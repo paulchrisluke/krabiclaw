@@ -220,7 +220,7 @@
                   </div>
                 </UCard>
                 <div v-if="msg.brandCard && importedSiteId" class="mt-2">
-                  <BrandEssentialsCard :site-id="importedSiteId" />
+                  <BrandEssentialsCard :site-id="importedSiteId" @done="handleBrandCardDone" />
                 </div>
                 <div v-if="msg.polishCard" class="mt-2">
                   <PolishSuggestionsCard
@@ -661,6 +661,13 @@ async function advance(target: WizardStep) {
           showPrimaryToggle: !!props.isAddingLocation,
         },
       })
+  }
+}
+
+function handleBrandCardDone() {
+  // Advance past the brand card step regardless of save or skip
+  if (workspaceEntryPath) {
+    router.push(workspaceEntryPath)
   }
 }
 

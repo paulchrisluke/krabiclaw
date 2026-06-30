@@ -84,7 +84,7 @@ export default defineEventHandler(async (event) => {
       SELECT ma.source as source
       FROM business_locations bl
       JOIN media_assets ma ON ma.id = bl.hero_image_asset_id
-      WHERE bl.site_id = ? AND bl.status = 'active'
+      WHERE bl.site_id = ? AND bl.status = 'active' AND ma.status = 'active'
       ORDER BY bl.is_primary DESC, bl.created_at ASC LIMIT 1
     `, [siteId])
 

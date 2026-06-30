@@ -462,7 +462,7 @@ async function saveWhatsappSettings() {
   try {
     const res = await $fetch<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>('/api/dashboard/editor/notifications', {
       method: 'PATCH',
-      body: { whatsapp_phone: whatsappForm.phone.trim() || undefined, channels: notificationChannels.value }
+      body: { whatsapp_phone: whatsappForm.phone.trim() || null, channels: notificationChannels.value }
     })
     whatsappPhone.value = res.notifications.whatsapp_phone
     whatsappForm.phone = res.notifications.whatsapp_phone ?? ''

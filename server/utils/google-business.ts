@@ -540,7 +540,8 @@ export const syncGoogleLocations = async (
             reviewsUpserted++
             // Only alert the owner for genuinely new rows — INSERT OR IGNORE means
             // changes === 0 for reviews we'd already synced on a prior run.
-            await notifyReviewReceived(env, env.DB, {
+            // Fire notification asynchronously to avoid blocking the sync loop
+            notifyReviewReceived(env, env.DB, {
               organizationId,
               siteId,
               siteName: location.title,

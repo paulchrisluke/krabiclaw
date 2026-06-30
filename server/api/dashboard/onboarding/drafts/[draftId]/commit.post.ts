@@ -61,6 +61,12 @@ export default defineEventHandler(async (event) => {
   })
 
   if (result.status !== 200) {
+    // Reset draft status to active on failure so it can be retried
+    await execute(db, `
+      UPDATE onboarding_drafts
+      SET status = 'active', updated_at = ?
+      WHERE id = ?
+    `, [new Date().toISOString(), draftId])
     return jsonResponse({
       error: typeof result.data.error === 'string' ? result.data.error : 'Could not create site. Please try again.',
     }, { status: result.status || 500 })
@@ -235,7 +241,7 @@ export default defineEventHandler(async (event) => {
         (id, organization_id, site_id, location_id, google_review_id,
          author_name, reviewer_photo_url, rating, title, content,
          owner_reply, owner_reply_at, photo_urls, status, source, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?)
     `, [
       review.id,
       organizationId,
@@ -262,6 +268,9 @@ export default defineEventHandler(async (event) => {
     SET status = 'committed', committed_site_id = ?, committed_at = ?, updated_at = ?
     WHERE id = ?
   `, [siteId, now, now, draftId])
+
+  // If anything fails after this point, the draft is already committed - we don't reset it
+  // since the site was successfully created. The user can continue from the dashboard.
 
   const orgRow = await queryFirst<{ slug: string }>(db, `
     SELECT slug FROM organization WHERE id = ? LIMIT 1

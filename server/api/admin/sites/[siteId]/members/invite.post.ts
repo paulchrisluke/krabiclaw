@@ -59,30 +59,46 @@ export default defineEventHandler(async (event) => {
   `, [site.organization_id, email])
 
   const expiresAt = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60)
-  const invitationId = existingInvite?.id ?? crypto.randomUUID()
 
   if (existingInvite) {
     if (!resend) {
       return jsonResponse({
         success: false,
         reason: 'already_invited',
-        invitationId,
-        inviteUrl: `${getRequestURL(event).origin}/accept-invitation/${invitationId}?siteId=${encodeURIComponent(site.id)}`,
+        invitationId: existingInvite.id,
+        inviteUrl: `${getRequestURL(event).origin}/accept-invitation/${existingInvite.id}?siteId=${encodeURIComponent(site.id)}`,
         existingRole: existingInvite.role ?? 'member',
       }, { status: 409 })
     }
 
+    // Resend: update existing invitation without changing its ID
     await execute(db, `
       UPDATE invitation
       SET role = ?, inviterId = ?, expiresAt = ?, status = 'pending'
       WHERE id = ?
-    `, [role, session.user.id, expiresAt, invitationId])
-  } else {
-    await execute(db, `
-      INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt)
-      VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)
-    `, [invitationId, site.organization_id, email, role, expiresAt, session.user.id, Math.floor(Date.now() / 1000)])
+    `, [role, session.user.id, expiresAt, existingInvite.id])
+
+    return jsonResponse({
+      success: true,
+      invitationId: existingInvite.id,
+      inviteUrl: `${getRequestURL(event).origin}/accept-invitation/${existingInvite.id}?siteId=${encodeURIComponent(site.id)}`,
+      email,
+      role,
+      organizationId: site.organization_id,
+      organizationSlug: site.org_slug,
+      organizationName: site.org_name,
+      siteId: site.id,
+      siteSubdomain: site.subdomain,
+      resent: true,
+    })
   }
+
+  // New invitation
+  const invitationId = crypto.randomUUID()
+  await execute(db, `
+    INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt)
+    VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)
+  `, [invitationId, site.organization_id, email, role, expiresAt, session.user.id, Math.floor(Date.now() / 1000)])
 
   return jsonResponse({
     success: true,
@@ -95,6 +111,6 @@ export default defineEventHandler(async (event) => {
     organizationName: site.org_name,
     siteId: site.id,
     siteSubdomain: site.subdomain,
-    resent: Boolean(existingInvite),
+    resent: false,
   })
 })

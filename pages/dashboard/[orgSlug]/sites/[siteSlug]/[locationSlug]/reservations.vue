@@ -102,10 +102,11 @@ const confirmedCount = computed(() => reservations.value.filter(item => item.sta
 async function loadReservations() {
   loading.value = true
   try {
-    const [settingsResult, reservationsResult, locationsResult] = await Promise.allSettled([
+    const [settingsResult, reservationsResult, locationsResult, notificationsResult] = await Promise.allSettled([
       $fetch<{ settings: { public_url: string | null } }>(`/api/dashboard/settings`),
       $fetch<{ submissions: ReservationSubmission[] }>(`/api/dashboard/editor/reservation-submissions`),
       $fetch<{ locations: Array<{ slug: string; notification_phone: string | null }> }>(`/api/dashboard/locations`),
+      $fetch<{ notifications: { whatsapp_phone: string | null; channels: string[] } }>(`/api/dashboard/editor/notifications`),
     ])
     if (settingsResult.status === 'fulfilled') {
       sitePublicUrl.value = settingsResult.value.settings.public_url
@@ -117,9 +118,12 @@ async function loadReservations() {
     } else {
       throw reservationsResult.reason
     }
-    if (locationsResult.status === 'fulfilled') {
+    if (locationsResult.status === 'fulfilled' && notificationsResult.status === 'fulfilled') {
       const current = locationsResult.value.locations.find(loc => loc.slug === route.params.locationSlug)
-      notificationPhoneMissing.value = current ? !current.notification_phone : false
+      const notifications = notificationsResult.value.notifications
+      const effectivePhone = current?.notification_phone || notifications.whatsapp_phone
+      const whatsappEnabled = notifications.channels.includes('whatsapp')
+      notificationPhoneMissing.value = whatsappEnabled && !effectivePhone
     } else {
       console.warn('reservation_location_load_failed', locationsResult.reason)
     }

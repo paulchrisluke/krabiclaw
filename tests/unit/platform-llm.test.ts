@@ -84,7 +84,7 @@ test('renderPlatformDocMarkdown emits front matter and route metadata', () => {
 
   assert.match(markdown, /^---/m)
   assert.match(markdown, /title: "Getting started with KrabiClaw"/)
-  assert.match(markdown, /markdown_url: "\/docs\/getting-started\/getting-started-with-krabiclaw\.md"/)
+  assert.match(markdown, /markdown_url: "\/docs-md\/getting-started\/getting-started-with-krabiclaw\.md"/)
   assert.match(markdown, /type: "documentation"/)
   assert.match(markdown, /# Getting started with KrabiClaw/)
 })

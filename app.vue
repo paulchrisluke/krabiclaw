@@ -55,7 +55,7 @@ useHead(() => {
 
   const letter = tenantBrandName.value.charAt(0).toUpperCase() || 'K'
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="%231F2547"/><text x="32" y="44" text-anchor="middle" font-family="system-ui,sans-serif" font-size="28" font-weight="bold" fill="white">${letter}</text></svg>`
-  const fallback = `data:image/svg+xml,${svg}`
+  const fallback = `data:image/svg+xml,${encodeURIComponent(svg)}`
 
   return {
     link: [

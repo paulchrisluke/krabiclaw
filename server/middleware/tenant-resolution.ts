@@ -5,6 +5,7 @@ import { defineEventHandler, getRequestURL, getHeader } from 'h3'
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv } from '../utils/api-response'
 import { deriveSubdomain, getFreeSiteDomain, hostnameOf, isPlatformHost, isPreviewContext } from '../utils/tenant-hosts'
+import { verifyScopedPreviewToken } from '../utils/preview-token'
 
 interface TenantResolutionEnv {
   NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
@@ -120,17 +121,20 @@ export default defineEventHandler(async (event) => {
         LIMIT 1
       `, [draftId])
 
-      // Verify token as a signed stateless scoped token instead of comparing against a stored column
+      // Verify token as a signed stateless scoped token with scope and expiry validation
       if (previewDraft && previewToken) {
-        event.context.draftId = previewDraft.id
-        event.context.tenantType = 'tenant'
-        event.context.themeId = 'saya-theme-v1'
-        event.context.site = {
-          brand_name: previewDraft.name || null,
-          logo_url: null,
-          vertical: previewDraft.vertical || 'restaurant',
+        const isAuthorized = await verifyScopedPreviewToken(String(env.PREVIEW_SECRET), 'draft', draftId, previewToken)
+        if (isAuthorized) {
+          event.context.draftId = previewDraft.id
+          event.context.tenantType = 'tenant'
+          event.context.themeId = 'saya-theme-v1'
+          event.context.site = {
+            brand_name: previewDraft.name || null,
+            logo_url: null,
+            vertical: previewDraft.vertical || 'restaurant',
+          }
+          return
         }
-        return
       }
     }
   }

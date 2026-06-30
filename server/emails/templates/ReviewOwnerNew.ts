@@ -28,7 +28,10 @@ export default defineComponent({
       props.content
         ? h(EText, { style: 'margin:0 0 20px;font-size:15px;color:#52525b;line-height:1.6' }, () => props.content)
         : null,
-      h(EText, { style: 'margin:0;font-size:15px;color:#52525b;line-height:1.6' }, () => 'Open your dashboard to reply.'),
+      h('a', {
+        href: `https://${props.platformDomain}/dashboard`,
+        style: 'display:inline-block;padding:12px 24px;background:#7c3aed;color:white;text-decoration:none;border-radius:8px;font-weight:600;margin:20px 0 0;'
+      }, () => 'Open Dashboard'),
     ])
   },
 })

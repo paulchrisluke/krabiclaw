@@ -203,8 +203,10 @@ const { hasExperiences, locations, config } = useBootstrap()
 const { formatDate } = useLocaleDate()
 const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
-// Sites with experiences book per-experience on /experiences/[slug]; this generic
-// table-reservation form doesn't apply and is no longer linked from nav.
+// Pure experience-vertical sites book per-experience on /experiences/[slug]; this
+// generic table-reservation form doesn't apply there. Restaurants that also have
+// experiences attached (e.g. Ember & Slice, Kikuzuki) still need this page for
+// regular table bookings alongside their experience bookings.
 if (isExperienceSite.value && hasExperiences.value) {
   await navigateTo('/experiences', { replace: true, redirectCode: 302 })
 }

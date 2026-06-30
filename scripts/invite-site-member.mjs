@@ -196,7 +196,6 @@ const existingInviteRows = runWranglerJson(
 )
 
 const expiresAt = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60)
-let invitationId
 
 if (existingInviteRows.length > 0) {
   const existingInvite = existingInviteRows[0]
@@ -222,7 +221,7 @@ if (existingInviteRows.length > 0) {
     process.exit(0)
   }
 
-  invitationId = String(existingInvite.id)
+  // Resend: update existing invitation and return its ID
   runWranglerJson(
     target.wranglerArgs,
     `
@@ -231,11 +230,12 @@ if (existingInviteRows.length > 0) {
           inviterId = '${q(inviter.id)}',
           expiresAt = ${expiresAt},
           status = 'pending'
-      WHERE id = '${q(invitationId)}'
+      WHERE id = '${q(existingInvite.id)}'
     `
   )
+  const invitationId = existingInvite.id
 } else {
-  invitationId = randomUUID()
+  const invitationId = randomUUID()
   runWranglerJson(
     target.wranglerArgs,
     `

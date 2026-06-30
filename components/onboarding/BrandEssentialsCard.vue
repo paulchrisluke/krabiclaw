@@ -147,6 +147,7 @@ const { uploading: logoUploading, upload: uploadLogo } = useMediaUpload(siteApiB
 const { uploading: heroUploading, upload: uploadHero } = useMediaUpload(siteApiBase.value)
 
 const anyUploading = computed(() => logoUploading.value || heroUploading.value)
+const logoAssetId = ref<string | null>(null)
 
 async function onLogoSelected(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
@@ -154,7 +155,8 @@ async function onLogoSelected(event: Event) {
   errorMessage.value = null
   try {
     logoPreviewUrl.value = URL.createObjectURL(file)
-    await uploadLogo(file, { category: 'logo' })
+    const result = await uploadLogo(file, { category: 'logo' })
+    if (result) logoAssetId.value = result.id
   } catch {
     errorMessage.value = 'Could not upload that logo. Try a different image.'
     logoPreviewUrl.value = null
@@ -182,7 +184,7 @@ async function save() {
     const calls: Array<Promise<unknown>> = [
       $fetch<unknown>(`${siteApiBase.value}/settings`, {
         method: 'PATCH',
-        body: { brand_color: brandColor.value },
+        body: { brand_color: brandColor.value, logo_asset_id: logoAssetId.value },
       }),
     ]
     if (heroAssetId.value) {

@@ -35,6 +35,7 @@ async function completeManualWizard(
   await page.getByLabel('Address').fill('123 Moo 5, Ao Nang, Krabi')
   await page.getByLabel('Phone').fill('+66812345678')
   await page.getByLabel('Hours').fill('Monday: 9:00 AM - 6:00 PM\nTuesday: 9:00 AM - 6:00 PM')
+  await page.getByLabel('Manager alert number').fill('+66812345678')
   await page.getByRole('button', { name: /Create site|Add location/ }).click()
   // Site/location creation does several sequential D1 round trips (org lookup,
   // location insert, review upserts) against a remote preview deploy, which can

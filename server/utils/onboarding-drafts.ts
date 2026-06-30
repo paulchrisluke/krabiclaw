@@ -513,9 +513,8 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
 
   // Concurrency-safe upsert: try INSERT first, retry as UPDATE on UNIQUE constraint violation
   const id = crypto.randomUUID()
-  let result
   try {
-    result = await execute(db, `
+    await execute(db, `
       INSERT INTO onboarding_drafts
         (id, user_id, organization_id, name, vertical, subdomain_candidate, source_type, status, payload_json, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
@@ -531,6 +530,7 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
       now,
       now,
     ])
+    return id
   } catch (err: unknown) {
     // UNIQUE constraint violation on (user_id, status = 'active') means another request inserted first
     // Retry as UPDATE on the existing active draft
@@ -544,10 +544,10 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
       throw err // Re-throw if it's not a conflict we can handle
     }
 
-    result = await execute(db, `
+    const updateResult = await execute(db, `
       UPDATE onboarding_drafts
       SET organization_id = ?, name = ?, vertical = ?, subdomain_candidate = ?, source_type = ?, payload_json = ?, updated_at = ?
-      WHERE id = ?
+      WHERE id = ? AND status = 'active'
     `, [
       input.organizationId ?? null,
       input.name,
@@ -558,6 +558,11 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
       now,
       existing.id,
     ])
+
+    // If no row was updated, the draft is no longer active - rethrow
+    if (updateResult.meta.changes === 0) {
+      throw err
+    }
 
     return {
       id: existing.id,

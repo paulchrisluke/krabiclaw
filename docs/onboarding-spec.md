@@ -19,7 +19,6 @@ Grounding facts, not opinions:
 - `OnboardingChecklist.vue` tracks 5 items (`business_info`, `hero_image`, `menu_or_experiences`, `story`, `post`), rendered once on `pages/dashboard/[orgSlug]/sites/[siteSlug]/index.vue`. Completion logic in `server/api/dashboard/onboarding/checklist.get.ts`.
 - **Bug**: the checklist's `hero_image` check queries `site_content` for `field='hero' AND hero_image_asset_id IS NOT NULL` (`checklist.get.ts:75-78`), but neither `seedNewSite()` (`server/utils/site-template.ts`) nor the draft builder write hero through that column — `seedNewSite` writes hero via `business_locations.hero_image_asset_id` + a `media_assets` row, and the draft builder writes `site_content.hero_public_url`. The checklist's hero check can never actually pass for a site created through either current path. Fix this regardless of anything else in this spec.
 - **No dedicated brand step exists** anywhere in the wizard. Logo, brand color, and typography are never collected during onboarding. They can only be set later via dashboard CMS settings, which most new owners never find unprompted.
-- TEMPLATE_HERO_IMAGE (a hardcoded stock Cloudflare image) is duplicated verbatim in both `server/utils/onboarding-drafts.ts:147` and `server/utils/site-template.ts:12`. Same asset ID, copy-pasted constant — should be one shared source.
 
 ---
 

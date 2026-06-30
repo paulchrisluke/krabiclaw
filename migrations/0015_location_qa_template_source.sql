@@ -29,7 +29,8 @@ CREATE TABLE `__new_location_qa` (
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
   FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE CASCADE
 );--> statement-breakpoint
-INSERT INTO `__new_location_qa` SELECT * FROM `location_qa`;--> statement-breakpoint
+INSERT INTO `__new_location_qa` (id, organization_id, site_id, location_id, google_question_id, question, question_author, question_date, answer, answer_author, answer_date, is_owner_answer, upvote_count, source, status, sort_order, created_at, updated_at)
+SELECT id, organization_id, site_id, location_id, google_question_id, question, question_author, question_date, answer, answer_author, answer_date, is_owner_answer, upvote_count, source, status, sort_order, created_at, updated_at FROM `location_qa`;--> statement-breakpoint
 DROP TABLE `location_qa`;--> statement-breakpoint
 ALTER TABLE `__new_location_qa` RENAME TO `location_qa`;--> statement-breakpoint
 CREATE UNIQUE INDEX idx_location_qa_google_id

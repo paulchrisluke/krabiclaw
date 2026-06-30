@@ -264,7 +264,9 @@ export async function getNotificationsSettings(
       const parsed = JSON.parse(channelsRow.value)
       if (Array.isArray(parsed)) {
         const validChannels = parsed.filter(c => c === 'whatsapp' || c === 'email')
-        channels = validChannels.length ? validChannels : defaultChannels
+        // Drop whatsapp from channels if no whatsapp phone is configured
+        const availableChannels = whatsappPhone ? validChannels : validChannels.filter(c => c !== 'whatsapp')
+        channels = availableChannels.length ? availableChannels : defaultChannels
       }
     } catch {
       channels = defaultChannels
