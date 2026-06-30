@@ -57,7 +57,7 @@ useHead(() => {
   const letter = trimmedName.charAt(0).toUpperCase() || 'K'
   const escapeMap: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
   const safeLetter = letter.replace(/[&<>"']/g, (c: string) => escapeMap[c])
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="%231F2547"/><text x="32" y="44" text-anchor="middle" font-family="system-ui,sans-serif" font-size="28" font-weight="bold" fill="white">${safeLetter}</text></svg>`
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#1F2547"/><text x="32" y="44" text-anchor="middle" font-family="system-ui,sans-serif" font-size="28" font-weight="bold" fill="white">${safeLetter}</text></svg>`
   const fallback = `data:image/svg+xml,${encodeURIComponent(svg)}`
 
   const isDraftPreview = route.path.startsWith('/preview/draft/')

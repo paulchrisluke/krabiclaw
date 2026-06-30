@@ -118,10 +118,11 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        # Preview is redeployed fresh on every PR, so an ephemeral per-run secret is
-        # fine here — draft preview tokens only need to stay valid within one run.
+        # Preview is shared across concurrent/overlapping PR runs, so the secret must stay
+        # stable across runs — regenerating it per run would invalidate draft preview
+        # tokens issued by another run still in flight. Sourced from a fixed repo secret.
         run: |
-          openssl rand -hex 32 | npx wrangler secret put PREVIEW_SECRET --env preview
+          echo "${{ secrets.PREVIEW_SECRET_PREVIEW }}" | npx wrangler secret put PREVIEW_SECRET --env preview
       - run: npx playwright install --with-deps chromium
       - name: Warm up preview Worker
         run: |
@@ -190,10 +191,11 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        # Staging is reseeded on every push to staging, so an ephemeral per-run secret
-        # is fine here — draft preview tokens only need to stay valid within one run.
+        # Staging can be reseeded by overlapping pushes, so the secret must stay stable
+        # across runs — regenerating it per run would invalidate draft preview tokens
+        # issued by another run still in flight. Sourced from a fixed repo secret.
         run: |
-          openssl rand -hex 32 | npx wrangler secret put PREVIEW_SECRET --env staging
+          echo "${{ secrets.PREVIEW_SECRET_STAGING }}" | npx wrangler secret put PREVIEW_SECRET --env staging
       - run: npx playwright install --with-deps chromium
       - name: Warm up staging Worker
         run: |

@@ -16,9 +16,8 @@ export default defineEventHandler(async (event) => {
     if (!Array.isArray(body.channels)) {
       return jsonResponse({ error: 'channels must be an array' }, { status: 400 })
     }
-    const validChannels = body.channels.filter(c => c === 'whatsapp' || c === 'email')
-    if (validChannels.length === 0) {
-      return jsonResponse({ error: 'channels must contain at least one valid value (whatsapp or email)' }, { status: 400 })
+    if (body.channels.length === 0 || !body.channels.every(c => c === 'whatsapp' || c === 'email')) {
+      return jsonResponse({ error: 'channels must only contain valid values (whatsapp or email)' }, { status: 400 })
     }
   }
 

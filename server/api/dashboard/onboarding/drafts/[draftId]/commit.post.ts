@@ -1,6 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { execute, queryFirst } from '~/server/db'
+import { execute, executeBatch, queryFirst, type BatchQuery } from '~/server/db'
 import { updateLocation } from '~/server/utils/location-management'
 import { parseOnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
 import { runSiteCreation } from '~/server/utils/site-creation'
@@ -94,9 +94,9 @@ export default defineEventHandler(async (event) => {
     }
 
     const primaryLocation = payload.preview.locations[0]
-    let updatedSlug: string | null = null
+    let updatedSlug: string | null = locationRow.slug ?? null
     if (primaryLocation) {
-      updatedSlug = primaryLocation.slug || null
+      updatedSlug = primaryLocation.slug || locationRow.slug || slugify(primaryLocation.title)
       const updateResult = await updateLocation(db, organizationId, siteId, locationRow.id, {
         title: primaryLocation.title,
         slug: updatedSlug,
@@ -134,154 +134,183 @@ export default defineEventHandler(async (event) => {
     const heroIsPlaceholder = !payload.source.place?.photos?.[0]?.photoUri
     await setConfig(db, organizationId, siteId, 'hero_image_is_placeholder', heroIsPlaceholder ? 'true' : 'false')
 
+    // The full rebuild (content/menu/qa/posts/reviews delete+insert) plus the final
+    // draft status flip runs as a single atomic D1 batch, so a failure partway through
+    // never leaves the site with half-cleared content — see incident notes for why
+    // sequential execute() calls here are unsafe.
     const now = new Date().toISOString()
-    await execute(db, `DELETE FROM site_content WHERE organization_id = ? AND site_id = ?`, [organizationId, siteId])
+    const batchQueries: BatchQuery[] = []
+
+    batchQueries.push({ query: `DELETE FROM site_content WHERE organization_id = ? AND site_id = ?`, params: [organizationId, siteId] })
     for (const row of payload.preview.content) {
       // These rows are auto-generated draft copy the owner has not individually edited yet
       // (the wizard only supports re-running the whole details form, not per-field edits) —
       // mark them 'template' so the checklist and dashboard hints can prompt for real content.
-      await execute(db, `
-        INSERT INTO site_content
-          (id, organization_id, site_id, location_id, page, field, content,
-           hero_title, hero_subtitle, value, type, source, updated_at, updated_by, component)
-        VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'template', ?, ?, ?)
-      `, [
-        crypto.randomUUID(),
-        organizationId,
-        siteId,
-        row.page,
-        row.field,
-        row.content,
-        row.hero_title,
-        row.hero_subtitle,
-        row.value,
-        row.type,
-        row.updated_at || now,
-        session.user.id,
-        row.component,
-      ])
+      batchQueries.push({
+        query: `
+          INSERT INTO site_content
+            (id, organization_id, site_id, location_id, page, field, content,
+             hero_title, hero_subtitle, value, type, source, updated_at, updated_by, component)
+          VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'template', ?, ?, ?)
+        `,
+        params: [
+          crypto.randomUUID(),
+          organizationId,
+          siteId,
+          row.page,
+          row.field,
+          row.content,
+          row.hero_title,
+          row.hero_subtitle,
+          row.value,
+          row.type,
+          row.updated_at || now,
+          session.user.id,
+          row.component,
+        ],
+      })
     }
 
-    await execute(db, `DELETE FROM menu_items WHERE menu_id IN (SELECT id FROM menus WHERE site_id = ?)`, [siteId])
-    await execute(db, `DELETE FROM menus WHERE organization_id = ? AND site_id = ?`, [organizationId, siteId])
+    batchQueries.push({ query: `DELETE FROM menu_items WHERE menu_id IN (SELECT id FROM menus WHERE site_id = ?)`, params: [siteId] })
+    batchQueries.push({ query: `DELETE FROM menus WHERE organization_id = ? AND site_id = ?`, params: [organizationId, siteId] })
     if (payload.preview.menu) {
-      await execute(db, `
-        INSERT INTO menus
-          (id, organization_id, site_id, location_id, name, status, created_at, updated_at, created_by, updated_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        payload.preview.menu.id,
-        organizationId,
-        siteId,
-        locationRow.id,
-        payload.preview.menu.name,
-        payload.preview.menu.status,
-        now,
-        now,
-        session.user.id,
-        session.user.id,
-      ])
+      batchQueries.push({
+        query: `
+          INSERT INTO menus
+            (id, organization_id, site_id, location_id, name, status, created_at, updated_at, created_by, updated_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        params: [
+          payload.preview.menu.id,
+          organizationId,
+          siteId,
+          locationRow.id,
+          payload.preview.menu.name,
+          payload.preview.menu.status,
+          now,
+          now,
+          session.user.id,
+          session.user.id,
+        ],
+      })
 
       for (const item of payload.preview.menu.items) {
         // Draft menu items are template boilerplate (e.g. "Sample Starter") the owner
         // hasn't edited — mark 'template' so the checklist doesn't treat them as real.
-        await execute(db, `
-        INSERT INTO menu_items
-          (id, menu_id, section, name, slug, description, price_amount, available, sort_order, source, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'template', ?, ?)
-      `, [
-        item.id,
-        payload.preview.menu!.id,
-        item.section,
-        item.name,
-        item.slug,
-        item.description,
-        item.price_amount,
-        item.available ? 1 : 0,
-        item.sort_order,
-        now,
-        now,
-      ])
+        batchQueries.push({
+          query: `
+            INSERT INTO menu_items
+              (id, menu_id, section, name, slug, description, price_amount, available, sort_order, source, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'template', ?, ?)
+          `,
+          params: [
+            item.id,
+            payload.preview.menu.id,
+            item.section,
+            item.name,
+            item.slug,
+            item.description,
+            item.price_amount,
+            item.available ? 1 : 0,
+            item.sort_order,
+            now,
+            now,
+          ],
+        })
+      }
     }
-  }
 
-    await execute(db, `DELETE FROM location_qa WHERE organization_id = ? AND site_id = ?`, [organizationId, siteId])
+    batchQueries.push({ query: `DELETE FROM location_qa WHERE organization_id = ? AND site_id = ?`, params: [organizationId, siteId] })
     for (const item of payload.preview.qa) {
       // Draft Q&A is template boilerplate, not owner-authored — mark 'template'.
-      await execute(db, `
-        INSERT INTO location_qa
-          (id, organization_id, site_id, location_id, question, answer, answer_author, is_owner_answer, source, status, sort_order, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'template', 'published', ?, ?, ?)
-      `, [
-        item.id,
-        organizationId,
-        siteId,
-        locationRow.id,
-        item.question,
-        item.answer,
-        item.answer_author,
-        item.sort_order,
-        now,
-        now,
-      ])
+      batchQueries.push({
+        query: `
+          INSERT INTO location_qa
+            (id, organization_id, site_id, location_id, question, answer, answer_author, is_owner_answer, source, status, sort_order, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'template', 'published', ?, ?, ?)
+        `,
+        params: [
+          item.id,
+          organizationId,
+          siteId,
+          locationRow.id,
+          item.question,
+          item.answer,
+          item.answer_author,
+          item.sort_order,
+          now,
+          now,
+        ],
+      })
     }
 
-    await execute(db, `DELETE FROM posts WHERE organization_id = ? AND site_id = ?`, [organizationId, siteId])
+    batchQueries.push({ query: `DELETE FROM posts WHERE organization_id = ? AND site_id = ?`, params: [organizationId, siteId] })
     for (const post of payload.preview.posts) {
       // Draft "welcome" posts are auto-generated, not owner-authored — mark 'template'.
-      await execute(db, `
-        INSERT INTO posts
-          (id, organization_id, site_id, location_id, post_type, title, body, status, published_at, created_by, source, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'standard', ?, ?, ?, ?, ?, 'template', ?, ?)
-      `, [
-        post.id,
-        organizationId,
-        siteId,
-        locationRow.id,
-        post.title,
-        post.body,
-        post.status,
-        post.published_at,
-        session.user.id,
-        now,
-        now,
-      ])
+      batchQueries.push({
+        query: `
+          INSERT INTO posts
+            (id, organization_id, site_id, location_id, post_type, title, body, status, published_at, created_by, source, created_at, updated_at)
+          VALUES (?, ?, ?, ?, 'standard', ?, ?, ?, ?, ?, 'template', ?, ?)
+        `,
+        params: [
+          post.id,
+          organizationId,
+          siteId,
+          locationRow.id,
+          post.title,
+          post.body,
+          post.status,
+          post.published_at,
+          session.user.id,
+          now,
+          now,
+        ],
+      })
     }
 
     for (const review of payload.preview.reviews) {
       if (!review.rating) continue
-      await execute(db, `
-        INSERT OR IGNORE INTO reviews
-          (id, organization_id, site_id, location_id, google_review_id,
-           author_name, reviewer_photo_url, rating, title, content,
-           owner_reply, owner_reply_at, photo_urls, status, source, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?)
-      `, [
-        review.id,
-        organizationId,
-        siteId,
-        locationRow.id,
-        null,
-        review.author_name,
-        review.reviewer_photo_url,
-        review.rating,
-        review.title,
-        review.content,
-        review.owner_reply,
-        review.owner_reply_at,
-        review.photo_urls,
-        review.source ?? 'direct',
-        review.created_at ?? now,
-        now,
-      ])
+      batchQueries.push({
+        query: `
+          INSERT OR IGNORE INTO reviews
+            (id, organization_id, site_id, location_id, google_review_id,
+             author_name, reviewer_photo_url, rating, title, content,
+             owner_reply, owner_reply_at, photo_urls, status, source, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?)
+        `,
+        params: [
+          review.id,
+          organizationId,
+          siteId,
+          locationRow.id,
+          null,
+          review.author_name,
+          review.reviewer_photo_url,
+          review.rating,
+          review.title,
+          review.content,
+          review.owner_reply,
+          review.owner_reply_at,
+          review.photo_urls,
+          review.source ?? 'direct',
+          review.created_at ?? now,
+          now,
+        ],
+      })
     }
 
-    // Finalize draft status to committed
-    await execute(db, `
-      UPDATE onboarding_drafts
-      SET status = 'committed', committed_site_id = ?, committed_at = ?, updated_at = ?
-      WHERE id = ?
-    `, [siteId, now, now, draftId])
+    // Finalize draft status to committed in the same batch as the rebuild
+    batchQueries.push({
+      query: `
+        UPDATE onboarding_drafts
+        SET status = 'committed', committed_site_id = ?, committed_at = ?, updated_at = ?
+        WHERE id = ?
+      `,
+      params: [siteId, now, now, draftId],
+    })
+
+    await executeBatch(db, batchQueries)
     draftCommitted = true
 
     // If anything fails after this point, the draft is already committed - we don't reset it

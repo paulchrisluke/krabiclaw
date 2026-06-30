@@ -266,6 +266,8 @@
         <button
           v-for="(reply, i) in replies"
           :key="i"
+          data-testid="wizard-quick-reply"
+          :data-reply-action="reply.action"
           :class="[
             'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12.5px] font-semibold transition-colors',
             reply.primary

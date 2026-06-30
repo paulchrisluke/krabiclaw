@@ -40,16 +40,21 @@ async function completeManualWizard(
   // New-site creation now stages a private draft first ("Draft ready...") and
   // needs a second "Create site" quick-reply click to commit it; adding a
   // location to an existing site skips drafting and goes straight to "Done".
-  // `.last()` disambiguates from the original form button, which stays in the
-  // chat transcript (now re-enabled) once the draft save completes.
+  // The quick-reply chip is tagged with data-reply-action so it can be targeted
+  // unambiguously — the original form button (same "Create site" label) stays
+  // visible and re-enabled in the chat transcript once the draft save completes,
+  // so a text/role locator alone (or DOM-order .last()) can't reliably tell them apart.
   const draftOrDone = page.getByText(/Draft ready\.|Done\. Your workspace is live/)
   // Site/location creation does several sequential D1 round trips (org lookup,
   // location insert, review upserts) against a remote preview deploy, which can
   // outrun a 15s wait even though the wizard's own bot-message delay is fixed at ~640ms.
   await expect(draftOrDone.first()).toBeVisible({ timeout: 30_000 })
   if (await page.getByText('Draft ready.').isVisible().catch(() => false)) {
-    await page.getByRole('button', { name: 'Create site', exact: true }).last().click()
-    await expect(page.getByText('Done. Your workspace is live')).toBeVisible({ timeout: 30_000 })
+    await page.locator('[data-testid="wizard-quick-reply"][data-reply-action="commit_draft"]').click()
+    // Commit chains several sequential round trips (runSiteCreation, primary location
+    // update, the content/menu/qa/posts/reviews batch insert, then currency + social
+    // status follow-ups) — give this more headroom than the draft-save wait above.
+    await expect(page.getByText('Done. Your workspace is live')).toBeVisible({ timeout: 45_000 })
   }
 }
 
@@ -180,8 +185,10 @@ test.describe('onboarding wizard UI', () => {
 
   test('a new user can build a site manually and add a second location manually', async ({ page, baseURL }) => {
     // Two full manual wizard completions (site + second location) routinely
-    // exceed the default 30s test timeout against a remote preview deploy.
-    test.setTimeout(90_000)
+    // exceed the default 30s test timeout against a remote preview deploy. Each
+    // completion can wait up to 30s for the draft save plus 45s for the commit
+    // chain (worst case), so give the overall test enough budget for both.
+    test.setTimeout(180_000)
     const suffix = Date.now()
     const userId = `e2e-onboard-${suffix}`
     await loginFreshUser(page, baseURL!, userId)

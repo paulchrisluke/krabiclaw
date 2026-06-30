@@ -6,7 +6,7 @@ DELETE FROM `onboarding_drafts`
 WHERE status = 'active'
   AND id NOT IN (
   SELECT id FROM (
-    SELECT id, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY updated_at DESC) as rn
+    SELECT id, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY updated_at DESC, id DESC) as rn
     FROM `onboarding_drafts`
     WHERE status = 'active'
   ) ranked

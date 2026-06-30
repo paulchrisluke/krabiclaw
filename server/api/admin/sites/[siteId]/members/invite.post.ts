@@ -102,8 +102,9 @@ export default defineEventHandler(async (event) => {
     LIMIT 1
   `, [site.organization_id, email])
 
-  if (expiredInvite && !resend) {
-    // Replace expired/non-pending invite with a fresh one
+  if (expiredInvite) {
+    // Clear the stale expired/non-pending row before inserting a fresh one, whether this
+    // is a first invite or a resend with no pending row left to update.
     await execute(db, `
       DELETE FROM invitation WHERE id = ?
     `, [expiredInvite.id])

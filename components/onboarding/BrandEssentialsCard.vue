@@ -153,6 +153,7 @@ async function onLogoSelected(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
   errorMessage.value = null
+  logoAssetId.value = null
   try {
     logoPreviewUrl.value = URL.createObjectURL(file)
     const result = await uploadLogo(file, { category: 'logo' })

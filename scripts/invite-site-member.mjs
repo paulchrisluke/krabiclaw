@@ -195,6 +195,19 @@ const existingInviteRows = runWranglerJson(
   `
 )
 
+const expiredInviteRows = runWranglerJson(
+  target.wranglerArgs,
+  `
+    SELECT id
+    FROM invitation
+    WHERE organizationId = '${q(site.organization_id)}'
+      AND lower(email) = '${q(email)}'
+      AND (status != 'pending' OR expiresAt <= strftime('%s', 'now'))
+    ORDER BY createdAt DESC
+    LIMIT 1
+  `
+)
+
 const expiresAt = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60)
 let invitationId
 
@@ -236,6 +249,15 @@ if (existingInviteRows.length > 0) {
     `
   )
 } else {
+  if (expiredInviteRows.length > 0) {
+    // Mirror the API's replacement path: clear the stale expired/non-pending row
+    // before inserting a fresh one.
+    runWranglerJson(
+      target.wranglerArgs,
+      `DELETE FROM invitation WHERE id = '${q(expiredInviteRows[0].id)}'`
+    )
+  }
+
   invitationId = randomUUID()
   runWranglerJson(
     target.wranglerArgs,
