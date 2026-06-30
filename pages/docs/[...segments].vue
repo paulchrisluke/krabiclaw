@@ -127,6 +127,7 @@ interface DocListItem {
 }
 
 const route = useRoute()
+const requestFetch = useRequestFetch()
 const segments = computed(() => {
   const raw = route.params.segments
   if (Array.isArray(raw)) return raw.filter(Boolean)
@@ -168,7 +169,14 @@ const { data: doc, pending: loading, error } = await useAsyncData(
   `doc-${categoryParam.value}-${slugParam.value ?? 'index'}`,
   async () => {
     if (!slugParam.value) return null
-    const response = await $fetch<{ doc?: Doc }>(`/api/public/docs/${categoryParam.value}/${slugParam.value}`)
+    const endpoint = `/api/public/docs/${categoryParam.value}/${slugParam.value}`
+    // Bare $fetch loses the event's Cloudflare bindings on this nested SSR call (the
+    // request never reaches the Workers fetch() entrypoint that attaches them) and the
+    // API then 500s with "Database not available" — useRequestFetch() preserves the
+    // parent event's context. Matches pages/blog/[category]/[slug].vue.
+    const response = import.meta.server
+      ? await requestFetch<{ doc?: Doc }>(endpoint)
+      : await $fetch<{ doc?: Doc }>(endpoint)
     if (!response?.doc) {
       throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
     }
