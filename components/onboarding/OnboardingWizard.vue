@@ -666,8 +666,8 @@ async function advance(target: WizardStep) {
 
 function handleBrandCardDone() {
   // Advance past the brand card step regardless of save or skip
-  if (workspaceEntryPath) {
-    router.push(workspaceEntryPath)
+  if (workspaceEntryPath.value) {
+    router.push(workspaceEntryPath.value)
   }
 }
 

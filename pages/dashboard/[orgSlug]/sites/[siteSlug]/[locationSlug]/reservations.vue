@@ -125,7 +125,12 @@ async function loadReservations() {
       const whatsappEnabled = notifications.channels.includes('whatsapp')
       notificationPhoneMissing.value = whatsappEnabled && !effectivePhone
     } else {
-      console.warn('reservation_location_load_failed', locationsResult.reason)
+      const loadError = locationsResult.status === 'rejected'
+        ? locationsResult.reason
+        : notificationsResult.status === 'rejected'
+          ? notificationsResult.reason
+          : undefined
+      console.warn('reservation_location_load_failed', loadError)
     }
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load reservations', color: 'error' })

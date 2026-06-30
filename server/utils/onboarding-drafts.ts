@@ -110,6 +110,12 @@ export interface OnboardingDraftPayload {
   }
 }
 
+export interface OnboardingDraftUpsertResult {
+  id: string
+  subdomainCandidate: string
+  payload: OnboardingDraftPayload
+}
+
 export interface DraftDetailsInput {
   name: string
   city: string | null
@@ -506,7 +512,7 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
   vertical: SiteVertical
   sourceType: DraftSourceType
   payload: OnboardingDraftPayload
-}) {
+}): Promise<OnboardingDraftUpsertResult> {
   const payloadJson = JSON.stringify(input.payload)
   const subdomainCandidate = input.payload.preview.subdomainCandidate
   const now = nowIso()
@@ -530,7 +536,11 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
       now,
       now,
     ])
-    return id
+    return {
+      id,
+      subdomainCandidate,
+      payload: input.payload,
+    }
   } catch (err: unknown) {
     // UNIQUE constraint violation on (user_id, status = 'active') means another request inserted first
     // Retry as UPDATE on the existing active draft
@@ -569,11 +579,5 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
       subdomainCandidate,
       payload: input.payload,
     }
-  }
-
-  return {
-    id,
-    subdomainCandidate,
-    payload: input.payload,
   }
 }
