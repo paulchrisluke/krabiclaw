@@ -135,6 +135,15 @@ jobs:
         env:
           PLAYWRIGHT_PREVIEW_URL: https://preview.krabiclaw.com
         run: yarn test:e2e:full
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: playwright-report-preview
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
 
   e2e-staging:
     name: E2E staging
@@ -207,6 +216,15 @@ jobs:
           sleep 10
       - name: Run full E2E suite
         run: yarn test:e2e:full
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: playwright-report-staging
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
 
   prod-deploy:
     name: Deploy to production

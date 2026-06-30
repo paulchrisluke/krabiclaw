@@ -254,6 +254,7 @@
       <!-- Error banner -->
       <div
         v-if="importError"
+        data-testid="wizard-error-banner"
         class="mb-3 flex items-center gap-2 rounded-lg border border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-950 px-3 py-2 text-xs text-error-600 dark:text-error-400"
       >
         <UIcon name="i-heroicons-exclamation-triangle" class="size-3.5 shrink-0" />

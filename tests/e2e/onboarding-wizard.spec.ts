@@ -54,7 +54,15 @@ async function completeManualWizard(
     // Commit chains several sequential round trips (runSiteCreation, primary location
     // update, the content/menu/qa/posts/reviews batch insert, then currency + social
     // status follow-ups) — give this more headroom than the draft-save wait above.
-    await expect(page.getByText('Done. Your workspace is live')).toBeVisible({ timeout: 45_000 })
+    try {
+      await expect(page.getByText('Done. Your workspace is live')).toBeVisible({ timeout: 60_000 })
+    } catch (waitError) {
+      // Surface the wizard's own error banner (if the commit actually failed server-side)
+      // instead of just a bare timeout, since the banner text is dropped otherwise — CI
+      // doesn't upload screenshots/videos for this job.
+      const bannerText = await page.getByTestId('wizard-error-banner').textContent().catch(() => null)
+      throw new Error(`commitDraft never reached "Done"${bannerText ? ` — wizard error banner: ${bannerText}` : ' (no error banner visible either)'}`, { cause: waitError })
+    }
   }
 }
 
