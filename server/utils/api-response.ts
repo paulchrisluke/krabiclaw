@@ -2,16 +2,6 @@ import { createError, getHeader, type H3Event } from 'h3'
 import { createDb, type AppDb } from '~/server/db'
 import type { CloudflareEnv } from './auth'
 
-function normalizeHeaders(headers: HeadersInit): HeadersInit {
-  if (headers instanceof Headers) {
-    return headers
-  }
-  if (Array.isArray(headers)) {
-    return headers
-  }
-  return headers
-}
-
 export const jsonResponse = (body: ApiValue, init: ResponseInit = {}) => {
   const mergedHeaders = new Headers(init.headers)
   mergedHeaders.set('content-type', 'application/json; charset=utf-8')

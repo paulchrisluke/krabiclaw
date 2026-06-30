@@ -188,6 +188,11 @@ function draftUid(prefix: string) {
   return `draft-${prefix}-${crypto.randomUUID()}`
 }
 
+function isUniqueConstraintError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '')
+  return /UNIQUE constraint failed/i.test(message)
+}
+
 function asPlaceSnapshot(place: PlaceDetails): PlaceDetailsSnapshot {
   return {
     placeId: place.placeId,
@@ -542,6 +547,9 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
       payload: input.payload,
     }
   } catch (err: unknown) {
+    if (!isUniqueConstraintError(err)) {
+      throw err
+    }
     // UNIQUE constraint violation on (user_id, status = 'active') means another request inserted first
     // Retry as UPDATE on the existing active draft
     const existing = await queryFirst<{ id: string }>(db, `

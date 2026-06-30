@@ -566,17 +566,17 @@ export async function notifyReviewReceived(
   const restaurant = siteName(opts)
   const platformDomain = getPlatformDomain(env)
 
-  const ownerEmail = await useRender(ReviewOwnerNew, {
-    props: {
-      authorName: opts.authorName,
-      rating: opts.rating,
-      content: opts.content ?? '',
-      siteName: restaurant,
-      platformDomain,
-    },
-  })
-
   try {
+    const ownerEmail = await useRender(ReviewOwnerNew, {
+      props: {
+        authorName: opts.authorName,
+        rating: opts.rating,
+        content: opts.content ?? '',
+        siteName: restaurant,
+        platformDomain,
+      },
+    })
+
     await notifyOwner(env, db, {
       ...opts,
       template: 'new_review',

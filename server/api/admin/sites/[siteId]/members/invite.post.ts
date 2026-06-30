@@ -93,6 +93,22 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  // Check for expired or non-pending invites that can be replaced
+  const expiredInvite = await queryFirst<{ id: string }>(db, `
+    SELECT id
+    FROM invitation
+    WHERE organizationId = ? AND lower(email) = ? AND (status != 'pending' OR expiresAt <= strftime('%s', 'now'))
+    ORDER BY createdAt DESC
+    LIMIT 1
+  `, [site.organization_id, email])
+
+  if (expiredInvite && !resend) {
+    // Replace expired/non-pending invite with a fresh one
+    await execute(db, `
+      DELETE FROM invitation WHERE id = ?
+    `, [expiredInvite.id])
+  }
+
   // New invitation
   const invitationId = crypto.randomUUID()
   await execute(db, `

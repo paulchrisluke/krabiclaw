@@ -122,8 +122,11 @@ export default defineEventHandler(async (event) => {
       `, [draftId])
 
       // Verify token as a signed stateless scoped token with scope and expiry validation
-      if (previewDraft && previewToken) {
-        const isAuthorized = await verifyScopedPreviewToken(String(env.PREVIEW_SECRET), 'draft', draftId, previewToken)
+      const previewSecret = typeof env.PREVIEW_SECRET === 'string' && env.PREVIEW_SECRET.trim()
+        ? env.PREVIEW_SECRET.trim()
+        : null
+      if (previewDraft && previewToken && previewSecret) {
+        const isAuthorized = await verifyScopedPreviewToken(previewSecret, 'draft', draftId, previewToken)
         if (isAuthorized) {
           event.context.draftId = previewDraft.id
           event.context.tenantType = 'tenant'

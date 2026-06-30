@@ -541,21 +541,29 @@ export const syncGoogleLocations = async (
             reviewsUpserted++
             // Only alert the owner for genuinely new rows — INSERT OR IGNORE means
             // changes === 0 for reviews we'd already synced on a prior run.
-            // Fire notification asynchronously to avoid blocking the sync loop
-            notificationPromises.push(
-              notifyReviewReceived(env, env.DB, {
-                organizationId,
-                siteId,
-                siteName: location.title,
-                locationId: localLocationId,
-                reviewId,
-                authorName,
-                rating: Math.round(rating),
-                content: comment,
-              }).catch((error) => {
-                console.error('review_sync_notify_failed', { reviewId, error: error instanceof Error ? error.message : String(error) })
-              })
-            )
+            // Also skip notifications for historical backfill (reviews older than 30 days)
+            const reviewDate = new Date(createTime)
+            const thirtyDaysAgo = new Date(now)
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+            const isHistorical = reviewDate < thirtyDaysAgo
+            
+            if (!isHistorical) {
+              // Fire notification asynchronously to avoid blocking the sync loop
+              notificationPromises.push(
+                notifyReviewReceived(env, env.DB, {
+                  organizationId,
+                  siteId,
+                  siteName: location.title,
+                  locationId: localLocationId,
+                  reviewId,
+                  authorName,
+                  rating: Math.round(rating),
+                  content: comment,
+                }).catch((error) => {
+                  console.error('review_sync_notify_failed', { reviewId, error: error instanceof Error ? error.message : String(error) })
+                })
+              )
+            }
           }
         }
       } catch {

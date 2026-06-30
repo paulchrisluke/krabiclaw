@@ -207,9 +207,11 @@ const isExperienceSite = computed(() => (site as { vertical?: string | null } | 
 // generic table-reservation form doesn't apply there. Restaurants that also have
 // experiences attached (e.g. Ember & Slice, Kikuzuki) still need this page for
 // regular table bookings alongside their experience bookings.
-if (isExperienceSite.value) {
-  await navigateTo('/experiences', { replace: true, redirectCode: 302 })
-}
+watch([isExperienceSite, hasExperiences], ([isExp, hasExp]) => {
+  if (isExp) {
+    navigateTo('/experiences', { replace: true, redirectCode: 302 })
+  }
+}, { immediate: true })
 
 // ── Calendar ──────────────────────────────────────────────────────────────
 // selectedDate is untyped to bridge the two moduleResolution instances of

@@ -442,7 +442,7 @@ export const menu_items = sqliteTable("menu_items", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text(),
 	updated_by: text(),
-}, (table) => [
+}, (_table) => [
 	check("menu_items_source_check", sql`source IN ('manual', 'template')`),
 ]);
 

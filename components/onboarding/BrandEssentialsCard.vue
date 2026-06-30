@@ -167,6 +167,7 @@ async function onHeroSelected(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
   errorMessage.value = null
+  heroAssetId.value = null
   try {
     heroPreviewUrl.value = URL.createObjectURL(file)
     const result = await uploadHero(file)
@@ -181,6 +182,11 @@ async function save() {
   saving.value = true
   errorMessage.value = null
   try {
+    // Wait for any pending uploads to complete
+    if (logoUploading.value || heroUploading.value) {
+      errorMessage.value = 'Please wait for uploads to complete before saving.'
+      return
+    }
     const calls: Array<Promise<unknown>> = [
       $fetch<unknown>(`${siteApiBase.value}/settings`, {
         method: 'PATCH',

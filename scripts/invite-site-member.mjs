@@ -196,9 +196,11 @@ const existingInviteRows = runWranglerJson(
 )
 
 const expiresAt = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60)
+let invitationId
 
 if (existingInviteRows.length > 0) {
   const existingInvite = existingInviteRows[0]
+  invitationId = existingInvite.id
 
   if (!resend) {
     console.log(
@@ -233,9 +235,8 @@ if (existingInviteRows.length > 0) {
       WHERE id = '${q(existingInvite.id)}'
     `
   )
-  const invitationId = existingInvite.id
 } else {
-  const invitationId = randomUUID()
+  invitationId = randomUUID()
   runWranglerJson(
     target.wranglerArgs,
     `

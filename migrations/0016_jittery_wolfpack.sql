@@ -3,7 +3,8 @@ PRAGMA foreign_keys=OFF;--> statement-breakpoint
 -- Deduplicate active drafts before adding unique constraint
 -- Keep the most recently updated draft per user
 DELETE FROM `onboarding_drafts`
-WHERE id NOT IN (
+WHERE status = 'active'
+  AND id NOT IN (
   SELECT id FROM (
     SELECT id, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY updated_at DESC) as rn
     FROM `onboarding_drafts`

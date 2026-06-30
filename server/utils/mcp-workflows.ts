@@ -284,8 +284,9 @@ export async function updateNotificationsSettings(
 ) {
   const ops: Promise<unknown>[] = []
   const trimmedPhone = whatsappPhone?.trim()
-  if (trimmedPhone) {
-    ops.push(setOrgWhatsAppPhone(db, organizationId, siteId, trimmedPhone))
+  // Explicit null or empty string means clear the phone
+  if (whatsappPhone !== undefined) {
+    ops.push(setOrgWhatsAppPhone(db, organizationId, siteId, trimmedPhone || null))
   }
   if (channels) {
     const defaultPhone = trimmedPhone || await getOrgWhatsAppPhone(db, organizationId, siteId)

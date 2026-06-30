@@ -57,6 +57,7 @@ export default defineEventHandler(async (event) => {
   let organizationId: string | null = null
   let siteId: string | null = null
   let siteSlug: string | null = null
+  let draftCommitted = false
 
   try {
     const result = await runSiteCreation(env as SiteEnv, db, session.user.id, {
@@ -89,14 +90,14 @@ export default defineEventHandler(async (event) => {
     `, [siteId, organizationId])
 
     if (!locationRow?.id) {
-      return jsonResponse({ error: 'No active location found for this site. Site creation may have failed.' }, { status: 500 })
+      throw new Error('No active location found for this site. Site creation may have failed.')
     }
 
     const primaryLocation = payload.preview.locations[0]
     let updatedSlug: string | null = null
     if (primaryLocation) {
-      updatedSlug = primaryLocation.slug || slugify(primaryLocation.title)
-      await updateLocation(db, organizationId, siteId, locationRow.id, {
+      updatedSlug = primaryLocation.slug || null
+      const updateResult = await updateLocation(db, organizationId, siteId, locationRow.id, {
         title: primaryLocation.title,
         slug: updatedSlug,
         city: primaryLocation.city ?? undefined,
@@ -114,6 +115,14 @@ export default defineEventHandler(async (event) => {
         maps_url: payload.source.place?.mapsUrl ?? undefined,
         google_place_id: payload.source.place?.placeId ?? undefined,
       }, session.user.id)
+
+      if (updateResult.status !== 200) {
+        throw new Error(
+          typeof updateResult.data?.error === 'string'
+            ? updateResult.data.error
+            : 'Primary location update failed.',
+        )
+      }
     }
 
     const heroImageUrl = payload.preview.config.hero_image_url
@@ -273,13 +282,19 @@ export default defineEventHandler(async (event) => {
       SET status = 'committed', committed_site_id = ?, committed_at = ?, updated_at = ?
       WHERE id = ?
     `, [siteId, now, now, draftId])
+    draftCommitted = true
 
     // If anything fails after this point, the draft is already committed - we don't reset it
     // since the site was successfully created. The user can continue from the dashboard.
 
-    const orgRow = await queryFirst<{ slug: string }>(db, `
-      SELECT slug FROM organization WHERE id = ? LIMIT 1
-    `, [organizationId])
+    let orgRow: { slug: string } | null = null
+    try {
+      orgRow = await queryFirst<{ slug: string }>(db, `
+        SELECT slug FROM organization WHERE id = ? LIMIT 1
+      `, [organizationId])
+    } catch (lookupError) {
+      console.warn('commit_post_org_lookup_failed', lookupError)
+    }
 
     return jsonResponse({
       success: true,
@@ -291,7 +306,7 @@ export default defineEventHandler(async (event) => {
   } catch (error) {
     // If site was created but something else failed, mark draft as failed but don't reset to active
     // The site exists and the user can continue from the dashboard
-    if (siteId) {
+    if (siteId && !draftCommitted) {
       await execute(db, `
         UPDATE onboarding_drafts
         SET status = 'failed', updated_at = ?
@@ -300,6 +315,13 @@ export default defineEventHandler(async (event) => {
       console.error('commit_post_error_after_site_creation', error)
       return jsonResponse({
         error: 'Site was created but some data import failed. Please check your dashboard and try importing missing data manually.',
+        siteId,
+      }, { status: 500 })
+    }
+    if (siteId && draftCommitted) {
+      console.error('commit_post_error_after_finalization', error)
+      return jsonResponse({
+        error: 'Site was created, but finalization failed. Please check your dashboard.',
         siteId,
       }, { status: 500 })
     }

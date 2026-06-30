@@ -60,13 +60,18 @@ useHead(() => {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="%231F2547"/><text x="32" y="44" text-anchor="middle" font-family="system-ui,sans-serif" font-size="28" font-weight="bold" fill="white">${safeLetter}</text></svg>`
   const fallback = `data:image/svg+xml,${encodeURIComponent(svg)}`
 
+  const isDraftPreview = route.path.startsWith('/preview/draft/')
+  const linkItems = [
+    { key: 'app-icon-svg', rel: 'icon', type: 'image/svg+xml', href: fallback },
+    { key: 'app-icon-shortcut', rel: 'shortcut icon', href: fallback },
+    { key: 'app-icon-apple', rel: 'apple-touch-icon', sizes: '180x180', href: fallback },
+  ]
+  if (!isDraftPreview) {
+    linkItems.push({ key: 'app-manifest', rel: 'manifest', href: '/tenant.webmanifest' })
+  }
+
   return {
-    link: [
-      { key: 'app-icon-svg', rel: 'icon', type: 'image/svg+xml', href: fallback },
-      { key: 'app-icon-shortcut', rel: 'shortcut icon', href: fallback },
-      { key: 'app-icon-apple', rel: 'apple-touch-icon', sizes: '180x180', href: fallback },
-      { key: 'app-manifest', rel: 'manifest', href: '/tenant.webmanifest' }
-    ]
+    link: linkItems
   }
 })
 
