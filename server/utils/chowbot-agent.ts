@@ -2758,6 +2758,7 @@ async function executeTool(
         ? input.channels.filter((value: unknown): value is string => value === "email" || value === "whatsapp")
         : undefined;
       if (!phone && !channels) return { error: "whatsapp_phone and/or channels are required." };
+      if (channels && channels.length === 0) return { error: "channels must contain at least one valid value (email or whatsapp)." };
       const result = await updateNotificationsSettings(db, orgId, siteId, phone, channels);
       return { updated: true, ...result };
     }

@@ -454,6 +454,10 @@ async function startFacebookConnect() {
 }
 
 async function saveWhatsappSettings() {
+  if (notificationChannels.value.length === 0) {
+    toast.add({ description: 'Select at least one notification channel', color: 'error' })
+    return
+  }
   if (notificationChannels.value.includes('whatsapp') && !whatsappForm.phone.trim()) {
     toast.add({ description: 'Add a WhatsApp number to use the WhatsApp channel', color: 'error' })
     return

@@ -23,14 +23,13 @@ CREATE TABLE `__new_menu_items` (
 	`created_by` text,
 	`updated_by` text,
 	FOREIGN KEY (`menu_id`) REFERENCES `menus`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`image_asset_id`) REFERENCES `media_assets_old`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`image_asset_id`) REFERENCES `media_assets`(`id`) ON UPDATE no action ON DELETE set null,
 	CONSTRAINT "menu_items_source_check" CHECK(source IN ('manual', 'template'))
 );
 --> statement-breakpoint
 INSERT INTO `__new_menu_items`("id", "menu_id", "section", "name", "slug", "description", "price_amount", "image_asset_id", "available", "featured", "featured_sort_order", "sort_order", "allergens", "ingredients", "dietary_notes", "preparation", "serving_note", "source", "created_at", "updated_at", "created_by", "updated_by") SELECT "id", "menu_id", "section", "name", "slug", "description", "price_amount", "image_asset_id", "available", "featured", "featured_sort_order", "sort_order", "allergens", "ingredients", "dietary_notes", "preparation", "serving_note", "source", "created_at", "updated_at", "created_by", "updated_by" FROM `menu_items`;--> statement-breakpoint
 DROP TABLE `menu_items`;--> statement-breakpoint
 ALTER TABLE `__new_menu_items` RENAME TO `menu_items`;--> statement-breakpoint
-PRAGMA foreign_keys=ON;--> statement-breakpoint
 CREATE TABLE `__new_posts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -58,10 +57,11 @@ CREATE TABLE `__new_posts` (
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE set null,
-	FOREIGN KEY (`image_asset_id`) REFERENCES `media_assets_old`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`image_asset_id`) REFERENCES `media_assets`(`id`) ON UPDATE no action ON DELETE set null,
 	CONSTRAINT "posts_source_check" CHECK(source IN ('manual', 'template'))
 );
 --> statement-breakpoint
 INSERT INTO `__new_posts`("id", "organization_id", "site_id", "location_id", "google_post_id", "post_type", "title", "body", "image_asset_id", "cta_type", "cta_url", "event_title", "event_start", "event_end", "offer_coupon", "offer_terms", "status", "scheduled_for", "published_at", "source", "created_by", "created_at", "updated_at") SELECT "id", "organization_id", "site_id", "location_id", "google_post_id", "post_type", "title", "body", "image_asset_id", "cta_type", "cta_url", "event_title", "event_start", "event_end", "offer_coupon", "offer_terms", "status", "scheduled_for", "published_at", "source", "created_by", "created_at", "updated_at" FROM `posts`;--> statement-breakpoint
 DROP TABLE `posts`;--> statement-breakpoint
-ALTER TABLE `__new_posts` RENAME TO `posts`;
+ALTER TABLE `__new_posts` RENAME TO `posts`;--> statement-breakpoint
+PRAGMA foreign_keys=ON;

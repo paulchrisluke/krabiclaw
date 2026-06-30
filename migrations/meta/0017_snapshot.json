@@ -500,10 +500,10 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "blog_posts_featured_image_asset_id_media_assets_old_id_fk": {
-          "name": "blog_posts_featured_image_asset_id_media_assets_old_id_fk",
+        "blog_posts_featured_image_asset_id_media_assets_id_fk": {
+          "name": "blog_posts_featured_image_asset_id_media_assets_id_fk",
           "tableFrom": "blog_posts",
-          "tableTo": "media_assets_old",
+          "tableTo": "media_assets",
           "columnsFrom": [
             "featured_image_asset_id"
           ],
@@ -3525,7 +3525,25 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "idx_location_qa_google_id": {
+          "name": "idx_location_qa_google_id",
+          "columns": [
+            "google_question_id"
+          ],
+          "isUnique": true,
+          "where": "google_question_id IS NOT NULL"
+        },
+        "idx_location_qa_location": {
+          "name": "idx_location_qa_location",
+          "columns": [
+            "location_id",
+            "status",
+            "sort_order"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "location_qa_organization_id_organization_id_fk": {
           "name": "location_qa_organization_id_organization_id_fk",
@@ -4551,10 +4569,10 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "menu_items_image_asset_id_media_assets_old_id_fk": {
-          "name": "menu_items_image_asset_id_media_assets_old_id_fk",
+        "menu_items_image_asset_id_media_assets_id_fk": {
+          "name": "menu_items_image_asset_id_media_assets_id_fk",
           "tableFrom": "menu_items",
-          "tableTo": "media_assets_old",
+          "tableTo": "media_assets",
           "columnsFrom": [
             "image_asset_id"
           ],
@@ -7089,10 +7107,10 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "posts_image_asset_id_media_assets_old_id_fk": {
-          "name": "posts_image_asset_id_media_assets_old_id_fk",
+        "posts_image_asset_id_media_assets_id_fk": {
+          "name": "posts_image_asset_id_media_assets_id_fk",
           "tableFrom": "posts",
-          "tableTo": "media_assets_old",
+          "tableTo": "media_assets",
           "columnsFrom": [
             "image_asset_id"
           ],

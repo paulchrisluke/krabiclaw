@@ -289,9 +289,11 @@ export async function updateNotificationsSettings(
   }
   if (channels) {
     const defaultPhone = trimmedPhone || await getOrgWhatsAppPhone(db, organizationId, siteId)
-    const defaultChannels = defaultPhone ? ['whatsapp'] : ['email']
     const validChannels = channels.filter(c => c === 'whatsapp' || c === 'email')
-    const value = JSON.stringify(validChannels.length ? validChannels : defaultChannels)
+    // Filter out whatsapp if no phone is available
+    const channelsToPersist = defaultPhone ? validChannels : validChannels.filter(c => c !== 'whatsapp')
+    const finalChannels = channelsToPersist.length ? channelsToPersist : ['email']
+    const value = JSON.stringify(finalChannels)
     ops.push(
       execute(
         db,

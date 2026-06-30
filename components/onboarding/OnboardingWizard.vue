@@ -1045,7 +1045,8 @@ async function finishCreation(orgSlug: string | null | undefined, siteSlug: stri
       })
     } catch (error) {
       console.error('onboarding_currency_save_failed', error)
-      throw new Error('Failed to save currency setting. Please try again.')
+      // Don't abort the onboarding flow - the site was already created successfully
+      // Log the failure but continue; currency can be fixed in dashboard settings later
     }
   }
 

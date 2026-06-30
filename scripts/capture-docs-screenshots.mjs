@@ -172,25 +172,36 @@ async function captureDashboardPages(results, userId) {
   await page.close()
 }
 
-const results = []
-const onboardedUserId = await captureOnboardingFlow(results)
-await captureDashboardPages(results, onboardedUserId)
-await browser.close()
+async function main() {
+  const results = []
+  const onboardedUserId = await captureOnboardingFlow(results)
+  await captureDashboardPages(results, onboardedUserId)
 
-console.log(`\nCaptured ${results.length} screenshots to ${OUT}\n`)
+  console.log(`\nCaptured ${results.length} screenshots to ${OUT}\n`)
 
-// Upload everything via the admin platform-media route.
-const loginPage = await chromium.launch().then(b => b.newPage())
-await loginPage.goto(`${BASE}/api/dev/login?userId=${ADMIN_USER_ID}`)
-const cookieHeader = await getCookieHeader(loginPage)
-await loginPage.context().browser().close()
+  // Upload everything via the admin platform-media route.
+  const loginPage = await chromium.launch().then(b => b.newPage())
+  try {
+    await loginPage.goto(`${BASE}/api/dev/login?userId=${ADMIN_USER_ID}`)
+    const cookieHeader = await getCookieHeader(loginPage)
 
-const uploaded = {}
-for (const { name, filePath } of results) {
-  const asset = await uploadScreenshot(filePath, `Docs screenshot: ${name}`, cookieHeader)
-  uploaded[name] = { id: asset.id, public_url: asset.public_url }
-  console.log(`${name}: ${asset.public_url}  (asset_id: ${asset.id})`)
+    const uploaded = {}
+    for (const { name, filePath } of results) {
+      const altText = name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+      const asset = await uploadScreenshot(filePath, `Screenshot: ${altText}`, cookieHeader)
+      uploaded[name] = { id: asset.id, public_url: asset.public_url }
+      console.log(`${name}: ${asset.public_url}  (asset_id: ${asset.id})`)
+    }
+
+    console.log('\nJSON summary:\n')
+    console.log(JSON.stringify(uploaded, null, 2))
+  } finally {
+    await loginPage.context().browser().close()
+  }
 }
 
-console.log('\nJSON summary:\n')
-console.log(JSON.stringify(uploaded, null, 2))
+try {
+  await main()
+} finally {
+  await browser.close()
+}

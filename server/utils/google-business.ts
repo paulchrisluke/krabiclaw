@@ -430,6 +430,7 @@ export const syncGoogleLocations = async (
 
   const now = new Date().toISOString()
   let reviewsUpserted = 0
+  const notificationPromises: Promise<void>[] = []
 
   for (const location of locations) {
     const googleLocationId = location.name.split('/').pop() || ''
@@ -541,18 +542,20 @@ export const syncGoogleLocations = async (
             // Only alert the owner for genuinely new rows — INSERT OR IGNORE means
             // changes === 0 for reviews we'd already synced on a prior run.
             // Fire notification asynchronously to avoid blocking the sync loop
-            notifyReviewReceived(env, env.DB, {
-              organizationId,
-              siteId,
-              siteName: location.title,
-              locationId: localLocationId,
-              reviewId,
-              authorName,
-              rating: Math.round(rating),
-              content: comment,
-            }).catch((error) => {
-              console.error('review_sync_notify_failed', { reviewId, error: error instanceof Error ? error.message : String(error) })
-            })
+            notificationPromises.push(
+              notifyReviewReceived(env, env.DB, {
+                organizationId,
+                siteId,
+                siteName: location.title,
+                locationId: localLocationId,
+                reviewId,
+                authorName,
+                rating: Math.round(rating),
+                content: comment,
+              }).catch((error) => {
+                console.error('review_sync_notify_failed', { reviewId, error: error instanceof Error ? error.message : String(error) })
+              })
+            )
           }
         }
       } catch {
@@ -560,6 +563,9 @@ export const syncGoogleLocations = async (
       }
     }
   }
+
+  // Await all pending notification promises before returning
+  await Promise.allSettled(notificationPromises)
 
   return { reviewsUpserted }
 }

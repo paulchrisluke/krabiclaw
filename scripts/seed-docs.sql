@@ -307,7 +307,7 @@ VALUES (
   'doc-014',
   'Deploy your site',
   'deploy-your-site',
-  'Deploying a site takes about 5 minutes. KrabiClaw asks a handful of questions, builds a private preview as you answer, and only reserves your live address once you approve it.
+  'Deploying a site takes about 5 minutes. KrabiClaw asks a handful of questions, builds a private preview after you submit the details form, and only reserves your live address once you approve it.
 
 ![Onboarding welcome screen](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/1cea1097-025e-4d90-a82f-1ad8f86f0a00/public)
 
@@ -423,7 +423,7 @@ VALUES (
   '{"steps":[
     {"name":"Pick your business type","text":"Choose Restaurant, cafe or bar, or Experience, class or activity. This sets the layout and copy your site starts with.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"d99df1a2-7999-4817-bf1c-88594284dcd4","position":0},
     {"name":"Choose Google Maps or manual entry","text":"Paste your Google Maps link so KrabiClaw can pull your name, address, phone, hours, and photos automatically, or start manually by typing your business name.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"216f3103-5fd8-4e9a-8ade-7e550117b5e8","position":1},
-    {"name":"Fill in the details","text":"Review or fill in your name, city, address, phone, website, hours, manager alert number, timezone, and currency. All required, even on the manual path.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"572033d7-0fc1-4143-99fa-53283fb7d5bc","position":2},
+    {"name":"Fill in the details","text":"Review or fill in your name, city, address, phone, website, hours. Manager alert number, timezone, and currency are required; other fields are optional.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"572033d7-0fc1-4143-99fa-53283fb7d5bc","position":2},
     {"name":"Review your draft, then create the site","text":"Submitting saves a private draft with a real preview first. Choose Create site to go live, or Edit details to keep adjusting.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"8d7cf0e6-b2d5-4b1f-bfe0-9dbf3af09b16","position":3},
     {"name":"Make it yours","text":"Optional: set a brand color, upload a logo, and add a real hero photo. Skip it and do this later if you would rather.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"0d841791-9cda-44bb-bd49-dae270e8f485","position":4},
     {"name":"You are live","text":"Your site is published after you choose Create site. Open your dashboard, keep building with ChowBot or the structured editor, or connect ChatGPT.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"717d66cc-9f1e-4639-bf91-3d91561586bb","position":5}

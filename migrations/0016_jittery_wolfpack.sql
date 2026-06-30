@@ -1,4 +1,17 @@
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
+
+-- Deduplicate active drafts before adding unique constraint
+-- Keep the most recently updated draft per user
+DELETE FROM `onboarding_drafts`
+WHERE id NOT IN (
+  SELECT id FROM (
+    SELECT id, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY updated_at DESC) as rn
+    FROM `onboarding_drafts`
+    WHERE status = 'active'
+  ) ranked
+  WHERE rn = 1
+);
+
 CREATE TABLE `__new_onboarding_drafts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,

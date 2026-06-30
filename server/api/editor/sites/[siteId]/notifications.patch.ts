@@ -12,8 +12,14 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'whatsapp_phone or channels is required' }, { status: 400 })
   }
 
-  if (body.channels !== undefined && !Array.isArray(body.channels)) {
-    return jsonResponse({ error: 'channels must be an array' }, { status: 400 })
+  if (body.channels !== undefined) {
+    if (!Array.isArray(body.channels)) {
+      return jsonResponse({ error: 'channels must be an array' }, { status: 400 })
+    }
+    const validChannels = body.channels.filter(c => c === 'whatsapp' || c === 'email')
+    if (validChannels.length === 0) {
+      return jsonResponse({ error: 'channels must contain at least one valid value (whatsapp or email)' }, { status: 400 })
+    }
   }
 
   const env = cloudflareEnv(event)
