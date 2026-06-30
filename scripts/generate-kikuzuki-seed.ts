@@ -16,6 +16,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { execWithRetry } from './wrangler-retry.ts'
 import {
   renderKikuzukiCoreSeedBlock,
   renderKikuzukiMediaBlock,
@@ -64,7 +65,7 @@ VALUES ('org-kikuzuki', 'Kikuzuki Krabi Thailand', 'kikuzuki-krabi-thailand', un
 -- Ensure the dedicated owner user exists to satisfy FK constraints.
 INSERT OR IGNORE INTO user (id, name, email, emailVerified)
 VALUES
-  ('user-kikuzuki', 'Kikuzuki Owner', 'contact@kikuzuki.com', 1);
+  ('user-kikuzuki', 'Kikuzuki Owner', 'owner@kikuzuki.example', 1);
 
 INSERT OR REPLACE INTO member (id, organizationId, userId, role, createdAt)
 VALUES
@@ -117,7 +118,7 @@ try {
 
   const cmd = ['npx', ...wranglerArgs, '--file', sqlPath]
   console.log(`[seed:kikuzuki] Applying: ${cmd.join(' ')}`)
-  execFileSync('npx', [...wranglerArgs, '--file', sqlPath], { stdio: 'inherit' })
+  await execWithRetry(() => execFileSync('npx', [...wranglerArgs, '--file', sqlPath], { stdio: 'inherit' }), 'seed:kikuzuki')
   console.log('[seed:kikuzuki] Done.')
 } finally {
   rmSync(dir, { recursive: true, force: true })

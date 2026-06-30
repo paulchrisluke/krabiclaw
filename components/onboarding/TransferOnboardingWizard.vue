@@ -1,16 +1,6 @@
 <template>
   <div class="relative flex min-h-0 flex-col border-r border-default bg-default">
 
-    <!-- Pane header -->
-    <div class="flex shrink-0 items-center justify-between border-b border-default px-5 py-3">
-      <div class="flex items-center gap-2">
-        <div class="flex size-[26px] items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <UIcon name="i-heroicons-check-badge" class="size-4" />
-        </div>
-        <span class="text-sm font-semibold text-highlighted">Site handoff</span>
-      </div>
-    </div>
-
     <!-- Scroll area -->
     <div ref="scrollRef" class="min-h-0 flex-1 overflow-y-auto">
 
@@ -184,7 +174,7 @@
                   />
                   <McpEditCard
                     :guide-to="`/dashboard/${orgSlug}/~/settings/chatgpt`"
-                    guide-label="ChatGPT setup guide"
+                    guide-label="Install ChatGPT app"
                     :starter-prompt="transferStarterPrompt"
                     :dashboard-to="`/dashboard/${orgSlug}`"
                     dashboard-label="Open the dashboard"

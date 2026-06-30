@@ -1,6 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import { execute, queryFirst } from '~/server/db'
 import { encryptSecret, decryptSecret, encryptionEnv } from './encryption'
+import { notifyReviewReceived } from './notifications'
 
 type JsonPrimitive = string | number | boolean | null
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[]
@@ -21,6 +22,13 @@ export interface GoogleBusinessEnv {
   GOOGLE_BUSINESS_CLIENT_ID?: string
   GOOGLE_BUSINESS_CLIENT_SECRET?: string
   GOOGLE_BUSINESS_REDIRECT_URI?: string
+  // Notification env, used to alert the owner when a new review comes in via sync
+  RESEND_API_KEY?: string
+  WHATSAPP_PHONE_NUMBER_ID?: string
+  WHATSAPP_ACCESS_TOKEN?: string
+  EMAIL_FROM?: string
+  EMAIL_DELIVERY_MODE?: string
+  NUXT_PUBLIC_PLATFORM_DOMAIN?: string
 }
 
 export interface GoogleBusinessSyncResult {
@@ -422,6 +430,7 @@ export const syncGoogleLocations = async (
 
   const now = new Date().toISOString()
   let reviewsUpserted = 0
+  const notificationPromises: Promise<void>[] = []
 
   for (const location of locations) {
     const googleLocationId = location.name.split('/').pop() || ''
@@ -508,6 +517,7 @@ export const syncGoogleLocations = async (
           const comment = r.comment ? String(r.comment) : null
           const createTime = r.createTime ? String(r.createTime) : now
 
+          const reviewId = `gbiz-${reviewName.replace(/\//g, '-')}`
           const result = await execute(env.DB, `
             INSERT OR IGNORE INTO reviews
               (id, organization_id, site_id, location_id, google_review_id,
@@ -515,7 +525,7 @@ export const syncGoogleLocations = async (
                status, source, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', 'google_business', ?, ?)
           `, [
-            `gbiz-${reviewName.replace(/\//g, '-')}`,
+            reviewId,
             organizationId,
             siteId,
             localLocationId,
@@ -527,13 +537,43 @@ export const syncGoogleLocations = async (
             createTime,
             now
           ])
-          if (result.meta.changes > 0) reviewsUpserted++
+          if (result.meta.changes > 0) {
+            reviewsUpserted++
+            // Only alert the owner for genuinely new rows — INSERT OR IGNORE means
+            // changes === 0 for reviews we'd already synced on a prior run.
+            // Also skip notifications for historical backfill (reviews older than 30 days)
+            const reviewDate = new Date(createTime)
+            const thirtyDaysAgo = new Date(now)
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+            const isHistorical = reviewDate < thirtyDaysAgo
+            
+            if (!isHistorical) {
+              // Fire notification asynchronously to avoid blocking the sync loop
+              notificationPromises.push(
+                notifyReviewReceived(env, env.DB, {
+                  organizationId,
+                  siteId,
+                  siteName: location.title,
+                  locationId: localLocationId,
+                  reviewId,
+                  authorName,
+                  rating: Math.round(rating),
+                  content: comment,
+                }).catch((error) => {
+                  console.error('review_sync_notify_failed', { reviewId, error: error instanceof Error ? error.message : String(error) })
+                })
+              )
+            }
+          }
         }
       } catch {
         // Non-fatal: reviews sync failure should not abort location sync
       }
     }
   }
+
+  // Await all pending notification promises before returning
+  await Promise.allSettled(notificationPromises)
 
   return { reviewsUpserted }
 }

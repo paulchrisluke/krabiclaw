@@ -18,8 +18,9 @@ const tenantRoutes = [
   { path: '/about', title: /About|Story|Ember/, text: 'Ember' },
   { path: '/posts', title: /Updates|Posts|Ember/, text: 'Ember' },
   ...demoFixture.publicRoutes,
-  // Demo site has experiences, so /reservations redirects to /experiences (per-experience booking replaces the generic table-reservation form)
-  { path: '/reservations', title: /Experiences/, text: 'Experiences' },
+  // Demo site is a restaurant with experiences attached, not a pure experience vertical,
+  // so /reservations stays the generic table-reservation form alongside /experiences.
+  { path: '/reservations', title: /Ember & Slice \| Reserve a table/, text: 'Make a Reservation' },
   { path: '/contact', title: /Contact/, text: 'Send a message' }
 ]
 

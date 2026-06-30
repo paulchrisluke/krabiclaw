@@ -38,12 +38,11 @@
     </ul>
 
     <div class="pt-3 flex items-center gap-3">
-      <UButton as="a" href="https://chatgpt.com" target="_blank" rel="noopener" size="sm">
-        Open ChatGPT
-        <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-3.5" />
+      <UButton :to="`/dashboard/${orgSlug}/~/settings/chatgpt`" size="sm">
+        Install ChatGPT app
       </UButton>
-      <UButton :to="`/dashboard/${orgSlug}/~/settings/chatgpt`" variant="outline" color="neutral" size="sm">
-        ChatGPT setup guide
+      <UButton to="/docs/integrations/mcp-setup" variant="outline" color="neutral" size="sm">
+        MCP setup guide
       </UButton>
     </div>
   </UCard>

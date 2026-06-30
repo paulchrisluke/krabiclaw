@@ -4,6 +4,7 @@ import { queryAll } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 
 const redirects: Record<string, string> = {
+  '/docs/mcp-setup': '/docs/integrations/mcp-setup',
   '/privacy-policy': '/privacy',
   '/terms-and-conditions': '/terms',
 }
@@ -22,7 +23,7 @@ export default defineEventHandler(async (event) => {
     getMethod(event) === 'GET' &&
     (getRequestHeader(event, 'accept') ?? '').includes('text/html')
   ) {
-    return sendRedirect(event, '/docs/mcp-setup', 302)
+    return sendRedirect(event, '/docs/integrations/mcp-setup', 302)
   }
 
   const target = redirects[normalizedPathname]

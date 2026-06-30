@@ -23,6 +23,16 @@
         alt="" aria-hidden="true" fetchpriority="high" decoding="async"
         class="absolute inset-0 h-full w-full object-cover"
       />
+      <!-- No real photo yet: a brand-color + icon treatment, not a stock photo that
+           isn't actually theirs and not a blank panel either. -->
+      <div
+        v-else
+        aria-hidden="true"
+        class="absolute inset-0 flex items-center justify-center"
+        :style="{ background: `linear-gradient(135deg, ${brandColor} 0%, color-mix(in srgb, ${brandColor} 60%, black) 100%)` }"
+      >
+        <UIcon :name="verticalIcon" class="size-24 text-white/25" />
+      </div>
 
       <!-- Deferred video: opacity-0 in DOM, fades to opacity-100 after canplay.
            Parent opacity-50 applies, so final rendered opacity is 0.5. -->
@@ -114,6 +124,8 @@ interface Props {
     hasOrderLinks?: boolean
     ctaRoute?: string
     reserveCta?: string
+    brandColor?: string
+    vertical?: string
   }
 }
 
@@ -129,6 +141,9 @@ const businessPrimaryPhoto = computed(() => props.data?.businessPrimaryPhoto)
 const hasOrderLinks = computed(() => props.data?.hasOrderLinks || false)
 const ctaRoute = computed(() => props.data?.ctaRoute || '')
 const reserveCta = computed(() => props.data?.reserveCta || '')
+// Neutral default until the owner picks a brand color in onboarding.
+const brandColor = computed(() => props.data?.brandColor || '#3F3F46')
+const verticalIcon = computed(() => props.data?.vertical === 'experience' ? 'i-heroicons-sparkles' : 'i-heroicons-building-storefront')
 
 const { videoEl, showVideo } = useHeroVideo(() => hero.value?.video)
 </script>

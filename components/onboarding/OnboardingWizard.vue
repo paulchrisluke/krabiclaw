@@ -22,16 +22,6 @@
       </div>
     </Transition>
 
-    <!-- Pane header -->
-    <div class="flex shrink-0 items-center justify-between border-b border-default px-5 py-3">
-      <div class="flex items-center gap-2">
-        <div class="flex size-[26px] items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <UIcon name="i-heroicons-sparkles" class="size-4" />
-        </div>
-        <span class="text-sm font-semibold text-highlighted">Setup assistant</span>
-      </div>
-    </div>
-
     <!-- Scroll area -->
     <div ref="scrollRef" class="min-h-0 flex-1 overflow-y-auto">
 
@@ -229,6 +219,9 @@
                     </UButton>
                   </div>
                 </UCard>
+                <div v-if="msg.brandCard && importedSiteId" class="mt-2">
+                  <BrandEssentialsCard :site-id="importedSiteId" @done="handleBrandCardDone" />
+                </div>
                 <div v-if="msg.polishCard" class="mt-2">
                   <PolishSuggestionsCard
                     :vertical="selectedVertical"
@@ -261,6 +254,7 @@
       <!-- Error banner -->
       <div
         v-if="importError"
+        data-testid="wizard-error-banner"
         class="mb-3 flex items-center gap-2 rounded-lg border border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-950 px-3 py-2 text-xs text-error-600 dark:text-error-400"
       >
         <UIcon name="i-heroicons-exclamation-triangle" class="size-3.5 shrink-0" />
@@ -273,6 +267,8 @@
         <button
           v-for="(reply, i) in replies"
           :key="i"
+          data-testid="wizard-quick-reply"
+          :data-reply-action="reply.action"
           :class="[
             'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12.5px] font-semibold transition-colors',
             reply.primary
@@ -318,6 +314,7 @@
 
 <script setup lang="ts">
 import { marked } from 'marked'
+import { DEFAULT_CURRENCY } from '~/shared/currencies'
 import {
   buildOnboardingStarterPrompt,
   getQuickActionPrompts,
@@ -333,6 +330,7 @@ interface WizardMessage {
   socialCard?: boolean
   polishCard?: boolean
   mcpCard?: boolean
+  brandCard?: boolean
   placePreview?: { name: string; address: string; phone?: string | null; mapsUrl?: string | null }
   detailsCard?: {
     title: string
@@ -352,6 +350,13 @@ interface QuickReply {
   action?: string
 }
 
+interface DraftSavedPayload {
+  draftId: string
+  previewToken: string
+  draftName: string
+  subdomainCandidate: string
+}
+
 type WizardStep = 'welcome' | 'vertical' | 'source' | 'awaiting_url' | 'awaiting_manual_name' | 'confirm' | 'details' | 'importing' | 'imported'
 type Vertical = 'restaurant' | 'experience'
 type DetailsSource = 'imported' | 'manual'
@@ -368,6 +373,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'site-created': [orgSlug: string | null, locationSlug?: string | null]
+  'draft-saved': [draft: DraftSavedPayload]
 }>()
 
 const router = useRouter()
@@ -421,6 +427,7 @@ const detailsForm = reactive({
   openingHours: '',
   notificationPhone: '',
   timezone: '',
+  currency: DEFAULT_CURRENCY,
   isPrimary: true,
 })
 
@@ -451,6 +458,7 @@ const importedSiteSlug = ref<string | null>(null)
 const importedLocationSlug = ref<string | null>(null)
 const checklistStarterPrompt = ref<string | null>(null)
 const preConfirmStep = ref<WizardStep>('awaiting_url')
+const onboardingDraftId = ref<string | null>(null)
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -510,7 +518,7 @@ const brandWorkspacePath = computed(() => {
 
 const chatgptGuidePath = computed(() => {
   const slug = importedOrgSlug.value ?? props.existingOrgSlug ?? null
-  return slug ? `/dashboard/${slug}/~/settings/chatgpt` : '/plugin'
+  return slug ? `/dashboard/${slug}/~/settings/chatgpt` : '/docs/integrations/mcp-setup'
 })
 
 const chatgptStarterPrompt = computed(() => {
@@ -552,6 +560,7 @@ async function pushBot(text: string, extra?: {
   socialCard?: boolean
   polishCard?: boolean
   mcpCard?: boolean
+  brandCard?: boolean
   placePreview?: WizardMessage['placePreview']
   detailsCard?: WizardMessage['detailsCard']
 }) {
@@ -658,6 +667,13 @@ async function advance(target: WizardStep) {
   }
 }
 
+function handleBrandCardDone() {
+  // Advance past the brand card step regardless of save or skip
+  if (workspaceEntryPath.value) {
+    router.push(workspaceEntryPath.value)
+  }
+}
+
 async function handleReply(reply: QuickReply) {
   if (reply.action === 'set_vertical_restaurant') {
     selectedVertical.value = 'restaurant'
@@ -716,6 +732,18 @@ async function handleReply(reply: QuickReply) {
     const siteSlugForLocation = importedSiteSlug.value ?? props.existingSiteSlug
     await markOnboardingComplete()
     await router.push(slug && siteSlugForLocation ? `/dashboard/${slug}/sites/${siteSlugForLocation}/new` : '/dashboard')
+    return
+  }
+
+  if (reply.action === 'edit_draft') {
+    pushUser(reply.label)
+    await advance('details')
+    return
+  }
+
+  if (reply.action === 'commit_draft') {
+    pushUser(reply.label)
+    await commitDraft()
     return
   }
 }
@@ -802,9 +830,63 @@ async function submitDetails() {
   step.value = 'importing'
   importing.value = true
   importError.value = null
-  const tools = await showLookupTools(props.isAddingLocation ? 'Adding your location…' : 'Creating your workspace…')
+  const tools = await showLookupTools(
+    props.isAddingLocation
+      ? 'Adding your location…'
+      : 'Saving your private draft preview…'
+  )
 
   try {
+    if (!props.isAddingLocation) {
+      const endpoint = pendingPreview.value
+        ? '/api/dashboard/onboarding/drafts/from-place'
+        : '/api/dashboard/onboarding/drafts/manual'
+
+      const body = pendingPreview.value
+        ? {
+            placeId: pendingPreview.value.placeId,
+            vertical: selectedVertical.value,
+            details: serializeDetails(),
+          }
+        : {
+            name: detailsForm.name.trim(),
+            vertical: selectedVertical.value,
+            details: serializeDetails(),
+          }
+
+      const res = await $fetch<{
+        success: boolean
+        draftId?: string
+        previewToken?: string
+        draftName?: string
+        subdomainCandidate?: string
+        error?: string
+      }>(endpoint, { method: 'POST', body })
+
+      if (!res.success || !res.draftId || !res.previewToken || !res.draftName || !res.subdomainCandidate) {
+        throw new Error(res.error ?? 'Failed to save your preview draft. Please try again.')
+      }
+
+      tools[0]!.done = true
+      onboardingDraftId.value = res.draftId
+      emit('draft-saved', {
+        draftId: res.draftId,
+        previewToken: res.previewToken,
+        draftName: res.draftName,
+        subdomainCandidate: res.subdomainCandidate,
+      })
+
+      await pushBot(
+        'Draft ready. The preview on the right now shows a private working copy, so you can review the site before reserving a live subdomain.'
+      )
+      replies.value = [
+        { label: 'Create site', icon: 'i-heroicons-check-badge', primary: true, action: 'commit_draft' },
+        { label: 'Edit details', icon: 'i-heroicons-pencil-square', action: 'edit_draft' },
+      ]
+      step.value = 'details'
+      return
+    }
+
     const endpoint = pendingPreview.value
       ? (props.setupEndpoint ?? '/api/dashboard/onboarding/setup')
       : (props.setupManualEndpoint ?? '/api/dashboard/onboarding/setup-manual')
@@ -848,6 +930,54 @@ async function submitDetails() {
   }
 }
 
+let committing = false
+
+async function commitDraft() {
+  if (committing) return
+  if (!onboardingDraftId.value) {
+    importError.value = 'No draft is ready yet. Save the preview first.'
+    await advance('details')
+    return
+  }
+
+  committing = true
+  replies.value = []
+  step.value = 'importing'
+  importing.value = true
+  importError.value = null
+  const tools = await showLookupTools('Creating your site from the approved draft…')
+
+  try {
+    const res = await $fetch<{
+      success: boolean
+      siteId?: string | null
+      orgSlug?: string | null
+      siteSlug?: string | null
+      locationSlug?: string | null
+      error?: string
+    }>(`/api/dashboard/onboarding/drafts/${onboardingDraftId.value}/commit`, {
+      method: 'POST',
+    })
+
+    if (!res.success) {
+      throw new Error(res.error ?? 'Failed to create your workspace. Please try again.')
+    }
+
+    tools[0]!.done = true
+    importedSiteId.value = res.siteId ?? props.siteId ?? null
+    importedOrgSlug.value = res.orgSlug ?? null
+    importedSiteSlug.value = res.siteSlug ?? props.existingSiteSlug ?? null
+    await refreshChecklistStarterPrompt(importedSiteId.value)
+    await finishCreation(res.orgSlug, res.siteSlug ?? importedSiteSlug.value ?? props.existingSiteSlug ?? null, res.locationSlug)
+  } catch (error) {
+    importError.value = error instanceof Error ? error.message : 'Something went wrong. Please try again.'
+    step.value = 'details'
+  } finally {
+    importing.value = false
+    committing = false
+  }
+}
+
 function serializeDetails() {
   return {
     name: detailsForm.name.trim(),
@@ -862,6 +992,14 @@ function serializeDetails() {
   }
 }
 
+function guessLocalTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+  } catch {
+    return ''
+  }
+}
+
 function seedDetailsFromPreview(preview: NonNullable<typeof pendingPreview.value>) {
   detailsForm.name = preview.name ?? ''
   detailsForm.city = preview.city ?? ''
@@ -869,8 +1007,12 @@ function seedDetailsFromPreview(preview: NonNullable<typeof pendingPreview.value
   detailsForm.phone = preview.phone ?? ''
   detailsForm.websiteUrl = preview.websiteUrl ?? ''
   detailsForm.openingHours = Array.isArray(preview.openingHours) ? preview.openingHours.join('\n') : ''
-  detailsForm.notificationPhone = ''
-  detailsForm.timezone = ''
+  // Default the alert number to the business phone and guess the timezone from the
+  // browser — both are required now (a missing notification phone silently degrades
+  // booking alerts to email-only), so default them instead of leaving them blank.
+  detailsForm.notificationPhone = preview.phone ?? ''
+  detailsForm.timezone = guessLocalTimezone()
+  detailsForm.currency = DEFAULT_CURRENCY
   detailsForm.isPrimary = !props.isAddingLocation
 }
 
@@ -882,7 +1024,8 @@ function seedDetailsFromManual(name: string) {
   detailsForm.websiteUrl = ''
   detailsForm.openingHours = ''
   detailsForm.notificationPhone = ''
-  detailsForm.timezone = ''
+  detailsForm.timezone = guessLocalTimezone()
+  detailsForm.currency = DEFAULT_CURRENCY
   detailsForm.isPrimary = !props.isAddingLocation
 }
 
@@ -894,15 +1037,36 @@ async function finishCreation(orgSlug: string | null | undefined, siteSlug: stri
   if (importedSiteId.value && !props.isAddingLocation) {
     trackSiteCreated(importedSiteId.value)
   }
-  
+
+  // Currency is site-level (not asked again on add-location) and otherwise
+  // silently defaults to THB — persist the onboarding choice explicitly.
+  if (importedSiteId.value && !props.isAddingLocation) {
+    try {
+      await $fetch(`/api/sites/${importedSiteId.value}/settings`, {
+        method: 'PATCH',
+        body: { default_currency: detailsForm.currency },
+      })
+    } catch (error) {
+      console.error('onboarding_currency_save_failed', error)
+      // Don't abort the onboarding flow - the site was already created successfully
+      // Log the failure but continue; currency can be fixed in dashboard settings later
+    }
+  }
+
   await refreshSocialStatus(importedSiteId.value)
   await sleep(300)
   const domainSlug = siteSlug ?? orgSlug
   const domain = domainSlug ? `**${domainSlug}.krabiclaw.com**` : 'your new workspace'
   const offerLabel = selectedVertical.value === 'experience' ? 'experiences' : 'menu'
   await pushBot(`Done. Your workspace is live at ${domain}.`)
+  if (!props.isAddingLocation && importedSiteId.value) {
+    await pushBot(
+      `One last thing before you go — a logo, real photo, and brand color take this from "a template" to "your site" in under a minute.`,
+      { brandCard: true },
+    )
+  }
   await pushBot(
-    `Head to your dashboard to keep building — add your ${offerLabel}, hero image and story — or connect ChatGPT to manage it from there.`,
+    `From here, head to your dashboard to keep building — add your ${offerLabel} and story — or connect ChatGPT to manage it from there.`,
     { handoff: true, socialCard: !props.isAddingLocation, polishCard: true, mcpCard: true },
   )
   step.value = 'imported'

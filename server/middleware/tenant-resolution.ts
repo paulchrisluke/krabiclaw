@@ -5,6 +5,7 @@ import { defineEventHandler, getRequestURL, getHeader } from 'h3'
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv } from '../utils/api-response'
 import { deriveSubdomain, getFreeSiteDomain, hostnameOf, isPlatformHost, isPreviewContext } from '../utils/tenant-hosts'
+import { verifyScopedPreviewToken } from '../utils/preview-token'
 
 interface TenantResolutionEnv {
   NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
@@ -98,6 +99,45 @@ export default defineEventHandler(async (event) => {
         event.context.tenantType = 'tenant'
         event.context.site = { brand_name: previewSite.brand_name || null, logo_url: previewSite.logo_url || null, vertical: previewSite.vertical || 'restaurant' }
         return
+      }
+    }
+  }
+
+  const previewDraftMatch = url.pathname.match(/^\/preview\/draft\/([^/?]+)/)
+  if (previewDraftMatch && isPlatformHost(host, env)) {
+    const draftId = previewDraftMatch[1]!
+    const previewToken = url.searchParams.get('token')
+    const db = env.db
+    if (db) {
+      const previewDraft = await queryFirst<{
+        id: string
+        name: string
+        vertical: string | null
+        payload_json: string
+      }>(db, `
+        SELECT id, name, vertical, payload_json
+        FROM onboarding_drafts
+        WHERE id = ? AND status = 'active'
+        LIMIT 1
+      `, [draftId])
+
+      // Verify token as a signed stateless scoped token with scope and expiry validation
+      const previewSecret = typeof env.PREVIEW_SECRET === 'string' && env.PREVIEW_SECRET.trim()
+        ? env.PREVIEW_SECRET.trim()
+        : null
+      if (previewDraft && previewToken && previewSecret) {
+        const isAuthorized = await verifyScopedPreviewToken(previewSecret, 'draft', draftId, previewToken)
+        if (isAuthorized) {
+          event.context.draftId = previewDraft.id
+          event.context.tenantType = 'tenant'
+          event.context.themeId = 'saya-theme-v1'
+          event.context.site = {
+            brand_name: previewDraft.name || null,
+            logo_url: null,
+            vertical: previewDraft.vertical || 'restaurant',
+          }
+          return
+        }
       }
     }
   }

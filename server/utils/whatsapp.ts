@@ -509,14 +509,20 @@ export async function fetchWhatsAppMedia(
 
 /**
  * Store (or update) the org's WhatsApp notification phone in site_config.
- * Normalizes to E.164 before saving.
+ * Normalizes to E.164 before saving. Passing null/empty clears it instead.
  */
 export async function setOrgWhatsAppPhone(
   db: DbClient,
   organizationId: string,
   siteId: string,
-  phone: string
+  phone: string | null
 ): Promise<void> {
+  if (!phone) {
+    await execute(db, `
+      DELETE FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'whatsapp_phone'
+    `, [organizationId, siteId])
+    return
+  }
   const normalized = normalizePhone(phone)
   const now = new Date().toISOString()
   await execute(db, `

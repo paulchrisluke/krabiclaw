@@ -165,7 +165,9 @@
           businessPrimaryPhoto: googleBusiness?.media?.[0],
           hasOrderLinks: hasOrderLinks,
           ctaRoute: homeCopy.ctaRoute,
-          reserveCta: homeCopy.reserveCta
+          reserveCta: homeCopy.reserveCta,
+          brandColor: bootstrapConfig.value?.brand_color,
+          vertical: site?.vertical
         }"
       />
       <section v-else id="section-hero" class="relative min-h-160 overflow-hidden flex items-center">
@@ -191,6 +193,15 @@
             alt="" aria-hidden="true" fetchpriority="high" decoding="async"
             class="absolute inset-0 h-full w-full object-cover"
           />
+          <!-- Fallback: brand color + icon when no media available -->
+          <div
+            v-else
+            class="absolute inset-0 flex items-center justify-center"
+            :style="{ background: `linear-gradient(135deg, ${bootstrapConfig.value?.brand_color || '#1F2547'} 0%, color-mix(in srgb, ${bootstrapConfig.value?.brand_color || '#1F2547'} 60%, black) 100%)` }"
+            aria-hidden="true"
+          >
+            <UIcon :name="verticalIcon" class="size-24 text-white/25" />
+          </div>
 
           <!-- Deferred video: not in SSR, starts opacity-0, fades in after canplay -->
           <ClientOnly v-if="hero.video && hero.videoKind === 'video'">
@@ -716,6 +727,7 @@ const googleReviewSummary = computed(() => {
 })
 
 const restaurantName = computed(() => site?.brand_name || businessTitle.value || 'Business')
+const verticalIcon = computed(() => site?.vertical === 'experience' ? 'i-heroicons-sparkles' : 'i-heroicons-building-storefront')
 
 // Hero from CMS with Google Business fallbacks
 const hero = computed(() => getHero({

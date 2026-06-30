@@ -9,22 +9,6 @@ function uid(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
 }
 
-const TEMPLATE_HERO_IMAGE = {
-  cloudflareImageId: "0762ea49-0bd2-4cc8-1044-d6c9b1f00100",
-  publicUrl:
-    "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/public",
-  thumbnailUrl:
-    "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/thumbnail",
-};
-
-const TEMPLATE_STORY_IMAGE = {
-  cloudflareImageId: "03e7f501-7689-4607-3acb-ec6f0d958500",
-  publicUrl:
-    "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/03e7f501-7689-4607-3acb-ec6f0d958500/public",
-  thumbnailUrl:
-    "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/03e7f501-7689-4607-3acb-ec6f0d958500/thumbnail",
-};
-
 // Per-vertical menu sections. Restaurant uses the familiar 4-section layout;
 // other verticals that don't have a menu get no menu seeded.
 const VERTICAL_MENU_SECTIONS: Partial<
@@ -124,17 +108,13 @@ const VERTICAL_QA: Partial<
   ],
 };
 
-// Per-vertical site_content seeds
+// Per-vertical site_content seeds. No stock story image: SayaBrandStory already
+// renders a clean single-column layout with no image rather than a photo that
+// isn't actually the business's own.
 const VERTICAL_SITE_CONTENT: Partial<
-  Record<
-    SiteVertical,
-    (
-      _name: string,
-      _storyMediaId: string,
-    ) => Array<[string, string, string, string?]>
-  >
+  Record<SiteVertical, (_name: string) => Array<[string, string, string, string?]>>
 > = {
-  restaurant: (name, storyMediaId) => [
+  restaurant: (name) => [
     ["home", "cta.title", "Come hungry."],
     ["about", "hero.title", "About Us"],
     [
@@ -142,7 +122,6 @@ const VERTICAL_SITE_CONTENT: Partial<
       "hero.subtitle",
       `${name} is built around generous food, warm service, and a room that feels easy to return to.`,
     ],
-    ["about", "story.image", storyMediaId, "media"],
     ["about", "story.headline", "Our Story"],
     [
       "about",
@@ -157,7 +136,7 @@ const VERTICAL_SITE_CONTENT: Partial<
     ],
     ["about", "cta.title", "Come dine with us"],
   ],
-  experience: (name, storyMediaId) => [
+  experience: (name) => [
     ["home", "cta.title", "Book a class."],
     ["about", "hero.title", "About Us"],
     [
@@ -165,7 +144,6 @@ const VERTICAL_SITE_CONTENT: Partial<
       "hero.subtitle",
       `${name} is built around hands-on learning, skilled instruction, and a space that invites you to try something new.`,
     ],
-    ["about", "story.image", storyMediaId, "media"],
     ["about", "story.headline", "Our Story"],
     [
       "about",
@@ -202,8 +180,6 @@ export async function seedNewSite(
     [siteId, "main"],
   );
   const locationId = existing?.id ?? uid("loc");
-  const heroMediaId = uid("media");
-  const storyMediaId = uid("media");
 
   const statements: BatchQuery[] = [];
 
@@ -250,56 +226,10 @@ export async function seedNewSite(
     params: [locationId, siteId, organizationId],
   });
 
-  // ── Hero image ────────────────────────────────────────────────────────────
-  statements.push({
-    query: `
-    INSERT OR IGNORE INTO media_assets
-      (id, organization_id, site_id, location_id, kind, provider, source,
-       cloudflare_image_id, public_url, thumbnail_url, mime_type, file_name, alt_text, status)
-    VALUES (?, ?, ?, ?, 'image', 'cloudflare_images', 'generated',
-      ?, ?, ?, 'image/jpeg', 'hero.jpg', ?, 'active')
-  `,
-    params: [
-      heroMediaId,
-      organizationId,
-      siteId,
-      locationId,
-      TEMPLATE_HERO_IMAGE.cloudflareImageId,
-      TEMPLATE_HERO_IMAGE.publicUrl,
-      TEMPLATE_HERO_IMAGE.thumbnailUrl,
-      `${name} hero image`,
-    ],
-  });
-
-  statements.push({
-    query: `
-    UPDATE business_locations
-    SET hero_image_asset_id = ?
-    WHERE id = ?
-  `,
-    params: [heroMediaId, locationId],
-  });
-
-  // ── Story image ───────────────────────────────────────────────────────────
-  statements.push({
-    query: `
-    INSERT OR IGNORE INTO media_assets
-      (id, organization_id, site_id, location_id, kind, provider, source,
-       cloudflare_image_id, public_url, thumbnail_url, mime_type, file_name, alt_text, status)
-    VALUES (?, ?, ?, ?, 'image', 'cloudflare_images', 'generated',
-      ?, ?, ?, 'image/jpeg', 'story.jpg', ?, 'active')
-  `,
-    params: [
-      storyMediaId,
-      organizationId,
-      siteId,
-      locationId,
-      TEMPLATE_STORY_IMAGE.cloudflareImageId,
-      TEMPLATE_STORY_IMAGE.publicUrl,
-      TEMPLATE_STORY_IMAGE.thumbnailUrl,
-      `${name} story image`,
-    ],
-  });
+  // No stock hero/story media seeded here: a generic stock photo isn't actually
+  // theirs. The homepage hero renders a brand-color + icon treatment instead
+  // (SayaHomeHero.vue), and the public location page falls back to the same
+  // treatment (pages/locations/[slug]/index.vue) when hero_image_asset_id is unset.
 
   // ── Sample menu (restaurant only) ─────────────────────────────────────────
   const menuItems = VERTICAL_MENU_SECTIONS[vertical];
@@ -318,8 +248,8 @@ export async function seedNewSite(
       statements.push({
         query: `
         INSERT OR IGNORE INTO menu_items
-          (id, menu_id, section, name, slug, description, price_amount, available, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+          (id, menu_id, section, name, slug, description, price_amount, available, sort_order, source)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, 'template')
       `,
         params: [
           uid("mi"),
@@ -368,10 +298,10 @@ export async function seedNewSite(
     query: `
     INSERT OR IGNORE INTO posts
       (id, organization_id, site_id, location_id, post_type, title, body,
-       status, published_at, created_by)
+       status, published_at, created_by, source)
     VALUES (?, ?, ?, ?, 'update', 'Welcome to our new website',
       ?,
-      'published', datetime('now'), 'system')
+      'published', datetime('now'), 'system', 'template')
   `,
     params: [postId, organizationId, siteId, locationId, postBody],
   });
@@ -387,7 +317,7 @@ export async function seedNewSite(
   // ── Homepage CTA + about page content (vertical-specific) ─────────────────
   const siteContentFn =
     VERTICAL_SITE_CONTENT[vertical] ?? VERTICAL_SITE_CONTENT.restaurant!;
-  const siteContent = siteContentFn(name, storyMediaId);
+  const siteContent = siteContentFn(name);
 
   for (const [page, field, content, type] of siteContent) {
     const contentType = type ?? "text";

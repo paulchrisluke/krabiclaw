@@ -3402,11 +3402,27 @@ export async function executeMcpToolCall(
       };
     case "update_notification_settings":
       {
+        const rawPhone = args.whatsapp_phone;
+        const whatsappPhone = typeof rawPhone === "string" && rawPhone.trim()
+          ? rawPhone.trim()
+          : undefined;
+        const channels = args.channels === undefined
+          ? undefined
+          : requiredStringArray(args.channels, "channels");
+
+        if (!whatsappPhone && !channels) {
+          throw mcpProtocolError(
+            MCP_ERROR.invalidParams,
+            "Provide whatsapp_phone and/or channels.",
+          );
+        }
+
         const notifications = await updateNotificationsSettings(
           site.db,
           site.organizationId,
           site.siteId,
-          requiredString(args, "whatsapp_phone"),
+          whatsappPhone,
+          channels,
         );
         return {
           notifications,

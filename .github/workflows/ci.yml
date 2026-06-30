@@ -114,6 +114,16 @@ jobs:
           WRANGLER_LOG: debug
         run: |
           npx wrangler deploy --env preview || (echo "Deploy failed, retrying once..." && sleep 10 && npx wrangler deploy --env preview)
+      - name: Sync preview secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PREVIEW_SECRET_PREVIEW: ${{ secrets.PREVIEW_SECRET_PREVIEW }}
+        # Preview is shared across concurrent/overlapping PR runs, so the secret must stay
+        # stable across runs — regenerating it per run would invalidate draft preview
+        # tokens issued by another run still in flight. Sourced from a fixed repo secret.
+        run: |
+          printf '%s' "$PREVIEW_SECRET_PREVIEW" | npx wrangler secret put PREVIEW_SECRET --env preview
       - run: npx playwright install --with-deps chromium
       - name: Warm up preview Worker
         run: |
@@ -125,6 +135,15 @@ jobs:
         env:
           PLAYWRIGHT_PREVIEW_URL: https://preview.krabiclaw.com
         run: yarn test:e2e:full
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: playwright-report-preview
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
 
   e2e-staging:
     name: E2E staging
@@ -178,6 +197,15 @@ jobs:
         run: |
           echo "$STRIPE_SECRET_KEY_TEST" | npx wrangler secret put STRIPE_SECRET_KEY --env staging
           echo "$STRIPE_WEBHOOK_SECRET_STAGING" | npx wrangler secret put STRIPE_WEBHOOK_SECRET --env staging
+      - name: Sync staging preview secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # Staging can be reseeded by overlapping pushes, so the secret must stay stable
+        # across runs — regenerating it per run would invalidate draft preview tokens
+        # issued by another run still in flight. Sourced from a fixed repo secret.
+        run: |
+          echo "${{ secrets.PREVIEW_SECRET_STAGING }}" | npx wrangler secret put PREVIEW_SECRET --env staging
       - run: npx playwright install --with-deps chromium
       - name: Warm up staging Worker
         run: |
@@ -188,6 +216,15 @@ jobs:
           sleep 10
       - name: Run full E2E suite
         run: yarn test:e2e:full
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: playwright-report-staging
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
 
   prod-deploy:
     name: Deploy to production

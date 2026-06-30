@@ -23,7 +23,7 @@ export interface BootstrapParams {
 // Extracts the page sub-path from a platform preview route path.
 // Returns null if the path is not a preview route.
 function getPreviewSubpath(path: string): string | null {
-  const match = path.match(/^\/preview\/site\/[^/]+(\/.*)?$/)
+  const match = path.match(/^\/preview\/(?:site|draft)\/[^/]+(\/.*)?$/)
   if (!match) return null
   return match[1] || '/'
 }
@@ -197,6 +197,7 @@ export const useBootstrapUrl = (
   siteId: string | null | undefined,
   params: BootstrapParams,
 ) => {
+  const route = useRoute()
   const qs = new URLSearchParams();
   if (params.page) qs.set("page", params.page);
   if (params.location) qs.set("location", params.location);
@@ -209,5 +210,9 @@ export const useBootstrapUrl = (
     qs.set("token", params.token);
   }
   const q = qs.toString();
+  const draftId = typeof route.params.draftId === 'string' && route.path.startsWith('/preview/draft/')
+    ? route.params.draftId
+    : null
+  if (draftId) return `/api/public/drafts/${draftId}/bootstrap${q ? `?${q}` : ""}`;
   return `/api/public/sites/${siteId}/bootstrap${q ? `?${q}` : ""}`;
 };

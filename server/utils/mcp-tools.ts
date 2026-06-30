@@ -1222,7 +1222,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       brand_description: { type: 'string' },
       logo_url: { type: 'string' },
       logo_asset_id: { type: 'string' },
-      contact_email: { type: 'string' },
+      contact_email: { type: ['string', 'null'], description: 'Public contact email shown to guests. Pass null to clear it.' },
       default_currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] },
       social_facebook: { type: 'string', description: 'Full Facebook page URL, e.g. https://facebook.com/yourpage. Must include the https:// scheme — bare domains or handles are rejected.' },
       social_instagram: { type: 'string', description: 'Full Instagram profile URL, e.g. https://instagram.com/yourhandle. Must include the https:// scheme — bare domains or handles are rejected.' },
@@ -1367,7 +1367,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: {
       location_id: { type: 'string', description: 'Location id or slug.' },
       phone: { type: 'string', description: 'Public phone number shown to guests on the website and in booking/reservation confirmation emails.' },
-      email: { type: 'string', description: 'Public email shown to guests on the website and in booking/reservation confirmation emails.' },
+      email: { type: ['string', 'null'], description: 'Public email shown to guests on the website and in booking/reservation confirmation emails. Pass null to clear it.' },
       notification_phone: { type: 'string', description: 'WhatsApp number for internal booking/reservation alerts to this location\'s manager. Not shown to guests. Falls back to the site-level whatsapp_phone if null. International format: +66812345678' },
       hero_image_asset_id: { type: 'string', description: 'Asset ID from get_site_media_assets. Assigns the hero image for this location.' },
       hero_video_asset_id: { type: 'string', description: 'Asset ID from get_site_media_assets. Assigns the hero video for this location.' },
@@ -3062,10 +3062,12 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           type: 'object',
           properties: {
             whatsapp_phone: { type: ['string', 'null'] },
-            notify_on_contact: { type: 'number' },
-            notify_on_reservation: { type: 'number' },
-            notify_on_booking: { type: 'number' },
+            channels: {
+              type: 'array',
+              items: { type: 'string', enum: ['email', 'whatsapp'] },
+            },
           },
+          required: ['whatsapp_phone', 'channels'],
         },
       },
       required: ['notifications'],
@@ -3077,15 +3079,27 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     domain: 'notifications',
     minimumRole: 'admin',
     confirmRequired: false,
-    inputSchema: { whatsapp_phone: { type: 'string' } },
-    required: ['whatsapp_phone'],
+    inputSchema: {
+      whatsapp_phone: { type: ['string', 'null'], description: 'Site-level WhatsApp number for owner alerts. Omit to leave unchanged.' },
+      channels: {
+        type: 'array',
+        items: { type: 'string', enum: ['email', 'whatsapp'] },
+        description: 'Owner alert channels. Use one or both of email and whatsapp.',
+      },
+    },
     outputSchema: {
       type: 'object',
       properties: {
         notifications: {
           type: 'object',
-          properties: { whatsapp_phone: { type: 'string' } },
-          required: ['whatsapp_phone'],
+          properties: {
+            whatsapp_phone: { type: ['string', 'null'] },
+            channels: {
+              type: 'array',
+              items: { type: 'string', enum: ['email', 'whatsapp'] },
+            },
+          },
+          required: ['whatsapp_phone', 'channels'],
         },
       },
       required: ['notifications'],

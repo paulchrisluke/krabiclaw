@@ -4,6 +4,7 @@ import { execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { execWithRetry } from './wrangler-retry.ts'
 import {
   renderCompiledDemoContentBlock,
   renderCompiledDemoCoreSeedBlock,
@@ -157,7 +158,7 @@ try {
   writeFileSync(sqlPath, sql, 'utf8')
   const cmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --file "${sqlPath}"`.trim()
   console.log(`[seed:demo] Applying: ${cmd}`)
-  execSync(cmd, { stdio: 'inherit' })
+  await execWithRetry(() => execSync(cmd, { stdio: 'inherit' }), 'seed:demo')
   console.log('[seed:demo] Done.')
 } finally {
   rmSync(dir, { recursive: true, force: true })

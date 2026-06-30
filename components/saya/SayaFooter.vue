@@ -72,8 +72,8 @@
           <ul class="space-y-3 text-sm">
             <li v-if="hasMenu"><NuxtLink to="/menu" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.menu') }}</NuxtLink></li>
             <li v-if="hasExperiences"><NuxtLink to="/experiences" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.experiences') }}</NuxtLink></li>
-            <li v-if="!hasExperiences"><NuxtLink to="/reservations" class="text-inverted/60 no-underline transition hover:text-inverted">{{ copy.reservationPageKicker }}</NuxtLink></li>
-            <li v-if="!hasExperiences"><NuxtLink to="/photos" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.gallery') }}</NuxtLink></li>
+            <li v-if="!isExperienceSite"><NuxtLink to="/reservations" class="text-inverted/60 no-underline transition hover:text-inverted">{{ copy.reservationPageKicker }}</NuxtLink></li>
+            <li v-if="!isExperienceSite"><NuxtLink to="/photos" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.gallery') }}</NuxtLink></li>
             <li><NuxtLink to="/about" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.our_story') }}</NuxtLink></li>
           </ul>
         </div>
@@ -95,7 +95,7 @@
       </div>
 
       <!-- Delivery partners row — only rendered when at least one link is configured AND not an experiences site -->
-      <div v-if="orderLinks.length && !hasExperiences" class="flex flex-wrap items-center gap-8 border-b border-inverted/10 py-10">
+      <div v-if="orderLinks.length && !isExperienceSite" class="flex flex-wrap items-center gap-8 border-b border-inverted/10 py-10">
         <span class="saya-eyebrow text-inverted/50">{{ t('saya.footer.order_online') }}</span>
         <a
           v-for="link in orderLinks"
@@ -157,6 +157,7 @@ function toggleColorMode() {
 }
 const { locale } = useI18n()
 const copy = computed(() => getVerticalCopy((site as { vertical?: string } | null)?.vertical, locale.value))
+const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
 // Shared bootstrap — same key as the page → zero extra SSR requests
 interface I18nComposable {
