@@ -268,7 +268,7 @@ That''s it — your details are saved as a private draft. Preview it, then commi
 
 {{component type="how_to"}}
 
-If you want a deeper walkthrough of the setup flow itself, continue to [Use the onboarding flow](/docs/getting-started/onboarding).
+If you want a deeper walkthrough of the setup flow itself, continue to [Deploy your site](/docs/getting-started/deploy-your-site).
 
 ## Add ChatGPT later
 
@@ -280,7 +280,7 @@ After the site exists, you can connect KrabiClaw to ChatGPT if you want to edit 
 
 ## Next steps
 
-- [Use the onboarding flow](/docs/getting-started/onboarding)
+- [Deploy your site](/docs/getting-started/deploy-your-site)
 - [Connect KrabiClaw to ChatGPT (MCP Setup)](/docs/integrations/mcp-setup)
 - [Browse all documentation](/docs)
 - [Read the platform blog](/blog)
@@ -305,13 +305,15 @@ After the site exists, you can connect KrabiClaw to ChatGPT if you want to edit 
 INSERT OR REPLACE INTO platform_docs (id, title, slug, body, excerpt, category, author_id, seo_description, seo_keywords, canonical_url, robots, difficulty_level, sort_order, status, published_at, created_at, updated_at)
 VALUES (
   'doc-014',
-  'Use the onboarding flow',
-  'onboarding',
-  'Onboarding is a short conversation, not a form — KrabiClaw asks a few questions and builds your homepage live as you answer. The exact steps with screenshots are below in **Go through onboarding**.
+  'Deploy your site',
+  'deploy-your-site',
+  'Deploying a site takes about 5 minutes. KrabiClaw asks a handful of questions, builds a private preview as you answer, and only reserves your live address once you approve it.
 
-![Onboarding welcome screen](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/1c7cbfd3-7d88-405d-6de6-e7f4701e8200/public)
+![Onboarding welcome screen](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/1cea1097-025e-4d90-a82f-1ad8f86f0a00/public)
 
-## What to prepare
+## Before you start
+
+Have ready:
 
 - Your business name
 - Your Google Maps URL, if you have one
@@ -319,27 +321,83 @@ VALUES (
 - Hours
 - A website URL, if you already have one
 
-## Google Maps or manual — which to use
+## 1. Pick your business type
 
-If your business already has a Google Maps listing, paste the link and KrabiClaw pulls your name, address, phone, hours, and photos automatically — you only need to fix what looks off. If it does not, or you would rather not use Maps, start manually: type your business name and fill in the rest yourself. Either way nothing publishes without your say — if you came from Google Maps, KrabiClaw shows you the match and asks you to confirm it is right before using it, and every field in the details form stays editable.
+Open [onboarding](/dashboard/onboarding) and choose Restaurant, café or bar, or Experience, class or activity. This sets the layout and copy your site starts with — you cannot change it later without contacting support.
 
-## What your site looks like right after onboarding
+![Choosing a business type](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/f85cd2c3-0394-457e-f508-bed0bc891000/public)
 
-Your site goes live immediately on a free `krabiclaw.com` address with your real name, address, hours, and contact details in place — but it is not finished. There is no hero image, menu or experience list, or brand story yet, so those sections show realistic example content (not a blank page) until you replace it. Notification preferences, team invites, and other dashboard settings are not part of onboarding — they wait until you are in the dashboard. See [What happens after onboarding](/docs/getting-started/after-onboarding) for what to fill in first.
+## 2. Choose Google Maps or manual entry
+
+![Choosing Google Maps or manual entry](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/6a75af3c-74dd-4a16-1fcf-c5c01bda4b00/public)
+
+**Google Maps** — paste the full URL from your browser, or a short `maps.app.goo.gl` link. KrabiClaw looks up the listing and shows you the match before using it; pulls your name, address, phone, hours, and photos automatically.
+
+**Manual** — type your business name and fill in the rest yourself. Use this if your business is not on Google Maps yet, or you would rather not connect it.
+
+## 3. Fill in the details
+
+Review or fill in your name, city, address, phone, website, hours, manager alert number, timezone, and currency. If you came from Google Maps, most fields are already filled in — fix anything that looks off.
+
+![Business details form](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/3658852e-7519-4791-dc75-28e55aa02500/public)
+
+Manager alert number, timezone, and currency are required on every path now, not just manual — a missing alert number used to silently degrade booking alerts to email-only with no warning, so KrabiClaw asks up front instead. Timezone and currency are pre-guessed from your browser and country; check them rather than leaving the defaults blind.
+
+![Details form filled in with required fields](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/aaf6bc61-eb84-462f-5367-ac144f109600/public)
+
+## 4. Review your draft, then create the site
+
+Submitting the form does not go live yet — it saves a private draft and shows you a real preview of it first.
+
+![Draft ready, with a private preview link](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/a86fa447-4453-460e-6c2c-73a8cfc05300/public)
+
+Check the preview, then choose **Create site** to reserve your `krabiclaw.com` address and publish, or **Edit details** to go back first. Nothing is public until you choose Create site. This is a separate explicit commit step — onboarding only creates the draft.
+
+## 5. Make it yours (optional)
+
+Right after the site is created, KrabiClaw offers a quick pass at branding: a brand color, a logo, and a real hero photo. Skip it if you would rather do this later from ChatGPT or the dashboard — nothing here blocks your site from being live.
+
+![Make it yours: brand color, logo, and hero photo](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/62a050af-22e2-43bf-bb2e-cdfc9fbf2b00/public)
+
+## 6. You are live
+
+Your site is published immediately once you create it. From here, open your dashboard, keep building with ChowBot or the structured editor, or connect ChatGPT to manage it through conversation.
+
+![Setup complete with next-step options](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/770d9d26-3bee-4b2a-210b-91a53bbbd800/public)
 
 {{component type="how_to"}}
+
+## Common problems
+
+### KrabiClaw could not find my business on Google Maps
+
+Paste the full URL from your browser''s address bar rather than a search result link, or use a short `maps.app.goo.gl` link copied from the Maps app''s Share button. If your business genuinely is not listed yet, switch to manual entry instead.
+
+### The Create site button stays disabled
+
+Manager alert number, timezone, and currency are required before you can submit, on every path. Scroll the form for a field still showing red.
+
+### I do not want to commit to a subdomain yet
+
+You do not have to. After filling in details, you land on a private draft preview with no public address — review it, then choose Edit details to keep adjusting, or Create site only when you are ready to reserve the address for real.
+
+### I skipped "Make it yours" — can I still add a logo and hero photo?
+
+Yes. Nothing there is required to go live. Add them anytime from ChatGPT, ChowBot, or the structured editor in your dashboard.
 
 ## Related guides
 
 - [Getting started with KrabiClaw](/docs/getting-started/getting-started-with-krabiclaw)
-- [What happens after onboarding](/docs/getting-started/after-onboarding)
+- [Customize your brand and theme](/docs/getting-started/customize-brand-theme)
+- [Invite your team](/docs/getting-started/invite-your-team)
+- [Set up notifications](/docs/getting-started/set-up-notifications)
 - [Connect KrabiClaw to ChatGPT (MCP Setup)](/docs/integrations/mcp-setup)',
-  'Use KrabiClaw onboarding to add your business details, review the first version of your site, and get ready to publish.',
+  'Deploy your first KrabiClaw site in about 5 minutes: pick a business type, add your details from Google Maps or manually, review a private draft, then go live.',
   'Getting Started',
   NULL,
-  'Learn how the KrabiClaw onboarding flow works, what to prepare, and how it helps you build the first version of your site.',
-  'KrabiClaw onboarding, website setup, business details, publish website, getting started',
-  '/docs/getting-started/onboarding',
+  'Step-by-step guide to deploying a KrabiClaw site: business type, Google Maps or manual entry, the details form, draft preview, and going live.',
+  'KrabiClaw onboarding, deploy website, website setup, business details, publish website, getting started',
+  '/docs/getting-started/deploy-your-site',
   'index, follow',
   'Beginner',
   1,
@@ -358,16 +416,17 @@ VALUES (
   'doc-014',
   'how_to',
   1,
-  'Go through onboarding',
+  'Deploy your site',
   'active',
   1,
   1,
   '{"steps":[
-    {"name":"Pick your business type","text":"Tell KrabiClaw whether you run a restaurant, cafe or bar, or an experience, class or activity. This sets the layout and copy your site starts with.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"8842b435-2b73-4641-b5ba-6b5e3a8afd88","position":0},
-    {"name":"Choose how to add your details","text":"Paste your Google Maps link so KrabiClaw can pull your name, address, phone, hours, and photos automatically, or start manually by typing your business name.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"c6e614bc-2223-44af-9cd1-0c9d0e19c2eb","position":1},
-    {"name":"Confirm the match","text":"If you used Google Maps, KrabiClaw shows you what it found and asks you to confirm it is the right listing before using it.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"b491fc85-ddf3-4e98-bcc0-b6e24354b469","position":2},
-    {"name":"Fill in the details","text":"Review or fill in your name, city, address, phone, website, hours, a manager alert number, and your timezone. Anything you leave blank can be filled in later from the dashboard.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"589a02b6-a58a-465f-ab3e-22b89faac018","position":3},
-    {"name":"Publish and keep building","text":"Your site goes live immediately on a free krabiclaw.com address. From there, open your dashboard, keep building with ChowBot or the structured editor, or connect ChatGPT to manage it through conversation.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"628f0450-70c6-4174-9b21-dda3b01ed1da","position":4}
+    {"name":"Pick your business type","text":"Choose Restaurant, cafe or bar, or Experience, class or activity. This sets the layout and copy your site starts with.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"d99df1a2-7999-4817-bf1c-88594284dcd4","position":0},
+    {"name":"Choose Google Maps or manual entry","text":"Paste your Google Maps link so KrabiClaw can pull your name, address, phone, hours, and photos automatically, or start manually by typing your business name.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"216f3103-5fd8-4e9a-8ade-7e550117b5e8","position":1},
+    {"name":"Fill in the details","text":"Review or fill in your name, city, address, phone, website, hours, manager alert number, timezone, and currency. All required, even on the manual path.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"572033d7-0fc1-4143-99fa-53283fb7d5bc","position":2},
+    {"name":"Review your draft, then create the site","text":"Submitting saves a private draft with a real preview first. Choose Create site to go live, or Edit details to keep adjusting.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"8d7cf0e6-b2d5-4b1f-bfe0-9dbf3af09b16","position":3},
+    {"name":"Make it yours","text":"Optional: set a brand color, upload a logo, and add a real hero photo. Skip it and do this later if you would rather.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"0d841791-9cda-44bb-bd49-dae270e8f485","position":4},
+    {"name":"You are live","text":"Your site is published after you choose Create site. Open your dashboard, keep building with ChowBot or the structured editor, or connect ChatGPT.","url":"https://krabiclaw.com/dashboard/onboarding","image_asset_id":"717d66cc-9f1e-4639-bf91-3d91561586bb","position":5}
   ],"estimated_time":"PT5M"}',
   datetime('now'),
   datetime('now')
@@ -415,50 +474,167 @@ VALUES (
   datetime('now')
 );
 
+DELETE FROM platform_content_components WHERE content_type = 'doc' AND content_id = 'doc-015';
+DELETE FROM platform_docs WHERE id = 'doc-015';
+
 INSERT OR REPLACE INTO platform_docs (id, title, slug, body, excerpt, category, author_id, seo_description, seo_keywords, canonical_url, robots, difficulty_level, sort_order, status, published_at, created_at, updated_at)
 VALUES (
-  'doc-015',
-  'What happens after onboarding',
-  'after-onboarding',
-  'Onboarding gets your name, address, hours, and contact details live. Almost everything else — your hero image, menu or experiences, your story, your first post, notification preferences, and your team — is left for you to fill in afterward, and KrabiClaw does not walk you through it as a wizard. Here is where each of those actually lives.
+  'doc-016',
+  'Customize your brand and theme',
+  'customize-brand-theme',
+  'A new site starts with your real business details but a generic look — no logo, no real hero photo, and a default brand color. None of this blocks your site from being live; it is just what makes it look like yours instead of a template.
 
-## The "Finish setting up with ChatGPT" checklist
+## 1. Open the brand essentials
 
-Open your site''s dashboard at `/dashboard/{your-org}/sites/{your-site}` and you will see a card tracking five things: business info imported, hero image added, menu added (or experiences listed, for experience-vertical sites), an About section written, and a first post published.
+If you skipped this during setup, open ChatGPT or ChowBot in your dashboard and ask to update your brand color, logo, or hero photo. Each can also be set directly from the structured editor in your site workspace.
 
-![The post-onboarding checklist card](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/5d63ac03-69f6-45c7-8175-ae94f5fb1b00/public)
+![Make it yours: brand color, logo, and hero photo](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/62a050af-22e2-43bf-bb2e-cdfc9fbf2b00/public)
 
-In practice, most new sites start at 4 of 5 — KrabiClaw seeds starter placeholder content for your menu, About section, and first post automatically, so usually only the hero image is genuinely empty. Worth checking the seeded text and replacing it with your own, even on items already checked off.
+## 2. Set a brand color
 
-Each item has a copy-to-clipboard prompt, not an upload form — the checklist is built to feed ChatGPT or ChowBot, not to be filled in directly on the card. Click the clipboard icon, paste the prompt into ChatGPT (with the KrabiClaw app connected) or into ChowBot in your dashboard, and answer what it asks you. You can dismiss the card at any time; once dismissed or fully complete, a smaller "Quick actions" card with the same prompts stays in its place.
+Pick one of the preset swatches or use the color picker for a custom value. This color is used across your site''s buttons, accents, and the homepage hero treatment when no photo is set yet.
 
-## Adding your hero image
+## 3. Upload a logo
 
-The checklist prompt ("Generate a hero image for [your business]''s homepage") asks ChatGPT to generate one for you. If you would rather use your own photo, skip the prompt and upload it directly from the structured editor instead — open your site workspace, go to the page with your hero section, and upload from there.
+Upload a logo file. It is used in your site header and anywhere else your brand mark appears.
 
-## Inviting your team
+## 4. Add a real hero photo
 
-Team invites are not part of any onboarding nudge — you go find them yourself, under **Settings → Members** (`/dashboard/{your-org}/~/settings/members`). From there you can see who already has access, invite someone by email with a Member or Admin role, and see pending invitations that have not been accepted yet.
+Until you add one, your homepage hero shows your brand color instead of a stock photo that is not actually yours — KrabiClaw never substitutes a generic stock image for your business. Upload your own photo here, or generate one by asking ChatGPT or ChowBot, for example "Generate a hero image for my homepage."
 
-![Inviting a team member from organization settings](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/1f356c74-89de-4946-62dd-98406faf8800/public)
+## Common problems
 
-## Changing your notification number
+### My hero section is just a solid color
 
-The manager alert number you set during onboarding is the only notification preference KrabiClaw asks for, and there is no separate notification settings page for it. To change it afterward, go to your location''s page at `/dashboard/{your-org}/sites/{your-site}/{your-location}` and update the manager alert number field there.
+That is intentional, not a bug — until you add a real photo, the brand-color treatment is the placeholder, not a broken image. Upload a photo to replace it.
+
+### I want a different look entirely, not just color and photos
+
+Brand color, logo, and hero photo are the essentials covered here. For deeper page-by-page changes, use the structured editor in your dashboard or ask ChatGPT to make specific edits.
 
 ## Related guides
 
-- [Use the onboarding flow](/docs/getting-started/onboarding)
+- [Deploy your site](/docs/getting-started/deploy-your-site)
 - [Connect KrabiClaw to ChatGPT (MCP Setup)](/docs/integrations/mcp-setup)',
-  'After onboarding, KrabiClaw nudges you to add a hero image, menu or experiences, your story, and a first post through a dashboard checklist — team invites and notification settings live elsewhere and are not part of any nudge.',
+  'Set a brand color, upload a logo, and add a real hero photo so your KrabiClaw site looks like your business, not a template.',
   'Getting Started',
   NULL,
-  'What to do after KrabiClaw onboarding: the post-onboarding checklist, adding a hero image, inviting team members, and changing your notification number.',
-  'KrabiClaw after onboarding, post onboarding checklist, invite team members, hero image, notification preferences',
-  '/docs/getting-started/after-onboarding',
+  'How to customize your KrabiClaw site''s brand color, logo, and hero photo after deploying.',
+  'KrabiClaw branding, logo upload, hero photo, brand color, customize theme',
+  '/docs/getting-started/customize-brand-theme',
   'index, follow',
   'Beginner',
   2,
+  'published',
+  datetime('now'),
+  datetime('now'),
+  datetime('now')
+);
+
+INSERT OR REPLACE INTO platform_docs (id, title, slug, body, excerpt, category, author_id, seo_description, seo_keywords, canonical_url, robots, difficulty_level, sort_order, status, published_at, created_at, updated_at)
+VALUES (
+  'doc-017',
+  'Invite your team',
+  'invite-your-team',
+  'Team invites are not part of onboarding or any dashboard nudge — you go find them yourself, under organization settings.
+
+## 1. Open Members
+
+Go to **Settings → Members** (`/dashboard/{your-org}/~/settings/members`). You will see everyone who already has access, with their role.
+
+![Inviting a team member from organization settings](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/1f356c74-89de-4946-62dd-98406faf8800/public)
+
+## 2. Send an invite
+
+Enter their email, pick a role — Member or Admin — and send the invite. They will need to accept it before they show up as a full member; until then you will see them under Pending Invitations.
+
+## 3. Choose the right role
+
+- **Owner** — the original account that created the organization. Cannot be changed here.
+- **Admin** — full access to settings, billing, and content.
+- **Member** — can edit content but not organization-level settings like billing.
+
+## Common problems
+
+### My invite is not showing as accepted
+
+Check Pending Invitations on the same page. If it has expired, cancel it and send a new one.
+
+### I need to remove someone
+
+From the Members list, use the remove action next to their name. This does not apply to the Owner.
+
+## Related guides
+
+- [Deploy your site](/docs/getting-started/deploy-your-site)
+- [Set up notifications](/docs/getting-started/set-up-notifications)',
+  'Invite team members to your KrabiClaw organization from Settings → Members, and choose between Admin and Member roles.',
+  'Getting Started',
+  NULL,
+  'How to invite team members to a KrabiClaw organization and choose their role.',
+  'KrabiClaw team invite, organization members, admin role, member role',
+  '/docs/getting-started/invite-your-team',
+  'index, follow',
+  'Beginner',
+  3,
+  'published',
+  datetime('now'),
+  datetime('now'),
+  datetime('now')
+);
+
+INSERT OR REPLACE INTO platform_docs (id, title, slug, body, excerpt, category, author_id, seo_description, seo_keywords, canonical_url, robots, difficulty_level, sort_order, status, published_at, created_at, updated_at)
+VALUES (
+  'doc-018',
+  'Set up notifications',
+  'set-up-notifications',
+  'KrabiClaw alerts you about new bookings, messages, and reviews. By default that goes to your account email — no setup required. Add WhatsApp if you want alerts there too, and override the number for a specific location if it needs its own.
+
+## 1. Open Settings → General
+
+Go to `/dashboard/{your-org}/~/settings/general` and find the Notifications card.
+
+![Notification channel and site-wide WhatsApp number](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/8a9b504e-efce-4b5d-ba84-f4a79a2e4700/public)
+
+## 2. Choose your alert channel
+
+Pick Email, WhatsApp, or both. Email always works and needs no number — it goes to the organization owner''s account address. WhatsApp requires a number below.
+
+## 3. Set a site-wide WhatsApp number (optional)
+
+This number is used for every location''s alerts unless that location sets its own number to override it. Use international format, for example `+66812345678`.
+
+## 4. Override the number for one location (optional)
+
+If a specific location needs its own alert number — a different manager, a different country — set it from that location''s page at `/dashboard/{your-org}/sites/{your-site}/{your-location}`, under **Notifications**. It falls back to the site-wide number above if left blank.
+
+## Common problems
+
+### I set a WhatsApp number but did not get an alert
+
+Check that WhatsApp is actually selected as an alert channel — adding a number alone does not turn the channel on. Both need to be set.
+
+### I want different alert numbers for different locations
+
+Set a site-wide default in Settings → General, then override it per location from that location''s own page. The location-level number always wins for that location.
+
+### I never set anything — am I getting alerts at all?
+
+Yes. Email is the default fallback and always sends to the organization owner''s account email, even with nothing configured here.
+
+## Related guides
+
+- [Deploy your site](/docs/getting-started/deploy-your-site)
+- [Invite your team](/docs/getting-started/invite-your-team)',
+  'Choose how KrabiClaw alerts you about new bookings, messages, and reviews — email by default, with an optional WhatsApp number you can override per location.',
+  'Getting Started',
+  NULL,
+  'How to set up KrabiClaw notifications: choosing email or WhatsApp, setting a site-wide number, and overriding it per location.',
+  'KrabiClaw notifications, WhatsApp alerts, email alerts, manager alert number, notification settings',
+  '/docs/getting-started/set-up-notifications',
+  'index, follow',
+  'Beginner',
+  4,
   'published',
   datetime('now'),
   datetime('now'),

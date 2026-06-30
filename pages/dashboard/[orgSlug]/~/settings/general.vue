@@ -141,16 +141,9 @@
 
         <UCard>
           <template #header>
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <h2 class="font-semibold text-highlighted">WhatsApp Notifications</h2>
-                <p class="mt-1 text-sm text-muted">Site alert recipient.</p>
-              </div>
-              <UBadge
-                :label="whatsappPhone ? 'Configured' : 'Not configured'"
-                :color="whatsappPhone ? 'success' : 'neutral'"
-                variant="soft"
-              />
+            <div>
+              <h2 class="font-semibold text-highlighted">Notifications</h2>
+              <p class="mt-1 text-sm text-muted">Where new bookings, messages, and reviews get sent. Always falls back to the owner's account email if nothing below is set.</p>
             </div>
           </template>
 
@@ -159,16 +152,38 @@
             <USkeleton class="h-9 rounded-lg" />
           </div>
           <div v-else class="space-y-4">
-            <UFormField label="Notification phone" help="Use international format, for example +66812345678.">
-              <UInput v-model="whatsappForm.phone" type="tel" placeholder="+66..." />
+            <UFormField label="Alert channel" help="Email always works. Add a WhatsApp number below to also (or only) get alerts there.">
+              <USelectMenu
+                v-model="notificationChannels"
+                multiple
+                :items="CHANNEL_OPTIONS"
+                value-key="value"
+                label-key="label"
+                class="w-full sm:w-64"
+              />
             </UFormField>
+            <UFormField
+              label="Site-wide WhatsApp number"
+              help="Use international format, for example +66812345678. Used for every location unless a location sets its own number below to override it."
+            >
+              <div class="flex items-center gap-2">
+                <UInput v-model="whatsappForm.phone" type="tel" placeholder="+66..." class="flex-1" />
+                <UBadge
+                  :label="whatsappPhone ? 'Configured' : 'Not configured'"
+                  :color="whatsappPhone ? 'success' : 'neutral'"
+                  variant="soft"
+                />
+              </div>
+            </UFormField>
+            <p class="text-xs text-muted">
+              Need a different number for one location only? Set its manager alert number from that location's page instead of here.
+            </p>
             <UButton
               icon="i-heroicons-check"
               :loading="savingWhatsapp"
-              :disabled="!whatsappForm.phone.trim()"
-              @click="saveWhatsappPhone"
+              @click="saveWhatsappSettings"
             >
-              Save WhatsApp number
+              Save notification settings
             </UButton>
           </div>
         </UCard>
@@ -318,6 +333,11 @@ const connectingFacebook = ref(false)
 const savingWhatsapp = ref(false)
 const whatsappPhone = ref<string | null>(null)
 const whatsappForm = reactive({ phone: '' })
+const notificationChannels = ref<string[]>(['email'])
+const CHANNEL_OPTIONS = [
+  { label: 'Email', value: 'email' },
+  { label: 'WhatsApp', value: 'whatsapp' },
+]
 const facebookConnection = ref<FacebookConnectionStatus | null>(null)
 
 interface FacebookConnectionStatus {
@@ -393,6 +413,7 @@ async function loadSiteIntegrations() {
     if (!dashboard.site.value) {
       whatsappPhone.value = null
       whatsappForm.phone = ''
+      notificationChannels.value = ['email']
       facebookConnection.value = { connected: false }
       return
     }
@@ -401,13 +422,14 @@ async function loadSiteIntegrations() {
     const canUseFacebook = plan === 'growth' || plan === 'managed' || plan === 'seo_accelerator'
 
     const [notificationsRes, facebookRes] = await Promise.all([
-      $fetch<{ success: boolean; notifications: { whatsapp_phone: string | null } }>('/api/dashboard/editor/notifications'),
+      $fetch<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>('/api/dashboard/editor/notifications'),
       canUseFacebook
         ? $fetch<FacebookConnectionStatus>('/api/integrations/facebook-pages/connection')
         : Promise.resolve<FacebookConnectionStatus>({ connected: false }),
     ])
     whatsappPhone.value = notificationsRes.notifications.whatsapp_phone
     whatsappForm.phone = notificationsRes.notifications.whatsapp_phone ?? ''
+    notificationChannels.value = notificationsRes.notifications.channels?.length ? notificationsRes.notifications.channels : ['email']
     facebookConnection.value = facebookRes
   } catch (err) {
     toast.add({ description: getErrorMessage(err, 'Failed to load site connections'), color: 'error' })
@@ -431,18 +453,23 @@ async function startFacebookConnect() {
   }
 }
 
-async function saveWhatsappPhone() {
+async function saveWhatsappSettings() {
+  if (notificationChannels.value.includes('whatsapp') && !whatsappForm.phone.trim()) {
+    toast.add({ description: 'Add a WhatsApp number to use the WhatsApp channel', color: 'error' })
+    return
+  }
   savingWhatsapp.value = true
   try {
-    const res = await $fetch<{ success: boolean; notifications: { whatsapp_phone: string } }>('/api/dashboard/editor/notifications', {
+    const res = await $fetch<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>('/api/dashboard/editor/notifications', {
       method: 'PATCH',
-      body: { whatsapp_phone: whatsappForm.phone }
+      body: { whatsapp_phone: whatsappForm.phone.trim() || undefined, channels: notificationChannels.value }
     })
     whatsappPhone.value = res.notifications.whatsapp_phone
-    whatsappForm.phone = res.notifications.whatsapp_phone
-    toast.add({ description: 'WhatsApp number saved', color: 'success' })
+    whatsappForm.phone = res.notifications.whatsapp_phone ?? ''
+    notificationChannels.value = res.notifications.channels
+    toast.add({ description: 'Notification settings saved', color: 'success' })
   } catch (err) {
-    toast.add({ description: getErrorMessage(err, 'Failed to save WhatsApp number'), color: 'error' })
+    toast.add({ description: getErrorMessage(err, 'Failed to save notification settings'), color: 'error' })
   } finally {
     savingWhatsapp.value = false
   }

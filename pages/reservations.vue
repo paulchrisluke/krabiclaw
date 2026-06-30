@@ -161,8 +161,8 @@
             <h3 class="mb-4 text-lg font-semibold text-default">{{ resCopy.contactInfoHeading }}</h3>
             <p v-if="selectedLocation" class="mb-3 text-sm text-muted">{{ selectedLocation.title }}</p>
             <div class="space-y-2">
-              <p class="text-muted"><strong class="text-default">{{ resCopy.phoneLabelShort }}:</strong> {{ contactPhone }}</p>
-              <p class="text-muted"><strong class="text-default">{{ resCopy.emailLabelShort }}:</strong> {{ contactEmail }}</p>
+              <p v-if="contactPhone" class="text-muted"><strong class="text-default">{{ resCopy.phoneLabelShort }}:</strong> {{ contactPhone }}</p>
+              <p v-if="contactEmail" class="text-muted"><strong class="text-default">{{ resCopy.emailLabelShort }}:</strong> {{ contactEmail }}</p>
             </div>
           </UCard>
 
@@ -201,10 +201,11 @@ const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 const { hasExperiences, locations, config } = useBootstrap()
 const { formatDate } = useLocaleDate()
+const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
 // Sites with experiences book per-experience on /experiences/[slug]; this generic
 // table-reservation form doesn't apply and is no longer linked from nav.
-if (hasExperiences.value) {
+if (isExperienceSite.value && hasExperiences.value) {
   await navigateTo('/experiences', { replace: true, redirectCode: 302 })
 }
 

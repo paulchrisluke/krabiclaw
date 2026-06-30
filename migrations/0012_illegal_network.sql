@@ -48,9 +48,22 @@ CREATE TABLE `__new_blog_posts` (
 	CONSTRAINT "blog_posts_category_check" CHECK(site_id IS NOT NULL OR category IS NOT NULL)
 );
 --> statement-breakpoint
+CREATE TRIGGER `__new_blog_posts_scope_org_site_insert`
+BEFORE INSERT ON `__new_blog_posts`
+WHEN NEW.organization_id IS NOT NULL
+  AND NEW.site_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM sites
+    WHERE id = NEW.site_id AND organization_id = NEW.organization_id
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'blog_posts site_id must belong to organization_id');
+END;
+--> statement-breakpoint
 INSERT INTO `__new_blog_posts`("id", "organization_id", "site_id", "title", "slug", "body", "excerpt", "category", "status", "author_id", "featured_image_asset_id", "published_at", "scheduled_for", "created_at", "updated_at", "seo_description", "seo_keywords", "canonical_url", "robots") SELECT "id", "organization_id", "site_id", "title", "slug", "body", "excerpt", "category", "status", "author_id", "featured_image_asset_id", "published_at", "scheduled_for", "created_at", "updated_at", "seo_description", "seo_keywords", "canonical_url", "robots" FROM `blog_posts`;--> statement-breakpoint
 DROP TABLE `blog_posts`;--> statement-breakpoint
 ALTER TABLE `__new_blog_posts` RENAME TO `blog_posts`;--> statement-breakpoint
+DROP TRIGGER `__new_blog_posts_scope_org_site_insert`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint
 CREATE UNIQUE INDEX `blog_posts_platform_slug_idx` ON `blog_posts` (`slug`) WHERE site_id IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX `blog_posts_site_slug_idx` ON `blog_posts` (`site_id`,`slug`) WHERE site_id IS NOT NULL;--> statement-breakpoint

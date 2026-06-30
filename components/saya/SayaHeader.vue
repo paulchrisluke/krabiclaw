@@ -23,7 +23,7 @@
           </NuxtLink>
 
           <NuxtLink
-            v-if="!hasExperiences"
+            v-if="!isExperienceSite"
             to="/reservations"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
@@ -108,7 +108,7 @@
             {{ $t('saya.header.order_now') }}
           </NuxtLink>
           <NuxtLink
-            v-if="!hasExperiences"
+            v-if="!isExperienceSite"
             to="/reservations"
             class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
@@ -182,6 +182,7 @@ onUnmounted(() => {
 
 const restaurantName = computed(() => (site as Site | null)?.brand_name || DEFAULT_BUSINESS_NAME)
 const logoUrl = computed(() => (site as Site | null)?.logo_url || null)
+const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
 useUpgradeModal()
 

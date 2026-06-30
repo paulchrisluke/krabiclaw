@@ -180,6 +180,10 @@ const { data: doc, pending: loading, error } = await useAsyncData(
   }
 )
 
+if (error.value) {
+  throw error.value
+}
+
 function renderMarkdown(markdown: string) {
   return DOMPurify.sanitize(renderMarkdownToHtml(markdown || ''))
 }

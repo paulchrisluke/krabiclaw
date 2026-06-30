@@ -50,6 +50,21 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'User is already a member of this organization', existingRole: existingMember.role }, { status: 409 })
   }
 
+  const expiresAt = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60)
+  const invitationId = crypto.randomUUID()
+
+  // Use INSERT OR REPLACE to handle concurrent requests atomically
+  await execute(db, `
+    INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt)
+    VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)
+    ON CONFLICT(organizationId, lower(email)) DO UPDATE SET
+      role = excluded.role,
+      inviterId = excluded.inviterId,
+      expiresAt = excluded.expiresAt,
+      status = 'pending'
+    WHERE status = 'pending' AND expiresAt > strftime('%s', 'now')
+  `, [invitationId, site.organization_id, email, role, expiresAt, session.user.id, Math.floor(Date.now() / 1000)])
+
   const existingInvite = await queryFirst<{ id: string; role: string | null }>(db, `
     SELECT id, role
     FROM invitation
@@ -58,30 +73,18 @@ export default defineEventHandler(async (event) => {
     LIMIT 1
   `, [site.organization_id, email])
 
-  const expiresAt = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60)
-  const invitationId = existingInvite?.id ?? crypto.randomUUID()
+  if (!existingInvite) {
+    return jsonResponse({ error: 'Failed to create invitation' }, { status: 500 })
+  }
 
-  if (existingInvite) {
-    if (!resend) {
-      return jsonResponse({
-        success: false,
-        reason: 'already_invited',
-        invitationId,
-        inviteUrl: `${getRequestURL(event).origin}/accept-invitation/${invitationId}?siteId=${encodeURIComponent(site.id)}`,
-        existingRole: existingInvite.role ?? 'member',
-      }, { status: 409 })
-    }
-
-    await execute(db, `
-      UPDATE invitation
-      SET role = ?, inviterId = ?, expiresAt = ?, status = 'pending'
-      WHERE id = ?
-    `, [role, session.user.id, expiresAt, invitationId])
-  } else {
-    await execute(db, `
-      INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt)
-      VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)
-    `, [invitationId, site.organization_id, email, role, expiresAt, session.user.id, Math.floor(Date.now() / 1000)])
+  if (!resend && existingInvite.id !== invitationId) {
+    return jsonResponse({
+      success: false,
+      reason: 'already_invited',
+      invitationId: existingInvite.id,
+      inviteUrl: `${getRequestURL(event).origin}/accept-invitation/${existingInvite.id}?siteId=${encodeURIComponent(site.id)}`,
+      existingRole: existingInvite.role ?? 'member',
+    }, { status: 409 })
   }
 
   return jsonResponse({

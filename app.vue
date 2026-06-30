@@ -16,6 +16,8 @@ const route = useRoute()
 const defaultOgImage = useSharedOgImage()
 const defaultPageUrl = useSeoUrl(() => route.path)
 const defaultSiteName = isPlatform ? 'KrabiClaw' : (site?.brand_name || 'KrabiClaw')
+const tenantLogoUrl = computed(() => config.value.logo_url || site?.logo_url || null)
+const tenantBrandName = computed(() => config.value.brand_name || site?.brand_name || '')
 
 useSeoMeta({
   ogImage: defaultOgImage,
@@ -24,6 +26,45 @@ useSeoMeta({
   ogSiteName: defaultSiteName,
   twitterCard: 'summary_large_image',
   twitterImage: defaultOgImage
+})
+
+useHead(() => {
+  if (isPlatform) {
+    return {
+      link: [
+        { key: 'app-icon-96', rel: 'icon', type: 'image/png', href: '/favicon-96x96.png', sizes: '96x96' },
+        { key: 'app-icon-svg', rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { key: 'app-icon-shortcut', rel: 'shortcut icon', href: '/favicon.ico' },
+        { key: 'app-icon-apple', rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
+        { key: 'app-manifest', rel: 'manifest', href: '/site.webmanifest' }
+      ]
+    }
+  }
+
+  if (tenantLogoUrl.value) {
+    return {
+      link: [
+        { key: 'app-icon-96', rel: 'icon', href: tenantLogoUrl.value, sizes: '96x96' },
+        { key: 'app-icon-default', rel: 'icon', href: tenantLogoUrl.value },
+        { key: 'app-icon-shortcut', rel: 'shortcut icon', href: tenantLogoUrl.value },
+        { key: 'app-icon-apple', rel: 'apple-touch-icon', sizes: '180x180', href: tenantLogoUrl.value },
+        { key: 'app-manifest', rel: 'manifest', href: '/tenant.webmanifest' }
+      ]
+    }
+  }
+
+  const letter = tenantBrandName.value.charAt(0).toUpperCase() || 'K'
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="%231F2547"/><text x="32" y="44" text-anchor="middle" font-family="system-ui,sans-serif" font-size="28" font-weight="bold" fill="white">${letter}</text></svg>`
+  const fallback = `data:image/svg+xml,${svg}`
+
+  return {
+    link: [
+      { key: 'app-icon-svg', rel: 'icon', type: 'image/svg+xml', href: fallback },
+      { key: 'app-icon-shortcut', rel: 'shortcut icon', href: fallback },
+      { key: 'app-icon-apple', rel: 'apple-touch-icon', sizes: '180x180', href: fallback },
+      { key: 'app-manifest', rel: 'manifest', href: '/tenant.webmanifest' }
+    ]
+  }
 })
 
 // GA4 measurement ID format ("G-XXXXXXXXXX") — validated before interpolation

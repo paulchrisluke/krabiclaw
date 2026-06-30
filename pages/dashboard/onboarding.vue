@@ -112,7 +112,8 @@ const currentPageIsLocationScoped = computed(() => locationScopedPages.has(selec
 const previewPagePath = computed(() => {
   if (draftPreview.value) {
     // Draft previews don't support location-scoped routes
-    if (selectedPreviewPage.value === 'location' || selectedPreviewPage.value === 'menu') return '/'
+    if (selectedPreviewPage.value === 'location') return '/'
+    if (selectedPreviewPage.value === 'menu') return '/menu'
     return selectedPreviewPage.value === 'home' ? '/' : `/${selectedPreviewPage.value}`
   }
   if (!selectedLocation.value) return selectedPreviewPage.value === 'home' ? '/' : `/${selectedPreviewPage.value}`

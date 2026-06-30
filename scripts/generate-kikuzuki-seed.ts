@@ -64,7 +64,7 @@ VALUES ('org-kikuzuki', 'Kikuzuki Krabi Thailand', 'kikuzuki-krabi-thailand', un
 -- Ensure the dedicated owner user exists to satisfy FK constraints.
 INSERT OR IGNORE INTO user (id, name, email, emailVerified)
 VALUES
-  ('user-kikuzuki', 'Kikuzuki Owner', 'contact@kikuzuki.com', 1);
+  ('user-kikuzuki', 'Kikuzuki Owner', 'owner@kikuzuki.example', 1);
 
 INSERT OR REPLACE INTO member (id, organizationId, userId, role, createdAt)
 VALUES

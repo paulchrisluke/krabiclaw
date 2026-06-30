@@ -205,6 +205,10 @@ const { data, pending, error: docsError } = await useFetch<DocsResponse>('/api/p
   default: () => ({ docs: [] })
 })
 
+if (docsError.value) {
+  throw createError({ statusCode: 500, statusMessage: 'Failed to load documentation' })
+}
+
 const docs = computed<PublicDoc[]>(() => data.value?.docs ?? [])
 const docsWithCategorySlug = computed(() =>
   docs.value

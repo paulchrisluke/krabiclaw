@@ -40,7 +40,14 @@ export default defineEventHandler(async (event) => {
   }
 
   // Check Content-Length before parsing multipart to avoid memory exhaustion
-  const contentLength = Number(getHeader(event, 'content-length') || 0)
+  const contentLengthHeader = getHeader(event, 'content-length')
+  if (!contentLengthHeader) {
+    return jsonResponse({ error: 'Content-Length header required' }, { status: 413 })
+  }
+  const contentLength = Number(contentLengthHeader)
+  if (isNaN(contentLength) || contentLength < 0) {
+    return jsonResponse({ error: 'Invalid Content-Length header' }, { status: 413 })
+  }
   if (contentLength > MAX_BYTES) {
     return jsonResponse({ error: 'Request body too large (max 10 MB)' }, { status: 413 })
   }

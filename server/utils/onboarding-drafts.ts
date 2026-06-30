@@ -395,7 +395,7 @@ export function buildOnboardingDraftPayload(input: {
   const menuTemplate = DRAFT_MENU_SECTIONS[input.vertical]
   const menu: DraftMenuRecord | null = menuTemplate
     ? {
-        id: 'draft-menu-main',
+        id: draftUid('menu'),
         name: 'Menu',
         status: 'published',
         items: menuTemplate.map(([section, itemName, itemSlug, itemDescription, price], index) => ({

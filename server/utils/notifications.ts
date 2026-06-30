@@ -8,6 +8,7 @@ import ReservationGuestReceived from '~/server/emails/templates/ReservationGuest
 import ReservationGuestCancelled from '~/server/emails/templates/ReservationGuestCancelled'
 import ContactOwnerNew from '~/server/emails/templates/ContactOwnerNew'
 import ContactGuestReceived from '~/server/emails/templates/ContactGuestReceived'
+import ReviewOwnerNew from '~/server/emails/templates/ReviewOwnerNew'
 import BookingOwnerNew from '~/server/emails/templates/BookingOwnerNew'
 import BookingGuestReceived from '~/server/emails/templates/BookingGuestReceived'
 
@@ -67,6 +68,14 @@ interface ExperienceBookingNotificationInput extends SiteContext {
   partySize: number
   contactPhone?: string | null
   contactEmail?: string | null
+}
+
+interface ReviewNotificationInput extends SiteContext {
+  locationId?: string | null
+  reviewId: string
+  authorName: string
+  rating: number
+  content?: string | null
 }
 
 interface EmailTemplate {
@@ -324,13 +333,6 @@ async function getLocationNotificationPhone(db: DbClient, locationId: string, or
   return row?.notification_phone ?? null
 }
 
-async function getLocationNotificationEmail(db: DbClient, locationId: string, organizationId: string, siteId: string): Promise<string | null> {
-  const row = await queryFirst<{ email: string | null }>(db, `
-    SELECT email FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1
-  `, [locationId, organizationId, siteId])
-  return row?.email?.trim() || null
-}
-
 async function notifyOwner(
   env: NotificationEnv,
   db: DbClient,
@@ -351,12 +353,12 @@ async function notifyOwner(
   const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
   const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.siteId) : null
   const ownerEmail = await getOwnerEmail(db, opts.organizationId)
-  const locationEmail = opts.locationId ? await getLocationNotificationEmail(db, opts.locationId, opts.organizationId, opts.siteId) : null
 
   // Collect unique phones — location manager + owner (site-level), deduped
   const phones = [...new Set([locationPhone, sitePhone].filter(Boolean))] as string[]
-  // Collect unique emails — location inbox + owner/admin fallback, deduped
-  const emails = [...new Set([locationEmail, ownerEmail].filter(Boolean))] as string[]
+  // Internal email alerts always go to the org owner/admin account.
+  // Public contact emails are guest-facing data and must not double as notification routing.
+  const emails = [...new Set([ownerEmail].filter(Boolean))] as string[]
 
   const channels = await getOwnerNotificationChannels(db, opts, phones.length > 0)
 
@@ -554,6 +556,50 @@ export async function notifyContactSubmitted(
       })
     }
   })
+}
+
+export async function notifyReviewReceived(
+  env: NotificationEnv,
+  db: DbClient,
+  opts: ReviewNotificationInput
+) {
+  const restaurant = siteName(opts)
+  const platformDomain = getPlatformDomain(env)
+
+  const ownerEmail = await useRender(ReviewOwnerNew, {
+    props: {
+      authorName: opts.authorName,
+      rating: opts.rating,
+      content: opts.content ?? '',
+      siteName: restaurant,
+      platformDomain,
+    },
+  })
+
+  try {
+    await notifyOwner(env, db, {
+      ...opts,
+      template: 'new_review',
+      title: `New ${opts.rating}-star review from ${opts.authorName}`,
+      payload: {
+        review_id: opts.reviewId,
+        author_name: opts.authorName,
+        rating: String(opts.rating),
+        content_preview: (opts.content ?? '').slice(0, 200),
+        site_name: restaurant,
+      },
+      email: { subject: `New review from ${opts.authorName}`, html: ownerEmail.html, text: ownerEmail.text },
+      whatsapp: {
+        template: 'new_review',
+        vars: { rating: String(opts.rating), site_name: restaurant, excerpt: opts.content ?? '' },
+      },
+    })
+  } catch (error) {
+    console.error('notifyReviewReceived_failed', {
+      reviewId: opts.reviewId,
+      error: error instanceof Error ? error.message : String(error)
+    })
+  }
 }
 
 export async function notifyExperienceBookingCreated(

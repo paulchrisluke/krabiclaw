@@ -1231,8 +1231,8 @@ async function executeTool(
           slug: toSqlText(input.slug) ?? undefined,
           city: toSqlText(input.city) ?? undefined,
           neighborhood: toSqlText(input.neighborhood) ?? undefined,
-          phone: toSqlText(input.phone) ?? undefined,
-          email: toSqlText(input.email) ?? undefined,
+          phone: input.phone !== undefined ? (toSqlText(input.phone) ?? null) : undefined,
+          email: input.email !== undefined ? (toSqlText(input.email) ?? null) : undefined,
           notification_phone: toSqlText(input.notification_phone) ?? undefined,
           description: toSqlText(input.description) ?? undefined,
           short_description: toSqlText(input.short_description) ?? undefined,
@@ -2751,9 +2751,14 @@ async function executeTool(
     }
 
     case "update_notification_settings": {
-      const phone = toSqlText(input.whatsapp_phone);
-      if (!phone) return { error: "whatsapp_phone is required." };
-      const result = await updateNotificationsSettings(db, orgId, siteId, phone);
+      const phone = typeof input.whatsapp_phone === "string" && input.whatsapp_phone.trim()
+        ? input.whatsapp_phone.trim()
+        : undefined;
+      const channels = Array.isArray(input.channels)
+        ? input.channels.filter((value: unknown): value is string => value === "email" || value === "whatsapp")
+        : undefined;
+      if (!phone && !channels) return { error: "whatsapp_phone and/or channels are required." };
+      const result = await updateNotificationsSettings(db, orgId, siteId, phone, channels);
       return { updated: true, ...result };
     }
 

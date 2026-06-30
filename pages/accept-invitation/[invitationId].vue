@@ -52,7 +52,7 @@
               <UIcon name="i-heroicons-globe-alt" class="size-4 text-muted mt-0.5 shrink-0" />
               <span class="text-muted">
                 You’ll land in <strong class="text-default">{{ invitation.site.brandName || invitation.site.subdomain || invitation.organization.name }}</strong>
-                <template v-if="invitation.site.subdomain"> at <strong class="text-default">{{ invitation.site.subdomain }}.krabiclaw.com</strong></template>.
+                <template v-if="invitation.site.subdomain"> at <strong class="text-default">{{ invitation.site.subdomain }}.{{ freeSiteDomain }}</strong></template>.
               </span>
             </div>
             <div v-if="invitation.inviter.name || invitation.inviter.email" class="flex items-start gap-3 text-sm">
@@ -203,6 +203,9 @@ const pagePath = computed(() => {
 
 const emailLoginUrl = computed(() => `/login?next=${encodeURIComponent(pagePath.value)}`)
 
+const config = useRuntimeConfig()
+const freeSiteDomain = computed(() => (config.public.freeSiteDomain as string).replace(/^https?:\/\//, ''))
+
 const emailMatches = computed(() => {
   if (!invitation.value || !user.value) return false
   return user.value.email?.toLowerCase() === invitation.value.email.toLowerCase()
@@ -210,9 +213,7 @@ const emailMatches = computed(() => {
 
 const iframeUrl = computed(() => {
   if (!invitation.value?.site?.subdomain) return ''
-  const config = useRuntimeConfig()
-  const freeSiteDomain = (config.public.freeSiteDomain as string).replace(/^https?:\/\//, '')
-  return `https://${invitation.value.site.subdomain}.${freeSiteDomain}`
+  return `https://${invitation.value.site.subdomain}.${freeSiteDomain.value}`
 })
 
 onMounted(async () => {

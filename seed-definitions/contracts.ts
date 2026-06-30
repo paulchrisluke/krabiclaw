@@ -24,7 +24,7 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
     onboardingStatus: 'pending' | 'active' | 'failed'
     urlStructure: 'location_subdirectories' | 'flat'
     primaryLocationId: string
-    contactEmail: string
+    contactEmail: string | null
     contactPhone?: string | null
     defaultCurrency: string
     vertical: 'restaurant' | 'experience'
@@ -93,7 +93,7 @@ export interface CuratedLocationDefinition {
     country: string
   }
   phone: string
-  email: string
+  email: string | null
   mapsUrl: string
   latitude: number
   longitude: number

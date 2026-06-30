@@ -1031,12 +1031,15 @@ async function finishCreation(orgSlug: string | null | undefined, siteSlug: stri
   // Currency is site-level (not asked again on add-location) and otherwise
   // silently defaults to THB — persist the onboarding choice explicitly.
   if (importedSiteId.value && !props.isAddingLocation) {
-    await $fetch(`/api/sites/${importedSiteId.value}/settings`, {
-      method: 'PATCH',
-      body: { default_currency: detailsForm.currency },
-    }).catch((error) => {
+    try {
+      await $fetch(`/api/sites/${importedSiteId.value}/settings`, {
+        method: 'PATCH',
+        body: { default_currency: detailsForm.currency },
+      })
+    } catch (error) {
       console.error('onboarding_currency_save_failed', error)
-    })
+      throw new Error('Failed to save currency setting. Please try again.')
+    }
   }
 
   await refreshSocialStatus(importedSiteId.value)
