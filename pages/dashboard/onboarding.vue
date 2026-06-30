@@ -81,14 +81,14 @@ const sitePreviewBaseUrl = computed(() => {
 })
 
 const previewLocations = computed(() => {
-  if (siteLocations.value.length > 0) return siteLocations.value
-  if (!draftPreview.value) return []
-  return [{
+  if (draftPreview.value) return [{
     id: draftPreview.value.draftId,
     slug: draftPreview.value.subdomainCandidate,
     title: draftPreview.value.draftName,
     is_primary: true,
   }]
+  if (siteLocations.value.length > 0) return siteLocations.value
+  return []
 })
 
 const selectedLocation = computed(() =>
@@ -110,7 +110,11 @@ const locationScopedPages = new Set(['location', 'menu'])
 const currentPageIsLocationScoped = computed(() => locationScopedPages.has(selectedPreviewPage.value))
 
 const previewPagePath = computed(() => {
-  if (draftPreview.value) return selectedPreviewPage.value === 'home' ? '/' : `/${selectedPreviewPage.value}`
+  if (draftPreview.value) {
+    // Draft previews don't support location-scoped routes
+    if (selectedPreviewPage.value === 'location' || selectedPreviewPage.value === 'menu') return '/'
+    return selectedPreviewPage.value === 'home' ? '/' : `/${selectedPreviewPage.value}`
+  }
   if (!selectedLocation.value) return selectedPreviewPage.value === 'home' ? '/' : `/${selectedPreviewPage.value}`
   if (selectedPreviewPage.value === 'location') return `/locations/${selectedLocation.value.slug}`
   if (selectedPreviewPage.value === 'menu') return `/locations/${selectedLocation.value.slug}/menu`

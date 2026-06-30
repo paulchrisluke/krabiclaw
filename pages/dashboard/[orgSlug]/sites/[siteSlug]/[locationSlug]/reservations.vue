@@ -17,6 +17,20 @@
         </UCard>
       </div>
 
+      <UAlert
+        v-if="!loading && notificationPhoneMissing"
+        color="warning"
+        variant="subtle"
+        icon="i-heroicons-exclamation-triangle"
+        title="Booking alerts are email-only right now"
+        description="No manager alert number is set for this location, so new reservations are only emailed to the account owner — easy to miss. Add a number to also get them by WhatsApp."
+        class="mb-4"
+      >
+        <template #actions>
+          <UButton :to="locationSettingsPath" color="warning" size="xs">Add alert number</UButton>
+        </template>
+      </UAlert>
+
       <div v-if="loading" class="space-y-3">
         <USkeleton v-for="i in 5" :key="i" class="h-24 rounded-lg" />
       </div>
@@ -68,10 +82,14 @@ interface ReservationSubmission {
 
 const siteId = await useDashboardSiteId()
 const toast = useToast()
+const route = useRoute()
 const sitePublicUrl = ref<string | null>(null)
 const reservations = ref<ReservationSubmission[]>([])
 const loading = ref(true)
+const notificationPhoneMissing = ref(false)
 const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
+
+const locationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/${route.params.locationSlug}`)
 
 const _headerLinks = computed(() => buildHeaderLinks([
   { label: 'Edit reservation page', icon: 'i-heroicons-document-text', to: `${paths.value.content}?page=reservations`, color: 'primary' as const, variant: 'soft' as const },
@@ -84,9 +102,10 @@ const confirmedCount = computed(() => reservations.value.filter(item => item.sta
 async function loadReservations() {
   loading.value = true
   try {
-    const [settingsResult, reservationsResult] = await Promise.allSettled([
+    const [settingsResult, reservationsResult, locationsResult] = await Promise.allSettled([
       $fetch<{ settings: { public_url: string | null } }>(`/api/dashboard/settings`),
-      $fetch<{ submissions: ReservationSubmission[] }>(`/api/dashboard/editor/reservation-submissions`)
+      $fetch<{ submissions: ReservationSubmission[] }>(`/api/dashboard/editor/reservation-submissions`),
+      $fetch<{ locations: Array<{ slug: string; notification_phone: string | null }> }>(`/api/dashboard/locations`),
     ])
     if (settingsResult.status === 'fulfilled') {
       sitePublicUrl.value = settingsResult.value.settings.public_url
@@ -97,6 +116,12 @@ async function loadReservations() {
       reservations.value = reservationsResult.value.submissions ?? []
     } else {
       throw reservationsResult.reason
+    }
+    if (locationsResult.status === 'fulfilled') {
+      const current = locationsResult.value.locations.find(loc => loc.slug === route.params.locationSlug)
+      notificationPhoneMissing.value = !current?.notification_phone
+    } else {
+      console.warn('reservation_location_load_failed', locationsResult.reason)
     }
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load reservations', color: 'error' })

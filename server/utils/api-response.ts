@@ -2,13 +2,24 @@ import { createError, getHeader, type H3Event } from 'h3'
 import { createDb, type AppDb } from '~/server/db'
 import type { CloudflareEnv } from './auth'
 
+function normalizeHeaders(headers: HeadersInit): HeadersInit {
+  if (headers instanceof Headers) {
+    const obj: Record<string, string> = {}
+    headers.forEach((value, key) => {
+      obj[key] = value
+    })
+    return obj
+  }
+  return headers
+}
+
 export const jsonResponse = (body: ApiValue, init: ResponseInit = {}) =>
   new Response(JSON.stringify(body), {
     ...init,
-    headers: {
+    headers: normalizeHeaders({
       'content-type': 'application/json; charset=utf-8',
       ...init.headers
-    }
+    })
   })
 
 export const textResponse = (
@@ -18,10 +29,10 @@ export const textResponse = (
 ) =>
   new Response(body, {
     ...init,
-    headers: {
+    headers: normalizeHeaders({
       'content-type': contentType,
       ...init.headers,
-    },
+    }),
   })
 
 export const cleanString = (value: ApiValue, maxLength: number) =>

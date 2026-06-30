@@ -165,7 +165,9 @@
           businessPrimaryPhoto: googleBusiness?.media?.[0],
           hasOrderLinks: hasOrderLinks,
           ctaRoute: homeCopy.ctaRoute,
-          reserveCta: homeCopy.reserveCta
+          reserveCta: homeCopy.reserveCta,
+          brandColor: bootstrapConfig.value?.brand_color,
+          vertical: site?.vertical
         }"
       />
       <section v-else id="section-hero" class="relative min-h-160 overflow-hidden flex items-center">

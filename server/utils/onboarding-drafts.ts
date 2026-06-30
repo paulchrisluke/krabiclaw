@@ -98,7 +98,7 @@ export interface OnboardingDraftPayload {
     brandName: string
     vertical: SiteVertical
     subdomainCandidate: string
-    config: Record<string, string>
+    config: Record<string, string | null>
     locations: DraftLocationRecord[]
     menu: DraftMenuRecord | null
     reviews: DraftReviewRecord[]
@@ -142,16 +142,6 @@ export interface PlaceDetailsSnapshot {
     text: string | null
     publishedAt: string | null
   }>
-}
-
-const TEMPLATE_HERO_IMAGE = {
-  publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/public',
-  thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/thumbnail',
-}
-
-const TEMPLATE_STORY_IMAGE = {
-  publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/03e7f501-7689-4607-3acb-ec6f0d958500/public',
-  thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/03e7f501-7689-4607-3acb-ec6f0d958500/thumbnail',
 }
 
 const DRAFT_MENU_SECTIONS: Partial<Record<SiteVertical, Array<[string, string, string, string, number]>>> = {
@@ -281,10 +271,12 @@ function buildDraftContent(brandName: string, vertical: SiteVertical, heroImageU
       updated_at: updatedAt,
     },
     {
+      // No stock photo: SayaBrandStory already renders a clean single-column
+      // layout with no image rather than a broken/empty image block.
       page: 'about',
       field: 'story.image',
-      content: TEMPLATE_STORY_IMAGE.publicUrl,
-      value: TEMPLATE_STORY_IMAGE.publicUrl,
+      content: null,
+      value: null,
       type: 'media',
       hero_title: null,
       hero_subtitle: null,
@@ -292,7 +284,7 @@ function buildDraftContent(brandName: string, vertical: SiteVertical, heroImageU
       hero_kind: null,
       hero_video_public_url: null,
       hero_video_kind: null,
-      thumbnail_url: TEMPLATE_STORY_IMAGE.thumbnailUrl,
+      thumbnail_url: null,
       component: null,
       updated_at: updatedAt,
     },
@@ -388,9 +380,11 @@ export function buildOnboardingDraftPayload(input: {
   const brandName = input.details.name || input.name
   const subdomainCandidate = slugify(brandName).slice(0, 40)
   const placeSnapshot = input.place ? asPlaceSnapshot(input.place) : null
-  const heroImageUrl = placeSnapshot?.photos[0]?.photoUri ?? TEMPLATE_HERO_IMAGE.publicUrl
+  // No stock photo fallback here: a generic stock image isn't actually theirs, and the
+  // Saya hero renders a brand-color + icon treatment when no real photo is available yet.
+  const heroImageUrl = placeSnapshot?.photos[0]?.photoUri ?? null
   const locationHeroImageUrl = placeSnapshot?.photos[1]?.photoUri ?? heroImageUrl
-  const heroThumbnailUrl = heroImageUrl === TEMPLATE_HERO_IMAGE.publicUrl ? TEMPLATE_HERO_IMAGE.thumbnailUrl : heroImageUrl
+  const heroThumbnailUrl = heroImageUrl
   const locationSlug = slugify(brandName) || 'main'
   const locationId = 'draft-location-main'
 
@@ -513,34 +507,15 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
   sourceType: DraftSourceType
   payload: OnboardingDraftPayload
 }) {
-  const existing = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM onboarding_drafts
-    WHERE user_id = ? AND status = 'active'
-    LIMIT 1
-  `, [input.userId])
-
-  const id = existing?.id ?? crypto.randomUUID()
   const payloadJson = JSON.stringify(input.payload)
   const subdomainCandidate = input.payload.preview.subdomainCandidate
   const now = nowIso()
 
-  if (existing) {
-    await execute(db, `
-      UPDATE onboarding_drafts
-      SET organization_id = ?, name = ?, vertical = ?, subdomain_candidate = ?, source_type = ?, payload_json = ?, updated_at = ?
-      WHERE id = ?
-    `, [
-      input.organizationId ?? null,
-      input.name,
-      input.vertical,
-      subdomainCandidate,
-      input.sourceType,
-      payloadJson,
-      now,
-      id,
-    ])
-  } else {
-    await execute(db, `
+  // Concurrency-safe upsert: try INSERT first, retry as UPDATE on UNIQUE constraint violation
+  const id = crypto.randomUUID()
+  let result
+  try {
+    result = await execute(db, `
       INSERT INTO onboarding_drafts
         (id, user_id, organization_id, name, vertical, subdomain_candidate, source_type, status, payload_json, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
@@ -556,6 +531,39 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
       now,
       now,
     ])
+  } catch (err: unknown) {
+    // UNIQUE constraint violation on (user_id, status = 'active') means another request inserted first
+    // Retry as UPDATE on the existing active draft
+    const existing = await queryFirst<{ id: string }>(db, `
+      SELECT id FROM onboarding_drafts
+      WHERE user_id = ? AND status = 'active'
+      LIMIT 1
+    `, [input.userId])
+
+    if (!existing) {
+      throw err // Re-throw if it's not a conflict we can handle
+    }
+
+    result = await execute(db, `
+      UPDATE onboarding_drafts
+      SET organization_id = ?, name = ?, vertical = ?, subdomain_candidate = ?, source_type = ?, payload_json = ?, updated_at = ?
+      WHERE id = ?
+    `, [
+      input.organizationId ?? null,
+      input.name,
+      input.vertical,
+      subdomainCandidate,
+      input.sourceType,
+      payloadJson,
+      now,
+      existing.id,
+    ])
+
+    return {
+      id: existing.id,
+      subdomainCandidate,
+      payload: input.payload,
+    }
   }
 
   return {

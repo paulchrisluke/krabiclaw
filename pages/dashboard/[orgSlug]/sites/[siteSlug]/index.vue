@@ -12,10 +12,10 @@
 
       <div v-else class="space-y-6">
         <!-- Onboarding checklist (shown until dismissed or all items complete) -->
-        <OnboardingChecklist :org-slug="String(route.params.orgSlug)" @visible="onboardingVisible = $event" />
+        <DashboardOnboardingChecklist :org-slug="String(route.params.orgSlug)" @visible="onboardingVisible = $event" />
 
         <!-- Persistent fallback once the checklist is dismissed/complete, so MCP prompts stay discoverable -->
-        <McpQuickActions v-if="!onboardingVisible" :org-slug="String(route.params.orgSlug)" />
+        <DashboardMcpQuickActions v-if="!onboardingVisible" :org-slug="String(route.params.orgSlug)" />
 
         <!-- Usage strip -->
         <div v-if="credits" class="grid grid-cols-2 sm:grid-cols-4 gap-4">

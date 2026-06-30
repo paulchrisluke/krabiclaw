@@ -22,7 +22,12 @@ export const usePageContent = (pageName?: string) => {
   const route = useRoute()
 
   const page = computed(() => {
-    const name = pageName || route.path
+    let name = pageName || route.path
+    // Strip /preview/draft/:draftId prefix for draft preview routes
+    if (!pageName && route.path.startsWith('/preview/draft/')) {
+      const match = route.path.match(/^\/preview\/draft\/[^/]+\/(.*)$/)
+      if (match) name = match[1] || '/'
+    }
     if (name === '/' || name === 'home') return 'home'
     return name.replace(/^\//, '').replace(/\//g, '-')
   })

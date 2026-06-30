@@ -19,7 +19,7 @@ export function useCopyableCodeBlocks(containerRef: Ref<HTMLElement | null | und
 
       const button = document.createElement('button')
       button.type = 'button'
-      button.className = 'kc-copy-btn absolute right-2 top-2 rounded-md border border-default/40 bg-elevated/80 p-1.5 text-dimmed opacity-0 transition-opacity group-hover:opacity-100 hover:text-default focus-visible:opacity-100'
+      button.className = 'kc-copy-btn absolute right-2 top-2 rounded-md border border-default/40 bg-elevated/80 p-1.5 text-dimmed transition-opacity hover:text-default focus-visible:opacity-100'
       button.setAttribute('aria-label', 'Copy code')
       button.innerHTML = COPY_ICON
 

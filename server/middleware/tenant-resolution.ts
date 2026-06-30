@@ -105,6 +105,7 @@ export default defineEventHandler(async (event) => {
   const previewDraftMatch = url.pathname.match(/^\/preview\/draft\/([^/?]+)/)
   if (previewDraftMatch && isPlatformHost(host, env)) {
     const draftId = previewDraftMatch[1]!
+    const previewToken = url.searchParams.get('token')
     const db = env.db
     if (db) {
       const previewDraft = await queryFirst<{
@@ -112,14 +113,15 @@ export default defineEventHandler(async (event) => {
         name: string
         vertical: string | null
         payload_json: string
+        preview_token: string | null
       }>(db, `
-        SELECT id, name, vertical, payload_json
+        SELECT id, name, vertical, payload_json, preview_token
         FROM onboarding_drafts
         WHERE id = ? AND status = 'active'
         LIMIT 1
       `, [draftId])
 
-      if (previewDraft) {
+      if (previewDraft && previewToken && previewDraft.preview_token === previewToken) {
         event.context.draftId = previewDraft.id
         event.context.tenantType = 'tenant'
         event.context.themeId = 'saya-theme-v1'

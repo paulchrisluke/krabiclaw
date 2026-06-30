@@ -899,7 +899,8 @@ export async function updateMenuItem(
 
   setParts.push("updated_at = ?");
   setParts.push("updated_by = ?");
-  params.push(now, updatedBy);
+  setParts.push("source = ?");
+  params.push(now, updatedBy, "manual");
 
   params.push(menuItemId);
 

@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const session = await getAuthSession(event, env)
-  if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
+  if (!session?.user?.email || !session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
   if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
 
   const siteId = String(getRouterParam(event, 'siteId') || '').trim()
@@ -53,7 +53,7 @@ export default defineEventHandler(async (event) => {
   const existingInvite = await queryFirst<{ id: string; role: string | null }>(db, `
     SELECT id, role
     FROM invitation
-    WHERE organizationId = ? AND lower(email) = ? AND status = 'pending'
+    WHERE organizationId = ? AND lower(email) = ? AND status = 'pending' AND expiresAt > strftime('%s', 'now')
     ORDER BY createdAt DESC
     LIMIT 1
   `, [site.organization_id, email])
@@ -67,7 +67,7 @@ export default defineEventHandler(async (event) => {
         success: false,
         reason: 'already_invited',
         invitationId,
-        inviteUrl: `${getRequestURL(event).origin}/accept-invitation/${invitationId}`,
+        inviteUrl: `${getRequestURL(event).origin}/accept-invitation/${invitationId}?siteId=${encodeURIComponent(site.id)}`,
         existingRole: existingInvite.role ?? 'member',
       }, { status: 409 })
     }

@@ -39,6 +39,12 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })
   }
 
+  // Check Content-Length before parsing multipart to avoid memory exhaustion
+  const contentLength = Number(getHeader(event, 'content-length') || 0)
+  if (contentLength > MAX_BYTES) {
+    return jsonResponse({ error: 'Request body too large (max 10 MB)' }, { status: 413 })
+  }
+
   const formData = await readMultipartFormData(event)
   if (!formData) return jsonResponse({ error: 'Multipart form data required' }, { status: 400 })
 
@@ -59,8 +65,12 @@ export default defineEventHandler(async (event) => {
   const altTextPart = formData.find(p => p.name === 'alt_text')
   const altText = altTextPart?.data ? Buffer.from(altTextPart.data).toString().trim() || null : null
 
+  let uploaded: { imageId: string; publicUrl: string; thumbnailUrl: string } | null = null
   try {
-    const uploaded = await uploadImageBuffer(env, filePart.data.slice().buffer, filename, contentType)
+    // Extract exact byte range as ArrayBuffer to avoid uploading full backing buffer
+    const arrayBuffer = new ArrayBuffer(filePart.data.byteLength)
+    new Uint8Array(arrayBuffer).set(new Uint8Array(filePart.data.buffer, filePart.data.byteOffset, filePart.data.byteLength))
+    uploaded = await uploadImageBuffer(env, arrayBuffer as ArrayBuffer, filename, contentType)
 
     await ensurePlatformMediaScope(db)
     const assetId = crypto.randomUUID()
@@ -85,6 +95,14 @@ export default defineEventHandler(async (event) => {
     if (!asset) return jsonResponse({ error: 'Uploaded media asset was not found after creation' }, { status: 500 })
     return jsonResponse({ asset })
   } catch (err) {
+    // Clean up orphaned Cloudflare image if upload succeeded but DB insert failed
+    if (uploaded?.imageId) {
+      try {
+        await env.CF_IMAGES.delete(uploaded.imageId)
+      } catch (cleanupErr) {
+        console.error('Failed to clean up orphaned Cloudflare image:', cleanupErr)
+      }
+    }
     console.error('Failed to upload platform media:', err)
     return jsonResponse({ error: 'Failed to upload media' }, { status: 500 })
   }

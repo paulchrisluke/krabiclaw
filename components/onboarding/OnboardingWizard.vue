@@ -219,6 +219,9 @@
                     </UButton>
                   </div>
                 </UCard>
+                <div v-if="msg.brandCard && importedSiteId" class="mt-2">
+                  <BrandEssentialsCard :site-id="importedSiteId" />
+                </div>
                 <div v-if="msg.polishCard" class="mt-2">
                   <PolishSuggestionsCard
                     :vertical="selectedVertical"
@@ -308,6 +311,7 @@
 
 <script setup lang="ts">
 import { marked } from 'marked'
+import { DEFAULT_CURRENCY } from '~/shared/currencies'
 import {
   buildOnboardingStarterPrompt,
   getQuickActionPrompts,
@@ -323,6 +327,7 @@ interface WizardMessage {
   socialCard?: boolean
   polishCard?: boolean
   mcpCard?: boolean
+  brandCard?: boolean
   placePreview?: { name: string; address: string; phone?: string | null; mapsUrl?: string | null }
   detailsCard?: {
     title: string
@@ -419,6 +424,7 @@ const detailsForm = reactive({
   openingHours: '',
   notificationPhone: '',
   timezone: '',
+  currency: DEFAULT_CURRENCY,
   isPrimary: true,
 })
 
@@ -551,6 +557,7 @@ async function pushBot(text: string, extra?: {
   socialCard?: boolean
   polishCard?: boolean
   mcpCard?: boolean
+  brandCard?: boolean
   placePreview?: WizardMessage['placePreview']
   detailsCard?: WizardMessage['detailsCard']
 }) {
@@ -913,13 +920,18 @@ async function submitDetails() {
   }
 }
 
+let committing = false
+
 async function commitDraft() {
+  if (committing) return
   if (!onboardingDraftId.value) {
     importError.value = 'No draft is ready yet. Save the preview first.'
     await advance('details')
     return
   }
 
+  committing = true
+  replies.value = []
   step.value = 'importing'
   importing.value = true
   importError.value = null
@@ -952,6 +964,7 @@ async function commitDraft() {
     step.value = 'details'
   } finally {
     importing.value = false
+    committing = false
   }
 }
 
@@ -969,6 +982,14 @@ function serializeDetails() {
   }
 }
 
+function guessLocalTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+  } catch {
+    return ''
+  }
+}
+
 function seedDetailsFromPreview(preview: NonNullable<typeof pendingPreview.value>) {
   detailsForm.name = preview.name ?? ''
   detailsForm.city = preview.city ?? ''
@@ -976,8 +997,12 @@ function seedDetailsFromPreview(preview: NonNullable<typeof pendingPreview.value
   detailsForm.phone = preview.phone ?? ''
   detailsForm.websiteUrl = preview.websiteUrl ?? ''
   detailsForm.openingHours = Array.isArray(preview.openingHours) ? preview.openingHours.join('\n') : ''
-  detailsForm.notificationPhone = ''
-  detailsForm.timezone = ''
+  // Default the alert number to the business phone and guess the timezone from the
+  // browser — both are required now (a missing notification phone silently degrades
+  // booking alerts to email-only), so default them instead of leaving them blank.
+  detailsForm.notificationPhone = preview.phone ?? ''
+  detailsForm.timezone = guessLocalTimezone()
+  detailsForm.currency = DEFAULT_CURRENCY
   detailsForm.isPrimary = !props.isAddingLocation
 }
 
@@ -989,7 +1014,8 @@ function seedDetailsFromManual(name: string) {
   detailsForm.websiteUrl = ''
   detailsForm.openingHours = ''
   detailsForm.notificationPhone = ''
-  detailsForm.timezone = ''
+  detailsForm.timezone = guessLocalTimezone()
+  detailsForm.currency = DEFAULT_CURRENCY
   detailsForm.isPrimary = !props.isAddingLocation
 }
 
@@ -1001,15 +1027,32 @@ async function finishCreation(orgSlug: string | null | undefined, siteSlug: stri
   if (importedSiteId.value && !props.isAddingLocation) {
     trackSiteCreated(importedSiteId.value)
   }
-  
+
+  // Currency is site-level (not asked again on add-location) and otherwise
+  // silently defaults to THB — persist the onboarding choice explicitly.
+  if (importedSiteId.value && !props.isAddingLocation) {
+    await $fetch(`/api/sites/${importedSiteId.value}/settings`, {
+      method: 'PATCH',
+      body: { default_currency: detailsForm.currency },
+    }).catch((error) => {
+      console.error('onboarding_currency_save_failed', error)
+    })
+  }
+
   await refreshSocialStatus(importedSiteId.value)
   await sleep(300)
   const domainSlug = siteSlug ?? orgSlug
   const domain = domainSlug ? `**${domainSlug}.krabiclaw.com**` : 'your new workspace'
   const offerLabel = selectedVertical.value === 'experience' ? 'experiences' : 'menu'
   await pushBot(`Done. Your workspace is live at ${domain}.`)
+  if (!props.isAddingLocation && importedSiteId.value) {
+    await pushBot(
+      `One last thing before you go — a logo, real photo, and brand color take this from "a template" to "your site" in under a minute.`,
+      { brandCard: true },
+    )
+  }
   await pushBot(
-    `Head to your dashboard to keep building — add your ${offerLabel}, hero image and story — or connect ChatGPT to manage it from there.`,
+    `From here, head to your dashboard to keep building — add your ${offerLabel} and story — or connect ChatGPT to manage it from there.`,
     { handoff: true, socialCard: !props.isAddingLocation, polishCard: true, mcpCard: true },
   )
   step.value = 'imported'

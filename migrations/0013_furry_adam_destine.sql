@@ -1,0 +1,1 @@
+ALTER TABLE `menu_items` ADD `source` text DEFAULT 'manual' NOT NULL;

@@ -31,10 +31,15 @@
           class="absolute inset-0 bg-cover bg-center opacity-50"
           :style="heroBackgroundStyle"
         />
+        <!-- No real photo yet: same brand-color + icon treatment as the homepage
+             hero (SayaHomeHero.vue) — not a stock photo that isn't actually theirs. -->
         <div
           v-else
-          class="absolute inset-0 bg-zinc-900"
-        />
+          class="absolute inset-0 flex items-center justify-center"
+          :style="{ background: `linear-gradient(135deg, ${locationHeroBrandColor} 0%, color-mix(in srgb, ${locationHeroBrandColor} 60%, black) 100%)` }"
+        >
+          <UIcon :name="locationHeroIcon" class="size-24 text-white/25" />
+        </div>
         <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.3) 100%)" />
         <div class="relative flex min-h-160 items-end">
           <div class="mx-auto w-full max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
@@ -356,6 +361,10 @@ const otherLocations = computed(() => locations.value.filter((l: ApiRecord) => l
 
 // Reviews preview from bootstrap
 const reviewsPreview = computed(() => locationReviews.value.slice(0, 3))
+
+// Neutral default until the owner picks a brand color in onboarding.
+const locationHeroBrandColor = computed(() => bootstrapConfig.value?.brand_color || '#3F3F46')
+const locationHeroIcon = computed(() => (site as ApiValue)?.vertical === 'experience' ? 'i-heroicons-sparkles' : 'i-heroicons-building-storefront')
 
 // Sanitize hero background URL to prevent CSS injection
 const heroBackgroundStyle = computed(() => {

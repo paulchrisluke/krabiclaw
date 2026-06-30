@@ -210,7 +210,9 @@ const emailMatches = computed(() => {
 
 const iframeUrl = computed(() => {
   if (!invitation.value?.site?.subdomain) return ''
-  return `https://${invitation.value.site.subdomain}.krabiclaw.com`
+  const config = useRuntimeConfig()
+  const freeSiteDomain = (config.public.freeSiteDomain as string).replace(/^https?:\/\//, '')
+  return `https://${invitation.value.site.subdomain}.${freeSiteDomain}`
 })
 
 onMounted(async () => {

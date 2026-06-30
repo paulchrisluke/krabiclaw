@@ -158,9 +158,13 @@ function serializeComponentMarkdown(component: PlatformContentComponent) {
 
 export function renderContentMarkdownWithComponents(body: string, components: PlatformContentComponent[]) {
   const normalizedComponents = [...components].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+  // Filter out inactive or disabled components before serialization
+  const activeComponents = normalizedComponents.filter(
+    component => component.status === 'active' && component.render_enabled !== false
+  )
   const queues = {
-    faq: normalizedComponents.filter(component => component.type === 'faq'),
-    how_to: normalizedComponents.filter(component => component.type === 'how_to'),
+    faq: activeComponents.filter(component => component.type === 'faq'),
+    how_to: activeComponents.filter(component => component.type === 'how_to'),
   }
   const usedComponentIds = new Set<string>()
   const replacedBody = body.replace(COMPONENT_EMBED_REGEX, (_match, quoted, singleQuoted, bare) => {
@@ -172,7 +176,7 @@ export function renderContentMarkdownWithComponents(body: string, components: Pl
     return `\n\n${serializeComponentMarkdown(component)}\n\n`
   })
 
-  const trailingSections = normalizedComponents
+  const trailingSections = activeComponents
     .filter(component => !usedComponentIds.has(component.id))
     .map(component => serializeComponentMarkdown(component))
     .filter(Boolean)
@@ -222,8 +226,8 @@ export function renderPlatformDocMarkdown(doc: PlatformLlmDocDetail, origin: str
   ].join('\n')
 }
 
-export function renderPlatformBlogMarkdown(post: PlatformLlmBlogDetail, origin: string) {
-  const categorySlug = blogCategoryToSlug(post.category)
+export function renderPlatformBlogMarkdown(post: PlatformLlmBlogDetail, origin: string, categoryOverride?: string) {
+  const categorySlug = categoryOverride || blogCategoryToSlug(post.category)
   if (!categorySlug) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
   const path = `/blog/${categorySlug}/${post.slug}`
   const markdownPath = `${path}.md`
@@ -362,7 +366,7 @@ export function buildLlmsTxt(origin: string, docs: PlatformLlmLinkEntry[], posts
     '',
     '## Optional',
     `- [Full LLM context](${absoluteUrl(origin, '/llms-full.txt')}): Aggregated export of published docs and blog posts.`,
-    `- [Docs index JSON](${absoluteUrl(origin, '/docs-index.json')}): Machine-readable manifest of published docs.`,
+    `- [Docs index JSON](${absoluteUrl(origin, '/docs/index.json')}): Machine-readable manifest of published docs.`,
     `- [Blog index JSON](${absoluteUrl(origin, '/blog/index.json')}): Machine-readable manifest of published platform blog posts.`,
     `- [Blog RSS feed](${absoluteUrl(origin, '/blog/rss.xml')}): Chronological feed for published platform posts.`,
     `- [Blog JSON feed](${absoluteUrl(origin, '/blog/feed.json')}): JSON Feed export for published platform posts.`,
@@ -496,5 +500,10 @@ export function buildBlogJsonFeed(origin: string, posts: PlatformLlmLinkEntry[])
 
 export function resolvePublicOrigin(event: H3Event) {
   const runtimeConfig = useRuntimeConfig()
-  return (runtimeConfig.public.siteUrl || getRequestURL(event).origin).replace(/\/$/, '')
+  // Only trust runtime-configured siteUrl; avoid untrusted Host header from getRequestURL
+  const origin = runtimeConfig.public.siteUrl
+  if (!origin) {
+    throw createError({ statusCode: 500, statusMessage: 'siteUrl not configured' })
+  }
+  return origin.replace(/\/$/, '')
 }

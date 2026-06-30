@@ -12,7 +12,7 @@ export interface MediaAsset {
   location_id: string | null
   kind: 'image' | 'video' | 'file'
   provider: 'cloudflare_images' | 'cloudflare_r2' | 'google_business' | 'external_url' | 'chowbot'
-  source: 'uploaded' | 'google_sync' | 'generated' | 'external'
+  source: 'uploaded' | 'google_sync' | 'generated' | 'external' | 'template_stock'
   cloudflare_image_id: string | null
   r2_key: string | null
   google_media_name: string | null

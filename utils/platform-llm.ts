@@ -177,9 +177,13 @@ function serializeComponentMarkdown(component: LlmContentComponent) {
 
 export function renderContentMarkdownWithComponents(body: string, components: LlmContentComponent[]) {
   const normalizedComponents = [...components].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+  // Filter out inactive or disabled components before serialization
+  const activeComponents = normalizedComponents.filter(
+    component => component.status === 'active' && component.render_enabled !== false
+  )
   const queues = {
-    faq: normalizedComponents.filter(component => component.type === 'faq'),
-    how_to: normalizedComponents.filter(component => component.type === 'how_to'),
+    faq: activeComponents.filter(component => component.type === 'faq'),
+    how_to: activeComponents.filter(component => component.type === 'how_to'),
   }
   const usedComponentIds = new Set<string>()
   const replacedBody = body.replace(COMPONENT_EMBED_REGEX, (_match, quoted, singleQuoted, bare) => {
@@ -191,7 +195,7 @@ export function renderContentMarkdownWithComponents(body: string, components: Ll
     return `\n\n${serializeComponentMarkdown(component)}\n\n`
   })
 
-  const trailingSections = normalizedComponents
+  const trailingSections = activeComponents
     .filter(component => !usedComponentIds.has(component.id))
     .map(component => serializeComponentMarkdown(component))
     .filter(Boolean)

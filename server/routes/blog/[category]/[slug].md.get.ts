@@ -17,5 +17,5 @@ export default defineEventHandler(async (event) => {
   const post = await getPublishedPlatformBlogPostBySlug(db, category, slug)
   if (!post) return textResponse('Post not found\n', { status: 404 })
 
-  return textResponse(renderPlatformBlogMarkdown(post, resolvePublicOrigin(event)), {}, 'text/markdown; charset=utf-8')
+  return textResponse(renderPlatformBlogMarkdown(post, resolvePublicOrigin(event), category), {}, 'text/markdown; charset=utf-8')
 })

@@ -19,38 +19,151 @@ DELETE FROM platform_docs
 INSERT OR REPLACE INTO platform_docs (id, title, slug, body, excerpt, category, author_id, seo_description, seo_keywords, canonical_url, robots, difficulty_level, sort_order, status, published_at, created_at, updated_at)
 VALUES (
   'doc-012',
-  'Connect KrabiClaw to ChatGPT (MCP Setup)',
+  'Connect KrabiClaw to ChatGPT',
   'mcp-setup',
-  '## Connect KrabiClaw to ChatGPT
+  '# Connect KrabiClaw to ChatGPT
 
-KrabiClaw runs an MCP (Model Context Protocol) server so you can manage your site, menus, and media directly from ChatGPT.
+Connect KrabiClaw to ChatGPT so you can manage your website, menus, media, locations, reviews, and work requests by conversation.
 
-## MCP server URL
+This takes about 5 minutes. Use ChatGPT in a web browser, not the mobile app.
 
-```
+## Before you start
+
+Copy this exact server URL:
+
+```text
 https://krabiclaw.com/api/mcp
 ```
 
-Paste this into ChatGPT''s connector setup. Don''t open it directly in a browser tab — it isn''t a page you visit, it''s the address ChatGPT itself connects to. If you tapped this link from an email, WhatsApp message, or chat, you landed here instead.
+Do not open this URL in a browser tab. Paste it into ChatGPT''s Connection field when asked.
 
-## What you''re giving ChatGPT access to
+## 1. Open Advanced settings
 
-When you connect, KrabiClaw asks you to approve:
+Find the Advanced settings row in ChatGPT Apps or Connectors settings and tap it.
 
-- Verifying your identity.
-- Reading and updating your site content, menus, and media.
-- Managing locations, reviews, and Q&A.
-- Submitting and tracking work requests.
+![Advanced settings row in ChatGPT settings](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/f848fb38-bbfb-47fe-c83c-cf0ce70bdd00/public)
 
-You can review or revoke this access anytime from [Account Settings](/dashboard/account/settings).
+## 2. Turn on Developer mode
 
-## Prefer a guided page with a copy button?
+Turn Developer mode on so the switch is blue, then tap Create app.
 
-Visit [KrabiClaw for ChatGPT](/plugin) for the same instructions with a one-click copy button and setup screenshots.',
-  'Connect the KrabiClaw MCP server to ChatGPT so you can manage your site through conversation.',
+![Developer mode enabled with Create app button](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/ec7fb04a-da9d-44c6-3612-0842c5904000/public)
+
+## 3. Create the KrabiClaw app
+
+Fill in the app form like this:
+
+| Field | What to enter |
+|---|---|
+| Name | `KrabiClaw` |
+| Description | `Manage your KrabiClaw website.` |
+| Connection | `https://krabiclaw.com/api/mcp` |
+| Authentication | `OAuth` |
+
+The important part is the Connection field. It must be exactly:
+
+```text
+https://krabiclaw.com/api/mcp
+```
+
+Use `https`, not `http`. Use `krabiclaw.com`, not your own website domain.
+
+![New app form with KrabiClaw MCP server URL](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/5e59bfbb-9c54-4914-cf0e-b551ee5a8500/public)
+
+## 4. Accept the warning and create
+
+Scroll down, check the box that says you understand and want to continue, then tap Create.
+
+![Custom MCP warning and Create button](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/05f000be-cfb0-4249-e358-5a83b4468e00/public)
+
+## 5. Connect KrabiClaw
+
+After the app is created, tap Connect on the KrabiClaw app page.
+
+![KrabiClaw app page with Connect button](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/45a0b618-f9e9-4a77-8264-53204d6f3d00/public)
+
+## 6. Sign in with KrabiClaw
+
+Tap Sign in with KrabiClaw and sign in to your KrabiClaw account.
+
+![Sign in with KrabiClaw screen](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/a0eff553-ef60-419a-6775-3cbe9b9ef100/public)
+
+## 7. Approve access
+
+Review what ChatGPT is allowed to access and tap Agree.
+
+![KrabiClaw account access approval screen](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b57038c4-0c20-4980-af17-ec2736079500/public)
+
+## 8. Use KrabiClaw in ChatGPT
+
+Open a new ChatGPT chat, tap the plus button, choose Plugins, then choose KrabiClaw and try asking "What tools do you have?"
+
+![Plus button beside the ChatGPT message box](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/a068390b-4b28-4b5e-9901-f25d07f6e500/public)
+
+![Plugins option in the ChatGPT attachment menu](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/de38068b-37bc-4a6a-1bf2-0b9ef0d25a00/public)
+
+![KrabiClaw plugin selected in ChatGPT](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/59371233-b090-46c3-4b61-9e27f839cf00/public)
+
+{{component type="how_to"}}
+
+## Common problems
+
+### I clicked the KrabiClaw server URL and got an error
+
+That is normal. Do not open the server URL directly. Copy and paste https://krabiclaw.com/api/mcp into the ChatGPT Connection field instead.
+
+### ChatGPT says the connection is wrong
+
+Check three things: use https not http, use krabiclaw.com not your own site domain, and delete any extra spaces in the field and paste the URL again.
+
+### I cannot find Developer mode or Create app
+
+Use ChatGPT in a web browser at https://chatgpt.com/apps#settings/Connectors. If you are using the ChatGPT mobile app, switch to Chrome or Safari and sign in to ChatGPT there.
+
+### I am on a different device
+
+That is fine. Use any phone, tablet, or computer as long as you sign in to the same ChatGPT account.
+
+### I created the app but cannot use it in chat
+
+Open a new chat, tap the plus button, choose Plugins, then choose KrabiClaw. If KrabiClaw does not appear, go back to ChatGPT Apps or Connectors settings and make sure KrabiClaw is connected.
+
+### I see a safety warning
+
+That is expected. KrabiClaw uses ChatGPT developer mode because it can make real changes to your website. Only connect KrabiClaw if you trust the KrabiClaw account and website you are signing in to.
+
+## What you are giving ChatGPT access to
+
+When you approve the connection, KrabiClaw asks permission for ChatGPT to:
+
+- Verify your identity.
+- Read and update your site content, menus, and media.
+- Manage locations, reviews, and Q&A.
+- Submit and track work requests.
+
+You can review or revoke access anytime from your KrabiClaw account settings.
+
+## Technical notes
+
+KrabiClaw connects to ChatGPT through MCP, the Model Context Protocol.
+
+MCP server URL:
+
+```text
+https://krabiclaw.com/api/mcp
+```
+
+Authentication:
+
+```text
+OAuth
+```
+
+ChatGPT developer mode and MCP apps are beta features, so ChatGPT screens and wording may change over time. OpenAI''s current guidance says to use Settings -> Apps -> Advanced settings -> Developer mode, then create an app from the MCP server URL.',
+  'Connect KrabiClaw to ChatGPT so you can manage your website through conversation with step-by-step setup instructions.',
   'Integrations',
   NULL,
-  'Connect KrabiClaw to ChatGPT using the MCP server URL, with step-by-step setup instructions and a list of requested permissions.',
+  'Step-by-step guide to connect KrabiClaw to ChatGPT using the MCP server URL, with screenshots and troubleshooting tips.',
   'KrabiClaw MCP, connect ChatGPT, MCP server URL, ChatGPT connector setup, KrabiClaw ChatGPT integration',
   '/docs/integrations/mcp-setup',
   'index, follow',
@@ -66,28 +179,6 @@ DELETE FROM platform_content_components WHERE content_type = 'doc' AND content_i
 
 INSERT INTO platform_content_components (id, content_type, content_id, type, position, label, status, render_enabled, schema_enabled, data_json, created_at, updated_at)
 VALUES (
-  'doc-012-howto',
-  'doc',
-  'doc-012',
-  'how_to',
-  1,
-  'Set up the connector',
-  'active',
-  1,
-  1,
-  '{"steps":[
-    {"name":"Enable Developer Mode","text":"Go to ChatGPT Settings -> Connectors -> Advanced, and enable Developer mode.","position":0},
-    {"name":"Create an app","text":"Click Create an App from the Connectors screen.","position":1},
-    {"name":"Configure app details","text":"Set the title to KrabiClaw, choose OAuth authentication, and paste the MCP server URL: https://krabiclaw.com/api/mcp","position":2},
-    {"name":"Create and connect","text":"Click Create, then Connect, and sign in with your KrabiClaw account when prompted.","position":3},
-    {"name":"Try it","text":"Start a new chat, add the KrabiClaw app, and try a prompt like \"What can you do?\"","position":4}
-  ],"estimated_time":"PT2M"}',
-  datetime('now'),
-  datetime('now')
-);
-
-INSERT INTO platform_content_components (id, content_type, content_id, type, position, label, status, render_enabled, schema_enabled, data_json, created_at, updated_at)
-VALUES (
   'doc-012-faq',
   'doc',
   'doc-012',
@@ -98,10 +189,39 @@ VALUES (
   1,
   1,
   '{"items":[
-    {"question":"I clicked this link and landed on a page instead of connecting — what happened?","answer":"The MCP server URL is meant to be pasted into the ChatGPT connector setup, not opened directly in a browser. Copy the URL above into the connector field instead.","position":0},
-    {"question":"What can ChatGPT do once connected?","answer":"It can read and update your site content, menus, and media, manage locations, reviews, and Q&A, and submit or track work requests — the same permissions shown on the consent screen when you connect.","position":1},
-    {"question":"Can I disconnect ChatGPT later?","answer":"Yes. Open [Account Settings](/dashboard/account/settings) and remove the connected app at any time.","position":2}
+    {"question":"I clicked the KrabiClaw server URL and got an error","answer":"That is normal. Do not open the server URL directly. Copy and paste https://krabiclaw.com/api/mcp into the ChatGPT Connection field instead.","position":0},
+    {"question":"ChatGPT says the connection is wrong","answer":"Check three things: use https not http, use krabiclaw.com not your own site domain, and delete any extra spaces in the field and paste the URL again.","position":1},
+    {"question":"I cannot find Developer mode or Create app","answer":"Use ChatGPT in a web browser at https://chatgpt.com/apps#settings/Connectors. If you are using the ChatGPT mobile app, switch to Chrome or Safari and sign in to ChatGPT there.","position":2},
+    {"question":"I am on a different device","answer":"That is fine. Use any phone, tablet, or computer as long as you sign in to the same ChatGPT account.","position":3},
+    {"question":"I created the app but cannot use it in chat","answer":"Open a new chat, tap the plus button, choose Plugins, then choose KrabiClaw. If KrabiClaw does not appear, go back to ChatGPT Apps or Connectors settings and make sure KrabiClaw is connected.","position":4},
+    {"question":"I see a safety warning","answer":"That is expected. KrabiClaw uses ChatGPT developer mode because it can make real changes to your website. Only connect KrabiClaw if you trust the KrabiClaw account and website you are signing in to.","position":5},
+    {"question":"Can I disconnect ChatGPT later?","answer":"Yes. Open your KrabiClaw account settings and remove the connected app at any time.","position":6}
   ]}',
+  datetime('now'),
+  datetime('now')
+);
+
+INSERT INTO platform_content_components (id, content_type, content_id, type, position, label, status, render_enabled, schema_enabled, data_json, created_at, updated_at)
+VALUES (
+  'doc-012-howto',
+  'doc',
+  'doc-012',
+  'how_to',
+  1,
+  'Set up the connector',
+  'active',
+  1,
+  1,
+  '{"steps":[
+    {"name":"Open Advanced settings","text":"Find the Advanced settings row in ChatGPT Apps or Connectors settings and tap it.","position":0,"image_public_url":"https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/f848fb38-bbfb-47fe-c83c-cf0ce70bdd00/public"},
+    {"name":"Turn on Developer mode","text":"Turn Developer mode on so the switch is blue, then tap Create app.","position":1,"image_public_url":"https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/ec7fb04a-da9d-44c6-3612-0842c5904000/public"},
+    {"name":"Create the KrabiClaw app","text":"Fill in the app form with Name: KrabiClaw, Description: Manage your KrabiClaw website, Connection: https://krabiclaw.com/api/mcp, Authentication: OAuth","position":2,"image_public_url":"https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/5e59bfbb-9c54-4914-cf0e-b551ee5a8500/public"},
+    {"name":"Accept the warning and create","text":"Scroll down, check the box that says you understand and want to continue, then tap Create.","position":3,"image_public_url":"https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/05f000be-cfb0-4249-e358-5a83b4468e00/public"},
+    {"name":"Connect KrabiClaw","text":"After the app is created, tap Connect on the KrabiClaw app page.","position":4,"image_public_url":"https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/45a0b618-f9e9-4a77-8264-53204d6f3d00/public"},
+    {"name":"Sign in with KrabiClaw","text":"Tap Sign in with KrabiClaw and sign in to your KrabiClaw account.","position":5,"image_public_url":"https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/a0eff553-ef60-419a-6775-3cbe9b9ef100/public"},
+    {"name":"Approve access","text":"Review what ChatGPT is allowed to access and tap Agree.","position":6,"image_public_url":"https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b57038c4-0c20-4980-af17-ec2736079500/public"},
+    {"name":"Use KrabiClaw in ChatGPT","text":"Open a new ChatGPT chat, tap the plus button, choose Plugins, then choose KrabiClaw and try asking \"What tools do you have?\"","position":7,"image_public_url":"https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/a068390b-4b28-4b5e-9901-f25d07f6e500/public"}
+  ],"estimated_time":"PT5M"}',
   datetime('now'),
   datetime('now')
 );
@@ -111,7 +231,9 @@ VALUES (
   'doc-013',
   'Getting started with KrabiClaw',
   'getting-started-with-krabiclaw',
-  'Deploy your website on KrabiClaw in three steps: create a KrabiClaw account, use AI to build your website, and deploy.
+  '# Getting started with KrabiClaw
+
+Create your first KrabiClaw site, add your business details, choose how you want to manage it, and publish your first version.
 
 ## AI Assistance
 
@@ -142,7 +264,7 @@ Onboarding walks you through four short steps to turn your real business details
 3. **Confirm the match** — if you used Google Maps, KrabiClaw shows you what it found and asks you to confirm it''s the right listing before using it.
 4. **Fill in the details** — name, city, address, phone, website, hours, a manager alert number, and your timezone. Anything you leave blank can be filled in later from the dashboard.
 
-That''s it — your site is created and live on a free krabiclaw.com address as soon as you submit the details.
+That''s it — your details are saved as a private draft. Preview it, then commit to create your live site on a free krabiclaw.com address.
 
 {{component type="how_to"}}
 

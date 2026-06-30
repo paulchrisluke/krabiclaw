@@ -19,6 +19,7 @@ export interface SiteConfig {
   google_site_verification?: string
   hero_image_url?: string
   location_hero_image_url?: string
+  hero_image_is_placeholder?: string
   default_timezone?: string
 }
 

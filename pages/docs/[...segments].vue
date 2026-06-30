@@ -149,9 +149,13 @@ if (!slugToCategory(categoryParam.value)) {
   throw createError({ statusCode: 404, statusMessage: 'Documentation category not found' })
 }
 
-const { data: docsList } = await useFetch<{ docs: DocListItem[] }>('/api/public/docs', {
+const { data: docsList, error: docsListError } = await useFetch<{ docs: DocListItem[] }>('/api/public/docs', {
   default: () => ({ docs: [] })
 })
+
+if (docsListError.value) {
+  throw createError({ statusCode: 500, statusMessage: 'Failed to load documentation index' })
+}
 
 if (!slugParam.value) {
   const firstDoc = (docsList.value?.docs ?? []).find(doc => doc.category === slugToCategory(categoryParam.value))
@@ -227,19 +231,23 @@ const orderedDocs = computed(() => (docsList.value?.docs ?? [])
   })
   .filter((item): item is DocListItem & { path: string } => Boolean(item)))
 
+const categoryDocs = computed(() =>
+  orderedDocs.value.filter(item => item.category === doc.value?.category),
+)
+
 const currentDocIndex = computed(() =>
-  orderedDocs.value.findIndex(item =>
+  categoryDocs.value.findIndex(item =>
     item.slug === doc.value?.slug && item.category === doc.value?.category,
   ),
 )
 
 const previousDoc = computed(() =>
-  currentDocIndex.value > 0 ? orderedDocs.value[currentDocIndex.value - 1] : null,
+  currentDocIndex.value > 0 ? categoryDocs.value[currentDocIndex.value - 1] : null,
 )
 
 const nextDoc = computed(() =>
-  currentDocIndex.value >= 0 && currentDocIndex.value < orderedDocs.value.length - 1
-    ? orderedDocs.value[currentDocIndex.value + 1]
+  currentDocIndex.value >= 0 && currentDocIndex.value < categoryDocs.value.length - 1
+    ? categoryDocs.value[currentDocIndex.value + 1]
     : null,
 )
 

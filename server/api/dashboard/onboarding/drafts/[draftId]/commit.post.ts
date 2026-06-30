@@ -41,9 +41,6 @@ export default defineEventHandler(async (event) => {
   if (!draft || draft.user_id !== session.user.id) {
     return jsonResponse({ error: 'Draft not found' }, { status: 404 })
   }
-  if (draft.status !== 'active') {
-    return jsonResponse({ error: 'Draft is no longer active' }, { status: 409 })
-  }
 
   const payload = parseOnboardingDraftPayload(draft.payload_json)
   const result = await runSiteCreation(env as SiteEnv, db, session.user.id, {
@@ -74,6 +71,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const primaryLocation = payload.preview.locations[0]
+  const updatedSlug = primaryLocation?.slug || slugify(primaryLocation?.title || '')
   if (primaryLocation) {
     await updateLocation(db, organizationId, siteId, locationRow.id, {
       title: primaryLocation.title,
@@ -99,15 +97,22 @@ export default defineEventHandler(async (event) => {
   const locationHeroImageUrl = payload.preview.config.location_hero_image_url
   if (heroImageUrl) await setConfig(db, organizationId, siteId, 'hero_image_url', heroImageUrl)
   if (locationHeroImageUrl) await setConfig(db, organizationId, siteId, 'location_hero_image_url', locationHeroImageUrl)
+  // No real Maps photo was available, so the hero is still the generic stock fallback —
+  // record this so the onboarding checklist can tell a placeholder hero from a real one.
+  const heroIsPlaceholder = !payload.source.place?.photos?.[0]?.photoUri
+  await setConfig(db, organizationId, siteId, 'hero_image_is_placeholder', heroIsPlaceholder ? 'true' : 'false')
 
   const now = new Date().toISOString()
   await execute(db, `DELETE FROM site_content WHERE organization_id = ? AND site_id = ?`, [organizationId, siteId])
   for (const row of payload.preview.content) {
+    // These rows are auto-generated draft copy the owner has not individually edited yet
+    // (the wizard only supports re-running the whole details form, not per-field edits) —
+    // mark them 'template' so the checklist and dashboard hints can prompt for real content.
     await execute(db, `
       INSERT INTO site_content
         (id, organization_id, site_id, location_id, page, field, content,
          hero_title, hero_subtitle, value, type, source, updated_at, updated_by, component)
-      VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?, ?)
+      VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'template', ?, ?, ?)
     `, [
       crypto.randomUUID(),
       organizationId,
@@ -146,10 +151,12 @@ export default defineEventHandler(async (event) => {
     ])
 
     for (const item of payload.preview.menu.items) {
+      // Draft menu items are template boilerplate (e.g. "Sample Starter") the owner
+      // hasn't edited — mark 'template' so the checklist doesn't treat them as real.
       await execute(db, `
         INSERT INTO menu_items
-          (id, menu_id, section, name, slug, description, price_amount, available, sort_order, created_at, updated_at, created_by, updated_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, menu_id, section, name, slug, description, price_amount, available, sort_order, source, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'template', ?, ?)
       `, [
         item.id,
         payload.preview.menu!.id,
@@ -162,18 +169,17 @@ export default defineEventHandler(async (event) => {
         item.sort_order,
         now,
         now,
-        session.user.id,
-        session.user.id,
       ])
     }
   }
 
   await execute(db, `DELETE FROM location_qa WHERE organization_id = ? AND site_id = ?`, [organizationId, siteId])
   for (const item of payload.preview.qa) {
+    // Draft Q&A is template boilerplate, not owner-authored — mark 'template'.
     await execute(db, `
       INSERT INTO location_qa
         (id, organization_id, site_id, location_id, question, answer, answer_author, is_owner_answer, source, status, sort_order, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'manual', 'published', ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'template', 'published', ?, ?, ?)
     `, [
       item.id,
       organizationId,
@@ -190,10 +196,11 @@ export default defineEventHandler(async (event) => {
 
   await execute(db, `DELETE FROM posts WHERE organization_id = ? AND site_id = ?`, [organizationId, siteId])
   for (const post of payload.preview.posts) {
+    // Draft "welcome" posts are auto-generated, not owner-authored — mark 'template'.
     await execute(db, `
       INSERT INTO posts
-        (id, organization_id, site_id, location_id, post_type, title, body, status, published_at, created_by, created_at, updated_at)
-      VALUES (?, ?, ?, ?, 'standard', ?, ?, ?, ?, ?, ?, ?)
+        (id, organization_id, site_id, location_id, post_type, title, body, status, published_at, created_by, source, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'standard', ?, ?, ?, ?, ?, 'template', ?, ?)
     `, [
       post.id,
       organizationId,
@@ -237,11 +244,16 @@ export default defineEventHandler(async (event) => {
     ])
   }
 
-  await execute(db, `
+  // Atomic draft status transition: only succeed if status is still 'active'
+  const updateResult = await execute(db, `
     UPDATE onboarding_drafts
     SET status = 'committed', committed_site_id = ?, committed_at = ?, updated_at = ?
-    WHERE id = ?
+    WHERE id = ? AND status = 'active'
   `, [siteId, now, now, draftId])
+
+  if (updateResult.meta.changes === 0) {
+    return jsonResponse({ error: 'Draft is no longer active (concurrent commit)' }, { status: 409 })
+  }
 
   const orgRow = await queryFirst<{ slug: string }>(db, `
     SELECT slug FROM organization WHERE id = ? LIMIT 1
@@ -252,6 +264,6 @@ export default defineEventHandler(async (event) => {
     siteId,
     orgSlug: orgRow?.slug ?? null,
     siteSlug: siteSlug ?? null,
-    locationSlug: locationRow.slug ?? null,
+    locationSlug: updatedSlug ?? locationRow.slug ?? null,
   })
 })

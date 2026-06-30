@@ -76,11 +76,6 @@ const props = withDefaults(defineProps<{
 
 const items = computed(() => [
   {
-    icon: 'i-heroicons-photo',
-    title: 'Add your logo and hero image',
-    body: 'Set the brand mark and the main visual after the site is live so every page inherits the right look.',
-  },
-  {
     icon: 'i-heroicons-document-text',
     title: props.vertical === 'experience' ? 'Add your headline experiences' : 'Add your core menu or offerings',
     body: props.vertical === 'experience'

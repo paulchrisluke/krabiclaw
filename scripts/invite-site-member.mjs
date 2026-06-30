@@ -189,6 +189,7 @@ const existingInviteRows = runWranglerJson(
     WHERE organizationId = '${q(site.organization_id)}'
       AND lower(email) = '${q(email)}'
       AND status = 'pending'
+      AND expiresAt > strftime('%s', 'now')
     ORDER BY createdAt DESC
     LIMIT 1
   `

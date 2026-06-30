@@ -84,7 +84,7 @@ function humanizeDuration(iso: string): string {
   const parts: string[] = []
   if (hours) parts.push(`${hours} hr`)
   if (minutes) parts.push(`${minutes} min`)
-  if (seconds && !hours && !minutes) parts.push(`${seconds} sec`)
+  if (seconds) parts.push(`${seconds} sec`)
   return parts.length ? parts.join(' ') : iso
 }
 </script>
