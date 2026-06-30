@@ -36,6 +36,13 @@
       "when": 1782532381202,
       "tag": "0011_lethal_gargoyle",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1782795305719,
+      "tag": "0012_illegal_network",
+      "breakpoints": true
     }
   ]
 }

@@ -21,19 +21,29 @@ async function signPreviewPayload(secret: string, payload: string) {
 }
 
 export async function createPreviewToken(secret: string, siteId: string, expiresAt: number) {
-  const payload = `${siteId}.${expiresAt}`
+  const payload = `site:${siteId}.${expiresAt}`
+  const signature = await signPreviewPayload(secret, payload)
+  return `${expiresAt}.${signature}`
+}
+
+export async function createScopedPreviewToken(secret: string, scope: string, entityId: string, expiresAt: number) {
+  const payload = `${scope}:${entityId}.${expiresAt}`
   const signature = await signPreviewPayload(secret, payload)
   return `${expiresAt}.${signature}`
 }
 
 export async function verifyPreviewToken(secret: string, siteId: string, token: string) {
+  return verifyScopedPreviewToken(secret, 'site', siteId, token)
+}
+
+export async function verifyScopedPreviewToken(secret: string, scope: string, entityId: string, token: string) {
   const [expiresAtRaw, signature] = token.split('.')
   const expiresAt = Number(expiresAtRaw)
 
   if (!Number.isFinite(expiresAt) || !signature) return false
   if (Date.now() > expiresAt) return false
 
-  const expected = await createPreviewToken(secret, siteId, expiresAt)
+  const expected = await createScopedPreviewToken(secret, scope, entityId, expiresAt)
 
   const tokenBuf = textEncoder.encode(token)
   const expectedBuf = textEncoder.encode(expected)

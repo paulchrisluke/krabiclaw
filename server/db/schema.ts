@@ -604,6 +604,24 @@ export const organization_entitlements = sqliteTable("organization_entitlements"
 	unique("organization_entitlements_organization_id_key_unique").on(table.organization_id, table.key),
 ]);
 
+export const onboarding_drafts = sqliteTable("onboarding_drafts", {
+	id: text().primaryKey(),
+	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
+	organization_id: text().references(() => organization.id, { onDelete: "set null" } ),
+	name: text().notNull(),
+	vertical: text().default("restaurant").notNull(),
+	subdomain_candidate: text(),
+	source_type: text().notNull(),
+	status: text().default("active").notNull(),
+	payload_json: text().notNull(),
+	committed_site_id: text().references(() => sites.id, { onDelete: "set null" } ),
+	committed_at: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	uniqueIndex("idx_onboarding_drafts_active_user_unique").on(table.user_id).where(sql`status = 'active'`),
+]);
+
 export const platform_analytics = sqliteTable("platform_analytics", {
 	id: text().primaryKey(),
 	metric: text().notNull(),

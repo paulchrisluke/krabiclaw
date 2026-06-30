@@ -22,16 +22,6 @@
       </div>
     </Transition>
 
-    <!-- Pane header -->
-    <div class="flex shrink-0 items-center justify-between border-b border-default px-5 py-3">
-      <div class="flex items-center gap-2">
-        <div class="flex size-[26px] items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <UIcon name="i-heroicons-sparkles" class="size-4" />
-        </div>
-        <span class="text-sm font-semibold text-highlighted">Setup assistant</span>
-      </div>
-    </div>
-
     <!-- Scroll area -->
     <div ref="scrollRef" class="min-h-0 flex-1 overflow-y-auto">
 
@@ -352,6 +342,13 @@ interface QuickReply {
   action?: string
 }
 
+interface DraftSavedPayload {
+  draftId: string
+  previewToken: string
+  draftName: string
+  subdomainCandidate: string
+}
+
 type WizardStep = 'welcome' | 'vertical' | 'source' | 'awaiting_url' | 'awaiting_manual_name' | 'confirm' | 'details' | 'importing' | 'imported'
 type Vertical = 'restaurant' | 'experience'
 type DetailsSource = 'imported' | 'manual'
@@ -368,6 +365,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'site-created': [orgSlug: string | null, locationSlug?: string | null]
+  'draft-saved': [draft: DraftSavedPayload]
 }>()
 
 const router = useRouter()
@@ -451,6 +449,7 @@ const importedSiteSlug = ref<string | null>(null)
 const importedLocationSlug = ref<string | null>(null)
 const checklistStarterPrompt = ref<string | null>(null)
 const preConfirmStep = ref<WizardStep>('awaiting_url')
+const onboardingDraftId = ref<string | null>(null)
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -510,7 +509,7 @@ const brandWorkspacePath = computed(() => {
 
 const chatgptGuidePath = computed(() => {
   const slug = importedOrgSlug.value ?? props.existingOrgSlug ?? null
-  return slug ? `/dashboard/${slug}/~/settings/chatgpt` : '/plugin'
+  return slug ? `/dashboard/${slug}/~/settings/chatgpt` : '/docs/integrations/mcp-setup'
 })
 
 const chatgptStarterPrompt = computed(() => {
@@ -718,6 +717,18 @@ async function handleReply(reply: QuickReply) {
     await router.push(slug && siteSlugForLocation ? `/dashboard/${slug}/sites/${siteSlugForLocation}/new` : '/dashboard')
     return
   }
+
+  if (reply.action === 'edit_draft') {
+    pushUser(reply.label)
+    await advance('details')
+    return
+  }
+
+  if (reply.action === 'commit_draft') {
+    pushUser(reply.label)
+    await commitDraft()
+    return
+  }
 }
 
 async function handleTextSubmit() {
@@ -802,9 +813,63 @@ async function submitDetails() {
   step.value = 'importing'
   importing.value = true
   importError.value = null
-  const tools = await showLookupTools(props.isAddingLocation ? 'Adding your location…' : 'Creating your workspace…')
+  const tools = await showLookupTools(
+    props.isAddingLocation
+      ? 'Adding your location…'
+      : 'Saving your private draft preview…'
+  )
 
   try {
+    if (!props.isAddingLocation) {
+      const endpoint = pendingPreview.value
+        ? '/api/dashboard/onboarding/drafts/from-place'
+        : '/api/dashboard/onboarding/drafts/manual'
+
+      const body = pendingPreview.value
+        ? {
+            placeId: pendingPreview.value.placeId,
+            vertical: selectedVertical.value,
+            details: serializeDetails(),
+          }
+        : {
+            name: detailsForm.name.trim(),
+            vertical: selectedVertical.value,
+            details: serializeDetails(),
+          }
+
+      const res = await $fetch<{
+        success: boolean
+        draftId?: string
+        previewToken?: string
+        draftName?: string
+        subdomainCandidate?: string
+        error?: string
+      }>(endpoint, { method: 'POST', body })
+
+      if (!res.success || !res.draftId || !res.previewToken || !res.draftName || !res.subdomainCandidate) {
+        throw new Error(res.error ?? 'Failed to save your preview draft. Please try again.')
+      }
+
+      tools[0]!.done = true
+      onboardingDraftId.value = res.draftId
+      emit('draft-saved', {
+        draftId: res.draftId,
+        previewToken: res.previewToken,
+        draftName: res.draftName,
+        subdomainCandidate: res.subdomainCandidate,
+      })
+
+      await pushBot(
+        'Draft ready. The preview on the right now shows a private working copy, so you can review the site before reserving a live subdomain.'
+      )
+      replies.value = [
+        { label: 'Create site', icon: 'i-heroicons-check-badge', primary: true, action: 'commit_draft' },
+        { label: 'Edit details', icon: 'i-heroicons-pencil-square', action: 'edit_draft' },
+      ]
+      step.value = 'details'
+      return
+    }
+
     const endpoint = pendingPreview.value
       ? (props.setupEndpoint ?? '/api/dashboard/onboarding/setup')
       : (props.setupManualEndpoint ?? '/api/dashboard/onboarding/setup-manual')
@@ -842,6 +907,48 @@ async function submitDetails() {
     await finishCreation(res.orgSlug, res.siteSlug ?? importedSiteSlug.value ?? props.existingSiteSlug ?? null, res.locationSlug)
   } catch (err) {
     importError.value = err instanceof Error ? err.message : 'Something went wrong. Please try again.'
+    step.value = 'details'
+  } finally {
+    importing.value = false
+  }
+}
+
+async function commitDraft() {
+  if (!onboardingDraftId.value) {
+    importError.value = 'No draft is ready yet. Save the preview first.'
+    await advance('details')
+    return
+  }
+
+  step.value = 'importing'
+  importing.value = true
+  importError.value = null
+  const tools = await showLookupTools('Creating your site from the approved draft…')
+
+  try {
+    const res = await $fetch<{
+      success: boolean
+      siteId?: string | null
+      orgSlug?: string | null
+      siteSlug?: string | null
+      locationSlug?: string | null
+      error?: string
+    }>(`/api/dashboard/onboarding/drafts/${onboardingDraftId.value}/commit`, {
+      method: 'POST',
+    })
+
+    if (!res.success) {
+      throw new Error(res.error ?? 'Failed to create your workspace. Please try again.')
+    }
+
+    tools[0]!.done = true
+    importedSiteId.value = res.siteId ?? props.siteId ?? null
+    importedOrgSlug.value = res.orgSlug ?? null
+    importedSiteSlug.value = res.siteSlug ?? props.existingSiteSlug ?? null
+    await refreshChecklistStarterPrompt(importedSiteId.value)
+    await finishCreation(res.orgSlug, res.siteSlug ?? importedSiteSlug.value ?? props.existingSiteSlug ?? null, res.locationSlug)
+  } catch (error) {
+    importError.value = error instanceof Error ? error.message : 'Something went wrong. Please try again.'
     step.value = 'details'
   } finally {
     importing.value = false

@@ -1,0 +1,91 @@
+// POST /api/admin/platform/media - Upload a platform (non-tenant) media asset
+// Mirrors the upload_platform_image MCP tool (server/utils/platform-mcp-executor.ts)
+// for admin contexts that need this outside a ChatGPT/MCP session, e.g. docs screenshots.
+import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { getAuthSession } from '~/server/utils/auth'
+import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { hasCloudflareImagesConfig, uploadImageBuffer } from '~/server/utils/cloudflare-images'
+import { createMediaAsset } from '~/server/utils/media-asset-manager'
+import { ensurePlatformMediaScope, listPlatformMediaAssets, PLATFORM_MEDIA_ORG_ID, PLATFORM_MEDIA_SITE_ID } from '~/server/utils/platform-media'
+
+const IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
+const MAX_BYTES = 10 * 1024 * 1024
+
+function sanitizeFilename(raw: string | undefined): string {
+  const sanitized = (raw ?? '')
+    .replace(/[\\/]+/g, '-')
+    .replace(/[^\x20-\x7E]+/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/[^A-Za-z0-9._-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-.]+|[-.]+$/g, '')
+    .slice(0, 120)
+  return sanitized || 'upload'
+}
+
+export default defineEventHandler(async (event) => {
+  const env = cloudflareEnv(event)
+  const db = env.DB
+  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
+
+  const session = await getAuthSession(event, env)
+  if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
+
+  if (!isPlatformAdmin(session.user, env)) {
+    return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
+  }
+
+  if (!hasCloudflareImagesConfig(env)) {
+    return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })
+  }
+
+  const formData = await readMultipartFormData(event)
+  if (!formData) return jsonResponse({ error: 'Multipart form data required' }, { status: 400 })
+
+  const filePart = formData.find(p => p.name === 'file')
+  if (!filePart?.data) return jsonResponse({ error: 'file field required' }, { status: 400 })
+
+  const contentType = typeof filePart.type === 'string'
+    ? filePart.type.split(';', 1)[0]?.toLowerCase().trim() || ''
+    : ''
+  if (!IMAGE_MIME_TYPES.has(contentType)) {
+    return jsonResponse({ error: `Unsupported file type: ${contentType || 'unknown'}` }, { status: 415 })
+  }
+  if (filePart.data.byteLength > MAX_BYTES) {
+    return jsonResponse({ error: 'File too large (max 10 MB)' }, { status: 413 })
+  }
+
+  const filename = sanitizeFilename(filePart.filename)
+  const altTextPart = formData.find(p => p.name === 'alt_text')
+  const altText = altTextPart?.data ? Buffer.from(altTextPart.data).toString().trim() || null : null
+
+  try {
+    const uploaded = await uploadImageBuffer(env, filePart.data.slice().buffer, filename, contentType)
+
+    await ensurePlatformMediaScope(db)
+    const assetId = crypto.randomUUID()
+    await createMediaAsset(db, {
+      id: assetId,
+      organization_id: PLATFORM_MEDIA_ORG_ID,
+      site_id: PLATFORM_MEDIA_SITE_ID,
+      kind: 'image',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflare_image_id: uploaded.imageId,
+      public_url: uploaded.publicUrl,
+      thumbnail_url: uploaded.thumbnailUrl,
+      alt_text: altText,
+      mime_type: contentType,
+      file_name: filename,
+      status: 'active',
+      created_by_user_id: session.user.id,
+    })
+
+    const asset = (await listPlatformMediaAssets(db, { id: assetId, limit: 1 }))[0] ?? null
+    if (!asset) return jsonResponse({ error: 'Uploaded media asset was not found after creation' }, { status: 500 })
+    return jsonResponse({ asset })
+  } catch (err) {
+    console.error('Failed to upload platform media:', err)
+    return jsonResponse({ error: 'Failed to upload media' }, { status: 500 })
+  }
+})

@@ -8,7 +8,7 @@
 
       <div v-if="hasMeta" class="flex flex-wrap gap-2 text-sm text-muted">
         <span v-if="estimatedTime" class="rounded-full border border-default px-3 py-1">
-          {{ estimatedTime }}
+          {{ humanizeDuration(estimatedTime) }}
         </span>
         <span v-for="item in toolItems" :key="`tool-${item}`" class="rounded-full border border-default px-3 py-1">
           Tool: {{ item }}
@@ -73,5 +73,18 @@ const hasMeta = computed(() =>
 function safeStepUrl(url: string | null | undefined) {
   const sanitized = sanitizeUrl(url)
   return sanitized.startsWith('http://') || sanitized.startsWith('https://') ? sanitized : ''
+}
+
+// schema.org wants the raw ISO 8601 duration (handled separately in
+// useContentPageSchema.ts) — this only formats the on-page badge.
+function humanizeDuration(iso: string): string {
+  const match = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso)
+  if (!match) return iso
+  const [, hours, minutes, seconds] = match
+  const parts: string[] = []
+  if (hours) parts.push(`${hours} hr`)
+  if (minutes) parts.push(`${minutes} min`)
+  if (seconds && !hours && !minutes) parts.push(`${seconds} sec`)
+  return parts.length ? parts.join(' ') : iso
 }
 </script>

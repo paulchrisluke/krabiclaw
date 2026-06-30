@@ -11,6 +11,19 @@ export const jsonResponse = (body: ApiValue, init: ResponseInit = {}) =>
     }
   })
 
+export const textResponse = (
+  body: string,
+  init: ResponseInit = {},
+  contentType = 'text/plain; charset=utf-8',
+) =>
+  new Response(body, {
+    ...init,
+    headers: {
+      'content-type': contentType,
+      ...init.headers,
+    },
+  })
+
 export const cleanString = (value: ApiValue, maxLength: number) =>
   typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
 

@@ -1,6 +1,10 @@
 <template>
   <div>
-    <div v-if="loading" class="py-12 text-center">
+    <div v-if="isCategoryRedirect" class="py-12 text-center">
+      <p class="text-muted">Redirecting...</p>
+    </div>
+
+    <div v-else-if="loading" class="py-12 text-center">
       <p class="text-muted">Loading...</p>
     </div>
 
@@ -9,52 +13,73 @@
     </div>
 
     <div v-else class="xl:grid xl:grid-cols-[minmax(0,1fr)_240px] xl:gap-10">
-    <article>
-      <DocsBreadcrumb :crumbs="breadcrumbs" />
+      <article>
+        <DocsBreadcrumb :crumbs="breadcrumbs" />
 
-      <h1 class="mb-6 text-4xl font-bold text-default">{{ doc.title }}</h1>
+        <h1 class="mb-6 text-4xl font-bold text-default">{{ doc.title }}</h1>
+        <p v-if="doc.excerpt" class="mb-8 text-xl leading-relaxed text-muted">{{ doc.excerpt }}</p>
 
-      <p v-if="doc.excerpt" class="mb-8 text-xl leading-relaxed text-muted">{{ doc.excerpt }}</p>
-
-      <div v-if="docMedia.url" class="mb-10 overflow-hidden rounded-2xl">
-        <video
-          v-if="docMedia.isVideo"
-          :src="docMedia.url"
-          autoplay
-          muted
-          loop
-          playsinline
-          class="max-h-96 w-full object-cover"
-        />
-        <img
-          v-else
-          :src="docMedia.url"
-          :alt="doc.title"
-          class="max-h-96 w-full object-cover"
-        />
-      </div>
-
-      <div ref="articleBodyRef" class="space-y-14">
-        <template v-for="(block, blockIndex) in renderedBlocks" :key="`block-${blockIndex}`">
-          <!-- eslint-disable-next-line vue/no-v-html -->
-          <div
-            v-if="block.kind === 'html'"
-            class="prose prose-lg max-w-none text-default prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-h4:text-base dark:prose-invert"
-            v-html="block.html"
+        <div v-if="docMedia.url" class="mb-10 overflow-hidden rounded-2xl">
+          <video
+            v-if="docMedia.isVideo"
+            :src="docMedia.url"
+            autoplay
+            muted
+            loop
+            playsinline
+            class="max-h-96 w-full object-cover"
           />
-
-          <component
-            :is="resolveContentComponent(block.type)"
+          <img
             v-else
-            v-bind="block.props"
+            :src="docMedia.url"
+            :alt="doc.title"
+            class="max-h-96 w-full object-cover"
           />
-        </template>
-      </div>
-    </article>
+        </div>
 
-    <aside class="hidden xl:block">
-      <DocsToc :html="tocHtml" />
-    </aside>
+        <div ref="articleBodyRef" class="space-y-14">
+          <template v-for="(block, blockIndex) in renderedBlocks" :key="`block-${blockIndex}`">
+            <div
+              v-if="block.kind === 'html'"
+              class="prose prose-lg max-w-none text-default prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-h4:text-base dark:prose-invert"
+              v-html="block.html"
+            />
+
+            <component
+              :is="resolveContentComponent(block.type)"
+              v-else
+              v-bind="block.props"
+            />
+          </template>
+        </div>
+
+        <nav v-if="previousDoc || nextDoc" class="mt-16 grid gap-4 border-t border-default pt-8 md:grid-cols-2">
+          <NuxtLink
+            v-if="previousDoc"
+            :to="previousDoc.path"
+            class="group rounded-2xl border border-default p-5 no-underline transition hover:border-muted hover:bg-elevated"
+          >
+            <p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Previous</p>
+            <p class="mt-2 text-lg font-semibold text-default group-hover:text-primary">{{ previousDoc.title }}</p>
+            <p v-if="previousDoc.category" class="mt-1 text-sm text-muted">{{ previousDoc.category }}</p>
+          </NuxtLink>
+          <div v-else class="hidden md:block" />
+
+          <NuxtLink
+            v-if="nextDoc"
+            :to="nextDoc.path"
+            class="group rounded-2xl border border-default p-5 text-left no-underline transition hover:border-muted hover:bg-elevated md:justify-self-end md:w-full"
+          >
+            <p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Next</p>
+            <p class="mt-2 text-lg font-semibold text-default group-hover:text-primary">{{ nextDoc.title }}</p>
+            <p v-if="nextDoc.category" class="mt-1 text-sm text-muted">{{ nextDoc.category }}</p>
+          </NuxtLink>
+        </nav>
+      </article>
+
+      <aside class="hidden xl:block">
+        <DocsToc :html="tocHtml" />
+      </aside>
     </div>
   </div>
 </template>
@@ -62,17 +87,13 @@
 <script setup lang="ts">
 import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
-import { categoryToSlug } from '~/utils/docs-categories'
+import { categoryToSlug, slugToCategory } from '~/utils/docs-categories'
 import { buildContentBlocks, normalizeContentComponent, type ContentComponent } from '~/utils/content-blocks'
 import { resolveContentComponent } from '~/utils/content-component-resolver'
 
 definePageMeta({ layout: 'docs' })
 
-// isomorphic-dompurify's jsdom shim breaks during SSR on the Workers runtime
-// (no real DOM globals) — load it client-only, matching pages/experiences/[slug].vue.
-// The SSR path uses a Workers-safe regex sanitizer instead of a no-op passthrough.
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: sanitizeHtmlForSsr }
-
 const { resolveMedia } = useMedia()
 
 interface Doc {
@@ -100,19 +121,58 @@ interface Doc {
   components?: ContentComponent[]
 }
 
+interface DocListItem {
+  title: string
+  slug: string
+  category?: string | null
+}
+
 const route = useRoute()
-const requestFetch = useRequestFetch()
+const segments = computed(() => {
+  const raw = route.params.segments
+  if (Array.isArray(raw)) return raw.filter(Boolean)
+  if (typeof raw === 'string' && raw.length) {
+    return raw.split('/').map(part => part.trim()).filter(Boolean)
+  }
+  return []
+})
+
+const categoryParam = computed(() => segments.value[0] ?? '')
+const slugParam = computed(() => segments.value[1] ?? null)
+const isCategoryRedirect = computed(() => segments.value.length === 1)
+
+if (segments.value.length < 1 || segments.value.length > 2) {
+  throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
+}
+
+if (!slugToCategory(categoryParam.value)) {
+  throw createError({ statusCode: 404, statusMessage: 'Documentation category not found' })
+}
+
+const { data: docsList } = await useFetch<{ docs: DocListItem[] }>('/api/public/docs', {
+  default: () => ({ docs: [] })
+})
+
+if (!slugParam.value) {
+  const firstDoc = (docsList.value?.docs ?? []).find(doc => doc.category === slugToCategory(categoryParam.value))
+  if (!firstDoc) {
+    throw createError({ statusCode: 404, statusMessage: 'Documentation category not found' })
+  }
+  await navigateTo(`/docs/${categoryParam.value}/${firstDoc.slug}`, { replace: true, redirectCode: 302 })
+}
 
 const { data: doc, pending: loading, error } = await useAsyncData(
-  `doc-${route.params.category}-${route.params.slug}`,
+  `doc-${categoryParam.value}-${slugParam.value ?? 'index'}`,
   async () => {
-    const response = import.meta.server
-      ? await requestFetch<{ doc?: Doc }>(`/api/public/docs/${route.params.category}/${route.params.slug}`)
-      : await $fetch<{ doc?: Doc }>(`/api/public/docs/${route.params.category}/${route.params.slug}`)
+    if (!slugParam.value) return null
+    const response = await $fetch<{ doc?: Doc }>(`/api/public/docs/${categoryParam.value}/${slugParam.value}`)
     if (!response?.doc) {
       throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
     }
     return response.doc
+  },
+  {
+    default: () => null,
   }
 )
 
@@ -156,12 +216,39 @@ const renderedComponents = computed(() => {
     .map(block => block.component)
 })
 
+const orderedDocs = computed(() => (docsList.value?.docs ?? [])
+  .map((item) => {
+    const itemCategorySlug = categoryToSlug(item.category)
+    if (!itemCategorySlug) return null
+    return {
+      ...item,
+      path: `/docs/${itemCategorySlug}/${item.slug}`,
+    }
+  })
+  .filter((item): item is DocListItem & { path: string } => Boolean(item)))
+
+const currentDocIndex = computed(() =>
+  orderedDocs.value.findIndex(item =>
+    item.slug === doc.value?.slug && item.category === doc.value?.category,
+  ),
+)
+
+const previousDoc = computed(() =>
+  currentDocIndex.value > 0 ? orderedDocs.value[currentDocIndex.value - 1] : null,
+)
+
+const nextDoc = computed(() =>
+  currentDocIndex.value >= 0 && currentDocIndex.value < orderedDocs.value.length - 1
+    ? orderedDocs.value[currentDocIndex.value + 1]
+    : null,
+)
+
 const docMedia = computed(() => resolveMedia({
   public_url: doc.value?.featured_image?.public_url,
   kind: doc.value?.featured_image?.kind,
 }))
 
-const categorySlug = computed(() => categoryToSlug(doc.value?.category) || String(route.params.category))
+const categorySlug = computed(() => categoryToSlug(doc.value?.category) || categoryParam.value)
 const canonicalUrl = usePlatformSeoUrl(() => doc.value ? (doc.value.canonical_url || `/docs/${categorySlug.value}/${doc.value.slug}`) : '/docs')
 const ogImage = useSharedOgImage(() => docMedia.value.thumb)
 const seoTitle = computed(() => doc.value?.title || 'Documentation')
