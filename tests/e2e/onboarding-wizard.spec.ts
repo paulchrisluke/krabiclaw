@@ -37,10 +37,20 @@ async function completeManualWizard(
   await page.getByLabel('Hours').fill('Monday: 9:00 AM - 6:00 PM\nTuesday: 9:00 AM - 6:00 PM')
   await page.getByLabel('Manager alert number').fill('+66812345678')
   await page.getByRole('button', { name: /Create site|Add location/ }).click()
+  // New-site creation now stages a private draft first ("Draft ready...") and
+  // needs a second "Create site" quick-reply click to commit it; adding a
+  // location to an existing site skips drafting and goes straight to "Done".
+  // `.last()` disambiguates from the original form button, which stays in the
+  // chat transcript (now re-enabled) once the draft save completes.
+  const draftOrDone = page.getByText(/Draft ready\.|Done\. Your workspace is live/)
   // Site/location creation does several sequential D1 round trips (org lookup,
   // location insert, review upserts) against a remote preview deploy, which can
   // outrun a 15s wait even though the wizard's own bot-message delay is fixed at ~640ms.
-  await expect(page.getByText('Done. Your workspace is live')).toBeVisible({ timeout: 30_000 })
+  await expect(draftOrDone.first()).toBeVisible({ timeout: 30_000 })
+  if (await page.getByText('Draft ready.').isVisible().catch(() => false)) {
+    await page.getByRole('button', { name: 'Create site', exact: true }).last().click()
+    await expect(page.getByText('Done. Your workspace is live')).toBeVisible({ timeout: 30_000 })
+  }
 }
 
 type TransferPlan = 'free' | 'growth'
