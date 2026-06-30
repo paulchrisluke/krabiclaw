@@ -114,6 +114,14 @@ jobs:
           WRANGLER_LOG: debug
         run: |
           npx wrangler deploy --env preview || (echo "Deploy failed, retrying once..." && sleep 10 && npx wrangler deploy --env preview)
+      - name: Sync preview secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # Preview is redeployed fresh on every PR, so an ephemeral per-run secret is
+        # fine here — draft preview tokens only need to stay valid within one run.
+        run: |
+          openssl rand -hex 32 | npx wrangler secret put PREVIEW_SECRET --env preview
       - run: npx playwright install --with-deps chromium
       - name: Warm up preview Worker
         run: |
@@ -178,6 +186,14 @@ jobs:
         run: |
           echo "$STRIPE_SECRET_KEY_TEST" | npx wrangler secret put STRIPE_SECRET_KEY --env staging
           echo "$STRIPE_WEBHOOK_SECRET_STAGING" | npx wrangler secret put STRIPE_WEBHOOK_SECRET --env staging
+      - name: Sync staging preview secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # Staging is reseeded on every push to staging, so an ephemeral per-run secret
+        # is fine here — draft preview tokens only need to stay valid within one run.
+        run: |
+          openssl rand -hex 32 | npx wrangler secret put PREVIEW_SECRET --env staging
       - run: npx playwright install --with-deps chromium
       - name: Warm up staging Worker
         run: |

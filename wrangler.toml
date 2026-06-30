@@ -35,6 +35,11 @@ GA4_MEASUREMENT_ID = "G-NJ1BSP9BYG"
 #   yarn wrangler secret put CRON_SECRET
 # GA4_API_SECRET (Measurement Protocol) is a secret, not a var:
 #   yarn wrangler secret put GA4_API_SECRET
+# PREVIEW_SECRET signs scoped preview/draft tokens (server/utils/preview-token.ts)
+# and is required by the onboarding draft endpoints. preview/staging CI deploys set
+# a fresh ephemeral value on every run (see .github/workflows/ci.yml); production
+# needs a stable value set once:
+#   yarn wrangler secret put PREVIEW_SECRET
 
 [[d1_databases]]
 binding = "DB"
