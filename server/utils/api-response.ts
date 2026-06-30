@@ -4,11 +4,10 @@ import type { CloudflareEnv } from './auth'
 
 function normalizeHeaders(headers: HeadersInit): HeadersInit {
   if (headers instanceof Headers) {
-    const obj: Record<string, string> = {}
-    headers.forEach((value, key) => {
-      obj[key] = value
-    })
-    return obj
+    return headers
+  }
+  if (Array.isArray(headers)) {
+    return headers
   }
   return headers
 }

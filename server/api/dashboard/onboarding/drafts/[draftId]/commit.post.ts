@@ -42,6 +42,17 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Draft not found' }, { status: 404 })
   }
 
+  // Atomic draft status transition: claim draft before site creation to prevent duplicates
+  const claimResult = await execute(db, `
+    UPDATE onboarding_drafts
+    SET status = 'committing', updated_at = ?
+    WHERE id = ? AND status = 'active'
+  `, [new Date().toISOString(), draftId])
+
+  if (claimResult.meta.changes === 0) {
+    return jsonResponse({ error: 'Draft is no longer active (concurrent commit)' }, { status: 409 })
+  }
+
   const payload = parseOnboardingDraftPayload(draft.payload_json)
   const result = await runSiteCreation(env as SiteEnv, db, session.user.id, {
     name: draft.name,
@@ -71,11 +82,12 @@ export default defineEventHandler(async (event) => {
   }
 
   const primaryLocation = payload.preview.locations[0]
-  const updatedSlug = primaryLocation?.slug || slugify(primaryLocation?.title || '')
+  let updatedSlug: string | null = null
   if (primaryLocation) {
+    updatedSlug = primaryLocation.slug || slugify(primaryLocation.title)
     await updateLocation(db, organizationId, siteId, locationRow.id, {
       title: primaryLocation.title,
-      slug: primaryLocation.slug || slugify(primaryLocation.title),
+      slug: updatedSlug,
       city: primaryLocation.city ?? undefined,
       address: primaryLocation.address ?? undefined,
       description: primaryLocation.description ?? undefined,
@@ -244,16 +256,12 @@ export default defineEventHandler(async (event) => {
     ])
   }
 
-  // Atomic draft status transition: only succeed if status is still 'active'
-  const updateResult = await execute(db, `
+  // Finalize draft status to committed
+  await execute(db, `
     UPDATE onboarding_drafts
     SET status = 'committed', committed_site_id = ?, committed_at = ?, updated_at = ?
-    WHERE id = ? AND status = 'active'
+    WHERE id = ?
   `, [siteId, now, now, draftId])
-
-  if (updateResult.meta.changes === 0) {
-    return jsonResponse({ error: 'Draft is no longer active (concurrent commit)' }, { status: 409 })
-  }
 
   const orgRow = await queryFirst<{ slug: string }>(db, `
     SELECT slug FROM organization WHERE id = ? LIMIT 1

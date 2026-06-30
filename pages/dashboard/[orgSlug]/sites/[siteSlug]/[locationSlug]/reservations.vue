@@ -119,7 +119,7 @@ async function loadReservations() {
     }
     if (locationsResult.status === 'fulfilled') {
       const current = locationsResult.value.locations.find(loc => loc.slug === route.params.locationSlug)
-      notificationPhoneMissing.value = !current?.notification_phone
+      notificationPhoneMissing.value = current ? !current.notification_phone : false
     } else {
       console.warn('reservation_location_load_failed', locationsResult.reason)
     }

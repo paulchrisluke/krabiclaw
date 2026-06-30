@@ -105,6 +105,7 @@
           size="sm"
           color="primary"
           :loading="saving"
+          :disabled="anyUploading"
           @click="save"
         >
           Save brand essentials
@@ -144,6 +145,8 @@ const heroInput = ref<HTMLInputElement | null>(null)
 const siteApiBase = computed(() => `/api/editor/sites/${props.siteId}`)
 const { uploading: logoUploading, upload: uploadLogo } = useMediaUpload(siteApiBase.value)
 const { uploading: heroUploading, upload: uploadHero } = useMediaUpload(siteApiBase.value)
+
+const anyUploading = computed(() => logoUploading.value || heroUploading.value)
 
 async function onLogoSelected(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]

@@ -37,6 +37,7 @@
           v-else
           class="absolute inset-0 flex items-center justify-center"
           :style="{ background: `linear-gradient(135deg, ${locationHeroBrandColor} 0%, color-mix(in srgb, ${locationHeroBrandColor} 60%, black) 100%)` }"
+          aria-hidden="true"
         >
           <UIcon :name="locationHeroIcon" class="size-24 text-white/25" />
         </div>

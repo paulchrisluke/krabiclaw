@@ -64,6 +64,20 @@
       "when": 1782846400000,
       "tag": "0015_location_qa_template_source",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1782808696736,
+      "tag": "0016_jittery_wolfpack",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1782808738886,
+      "tag": "0017_free_nightshade",
+      "breakpoints": true
     }
   ]
 }

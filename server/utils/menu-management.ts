@@ -899,8 +899,14 @@ export async function updateMenuItem(
 
   setParts.push("updated_at = ?");
   setParts.push("updated_by = ?");
-  setParts.push("source = ?");
-  params.push(now, updatedBy, "manual");
+  params.push(now, updatedBy);
+
+  // Only change source to manual when actual content is edited, not for metadata-only changes
+  const hasContentChange = updates.name !== undefined || updates.description !== undefined || updates.section !== undefined
+  if (hasContentChange) {
+    setParts.push("source = ?");
+    params.push("manual");
+  }
 
   params.push(menuItemId);
 

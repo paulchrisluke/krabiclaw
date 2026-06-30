@@ -332,7 +332,13 @@ export function buildPlatformDocLinkEntries(docs: PlatformLlmDocSummary[], origi
 }
 
 export function buildPlatformBlogLinkEntries(posts: PlatformLlmBlogSummary[], origin: string): PlatformLlmLinkEntry[] {
-  return posts.flatMap((post) => {
+  // Sort by published date descending before serialization
+  const sortedPosts = [...posts].sort((a, b) => {
+    const aDate = a.published_at ? new Date(a.published_at).getTime() : 0
+    const bDate = b.published_at ? new Date(b.published_at).getTime() : 0
+    return bDate - aDate
+  })
+  return sortedPosts.flatMap((post) => {
     const categorySlug = blogCategoryToSlug(post.category)
     if (!categorySlug) return []
     const path = `/blog/${categorySlug}/${post.slug}`

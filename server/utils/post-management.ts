@@ -184,9 +184,12 @@ export async function updatePost(
   for (const [col, val] of fields) {
     if (val !== undefined) { sets.push(`${col} = ?`); params.push(val ?? null) }
   }
-  // Any edit clears the auto-seeded "Welcome to our new website" placeholder marker.
-  sets.push('source = ?')
-  params.push('manual')
+  // Only change source to manual when actual post content is edited, not for scheduling/location-only changes
+  const hasContentChange = data.title !== undefined || data.body !== undefined
+  if (hasContentChange) {
+    sets.push('source = ?')
+    params.push('manual')
+  }
 
   params.push(postId, organizationId, siteId)
   await execute(db, `UPDATE posts SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`, params)

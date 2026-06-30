@@ -181,33 +181,6 @@ if (memberRows.length > 0) {
   process.exit(0)
 }
 
-const expiresAt = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60)
-const invitationId = randomUUID()
-
-// Use INSERT OR REPLACE to handle concurrent requests atomically
-runWranglerJson(
-  target.wranglerArgs,
-  `
-    INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt)
-    VALUES (
-      '${q(invitationId)}',
-      '${q(site.organization_id)}',
-      '${q(email)}',
-      '${q(role)}',
-      'pending',
-      ${expiresAt},
-      '${q(inviter.id)}',
-      unixepoch()
-    )
-    ON CONFLICT(organizationId, lower(email)) DO UPDATE SET
-      role = excluded.role,
-      inviterId = excluded.inviterId,
-      expiresAt = excluded.expiresAt,
-      status = 'pending'
-    WHERE status = 'pending' AND expiresAt > strftime('%s', 'now')
-  `
-)
-
 const existingInviteRows = runWranglerJson(
   target.wranglerArgs,
   `
@@ -222,32 +195,63 @@ const existingInviteRows = runWranglerJson(
   `
 )
 
-if (existingInviteRows.length === 0) {
-  console.error('Failed to create invitation')
-  process.exit(1)
-}
+const expiresAt = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60)
+let invitationId
 
-const existingInvite = existingInviteRows[0]
+if (existingInviteRows.length > 0) {
+  const existingInvite = existingInviteRows[0]
 
-if (!resend && existingInvite.id !== invitationId) {
-  console.log(
-    JSON.stringify(
-      {
-        success: false,
-        reason: 'already_invited',
-        siteId: site.id,
-        organizationId: site.organization_id,
-        organizationSlug: site.organization_slug,
-        email,
-        invitationId: existingInvite.id,
-        inviteUrl: buildInviteUrl(target.baseUrl, existingInvite.id, site.id),
-        existingRole: existingInvite.role,
-      },
-      null,
-      2
+  if (!resend) {
+    console.log(
+      JSON.stringify(
+        {
+          success: false,
+          reason: 'already_invited',
+          siteId: site.id,
+          organizationId: site.organization_id,
+          organizationSlug: site.organization_slug,
+          email,
+          invitationId: existingInvite.id,
+          inviteUrl: buildInviteUrl(target.baseUrl, existingInvite.id, site.id),
+          existingRole: existingInvite.role,
+        },
+        null,
+        2
+      )
     )
+    process.exit(0)
+  }
+
+  invitationId = String(existingInvite.id)
+  runWranglerJson(
+    target.wranglerArgs,
+    `
+      UPDATE invitation
+      SET role = '${q(role)}',
+          inviterId = '${q(inviter.id)}',
+          expiresAt = ${expiresAt},
+          status = 'pending'
+      WHERE id = '${q(invitationId)}'
+    `
   )
-  process.exit(0)
+} else {
+  invitationId = randomUUID()
+  runWranglerJson(
+    target.wranglerArgs,
+    `
+      INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt)
+      VALUES (
+        '${q(invitationId)}',
+        '${q(site.organization_id)}',
+        '${q(email)}',
+        '${q(role)}',
+        'pending',
+        ${expiresAt},
+        '${q(inviter.id)}',
+        unixepoch()
+      )
+    `
+  )
 }
 
 console.log(

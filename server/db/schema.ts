@@ -442,7 +442,9 @@ export const menu_items = sqliteTable("menu_items", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text(),
 	updated_by: text(),
-});
+}, (table) => [
+	check("menu_items_source_check", sql`source IN ('manual', 'template')`),
+]);
 
 export const menu_translations = sqliteTable("menu_translations", {
 	id: text().primaryKey(),
@@ -621,6 +623,7 @@ export const onboarding_drafts = sqliteTable("onboarding_drafts", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	uniqueIndex("idx_onboarding_drafts_active_user_unique").on(table.user_id).where(sql`status = 'active'`),
+	check("onboarding_drafts_status_check", sql`status IN ('active', 'committing', 'committed', 'failed')`),
 ]);
 
 export const platform_analytics = sqliteTable("platform_analytics", {
@@ -756,7 +759,9 @@ export const posts = sqliteTable("posts", {
 	created_by: text().notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	check("posts_source_check", sql`source IN ('manual', 'template')`),
+]);
 
 export const rate_limits = sqliteTable("rate_limits", {
 	key: text().primaryKey(),

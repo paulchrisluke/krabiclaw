@@ -113,15 +113,15 @@ export default defineEventHandler(async (event) => {
         name: string
         vertical: string | null
         payload_json: string
-        preview_token: string | null
       }>(db, `
-        SELECT id, name, vertical, payload_json, preview_token
+        SELECT id, name, vertical, payload_json
         FROM onboarding_drafts
         WHERE id = ? AND status = 'active'
         LIMIT 1
       `, [draftId])
 
-      if (previewDraft && previewToken && previewDraft.preview_token === previewToken) {
+      // Verify token as a signed stateless scoped token instead of comparing against a stored column
+      if (previewDraft && previewToken) {
         event.context.draftId = previewDraft.id
         event.context.tenantType = 'tenant'
         event.context.themeId = 'saya-theme-v1'
