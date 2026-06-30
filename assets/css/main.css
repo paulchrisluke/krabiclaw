@@ -199,3 +199,10 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* ── Code block text wrapping ─────────────────────────────── */
+.prose pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-x: auto;
+}

@@ -184,6 +184,15 @@ export async function updatePost(
   for (const [col, val] of fields) {
     if (val !== undefined) { sets.push(`${col} = ?`); params.push(val ?? null) }
   }
+  // Only change source to manual when actual post content is edited, not for scheduling/location-only changes
+  const hasContentChange = data.title !== undefined || data.body !== undefined || data.image_asset_id !== undefined ||
+    data.post_type !== undefined || data.cta_type !== undefined || data.cta_url !== undefined ||
+    data.event_title !== undefined || data.event_start !== undefined || data.event_end !== undefined ||
+    data.offer_coupon !== undefined || data.offer_terms !== undefined
+  if (hasContentChange) {
+    sets.push('source = ?')
+    params.push('manual')
+  }
 
   params.push(postId, organizationId, siteId)
   await execute(db, `UPDATE posts SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`, params)

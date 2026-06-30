@@ -437,11 +437,14 @@ export const menu_items = sqliteTable("menu_items", {
 	dietary_notes: text(),
 	preparation: text(),
 	serving_note: text(),
+	source: text().default("manual").notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text(),
 	updated_by: text(),
-});
+}, (_table) => [
+	check("menu_items_source_check", sql`source IN ('manual', 'template')`),
+]);
 
 export const menu_translations = sqliteTable("menu_translations", {
 	id: text().primaryKey(),
@@ -604,6 +607,25 @@ export const organization_entitlements = sqliteTable("organization_entitlements"
 	unique("organization_entitlements_organization_id_key_unique").on(table.organization_id, table.key),
 ]);
 
+export const onboarding_drafts = sqliteTable("onboarding_drafts", {
+	id: text().primaryKey(),
+	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
+	organization_id: text().references(() => organization.id, { onDelete: "set null" } ),
+	name: text().notNull(),
+	vertical: text().default("restaurant").notNull(),
+	subdomain_candidate: text(),
+	source_type: text().notNull(),
+	status: text().default("active").notNull(),
+	payload_json: text().notNull(),
+	committed_site_id: text().references(() => sites.id, { onDelete: "set null" } ),
+	committed_at: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	uniqueIndex("idx_onboarding_drafts_active_user_unique").on(table.user_id).where(sql`status = 'active'`),
+	check("onboarding_drafts_status_check", sql`status IN ('active', 'committing', 'committed', 'failed')`),
+]);
+
 export const platform_analytics = sqliteTable("platform_analytics", {
 	id: text().primaryKey(),
 	metric: text().notNull(),
@@ -733,10 +755,13 @@ export const posts = sqliteTable("posts", {
 	status: text().default("draft").notNull(),
 	scheduled_for: text(),
 	published_at: text(),
+	source: text().default("manual").notNull(),
 	created_by: text().notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	check("posts_source_check", sql`source IN ('manual', 'template')`),
+]);
 
 export const rate_limits = sqliteTable("rate_limits", {
 	key: text().primaryKey(),

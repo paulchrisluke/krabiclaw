@@ -8,12 +8,17 @@ export default defineEventHandler(async (event) => {
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
   const body = await readBody(event) as { whatsapp_phone?: string; channels?: string[] }
-  if (!body.whatsapp_phone?.trim()) {
-    return jsonResponse({ error: 'whatsapp_phone is required' }, { status: 400 })
+  if (!body.whatsapp_phone?.trim() && body.channels === undefined) {
+    return jsonResponse({ error: 'whatsapp_phone or channels is required' }, { status: 400 })
   }
 
-  if (body.channels !== undefined && !Array.isArray(body.channels)) {
-    return jsonResponse({ error: 'channels must be an array' }, { status: 400 })
+  if (body.channels !== undefined) {
+    if (!Array.isArray(body.channels)) {
+      return jsonResponse({ error: 'channels must be an array' }, { status: 400 })
+    }
+    if (body.channels.length === 0 || !body.channels.every(c => c === 'whatsapp' || c === 'email')) {
+      return jsonResponse({ error: 'channels must only contain valid values (whatsapp or email)' }, { status: 400 })
+    }
   }
 
   const env = cloudflareEnv(event)
@@ -33,6 +38,6 @@ export default defineEventHandler(async (event) => {
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const notifications = await updateNotificationsSettings(db, site.organization_id, siteId, body.whatsapp_phone.trim(), body.channels)
+  const notifications = await updateNotificationsSettings(db, site.organization_id, siteId, body.whatsapp_phone?.trim(), body.channels)
   return jsonResponse({ success: true, notifications })
 })

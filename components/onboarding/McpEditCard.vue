@@ -56,23 +56,23 @@
 
       <div class="flex flex-wrap gap-2">
         <UButton
+          v-if="guideTo"
+          size="sm"
+          color="primary"
+          :to="guideTo"
+        >
+          {{ guideLabel }}
+        </UButton>
+        <UButton
           as="a"
           href="https://chatgpt.com"
           target="_blank"
           rel="noopener"
           size="sm"
-          color="primary"
-        >
-          Open ChatGPT
-        </UButton>
-        <UButton
-          v-if="guideTo"
-          size="sm"
           color="neutral"
           variant="outline"
-          :to="guideTo"
         >
-          {{ guideLabel }}
+          Open ChatGPT
         </UButton>
         <UButton
           v-if="dashboardTo"
@@ -114,7 +114,7 @@ const props = withDefaults(defineProps<{
 })
 
 const steps = computed(() => [
-  'Open ChatGPT and connect the KrabiClaw app if you have not already.',
+  'Install the KrabiClaw ChatGPT app from the setup guide if you have not already.',
   'Tell it exactly what you want to change in plain English.',
   'Use the dashboard when you want precise control over members, billing, domains, or structured content.',
 ])

@@ -23,7 +23,7 @@
           </NuxtLink>
 
           <NuxtLink
-            v-if="!hasExperiences"
+            v-if="!isExperienceSite"
             to="/reservations"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
@@ -100,7 +100,7 @@
           </template>
           <div class="my-1 border-t border-default" />
           <NuxtLink
-            v-if="hasOrderLinks"
+            v-if="hasOrderLinks && !isExperienceSite"
             to="/order"
             class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
@@ -108,7 +108,7 @@
             {{ $t('saya.header.order_now') }}
           </NuxtLink>
           <NuxtLink
-            v-if="!hasExperiences"
+            v-if="!isExperienceSite"
             to="/reservations"
             class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
@@ -182,6 +182,7 @@ onUnmounted(() => {
 
 const restaurantName = computed(() => (site as Site | null)?.brand_name || DEFAULT_BUSINESS_NAME)
 const logoUrl = computed(() => (site as Site | null)?.logo_url || null)
+const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
 useUpgradeModal()
 
@@ -197,12 +198,12 @@ const hasOrderLinks = computed(() =>
 )
 
 const primaryCtaPath = computed(() => {
-  if (hasOrderLinks.value) return '/order'
+  if (hasOrderLinks.value && !isExperienceSite.value) return '/order'
   return verticalCopy.value.ctaRoute
 })
 
 const primaryCtaLabel = computed(() => {
-  if (hasOrderLinks.value) return t('saya.header.order_now')
+  if (hasOrderLinks.value && !isExperienceSite.value) return t('saya.header.order_now')
   return verticalCopy.value.reserveCta
 })
 

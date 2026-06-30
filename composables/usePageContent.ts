@@ -22,12 +22,22 @@ export const usePageContent = (pageName?: string) => {
   const route = useRoute()
 
   const page = computed(() => {
-    const name = pageName || route.path
+    let name = pageName || route.path
+    // Strip /preview/draft/:draftId prefix for draft preview routes
+    if (!pageName && route.path.startsWith('/preview/draft/')) {
+      // Explicitly handle root draft preview route before regex stripping
+      if (route.path.match(/^\/preview\/draft\/[^/]+$/)) {
+        name = '/'
+      } else {
+        const match = route.path.match(/^\/preview\/draft\/[^/]+\/(.*)$/)
+        if (match) name = match[1] || '/'
+      }
+    }
     if (name === '/' || name === 'home') return 'home'
     return name.replace(/^\//, '').replace(/\//g, '-')
   })
 
-  const { isPlatform, siteId } = useTenantSite()
+  const { isPlatform, siteId, draftId } = useTenantSite()
   const { locale } = useI18n()
   const isPreview = computed(() => route.query.preview === 'true')
   const previewToken = computed(() => typeof route.query.token === 'string' ? route.query.token : '')
@@ -38,19 +48,22 @@ export const usePageContent = (pageName?: string) => {
     return ''
   })
 
-  const contentFetch = isPlatform || !siteId
+  const isDraftPreview = computed(() => route.path.startsWith('/preview/draft/'))
+  const contentFetch = isPlatform || (!siteId && !draftId)
     ? { data: ref(null), refresh: async () => undefined }
     : useFetch(() => {
-        const url = `/api/public/sites/${siteId}/content/${page.value}`
+        const baseUrl = isDraftPreview.value
+          ? `/api/public/drafts/${draftId}/content/${page.value}`
+          : `/api/public/sites/${siteId}/content/${page.value}`
         const params = new URLSearchParams()
         if (route.query.preview === 'true') params.set('preview', 'true')
         if (previewToken.value) params.set('token', previewToken.value)
         if (locationSlug.value) params.set('location', locationSlug.value)
         if (locale.value) params.set('locale', locale.value)
         const query = params.toString()
-        return query ? `${url}?${query}` : url
+        return query ? `${baseUrl}?${query}` : baseUrl
       }, {
-        key: computed(() => `content-${siteId}-${page.value}-${locationSlug.value || 'site'}-${locale.value || 'source'}-${isPreview.value ? 'preview' : 'published'}-${previewToken.value}-${reloadToken.value}`),
+        key: computed(() => `content-${siteId || draftId}-${page.value}-${locationSlug.value || 'site'}-${locale.value || 'source'}-${isPreview.value ? 'preview' : 'published'}-${previewToken.value}-${reloadToken.value}`),
         server: true,
         immediate: true
       })

@@ -75,10 +75,11 @@ const emptyBootstrap = (): BootstrapPayload => ({
 });
 
 export const useBootstrap = () => {
-  const { isPlatform, siteId } = useTenantSite();
+  const { isPlatform, siteId, draftId } = useTenantSite();
   const route = useRoute();
   const params = useBootstrapParams();
-  const key = computed(() => useBootstrapKey(siteId, params.value));
+  const entityId = computed(() => siteId || draftId || null)
+  const key = computed(() => useBootstrapKey(entityId.value, params.value));
 
   const url = computed(() => {
     return useBootstrapUrl(siteId, params.value);
@@ -88,7 +89,7 @@ export const useBootstrap = () => {
 
   const nuxtApp = useNuxtApp();
   const { data, error, pending } =
-    isPlatform || !siteId
+    isPlatform || (!siteId && !draftId)
       ? { data: ref<BootstrapPayload>(empty), error: ref<Error | null>(null), pending: ref(false) }
       : useAsyncData<BootstrapPayload>(
           key,

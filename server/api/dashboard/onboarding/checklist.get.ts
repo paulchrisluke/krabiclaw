@@ -72,15 +72,30 @@ export default defineEventHandler(async (event) => {
       )
     `, [siteId])
 
-    const heroImage = await queryFirst<{ c: number }>(db, `
-      SELECT COUNT(*) as c FROM site_content
-      WHERE site_id = ? AND page = 'home' AND field = 'hero' AND hero_image_asset_id IS NOT NULL
+    // Hero is "done" once it's no longer the generic stock fallback. Two paths write
+    // hero state today: the draft/commit flow (site_config flag) and direct site
+    // creation via seedNewSite (business_locations -> media_assets.source).
+    const heroConfig = await queryFirst<{ value: string }>(db, `
+      SELECT value FROM site_config
+      WHERE site_id = ? AND key = 'hero_image_is_placeholder' LIMIT 1
     `, [siteId])
+
+    const heroAsset = await queryFirst<{ source: string | null }>(db, `
+      SELECT ma.source as source
+      FROM business_locations bl
+      JOIN media_assets ma ON ma.id = bl.hero_image_asset_id
+      WHERE bl.site_id = ? AND bl.status = 'active' AND ma.status = 'active'
+      ORDER BY bl.is_primary DESC, bl.created_at ASC LIMIT 1
+    `, [siteId])
+
+    const heroIsReal = heroConfig
+      ? heroConfig.value === 'false'
+      : heroAsset?.source != null && heroAsset.source !== 'template_stock'
 
     const menuItems = await queryFirst<{ c: number }>(db, `
       SELECT COUNT(*) as c FROM menu_items mi
       JOIN menus m ON mi.menu_id = m.id
-      WHERE m.site_id = ?
+      WHERE m.site_id = ? AND mi.source != 'template'
     `, [siteId])
 
     const experiences = await queryFirst<{ c: number }>(db, `
@@ -90,11 +105,11 @@ export default defineEventHandler(async (event) => {
     const story = await queryFirst<{ c: number }>(db, `
       SELECT COUNT(*) as c FROM site_content
       WHERE site_id = ? AND page = 'about' AND field LIKE 'story%'
-      AND content IS NOT NULL AND length(content) > 20
+      AND content IS NOT NULL AND length(content) > 20 AND source != 'template'
     `, [siteId])
 
     const post = await queryFirst<{ c: number }>(db, `
-      SELECT COUNT(*) as c FROM posts WHERE site_id = ? AND status = 'published'
+      SELECT COUNT(*) as c FROM posts WHERE site_id = ? AND status = 'published' AND source != 'template'
     `, [siteId])
 
     return jsonResponse({
@@ -104,7 +119,7 @@ export default defineEventHandler(async (event) => {
       city: location?.city ?? null,
       items: {
         business_info: (businessInfo?.c ?? 0) > 0,
-        hero_image: (heroImage?.c ?? 0) > 0,
+        hero_image: heroIsReal,
         menu_or_experiences: vertical?.vertical === 'experience'
           ? (experiences?.c ?? 0) > 0
           : (menuItems?.c ?? 0) > 0,

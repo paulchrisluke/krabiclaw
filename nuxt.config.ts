@@ -2,8 +2,13 @@
 import { DEFAULT_CURRENCY, isCurrencyCode } from './shared/currencies'
 
 const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
-const isCi = process.env.CI === 'true'
-const enableNitroTasks = !isCi && process.env.NUXT_DISABLE_NITRO_TASKS !== 'true'
+// Opt-out only: GitHub Actions sets CI=true on every runner, including the
+// preview/staging/prod deploy jobs that build the artifact actually shipped
+// to Cloudflare, so gating this on ambient CI silently strips every
+// scheduled task (analytics aggregation, billing reminders, sync jobs, ...)
+// from production. Set NUXT_DISABLE_NITRO_TASKS=true explicitly if a local
+// dev/E2E run needs to avoid task-import side effects on the D1 proxy binding.
+const enableNitroTasks = process.env.NUXT_DISABLE_NITRO_TASKS !== 'true'
 
 export default defineNuxtConfig({
   modules: [
@@ -30,13 +35,6 @@ export default defineNuxtConfig({
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         { name: 'theme-color', content: '#1F2547' }
-      ],
-      link: [
-        { rel: 'icon', type: 'image/png', href: '/favicon-96x96.png', sizes: '96x96' },
-        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
-        { rel: 'shortcut icon', href: '/favicon.ico' },
-        { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
-        { rel: 'manifest', href: '/site.webmanifest' }
       ]
     },
   },
@@ -248,8 +246,8 @@ export default defineNuxtConfig({
     experimental: {
       tasks: enableNitroTasks
     },
-    // Keep task modules out of CI/dev E2E boot to avoid optional task import side-effects
-    // from breaking nitro-cloudflare-dev D1 proxy binding.
+    // Set NUXT_DISABLE_NITRO_TASKS=true to keep task modules out of a local
+    // dev/E2E boot if task imports break the nitro-cloudflare-dev D1 proxy binding.
     scheduledTasks: enableNitroTasks ? {
       '*/5 * * * *': ['translation-jobs-process'],
       '*/10 * * * *': ['domain-reconciliation'],

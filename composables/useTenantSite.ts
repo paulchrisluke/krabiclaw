@@ -9,6 +9,7 @@ export const useTenantSite = () => {
       return {
         tenantType: event.context.tenantType || 'platform',
         siteId: event.context.siteId || null,
+        draftId: event.context.draftId || null,
         organizationId: event.context.organizationId || null,
         themeId: event.context.themeId || null,
         site: event.context.site || null
@@ -17,6 +18,7 @@ export const useTenantSite = () => {
     return {
       tenantType: 'platform',
       siteId: null,
+      draftId: null,
       organizationId: null,
       themeId: null,
       site: null
@@ -27,6 +29,7 @@ export const useTenantSite = () => {
     isPlatform: tenantContext.value.tenantType === 'platform',
     isTenant: tenantContext.value.tenantType === 'tenant',
     siteId: tenantContext.value.siteId,
+    draftId: tenantContext.value.draftId,
     organizationId: tenantContext.value.organizationId,
     themeId: tenantContext.value.themeId,
     site: tenantContext.value.site

@@ -1,23 +1,6 @@
 <template>
   <div class="flex h-screen flex-col overflow-hidden bg-muted text-highlighted">
 
-    <!-- Top bar -->
-    <header class="flex h-[60px] shrink-0 items-center gap-4 border-b border-default bg-default px-5">
-      <div class="flex items-center gap-2.5">
-        <img src="/krabi-claw-logo.png" alt="KrabiClaw" class="h-7 w-auto" />
-      </div>
-      <div class="h-[22px] w-px bg-default-200 dark:bg-default-700" />
-      <div class="flex min-w-0 flex-col leading-tight">
-        <span class="truncate text-[13px] font-semibold text-highlighted">{{ siteName }}</span>
-        <span class="truncate font-mono text-[10.5px] text-dimmed">{{ siteDomain }} · live</span>
-      </div>
-      <div class="ml-auto flex items-center gap-2">
-        <UButton color="neutral" variant="ghost" size="sm" :to="`/dashboard/${orgSlug}`">
-          Skip setup
-        </UButton>
-      </div>
-    </header>
-
     <!-- Body: wizard left, preview right -->
     <div
       v-if="loaded"

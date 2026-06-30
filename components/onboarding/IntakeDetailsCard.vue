@@ -36,15 +36,23 @@
             placeholder="Monday: 9:00 AM - 6:00 PM&#10;Tuesday: 9:00 AM - 6:00 PM"
           />
         </UFormField>
-        <UFormField label="Manager alert number">
+        <UFormField label="Manager alert number" required help="Bookings get sent here by WhatsApp. Without it, alerts fall back to email only — easy to miss.">
           <UInput v-model="form.notificationPhone" type="tel" placeholder="+66..." />
         </UFormField>
-        <UFormField label="Timezone">
+        <UFormField label="Timezone" required help="Used to validate booking dates against your local time.">
           <USelectMenu
             v-model="form.timezone"
             :items="timezoneOptions"
             searchable
             placeholder="Select timezone"
+          />
+        </UFormField>
+        <UFormField v-if="!showPrimaryToggle" label="Currency" required help="Affects how menu and experience prices are displayed site-wide.">
+          <USelect
+            v-model="form.currency"
+            :items="currencyOptions"
+            value-attribute="value"
+            label-attribute="label"
           />
         </UFormField>
         <div v-if="showPrimaryToggle" class="sm:col-span-2">
@@ -72,6 +80,8 @@
 </template>
 
 <script setup lang="ts">
+import { CURRENCY_OPTIONS, type CurrencyCode } from '~/shared/currencies'
+
 type IntakeForm = {
   name: string
   city: string
@@ -81,6 +91,7 @@ type IntakeForm = {
   openingHours: string
   notificationPhone: string
   timezone: string
+  currency: CurrencyCode
   isPrimary: boolean
 }
 
@@ -99,15 +110,25 @@ const props = defineProps<{
 defineEmits<{ submit: [] }>()
 
 const timezoneOptions = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : []
+const currencyOptions = CURRENCY_OPTIONS
 
 const canSubmit = computed(() => {
-  if (!props.requireLocationBasics) return !!form.value.name.trim()
+  // notificationPhone + timezone are never supplied by Google Maps import, and
+  // a missing notification phone silently degrades booking alerts to email-only
+  // with no error surfaced anywhere — so these are required on every path, not
+  // just the manual-entry one. Currency is site-level (not asked again when
+  // adding a location, see showPrimaryToggle) but still required up front —
+  // it silently defaults to THB otherwise, wrong for any non-Thai client.
+  const hasNotificationBasics = form.value.notificationPhone.trim().length > 0
+    && form.value.timezone.trim().length > 0
+  const hasCurrency = props.showPrimaryToggle || form.value.currency.trim().length > 0
+  if (!props.requireLocationBasics) return !!form.value.name.trim() && hasNotificationBasics && hasCurrency
   return [
     form.value.name,
     form.value.city,
     form.value.address,
     form.value.phone,
     form.value.openingHours,
-  ].every(value => value.trim().length > 0)
+  ].every(value => value.trim().length > 0) && hasNotificationBasics && hasCurrency
 })
 </script>

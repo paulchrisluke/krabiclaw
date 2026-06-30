@@ -596,7 +596,7 @@ export const CHOWBOT_TOOLS: AiTool[] = [
         },
         phone: { type: "string", description: "Public phone number shown to guests on the website and in confirmation emails." },
         address: { type: "string" },
-        email: { type: "string", description: "Public email shown to guests on the website and in confirmation emails." },
+        email: { type: ["string", "null"], description: "Public email shown to guests on the website and in confirmation emails. Pass null to clear it." },
         notification_phone: {
           type: "string",
           description: "Internal WhatsApp number for booking/reservation alerts to this location's manager. Not shown to guests. Falls back to the site-level whatsapp_phone if not set. International format: +66812345678",
@@ -1740,7 +1740,7 @@ export const CHOWBOT_TOOLS: AiTool[] = [
   // ── Notification settings ─────────────────────────────────────────────────
   {
     name: "get_notification_settings",
-    description: "Read notification settings for this site (e.g. WhatsApp phone).",
+    description: "Read notification settings for this site, including WhatsApp phone and owner alert channels.",
     input_schema: { type: "object", properties: {} },
   },
   {
@@ -1750,11 +1750,15 @@ export const CHOWBOT_TOOLS: AiTool[] = [
       type: "object",
       properties: {
         whatsapp_phone: {
-          type: "string",
-          description: "WhatsApp phone number in E.164 format.",
+          type: ["string", "null"],
+          description: "Site-level WhatsApp phone number in E.164 format. Omit to leave unchanged.",
+        },
+        channels: {
+          type: "array",
+          items: { type: "string", enum: ["email", "whatsapp"] },
+          description: "Owner alert channels. Use one or both of email and whatsapp.",
         },
       },
-      required: ["whatsapp_phone"],
     },
   },
 

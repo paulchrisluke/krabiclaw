@@ -2,14 +2,27 @@ import { createError, getHeader, type H3Event } from 'h3'
 import { createDb, type AppDb } from '~/server/db'
 import type { CloudflareEnv } from './auth'
 
-export const jsonResponse = (body: ApiValue, init: ResponseInit = {}) =>
-  new Response(JSON.stringify(body), {
+export const jsonResponse = (body: ApiValue, init: ResponseInit = {}) => {
+  const mergedHeaders = new Headers(init.headers)
+  mergedHeaders.set('content-type', 'application/json; charset=utf-8')
+  return new Response(JSON.stringify(body), {
     ...init,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      ...init.headers
-    }
+    headers: mergedHeaders,
   })
+}
+
+export const textResponse = (
+  body: string,
+  init: ResponseInit = {},
+  contentType = 'text/plain; charset=utf-8',
+) => {
+  const mergedHeaders = new Headers(init.headers)
+  mergedHeaders.set('content-type', contentType)
+  return new Response(body, {
+    ...init,
+    headers: mergedHeaders,
+  })
+}
 
 export const cleanString = (value: ApiValue, maxLength: number) =>
   typeof value === 'string' ? value.trim().slice(0, maxLength) : ''

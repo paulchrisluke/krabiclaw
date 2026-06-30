@@ -8,7 +8,6 @@ import {
   syncGoogleLocations,
 } from "~/server/utils/google-business";
 import {
-  normalizePhone,
   getOrgWhatsAppPhone,
   setOrgWhatsAppPhone,
 } from "~/server/utils/whatsapp";
@@ -256,15 +255,21 @@ export async function getNotificationsSettings(
       [organizationId, siteId],
     ),
   ])
-  let channels: string[] = ['whatsapp']
+  // Mirrors the send-time default in server/utils/notifications.ts getOwnerNotificationChannels:
+  // only default to whatsapp if a number is actually configured, otherwise email.
+  const defaultChannels = whatsappPhone ? ['whatsapp'] : ['email']
+  let channels: string[] = defaultChannels
   if (channelsRow?.value) {
     try {
       const parsed = JSON.parse(channelsRow.value)
       if (Array.isArray(parsed)) {
-        channels = parsed.filter(c => c === 'whatsapp' || c === 'email')
+        const validChannels = parsed.filter(c => c === 'whatsapp' || c === 'email')
+        // Drop whatsapp from channels if no whatsapp phone is configured
+        const availableChannels = whatsappPhone ? validChannels : validChannels.filter(c => c !== 'whatsapp')
+        channels = availableChannels.length ? availableChannels : defaultChannels
       }
     } catch {
-      channels = ['whatsapp']
+      channels = defaultChannels
     }
   }
   return { whatsapp_phone: whatsappPhone, channels }
@@ -274,15 +279,22 @@ export async function updateNotificationsSettings(
   db: D1Database,
   organizationId: string,
   siteId: string,
-  whatsappPhone: string,
+  whatsappPhone?: string,
   channels?: string[],
 ) {
-  const ops: Promise<unknown>[] = [
-    setOrgWhatsAppPhone(db, organizationId, siteId, whatsappPhone.trim()),
-  ]
+  const ops: Promise<unknown>[] = []
+  const trimmedPhone = whatsappPhone?.trim()
+  // Explicit null or empty string means clear the phone
+  if (whatsappPhone !== undefined) {
+    ops.push(setOrgWhatsAppPhone(db, organizationId, siteId, trimmedPhone || ''))
+  }
   if (channels) {
+    const defaultPhone = trimmedPhone || await getOrgWhatsAppPhone(db, organizationId, siteId)
     const validChannels = channels.filter(c => c === 'whatsapp' || c === 'email')
-    const value = JSON.stringify(validChannels.length ? validChannels : ['whatsapp'])
+    // Filter out whatsapp if no phone is available
+    const channelsToPersist = defaultPhone ? validChannels : validChannels.filter(c => c !== 'whatsapp')
+    const finalChannels = channelsToPersist.length ? channelsToPersist : ['email']
+    const value = JSON.stringify(finalChannels)
     ops.push(
       execute(
         db,
@@ -292,8 +304,7 @@ export async function updateNotificationsSettings(
     )
   }
   await Promise.all(ops)
-  const normalizedChannels = channels ? channels.filter(c => c === 'whatsapp' || c === 'email') : ['whatsapp']
-  return { whatsapp_phone: normalizePhone(whatsappPhone.trim()), channels: normalizedChannels.length ? normalizedChannels : ['whatsapp'] }
+  return await getNotificationsSettings(db, organizationId, siteId)
 }
 
 export async function listContactSubmissions(db: D1Database, siteId: string) {

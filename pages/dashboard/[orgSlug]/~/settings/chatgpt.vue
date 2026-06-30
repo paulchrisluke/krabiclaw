@@ -64,8 +64,8 @@
               <UButton as="a" href="https://chatgpt.com" target="_blank" rel="noopener" color="primary">
                 Open ChatGPT
               </UButton>
-              <UButton to="/plugin" color="neutral" variant="ghost">
-                View public setup page
+              <UButton to="/docs/integrations/mcp-setup" color="neutral" variant="ghost">
+                Open MCP setup docs
               </UButton>
             </div>
           </div>
