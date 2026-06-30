@@ -17,7 +17,6 @@
         <DocsBreadcrumb :crumbs="breadcrumbs" />
 
         <h1 class="mb-6 text-4xl font-bold text-default">{{ doc.title }}</h1>
-        <p v-if="doc.excerpt" class="mb-8 text-xl leading-relaxed text-muted">{{ doc.excerpt }}</p>
 
         <div v-if="docMedia.url" class="mb-10 overflow-hidden rounded-2xl">
           <video
