@@ -286,7 +286,7 @@ export async function updateNotificationsSettings(
   const trimmedPhone = whatsappPhone?.trim()
   // Explicit null or empty string means clear the phone
   if (whatsappPhone !== undefined) {
-    ops.push(setOrgWhatsAppPhone(db, organizationId, siteId, trimmedPhone || null))
+    ops.push(setOrgWhatsAppPhone(db, organizationId, siteId, trimmedPhone || ''))
   }
   if (channels) {
     const defaultPhone = trimmedPhone || await getOrgWhatsAppPhone(db, organizationId, siteId)

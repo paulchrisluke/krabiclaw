@@ -118,11 +118,12 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PREVIEW_SECRET_PREVIEW: ${{ secrets.PREVIEW_SECRET_PREVIEW }}
         # Preview is shared across concurrent/overlapping PR runs, so the secret must stay
         # stable across runs — regenerating it per run would invalidate draft preview
         # tokens issued by another run still in flight. Sourced from a fixed repo secret.
         run: |
-          echo "${{ secrets.PREVIEW_SECRET_PREVIEW }}" | npx wrangler secret put PREVIEW_SECRET --env preview
+          printf '%s' "$PREVIEW_SECRET_PREVIEW" | npx wrangler secret put PREVIEW_SECRET --env preview
       - run: npx playwright install --with-deps chromium
       - name: Warm up preview Worker
         run: |

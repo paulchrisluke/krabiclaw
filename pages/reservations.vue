@@ -208,7 +208,7 @@ const isExperienceSite = computed(() => (site as { vertical?: string | null } | 
 // experiences attached (e.g. Ember & Slice, Kikuzuki) still need this page for
 // regular table bookings alongside their experience bookings.
 watch([isExperienceSite, hasExperiences], ([isExp, hasExp]) => {
-  if (isExp) {
+  if (isExp && hasExp) {
     navigateTo('/experiences', { replace: true, redirectCode: 302 })
   }
 }, { immediate: true })
