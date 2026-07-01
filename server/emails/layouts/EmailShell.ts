@@ -4,6 +4,7 @@ import { EHtml, EHead, EBody, EPreview, EContainer, ESection, EText, EHeading, E
 // Nuxt UI-inspired color tokens (email-safe inline styles)
 // Light mode
 const PRIMARY = '#FB7461' // coral
+const PRIMARY_TEXT = '#1F2547' // navy
 const BG = '#fafafa' // zinc-50
 const FG = '#18181b' // zinc-900
 const FG_MUTED = '#52525b' // zinc-600
@@ -18,6 +19,19 @@ const FG_MUTED_DARK = '#a1a1aa' // zinc-400
 const FG_DIMMED_DARK = '#71717a' // zinc-500
 const BORDER_DARK = '#27272a' // zinc-800
 const CARD_BG_DARK = '#18181b' // zinc-900
+
+// Dark-mode brand accents (assets/css/main.css --kc-teal/--kc-success/--kc-warning/
+// --kc-danger, hand-copied — see the note in EmailCallout.ts on why emails can't read
+// CSS custom properties from main.css directly). Translucent brand-hue backgrounds over
+// the dark card, vibrant brand-hue text — mirrors the app's own .dark .platform-theme
+// rule that coral/teal/yellow accents stay vibrant on dark surfaces rather than fading
+// to a single neutral gray, so each callout variant keeps its semantic color in dark mode.
+const CALLOUT_DARK = {
+  info:    { bg: 'rgba(43,181,181,0.16)', fg: '#6BDBDB', border: 'rgba(43,181,181,0.4)' },  // kc-teal
+  success: { bg: 'rgba(43,181,115,0.16)', fg: '#4ADE94', border: 'rgba(43,181,115,0.4)' },  // kc-success
+  warning: { bg: 'rgba(248,169,58,0.16)', fg: '#FDBB63', border: 'rgba(248,169,58,0.4)' },  // kc-warning
+  error:   { bg: 'rgba(224,82,76,0.16)',  fg: '#FF8983', border: 'rgba(224,82,76,0.4)'  },  // kc-danger
+}
 
 export default defineComponent({
   props: {
@@ -49,6 +63,14 @@ export default defineComponent({
             .email-details { border-color: ${BORDER_DARK} !important; }
             .email-details-label { color: ${FG_MUTED_DARK} !important; }
             .email-details-value { color: ${FG_DARK} !important; }
+            .email-callout-info { background-color: ${CALLOUT_DARK.info.bg} !important; border-color: ${CALLOUT_DARK.info.border} !important; }
+            .email-callout-info-title, .email-callout-info-body { color: ${CALLOUT_DARK.info.fg} !important; }
+            .email-callout-success { background-color: ${CALLOUT_DARK.success.bg} !important; border-color: ${CALLOUT_DARK.success.border} !important; }
+            .email-callout-success-title, .email-callout-success-body { color: ${CALLOUT_DARK.success.fg} !important; }
+            .email-callout-warning { background-color: ${CALLOUT_DARK.warning.bg} !important; border-color: ${CALLOUT_DARK.warning.border} !important; }
+            .email-callout-warning-title, .email-callout-warning-body { color: ${CALLOUT_DARK.warning.fg} !important; }
+            .email-callout-error { background-color: ${CALLOUT_DARK.error.bg} !important; border-color: ${CALLOUT_DARK.error.border} !important; }
+            .email-callout-error-title, .email-callout-error-body { color: ${CALLOUT_DARK.error.fg} !important; }
           }
         `),
       ]),
@@ -80,7 +102,7 @@ export default defineComponent({
               ? h(ESection, { style: 'padding:32px 40px 0' }, () => [
                   h(EButton, {
                     href: props.ctaUrl,
-                    style: { background: PRIMARY, color: '#1F2547', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif", fontWeight: '700', fontSize: '15px', lineHeight: '1', textDecoration: 'none', padding: '14px 28px', borderRadius: '8px', display: 'inline-block' },
+                    style: { background: PRIMARY, color: PRIMARY_TEXT, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif", fontWeight: '700', fontSize: '15px', lineHeight: '1', textDecoration: 'none', padding: '14px 28px', borderRadius: '8px', display: 'inline-block' },
                   }, () => props.ctaText),
                 ])
               : null,

@@ -29,7 +29,7 @@ export default defineComponent({
         ? h(EText, { style: 'margin:0 0 20px;font-size:15px;color:#52525b;line-height:1.6' }, () => props.content)
         : null,
       h(EmailAction, {
-        href: `https://${props.platformDomain}/dashboard`,
+        href: `https://${props.platformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')}/dashboard`,
         text: 'Open Dashboard',
         variant: 'secondary',
       }),

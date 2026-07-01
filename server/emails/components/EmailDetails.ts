@@ -16,6 +16,8 @@ export default defineComponent({
   setup(props) {
     const rows = props.rows.filter((row): row is [string, string | number] => row[1] !== null && row[1] !== undefined && row[1] !== '')
 
+    if (rows.length === 0) return () => null
+
     return () => h(ESection, {
       class: 'email-details',
       style: `margin:24px 0 0;border-top:1px solid ${BORDER};padding-top:20px`,

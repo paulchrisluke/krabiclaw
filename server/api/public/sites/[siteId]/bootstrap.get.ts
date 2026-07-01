@@ -248,7 +248,7 @@ export default defineEventHandler(async (event) => {
 
   // Validate query inputs before using KV cache — only allow known-safe values
   // to prevent unbounded cache entries from arbitrary variants.
-  const VALID_DATA_TYPES = new Set(['reviews', 'photos', 'qa', 'blog', 'blogPost']);
+  const VALID_DATA_TYPES = new Set(['reviews', 'photos', 'qa', 'blog', 'blogPost', 'posts']);
   const isValidDataType = dataType === null || VALID_DATA_TYPES.has(dataType);
   const isValidLocale = locale === undefined || /^[a-z]{2}(-[A-Z]{2})?$/.test(locale);
   const isValidPage = page === null || /^[a-z0-9_-]+$/.test(page);

@@ -44,8 +44,9 @@ export default defineComponent({
 
     return () => {
       const LinkComponent = (props.href.startsWith('mailto:') || props.href.startsWith('tel:') ? ELink : EButton) as typeof ELink
-      return h(ESection, { style: 'margin:24px 0 0;text-align:center' }, () => [
+      return h(ESection, { class: 'email-action', style: 'margin:24px 0 0;text-align:center' }, () => [
         h(LinkComponent, {
+          class: 'email-action-cta',
           href: props.href,
           style: getStyle(),
         }, () => props.text),

@@ -118,9 +118,10 @@ export const useBootstrap = () => {
               const redactedKey = params.value.token
                 ? key.value.split('~').slice(0, -1).concat('[redacted]').join('~')
                 : key.value
+              const errorSummary = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
               console.error(
                 `[useBootstrap] SSR self-fetch failed for siteId=${siteId ?? 'none'} draftId=${draftId ?? 'none'} ` +
-                `route=${route.path} url=${redactedUrl} key=${redactedKey}`
+                `route=${route.path} url=${redactedUrl} key=${redactedKey} error=${errorSummary}`
               )
               throw err
             }

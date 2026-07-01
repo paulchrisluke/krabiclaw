@@ -12,6 +12,14 @@ import ReviewOwnerNew from '~/server/emails/templates/ReviewOwnerNew'
 import BookingOwnerNew from '~/server/emails/templates/BookingOwnerNew'
 import BookingGuestReceived from '~/server/emails/templates/BookingGuestReceived'
 
+const SUBJECT_LABELS: Record<string, string> = {
+  general: 'General',
+  press: 'Press',
+  partnerships: 'Partnerships',
+  catering: 'Catering',
+  careers: 'Careers',
+}
+
 type NotificationChannel = 'email' | 'whatsapp'
 
 interface NotificationEnv {
@@ -541,7 +549,7 @@ export async function notifyContactSubmitted(
       email: { subject: `New website message from ${opts.guestName}`, html: ownerEmail.html, text: ownerEmail.text },
       whatsapp: {
         template: 'new_contact_msg',
-        vars: { guest_name: opts.guestName, email: opts.email, subject: opts.subject ?? '', message_preview: opts.message },
+        vars: { guest_name: opts.guestName, email: opts.email, subject: opts.subject ? SUBJECT_LABELS[opts.subject] ?? opts.subject : '', message_preview: opts.message },
       },
     }),
     sendEmailNotification(env, db, {

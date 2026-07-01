@@ -1,28 +1,35 @@
 import { defineComponent, h, type PropType } from 'vue'
 import { ESection, EText } from 'vue-email'
 
-// Nuxt UI-inspired color tokens (email-safe inline styles)
-const INFO_BG = '#eff6ff' // blue-50
-const INFO_FG = '#1e40af' // blue-800
-const INFO_BORDER = '#bfdbfe' // blue-200
+// Light-mode tints of the KrabiClaw brand palette (assets/css/main.css --kc-success/
+// --kc-warning/--kc-danger, plus --kc-teal for info — there's no separate brand info
+// color). Email clients can't load main.css or read CSS custom properties (most strip
+// external stylesheets/@import, and Outlook's Word engine ignores var() entirely), so
+// these are the same brand hues hand-copied as literal hex, not a shared token import.
+// Dark-mode counterparts live in EmailShell.ts's inline <style> media query, per variant
+// (see .email-callout-info/success/warning/error there) — a single generic override
+// would flatten all four variants to the same gray, losing the semantic color coding.
+const INFO_BG = '#E9FAFA'    // pale kc-teal (#2BB5B5)
+const INFO_FG = '#1B7373'
+const INFO_BORDER = '#BFEBEB'
 
-const SUCCESS_BG = '#f0fdf4' // green-50
-const SUCCESS_FG = '#166534' // green-800
-const SUCCESS_BORDER = '#bbf7d0' // green-200
+const SUCCESS_BG = '#EAF9F1' // pale kc-success (#2BB573)
+const SUCCESS_FG = '#1E8A54'
+const SUCCESS_BORDER = '#BFE9D2'
 
-const WARNING_BG = '#fefce8' // yellow-50
-const WARNING_FG = '#854d0e' // yellow-800
-const WARNING_BORDER = '#fef08a' // yellow-200
+const WARNING_BG = '#FFF4E3' // pale kc-warning (#F8A93A)
+const WARNING_FG = '#92590A'
+const WARNING_BORDER = '#F6D9A6'
 
-const ERROR_BG = '#fef2f2' // red-50
-const ERROR_FG = '#991b1b' // red-800
-const ERROR_BORDER = '#fecaca' // red-200
+const ERROR_BG = '#FCEBEA'   // pale kc-danger (#E0524C)
+const ERROR_FG = '#9B332E'
+const ERROR_BORDER = '#F3C3C0'
 
 export default defineComponent({
   props: {
-    variant: { 
-      type: String as PropType<'info' | 'success' | 'warning' | 'error'>, 
-      default: 'info' 
+    variant: {
+      type: String as PropType<'info' | 'success' | 'warning' | 'error'>,
+      default: 'info'
     },
     title: { type: String, default: null },
     children: { type: String, required: true },
@@ -42,8 +49,10 @@ export default defineComponent({
     }
 
     const styles = getStyles()
+    const variantClass = `email-callout-${props.variant}`
 
-    return () => h(ESection, { 
+    return () => h(ESection, {
+      class: `email-callout ${variantClass}`,
       style: `
         margin:24px 0 0;
         background:${styles.bg};
@@ -53,7 +62,8 @@ export default defineComponent({
       `
     }, () => [
       props.title
-        ? h(EText, { 
+        ? h(EText, {
+            class: `email-callout-title ${variantClass}-title`,
             style: `
               margin:0 0 8px;
               font-size:14px;
@@ -64,7 +74,8 @@ export default defineComponent({
             `
           }, () => props.title)
         : null,
-      h(EText, { 
+      h(EText, {
+        class: `email-callout-body ${variantClass}-body`,
         style: `
           margin:0;
           font-size:15px;
