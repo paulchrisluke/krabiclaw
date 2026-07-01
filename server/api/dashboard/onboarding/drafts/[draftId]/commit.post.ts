@@ -12,6 +12,14 @@ function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'site'
 }
 
+function summarizeBatchQueries(batchQueries: BatchQuery[]) {
+  return batchQueries.map((entry, index) => ({
+    index,
+    statement: entry.query.trim().split(/\s+/).slice(0, 12).join(' '),
+    params: Array.isArray(entry.params) ? entry.params.length : 0,
+  }))
+}
+
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
@@ -200,7 +208,7 @@ export default defineEventHandler(async (event) => {
         // hasn't edited — mark 'template' so the checklist doesn't treat them as real.
         batchQueries.push({
           query: `
-            INSERT OR IGNORE INTO menu_items
+            INSERT INTO menu_items
               (id, menu_id, section, name, slug, description, price_amount, available, sort_order, source, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'template', ?, ?)
           `,
@@ -226,7 +234,7 @@ export default defineEventHandler(async (event) => {
       // Draft Q&A is template boilerplate, not owner-authored — mark 'template'.
       batchQueries.push({
         query: `
-          INSERT OR IGNORE INTO location_qa
+          INSERT INTO location_qa
             (id, organization_id, site_id, location_id, question, answer, answer_author, is_owner_answer, source, status, sort_order, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'template', 'published', ?, ?, ?)
         `,
@@ -250,7 +258,7 @@ export default defineEventHandler(async (event) => {
       // Draft "welcome" posts are auto-generated, not owner-authored — mark 'template'.
       batchQueries.push({
         query: `
-          INSERT OR IGNORE INTO posts
+          INSERT INTO posts
             (id, organization_id, site_id, location_id, post_type, title, body, status, published_at, created_by, source, created_at, updated_at)
           VALUES (?, ?, ?, ?, 'standard', ?, ?, ?, ?, ?, 'template', ?, ?)
         `,
@@ -311,7 +319,28 @@ export default defineEventHandler(async (event) => {
       params: [siteId, now, now, draftId],
     })
 
-    await executeBatch(db, batchQueries)
+    try {
+      await executeBatch(db, batchQueries)
+    } catch (batchError) {
+      console.error('commit_post_batch_failed', {
+        draftId,
+        siteId,
+        organizationId,
+        batchSize: batchQueries.length,
+        contentRows: payload.preview.content.length,
+        menuItems: payload.preview.menu?.items.length ?? 0,
+        qaRows: payload.preview.qa.length,
+        posts: payload.preview.posts.length,
+        reviews: payload.preview.reviews.length,
+        queries: summarizeBatchQueries(batchQueries),
+        error: batchError instanceof Error ? {
+          name: batchError.name,
+          message: batchError.message,
+          stack: batchError.stack,
+        } : String(batchError),
+      })
+      throw batchError
+    }
     draftCommitted = true
 
     // If anything fails after this point, the draft is already committed - we don't reset it

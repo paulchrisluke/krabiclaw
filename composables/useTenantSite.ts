@@ -94,47 +94,37 @@ export const useSiteContent = async (page: string, locationId?: string) => {
 
 export const useSiteLocations = async () => {
   const { isTenant, siteId } = useTenantSite()
-  
+
   if (!isTenant || !siteId) {
     return ref<PublicLocationsResponse>({
-      success: true,
+      success: false,
       locations: [],
       count: 0,
     })
   }
-  
+
   const { data } = await useFetch<PublicLocationsResponse>(`/api/public/sites/${siteId}/locations`, {
     key: `site-locations-${siteId}`,
-    default: () => ({
-      success: true,
-      locations: [],
-      count: 0,
-    })
   })
-  
+
   return data
 }
 
 export const useSiteMenus = async (locationId?: string) => {
   const { isTenant, siteId } = useTenantSite()
-  
+
   if (!isTenant || !siteId) {
     return ref<PublicMenuResponse>({
-      success: true,
+      success: false,
       menu: null,
       message: 'No menu available for this scope',
     })
   }
-  
+
   const { data } = await useFetch<PublicMenuResponse>(`/api/public/sites/${siteId}/menus`, {
     query: { locationId },
     key: `site-menus-${siteId}-${locationId || 'site-wide'}`,
-    default: () => ({
-      success: true,
-      menu: null,
-      message: 'No menu available for this scope',
-    })
   })
-  
+
   return data
 }

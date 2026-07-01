@@ -20,6 +20,7 @@ import {
   updateMediaAssetMetadata,
 } from "~/server/utils/media-asset-manager";
 import { createMediaActivationToken } from "~/server/utils/media-activation-token";
+import { aggregateAnalyticsForRange } from "~/server/utils/analytics";
 import {
   createLocation,
   deleteLocation,
@@ -3760,6 +3761,7 @@ export async function executeMcpToolCall(
           statusMessage: "Dates must be YYYY-MM-DD format",
         });
       }
+      await aggregateAnalyticsForRange(site.db, site.siteId, startDate, endDate);
       const rows = await queryAll<Record<string, unknown>>(
         site.db,
         `

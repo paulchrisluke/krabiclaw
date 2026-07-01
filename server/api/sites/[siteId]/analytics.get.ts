@@ -3,7 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { defineEventHandler, getRouterParam, getQuery } from 'h3'
 import { queryAll, queryFirst } from '~/server/db'
-import { aggregateAnalyticsForDate } from '~/server/utils/analytics'
+import { aggregateAnalyticsForDate, aggregateAnalyticsForRange } from '~/server/utils/analytics'
 
 interface AnalyticsSummary {
   pageViews: number
@@ -197,6 +197,10 @@ export default defineEventHandler(async (event) => {
     } catch (err) {
       return jsonResponse({ error: err instanceof Error ? err.message : 'Invalid date' }, { status: 400 })
     }
+
+    // Backfill the requested range from raw events so tenant analytics can heal
+    // from an empty/partial daily rollup table without waiting for cron.
+    await aggregateAnalyticsForRange(db, siteId, startDate, endDate)
 
     // Opportunistically aggregate today's stats so the dashboard is up-to-date
     const today = getDateString(new Date())

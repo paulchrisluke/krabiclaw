@@ -188,6 +188,43 @@ export async function aggregateAnalyticsForDate(
   }
 }
 
+export async function aggregateAnalyticsForRange(
+  db: DbClient,
+  siteId: string,
+  startDate: string,
+  endDate: string
+): Promise<void> {
+  const cursor = new Date(`${startDate}T00:00:00.000Z`)
+  const end = new Date(`${endDate}T00:00:00.000Z`)
+
+  // Defensive check: reject overly wide ranges (max 365 days)
+  const maxDays = 365
+  const daySpan = Math.ceil((end.getTime() - cursor.getTime()) / (1000 * 60 * 60 * 24))
+  if (daySpan > maxDays) {
+    throw new Error(`Date range exceeds maximum of ${maxDays} days (requested: ${daySpan} days)`)
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+
+  while (cursor <= end) {
+    const date = cursor.toISOString().slice(0, 10)
+    if (date) {
+      // Skip re-aggregating days that already have a site_analytics_daily row,
+      // unless the date is today (which may still have new events)
+      const existingRow = await queryFirst<{ date: string }>(db, `
+        SELECT date FROM site_analytics_daily
+        WHERE site_id = ? AND date = ?
+        LIMIT 1
+      `, [siteId, date])
+
+      if (!existingRow || date === today) {
+        await aggregateAnalyticsForDate(db, siteId, date)
+      }
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+  }
+}
+
 /**
  * Aggregate platform pageview events (krabiclaw.com itself: home, blog, docs,
  * marketing) for a specific date into platform_analytics_daily. Mirrors

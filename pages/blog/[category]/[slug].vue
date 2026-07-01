@@ -211,6 +211,13 @@ const { data, pending, error } = await useAsyncData(
 
 if (error.value) throw error.value
 
+// Watch for errors during client-side navigation
+watch(error, (newError) => {
+  if (newError) {
+    throw newError
+  }
+})
+
 const post = computed(() => data.value?.post ?? null)
 const authorSubtitle = computed(() => post.value?.author_subtitle || '')
 

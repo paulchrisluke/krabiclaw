@@ -34,8 +34,9 @@ export default defineEventHandler(async (event) => {
     return sendRedirect(event, targetWithParams, 301)
   }
 
-  // Server-side 301 redirect for single-location sites
+  // Server-side redirect for single-location sites
   // Only run if tenant data is available (set by tenant-resolution middleware)
+  // Use 302 (temporary) since the single-location condition can change over time
   if (normalizedPathname === '/' && event.context.tenantType === TENANT_TYPES.TENANT && event.context.siteId) {
     const env = cloudflareEnv(event)
     const db = env.db
@@ -48,7 +49,7 @@ export default defineEventHandler(async (event) => {
         if (locations.length === 1) {
           const singleLoc = locations[0]
           if (singleLoc && singleLoc.slug) {
-            return sendRedirect(event, `/locations/${singleLoc.slug}`, 301)
+            return sendRedirect(event, `/locations/${singleLoc.slug}`, 302)
           }
         }
       } catch (err) {

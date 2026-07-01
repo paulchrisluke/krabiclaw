@@ -115,13 +115,13 @@ const { data, pending, error } = await useAsyncData(
         : await $fetch<{ post?: TenantBlogPost }>(postEndpoint.value)
     } catch (err) {
       if (getErrorStatusCode(err) === 404) {
-        throw createError({ statusCode: 404, statusMessage: 'Post not found' })
+        throw createError({ statusCode: 404, statusMessage: 'Post not found', fatal: true })
       }
       throw err
     }
 
     if (!payload.post) {
-      throw createError({ statusCode: 404, statusMessage: 'Post not found' })
+      throw createError({ statusCode: 404, statusMessage: 'Post not found', fatal: true })
     }
 
     return { post: payload.post }
