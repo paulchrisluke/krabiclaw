@@ -1,5 +1,6 @@
 import { updateSubscriptionQuantity } from "~/server/utils/billing";
 import { execute, executeBatch, queryFirst } from "~/server/db";
+import { isValidTimezone, normalizeTimezone } from "~/utils/timezone";
 
 type SetupEnv = Record<string, string | undefined>;
 
@@ -258,11 +259,11 @@ export async function createLocation(
       },
     };
   }
-  if (
-    input.timezone !== undefined &&
-    input.timezone !== null &&
-    !Intl.supportedValuesOf("timeZone").includes(input.timezone)
-  ) {
+  const normalizedTimezone = input.timezone === undefined
+    ? undefined
+    : normalizeTimezone(input.timezone);
+
+  if (normalizedTimezone !== undefined && normalizedTimezone !== null && !isValidTimezone(normalizedTimezone)) {
     return {
       status: 400,
       data: { error: "timezone must be a valid IANA time zone identifier." },
@@ -373,7 +374,7 @@ export async function createLocation(
           input.hero_image_asset_id ?? null,
           input.hero_video_asset_id ?? null,
           input.notification_phone ?? null,
-          input.timezone ?? null,
+          normalizedTimezone ?? null,
           isPrimary ? 1 : 0,
           now,
           now,
@@ -463,11 +464,11 @@ export async function updateLocation(
       },
     };
   }
-  if (
-    input.timezone !== undefined &&
-    input.timezone !== null &&
-    !Intl.supportedValuesOf("timeZone").includes(input.timezone)
-  ) {
+  const normalizedTimezone = input.timezone === undefined
+    ? undefined
+    : normalizeTimezone(input.timezone);
+
+  if (normalizedTimezone !== undefined && normalizedTimezone !== null && !isValidTimezone(normalizedTimezone)) {
     return {
       status: 400,
       data: { error: "timezone must be a valid IANA time zone identifier." },
@@ -542,7 +543,7 @@ export async function updateLocation(
   for (const field of simpleFields) {
     if (input[field] !== undefined) {
       sets.push(`${field} = ?`);
-      params.push(input[field] ?? null);
+      params.push(field === "timezone" ? normalizedTimezone ?? null : input[field] ?? null);
     }
   }
 

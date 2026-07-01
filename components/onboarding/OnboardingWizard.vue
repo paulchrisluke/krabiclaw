@@ -313,6 +313,7 @@
 </template>
 
 <script setup lang="ts">
+import { getLocalTimezone } from '~/utils/timezone'
 import { marked } from 'marked'
 import { DEFAULT_CURRENCY } from '~/shared/currencies'
 import {
@@ -993,11 +994,7 @@ function serializeDetails() {
 }
 
 function guessLocalTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || ''
-  } catch {
-    return ''
-  }
+  return getLocalTimezone()
 }
 
 function seedDetailsFromPreview(preview: NonNullable<typeof pendingPreview.value>) {

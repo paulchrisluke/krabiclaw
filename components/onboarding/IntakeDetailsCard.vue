@@ -81,6 +81,7 @@
 
 <script setup lang="ts">
 import { CURRENCY_OPTIONS, type CurrencyCode } from '~/shared/currencies'
+import { TIMEZONE_OPTIONS } from '~/utils/timezone'
 
 type IntakeForm = {
   name: string
@@ -109,7 +110,7 @@ const props = defineProps<{
 
 defineEmits<{ submit: [] }>()
 
-const timezoneOptions = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : []
+const timezoneOptions = TIMEZONE_OPTIONS
 const currencyOptions = CURRENCY_OPTIONS
 
 const canSubmit = computed(() => {
