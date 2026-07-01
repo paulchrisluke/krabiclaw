@@ -18,22 +18,16 @@ import {
   buildMcpOAuthChallenge,
   isMcpMutatingTool,
   mcpAuthRequiredResult,
-  scheduleMcpKvHtmlPurge,
   setMcpAuthChallenge,
 } from '~/server/utils/mcp-route-helpers'
+import { purgeSiteKvCache } from '~/server/utils/edge-cache'
+import { getPlatformHtmlCacheHosts } from '~/server/utils/tenant-hosts'
 
 const PLATFORM_AUTH_DESCRIPTION = 'Connect the KrabiClaw platform admin app to continue.'
 const PLATFORM_AUTH_REQUIRED_TEXT = 'Authentication required: connect the KrabiClaw platform admin app to continue.'
 
 function resourceMetadataUrl(baseUrl: string) {
   return `${baseUrl}/.well-known/oauth-protected-resource/platform-mcp`
-}
-
-// NUXT_PUBLIC_PLATFORM_DOMAIN is normally a full URL (e.g. "https://krabiclaw.com")
-// but config can legitimately hold a bare domain — strip a scheme if present
-// instead of relying on new URL(), which throws on domain-only input.
-function hostnameFromConfigValue(value: string): string {
-  return value.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
 }
 
 export default defineEventHandler(async (event) => {
@@ -198,24 +192,21 @@ export default defineEventHandler(async (event) => {
 
       const result = await executePlatformMcpToolCall(event, toolName, rawArgs)
 
-      // After any mutating tool call, purge KV HTML cache for the platform
-      // site so the next browser load gets fresh SSR HTML. Fire-and-forget —
-      // never block the MCP response on cache ops. Mirrors the per-site purge
-      // in server/api/mcp.post.ts.
+      // After any mutating tool call, purge KV HTML cache for every platform
+      // hostname before returning. Platform blog/docs edits are tiny admin
+      // writes, and returning before this finishes lets an immediate browser
+      // load reuse stale /blog HTML while the slug page renders fresh.
       const mutatedTool = PLATFORM_MCP_TOOLS.find(tool => tool.name === toolName)
       if (isMcpMutatingTool(mutatedTool)) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const kv = (env as any).SITE_CACHE as KVNamespace | undefined
-        scheduleMcpKvHtmlPurge({
-          event,
-          kv,
-          hostnames: [
-            new URL(baseUrl).hostname,
-            env.NUXT_PUBLIC_PLATFORM_DOMAIN ? hostnameFromConfigValue(env.NUXT_PUBLIC_PLATFORM_DOMAIN) : null,
-            'krabiclaw.com',
-          ],
-          logPrefix: 'platform-mcp-cache-purge',
-        })
+        if (kv) {
+          try {
+            await purgeSiteKvCache(kv, getPlatformHtmlCacheHosts(env, [baseUrl]))
+          } catch (err: unknown) {
+            console.warn('[platform-mcp-cache-purge] failed:', String(err))
+          }
+        }
       }
 
       return mcpSuccess(request.id, {

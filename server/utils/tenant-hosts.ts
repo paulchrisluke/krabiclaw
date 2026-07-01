@@ -15,14 +15,14 @@ const PAGES_DEV_HOST = 'krabiclaw.pages.dev'
 // PAGES_DEV_HOST above, just for `wrangler versions upload --preview-alias`.
 const WORKERS_DEV_PREVIEW_HOST_PATTERN = /^(?:[a-z0-9-]+-)?krabiclaw-preview\.[a-z0-9-]+\.workers\.dev$/
 
-// Strip protocol, trailing slash, and port so config values (which may be
+// Strip protocol, path, and port so config values (which may be
 // full URLs like "https://krabiclaw.com" or "http://localhost:3000") compare
 // cleanly against a request's hostname (which never carries protocol and has
 // already had its port stripped by the caller).
 export function normalizeHost(value?: string | null): string {
   return String(value || '')
     .replace(/^https?:\/\//, '')
-    .replace(/\/$/, '')
+    .replace(/\/.*$/, '')
     .split(':')[0] || ''
 }
 
@@ -42,6 +42,16 @@ export function getPlatformHosts(env: TenantHostEnv): string[] {
     'www.krabiclaw.com',
     normalizeHost(env.NUXT_PUBLIC_FREE_SITE_DOMAIN),
     normalizeHost(env.NUXT_PUBLIC_PLATFORM_DOMAIN),
+  ].filter((value): value is string => Boolean(value))))
+}
+
+export function getPlatformHtmlCacheHosts(
+  env: TenantHostEnv,
+  extraHosts: (string | null | undefined)[] = [],
+): string[] {
+  return Array.from(new Set([
+    ...extraHosts.map(normalizeHost),
+    ...getPlatformHosts(env),
   ].filter((value): value is string => Boolean(value))))
 }
 
