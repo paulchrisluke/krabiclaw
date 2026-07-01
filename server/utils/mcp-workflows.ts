@@ -343,13 +343,22 @@ export async function updateContactSubmissionStatus(
 export async function listReservationSubmissions(
   db: D1Database,
   siteId: string,
+  opts: { locationId?: string | null } = {},
 ) {
+  const params: string[] = [siteId]
+  let where = `rs.site_id = ?`
+  if (opts.locationId) {
+    where += ` AND rs.location_id = ?`
+    params.push(opts.locationId)
+  }
   return await queryAll<Record<string, unknown>>(db, `
-    SELECT * FROM reservation_submissions
-    WHERE site_id = ?
-    ORDER BY created_at DESC
+    SELECT rs.*, bl.title AS location_title
+    FROM reservation_submissions rs
+    LEFT JOIN business_locations bl ON bl.id = rs.location_id
+    WHERE ${where}
+    ORDER BY rs.created_at DESC
     LIMIT 200
-  `, [siteId]);
+  `, params);
 }
 
 export async function updateReservationSubmissionStatus(
@@ -357,16 +366,23 @@ export async function updateReservationSubmissionStatus(
   siteId: string,
   submissionId: string,
   status: string,
+  opts: { locationId?: string | null } = {},
 ) {
   if (!["new", "confirmed", "cancelled", "completed"].includes(status)) {
     throw new Error("Invalid reservation submission status");
   }
 
+  const params = [status, submissionId, siteId]
+  let where = `id = ? AND site_id = ?`
+  if (opts.locationId) {
+    where += ` AND location_id = ?`
+    params.push(opts.locationId)
+  }
   const result = await execute(db, `
     UPDATE reservation_submissions
     SET status = ?
-    WHERE id = ? AND site_id = ?
-  `, [status, submissionId, siteId]);
+    WHERE ${where}
+  `, params);
 
   if (!result.meta.changes) throw new Error("Reservation not found");
   return {

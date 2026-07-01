@@ -341,8 +341,27 @@ test.describe('stateless MCP server', () => {
     })
     expect(listReservations.status()).toBe(200)
     const reservationsBody = await listReservations.json()
-    const reservationSubmissionId = mcpData<{ submissions: Array<{ id: string }> }>(reservationsBody).submissions[0]?.id
+    const reservationSubmission = mcpData<{ submissions: Array<{
+      id: string
+      location_id: string | null
+      location_title: string | null
+      guests: string
+      date: string
+      time: string
+      party_size?: unknown
+      requested_date?: unknown
+      requested_time?: unknown
+    }> }>(reservationsBody).submissions[0]
+    const reservationSubmissionId = reservationSubmission?.id
     expect(reservationSubmissionId).toEqual(expect.any(String))
+    expect(reservationSubmission?.location_id).toEqual(expect.any(String))
+    expect(reservationSubmission?.location_title).toEqual(expect.any(String))
+    expect(reservationSubmission?.guests).toBe('2')
+    expect(reservationSubmission?.date).toBe('2030-01-15')
+    expect(reservationSubmission?.time).toBe('19:00')
+    expect(reservationSubmission?.party_size).toBeUndefined()
+    expect(reservationSubmission?.requested_date).toBeUndefined()
+    expect(reservationSubmission?.requested_time).toBeUndefined()
 
     const tools = await mcpRequest(request, baseURL!, {
       method: 'tools/list',
@@ -826,6 +845,11 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, experience_id: experienceId },
     })
     expect(bookingsList.status()).toBe(200)
+    const bookingsBody = await bookingsList.json()
+    const listedBooking = mcpData<{ bookings: Array<{ id: string; location_id: string | null; location_title: string | null }> }>(bookingsBody)
+      .bookings.find(item => item.id === bookingId)
+    expect(listedBooking?.location_id).toEqual(expect.any(String))
+    expect(listedBooking?.location_title).toEqual(expect.any(String))
 
     const bookingUpdate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',

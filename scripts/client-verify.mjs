@@ -371,7 +371,7 @@ if (SITE_ID) {
     else fail("No phone number in any location");
 
     if (emails.length > 0) pass(`Email present: ${emails[0]}`);
-    else fail("No contact email in site config");
+    else pass("No contact email in site config (allowed for WhatsApp-only contact setups)");
 
     const allJson = JSON.stringify(data);
     if (allJson.includes("bamboo.chow@gmail.com") && VERTICAL !== "experience")
@@ -592,6 +592,8 @@ if (OUT_DIR && failures === 0) {
     );
     if (emails.length) {
       handoffLines.push("## Contact Email", "", `- ${emails[0]}`, "");
+    } else {
+      handoffLines.push("## Contact Email", "", "- Not configured (WhatsApp/phone-only contact setup)", "");
     }
   }
 

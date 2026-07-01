@@ -22,6 +22,7 @@ const demoExperience = demoFixture.experiences[0]!
 
 type NotificationRow = {
   id: string
+  location_id: string | null
   channel: string
   template: string
   title: string
@@ -87,6 +88,7 @@ test.describe('notification records — contact form', () => {
     expect(dashboard).toBeDefined()
     expect(dashboard?.status).toBe('sent')
     expect(dashboard?.title).toContain('Playwright Contact Test')
+    expect(dashboard?.location_id).toBeNull()
 
     // Owner email notification (attempted — fails locally without RESEND_API_KEY)
     const ownerEmail = notifications.find(n => n.channel === 'email' && n.template === 'new_contact_msg')
@@ -145,6 +147,7 @@ test.describe('notification records — restaurant reservation (demo site)', () 
     expect(dashboard).toBeDefined()
     expect(dashboard?.status).toBe('sent')
     expect(dashboard?.title).toContain('Playwright Reservation Test')
+    expect(dashboard?.location_id).toBe('loc-demo')
 
     // Owner email
     const ownerEmail = notifications.find(
@@ -166,6 +169,7 @@ test.describe('notification records — restaurant reservation (demo site)', () 
     )
     expect(guestConfirm).toBeDefined()
     expect(guestConfirm?.recipient).toBe(guestEmail)
+    expect(guestConfirm?.location_id).toBe('loc-demo')
     expect(['sent', 'failed', 'pending']).toContain(guestConfirm?.status)
   })
 
@@ -206,6 +210,7 @@ test.describe('notification records — restaurant reservation (demo site)', () 
     const dashboard = notifications.find(n => n.channel === 'dashboard' && n.template === 'reservation_cancelled')
     expect(dashboard).toBeDefined()
     expect(dashboard?.status).toBe('sent')
+    expect(dashboard?.location_id).toBe('loc-demo')
 
     const guestCancel = notifications.find(n => n.channel === 'email' && n.template === 'reservation_customer_cancelled')
     expect(guestCancel).toBeDefined()
@@ -255,6 +260,7 @@ test.describe('notification records — demo experience booking', () => {
     )
     expect(dashboard).toBeDefined()
     expect(dashboard?.status).toBe('sent')
+    expect(dashboard?.location_id).toBe(demoExperience.locationId)
 
     const ownerEmail = notifications.find(
       n =>
@@ -274,6 +280,7 @@ test.describe('notification records — demo experience booking', () => {
     )
     expect(guestConfirm).toBeDefined()
     expect(guestConfirm?.recipient).toBe(guestEmail)
+    expect(guestConfirm?.location_id).toBe(demoExperience.locationId)
     expect(['sent', 'failed', 'pending']).toContain(guestConfirm?.status)
   })
 })

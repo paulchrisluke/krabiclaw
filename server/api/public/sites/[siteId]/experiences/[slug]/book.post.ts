@@ -122,6 +122,7 @@ export default defineEventHandler(async (event) => {
     experience_id: experience.id,
     organization_id: site.organization_id,
     site_id: siteId,
+    location_id: experience.location_id,
     guest_name: guestName,
     guest_email: guestEmail,
     guest_phone: guestPhone || null,

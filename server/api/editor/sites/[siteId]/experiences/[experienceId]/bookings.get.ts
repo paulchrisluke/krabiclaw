@@ -25,6 +25,20 @@ export default defineEventHandler(async (event) => {
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const bookings = await listExperienceBookings(db, siteId, experienceId)
+  const query = getQuery(event)
+  const locationId = typeof query.location_id === 'string' && query.location_id.trim()
+    ? query.location_id.trim()
+    : null
+
+  if (locationId) {
+    const location = await queryFirst<{ id: string }>(
+      db,
+      `SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`,
+      [locationId, siteId],
+    )
+    if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
+  }
+
+  const bookings = await listExperienceBookings(db, siteId, experienceId, { locationId })
   return jsonResponse({ bookings })
 })

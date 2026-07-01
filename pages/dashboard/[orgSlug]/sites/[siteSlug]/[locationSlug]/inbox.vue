@@ -80,6 +80,8 @@ interface ContactSubmission {
 
 interface ReservationSubmission {
   id: string
+  location_id: string
+  location_title: string | null
   name: string
   email: string
   phone: string
@@ -93,6 +95,7 @@ interface ReservationSubmission {
 
 const siteId = await useDashboardSiteId()
 const toast = useToast()
+const route = useRoute()
 const sitePublicUrl = ref<string | null>(null)
 const contacts = ref<ContactSubmission[]>([])
 const reservations = ref<ReservationSubmission[]>([])
@@ -101,7 +104,7 @@ const activeTab = ref('contact')
 const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 
 const tabs = computed(() => [
-  { label: `Contact (${contacts.value.length})`, value: 'contact', icon: 'i-heroicons-envelope' },
+  { label: `Site contact (${contacts.value.length})`, value: 'contact', icon: 'i-heroicons-envelope' },
   { label: `Reservations (${reservations.value.length})`, value: 'reservations', icon: 'i-heroicons-calendar-days' }
 ])
 
@@ -116,13 +119,18 @@ function formatDate(value: string) {
 async function loadInbox() {
   loading.value = true
   try {
-    const [settingsRes, contactRes, reservationRes] = await Promise.all([
+    const [settingsRes, contactRes, locationsRes] = await Promise.all([
       $fetch<{ settings: { public_url: string | null } }>(`/api/dashboard/settings`),
       $fetch<{ submissions: ContactSubmission[] }>(`/api/dashboard/editor/contact-submissions`),
-      $fetch<{ submissions: ReservationSubmission[] }>(`/api/dashboard/editor/reservation-submissions`)
+      $fetch<{ locations: Array<{ id: string; slug: string }> }>(`/api/dashboard/locations`)
     ])
     sitePublicUrl.value = settingsRes.settings.public_url
     contacts.value = contactRes.submissions ?? []
+    const current = locationsRes.locations.find(location => location.slug === route.params.locationSlug || location.id === route.params.locationSlug)
+    if (!current?.id) throw new Error('Location not found')
+    const reservationRes = await $fetch<{ submissions: ReservationSubmission[] }>(`/api/dashboard/editor/reservation-submissions`, {
+      query: { location_id: current.id }
+    })
     reservations.value = reservationRes.submissions ?? []
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load inbox', color: 'error' })
@@ -148,6 +156,7 @@ async function updateReservationStatus(submission: ReservationSubmission, status
   try {
     await $fetch(`/api/dashboard/editor/reservation-submissions/${submission.id}`, {
       method: 'PATCH',
+      query: { location_id: submission.location_id },
       body: { status }
     })
     submission.status = status

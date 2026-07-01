@@ -70,6 +70,8 @@ definePageMeta({ layout: 'dashboard' })
 
 interface ReservationSubmission {
   id: string
+  location_id: string
+  location_title: string | null
   name: string
   email: string
   phone: string
@@ -102,10 +104,9 @@ const confirmedCount = computed(() => reservations.value.filter(item => item.sta
 async function loadReservations() {
   loading.value = true
   try {
-    const [settingsResult, reservationsResult, locationsResult, notificationsResult] = await Promise.allSettled([
+    const [settingsResult, locationsResult, notificationsResult] = await Promise.allSettled([
       $fetch<{ settings: { public_url: string | null } }>(`/api/dashboard/settings`),
-      $fetch<{ submissions: ReservationSubmission[] }>(`/api/dashboard/editor/reservation-submissions`),
-      $fetch<{ locations: Array<{ slug: string; notification_phone: string | null }> }>(`/api/dashboard/locations`),
+      $fetch<{ locations: Array<{ id: string; slug: string; notification_phone: string | null }> }>(`/api/dashboard/locations`),
       $fetch<{ notifications: { whatsapp_phone: string | null; channels: string[] } }>(`/api/dashboard/editor/notifications`),
     ])
     if (settingsResult.status === 'fulfilled') {
@@ -113,24 +114,23 @@ async function loadReservations() {
     } else {
       console.warn('reservation_settings_load_failed', settingsResult.reason)
     }
-    if (reservationsResult.status === 'fulfilled') {
-      reservations.value = reservationsResult.value.submissions ?? []
-    } else {
-      throw reservationsResult.reason
-    }
-    if (locationsResult.status === 'fulfilled' && notificationsResult.status === 'fulfilled') {
-      const current = locationsResult.value.locations.find(loc => loc.slug === route.params.locationSlug)
+    if (locationsResult.status !== 'fulfilled') throw locationsResult.reason
+    const current = locationsResult.value.locations.find(loc => loc.slug === route.params.locationSlug || loc.id === route.params.locationSlug)
+    const locationId = current?.id
+    if (!locationId) throw new Error('Location not found')
+
+    const reservationsResult = await $fetch<{ submissions: ReservationSubmission[] }>(`/api/dashboard/editor/reservation-submissions`, {
+      query: { location_id: locationId }
+    })
+    reservations.value = reservationsResult.submissions ?? []
+
+    if (notificationsResult.status === 'fulfilled') {
       const notifications = notificationsResult.value.notifications
       const effectivePhone = current?.notification_phone || notifications.whatsapp_phone
       const whatsappEnabled = notifications.channels.includes('whatsapp')
       notificationPhoneMissing.value = whatsappEnabled && !effectivePhone
     } else {
-      const loadError = locationsResult.status === 'rejected'
-        ? locationsResult.reason
-        : notificationsResult.status === 'rejected'
-          ? notificationsResult.reason
-          : undefined
-      console.warn('reservation_location_load_failed', loadError)
+      console.warn('reservation_notifications_load_failed', notificationsResult.reason)
     }
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load reservations', color: 'error' })
@@ -143,6 +143,7 @@ async function updateReservationStatus(submission: ReservationSubmission, status
   try {
     await $fetch(`/api/dashboard/editor/reservation-submissions/${submission.id}`, {
       method: 'PATCH',
+      query: { location_id: submission.location_id },
       body: { status }
     })
     submission.status = status
