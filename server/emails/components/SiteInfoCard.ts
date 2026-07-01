@@ -1,5 +1,5 @@
 import { defineComponent, h, type PropType } from 'vue'
-import { ESection, EText, ELink } from 'vue-email'
+import { EText, ELink } from 'vue-email'
 
 const BRAND = '#FB7461'
 
@@ -11,8 +11,8 @@ export default defineComponent({
     pausedNote: { type: String as PropType<string | null>, default: null },
   },
   setup(props) {
-    return () => h(ESection, { style: 'background:#f9fafb;border-radius:10px;margin:24px 0 0;padding:20px 24px' }, () => [
-      h(EText, { style: 'margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#a1a1aa;font-weight:600' }, () => 'Your website'),
+    return () => [
+      h(EText, { style: 'margin:24px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#a1a1aa;font-weight:600' }, () => 'Your website'),
       h(EText, { style: 'margin:0;font-size:22px;font-weight:700;color:#18181b;letter-spacing:-0.3px' }, () => props.siteName),
       props.domain
         ? h(EText, { style: 'margin:10px 0 0;font-size:14px;color:#52525b' }, () => [
@@ -29,6 +29,6 @@ export default defineComponent({
       props.pausedNote
         ? h(EText, { style: 'margin:8px 0 0;font-size:13px;color:#f59e0b' }, () => props.pausedNote)
         : null,
-    ])
+    ]
   },
 })

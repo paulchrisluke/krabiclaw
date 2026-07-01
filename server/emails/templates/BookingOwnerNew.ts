@@ -1,11 +1,7 @@
 import { defineComponent, h, type PropType } from 'vue'
-import { ESection, EText } from 'vue-email'
+import { EText } from 'vue-email'
 import EmailShell from '../layouts/EmailShell'
-
-const CARD = 'border:1px solid #e4e4e7;border-radius:10px;padding:16px 20px;margin:0 0 20px'
-const ROW = 'font-size:15px;color:#18181b'
-const ROW_TOP = `${ROW};margin:8px 0 0`
-const ROW_TIGHT = `${ROW};margin:4px 0 0`
+import EmailDetails from '../components/EmailDetails'
 
 export default defineComponent({
   props: {
@@ -26,23 +22,21 @@ export default defineComponent({
       title: `New booking request from ${props.guestName}`,
       platformDomain: props.platformDomain,
     }, () => [
-      h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `New experience booking request from ${props.guestName}.`),
-      h(ESection, { style: CARD }, () => [
-        h(EText, { style: ROW }, () => [h('strong', null, 'Business: '), props.siteName]),
-        h(EText, { style: ROW_TOP }, () => [h('strong', null, 'Experience: '), props.experienceTitle]),
-        h(EText, { style: ROW_TOP }, () => [h('strong', null, 'Customer: '), props.guestName]),
-        h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Date: '), props.date]),
-        h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Time: '), props.time]),
-        h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Party size: '), String(props.partySize)]),
-        h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Email: '), props.email]),
-        props.phone
-          ? h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Phone: '), props.phone])
-          : null,
-        props.specialRequests
-          ? h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Special requests: '), props.specialRequests])
-          : null,
-      ]),
-      h(EText, { style: 'margin:0;font-size:15px;color:#52525b;line-height:1.6' }, () => 'Contact the customer to confirm the booking.'),
+      h(EText, { class: 'email-text', style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `New experience booking request from ${props.guestName}.`),
+      h(EmailDetails, {
+        rows: [
+          ['Business', props.siteName],
+          ['Experience', props.experienceTitle],
+          ['Customer', props.guestName],
+          ['Date', props.date],
+          ['Time', props.time],
+          ['Party size', String(props.partySize)],
+          ['Email', props.email],
+          props.phone && ['Phone', props.phone],
+          props.specialRequests && ['Special requests', props.specialRequests],
+        ].filter(Boolean) as [string, string][]
+      }),
+      h(EText, { class: 'email-text', style: 'margin:0;font-size:15px;color:#52525b;line-height:1.6' }, () => 'Contact the customer to confirm the booking.'),
     ])
   },
 })

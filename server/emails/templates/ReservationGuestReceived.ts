@@ -1,11 +1,7 @@
 import { defineComponent, h, type PropType } from 'vue'
-import { ESection, EText, ELink } from 'vue-email'
+import { EText, ELink } from 'vue-email'
 import EmailShell from '../layouts/EmailShell'
-
-const CARD = 'border:1px solid #e4e4e7;border-radius:10px;padding:16px 20px;margin:0 0 20px'
-const ROW = 'font-size:15px;color:#18181b'
-const ROW_TOP = `${ROW};margin:8px 0 0`
-const ROW_TIGHT = `${ROW};margin:4px 0 0`
+import EmailDetails from '../components/EmailDetails'
 
 export default defineComponent({
   props: {
@@ -29,15 +25,15 @@ export default defineComponent({
       platformDomain: props.platformDomain,
     }, () => [
       h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `Hi ${props.guestName}, your reservation request has been sent to ${props.siteName}.`),
-      h(ESection, { style: CARD }, () => [
-        h(EText, { style: ROW }, () => [h('strong', null, 'Venue: '), props.locationName ? `${props.siteName} — ${props.locationName}` : props.siteName]),
-        h(EText, { style: ROW_TOP }, () => [h('strong', null, 'Date: '), props.date]),
-        h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Time: '), props.time]),
-        h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Party size: '), props.guests]),
-        props.specialRequests
-          ? h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Special requests: '), props.specialRequests])
-          : null,
-      ]),
+      h(EmailDetails, {
+        rows: [
+          ['Venue', props.locationName ? `${props.siteName} — ${props.locationName}` : props.siteName],
+          ['Date', props.date],
+          ['Time', props.time],
+          ['Party size', props.guests],
+          props.specialRequests && ['Special requests', props.specialRequests],
+        ].filter(Boolean) as [string, string][]
+      }),
       props.contactPhone || props.contactEmail
         ? h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => [
             h('strong', null, `Questions? Contact ${props.siteName}: `),

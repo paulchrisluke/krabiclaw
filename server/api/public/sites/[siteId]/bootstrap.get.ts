@@ -246,14 +246,28 @@ export default defineEventHandler(async (event) => {
   const blogSlug = typeof query.blogSlug === "string" ? query.blogSlug : null;
   const locale = typeof query.locale === "string" ? query.locale : undefined;
 
+  // Validate query inputs before using KV cache — only allow known-safe values
+  // to prevent unbounded cache entries from arbitrary variants.
+  const VALID_DATA_TYPES = new Set(['reviews', 'photos', 'qa', 'blog', 'blogPost']);
+  const isValidDataType = dataType === null || VALID_DATA_TYPES.has(dataType);
+  const isValidLocale = locale === undefined || /^[a-z]{2}(-[A-Z]{2})?$/.test(locale);
+  const isValidPage = page === null || /^[a-z0-9_-]+$/.test(page);
+  const isValidLocation = locationSlug === null || /^[a-z0-9_-]+$/.test(locationSlug);
+  const isValidExperience = experienceSlug === null || /^[a-z0-9_-]+$/.test(experienceSlug);
+  const isValidBlogSlug = blogSlug === null || /^[a-z0-9_-]+$/.test(blogSlug);
+
+  const allInputsValid = isValidDataType && isValidLocale && isValidPage &&
+    isValidLocation && isValidExperience && isValidBlogSlug;
+
   // Read-through KV cache for the D1 batch below. Skipped for preview-authorized
   // requests (isPreviewAuthorized gates the whole read/write, not just the key —
   // omitting the token from the key alone would let a preview response collide
   // with the public cache entry for the same page/location) and for preview/staging
   // hosts, whose D1 gets reseeded on every CI push (see CLAUDE.md's E2E architecture) —
   // a 60s-old cached response could serve pre-reseed content into a fresh E2E run.
+  // Also skipped if any query input is invalid to prevent unbounded cache entries.
   const host = getHeader(event, "host") ?? "";
-  const useBootstrapCache = !isPreviewAuthorized && !isPreviewContext(host);
+  const useBootstrapCache = !isPreviewAuthorized && !isPreviewContext(host) && allInputsValid;
   const cacheKey = buildBootstrapCacheKey(siteId, {
     page,
     location: locationSlug,
@@ -268,7 +282,13 @@ export default defineEventHandler(async (event) => {
     const kv = (env as any).SITE_CACHE as KVNamespace | undefined;
     if (kv) {
       const cached = await getBootstrapCache(kv, cacheKey);
-      if (cached) return jsonResponse(JSON.parse(cached));
+      if (cached) {
+        try {
+          return jsonResponse(JSON.parse(cached));
+        } catch {
+          // Invalid cached JSON — treat as a miss and regenerate
+        }
+      }
     }
   }
 

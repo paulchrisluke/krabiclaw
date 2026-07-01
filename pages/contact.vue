@@ -29,17 +29,7 @@
             <h2 class="saya-display saya-italic text-3xl text-default">{{ t('saya.contact_page.anything_not_location_specific') }}</h2>
             <p class="mt-4 text-sm leading-relaxed text-muted">{{ t('saya.contact_page.specific_questions') }}</p>
 
-            <!-- Success state -->
-            <div v-if="tenantSubmitted" class="mt-10 py-4">
-              <UIcon name="i-heroicons-check-circle" class="size-7 text-default" />
-              <div class="saya-display saya-italic mt-4 text-3xl text-default">{{ t('saya.contact_page.got_it') }}</div>
-              <p class="mt-3 text-sm leading-relaxed text-muted">{{ t('saya.contact_page.reply_within') }}</p>
-              <button class="mt-6 text-xs uppercase tracking-widest text-default underline-offset-2 hover:underline" @click="tenantSubmitted = false; tenantForm = { name: '', email: '', subject: 'general', message: '' }">
-                {{ t('saya.contact_page.send_another') }}
-              </button>
-            </div>
-
-            <UForm v-else :state="tenantForm" :validate="validateTenantContact" class="mt-10 space-y-7" @submit="handleTenantContact">
+            <UForm :state="tenantForm" :validate="validateTenantContact" class="mt-10 space-y-7" @submit="handleTenantContact">
               <div class="grid gap-6 sm:grid-cols-2">
                 <UFormField :label="t('saya.contact_page.your_name')" name="name" required>
                   <UInput v-model="tenantForm.name" size="lg" class="w-full" />
@@ -268,6 +258,8 @@
 </template>
 
 <script setup>
+import { setContactConfirmation } from '~/composables/useContactHandoff'
+
 definePageMeta({ layout: false })
 
 const { isPlatform, siteId, site } = useTenantSite()
@@ -322,7 +314,6 @@ const subjectOptions = computed(() => [
 
 const tenantForm = ref({ name: '', email: '', subject: 'general', message: '' })
 const tenantSubmitting = ref(false)
-const tenantSubmitted = ref(false)
 
 const validateTenantContact = (state) => {
   const errors = []
@@ -334,19 +325,33 @@ const validateTenantContact = (state) => {
 }
 
 const handleTenantContact = async () => {
+  if (!siteId) return
   tenantSubmitting.value = true
   try {
     await $fetch(`/api/public/sites/${siteId}/contact`, {
       method: 'POST',
       body: tenantForm.value
     })
-    tenantSubmitted.value = true
-    toast.add({ description: t('saya.contact_page.message_sent'), color: 'success' })
   } catch {
     toast.add({ description: t('saya.contact_page.message_failed'), color: 'error' })
-  } finally {
     tenantSubmitting.value = false
+    return
   }
+  tenantSubmitting.value = false
+
+  // Best-effort only — a failure here (private browsing, storage quota) must
+  // never make a successful submission look like it failed.
+  try {
+    setContactConfirmation({
+      siteId,
+      siteName: businessName.value,
+      guestName: tenantForm.value.name,
+      subject: tenantForm.value.subject,
+    })
+  } catch {
+    // ignore — /contact/confirmed shows a generic success state either way
+  }
+  await navigateTo('/contact/confirmed')
 }
 
 // ── Platform form ────────────────────────────────────────

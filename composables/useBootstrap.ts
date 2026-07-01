@@ -120,8 +120,7 @@ export const useBootstrap = () => {
                 : key.value
               console.error(
                 `[useBootstrap] SSR self-fetch failed for siteId=${siteId ?? 'none'} draftId=${draftId ?? 'none'} ` +
-                `route=${route.path} url=${redactedUrl} key=${redactedKey}:`,
-                err,
+                `route=${route.path} url=${redactedUrl} key=${redactedKey}`
               )
               throw err
             }

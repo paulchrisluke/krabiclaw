@@ -284,6 +284,11 @@
 definePageMeta({ layout: 'saya' })
 import AppBreadcrumb from '~/components/ui/AppBreadcrumb.vue'
 import { formatMoneyAmount } from '~/shared/money'
+import {
+  useBootstrapParams,
+  useBootstrapKey,
+  useBootstrapUrl,
+} from '~/composables/useBootstrapParams'
 
 const { resolveMedia } = useMedia()
 const route = useRoute()
@@ -382,12 +387,48 @@ type PropertyValue = {
 }
 
 // Item already ships in the layout's single bootstrap payload (page=menu, menu=1) —
-// look it up by slug instead of firing a second SSR round trip.
-const { menu, config: siteConfig } = useBootstrap()
+// look it up by slug instead of firing a second SSR round trip. useBootstrap() itself
+// is lazy/non-blocking (fine for the layout's header/footer), but a missing item here
+// must produce a real HTTP 404 for search engines, which requires blocking on the fetch
+// during SSR — so this page awaits its own useAsyncData call against the exact same
+// key/URL the layout uses, and Nuxt's key-based dedup collapses both to one request.
+const params = useBootstrapParams()
+const bootstrapKey = computed(() => useBootstrapKey(siteId, params.value))
+const bootstrapUrl = computed(() => useBootstrapUrl(siteId, params.value))
+const requestFetch = useRequestFetch()
+
+interface BootstrapMenuResponse {
+  menu: ApiRecord | null
+}
+
+const { data, pending, error } = await useAsyncData<BootstrapMenuResponse>(
+  bootstrapKey,
+  () => (import.meta.server
+    ? requestFetch<BootstrapMenuResponse>(bootstrapUrl.value)
+    : $fetch<BootstrapMenuResponse>(bootstrapUrl.value)),
+  {
+    getCachedData(k, nuxtApp) {
+      return nuxtApp.payload.data[k] as BootstrapMenuResponse | undefined
+    },
+  },
+)
+
+// A fetch failure leaves data.value undefined, same as a genuinely missing
+// item — re-throw the real error first so outages aren't misreported as 404.
+if (error.value) {
+  throw error.value
+}
+
+const { config: siteConfig } = useBootstrap()
 
 const item = computed<MenuItemType | null>(
-  () => (menu.value?.items as MenuItemType[] | undefined)?.find((i) => i.slug === route.params.slug) ?? null
+  () => (data.value?.menu?.items as MenuItemType[] | undefined)?.find((i) => i.slug === route.params.slug) ?? null
 )
+
+// If no item matches after bootstrap resolves, throw a real 404
+if (!item.value) {
+  throw createError({ statusCode: 404, statusMessage: 'Menu item not found', fatal: true })
+}
 const category = computed(() => ({ name: item.value?.section }))
 const currency = computed(() => siteConfig.value.default_currency || 'THB')
 
