@@ -1,19 +1,23 @@
 <template>
-  <section class="relative min-h-160 overflow-hidden flex items-center bg-zinc-900">
+  <section id="section-hero" class="relative min-h-160 overflow-hidden flex items-center bg-zinc-900">
     <!-- Background media layer — wrapper opacity-50 matches location page style -->
     <div class="absolute inset-0 opacity-50">
       <!-- Poster image: always in SSR HTML, fetchpriority high — this is the LCP element.
            Video fades in on top after window.load + idle; poster remains painted. -->
       <img
         v-if="hero.thumbnail_url && hero.video"
-        :src="hero.thumbnail_url"
+        :src="cfImageVariant(hero.thumbnail_url, { width: 1200 }) ?? undefined"
+        :srcset="cfImageSrcset(hero.thumbnail_url) ?? undefined"
+        sizes="100vw"
         alt="" aria-hidden="true" fetchpriority="high" decoding="async"
         class="absolute inset-0 h-full w-full object-cover"
       />
       <!-- Image-only hero (no video) -->
       <img
         v-else-if="hero.image && hero.imageKind === 'image'"
-        :src="hero.image"
+        :src="cfImageVariant(hero.image, { width: 1200 }) ?? undefined"
+        :srcset="cfImageSrcset(hero.image) ?? undefined"
+        sizes="100vw"
         alt="" aria-hidden="true" fetchpriority="high" decoding="async"
         class="absolute inset-0 h-full w-full object-cover"
       />
@@ -40,7 +44,7 @@
         <video
           v-if="showVideo"
           ref="videoEl"
-          :poster="hero.thumbnail_url ?? undefined"
+          :poster="cfImageVariant(hero.thumbnail_url, { width: 1200 }) ?? undefined"
           muted loop playsinline preload="none"
           aria-hidden="true" role="presentation"
           class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-700"
@@ -51,13 +55,13 @@
 
     <!-- Content -->
     <AppSection bg="black" padding="none" class="relative z-10 py-36">
-      <p v-if="hero.eyebrow || businessCity" class="saya-eyebrow mb-8 text-white/70">
-        {{ hero.eyebrow || businessCity }}
+      <p v-if="eyebrow" data-field="hero.eyebrow" class="saya-eyebrow mb-8 text-white/70">
+        {{ eyebrow }}
       </p>
-      <h1 class="saya-display-lg text-white max-w-4xl">
+      <h1 data-field="hero.title" class="saya-display-lg text-white max-w-4xl">
         {{ hero.title || businessTitle }}<br>
-        <em v-if="hero.subtitle" class="saya-italic">{{ hero.subtitle }}</em>
-        <em v-else-if="businessSubtitle" class="saya-italic">{{ businessSubtitle }}</em>
+        <em v-if="hero.subtitle" data-field="hero.subtitle" class="saya-italic">{{ hero.subtitle }}</em>
+        <em v-else-if="businessSubtitle" data-field="hero.subtitle" class="saya-italic">{{ businessSubtitle }}</em>
       </h1>
 
       <!-- Location pills -->
@@ -73,7 +77,7 @@
         </NuxtLink>
       </div>
       <div v-else class="mt-12 flex flex-wrap gap-4">
-        <UButton v-if="hasOrderLinks" to="/order" color="neutral" variant="solid" size="xl" class="rounded-full bg-white! text-black! hover:bg-zinc-100!">{{ $t('saya.cta.order_now') }}</UButton>
+        <UButton v-if="hasOrderLinks" to="/order" color="neutral" variant="solid" size="xl" class="rounded-full bg-white! text-black! hover:bg-zinc-100!">{{ orderNowCta }}</UButton>
         <UButton
           :to="ctaRoute"
           color="neutral"
@@ -86,13 +90,13 @@
         </UButton>
         <UButton
           v-if="!hasOrderLinks"
-          to="/menu"
+          :to="viewMenuRoute"
           color="neutral"
           variant="outline"
           size="xl"
           class="rounded-full border-white/50 text-white hover:bg-white/10"
         >
-          {{ $t('saya.hero.view_menu') }}
+          {{ viewMenuCta }}
         </UButton>
       </div>
     </AppSection>
@@ -101,6 +105,7 @@
 
 <script setup lang="ts">
 import AppSection from '~/components/ui/AppSection.vue'
+import { cfImageSrcset, cfImageVariant } from '~/utils/cf-image'
 
 interface HeroData {
   title?: string
@@ -116,6 +121,10 @@ interface HeroData {
 interface Props {
   data?: {
     hero?: HeroData
+    // Pre-resolved via useBootstrap().getField('hero.eyebrow', ...) by the
+    // caller — not part of getHero()'s return shape, so it can't be read off
+    // `hero` the way title/subtitle/image/video can.
+    eyebrow?: string | null
     locations?: Array<{ id: string; slug: string; title: string }>
     businessTitle?: string
     businessSubtitle?: string
@@ -124,6 +133,14 @@ interface Props {
     hasOrderLinks?: boolean
     ctaRoute?: string
     reserveCta?: string
+    // Vertical-aware CTA copy (e.g. "Book Now"/"View Experiences" for
+    // experience-vertical tenants vs "Order Now"/"View Menu" for restaurants)
+    // — must come from the caller's homeCopy, never hardcoded here. Getting
+    // this wrong is the canonical Pottery House regression (restaurant copy
+    // on an experience-vertical site).
+    orderNowCta?: string
+    viewMenuCta?: string
+    viewMenuRoute?: string
     brandColor?: string
     vertical?: string
   }
@@ -132,6 +149,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), { data: () => ({}) })
 
 const hero = computed(() => props.data?.hero || {})
+const eyebrow = computed(() => props.data?.eyebrow || businessCity.value)
 const locations = computed(() => props.data?.locations || [])
 const hasLocations = computed(() => locations.value.length > 0)
 const businessTitle = computed(() => props.data?.businessTitle || '')
@@ -141,6 +159,9 @@ const businessPrimaryPhoto = computed(() => props.data?.businessPrimaryPhoto)
 const hasOrderLinks = computed(() => props.data?.hasOrderLinks || false)
 const ctaRoute = computed(() => props.data?.ctaRoute || '')
 const reserveCta = computed(() => props.data?.reserveCta || '')
+const orderNowCta = computed(() => props.data?.orderNowCta || 'Order Now')
+const viewMenuCta = computed(() => props.data?.viewMenuCta || 'View Menu')
+const viewMenuRoute = computed(() => props.data?.viewMenuRoute || '/menu')
 // Neutral default until the owner picks a brand color in onboarding.
 const brandColor = computed(() => props.data?.brandColor || '#3F3F46')
 const verticalIcon = computed(() => props.data?.vertical === 'experience' ? 'i-heroicons-sparkles' : 'i-heroicons-building-storefront')
