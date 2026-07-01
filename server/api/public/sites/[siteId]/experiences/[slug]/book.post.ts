@@ -148,6 +148,7 @@ export default defineEventHandler(async (event) => {
       bookingDate,
       timeSlot,
       partySize,
+      notes: notes || null,
       contactPhone,
       contactEmail,
     })

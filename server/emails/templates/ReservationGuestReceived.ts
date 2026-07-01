@@ -17,6 +17,7 @@ export default defineComponent({
     contactPhone: { type: String as PropType<string | null>, default: null },
     contactEmail: { type: String as PropType<string | null>, default: null },
     cancelUrl: { type: String as PropType<string | null>, default: null },
+    specialRequests: { type: String as PropType<string | null>, default: null },
     platformDomain: { type: String, required: true },
   },
   setup(props) {
@@ -32,6 +33,9 @@ export default defineComponent({
         h(EText, { style: ROW_TOP }, () => [h('strong', null, 'Date: '), props.date]),
         h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Time: '), props.time]),
         h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Party size: '), props.guests]),
+        props.specialRequests
+          ? h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Special requests: '), props.specialRequests])
+          : null,
       ]),
       props.contactPhone || props.contactEmail
         ? h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => [

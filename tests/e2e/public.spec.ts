@@ -202,8 +202,8 @@ test.describe('platform public site', () => {
     const blog = await page.goto(`${baseURL}/blog`, { waitUntil: 'domcontentloaded' })
     expect(blog?.status()).toBeLessThan(400)
     await page.waitForLoadState('load')
-    await expect(page).toHaveTitle(/Blog/)
-    await expect(page.getByRole('heading', { name: 'Business Blog' })).toBeVisible()
+    await expect(page).toHaveTitle(/Local AI Growth Notes/)
+    await expect(page.getByRole('heading', { name: 'Local AI Growth Notes' })).toBeVisible()
 
     await expectHealthyPage(page, errors)
   })

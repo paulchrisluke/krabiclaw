@@ -1,9 +1,9 @@
 <template>
   <div class="space-y-16">
     <div class="max-w-3xl">
-      <h1 class="mb-6 text-5xl font-bold text-default">Business Blog</h1>
+      <h1 class="mb-6 text-5xl font-bold text-default">Local AI Growth Notes</h1>
       <p class="text-xl text-muted">
-        Tips, insights, and stories to help your business thrive in the digital age.
+        How local businesses use ChatGPT, Google Maps, social sync, and analytics to keep their web presence growing.
       </p>
     </div>
 
@@ -146,8 +146,8 @@ const visibleCategories = computed(() => {
 
 usePlatformPageSeo({
   path: '/blog',
-  title: 'Blog',
-  description: 'Marketing tips, industry insights, and strategies to help your business succeed online.',
+  title: 'Local AI Growth Notes',
+  description: 'How local businesses use ChatGPT, Google Maps, social sync, and analytics to keep their web presence growing.',
   breadcrumbs: [
     { name: 'Home', url: '/' },
     { name: 'Blog', url: '/blog' },

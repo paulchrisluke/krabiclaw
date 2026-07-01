@@ -1,4 +1,4 @@
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, type PropType } from 'vue'
 import { ESection, EText } from 'vue-email'
 import EmailShell from '../layouts/EmailShell'
 
@@ -14,6 +14,8 @@ export default defineComponent({
     experienceTitle: { type: String, required: true },
     date: { type: String, required: true },
     time: { type: String, required: true },
+    partySize: { type: Number, required: true },
+    specialRequests: { type: String as PropType<string | null>, default: null },
     platformDomain: { type: String, required: true },
   },
   setup(props) {
@@ -29,6 +31,10 @@ export default defineComponent({
         h(EText, { style: ROW_TOP }, () => [h('strong', null, 'Customer: '), props.guestName]),
         h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Date: '), props.date]),
         h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Time: '), props.time]),
+        h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Party size: '), String(props.partySize)]),
+        props.specialRequests
+          ? h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Special requests: '), props.specialRequests])
+          : null,
       ]),
       h(EText, { style: 'margin:0;font-size:15px;color:#52525b;line-height:1.6' }, () => 'Contact the customer to confirm the booking.'),
     ])

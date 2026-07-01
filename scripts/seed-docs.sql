@@ -25,7 +25,7 @@ VALUES (
 
 Connect KrabiClaw to ChatGPT so you can manage your website, menus, media, locations, reviews, and work requests by conversation.
 
-This takes about 5 minutes. Use ChatGPT in a web browser, not the mobile app.
+This takes about 5 minutes. Use ChatGPT in a web browser first to install and connect KrabiClaw. After that, you can use the same connected app in ChatGPT web or in the ChatGPT mobile apps on iPhone or Android.
 
 ## Before you start
 
@@ -96,7 +96,9 @@ Review what ChatGPT is allowed to access and tap Agree.
 
 ## 8. Use KrabiClaw in ChatGPT
 
-Open a new ChatGPT chat, tap the plus button, choose Plugins, then choose KrabiClaw and try asking "What tools do you have?"
+Open a new ChatGPT chat on the web or in the mobile app, tap the plus button, choose Plugins, then choose KrabiClaw and try asking "What tools do you have?"
+
+Once you have installed KrabiClaw on the web, the connected app is available in the same ChatGPT account on desktop and mobile.
 
 ![Plus button beside the ChatGPT message box](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/a068390b-4b28-4b5e-9901-f25d07f6e500/public)
 
@@ -127,6 +129,10 @@ That is fine. Use any phone, tablet, or computer as long as you sign in to the s
 ### I created the app but cannot use it in chat
 
 Open a new chat, tap the plus button, choose Plugins, then choose KrabiClaw. If KrabiClaw does not appear, go back to ChatGPT Apps or Connectors settings and make sure KrabiClaw is connected.
+
+### Can I use KrabiClaw in the ChatGPT mobile app?
+
+Yes. Install and connect KrabiClaw in ChatGPT on the web first, then open the mobile app on the same account and start a new chat there.
 
 ### I see a safety warning
 
@@ -194,8 +200,9 @@ VALUES (
     {"question":"I cannot find Developer mode or Create app","answer":"Use ChatGPT in a web browser at https://chatgpt.com/apps#settings/Connectors. If you are using the ChatGPT mobile app, switch to Chrome or Safari and sign in to ChatGPT there.","position":2},
     {"question":"I am on a different device","answer":"That is fine. Use any phone, tablet, or computer as long as you sign in to the same ChatGPT account.","position":3},
     {"question":"I created the app but cannot use it in chat","answer":"Open a new chat, tap the plus button, choose Plugins, then choose KrabiClaw. If KrabiClaw does not appear, go back to ChatGPT Apps or Connectors settings and make sure KrabiClaw is connected.","position":4},
-    {"question":"I see a safety warning","answer":"That is expected. KrabiClaw uses ChatGPT developer mode because it can make real changes to your website. Only connect KrabiClaw if you trust the KrabiClaw account and website you are signing in to.","position":5},
-    {"question":"Can I disconnect ChatGPT later?","answer":"Yes. Open your KrabiClaw account settings and remove the connected app at any time.","position":6}
+    {"question":"Can I use KrabiClaw in the ChatGPT mobile app?","answer":"Yes. Install and connect KrabiClaw in ChatGPT on the web first, then open the mobile app on the same account and start a new chat there.","position":5},
+    {"question":"I see a safety warning","answer":"That is expected. KrabiClaw uses ChatGPT developer mode because it can make real changes to your website. Only connect KrabiClaw if you trust the KrabiClaw account and website you are signing in to.","position":6},
+    {"question":"Can I disconnect ChatGPT later?","answer":"Yes. Open your KrabiClaw account settings and remove the connected app at any time.","position":7}
   ]}',
   datetime('now'),
   datetime('now')

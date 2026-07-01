@@ -980,39 +980,42 @@ export async function createPlatformBlogPost(
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
     const slug = attempt === 0 ? slugBase : `${slugBase}-${randomSlugSuffix()}`
     try {
-      await execute(db, 'BEGIN')
-      try {
-        await execute(db, `
-          INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, status, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, author_id, published_at, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-          id,
-          organizationId,
-          siteId,
-          input.title,
-          slug,
-          input.body,
-          input.excerpt ?? null,
-          input.category ?? null,
-          input.publish ? 'published' : 'draft',
-          input.seo_description ?? null,
-          input.seo_keywords ?? null,
-          input.canonical_url ?? null,
-          input.robots ?? null,
-          input.featured_image_asset_id ?? null,
-          authorId,
-          publishedAt,
-          now,
-          now,
-        ])
+      await execute(db, `
+        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, status, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, author_id, published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        id,
+        organizationId,
+        siteId,
+        input.title,
+        slug,
+        input.body,
+        input.excerpt ?? null,
+        input.category ?? null,
+        input.publish ? 'published' : 'draft',
+        input.seo_description ?? null,
+        input.seo_keywords ?? null,
+        input.canonical_url ?? null,
+        input.robots ?? null,
+        input.featured_image_asset_id ?? null,
+        authorId,
+        publishedAt,
+        now,
+        now,
+      ])
 
+      try {
         await syncStructuredContent(db, 'blog_post', id, input)
-        const post = await getPlatformBlogPost(db, id, siteId)
-        await execute(db, 'COMMIT')
-        return { success: true, id, slug, published_at: publishedAt, post }
       } catch (err) {
-        await execute(db, 'ROLLBACK').catch(() => {})
+        try {
+          await execute(db, 'DELETE FROM blog_posts WHERE id = ?', [id])
+          await replaceContentComponents(db, 'blog_post', id, [])
+        } catch (cleanupErr) {
+          console.error('Failed to clean up blog post after create rollback:', cleanupErr)
+        }
         throw err
       }
+      const post = await getPlatformBlogPost(db, id, siteId)
+      return { success: true, id, slug, published_at: publishedAt, post }
     } catch (err) {
       if (isUniqueConstraintError(err, 'blog_posts') && attempt < MAX_SLUG_ATTEMPTS - 1) continue
       throw err
@@ -1109,7 +1112,6 @@ export async function updatePlatformBlogPost(
 
   params.push(postId)
 
-  await execute(db, 'BEGIN')
   try {
     const post = await queryFirst<ApiRecord | null>(db, `
       UPDATE blog_posts
@@ -1120,10 +1122,8 @@ export async function updatePlatformBlogPost(
 
     await syncStructuredContent(db, 'blog_post', postId, input)
     const updatedPost = await getPlatformBlogPost(db, postId, siteId)
-    await execute(db, 'COMMIT')
     return { success: true, post: updatedPost }
   } catch (err) {
-    await execute(db, 'ROLLBACK').catch(() => {})
     if (isUniqueConstraintError(err, 'blog_posts')) badRequest('Slug already in use')
     throw err
   }
@@ -1131,17 +1131,10 @@ export async function updatePlatformBlogPost(
 
 export async function deletePlatformBlogPost(db: D1Database, postIdOrSlug: string, siteId: string | null = null) {
   const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', siteId)
-  await execute(db, 'BEGIN')
-  try {
-    const result = await execute(db, 'DELETE FROM blog_posts WHERE id = ?', [postId])
-    if (!result.meta.changes || result.meta.changes === 0) notFound('Post not found')
-    await replaceContentComponents(db, 'blog_post', postId, [])
-    await execute(db, 'COMMIT')
-    return { success: true }
-  } catch (err) {
-    await execute(db, 'ROLLBACK').catch(() => {})
-    throw err
-  }
+  const result = await execute(db, 'DELETE FROM blog_posts WHERE id = ?', [postId])
+  if (!result.meta.changes || result.meta.changes === 0) notFound('Post not found')
+  await replaceContentComponents(db, 'blog_post', postId, [])
+  return { success: true }
 }
 
 export async function listPlatformDocs(db: DbClient, status?: string | null) {

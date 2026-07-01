@@ -42,6 +42,7 @@ interface ReservationNotificationInput extends SiteContext {
   date: string
   time: string
   guests: string
+  requests?: string | null
   wasConfirmed?: boolean
   cancelUrl?: string | null
   contactPhone?: string | null
@@ -66,6 +67,7 @@ interface ExperienceBookingNotificationInput extends SiteContext {
   bookingDate: string
   timeSlot: string
   partySize: number
+  notes?: string | null
   contactPhone?: string | null
   contactEmail?: string | null
 }
@@ -399,12 +401,13 @@ export async function notifyReservationCreated(
     date: opts.date,
     time: opts.time,
     guests: opts.guests,
+    requests: opts.requests ?? '',
     site_name: restaurant,
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(ReservationOwnerNew, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, platformDomain } }),
-    useRender(ReservationGuestReceived, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, contactPhone: opts.contactPhone, contactEmail: opts.contactEmail, cancelUrl: opts.cancelUrl, platformDomain } }),
+    useRender(ReservationOwnerNew, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, specialRequests: opts.requests, platformDomain } }),
+    useRender(ReservationGuestReceived, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, specialRequests: opts.requests, contactPhone: opts.contactPhone, contactEmail: opts.contactEmail, cancelUrl: opts.cancelUrl, platformDomain } }),
   ])
 
   const results = await Promise.allSettled([
@@ -416,7 +419,7 @@ export async function notifyReservationCreated(
       email: { subject: `New reservation request from ${opts.guestName}`, html: ownerEmail.html, text: ownerEmail.text },
       whatsapp: {
         template: 'new_reservation',
-        vars: { guest_name: opts.guestName, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone },
+        vars: { guest_name: opts.guestName, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, requests: opts.requests ?? '' },
       },
     }),
     sendEmailNotification(env, db, {
@@ -620,12 +623,13 @@ export async function notifyExperienceBookingCreated(
     date: opts.bookingDate,
     time: opts.timeSlot,
     party_size: String(opts.partySize),
+    requests: opts.notes ?? '',
     site_name: studio,
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(BookingOwnerNew, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, platformDomain } }),
-    useRender(BookingGuestReceived, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, platformDomain } }),
+    useRender(BookingOwnerNew, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, specialRequests: opts.notes, platformDomain } }),
+    useRender(BookingGuestReceived, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, specialRequests: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, platformDomain } }),
   ])
 
   const results = await Promise.allSettled([
@@ -642,6 +646,7 @@ export async function notifyExperienceBookingCreated(
           date: prettyDate,
           time: prettyTime,
           guests: String(opts.partySize),
+          requests: opts.notes ?? '',
           ...(opts.guestPhone ? { phone: opts.guestPhone } : {}),
         },
       },
