@@ -21,7 +21,7 @@
                 </p>
               </div>
               <UButton to="/docs/integrations/mcp-setup" color="neutral" variant="outline">
-                Open MCP setup docs
+                Open setup docs
               </UButton>
             </div>
 

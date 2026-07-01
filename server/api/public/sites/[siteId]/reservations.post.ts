@@ -82,13 +82,23 @@ export default defineEventHandler(async (event) => {
   if (isDateBeforeTimezoneToday(date, reservationTimezone))
     return jsonResponse({ error: 'Please choose a valid future date.' }, { status: 400 })
 
-  const locationHours = await queryFirst<{ opening_hours: string | null }>(
+  const location = await queryFirst<{ title: string | null; opening_hours: string | null }>(
     db,
-    'SELECT opening_hours FROM business_locations WHERE id = ? LIMIT 1',
+    'SELECT title, opening_hours FROM business_locations WHERE id = ? LIMIT 1',
     [resolvedLocationId],
   )
   let parsedHours: unknown = null
-  try { parsedHours = locationHours?.opening_hours ? JSON.parse(locationHours.opening_hours) : null } catch { parsedHours = null }
+  let parseFailed = false
+  if (location?.opening_hours) {
+    try {
+      parsedHours = JSON.parse(location.opening_hours)
+    } catch {
+      parseFailed = true
+    }
+  }
+  if (parseFailed) {
+    return jsonResponse({ error: 'Location hours configuration is invalid. Please contact support.' }, { status: 500 })
+  }
   const validTimes = isStructuredOpeningHours(parsedHours) ? generateReservationTimes(parsedHours, date) : FALLBACK_TIMES
   if (!validTimes.includes(time))
     return jsonResponse({ error: 'Please choose a valid time — this location is closed at that time.' }, { status: 400 })
@@ -134,6 +144,7 @@ export default defineEventHandler(async (event) => {
       siteId,
       siteName: site.brand_name,
       locationId: resolvedLocationId,
+      locationName: location?.title ?? null,
       reservationId: id,
       guestName: name,
       email,

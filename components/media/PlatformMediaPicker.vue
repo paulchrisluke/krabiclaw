@@ -10,7 +10,7 @@
         class="group flex cursor-pointer items-center gap-2 overflow-hidden rounded-lg border border-default transition-colors hover:border-accented"
         :class="modelValue ? 'p-1' : 'p-2'"
       >
-        <img
+        <UImage
           v-if="selectedUrl"
           :src="selectedUrl"
           class="size-10 shrink-0 rounded object-cover"
@@ -74,7 +74,7 @@
             :class="pendingAsset?.id === image.id ? 'border-primary' : 'border-transparent hover:border-default'"
             @click="onSelect(image)"
           >
-            <img :src="image.thumbnail_url || image.public_url || ''" alt="" class="h-full w-full object-cover" />
+            <UImage :src="image.thumbnail_url || image.public_url || ''" alt="" class="h-full w-full object-cover" />
           </button>
         </div>
       </div>

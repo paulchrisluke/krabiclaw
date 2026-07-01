@@ -51,9 +51,9 @@
         </div>
 
         <div class="mt-6 flex items-center gap-3 pt-6 border-t border-default">
-          <div class="h-10 w-10 rounded-full bg-inverted flex items-center justify-center text-inverted font-bold text-xs uppercase">
+          <UAvatar size="md" class="bg-inverted text-inverted font-bold text-xs uppercase">
             {{ reviewAuthor(review).charAt(0) }}
-          </div>
+          </UAvatar>
           <div>
             <p class="text-sm font-bold text-default">{{ reviewAuthor(review) }}</p>
             <time v-if="review.createTime || review.created_at" :datetime="review.createTime || review.created_at" class="block text-xs text-muted">

@@ -227,7 +227,7 @@ VALUES (
     {"name":"Connect KrabiClaw","text":"After the app is created, tap Connect on the KrabiClaw app page.","position":4,"image_public_url":"https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/45a0b618-f9e9-4a77-8264-53204d6f3d00/public"},
     {"name":"Sign in with KrabiClaw","text":"Tap Sign in with KrabiClaw and sign in to your KrabiClaw account.","position":5,"image_public_url":"https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/a0eff553-ef60-419a-6775-3cbe9b9ef100/public"},
     {"name":"Approve access","text":"Review what ChatGPT is allowed to access and tap Agree.","position":6,"image_public_url":"https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b57038c4-0c20-4980-af17-ec2736079500/public"},
-    {"name":"Use KrabiClaw in ChatGPT","text":"Open a new ChatGPT chat, tap the plus button, choose Plugins, then choose KrabiClaw and try asking \"What tools do you have?\"","position":7,"image_public_url":"https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/a068390b-4b28-4b5e-9901-f25d07f6e500/public"}
+    {"name":"Use KrabiClaw in ChatGPT","text":"Open a new ChatGPT chat on the web or in the mobile app, tap the plus button, choose Plugins, then choose KrabiClaw and try asking \"What tools do you have?\" Once you have installed KrabiClaw on the web, the connected app is available in the same ChatGPT account on desktop and mobile.","position":7,"image_public_url":"https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/a068390b-4b28-4b5e-9901-f25d07f6e500/public"}
   ],"estimated_time":"PT5M"}',
   datetime('now'),
   datetime('now')

@@ -18,7 +18,7 @@
       />
 
       <!-- Image -->
-      <img
+      <UImage
         v-else-if="mediaUrl"
         :src="mediaUrl"
         :alt="item.name"

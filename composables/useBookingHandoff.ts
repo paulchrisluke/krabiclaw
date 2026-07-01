@@ -5,6 +5,7 @@
 
 export interface BookingConfirmation {
   type: 'reservation' | 'experience'
+  siteId: string
   siteName: string
   guestName: string
   date: string
@@ -25,12 +26,14 @@ export function setBookingConfirmation(payload: BookingConfirmation) {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
 }
 
-export function getBookingConfirmation(): BookingConfirmation | null {
+export function getBookingConfirmation(currentSiteId: string): BookingConfirmation | null {
   if (!import.meta.client) return null
   const raw = sessionStorage.getItem(STORAGE_KEY)
   if (!raw) return null
   try {
-    return JSON.parse(raw) as BookingConfirmation
+    const parsed = JSON.parse(raw) as BookingConfirmation
+    if (parsed.siteId !== currentSiteId) return null
+    return parsed
   } catch {
     return null
   }

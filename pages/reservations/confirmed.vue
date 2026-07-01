@@ -94,7 +94,12 @@ const readableDate = computed(() => {
 })
 
 onMounted(async () => {
-  const handoff = getBookingConfirmation()
+  if (!siteId) {
+    pending.value = false
+    return
+  }
+
+  const handoff = getBookingConfirmation(siteId)
   if (handoff && handoff.type === 'reservation') {
     confirmation.value = handoff
     pending.value = false
@@ -113,6 +118,7 @@ onMounted(async () => {
       )
       confirmation.value = {
         type: 'reservation',
+        siteId,
         siteName: String((site as ApiValue)?.brand_name ?? ''),
         guestName: res.reservation.name,
         date: res.reservation.date,

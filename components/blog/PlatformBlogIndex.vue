@@ -35,7 +35,7 @@
               playsinline
               class="h-full w-full object-cover"
             />
-            <img
+            <UImage
               v-else
               :src="featuredMedia.url ?? undefined"
               :alt="featuredPost.title"
@@ -91,7 +91,7 @@
                   playsinline
                   class="h-full w-full object-cover"
                 />
-                <img
+                <UImage
                   v-else
                   :src="post.media.url ?? undefined"
                   :alt="post.title"

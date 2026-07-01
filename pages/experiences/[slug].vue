@@ -644,6 +644,7 @@ async function submitBooking() {
     )
     setBookingConfirmation({
       type: 'experience',
+      siteId,
       siteName: siteName.value,
       guestName: form.guest_name.trim(),
       title: experience.value?.title,

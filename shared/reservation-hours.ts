@@ -15,7 +15,7 @@ const WEEKDAY_BY_INDEX = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY'
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
 
 export function isStructuredOpeningHours(value: unknown): value is StructuredOpeningHoursEntry[] {
-  return Array.isArray(value) && value.length > 0 && value.every(entry =>
+  return Array.isArray(value) && value.every(entry =>
     entry && typeof entry === 'object'
     && typeof (entry as StructuredOpeningHoursEntry).openDay === 'string'
     && TIME_PATTERN.test((entry as StructuredOpeningHoursEntry).openTime)

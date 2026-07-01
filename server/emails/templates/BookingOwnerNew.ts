@@ -15,6 +15,8 @@ export default defineComponent({
     date: { type: String, required: true },
     time: { type: String, required: true },
     partySize: { type: Number, required: true },
+    email: { type: String, required: true },
+    phone: { type: String as PropType<string | null>, default: null },
     specialRequests: { type: String as PropType<string | null>, default: null },
     platformDomain: { type: String, required: true },
   },
@@ -32,6 +34,10 @@ export default defineComponent({
         h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Date: '), props.date]),
         h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Time: '), props.time]),
         h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Party size: '), String(props.partySize)]),
+        h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Email: '), props.email]),
+        props.phone
+          ? h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Phone: '), props.phone])
+          : null,
         props.specialRequests
           ? h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Special requests: '), props.specialRequests])
           : null,

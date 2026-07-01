@@ -10,7 +10,7 @@
         class="group flex cursor-pointer items-center gap-2 overflow-hidden rounded-lg border border-default transition-colors hover:border-accented"
         :class="modelValue ? 'p-1' : 'p-2'"
       >
-        <img
+        <UImage
           v-if="selectedUrl && selectedKind === 'image'"
           :src="selectedUrl"
           class="size-10 shrink-0 rounded object-cover"

@@ -19,12 +19,7 @@
           <span>{{ completedCount }} of {{ total }} complete</span>
           <span v-if="allDone" class="text-primary font-medium">All done!</span>
         </div>
-        <div class="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-          <div
-            class="h-full bg-primary rounded-full transition-all duration-500"
-            :style="{ width: `${(completedCount / total) * 100}%` }"
-          />
-        </div>
+        <UProgress :value="(completedCount / total) * 100" class="h-1.5" />
       </div>
 
       <div class="space-y-2">

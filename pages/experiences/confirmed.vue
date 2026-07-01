@@ -60,11 +60,13 @@ definePageMeta({ layout: 'saya' })
 
 const { formatDate } = useLocaleDate()
 const toast = useToast()
+const { siteId } = useTenantSite()
 
 const confirmation = ref<BookingConfirmation | null>(null)
 
 onMounted(() => {
-  const handoff = getBookingConfirmation()
+  if (!siteId) return
+  const handoff = getBookingConfirmation(siteId)
   confirmation.value = handoff && handoff.type === 'experience' ? handoff : null
 })
 

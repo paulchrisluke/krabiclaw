@@ -13,7 +13,7 @@
         <div class="absolute bottom-3 left-3 text-xs font-medium text-purple-400">{{ prompt }}</div>
       </div>
 
-      <img
+      <UImage
         v-else-if="result"
         :src="result.publicUrl"
         alt="Generated image"
@@ -95,7 +95,7 @@
         :class="i === activeIdx ? 'border-primary' : 'border-transparent opacity-60 hover:opacity-100'"
         @click="activeIdx = i; result = item"
       >
-        <img :src="item.publicUrl" alt="" class="h-full w-full object-cover" />
+        <UImage :src="item.publicUrl" alt="" class="h-full w-full object-cover" />
       </button>
     </div>
   </div>

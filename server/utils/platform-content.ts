@@ -1120,7 +1120,15 @@ export async function updatePlatformBlogPost(
        RETURNING id`, params)
     if (!post) notFound('Post not found')
 
-    await syncStructuredContent(db, 'blog_post', postId, input)
+    const priorPost = await getPlatformBlogPost(db, postId, siteId)
+    try {
+      await syncStructuredContent(db, 'blog_post', postId, input)
+    } catch (err) {
+      await syncStructuredContent(db, 'blog_post', postId, {
+        components: priorPost?.components ?? []
+      })
+      throw err
+    }
     const updatedPost = await getPlatformBlogPost(db, postId, siteId)
     return { success: true, post: updatedPost }
   } catch (err) {
@@ -1131,9 +1139,23 @@ export async function updatePlatformBlogPost(
 
 export async function deletePlatformBlogPost(db: D1Database, postIdOrSlug: string, siteId: string | null = null) {
   const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', siteId)
-  const result = await execute(db, 'DELETE FROM blog_posts WHERE id = ?', [postId])
-  if (!result.meta.changes || result.meta.changes === 0) notFound('Post not found')
-  await replaceContentComponents(db, 'blog_post', postId, [])
+  const priorComponents = await listContentComponents(db, 'blog_post', postId)
+  try {
+    await replaceContentComponents(db, 'blog_post', postId, [])
+    const result = await execute(db, 'DELETE FROM blog_posts WHERE id = ?', [postId])
+    if (!result.meta.changes || result.meta.changes === 0) notFound('Post not found')
+  } catch (err) {
+    await replaceContentComponents(db, 'blog_post', postId, priorComponents.map(c => ({
+      type: c.type,
+      data: c.data,
+      label: c.label,
+      status: c.status,
+      render_enabled: c.render_enabled,
+      schema_enabled: c.schema_enabled,
+      position: c.position,
+    })))
+    throw err
+  }
   return { success: true }
 }
 

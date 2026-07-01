@@ -16,9 +16,9 @@
         class="bg-default border border-default rounded-3xl p-8 shadow-sm hover:shadow-md transition-shadow"
       >
         <div class="flex items-start gap-4 mb-6">
-          <div class="h-10 w-10 shrink-0 rounded-full bg-inverted flex items-center justify-center text-inverted font-bold text-sm">
+          <UAvatar size="md" class="bg-inverted text-inverted font-bold text-sm">
             Q
-          </div>
+          </UAvatar>
           <div>
             <h3 class="text-lg font-bold text-default mb-1">{{ item.text }}</h3>
             <p class="text-[10px] text-muted font-bold uppercase tracking-widest">
@@ -28,9 +28,9 @@
         </div>
 
         <div v-if="item.topAnswer" class="flex items-start gap-4 bg-muted rounded-2xl p-6">
-          <div class="h-8 w-8 shrink-0 rounded-full bg-inverted flex items-center justify-center text-inverted font-bold text-xs">
+          <UAvatar size="sm" class="bg-inverted text-inverted font-bold text-xs">
             A
-          </div>
+          </UAvatar>
           <div>
             <p class="text-default leading-relaxed text-sm mb-2">{{ item.topAnswer.text }}</p>
             <p class="text-[10px] text-muted font-bold uppercase tracking-widest">

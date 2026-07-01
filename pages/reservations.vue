@@ -195,7 +195,7 @@ const availableTimes = computed(() => {
   const hours = selectedLocation.value?.opening_hours
   if (!reservationForm.value.date || !isStructuredOpeningHours(hours)) return FALLBACK_TIMES
   const times = generateReservationTimes(hours, reservationForm.value.date)
-  return times.length > 0 ? times : FALLBACK_TIMES
+  return times
 })
 const timeSelectOptions = computed(() => availableTimes.value.map(t => ({ label: t, value: t })))
 
@@ -288,7 +288,7 @@ const toast = useToast()
 const submitting = ref(false)
 
 async function handleReservation() {
-  if (submitting.value) return
+  if (submitting.value || !siteId) return
   submitting.value = true
   try {
     const res = await $fetch<{ id: string; cancellationToken: string }>(`/api/public/sites/${siteId}/reservations`, {
@@ -297,6 +297,7 @@ async function handleReservation() {
     })
     setBookingConfirmation({
       type: 'reservation',
+      siteId,
       siteName: brandName.value,
       guestName: reservationForm.value.name,
       date: reservationForm.value.date,
