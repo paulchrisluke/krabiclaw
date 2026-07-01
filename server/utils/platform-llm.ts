@@ -230,7 +230,7 @@ export function renderPlatformBlogMarkdown(post: PlatformLlmBlogDetail, origin: 
   const categorySlug = categoryOverride || blogCategoryToSlug(post.category)
   if (!categorySlug) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
   const path = `/blog/${categorySlug}/${post.slug}`
-  const markdownPath = `${path}.md`
+  const markdownPath = `/blog-md/${categorySlug}/${post.slug}.md`
   const canonicalUrl = post.canonical_url?.trim() || absoluteUrl(origin, path)
   const body = renderContentMarkdownWithComponents(post.body, post.components)
 
@@ -345,7 +345,7 @@ export function buildPlatformBlogLinkEntries(posts: PlatformLlmBlogSummary[], or
     return [{
       title: post.title,
       path,
-      markdownPath: `${path}.md`,
+      markdownPath: `/blog-md/${categorySlug}/${post.slug}.md`,
       canonicalUrl: post.canonical_url?.trim() || absoluteUrl(origin, path),
       summary: safeSummary(post.seo_description || post.excerpt, 'KrabiClaw platform blog article.'),
       category: post.category,

@@ -106,7 +106,7 @@ test('renderPlatformBlogMarkdown emits front matter and category route metadata'
   }, 'https://krabiclaw.com', 'marketing')
 
   assert.match(markdown, /category: "Marketing"/)
-  assert.match(markdown, /markdown_url: "\/blog\/marketing\/how-restaurants-can-launch-faster\.md"/)
+  assert.match(markdown, /markdown_url: "\/blog-md\/marketing\/how-restaurants-can-launch-faster\.md"/)
   assert.match(markdown, /author: "KrabiClaw"/)
   assert.match(markdown, /# How restaurants can launch faster/)
 })
@@ -125,7 +125,7 @@ test('buildLlmsTxt points at markdown mirrors and machine-readable indexes', () 
     [{
       title: 'How restaurants can launch faster',
       path: '/blog/marketing/how-restaurants-can-launch-faster',
-      markdownPath: '/blog/marketing/how-restaurants-can-launch-faster.md',
+      markdownPath: '/blog-md/marketing/how-restaurants-can-launch-faster.md',
       canonicalUrl: 'https://krabiclaw.com/blog/marketing/how-restaurants-can-launch-faster',
       summary: 'A practical guide.',
       category: 'Marketing',
@@ -134,7 +134,7 @@ test('buildLlmsTxt points at markdown mirrors and machine-readable indexes', () 
 
   assert.match(llms, /^# KrabiClaw/m)
   assert.match(llms, /\[Getting started with KrabiClaw\]\(https:\/\/krabiclaw\.com\/docs\/getting-started\/getting-started-with-krabiclaw\.md\)/)
-  assert.match(llms, /\[How restaurants can launch faster\]\(https:\/\/krabiclaw\.com\/blog\/marketing\/how-restaurants-can-launch-faster\.md\)/)
+  assert.match(llms, /\[How restaurants can launch faster\]\(https:\/\/krabiclaw\.com\/blog-md\/marketing\/how-restaurants-can-launch-faster\.md\)/)
   assert.match(llms, /\[Docs index JSON\]\(https:\/\/krabiclaw\.com\/docs\/index\.json\)/)
   assert.match(llms, /\[Blog JSON feed\]\(https:\/\/krabiclaw\.com\/blog\/feed\.json\)/)
 })

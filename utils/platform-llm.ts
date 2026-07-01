@@ -238,7 +238,7 @@ export function renderPlatformBlogMarkdown(
   categorySlug: string,
 ) {
   const path = `/blog/${categorySlug}/${post.slug}`
-  const markdownPath = `${path}.md`
+  const markdownPath = `/blog-md/${categorySlug}/${post.slug}.md`
   const canonicalUrl = post.canonical_url?.trim() || absoluteUrl(origin, path)
 
   return [

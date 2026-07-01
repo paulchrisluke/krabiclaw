@@ -7,8 +7,11 @@ import {
 
 export default defineEventHandler(async (event) => {
   const category = getRouterParam(event, 'category')
-  const slug = getRouterParam(event, 'slug')
-  if (!category || !slug) return textResponse('Post not found\n', { status: 404 })
+  const slugParam = getRouterParam(event, 'slug')
+  if (!category || !slugParam?.endsWith('.md')) return textResponse('Post not found\n', { status: 404 })
+
+  const slug = slugParam.slice(0, -'.md'.length)
+  if (!slug) return textResponse('Post not found\n', { status: 404 })
 
   const env = cloudflareEnv(event)
   const db = env.db
