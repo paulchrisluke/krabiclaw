@@ -2341,7 +2341,9 @@ async function executeTool(
       const { deleteExperience } = await import("~/server/utils/experiences");
       const id = toSqlText(input.experience_id);
       if (!id) return { error: "experience_id is required" };
-      const deleted = await deleteExperience(db, siteId, id);
+      const deleted = await deleteExperience(db, siteId, id, {
+        locationId: toSqlText(input.location_id) ?? null,
+      });
       if (!deleted) return { error: "Experience not found" };
       return { deleted: true };
     }

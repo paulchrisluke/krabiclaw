@@ -2744,7 +2744,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     confirmRequired: true,
     inputSchema: {
       experience_id: { type: 'string', description: 'Experience id or slug.' },
-      location_id: { type: 'string', description: 'Optional location id to verify/filter the experience bookings.' },
+      location_id: { type: 'string', description: 'Optional location id to constrain deletion to an experience in that location.' },
     },
     required: ['experience_id'],
     outputSchema: {

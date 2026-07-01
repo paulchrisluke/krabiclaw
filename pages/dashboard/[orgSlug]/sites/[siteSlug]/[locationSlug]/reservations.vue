@@ -154,5 +154,8 @@ async function updateReservationStatus(submission: ReservationSubmission, status
 }
 
 onMounted(loadReservations)
+watch(() => route.params.locationSlug, () => {
+  void loadReservations()
+})
 useSeoMeta({ title: 'Reservations | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

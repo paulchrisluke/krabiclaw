@@ -167,5 +167,8 @@ async function updateReservationStatus(submission: ReservationSubmission, status
 }
 
 onMounted(loadInbox)
+watch(() => route.params.locationSlug, () => {
+  void loadInbox()
+})
 useSeoMeta({ title: 'Inbox | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

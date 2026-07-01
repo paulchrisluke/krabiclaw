@@ -507,9 +507,16 @@ export async function deleteExperience(
   db: DbClient,
   siteId: string,
   idOrSlug: string,
+  opts: { locationId?: string | null } = {},
 ): Promise<boolean> {
   const id = (await resolveExperienceId(db, siteId, idOrSlug)) ?? idOrSlug
-  const result = await execute(db, `DELETE FROM experiences WHERE site_id = ? AND id = ?`, [siteId, id])
+  const params = [siteId, id]
+  let where = `site_id = ? AND id = ?`
+  if (opts.locationId) {
+    where += ` AND location_id = ?`
+    params.push(opts.locationId)
+  }
+  const result = await execute(db, `DELETE FROM experiences WHERE ${where}`, params)
   return Boolean(result.meta.changes)
 }
 
@@ -578,6 +585,12 @@ export async function listExperienceBookings(
     )
     if (!experience) return []
   }
+  const params = [siteId, experienceId]
+  let where = `eb.site_id = ? AND eb.experience_id = ?`
+  if (opts.locationId) {
+    where += ` AND COALESCE(eb.location_id, e.location_id) = ?`
+    params.push(opts.locationId)
+  }
   const results = await queryAll<ExperienceBooking>(
     db,
     `SELECT eb.id, eb.experience_id, eb.organization_id, eb.site_id,
@@ -586,12 +599,12 @@ export async function listExperienceBookings(
               eb.guest_name, eb.guest_email,
               eb.guest_phone, eb.party_size, eb.booking_date, eb.time_slot,
               eb.status, eb.notes, eb.created_at, eb.updated_at
-       FROM experience_bookings eb
-       LEFT JOIN experiences e ON e.id = eb.experience_id AND e.site_id = eb.site_id
-       LEFT JOIN business_locations bl ON bl.id = COALESCE(eb.location_id, e.location_id)
-       WHERE eb.site_id = ? AND eb.experience_id = ?
-       ORDER BY eb.booking_date ASC, eb.time_slot ASC, eb.created_at ASC`,
-    [siteId, experienceId],
+	       FROM experience_bookings eb
+	       LEFT JOIN experiences e ON e.id = eb.experience_id AND e.site_id = eb.site_id
+	       LEFT JOIN business_locations bl ON bl.id = COALESCE(eb.location_id, e.location_id)
+	       WHERE ${where}
+	       ORDER BY eb.booking_date ASC, eb.time_slot ASC, eb.created_at ASC`,
+    params,
   )
   return results ?? []
 }

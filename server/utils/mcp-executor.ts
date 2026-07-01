@@ -3148,6 +3148,7 @@ export async function executeMcpToolCall(
           site.db,
           site.siteId,
           requiredString(args, "experience_id"),
+          { locationId: optionalString(args, "location_id") ?? null },
         ),
         context: await mutationContextPayload(site),
       };
