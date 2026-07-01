@@ -1,5 +1,6 @@
 import slugify from 'slugify'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { PLATFORM_MEDIA_SITE_ID } from '~/server/utils/platform-media'
 import { BLOG_CATEGORY_LABELS } from '~/utils/blog-categories'
 
 const BLOG_TITLE_MAX = 200
@@ -567,18 +568,15 @@ async function ensureBlogFeaturedImageAssetExists(
   field = 'featured_image_asset_id',
   siteId: string | null = null,
 ) {
+  const scopedSiteId = siteId ?? PLATFORM_MEDIA_SITE_ID
   const conditions = ['id = ?', 'status = ?', 'kind = ?']
   const params: ApiValue[] = [assetId, 'active', 'image']
-  if (siteId) {
-    conditions.push('site_id = ?')
-    params.push(siteId)
-  } else {
-    conditions.push('site_id IS NULL')
-  }
+  conditions.push('site_id = ?')
+  params.push(scopedSiteId)
 
   const asset = await queryFirst(db, `SELECT id FROM media_assets WHERE ${conditions.join(' AND ')} LIMIT 1`, params)
   if (!asset) {
-    badRequest(siteId ? `${field} must reference an active image asset from this site` : `${field} must reference an active image asset`)
+    badRequest(siteId ? `${field} must reference an active image asset from this site` : `${field} must reference an active platform image asset`)
   }
 }
 
@@ -1263,7 +1261,7 @@ export async function createPlatformDoc(
   if (!input.title || !input.body) badRequest('title and body are required')
   validateDocCommon(input)
   if (input.parent_doc_id) await ensureDocParentExists(db, input.parent_doc_id)
-  if (input.featured_image_asset_id) await ensureMediaAssetExists(db, input.featured_image_asset_id)
+  if (input.featured_image_asset_id) await ensureBlogFeaturedImageAssetExists(db, input.featured_image_asset_id)
 
   const id = crypto.randomUUID()
   const slugBase = normalizeSlugFromTitle(input.title, 'doc')
@@ -1341,7 +1339,7 @@ export async function updatePlatformDoc(
     if (input.parent_doc_id) await ensureDocParentExists(db, input.parent_doc_id)
   }
   if (input.featured_image_asset_id !== undefined && input.featured_image_asset_id) {
-    await ensureMediaAssetExists(db, input.featured_image_asset_id)
+    await ensureBlogFeaturedImageAssetExists(db, input.featured_image_asset_id)
   }
 
   const fields: Array<keyof Omit<PlatformDocUpdateInput,

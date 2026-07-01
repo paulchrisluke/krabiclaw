@@ -111,9 +111,16 @@ export const useBootstrap = () => {
             try {
               return await requestFetch<BootstrapPayload>(url.value)
             } catch (err) {
+              // url/key can carry a signed preview token on /preview/* routes — strip it
+              // before logging so it doesn't end up in server logs. Key fields are
+              // "~"-joined with the token last (see useBootstrapKey).
+              const redactedUrl = url.value.replace(/([?&]token=)[^&]*/, '$1[redacted]')
+              const redactedKey = params.value.token
+                ? key.value.split('~').slice(0, -1).concat('[redacted]').join('~')
+                : key.value
               console.error(
                 `[useBootstrap] SSR self-fetch failed for siteId=${siteId ?? 'none'} draftId=${draftId ?? 'none'} ` +
-                `route=${route.path} url=${url.value} key=${key.value}:`,
+                `route=${route.path} url=${redactedUrl} key=${redactedKey}:`,
                 err,
               )
               throw err

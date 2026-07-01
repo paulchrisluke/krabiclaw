@@ -65,8 +65,10 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
     };
   }
 
-  // Blog post detail: /blog/[slug]
-  const blogMatch = path.match(/^\/blog\/([^/]+)/);
+  // Blog post detail: /blog/[slug] — single segment only. Deeper paths like
+  // /blog/[category]/[slug] belong to pages/blog/[category]/[slug].vue and
+  // must not be captured here, or the wrong segment ends up as blogSlug.
+  const blogMatch = path.match(/^\/blog\/([^/]+)\/?$/);
   if (blogMatch) {
     return {
       page: "blog",
@@ -225,11 +227,28 @@ export const useBootstrapParams = () => {
   });
 };
 
+// Each field is percent-encoded and joined with "~" (not a valid URI-component
+// character) so a hyphen inside a slug/locale can't be mistaken for a field
+// separator and collide two otherwise-distinct param combinations.
+const encodeKeyField = (value: string | null | undefined): string =>
+  encodeURIComponent(value ?? "");
+
 export const useBootstrapKey = (
   siteId: string | null | undefined,
   params: BootstrapParams,
 ) =>
-  `bs-${siteId ?? "none"}-${params.page ?? ""}-${params.location ?? ""}-${params.experience ?? ""}-${params.menu ? "m" : ""}-${params.data ?? ""}-${params.blogSlug ?? ""}-${params.locale ?? ""}-${params.token ?? ""}`;
+  [
+    "bs",
+    encodeKeyField(siteId ?? "none"),
+    encodeKeyField(params.page),
+    encodeKeyField(params.location),
+    encodeKeyField(params.experience),
+    params.menu ? "m" : "",
+    encodeKeyField(params.data),
+    encodeKeyField(params.blogSlug),
+    encodeKeyField(params.locale),
+    encodeKeyField(params.token),
+  ].join("~");
 
 export const useBootstrapUrl = (
   siteId: string | null | undefined,

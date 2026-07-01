@@ -114,7 +114,7 @@ interface BootstrapBlogResponse {
   blogPost: TenantBlogPost | null
 }
 
-const { data, pending } = await useAsyncData<BootstrapBlogResponse>(
+const { data, pending, error } = await useAsyncData<BootstrapBlogResponse>(
   bootstrapKey,
   () => (import.meta.server
     ? requestFetch<BootstrapBlogResponse>(bootstrapUrl.value)
@@ -125,6 +125,12 @@ const { data, pending } = await useAsyncData<BootstrapBlogResponse>(
     },
   },
 )
+
+// A fetch failure leaves data.value undefined, same as a genuinely missing
+// post — re-throw the real error first so outages aren't misreported as 404.
+if (error.value) {
+  throw error.value
+}
 
 if (!data.value?.blogPost) {
   throw createError({ statusCode: 404, statusMessage: 'Post not found', fatal: true })

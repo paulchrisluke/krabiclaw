@@ -3,10 +3,10 @@
 // params instead of host + pathname — bootstrap is looked up by siteId
 // directly, not by tenant hostname, so no hostname resolution is needed here.
 //
-// Cache key: bs-<siteId>-<page>-<location>-<experience>-<menu>-<data>-<blogSlug>-<locale>
-// (mirrors composables/useBootstrapParams.ts's useBootstrapKey(), minus `token` —
-// cached entries are never preview/draft-authorized, see the isPreviewAuthorized
-// guard at the call site in bootstrap.get.ts).
+// Cache key: bs~<siteId>~<page>~<location>~<experience>~<menu>~<data>~<blogSlug>~<locale>,
+// each field percent-encoded (mirrors composables/useBootstrapParams.ts's
+// useBootstrapKey(), minus `token` — cached entries are never preview/draft-authorized,
+// see the isPreviewAuthorized guard at the call site in bootstrap.get.ts).
 export const BOOTSTRAP_CACHE_TTL_SECONDS = 60
 
 export interface BootstrapCacheParams {
@@ -19,8 +19,21 @@ export interface BootstrapCacheParams {
   locale: string | undefined
 }
 
+const encodeKeyField = (value: string | null | undefined): string =>
+  encodeURIComponent(value ?? '')
+
 export function buildBootstrapCacheKey(siteId: string, params: BootstrapCacheParams): string {
-  return `bs-${siteId}-${params.page ?? ''}-${params.location ?? ''}-${params.experience ?? ''}-${params.menu ? 'm' : ''}-${params.data ?? ''}-${params.blogSlug ?? ''}-${params.locale ?? ''}`
+  return [
+    'bs',
+    encodeKeyField(siteId),
+    encodeKeyField(params.page),
+    encodeKeyField(params.location),
+    encodeKeyField(params.experience),
+    params.menu ? 'm' : '',
+    encodeKeyField(params.data),
+    encodeKeyField(params.blogSlug),
+    encodeKeyField(params.locale),
+  ].join('~')
 }
 
 export async function getBootstrapCache(kv: KVNamespace, key: string): Promise<string | null> {
@@ -47,11 +60,11 @@ export async function putBootstrapCache(
  * site_config, site_locales) so the next read reflects the edit immediately
  * instead of waiting out the TTL.
  *
- * KV keys are structured as: bs-<siteId>-...
- * We list by prefix bs-<siteId>- and delete all matches.
+ * KV keys are structured as: bs~<siteId>~...
+ * We list by prefix bs~<siteId>~ and delete all matches.
  */
 export async function purgeBootstrapCache(kv: KVNamespace, siteId: string): Promise<void> {
-  const prefix = `bs-${siteId}-`
+  const prefix = `bs~${encodeKeyField(siteId)}~`
   const deletions: Promise<void>[] = []
   let cursor: string | undefined
   do {
