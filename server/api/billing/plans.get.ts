@@ -220,6 +220,54 @@ async function fetchStripeProducts(
   return [STARTER_PLAN, ...plans];
 }
 
+// Plan pricing rarely changes and this handler previously called Stripe's
+// paginated products/prices list APIs on every single request. The
+// Cache-Control header below only helps external HTTP callers; it does
+// nothing for internal self-fetches, which never touch Cloudflare's edge
+// cache. A KV read-through cache (same SITE_CACHE namespace/pattern as
+// bootstrap-cache.ts) fixes the actual source of the cost for every caller
+// that has real Cloudflare bindings. TTL matches the existing max-age; no
+// invalidation hook exists (or is needed) since plan changes are rare, manual
+// (Stripe dashboard/scripts/seed-stripe.mjs), and the existing
+// stale-while-revalidate=86400 already signals day-scale staleness tolerance.
+//
+// Exported so server/middleware/zz-platform-plans-prefetch.ts can call it
+// directly from the real inbound request (which has bindings) instead of
+// usePlans.ts self-fetching this route during SSR (which does not — a
+// self-fetch event never inherits event.context.cloudflare, so it would
+// silently skip this cache and hit Stripe live on every render).
+const PLANS_CACHE_KEY = "stripe-plans:v1";
+const PLANS_CACHE_TTL_SECONDS = 3600;
+
+export async function getCachedPlans(
+  env: Record<string, string | undefined> & { SITE_CACHE?: KVNamespace },
+): Promise<Plan[]> {
+  const kv = env.SITE_CACHE;
+
+  if (kv) {
+    const cached = await kv.get(PLANS_CACHE_KEY, "text").catch(() => null);
+    if (cached) {
+      try {
+        return JSON.parse(cached) as Plan[];
+      } catch {
+        // Invalid cached JSON — treat as a miss and regenerate
+      }
+    }
+  }
+
+  const plans = await fetchStripeProducts(env);
+
+  if (kv) {
+    await kv
+      .put(PLANS_CACHE_KEY, JSON.stringify(plans), {
+        expirationTtl: PLANS_CACHE_TTL_SECONDS,
+      })
+      .catch(() => {});
+  }
+
+  return plans;
+}
+
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event);
 
@@ -233,8 +281,8 @@ export default defineEventHandler(async (event) => {
     "public, max-age=3600, stale-while-revalidate=86400",
   );
 
-  const plans = await fetchStripeProducts(
-    env as Record<string, string | undefined>,
+  const plans = await getCachedPlans(
+    env as Record<string, string | undefined> & { SITE_CACHE?: KVNamespace },
   );
   return jsonResponse(plans);
 });

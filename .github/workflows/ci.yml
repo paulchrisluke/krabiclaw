@@ -145,6 +145,40 @@ jobs:
             test-results/
           retention-days: 7
 
+  perf-benchmark:
+    name: Perf benchmark (reporting only)
+    if: github.event_name == 'pull_request'
+    needs: e2e-smoke
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Run bootstrap benchmark against preview
+        run: node scripts/benchmark-bootstrap.mjs --base-url https://preview.krabiclaw.com --output-dir test-results/bootstrap-benchmarks
+      - name: Post summary
+        if: always()
+        run: |
+          MD_FILE=$(ls -t test-results/bootstrap-benchmarks/*.md 2>/dev/null | head -n1)
+          if [ -n "$MD_FILE" ]; then
+            cat "$MD_FILE" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No benchmark output found." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bootstrap-benchmark
+          path: test-results/bootstrap-benchmarks/
+          retention-days: 30
+
   e2e-staging:
     name: E2E staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
