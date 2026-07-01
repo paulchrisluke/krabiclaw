@@ -8,8 +8,9 @@
     </header>
 
     <div class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
-    <div v-if="pending" class="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-      <div v-for="i in 3" :key="i" class="h-72 animate-pulse rounded-xl bg-elevated" />
+    <div v-if="pending" class="py-24 text-center text-muted">
+      <p class="mb-2 text-xl">Loading posts</p>
+      <p class="text-sm">Please wait a moment...</p>
     </div>
 
     <div v-else-if="error" class="py-24 text-center text-muted">

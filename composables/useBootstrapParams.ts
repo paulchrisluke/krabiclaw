@@ -189,7 +189,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       data: null,
       blogSlug: null,
     };
-  if (path === "/blog")
+  if (path === "/blog" || path === "/blog/")
     return {
       page: "blog",
       location: null,
@@ -230,8 +230,10 @@ export const useBootstrapParams = () => {
 // Each field is percent-encoded and joined with "~" (not a valid URI-component
 // character) so a hyphen inside a slug/locale can't be mistaken for a field
 // separator and collide two otherwise-distinct param combinations.
+// encodeURIComponent doesn't escape "~", so we replace it explicitly to avoid
+// delimiter collisions.
 const encodeKeyField = (value: string | null | undefined): string =>
-  encodeURIComponent(value ?? "");
+  encodeURIComponent(value ?? "").replace(/~/g, '%7E');
 
 export const useBootstrapKey = (
   siteId: string | null | undefined,

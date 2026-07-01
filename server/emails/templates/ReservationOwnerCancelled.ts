@@ -1,8 +1,7 @@
 import { defineComponent, h } from 'vue'
-import { ESection, EText } from 'vue-email'
+import { EText } from 'vue-email'
 import EmailShell from '../layouts/EmailShell'
-
-const CARD = 'border:1px solid #e4e4e7;border-radius:10px;padding:16px 20px;margin:0 0 20px'
+import EmailDetails from '../components/EmailDetails'
 
 export default defineComponent({
   props: {
@@ -21,11 +20,13 @@ export default defineComponent({
         : `Reservation request cancelled by ${props.guestName}`
       return h(EmailShell, { preheader: `Cancellation for ${props.siteName}`, title, platformDomain: props.platformDomain }, () => [
         h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `A reservation was cancelled for ${props.siteName}.`),
-        h(ESection, { style: CARD }, () => [
-          h(EText, { style: 'margin:0;font-size:15px;color:#18181b' }, () => [h('strong', null, props.guestName)]),
-          h(EText, { style: 'margin:8px 0 0;font-size:15px;color:#18181b' }, () => `${props.date} at ${props.time}`),
-          h(EText, { style: 'margin:4px 0 0;font-size:15px;color:#18181b' }, () => `${props.guests} guests`),
-        ]),
+        h(EmailDetails, {
+          rows: [
+            ['Guest', props.guestName],
+            ['Date & time', `${props.date} at ${props.time}`],
+            ['Party size', props.guests],
+          ]
+        }),
         h(EText, { style: 'margin:0;font-size:13px;color:#71717a;line-height:1.6' }, () => 'No action is required unless you need to follow up with the guest.'),
       ])
     }

@@ -12,6 +12,14 @@ import ReviewOwnerNew from '~/server/emails/templates/ReviewOwnerNew'
 import BookingOwnerNew from '~/server/emails/templates/BookingOwnerNew'
 import BookingGuestReceived from '~/server/emails/templates/BookingGuestReceived'
 
+const SUBJECT_LABELS: Record<string, string> = {
+  general: 'General',
+  press: 'Press',
+  partnerships: 'Partnerships',
+  catering: 'Catering',
+  careers: 'Careers',
+}
+
 type NotificationChannel = 'email' | 'whatsapp'
 
 interface NotificationEnv {
@@ -55,6 +63,7 @@ interface ContactNotificationInput extends SiteContext {
   contactId: string
   guestName: string
   email: string
+  subject?: string | null
   message: string
 }
 
@@ -521,12 +530,13 @@ export async function notifyContactSubmitted(
     contact_id: opts.contactId,
     guest_name: opts.guestName,
     email: opts.email,
+    subject: opts.subject ?? '',
     message_preview: opts.message.slice(0, 200),
     site_name: restaurant,
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(ContactOwnerNew, { props: { guestName: opts.guestName, email: opts.email, message: opts.message, siteName: restaurant, platformDomain } }),
+    useRender(ContactOwnerNew, { props: { guestName: opts.guestName, email: opts.email, subject: opts.subject, message: opts.message, siteName: restaurant, platformDomain } }),
     useRender(ContactGuestReceived, { props: { guestName: opts.guestName, siteName: restaurant, platformDomain } }),
   ])
 
@@ -539,7 +549,7 @@ export async function notifyContactSubmitted(
       email: { subject: `New website message from ${opts.guestName}`, html: ownerEmail.html, text: ownerEmail.text },
       whatsapp: {
         template: 'new_contact_msg',
-        vars: { guest_name: opts.guestName, email: opts.email, message_preview: opts.message },
+        vars: { guest_name: opts.guestName, email: opts.email, subject: opts.subject ? SUBJECT_LABELS[opts.subject] ?? opts.subject : '', message_preview: opts.message },
       },
     }),
     sendEmailNotification(env, db, {

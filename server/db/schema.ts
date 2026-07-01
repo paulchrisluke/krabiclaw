@@ -168,6 +168,7 @@ export const contact_submissions = sqliteTable("contact_submissions", {
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
 	name: text().notNull(),
 	email: text().notNull(),
+	subject: text(),
 	message: text().notNull(),
 	status: text().default("new").notNull(),
 	ip_hash: text(),

@@ -24,12 +24,11 @@
 import { getResponseStatus } from 'h3'
 import type { H3Event } from 'h3'
 import { purgeBootstrapCache } from '~/server/utils/bootstrap-cache'
-import { getCloudflareWaitUntil } from '~/server/utils/mcp-route-helpers'
 
 const EDITOR_SITES_PREFIX = '/api/editor/sites/'
 
 export default defineNitroPlugin((nitroApp) => {
-  nitroApp.hooks.hook('afterResponse', (event: H3Event) => {
+  nitroApp.hooks.hook('afterResponse', async (event: H3Event) => {
     if (event.method === 'GET' || event.method === 'HEAD') return
     if (!event.path.startsWith(EDITOR_SITES_PREFIX)) return
 
@@ -43,11 +42,16 @@ export default defineNitroPlugin((nitroApp) => {
     const kv = (event.context.cloudflare?.env as any)?.SITE_CACHE as KVNamespace | undefined
     if (!kv) return
 
-    const purgeAsync = purgeBootstrapCache(kv, siteId).catch((err: unknown) => {
+    // Awaited inline rather than scheduled via waitUntil — afterResponse hooks
+    // run after the client has already received the response, but leaving this
+    // detached let the request be considered "done" by CI/tests before KV was
+    // actually cleared. Awaiting here doesn't block the client (response is
+    // already sent); it only blocks Nitro from marking the request lifecycle
+    // complete until the purge finishes.
+    try {
+      await purgeBootstrapCache(kv, siteId)
+    } catch (err: unknown) {
       console.warn('[bootstrap-cache-invalidate] purge failed:', String(err))
-    })
-    const waitUntil = getCloudflareWaitUntil(event)
-    if (waitUntil) waitUntil(purgeAsync)
-    // purgeAsync already runs detached whether or not waitUntil is available
+    }
   })
 })

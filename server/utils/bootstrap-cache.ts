@@ -19,8 +19,10 @@ export interface BootstrapCacheParams {
   locale: string | undefined
 }
 
+// encodeURIComponent doesn't escape "~", so we replace it explicitly to avoid
+// delimiter collisions (mirrors composables/useBootstrapParams.ts).
 const encodeKeyField = (value: string | null | undefined): string =>
-  encodeURIComponent(value ?? '')
+  encodeURIComponent(value ?? '').replace(/~/g, '%7E')
 
 export function buildBootstrapCacheKey(siteId: string, params: BootstrapCacheParams): string {
   return [
