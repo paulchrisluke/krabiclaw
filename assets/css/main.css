@@ -206,3 +206,31 @@
   word-wrap: break-word;
   overflow-x: auto;
 }
+
+/* ── Prose overflow fixes for tables and code ───────────────── */
+.prose {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.prose code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.prose :where(td, th) code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.prose th,
+.prose td {
+  word-break: break-word;
+}

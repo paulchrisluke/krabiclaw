@@ -148,10 +148,11 @@ export default defineEventHandler(async (event) => {
       // mark them 'template' so the checklist and dashboard hints can prompt for real content.
       batchQueries.push({
         query: `
-          INSERT OR IGNORE INTO site_content
+          INSERT INTO site_content
             (id, organization_id, site_id, location_id, page, field, content,
              hero_title, hero_subtitle, value, type, source, updated_at, updated_by, component)
           VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'template', ?, ?, ?)
+          ON CONFLICT (organization_id, site_id, page, field) WHERE location_id IS NULL DO NOTHING
         `,
         params: [
           crypto.randomUUID(),

@@ -1,7 +1,7 @@
 // Tenant resolution middleware for KrabiClaw SaaS
 // Determines if request is for platform or tenant site
 
-import { defineEventHandler, getRequestURL, getHeader } from 'h3'
+import { defineEventHandler, getRequestURL, getHeader, type H3Event } from 'h3'
 import { queryFirst } from '~/server/db'
 import { TENANT_TYPES, type TenantType } from '~/utils/tenant-routing'
 import { cloudflareEnv } from '../utils/api-response'
@@ -26,7 +26,7 @@ interface TenantSiteRow {
 }
 
 function setTenantType(
-  event: Parameters<typeof defineEventHandler>[0] extends (event: infer T) => unknown ? T : never,
+  event: H3Event,
   tenantType: TenantType,
 ) {
   event.context.tenantType = tenantType

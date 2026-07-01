@@ -67,8 +67,8 @@ export const useTenantSite = () => {
   
   return {
     tenantType: tenantContext.value.tenantType,
-    isPlatform: tenantContext.value.tenantType === 'platform',
-    isTenant: tenantContext.value.tenantType === 'tenant',
+    isPlatform: tenantContext.value.tenantType === TENANT_TYPES.PLATFORM,
+    isTenant: tenantContext.value.tenantType === TENANT_TYPES.TENANT,
     siteId: tenantContext.value.siteId,
     draftId: tenantContext.value.draftId,
     organizationId: tenantContext.value.organizationId,
