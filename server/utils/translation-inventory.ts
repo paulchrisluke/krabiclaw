@@ -88,6 +88,10 @@ function shouldIncludeScope(scope: TranslationScope, entityType: TranslationEnti
   return false
 }
 
+function inventoryItemStateKey(item: Pick<TranslationInventoryItem, 'entity_type' | 'entity_id' | 'field'>): string {
+  return `${item.entity_type}:${item.entity_id}:${item.field}`
+}
+
 async function getTranslationStates(
   db: DbClient,
   organizationId: string,
@@ -126,7 +130,7 @@ async function getTranslationStates(
 
   for (const query of queries) rows.push(...query)
 
-  return new Map(rows.map(row => [`${row.entity_type}:${row.entity_id}:${row.field}`, row]))
+  return new Map(rows.map(row => [inventoryItemStateKey(row), row]))
 }
 
 async function getSourceRecords(
@@ -318,7 +322,7 @@ export async function buildTranslationInventory(
     if (!sourceText) continue
 
     const hash = await sourceHash(sourceText)
-    const state = translationStates.get(`${record.entity_type}:${record.entity_id}:${record.field}`)
+    const state = translationStates.get(inventoryItemStateKey(record))
     const translationStatus: TranslationInventoryStatus = state?.source_hash && state.source_hash !== hash
       ? 'stale'
       : state?.status ?? 'missing'
@@ -544,8 +548,18 @@ export async function publishTranslationDrafts(
       }
     })
 
-    const batchResults = await executeBatch(db, queries)
-    publishedCount = (batchResults || []).reduce((sum, res) => sum + (res.meta?.changes ?? 0), 0)
+    await executeBatch(db, queries)
+    const postPublishInventory = await buildTranslationInventory(db, organizationId, siteId, {
+      targetLocale: inventory.target_locale,
+      scope,
+      includePublished: true,
+    })
+    const publishedKeys = new Set(
+      postPublishInventory.items
+        .filter(item => item.translation_status === 'published')
+        .map(item => `${inventoryItemStateKey(item)}:${item.source_hash}`),
+    )
+    publishedCount = drafts.filter(item => publishedKeys.has(`${inventoryItemStateKey(item)}:${item.source_hash}`)).length
   }
 
   return {
