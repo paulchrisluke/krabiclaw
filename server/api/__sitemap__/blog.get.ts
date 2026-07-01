@@ -6,15 +6,16 @@
 import { queryAll } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { blogCategoryToSlug } from '~/utils/blog-categories'
+import { TENANT_TYPES } from '~/utils/tenant-routing'
 
 export default defineSitemapEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.db
   if (!db) return []
 
-  const siteId = event.context.tenantType === 'tenant' ? (event.context.siteId as string | undefined) : null
+  const siteId = event.context.tenantType === TENANT_TYPES.TENANT ? (event.context.siteId as string | undefined) : null
 
-  if (event.context.tenantType === 'tenant' && !siteId) return []
+  if (event.context.tenantType === TENANT_TYPES.TENANT && !siteId) return []
 
   if (siteId) {
     const posts = await queryAll<ApiRecord>(
