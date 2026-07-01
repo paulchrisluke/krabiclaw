@@ -337,7 +337,6 @@ const handleTenantContact = async () => {
     tenantSubmitting.value = false
     return
   }
-  tenantSubmitting.value = false
 
   // Best-effort only — a failure here (private browsing, storage quota) must
   // never make a successful submission look like it failed.
@@ -352,6 +351,7 @@ const handleTenantContact = async () => {
     // ignore — /contact/confirmed shows a generic success state either way
   }
   await navigateTo('/contact/confirmed')
+  tenantSubmitting.value = false
 }
 
 // ── Platform form ────────────────────────────────────────

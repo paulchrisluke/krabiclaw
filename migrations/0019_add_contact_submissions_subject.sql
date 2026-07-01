@@ -7,8 +7,11 @@
 -- outside drizzle-kit (never captured in migrations/meta/_journal.json), not
 -- something to silently resolve here. This migration only adds the column
 -- contact_submissions actually needs.
+--
+-- No CHECK constraint here: `ALTER TABLE ... ADD CHECK` is not valid SQLite —
+-- adding a CHECK after the fact requires a full table rebuild (as done for
+-- blog_posts/menu_items/posts elsewhere), which is unrelated schema drift and
+-- shouldn't be bundled into this migration. `subject` is already validated
+-- against an allow-list in contact.post.ts before insert.
 
 ALTER TABLE contact_submissions ADD `subject` text;
-
--- Add CHECK constraint to enforce allowed subject values at the database level
-ALTER TABLE contact_submissions ADD CHECK (subject IS NULL OR subject IN ('general', 'press', 'partnerships', 'catering', 'careers'));

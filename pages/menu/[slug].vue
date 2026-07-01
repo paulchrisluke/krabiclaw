@@ -292,7 +292,7 @@ import {
 
 const { resolveMedia } = useMedia()
 const route = useRoute()
-const { site } = useTenantSite()
+const { site, siteId, draftId } = useTenantSite()
 const siteName = computed(() => site?.brand_name || 'KrabiClaw')
 const config = useRuntimeConfig()
 const turnstileEnabled = computed(() => config.public.turnstileEnabled === true)
@@ -393,7 +393,8 @@ type PropertyValue = {
 // during SSR — so this page awaits its own useAsyncData call against the exact same
 // key/URL the layout uses, and Nuxt's key-based dedup collapses both to one request.
 const params = useBootstrapParams()
-const bootstrapKey = computed(() => useBootstrapKey(siteId, params.value))
+const entityId = computed(() => siteId || draftId || null)
+const bootstrapKey = computed(() => useBootstrapKey(entityId.value, params.value))
 const bootstrapUrl = computed(() => useBootstrapUrl(siteId, params.value))
 const requestFetch = useRequestFetch()
 
@@ -401,7 +402,7 @@ interface BootstrapMenuResponse {
   menu: ApiRecord | null
 }
 
-const { data, pending, error } = await useAsyncData<BootstrapMenuResponse>(
+const { data, pending: _pending, error } = await useAsyncData<BootstrapMenuResponse>(
   bootstrapKey,
   () => (import.meta.server
     ? requestFetch<BootstrapMenuResponse>(bootstrapUrl.value)

@@ -173,9 +173,7 @@ export const contact_submissions = sqliteTable("contact_submissions", {
 	status: text().default("new").notNull(),
 	ip_hash: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (_table) => [
-	check("contact_submissions_subject_check", sql`subject IS NULL OR subject IN ('general', 'press', 'partnerships', 'catering', 'careers')`),
-]);
+});
 
 export const dashboard_preferences = sqliteTable("dashboard_preferences", {
 	id: text().primaryKey(),
