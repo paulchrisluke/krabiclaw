@@ -1,5 +1,6 @@
 import slugify from 'slugify'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { PLATFORM_MEDIA_SITE_ID } from '~/server/utils/platform-media'
 import { BLOG_CATEGORY_LABELS } from '~/utils/blog-categories'
 
 const BLOG_TITLE_MAX = 200
@@ -567,18 +568,15 @@ async function ensureBlogFeaturedImageAssetExists(
   field = 'featured_image_asset_id',
   siteId: string | null = null,
 ) {
+  const scopedSiteId = siteId ?? PLATFORM_MEDIA_SITE_ID
   const conditions = ['id = ?', 'status = ?', 'kind = ?']
   const params: ApiValue[] = [assetId, 'active', 'image']
-  if (siteId) {
-    conditions.push('site_id = ?')
-    params.push(siteId)
-  } else {
-    conditions.push('site_id IS NULL')
-  }
+  conditions.push('site_id = ?')
+  params.push(scopedSiteId)
 
   const asset = await queryFirst(db, `SELECT id FROM media_assets WHERE ${conditions.join(' AND ')} LIMIT 1`, params)
   if (!asset) {
-    badRequest(siteId ? `${field} must reference an active image asset from this site` : `${field} must reference an active image asset`)
+    badRequest(siteId ? `${field} must reference an active image asset from this site` : `${field} must reference an active platform image asset`)
   }
 }
 
@@ -767,6 +765,67 @@ export function attachFeaturedImageFromBareJoin(record: ApiRecord) {
       height: height ?? null,
     },
   }
+}
+
+/**
+ * Shared by the public blog API route and the blog page's SSR data fetch.
+ * The page must call this directly (with its own request's `db` binding)
+ * rather than doing a nested self-fetch back to the API route — Nitro's
+ * internal dispatch for multi-segment dynamic routes does not reliably
+ * reproduce the same route-param/binding resolution as a real external
+ * request, which was causing the page to 404 on posts the API itself
+ * served fine.
+ */
+export async function getPublishedPlatformBlogPost(db: DbClient, category: string, slug: string) {
+  const post = await queryFirst<ApiRecord>(db, `
+    SELECT
+      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_description, p.seo_keywords,
+      p.canonical_url, p.robots,
+      p.published_at, p.created_at, p.updated_at,
+      p.featured_image_asset_id,
+      u.name AS author_name,
+      u.image AS author_image,
+      ma.public_url,
+      ma.kind,
+      ma.width,
+      ma.height
+    FROM blog_posts p
+    LEFT JOIN user u ON u.id = p.author_id
+    LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
+    WHERE p.slug = ? AND p.category = ? AND p.status = 'published' AND p.site_id IS NULL
+  `, [slug, category])
+
+  if (!post) return null
+
+  const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'blog_post', String(post.id), { activeOnly: true }))
+
+  return attachFeaturedImageFromBareJoin({ ...post, components })
+}
+
+/**
+ * Shared by the public docs API route and the docs page's SSR data fetch.
+ * See getPublishedPlatformBlogPost above for why the page must call this
+ * directly rather than doing a nested self-fetch back to the API route.
+ */
+export async function getPublishedPlatformDoc(db: DbClient, category: string, slug: string) {
+  const doc = await queryFirst<ApiRecord>(
+    db,
+    `SELECT
+       p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.difficulty_level,
+       p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
+       p.featured_image_asset_id, p.published_at, p.updated_at,
+       ma.public_url, ma.kind, ma.width, ma.height
+     FROM platform_docs p
+     LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
+     WHERE p.slug = ? AND p.category = ? AND p.status = 'published'`,
+    [slug, category],
+  )
+
+  if (!doc) return null
+
+  const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'doc', String(doc.id), { activeOnly: true }))
+
+  return attachFeaturedImageFromBareJoin({ ...doc, components })
 }
 
 function normalizeBlankToNull(input: { canonical_url?: string | null; robots?: string | null }) {
@@ -1202,7 +1261,7 @@ export async function createPlatformDoc(
   if (!input.title || !input.body) badRequest('title and body are required')
   validateDocCommon(input)
   if (input.parent_doc_id) await ensureDocParentExists(db, input.parent_doc_id)
-  if (input.featured_image_asset_id) await ensureMediaAssetExists(db, input.featured_image_asset_id)
+  if (input.featured_image_asset_id) await ensureBlogFeaturedImageAssetExists(db, input.featured_image_asset_id)
 
   const id = crypto.randomUUID()
   const slugBase = normalizeSlugFromTitle(input.title, 'doc')
@@ -1280,7 +1339,7 @@ export async function updatePlatformDoc(
     if (input.parent_doc_id) await ensureDocParentExists(db, input.parent_doc_id)
   }
   if (input.featured_image_asset_id !== undefined && input.featured_image_asset_id) {
-    await ensureMediaAssetExists(db, input.featured_image_asset_id)
+    await ensureBlogFeaturedImageAssetExists(db, input.featured_image_asset_id)
   }
 
   const fields: Array<keyof Omit<PlatformDocUpdateInput,

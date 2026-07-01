@@ -60,6 +60,12 @@
       <UButton to="/blog" variant="outline" color="neutral" size="sm">More Posts</UButton>
     </div>
   </article>
+
+  <div v-else class="mx-auto max-w-3xl px-4 py-32 text-center">
+    <h1 class="text-2xl font-bold text-default">Post not found</h1>
+    <p class="mt-3 text-muted">This post may have been moved or removed.</p>
+    <UButton to="/blog" variant="outline" color="neutral" size="sm" class="mt-6">More Posts</UButton>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -75,8 +81,6 @@ if (!isTenant || !siteId) throw createError({ statusCode: 404 })
 definePageMeta({ layout: 'saya' })
 
 const { resolveMedia } = useMedia()
-const route = useRoute()
-const requestFetch = useRequestFetch()
 
 interface TenantBlogPost {
   id: string
@@ -95,42 +99,44 @@ interface TenantBlogPost {
   components?: ContentComponent[]
 }
 
-const postEndpoint = computed(() => `/api/public/sites/${siteId}/blog/${String(route.params.slug)}`)
+// Post ships in the layout's single bootstrap payload (page=blog, blogSlug=slug) —
+// no separate fetch. useBootstrap() itself is lazy/non-blocking (fine for the
+// layout's header/footer), but a missing post here must produce a real HTTP 404
+// for search engines, which requires blocking on the fetch during SSR — so this
+// page awaits its own useAsyncData call against the exact same key/URL the
+// layout uses, and Nuxt's key-based dedup collapses both to one request.
+const params = useBootstrapParams()
+const bootstrapKey = computed(() => useBootstrapKey(siteId, params.value))
+const bootstrapUrl = computed(() => useBootstrapUrl(siteId, params.value))
+const requestFetch = useRequestFetch()
 
-function getErrorStatusCode(error: unknown) {
-  if (!error || typeof error !== 'object') return undefined
-  const statusCode = (error as { statusCode?: unknown }).statusCode
-  if (typeof statusCode === 'number') return statusCode
-  const status = (error as { status?: unknown }).status
-  return typeof status === 'number' ? status : undefined
+interface BootstrapBlogResponse {
+  blogPost: TenantBlogPost | null
 }
 
-const { data, pending, error } = await useAsyncData(
-  () => `tenant-blog-post-${postEndpoint.value}`,
-  async () => {
-    let payload: { post?: TenantBlogPost }
-    try {
-      payload = import.meta.server
-        ? await requestFetch<{ post?: TenantBlogPost }>(postEndpoint.value)
-        : await $fetch<{ post?: TenantBlogPost }>(postEndpoint.value)
-    } catch (err) {
-      if (getErrorStatusCode(err) === 404) {
-        throw createError({ statusCode: 404, statusMessage: 'Post not found', fatal: true })
-      }
-      throw err
-    }
-
-    if (!payload.post) {
-      throw createError({ statusCode: 404, statusMessage: 'Post not found', fatal: true })
-    }
-
-    return { post: payload.post }
+const { data, pending, error } = await useAsyncData<BootstrapBlogResponse>(
+  bootstrapKey,
+  () => (import.meta.server
+    ? requestFetch<BootstrapBlogResponse>(bootstrapUrl.value)
+    : $fetch<BootstrapBlogResponse>(bootstrapUrl.value)),
+  {
+    getCachedData(k, nuxtApp) {
+      return nuxtApp.payload.data[k] as BootstrapBlogResponse | undefined
+    },
   },
 )
 
-if (error.value) throw error.value
+// A fetch failure leaves data.value undefined, same as a genuinely missing
+// post — re-throw the real error first so outages aren't misreported as 404.
+if (error.value) {
+  throw error.value
+}
 
-const post = computed(() => data.value?.post ?? null)
+if (!data.value?.blogPost) {
+  throw createError({ statusCode: 404, statusMessage: 'Post not found', fatal: true })
+}
+
+const post = computed(() => data.value?.blogPost ?? null)
 const siteName = computed(() => site?.brand_name || 'Our Site')
 
 function renderMarkdown(markdown: string) {

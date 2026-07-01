@@ -22,6 +22,7 @@ import { cloudflareEnv } from "~/server/utils/api-response";
 import { isWidgetEnabledForTool } from "~/server/utils/mcp-widget-config";
 import { queryAll } from "~/server/db";
 import { purgeSiteKvCache } from "~/server/utils/edge-cache";
+import { purgeBootstrapCache } from "~/server/utils/bootstrap-cache";
 import {
   buildMcpAuthChallengeForError,
   buildMcpOAuthChallenge,
@@ -507,6 +508,17 @@ Common workflows: update menus and items, create and publish posts, triage conta
           const kv = (env as any).SITE_CACHE as KVNamespace | undefined;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const db = (env as any).DB as D1Database | undefined;
+          if (kv) {
+            // Bootstrap cache is keyed by siteId directly (not hostname), so no
+            // domain lookup is needed here — unlike the HTML purge below.
+            const purgeBootstrapAsync = purgeBootstrapCache(kv, siteId).catch(
+              (err: unknown) => {
+                console.warn("[mcp-cache-purge] bootstrap purge failed:", String(err))
+              },
+            )
+            const waitUntilBootstrap = getCloudflareWaitUntil(event)
+            if (waitUntilBootstrap) waitUntilBootstrap(purgeBootstrapAsync)
+          }
           if (kv && db) {
             // Look up all active hostnames for this site (subdomain + custom domains)
             const purgeAsync = queryAll<{ domain: string }>(

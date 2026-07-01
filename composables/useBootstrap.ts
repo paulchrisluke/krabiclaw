@@ -44,6 +44,8 @@ interface BootstrapPayload {
   photosList: ApiRecord[];
   qaList: ApiRecord[];
   postsList: ApiRecord[];
+  blogList: ApiRecord[];
+  blogPost: ApiRecord | null;
   locales: { code: string; label: string; is_source: boolean }[];
   hasExperiences: boolean;
   experiencesList: Experience[];
@@ -68,6 +70,8 @@ const emptyBootstrap = (): BootstrapPayload => ({
   photosList: [],
   qaList: [],
   postsList: [],
+  blogList: [],
+  blogPost: null,
   locales: [],
   hasExperiences: false,
   experiencesList: [],
@@ -94,9 +98,34 @@ export const useBootstrap = () => {
       ? { data: ref<BootstrapPayload>(empty), error: ref<Error | null>(null), pending: ref(false) }
       : useAsyncData<BootstrapPayload>(
           key,
-          () => import.meta.server
-            ? requestFetch<BootstrapPayload>(url.value)
-            : $fetch<BootstrapPayload>(url.value),
+          async () => {
+            if (!import.meta.server) return $fetch<BootstrapPayload>(url.value)
+            // Nested SSR self-fetch (useRequestFetch) has been the source of a real bug
+            // class elsewhere (pages/blog/[category]/[slug].vue, pages/docs/[...segments].vue):
+            // Nitro's internal dispatch for those routes sometimes returned a wrong 404 that
+            // an identical external request to the same URL didn't. This route's shape is
+            // different (one path segment + query string, not multiple path segments) and
+            // hasn't been reproduced failing the same way, but it's the highest-traffic
+            // self-fetch in the app (every tenant page goes through it) — log on failure so
+            // a future occurrence leaves evidence instead of a silent wrong render.
+            try {
+              return await requestFetch<BootstrapPayload>(url.value)
+            } catch (err) {
+              // url/key can carry a signed preview token on /preview/* routes — strip it
+              // before logging so it doesn't end up in server logs. Key fields are
+              // "~"-joined with the token last (see useBootstrapKey).
+              const redactedUrl = url.value.replace(/([?&]token=)[^&]*/, '$1[redacted]')
+              const redactedKey = params.value.token
+                ? key.value.split('~').slice(0, -1).concat('[redacted]').join('~')
+                : key.value
+              console.error(
+                `[useBootstrap] SSR self-fetch failed for siteId=${siteId ?? 'none'} draftId=${draftId ?? 'none'} ` +
+                `route=${route.path} url=${redactedUrl} key=${redactedKey}:`,
+                err,
+              )
+              throw err
+            }
+          },
           {
             default: emptyBootstrap,
             server: true,
@@ -149,6 +178,12 @@ export const useBootstrap = () => {
   const qaList = computed(() => (data.value?.qaList ?? []) as ApiRecord[]);
   const postsList = computed(
     () => (data.value?.postsList ?? []) as ApiRecord[],
+  );
+  const blogList = computed(
+    () => (data.value?.blogList ?? []) as ApiRecord[],
+  );
+  const blogPost = computed(
+    () => (data.value?.blogPost ?? null) as ApiRecord | null,
   );
 
   // ── Site locales + experiences flag ──────────────────────
@@ -299,6 +334,8 @@ export const useBootstrap = () => {
     photosList,
     qaList,
     postsList,
+    blogList,
+    blogPost,
     locales,
     hasExperiences,
     experiencesList,

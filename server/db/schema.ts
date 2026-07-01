@@ -759,7 +759,7 @@ export const posts = sqliteTable("posts", {
 	created_by: text().notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
+}, (_table) => [
 	check("posts_source_check", sql`source IN ('manual', 'template')`),
 ]);
 
