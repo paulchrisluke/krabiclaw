@@ -136,6 +136,57 @@ test.describe('public tenant site', () => {
 
     await expectHealthyPage(page, errors)
   })
+
+  test('missing tenant route returns a direct 404 through error.vue without redirect', async ({ page }) => {
+    const missingPath = '/this-route-should-not-exist'
+    const response = await page.goto(`${tenantBaseURL}${missingPath}`, { waitUntil: 'load' })
+
+    expect(response?.status()).toBe(404)
+    await expect(page).toHaveURL(`${tenantBaseURL}${missingPath}`)
+    await expect(page.locator('body')).toContainText('Error 404')
+    await expect(page.locator('body')).toContainText('Page not found')
+    await expect(page.locator('body')).not.toContainText('Site Not Found')
+  })
+
+  test('search-engine-like referrer preserves tenant 404 status and URL', async ({ page }) => {
+    const missingPath = '/blog/definitely-missing-post'
+    const response = await page.goto(`${tenantBaseURL}${missingPath}`, {
+      waitUntil: 'load',
+      referer: 'https://www.google.com/search?q=krabiclaw+missing+post',
+    })
+
+    expect(response?.status()).toBe(404)
+    await expect(page).toHaveURL(`${tenantBaseURL}${missingPath}`)
+    await expect(page.locator('body')).toContainText('Error 404')
+    await expect(page.locator('body')).toContainText('Page not found')
+  })
+
+  test('valid tenant route still works with a search-engine-like referrer', async ({ page }) => {
+    const response = await page.goto(`${tenantBaseURL}/locations`, {
+      waitUntil: 'load',
+      referer: 'https://www.google.com/search?q=ember+slice+locations',
+    })
+
+    expect(response?.status()).toBeLessThan(400)
+    await expect(page).toHaveURL(`${tenantBaseURL}/locations`)
+    await expect(page.locator('body')).toContainText('Locations')
+  })
+
+  test('unknown tenant localhost subdomain returns 404 without redirect', async ({ page }) => {
+    const base = new URL(tenantBaseURL)
+    test.skip(
+      !base.hostname.endsWith('.localhost'),
+      'Unknown-tenant subdomain routing is only directly testable in localhost E2E.',
+    )
+
+    base.hostname = 'missing-tenant.localhost'
+    const response = await page.goto(`${base.toString().replace(/\/$/, '')}/`, { waitUntil: 'load' })
+
+    expect(response?.status()).toBe(404)
+    await expect(page).toHaveURL(base.toString().replace(/\/$/, '') + '/')
+    await expect(page.locator('body')).toContainText('Error 404')
+    await expect(page.locator('body')).toContainText('Page not found')
+  })
 })
 
 test.describe('platform public site', () => {
@@ -155,5 +206,25 @@ test.describe('platform public site', () => {
     await expect(page.getByRole('heading', { name: 'Business Blog' })).toBeVisible()
 
     await expectHealthyPage(page, errors)
+  })
+
+  test('missing platform route returns error.vue 404 without redirect', async ({ page, baseURL }) => {
+    const missingPath = '/definitely-missing-platform-route'
+    const response = await page.goto(`${baseURL}${missingPath}`, { waitUntil: 'load' })
+
+    expect(response?.status()).toBe(404)
+    await expect(page).toHaveURL(`${baseURL}${missingPath}`)
+    await expect(page.locator('body')).toContainText('Error 404')
+    await expect(page.locator('body')).toContainText('Page not found')
+  })
+
+  test('/tenant-404 is not a special rendered page anymore', async ({ page, baseURL }) => {
+    const response = await page.goto(`${baseURL}/tenant-404`, { waitUntil: 'load' })
+
+    expect(response?.status()).toBe(404)
+    await expect(page).toHaveURL(`${baseURL}/tenant-404`)
+    await expect(page.locator('body')).toContainText('Error 404')
+    await expect(page.locator('body')).toContainText('Page not found')
+    await expect(page.locator('body')).not.toContainText('Site Not Found')
   })
 })

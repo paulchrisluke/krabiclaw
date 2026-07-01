@@ -1,9 +1,10 @@
 // Tenant routing middleware based on onboarding status
 // Routes tenant requests to appropriate pages
 
-import { defineEventHandler, getRequestURL, sendRedirect } from "h3";
+import { createError, defineEventHandler, getHeader, getRequestURL, sendRedirect } from "h3";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { platformHostname } from "~/server/utils/domains";
+import { TENANT_TYPES } from "~/utils/tenant-routing";
 
 export default defineEventHandler(async (event) => {
   const tenantType = event.context.tenantType;
@@ -17,16 +18,19 @@ export default defineEventHandler(async (event) => {
   }
 
   // Handle unknown tenant (404)
-  if (tenantType === "tenant-404") {
-    event.node.res.statusCode = 404;
-    if (pathname === "/tenant-404") {
+  if (tenantType === TENANT_TYPES.TENANT_404) {
+    if (shouldRenderWithNuxtErrorPage(event, pathname)) {
       return;
     }
-    return sendRedirect(event, "/tenant-404");
+
+    throw createError({
+      statusCode: 404,
+      statusMessage: "Site Not Found",
+    });
   }
 
   // Handle tenant sites based on onboarding status
-  if (tenantType === "tenant") {
+  if (tenantType === TENANT_TYPES.TENANT) {
     switch (onboardingStatus) {
       case "pending":
         return sendRedirect(event, "/tenant-setup-pending");
@@ -64,9 +68,30 @@ export default defineEventHandler(async (event) => {
       }
 
       default:
-        // Unknown status, treat as 404
-        event.node.res.statusCode = 404;
-        return sendRedirect(event, "/tenant-404");
+        if (shouldRenderWithNuxtErrorPage(event, pathname)) {
+          event.context.tenantType = TENANT_TYPES.TENANT_404;
+          return;
+        }
+
+        throw createError({
+          statusCode: 404,
+          statusMessage: "Site Not Found",
+        });
     }
   }
 });
+
+function shouldRenderWithNuxtErrorPage(
+  event: Parameters<typeof defineEventHandler>[0] extends (event: infer T) => unknown ? T : never,
+  pathname: string,
+) {
+  if (event.method !== "GET") return false;
+  if (pathname.startsWith("/api/")) return false;
+  if (pathname.startsWith("/_nuxt/") || pathname.startsWith("/assets/") || pathname.startsWith("/_ipx/")) return false;
+
+  const secFetchDest = getHeader(event, "sec-fetch-dest");
+  if (secFetchDest === "document") return true;
+
+  const accept = getHeader(event, "accept") || "";
+  return accept.includes("text/html");
+}

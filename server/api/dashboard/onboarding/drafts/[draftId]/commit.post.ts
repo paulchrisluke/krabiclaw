@@ -152,6 +152,7 @@ export default defineEventHandler(async (event) => {
             (id, organization_id, site_id, location_id, page, field, content,
              hero_title, hero_subtitle, value, type, source, updated_at, updated_by, component)
           VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'template', ?, ?, ?)
+          ON CONFLICT (organization_id, site_id, page, field) WHERE location_id IS NULL DO NOTHING
         `,
         params: [
           crypto.randomUUID(),
@@ -199,7 +200,7 @@ export default defineEventHandler(async (event) => {
         // hasn't edited — mark 'template' so the checklist doesn't treat them as real.
         batchQueries.push({
           query: `
-            INSERT INTO menu_items
+            INSERT OR IGNORE INTO menu_items
               (id, menu_id, section, name, slug, description, price_amount, available, sort_order, source, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'template', ?, ?)
           `,
@@ -225,7 +226,7 @@ export default defineEventHandler(async (event) => {
       // Draft Q&A is template boilerplate, not owner-authored — mark 'template'.
       batchQueries.push({
         query: `
-          INSERT INTO location_qa
+          INSERT OR IGNORE INTO location_qa
             (id, organization_id, site_id, location_id, question, answer, answer_author, is_owner_answer, source, status, sort_order, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'template', 'published', ?, ?, ?)
         `,
@@ -249,7 +250,7 @@ export default defineEventHandler(async (event) => {
       // Draft "welcome" posts are auto-generated, not owner-authored — mark 'template'.
       batchQueries.push({
         query: `
-          INSERT INTO posts
+          INSERT OR IGNORE INTO posts
             (id, organization_id, site_id, location_id, post_type, title, body, status, published_at, created_by, source, created_at, updated_at)
           VALUES (?, ?, ?, ?, 'standard', ?, ?, ?, ?, ?, 'template', ?, ?)
         `,

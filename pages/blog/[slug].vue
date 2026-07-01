@@ -7,12 +7,7 @@
     </div>
   </div>
 
-  <div v-else-if="error || !post" class="py-24 text-center">
-    <p class="mb-6 text-xl text-muted">Post not found.</p>
-    <UButton to="/blog" variant="outline" color="neutral">Back to Blog</UButton>
-  </div>
-
-  <article v-else class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
+  <article v-else-if="post" class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
     <div class="mb-6 flex flex-wrap items-center gap-3">
       <span v-if="post.category" class="rounded bg-muted px-2 py-1 text-xs font-medium text-muted">
         {{ post.category }}
@@ -120,14 +115,12 @@ const { data, pending, error } = await useAsyncData(
         : await $fetch<{ post?: TenantBlogPost }>(postEndpoint.value)
     } catch (err) {
       if (getErrorStatusCode(err) === 404) {
-        setResponseStatus(404)
-        throw err
+        throw createError({ statusCode: 404, statusMessage: 'Post not found' })
       }
       throw err
     }
 
     if (!payload.post) {
-      setResponseStatus(404)
       throw createError({ statusCode: 404, statusMessage: 'Post not found' })
     }
 
@@ -135,7 +128,7 @@ const { data, pending, error } = await useAsyncData(
   },
 )
 
-if (error.value && getErrorStatusCode(error.value) !== 404) throw error.value
+if (error.value) throw error.value
 
 const post = computed(() => data.value?.post ?? null)
 const siteName = computed(() => site?.brand_name || 'Our Site')
