@@ -249,9 +249,22 @@ export default defineEventHandler(async (event) => {
   // Validate query inputs before using KV cache — only allow known-safe values
   // to prevent unbounded cache entries from arbitrary variants.
   const VALID_DATA_TYPES = new Set(['reviews', 'photos', 'qa', 'blog', 'blogPost', 'posts']);
+  // Mirrors composables/useBootstrapParams.ts's getBootstrapParams() — the only
+  // page values the frontend ever requests. A regex alone (e.g. /^[a-z0-9_-]+$/)
+  // would still let an attacker mint unlimited distinct cache keys by varying
+  // the page value; allowlisting against the real route set bounds that space.
+  const VALID_PAGES = new Set([
+    'home', 'locations', 'location', 'about', 'contact', 'reservations',
+    'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'blog',
+  ]);
   const isValidDataType = dataType === null || VALID_DATA_TYPES.has(dataType);
   const isValidLocale = locale === undefined || /^[a-z]{2}(-[A-Z]{2})?$/.test(locale);
-  const isValidPage = page === null || /^[a-z0-9_-]+$/.test(page);
+  const isValidPage = page === null || VALID_PAGES.has(page);
+  // locationSlug/experienceSlug/blogSlug can't be allowlisted up front — they're
+  // arbitrary per-tenant slugs resolved against D1. The regex here only bounds
+  // the character set for a cheap pre-DB shape check; the actual cache *write*
+  // below is additionally gated on the slug having resolved to a real row, so
+  // slugs that don't correspond to an existing entity never populate the cache.
   const isValidLocation = locationSlug === null || /^[a-z0-9_-]+$/.test(locationSlug);
   const isValidExperience = experienceSlug === null || /^[a-z0-9_-]+$/.test(experienceSlug);
   const isValidBlogSlug = blogSlug === null || /^[a-z0-9_-]+$/.test(blogSlug);
@@ -1091,7 +1104,16 @@ export default defineEventHandler(async (event) => {
     experienceDetail,
   };
 
-  if (useBootstrapCache) {
+  // Slug-shaped inputs are only worth caching once they've resolved to a real
+  // row — otherwise a stream of made-up slugs (still regex-valid) would each
+  // mint their own permanent KV entry. locationRow/experienceDetail/blogPost
+  // are the actual D1-resolved lookups for locationSlug/experienceSlug/blogSlug.
+  const resolvedSlugsValid =
+    (!locationSlug || !!locationRow) &&
+    (!experienceSlug || !!experienceDetail) &&
+    (!blogSlug || !!blogPost);
+
+  if (useBootstrapCache && resolvedSlugsValid) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const kv = (env as any).SITE_CACHE as KVNamespace | undefined;
     if (kv) {

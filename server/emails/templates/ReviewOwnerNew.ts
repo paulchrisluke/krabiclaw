@@ -18,7 +18,7 @@ export default defineComponent({
       title: `New review from ${props.authorName}`,
       platformDomain: props.platformDomain,
     }, () => [
-      h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `${props.authorName} left a ${props.rating}-star review on ${props.siteName}.`),
+      h(EText, { class: 'email-text', style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `${props.authorName} left a ${props.rating}-star review on ${props.siteName}.`),
       h(EmailDetails, {
         rows: [
           ['From', props.authorName],
@@ -26,7 +26,7 @@ export default defineComponent({
         ]
       }),
       props.content
-        ? h(EText, { style: 'margin:0 0 20px;font-size:15px;color:#52525b;line-height:1.6' }, () => props.content)
+        ? h(EText, { class: 'email-text', style: 'margin:0 0 20px;font-size:15px;color:#52525b;line-height:1.6;white-space:pre-line' }, () => props.content)
         : null,
       h(EmailAction, {
         href: `https://${props.platformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')}/dashboard`,

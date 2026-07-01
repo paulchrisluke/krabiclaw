@@ -35,7 +35,7 @@ export default defineComponent({
         }, () => label),
         h('td', {
           class: 'email-details-value',
-          style: `padding:${index === 0 ? '0' : '12px'} 0 0;font-size:15px;color:${FG};line-height:1.5;vertical-align:top`,
+          style: `padding:${index === 0 ? '0' : '12px'} 0 0;font-size:15px;color:${FG};line-height:1.5;vertical-align:top;white-space:pre-line`,
         }, () => String(value)),
       ])
     ))))

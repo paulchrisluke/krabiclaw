@@ -35,7 +35,7 @@ export default defineComponent({
         ].filter(Boolean) as [string, string][]
       }),
       h(EText, { class: 'email-title', style: 'margin:0 0 8px;font-size:15px;color:#18181b;font-weight:600' }, () => 'Message:'),
-      h(EText, { class: 'email-text', style: 'margin:0 0 20px;font-size:15px;color:#52525b;line-height:1.6' }, () => props.message),
+      h(EText, { class: 'email-text', style: 'margin:0 0 20px;font-size:15px;color:#52525b;line-height:1.6;white-space:pre-line' }, () => props.message),
       h(EText, { class: 'email-text', style: 'margin:0;font-size:15px;color:#52525b;line-height:1.6' }, () => 'Reply to the customer directly.'),
     ])
   },
