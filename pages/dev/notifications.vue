@@ -39,9 +39,10 @@
           <UButton size="sm" variant="soft" @click="setPreset('all')">All</UButton>
         </div>
 
-        <div class="grid md:grid-cols-6 gap-3">
+        <div class="grid md:grid-cols-7 gap-3">
           <UInput v-model="filters.organizationId" placeholder="Organization ID (optional)" />
           <UInput v-model="filters.siteId" placeholder="Site ID (optional)" />
+          <UInput v-model="filters.locationId" placeholder="Location ID (optional)" />
           <USelect v-model="filters.channel" :items="channelOptions" />
           <USelect v-model="filters.status" :items="statusOptions" />
           <UInput v-model="filters.template" placeholder="Template (optional)" />
@@ -117,6 +118,7 @@
 
         <div class="space-y-2 text-sm">
           <p><span class="text-muted">Title:</span> <span class="text-default">{{ row.title || '—' }}</span></p>
+          <p><span class="text-muted">Location:</span> <span class="text-default">{{ row.location_id || '—' }}</span></p>
           <p><span class="text-muted">Recipient:</span> <span class="text-default">{{ row.recipient || '—' }}</span></p>
           <p><span class="text-muted">Provider Message ID:</span> <span class="text-default break-all">{{ row.provider_message_id || '—' }}</span></p>
           <p v-if="row.error" class="text-error"><span class="text-muted">Error:</span> {{ summarizeError(row.error) }}</p>
@@ -183,6 +185,7 @@ const rows = ref<Array<{
   id: string
   organization_id: string | null
   site_id: string | null
+  location_id: string | null
   channel: string
   template: string
   title: string | null
@@ -198,6 +201,7 @@ const rows = ref<Array<{
 const filters = ref({
   organizationId: 'org-demo',
   siteId: 'site-demo',
+  locationId: '',
   channel: 'email',
   status: 'sent',
   template: '',
@@ -365,6 +369,7 @@ async function load() {
     const query: Record<string, string> = { limit: String(filters.value.limit || 200) }
     if (filters.value.organizationId.trim()) query.organization_id = filters.value.organizationId.trim()
     if (filters.value.siteId.trim()) query.site_id = filters.value.siteId.trim()
+    if (filters.value.locationId.trim()) query.location_id = filters.value.locationId.trim()
     if (filters.value.channel !== 'all') query.channel = filters.value.channel
     if (filters.value.status !== 'all') query.status = filters.value.status
     if (filters.value.template.trim()) query.template = filters.value.template.trim()

@@ -297,12 +297,18 @@ export default defineEventHandler(async (event) => {
       const cached = await getBootstrapCache(kv, cacheKey);
       if (cached) {
         try {
+          setHeader(event, "x-bootstrap-cache", "HIT");
           return jsonResponse(JSON.parse(cached));
         } catch {
           // Invalid cached JSON — treat as a miss and regenerate
         }
       }
+      setHeader(event, "x-bootstrap-cache", "MISS");
+    } else {
+      setHeader(event, "x-bootstrap-cache", "NO-KV");
     }
+  } else {
+    setHeader(event, "x-bootstrap-cache", "SKIP");
   }
 
   // Parallelize site auth + location slug resolution — both only need siteId

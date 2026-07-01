@@ -3148,6 +3148,7 @@ export async function executeMcpToolCall(
           site.db,
           site.siteId,
           requiredString(args, "experience_id"),
+          { locationId: optionalString(args, "location_id") ?? null },
         ),
         context: await mutationContextPayload(site),
       };
@@ -3157,6 +3158,7 @@ export async function executeMcpToolCall(
           site.db,
           site.siteId,
           requiredString(args, "experience_id"),
+          { locationId: optionalString(args, "location_id") ?? null },
         ),
       };
     case "update_experience_booking":
@@ -3391,7 +3393,9 @@ export async function executeMcpToolCall(
       };
     case "get_reservation_inquiries":
       return {
-        submissions: await listReservationSubmissions(site.db, site.siteId),
+        submissions: await listReservationSubmissions(site.db, site.siteId, {
+          locationId: optionalString(args, "location_id") ?? null,
+        }),
       };
     case "get_notification_settings":
       return {

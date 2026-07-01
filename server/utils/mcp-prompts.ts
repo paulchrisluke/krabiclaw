@@ -124,7 +124,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
       return {
         description: "Summarize what's new across contact, reservations, and bookings",
         text: [
-          "Call get_contact_inquiries and get_reservation_inquiries to find new/unread submissions, and list_experience_bookings (per location if the site has more than one) to find pending bookings.",
+          "Call get_contact_inquiries for site-level contact messages, get_reservation_inquiries with location_id when the site has multiple locations, then list the site's experiences and call list_experience_bookings for each experience_id; summarize only pending experience bookings from those results.",
           "Summarize what's new, grouped by type, oldest first.",
           "For pending experience bookings only, update_experience_booking exists to confirm or decline — offer to do that with the user's explicit approval for each one, don't act unilaterally.",
           "There is no tool on this connection to reply to or change the status of contact or reservation submissions — for those, tell the user what's waiting and point them to the dashboard inbox and reservations pages to respond. Do not attempt to call a tool that doesn't exist for this.",

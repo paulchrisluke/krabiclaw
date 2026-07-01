@@ -192,6 +192,7 @@ async function getOwnerNotificationChannels(
 async function insertDashboardNotification(
   db: DbClient,
   opts: SiteContext & {
+    locationId?: string | null
     template: string
     title: string
     payload: Record<string, string>
@@ -202,12 +203,13 @@ async function insertDashboardNotification(
   try {
     await execute(db, `
       INSERT INTO notifications
-      (id, organization_id, site_id, channel, template, title, payload, status, sent_at, created_at)
-      VALUES (?, ?, ?, 'dashboard', ?, ?, ?, 'sent', ?, ?)
+      (id, organization_id, site_id, location_id, channel, template, title, payload, status, sent_at, created_at)
+      VALUES (?, ?, ?, ?, 'dashboard', ?, ?, ?, 'sent', ?, ?)
     `, [
       id,
       opts.organizationId,
       opts.siteId,
+      opts.locationId ?? null,
       opts.template,
       opts.title,
       JSON.stringify(opts.payload),
@@ -229,6 +231,7 @@ async function sendEmailNotification(
   env: NotificationEnv,
   db: DbClient,
   opts: SiteContext & {
+    locationId?: string | null
     to: string
     template: string
     title: string
@@ -246,12 +249,13 @@ async function sendEmailNotification(
   }
   await execute(db, `
     INSERT INTO notifications
-    (id, organization_id, site_id, channel, template, recipient, title, payload, status, created_at)
-    VALUES (?, ?, ?, 'email', ?, ?, ?, ?, 'pending', ?)
+    (id, organization_id, site_id, location_id, channel, template, recipient, title, payload, status, created_at)
+    VALUES (?, ?, ?, ?, 'email', ?, ?, ?, ?, 'pending', ?)
   `, [
     id,
     opts.organizationId,
     opts.siteId,
+    opts.locationId ?? null,
     opts.template,
     opts.to,
     opts.title,
@@ -385,6 +389,7 @@ async function notifyOwner(
       sendWhatsAppNotification(env, db, {
         organizationId: opts.organizationId,
         siteId: opts.siteId,
+        locationId: opts.locationId ?? null,
         toPhone,
         template: opts.whatsapp!.template,
         vars: opts.whatsapp!.vars,
@@ -478,6 +483,7 @@ export async function notifyReservationCancelled(
     time: opts.time,
     guests: opts.guests,
     reservation_was_confirmed: confirmed ? 'true' : 'false',
+    location_name: opts.locationName ?? '',
     site_name: restaurant,
   }
 
