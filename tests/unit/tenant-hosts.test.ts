@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   deriveSubdomain,
   getFreeSiteDomain,
+  getPlatformHtmlCacheHosts,
   getPlatformHosts,
   hostnameOf,
   isPlatformHost,
@@ -29,6 +30,7 @@ test('normalizeHost strips protocol, trailing slash and port', () => {
   assert.equal(normalizeHost('https://krabiclaw.com'), 'krabiclaw.com')
   assert.equal(normalizeHost('http://localhost:3000'), 'localhost')
   assert.equal(normalizeHost('http://localhost:3000/'), 'localhost')
+  assert.equal(normalizeHost('https://krabiclaw.com/api/mcp/platform'), 'krabiclaw.com')
   assert.equal(normalizeHost('krabiclaw.com'), 'krabiclaw.com')
   assert.equal(normalizeHost(''), '')
   assert.equal(normalizeHost(undefined), '')
@@ -55,6 +57,15 @@ test('getPlatformHosts always includes localhost, loopback and the documented pr
 test('getPlatformHosts folds the configured domains in without duplicates', () => {
   const hosts = getPlatformHosts(prodEnv)
   assert.equal(hosts.filter((h) => h === 'krabiclaw.com').length, 1)
+})
+
+test('getPlatformHtmlCacheHosts covers all platform host cache prefixes', () => {
+  assert.deepEqual(getPlatformHtmlCacheHosts(prodEnv, ['https://krabiclaw.com/api/mcp/platform']), [
+    'krabiclaw.com',
+    'localhost',
+    '127.0.0.1',
+    'www.krabiclaw.com',
+  ])
 })
 
 test('isPlatformHost recognizes localhost and loopback with and without a port', () => {

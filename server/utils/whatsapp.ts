@@ -226,6 +226,7 @@ export async function sendWhatsAppNotification(
   opts: {
     organizationId: string
     siteId?: string | null
+    locationId?: string | null
     toPhone: string            // raw phone, will be normalized
     template: WhatsAppTemplate
     vars?: Record<string, string>
@@ -241,13 +242,15 @@ export async function sendWhatsAppNotification(
 
   // Insert pending row first so we always have a record even if the send fails
   await execute(db, `
-    INSERT INTO notifications (id, organization_id, site_id, channel, template, payload, status, created_at)
-    VALUES (?, ?, ?, 'whatsapp', ?, ?, 'pending', ?)
+    INSERT INTO notifications (id, organization_id, site_id, location_id, channel, template, recipient, payload, status, created_at)
+    VALUES (?, ?, ?, ?, 'whatsapp', ?, ?, ?, 'pending', ?)
   `, [
     notificationId,
     opts.organizationId,
     opts.siteId ?? null,
+    opts.locationId ?? null,
     opts.template,
+    normalizedPhone,
     JSON.stringify({ to: normalizedPhone, ...vars }),
     now
   ])

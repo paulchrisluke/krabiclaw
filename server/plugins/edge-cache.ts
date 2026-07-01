@@ -62,9 +62,18 @@ export default defineNitroPlugin((nitroApp) => {
     const cookieHeader = cfRequest?.headers.get('cookie') ?? getHeader(event, 'cookie') ?? ''
     if (cookieHeader.includes(SESSION_COOKIE)) return
 
-    // Check response Set-Cookie header - skip caching if present
+    // Only skip caching when a Set-Cookie carries the real auth session — the
+    // anonymous pageview-tracking cookies (kc_visitor_id/kc_session_id) are set on
+    // every request (see getOrCreateSessionId's unconditional refresh) and don't
+    // personalize the HTML, so they must not block caching or the KV write path
+    // never fires for any real tenant page.
     const setCookieHeader = getResponseHeader(event, 'set-cookie')
-    if (setCookieHeader) return
+    const setCookieValues = Array.isArray(setCookieHeader)
+      ? setCookieHeader
+      : setCookieHeader
+        ? [String(setCookieHeader)]
+        : []
+    if (setCookieValues.some((c) => c.includes(SESSION_COOKIE))) return
 
     // Check for CSRF tokens or nonce markers in HTML body
     if (/csrf|nonce=|random\/nonce/i.test(body)) return

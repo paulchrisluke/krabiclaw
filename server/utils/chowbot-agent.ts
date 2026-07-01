@@ -77,6 +77,7 @@ import { getMediaAsset, updateMediaAssetMetadata } from "~/server/utils/media-as
 import {
   listWorkRequestsForOrganization,
   getNotificationsSettings,
+  listReservationSubmissions,
   updateNotificationsSettings,
   updateLocationQa,
   reorderLocationQa,
@@ -1619,12 +1620,8 @@ async function executeTool(
     }
 
     case "get_reservation_inquiries": {
-      const results = await queryAll(
-        db,
-        `SELECT id, name, email, phone, party_size, requested_date, requested_time, status, created_at
-         FROM reservation_submissions WHERE site_id = ? ORDER BY created_at DESC LIMIT 20`,
-        [siteId],
-      );
+      const locationId = toSqlText(input.location_id) ?? ctx.locationId ?? null;
+      const results = await listReservationSubmissions(db, siteId, { locationId });
       return results ?? [];
     }
 
@@ -2344,7 +2341,9 @@ async function executeTool(
       const { deleteExperience } = await import("~/server/utils/experiences");
       const id = toSqlText(input.experience_id);
       if (!id) return { error: "experience_id is required" };
-      const deleted = await deleteExperience(db, siteId, id);
+      const deleted = await deleteExperience(db, siteId, id, {
+        locationId: toSqlText(input.location_id) ?? null,
+      });
       if (!deleted) return { error: "Experience not found" };
       return { deleted: true };
     }
@@ -2354,7 +2353,9 @@ async function executeTool(
         await import("~/server/utils/experiences");
       const id = toSqlText(input.experience_id);
       if (!id) return { error: "experience_id is required" };
-      const bookings = await listExperienceBookings(db, siteId, id);
+      const bookings = await listExperienceBookings(db, siteId, id, {
+        locationId: toSqlText(input.location_id) ?? ctx.locationId ?? null,
+      });
       return { bookings };
     }
 

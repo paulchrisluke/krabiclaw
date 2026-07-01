@@ -851,8 +851,13 @@ export const CHOWBOT_TOOLS: AiTool[] = [
   },
   {
     name: "get_reservation_inquiries",
-    description: "List reservation requests for this site.",
-    input_schema: { type: "object", properties: {} },
+    description: "List reservation requests for this site, optionally scoped to one location.",
+    input_schema: {
+      type: "object",
+      properties: {
+        location_id: { type: "string", description: "Optional location id to list only that location's reservations." },
+      },
+    },
   },
 
   // ── Site Content ──────────────────────────────────────────────────────────
@@ -1346,6 +1351,7 @@ export const CHOWBOT_TOOLS: AiTool[] = [
       type: "object",
       properties: {
         experience_id: { type: "string", description: "Experience ID." },
+        location_id: { type: "string", description: "Optional location id to verify/filter the experience bookings." },
       },
       required: ["experience_id"],
     },

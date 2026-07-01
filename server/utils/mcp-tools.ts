@@ -351,11 +351,14 @@ const bookingObject = {
   properties: {
     id: { type: 'string' },
     experience_id: { type: 'string' },
+    location_id: { type: ['string', 'null'] },
+    location_title: { type: ['string', 'null'] },
     guest_name: { type: 'string' },
     guest_email: { type: 'string' },
     guest_phone: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['pending', 'confirmed', 'cancelled'] },
     booking_date: { type: ['string', 'null'] },
+    time_slot: { type: ['string', 'null'] },
     party_size: { type: 'number' },
     notes: { type: ['string', 'null'] },
     created_at: { type: 'string' },
@@ -397,7 +400,6 @@ const submissionObject = {
     message: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['new', 'read', 'replied', 'spam'] },
     created_at: { type: 'string' },
-    location_id: { type: ['string', 'null'] },
   },
 }
 
@@ -408,13 +410,14 @@ const reservationSubmissionObject = {
     name: { type: ['string', 'null'] },
     email: { type: ['string', 'null'] },
     phone: { type: ['string', 'null'] },
-    party_size: { type: ['number', 'null'] },
-    requested_date: { type: ['string', 'null'] },
-    requested_time: { type: ['string', 'null'] },
-    notes: { type: ['string', 'null'] },
-    status: { type: 'string', enum: ['new', 'confirmed', 'declined', 'spam'] },
+    guests: { type: ['string', 'null'] },
+    date: { type: ['string', 'null'] },
+    time: { type: ['string', 'null'] },
+    requests: { type: ['string', 'null'] },
+    status: { type: 'string', enum: ['new', 'confirmed', 'cancelled', 'completed'] },
     created_at: { type: 'string' },
     location_id: { type: ['string', 'null'] },
+    location_title: { type: ['string', 'null'] },
   },
 }
 
@@ -2739,7 +2742,10 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     domain: 'experiences',
     minimumRole: 'editor',
     confirmRequired: true,
-    inputSchema: { experience_id: { type: 'string', description: 'Experience id or slug.' } },
+    inputSchema: {
+      experience_id: { type: 'string', description: 'Experience id or slug.' },
+      location_id: { type: 'string', description: 'Optional location id to constrain deletion to an experience in that location.' },
+    },
     required: ['experience_id'],
     outputSchema: {
       type: 'object',
@@ -3043,6 +3049,9 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     domain: 'submissions',
     minimumRole: 'editor',
     confirmRequired: false,
+    inputSchema: {
+      location_id: { type: 'string', description: 'Optional location id to list only that location\'s reservations.' },
+    },
     outputSchema: {
       type: 'object',
       properties: { submissions: { type: 'array', items: reservationSubmissionObject } },
