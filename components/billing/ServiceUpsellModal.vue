@@ -5,15 +5,17 @@
         <!-- Team strip -->
         <div class="flex items-center gap-3 mb-5">
           <div class="flex -space-x-2">
-            <img
+            <UAvatar
               :src="PAUL_PHOTO_URL"
               alt="Paul"
-              class="w-9 h-9 rounded-full ring-2 ring-white dark:ring-gray-900 object-cover bg-gray-100"
+              size="md"
+              class="ring-2 ring-white dark:ring-gray-900"
             />
-            <img
+            <UAvatar
               :src="JULIA_PHOTO_URL"
               alt="Julia"
-              class="w-9 h-9 rounded-full ring-2 ring-white dark:ring-gray-900 object-cover bg-gray-100"
+              size="md"
+              class="ring-2 ring-white dark:ring-gray-900"
             />
           </div>
           <div>

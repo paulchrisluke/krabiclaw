@@ -2,12 +2,12 @@
   <AppSection :bg="bg" :padding="padding">
     <div :class="[isTeaser ? 'grid md:grid-cols-2 items-center gap-12' : 'max-w-4xl mx-auto']">
       <div :class="['relative overflow-hidden shadow-2xl transition-all duration-700', isTeaser ? 'rounded-2xl h-80 order-2' : 'rounded-3xl h-150 mb-16']">
-        <img
+        <UImage
           v-if="image"
           :src="image"
           :alt="imageAlt || title || $t('saya.about.image_alt')"
           class="w-full h-full object-cover hover:scale-105 transition-transform duration-1000"
-        >
+        />
         <div v-else class="w-full h-full bg-muted flex items-center justify-center border-2 border-dashed border-default">
           <span class="text-muted italic">{{ $t('saya.about.placeholder') }}</span>
         </div>

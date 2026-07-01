@@ -25,7 +25,7 @@
 
       <!-- ── Mobile sticky bottom CTA ───────────────────────── -->
       <div
-        v-if="experience.status !== 'sold_out' && !bookingSuccess"
+        v-if="experience.status !== 'sold_out'"
         class="lg:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-between gap-4 border-t border-default bg-default/95 backdrop-blur-sm px-5 py-4 shadow-lg"
       >
         <div class="min-w-0">
@@ -298,13 +298,7 @@
 
               <!-- Booking form -->
               <div v-else id="booking" class="space-y-4">
-                <div v-if="bookingSuccess" class="rounded-xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 px-5 py-6 text-center space-y-2">
-                  <UIcon name="i-heroicons-check-circle" class="size-10 text-green-500 mx-auto" />
-                  <p class="font-semibold text-default">You're booked!</p>
-                  <p class="text-muted text-sm">{{ bookingMessage }}</p>
-                </div>
-
-                <form v-else class="space-y-4" @submit.prevent="submitBooking">
+                <form class="space-y-4" @submit.prevent="submitBooking">
                   <!-- Date + party size row -->
                   <div class="grid grid-cols-2 gap-3">
                     <UFormField label="Date" required>
@@ -393,6 +387,7 @@
 </template>
 
 <script setup lang="ts">
+import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 
 definePageMeta({ key: (route) => route.fullPath })
 
@@ -609,9 +604,7 @@ watch(experience, () => loadSlotAvailability())
 onMounted(loadSlotAvailability)
 
 const submitting = ref(false)
-const bookingSuccess = ref(false)
 const bookingError = ref<string | null>(null)
-const bookingMessage = ref('')
 
 const canSubmit = computed(() =>
   form.guest_name.trim() &&
@@ -649,8 +642,21 @@ async function submitBooking() {
         },
       },
     )
-    bookingMessage.value = res.message
-    bookingSuccess.value = true
+    setBookingConfirmation({
+      type: 'experience',
+      siteId,
+      siteName: siteName.value,
+      guestName: form.guest_name.trim(),
+      title: experience.value?.title,
+      date: form.booking_date,
+      time: form.time_slot,
+      guests: form.party_size,
+      requests: form.notes.trim() || null,
+      contactPhone: (experienceLocation.value as ApiRecord | null)?.phone ?? null,
+      contactEmail: (experienceLocation.value as ApiRecord | null)?.email ?? null,
+      message: res.message,
+    })
+    await navigateTo('/experiences/confirmed')
   } catch (err: unknown) {
     const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
     bookingError.value = typeof errorData?.error === 'string' ? errorData.error : 'Something went wrong. Please try again.'

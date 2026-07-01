@@ -27,12 +27,12 @@
               playsinline
               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
-            <img
+            <UImage
               v-else
               :src="post.media[0].googleUrl"
               :alt="post.title || t('saya.posts.image_alt')"
               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            >
+            />
           </template>
           <div v-else class="w-full h-full flex items-center justify-center text-muted italic text-xs">
             {{ t('saya.posts.no_preview') }}

@@ -413,6 +413,7 @@
 </template>
 
 <script setup lang="ts">
+import { TIMEZONE_OPTIONS } from '~/utils/timezone'
 definePageMeta({ layout: 'dashboard' })
 
 interface BusinessLocation {
@@ -567,7 +568,7 @@ const detailsForm = reactive({
   timezone: '',
 })
 
-const timezoneOptions = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : []
+const timezoneOptions = TIMEZONE_OPTIONS
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const
 

@@ -9,12 +9,7 @@
     </div>
   </div>
 
-  <div v-else-if="error || !post" class="py-24 text-center">
-    <p class="mb-6 text-xl text-muted">Article not found.</p>
-    <UButton to="/blog" variant="outline" color="neutral">Back to Blog</UButton>
-  </div>
-
-  <div v-else class="xl:grid xl:grid-cols-[minmax(0,1fr)_240px] xl:gap-10">
+  <div v-else-if="post" class="xl:grid xl:grid-cols-[minmax(0,1fr)_240px] xl:gap-10">
     <article>
       <DocsBreadcrumb :crumbs="breadcrumbs" />
 
@@ -197,14 +192,12 @@ const { data, pending, error } = await useAsyncData(
         ? Number((err as { statusCode?: unknown; status?: unknown }).statusCode ?? (err as { status?: unknown }).status)
         : undefined
       if (statusCode === 404) {
-        setResponseStatus(404)
         throw createError({ statusCode: 404, statusMessage: 'Article not found' })
       }
       throw err
     }
 
     if (!payload.post) {
-      setResponseStatus(404)
       throw createError({ statusCode: 404, statusMessage: 'Article not found' })
     }
     return {
@@ -215,6 +208,15 @@ const { data, pending, error } = await useAsyncData(
     }
   }
 )
+
+if (error.value) throw error.value
+
+// Watch for errors during client-side navigation
+watch(error, (newError) => {
+  if (newError) {
+    throw newError
+  }
+})
 
 const post = computed(() => data.value?.post ?? null)
 const authorSubtitle = computed(() => post.value?.author_subtitle || '')

@@ -160,4 +160,7 @@ remote = false
 binding = "AI"
 
 [env.staging.observability]
-enabled = false
+enabled = true
+
+[env.staging.observability.traces]
+enabled = true

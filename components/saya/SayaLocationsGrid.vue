@@ -24,12 +24,12 @@
             loop
             playsinline
           />
-          <img
+          <UImage
             v-else-if="loc.public_url"
             :src="loc.public_url"
             :alt="loc.title"
             class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
-          >
+          />
           <div v-else class="flex h-full w-full items-center justify-center">
             <UIcon name="i-heroicons-map-pin" class="size-10 text-muted" />
           </div>

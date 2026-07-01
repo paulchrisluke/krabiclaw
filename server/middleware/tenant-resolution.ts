@@ -1,8 +1,9 @@
 // Tenant resolution middleware for KrabiClaw SaaS
 // Determines if request is for platform or tenant site
 
-import { defineEventHandler, getRequestURL, getHeader } from 'h3'
+import { defineEventHandler, getRequestURL, getHeader, type H3Event } from 'h3'
 import { queryFirst } from '~/server/db'
+import { TENANT_TYPES, type TenantType } from '~/utils/tenant-routing'
 import { cloudflareEnv } from '../utils/api-response'
 import { deriveSubdomain, getFreeSiteDomain, hostnameOf, isPlatformHost, isPreviewContext } from '../utils/tenant-hosts'
 import { verifyScopedPreviewToken } from '../utils/preview-token'
@@ -22,6 +23,13 @@ interface TenantSiteRow {
   brand_name: string | null
   logo_url: string | null
   vertical: string | null
+}
+
+function setTenantType(
+  event: H3Event,
+  tenantType: TenantType,
+) {
+  event.context.tenantType = tenantType
 }
 
 export default defineEventHandler(async (event) => {
@@ -59,7 +67,7 @@ export default defineEventHandler(async (event) => {
           event.context.organizationId = site.organization_id
           event.context.themeId = site.theme_id
           event.context.onboardingStatus = site.onboarding_status
-          event.context.tenantType = 'tenant'
+          setTenantType(event, TENANT_TYPES.TENANT)
           event.context.tenantHost = host.split(':')[0]
           // Preview/staging tenant access intentionally stays on the current
           // host because nested tenant subdomains are unavailable there. If we
@@ -96,7 +104,7 @@ export default defineEventHandler(async (event) => {
         event.context.organizationId = previewSite.organization_id
         event.context.themeId = previewSite.theme_id
         event.context.onboardingStatus = previewSite.onboarding_status
-        event.context.tenantType = 'tenant'
+        setTenantType(event, TENANT_TYPES.TENANT)
         event.context.site = { brand_name: previewSite.brand_name || null, logo_url: previewSite.logo_url || null, vertical: previewSite.vertical || 'restaurant' }
         return
       }
@@ -129,7 +137,7 @@ export default defineEventHandler(async (event) => {
         const isAuthorized = await verifyScopedPreviewToken(previewSecret, 'draft', draftId, previewToken)
         if (isAuthorized) {
           event.context.draftId = previewDraft.id
-          event.context.tenantType = 'tenant'
+          setTenantType(event, TENANT_TYPES.TENANT)
           event.context.themeId = 'saya-theme-v1'
           event.context.site = {
             brand_name: previewDraft.name || null,
@@ -149,7 +157,7 @@ export default defineEventHandler(async (event) => {
 
   // Platform routes (KrabiClaw SaaS)
   if (isPlatform || isPlatformPath) {
-    event.context.tenantType = 'platform'
+    setTenantType(event, TENANT_TYPES.PLATFORM)
     event.context.siteId = null
     return
   }
@@ -163,7 +171,7 @@ export default defineEventHandler(async (event) => {
     event.context.organizationId = site.organization_id
     event.context.themeId = site.theme_id
     event.context.onboardingStatus = site.onboarding_status
-    event.context.tenantType = 'tenant'
+    setTenantType(event, TENANT_TYPES.TENANT)
     event.context.tenantHost = host.split(':')[0]
     event.context.canonicalDomain = site.canonical_domain || null
     event.context.site = { brand_name: site.brand_name || null, logo_url: site.logo_url || null, vertical: site.vertical || 'restaurant' }
@@ -171,7 +179,7 @@ export default defineEventHandler(async (event) => {
   }
   
   // No tenant found - this is an unknown subdomain/custom domain
-  event.context.tenantType = 'tenant-404'
+  setTenantType(event, TENANT_TYPES.TENANT_404)
   event.context.siteId = null
 })
 

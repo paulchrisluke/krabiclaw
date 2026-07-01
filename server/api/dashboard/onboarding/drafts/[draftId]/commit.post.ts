@@ -12,6 +12,14 @@ function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'site'
 }
 
+function summarizeBatchQueries(batchQueries: BatchQuery[]) {
+  return batchQueries.map((entry, index) => ({
+    index,
+    statement: entry.query.trim().split(/\s+/).slice(0, 12).join(' '),
+    params: Array.isArray(entry.params) ? entry.params.length : 0,
+  }))
+}
+
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
@@ -152,6 +160,7 @@ export default defineEventHandler(async (event) => {
             (id, organization_id, site_id, location_id, page, field, content,
              hero_title, hero_subtitle, value, type, source, updated_at, updated_by, component)
           VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'template', ?, ?, ?)
+          ON CONFLICT (organization_id, site_id, page, field) WHERE location_id IS NULL DO NOTHING
         `,
         params: [
           crypto.randomUUID(),
@@ -310,7 +319,28 @@ export default defineEventHandler(async (event) => {
       params: [siteId, now, now, draftId],
     })
 
-    await executeBatch(db, batchQueries)
+    try {
+      await executeBatch(db, batchQueries)
+    } catch (batchError) {
+      console.error('commit_post_batch_failed', {
+        draftId,
+        siteId,
+        organizationId,
+        batchSize: batchQueries.length,
+        contentRows: payload.preview.content.length,
+        menuItems: payload.preview.menu?.items.length ?? 0,
+        qaRows: payload.preview.qa.length,
+        posts: payload.preview.posts.length,
+        reviews: payload.preview.reviews.length,
+        queries: summarizeBatchQueries(batchQueries),
+        error: batchError instanceof Error ? {
+          name: batchError.name,
+          message: batchError.message,
+          stack: batchError.stack,
+        } : String(batchError),
+      })
+      throw batchError
+    }
     draftCommitted = true
 
     // If anything fails after this point, the draft is already committed - we don't reset it

@@ -20,12 +20,12 @@
             </NuxtLink>
           </div>
           <div v-if="image" class="overflow-hidden">
-            <img
+            <UImage
               :src="image"
               alt=""
               aria-hidden="true"
               class="h-full w-full object-cover aspect-4/3"
-            >
+            />
           </div>
         </div>
       </template>

@@ -4,6 +4,7 @@ import { notifyReservationCreated } from '~/server/utils/notifications'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { resolveLocationTimezone, isDateBeforeTimezoneToday } from '~/server/utils/site-config'
+import { generateReservationTimes, isStructuredOpeningHours } from '~/shared/reservation-hours'
 
 const hashIp = async (ip: string) => {
   if (!ip) return null
@@ -12,8 +13,11 @@ const hashIp = async (ip: string) => {
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-const VALID_TIMES = ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00']
+// Fallback used only when a location has no structured opening_hours (e.g. Google Places imports,
+// which store hours as free-text weekday descriptions that can't be parsed into slots).
+const FALLBACK_TIMES = ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00']
 const VALID_GUESTS = ['1','2','3','4','5','6','7','8+']
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -43,7 +47,7 @@ export default defineEventHandler(async (event) => {
   if (!phone) return jsonResponse({ error: 'Please enter your phone number.' }, { status: 400 })
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
     return jsonResponse({ error: 'Please choose a valid future date.' }, { status: 400 })
-  if (!VALID_TIMES.includes(time))
+  if (!time || !TIME_PATTERN.test(time))
     return jsonResponse({ error: 'Please choose a valid time.' }, { status: 400 })
   if (!VALID_GUESTS.includes(guests))
     return jsonResponse({ error: 'Please choose a valid party size.' }, { status: 400 })
@@ -77,6 +81,27 @@ export default defineEventHandler(async (event) => {
   const reservationTimezone = await resolveLocationTimezone(db, site.organization_id, siteId, resolvedLocationId)
   if (isDateBeforeTimezoneToday(date, reservationTimezone))
     return jsonResponse({ error: 'Please choose a valid future date.' }, { status: 400 })
+
+  const location = await queryFirst<{ title: string | null; opening_hours: string | null }>(
+    db,
+    'SELECT title, opening_hours FROM business_locations WHERE id = ? LIMIT 1',
+    [resolvedLocationId],
+  )
+  let parsedHours: unknown = null
+  let parseFailed = false
+  if (location?.opening_hours) {
+    try {
+      parsedHours = JSON.parse(location.opening_hours)
+    } catch {
+      parseFailed = true
+    }
+  }
+  if (parseFailed) {
+    return jsonResponse({ error: 'Location hours configuration is invalid. Please contact support.' }, { status: 500 })
+  }
+  const validTimes = isStructuredOpeningHours(parsedHours) ? generateReservationTimes(parsedHours, date) : FALLBACK_TIMES
+  if (!validTimes.includes(time))
+    return jsonResponse({ error: 'Please choose a valid time — this location is closed at that time.' }, { status: 400 })
 
   const id = crypto.randomUUID()
   const ipHash = await hashIp(getHeader(event, 'CF-Connecting-IP') ?? getHeader(event, 'x-forwarded-for') ?? '')
@@ -119,6 +144,7 @@ export default defineEventHandler(async (event) => {
       siteId,
       siteName: site.brand_name,
       locationId: resolvedLocationId,
+      locationName: location?.title ?? null,
       reservationId: id,
       guestName: name,
       email,
@@ -126,6 +152,7 @@ export default defineEventHandler(async (event) => {
       date,
       time,
       guests,
+      requests,
       cancelUrl,
       contactPhone,
       contactEmail,

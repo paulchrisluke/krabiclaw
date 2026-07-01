@@ -2,6 +2,7 @@
 import { defineEventHandler, getMethod, getRequestHeader, getRequestURL, sendRedirect } from 'h3'
 import { queryAll } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
+import { TENANT_TYPES } from '~/utils/tenant-routing'
 
 const redirects: Record<string, string> = {
   '/docs/mcp-setup': '/docs/integrations/mcp-setup',
@@ -33,8 +34,10 @@ export default defineEventHandler(async (event) => {
     return sendRedirect(event, targetWithParams, 301)
   }
 
-  // Server-side 301 redirect for single-location sites
-  if (normalizedPathname === '/' && event.context.tenantType === 'tenant' && event.context.siteId) {
+  // Server-side redirect for single-location sites
+  // Only run if tenant data is available (set by tenant-resolution middleware)
+  // Use 302 (temporary) since the single-location condition can change over time
+  if (normalizedPathname === '/' && event.context.tenantType === TENANT_TYPES.TENANT && event.context.siteId) {
     const env = cloudflareEnv(event)
     const db = env.db
     if (db) {
@@ -46,7 +49,7 @@ export default defineEventHandler(async (event) => {
         if (locations.length === 1) {
           const singleLoc = locations[0]
           if (singleLoc && singleLoc.slug) {
-            return sendRedirect(event, `/locations/${singleLoc.slug}`, 301)
+            return sendRedirect(event, `/locations/${singleLoc.slug}`, 302)
           }
         }
       } catch (err) {

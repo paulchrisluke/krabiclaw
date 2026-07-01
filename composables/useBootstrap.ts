@@ -77,6 +77,7 @@ const emptyBootstrap = (): BootstrapPayload => ({
 export const useBootstrap = () => {
   const { isPlatform, siteId, draftId } = useTenantSite();
   const route = useRoute();
+  const requestFetch = useRequestFetch()
   const params = useBootstrapParams();
   const entityId = computed(() => siteId || draftId || null)
   const key = computed(() => useBootstrapKey(entityId.value, params.value));
@@ -93,7 +94,9 @@ export const useBootstrap = () => {
       ? { data: ref<BootstrapPayload>(empty), error: ref<Error | null>(null), pending: ref(false) }
       : useAsyncData<BootstrapPayload>(
           key,
-          () => $fetch<BootstrapPayload>(url.value),
+          () => import.meta.server
+            ? requestFetch<BootstrapPayload>(url.value)
+            : $fetch<BootstrapPayload>(url.value),
           {
             default: emptyBootstrap,
             server: true,

@@ -9,8 +9,17 @@
 
 <script setup lang="ts">
 import { calculateThemeColors } from '~/utils/color-utils'
+import { buildTenantHeadLinks } from '~/utils/tenant-head'
+import { TENANT_TYPES } from '~/utils/tenant-routing'
 
-const { isPlatform, site } = useTenantSite()
+const { tenantType, isPlatform, site } = useTenantSite()
+if (tenantType === TENANT_TYPES.TENANT_404) {
+  throw createError({
+    statusCode: 404,
+    statusMessage: 'Site Not Found',
+  })
+}
+
 const { config } = useBootstrap()
 const route = useRoute()
 const defaultOgImage = useSharedOgImage()
@@ -29,55 +38,20 @@ useSeoMeta({
 })
 
 useHead(() => {
-  if (isPlatform) {
-    return {
-      link: [
-        { key: 'app-icon-96', rel: 'icon', type: 'image/png', href: '/favicon-96x96.png', sizes: '96x96' },
-        { key: 'app-icon-svg', rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
-        { key: 'app-icon-shortcut', rel: 'shortcut icon', href: '/favicon.ico' },
-        { key: 'app-icon-apple', rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
-        { key: 'app-manifest', rel: 'manifest', href: '/site.webmanifest' }
-      ]
-    }
-  }
-
-  if (tenantLogoUrl.value) {
-    return {
-      link: [
-        { key: 'app-icon-96', rel: 'icon', href: tenantLogoUrl.value, sizes: '96x96' },
-        { key: 'app-icon-default', rel: 'icon', href: tenantLogoUrl.value },
-        { key: 'app-icon-shortcut', rel: 'shortcut icon', href: tenantLogoUrl.value },
-        { key: 'app-icon-apple', rel: 'apple-touch-icon', sizes: '180x180', href: tenantLogoUrl.value },
-        { key: 'app-manifest', rel: 'manifest', href: '/tenant.webmanifest' }
-      ]
-    }
-  }
-
-  const trimmedName = tenantBrandName.value.trim()
-  const letter = trimmedName.charAt(0).toUpperCase() || 'K'
-  const escapeMap: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
-  const safeLetter = letter.replace(/[&<>"']/g, (c: string) => escapeMap[c])
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#1F2547"/><text x="32" y="44" text-anchor="middle" font-family="system-ui,sans-serif" font-size="28" font-weight="bold" fill="white">${safeLetter}</text></svg>`
-  const fallback = `data:image/svg+xml,${encodeURIComponent(svg)}`
-
-  const isDraftPreview = route.path.startsWith('/preview/draft/')
-  const linkItems = [
-    { key: 'app-icon-svg', rel: 'icon', type: 'image/svg+xml', href: fallback },
-    { key: 'app-icon-shortcut', rel: 'shortcut icon', href: fallback },
-    { key: 'app-icon-apple', rel: 'apple-touch-icon', sizes: '180x180', href: fallback },
-  ]
-  if (!isDraftPreview) {
-    linkItems.push({ key: 'app-manifest', rel: 'manifest', href: '/tenant.webmanifest' })
-  }
-
   return {
-    link: linkItems
+    link: buildTenantHeadLinks({
+      isPlatform,
+      tenantLogoUrl: tenantLogoUrl.value,
+      tenantBrandName: tenantBrandName.value,
+      isDraftPreview: route.path.startsWith('/preview/draft/'),
+    })
   }
 })
 
-// GA4 measurement ID format ("G-XXXXXXXXXX") — validated before interpolation
-// since the init script below renders with sanitizers disabled.
-const GA4_MEASUREMENT_ID_RE = /^G-[A-Z0-9]+$/i
+// Site settings / OAuth-linked GA values are the source of truth. We
+// intentionally accept any normalized G-prefixed token instead of hard-coding
+// a fixed length, to avoid rejecting future-compatible GA4-style IDs.
+const GA4_MEASUREMENT_ID_RE = /^G-[A-Z0-9]+$/
 
 // Google Analytics: platform uses KrabiClaw's own GA4 property. Tenant (Saya)
 // pages use the site's own connected GA4 property (server/utils/google-analytics.ts),
@@ -88,17 +62,18 @@ useHead(() => {
     ? 'G-NJ1BSP9BYG'
     : config.value.google_analytics_measurement_id
 
-  if (!measurementId || !GA4_MEASUREMENT_ID_RE.test(measurementId)) return {}
+  const normalizedMeasurementId = String(measurementId || '').trim().toUpperCase()
+  if (!normalizedMeasurementId || !GA4_MEASUREMENT_ID_RE.test(normalizedMeasurementId)) return {}
 
   return {
     script: [
       {
-        src: `https://www.googletagmanager.com/gtag/js?id=${measurementId}`,
+        src: `https://www.googletagmanager.com/gtag/js?id=${normalizedMeasurementId}`,
         async: true
       },
       {
         key: 'krabiclaw-ga-init',
-        innerHTML: `window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', '${measurementId}');`
+        innerHTML: `window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', '${normalizedMeasurementId}');`
       }
     ],
     __dangerouslyDisableSanitizersByTagID: {

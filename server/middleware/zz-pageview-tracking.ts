@@ -6,6 +6,7 @@
 // once a response is sent — see event.handled).
 import { defineEventHandler, getHeader, getRequestURL } from 'h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
+import { TENANT_TYPES } from '~/utils/tenant-routing'
 import {
   getClientIp,
   getCloudflareGeo,
@@ -21,8 +22,8 @@ import {
 export default defineEventHandler(async (event) => {
   if (event.method !== 'GET') return
 
-  const isTenant = event.context.tenantType === 'tenant'
-  const isPlatform = event.context.tenantType === 'platform'
+  const isTenant = event.context.tenantType === TENANT_TYPES.TENANT
+  const isPlatform = event.context.tenantType === TENANT_TYPES.PLATFORM
   if (!isTenant && !isPlatform) return
 
   const siteId = event.context.siteId

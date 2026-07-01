@@ -18,7 +18,7 @@
           <UCard class="rounded-2xl bg-muted">
 
             <!-- ── Form ────────────────────────────────────────────── -->
-            <UForm v-if="!submitted" :state="reservationForm" :validate="validateReservation" class="space-y-6" @submit="handleReservation">
+            <UForm :state="reservationForm" :validate="validateReservation" class="space-y-6" @submit="handleReservation">
 
               <!-- Name + Email -->
               <div class="grid gap-5 sm:grid-cols-2">
@@ -106,50 +106,6 @@
               </UButton>
             </UForm>
 
-            <!-- ── Thank You ───────────────────────────────────────── -->
-            <div v-else class="py-10 text-center">
-              <!-- Check icon -->
-              <div class="mb-8 flex justify-center">
-                <div class="flex size-20 items-center justify-center rounded-full bg-primary/10">
-                  <UIcon name="i-heroicons-check-circle" class="size-12 text-primary" />
-                </div>
-              </div>
-
-              <h2 class="saya-display saya-italic text-4xl text-default">
-                {{ resCopy.thankYouLabel(lastSubmission?.name ?? '') }}
-              </h2>
-              <p class="mt-4 text-muted">
-                {{ resCopy.confirmationMessage(
-                  lastSubmission?.guests ?? '',
-                  Number(lastSubmission?.guests) === 1 ? resCopy.guestLabel : resCopy.guestsLabelPlural,
-                  readableLastDate,
-                  lastSubmission?.time ?? ''
-                ) }}
-              </p>
-              <p class="mt-2 text-sm text-muted">
-                {{ resCopy.confirmSoonLabel(resCopy.reservationWord) }}
-              </p>
-
-              <!-- Manage reservation -->
-              <div v-if="cancelUrl" class="mt-10 rounded-2xl border border-default bg-default px-6 py-5">
-                <p class="saya-eyebrow mb-1 text-muted">{{ resCopy.manageLabel(resCopy.reservationWord) }}</p>
-                <p class="text-sm text-muted">{{ resCopy.cancelAnytimeLabel }}</p>
-                <UButton :to="cancelUrl" color="error" variant="ghost" size="sm" class="mt-4 rounded-full">
-                  <UIcon name="i-heroicons-x-circle" class="mr-1.5 size-4" />
-                  {{ resCopy.cancelLabel(resCopy.reservationWord) }}
-                </UButton>
-              </div>
-
-              <div class="mt-8 flex flex-col gap-3">
-                <UButton :to="`tel:${contactPhone?.replace(/\s/g, '') ?? ''}`" color="neutral" variant="soft" class="rounded-full">
-                  {{ resCopy.callUsLabel(contactPhone ?? '') }}
-                </UButton>
-                <UButton color="primary" variant="ghost" size="sm" @click="resetForm">
-                  {{ resCopy.makeAnotherLabel(resCopy.reservationWord) }}
-                </UButton>
-              </div>
-            </div>
-
           </UCard>
         </div>
 
@@ -192,6 +148,8 @@
 import { getFieldDef } from '~/config/content-registry'
 import { usePageContent } from '~/composables/usePageContent'
 import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
+import { generateReservationTimes, isStructuredOpeningHours } from '~/shared/reservation-hours'
+import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 
 definePageMeta({ layout: 'saya' })
 
@@ -229,13 +187,24 @@ const readableDate = computed(() => {
   return formatDate(`${reservationForm.value.date}T12:00:00`)
 })
 
-const readableLastDate = computed(() => {
-  if (!lastSubmission.value?.date) return ''
-  return formatDate(`${lastSubmission.value.date}T12:00:00`)
+// ── Options ───────────────────────────────────────────────────────────────
+// Fallback used when the location has no structured opening_hours (e.g. Google Places imports,
+// which store hours as free-text weekday descriptions that can't be parsed into slots).
+const FALLBACK_TIMES = ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00']
+const availableTimes = computed(() => {
+  const hours = selectedLocation.value?.opening_hours
+  if (!reservationForm.value.date || !isStructuredOpeningHours(hours)) return FALLBACK_TIMES
+  const times = generateReservationTimes(hours, reservationForm.value.date)
+  return times
+})
+const timeSelectOptions = computed(() => availableTimes.value.map(t => ({ label: t, value: t })))
+
+watch(availableTimes, (times) => {
+  if (reservationForm.value.time && !times.includes(reservationForm.value.time)) {
+    reservationForm.value.time = ''
+  }
 })
 
-// ── Options ───────────────────────────────────────────────────────────────
-const timeSelectOptions = ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00'].map(t => ({ label: t, value: t }))
 const guestOptions = computed(() => [
   { value: '1', label: resCopy.value.oneGuestLabel },
   { value: '2', label: `2 ${resCopy.value.guestsLabelPlural}` },
@@ -317,47 +286,35 @@ const validateReservation = (state: typeof reservationForm.value) => {
 
 const toast = useToast()
 const submitting = ref(false)
-const submitted = ref(false)
-const lastSubmission = ref<{ name: string; date: string; time: string; guests: string; id?: string; cancellationToken?: string } | null>(null)
 
 async function handleReservation() {
-  if (submitting.value) return
+  if (submitting.value || !siteId) return
   submitting.value = true
   try {
     const res = await $fetch<{ id: string; cancellationToken: string }>(`/api/public/sites/${siteId}/reservations`, {
       method: 'POST',
       body: reservationForm.value,
     })
-    lastSubmission.value = { ...reservationForm.value, id: res?.id, cancellationToken: res?.cancellationToken }
-    submitted.value = true
-    reservationForm.value = {
-      name: '',
-      email: '',
-      phone: '',
-      location_id: reservationForm.value.location_id,
-      date: '',
-      time: '',
-      guests: '',
-      requests: '',
-    }
-    selectedDate.value = undefined
-    toast.add({ description: "Reservation request received! We'll confirm shortly.", color: 'success' })
+    setBookingConfirmation({
+      type: 'reservation',
+      siteId,
+      siteName: brandName.value,
+      guestName: reservationForm.value.name,
+      date: reservationForm.value.date,
+      time: reservationForm.value.time,
+      guests: reservationForm.value.guests,
+      requests: reservationForm.value.requests || null,
+      cancelUrl: res?.id && res?.cancellationToken ? `/reservations/cancel?id=${res.id}#${res.cancellationToken}` : null,
+      contactPhone: contactPhone.value || null,
+      contactEmail: contactEmail.value || null,
+    })
+    await navigateTo('/reservations/confirmed')
   } catch (err) {
     toast.add({ description: (err as ApiValue)?.data?.error ?? 'Failed to submit. Please try again.', color: 'error' })
   } finally {
     submitting.value = false
   }
 }
-
-function resetForm() {
-  submitted.value = false
-  lastSubmission.value = null
-}
-
-const cancelUrl = computed(() => {
-  if (!lastSubmission.value?.id || !lastSubmission.value?.cancellationToken) return null
-  return `/reservations/cancel?id=${lastSubmission.value.id}#${lastSubmission.value.cancellationToken}`
-})
 
 // ── SEO ───────────────────────────────────────────────────────────────────
 const currentPageUrl = useSeoUrl('/reservations')

@@ -67,21 +67,23 @@ export default defineEventHandler(async (event) => {
 
     if (body.status === 'disabled') {
       const now = new Date().toISOString()
-      await db.exec('BEGIN IMMEDIATE TRANSACTION')
-      let domain: SiteDomainRow | null = null
       let promotedDomain: SiteDomainRow | null = null
-      try {
-        const existing = await queryFirst<SiteDomainRow>(db, `
-          SELECT *
-          FROM site_domains
-          WHERE id = ? AND site_id = ? AND type = 'custom'
-          LIMIT 1
-        `, [domainId, siteId])
-        if (!existing) {
-          await db.exec('ROLLBACK')
-          return jsonResponse({ error: 'Domain not found' }, { status: 404 })
-        }
 
+      const existing = await queryFirst<SiteDomainRow>(db, `
+        SELECT *
+        FROM site_domains
+        WHERE id = ? AND site_id = ? AND type = 'custom'
+        LIMIT 1
+      `, [domainId, siteId])
+      if (!existing) {
+        return jsonResponse({ error: 'Domain not found' }, { status: 404 })
+      }
+
+      const priorCanonical = await queryFirst<SiteDomainRow>(db, `
+        SELECT * FROM site_domains WHERE site_id = ? AND role = 'canonical' LIMIT 1
+      `, [siteId])
+
+      try {
         await execute(db, `
           UPDATE site_domains
           SET status = 'disabled', role = 'secondary', updated_at = ?
@@ -119,17 +121,22 @@ export default defineEventHandler(async (event) => {
             `, [now, siteId, site.organization_id])
           }
         }
-
-        domain = await queryFirst<SiteDomainRow>(db, `
-          SELECT * FROM site_domains
-          WHERE id = ? AND site_id = ? AND type = 'custom'
-          LIMIT 1
-        `, [domainId, siteId])
-        await db.exec('COMMIT')
       } catch (error) {
-        await db.exec('ROLLBACK')
+        if (priorCanonical) {
+          await execute(db, `
+            UPDATE site_domains
+            SET role = 'canonical', updated_at = ?
+            WHERE id = ?
+          `, [now, priorCanonical.id])
+        }
         throw error
       }
+
+      const domain = await queryFirst<SiteDomainRow>(db, `
+        SELECT * FROM site_domains
+        WHERE id = ? AND site_id = ? AND type = 'custom'
+        LIMIT 1
+      `, [domainId, siteId])
 
       if (!domain) return jsonResponse({ error: 'Domain not found' }, { status: 404 })
       return jsonResponse({ success: true, domain, promotedDomain: promotedDomain || null })

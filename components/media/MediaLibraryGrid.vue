@@ -83,7 +83,7 @@
         @click="emit('select', asset)"
       >
         <!-- Media thumbnail -->
-        <img
+        <UImage
           v-if="asset.thumbnail_url || (asset.kind === 'image' && asset.public_url)"
           :src="asset.thumbnail_url || asset.public_url"
           :alt="asset.alt_text || asset.title || asset.description || ''"
