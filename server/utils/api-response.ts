@@ -34,16 +34,31 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
     const missing = requiredBindings.filter((key) => !env?.[key])
 
     if (missing.length > 0) {
-      const cfRay = getHeader(event, 'cf-ray') ?? 'no-cf-ray'
+      const cfRay = getHeader(event, 'cf-ray')
       const host = getHeader(event, 'host') ?? 'no-host'
       const path = event.path ?? 'no-path'
-      console.error(
-        `[cloudflareEnv] FATAL: Missing bindings: ${missing.join(', ')} ` +
-        `for ${host}${path} (cf-ray: ${cfRay}). In local dev, run via wrangler dev/yarn dev. ` +
-        'In production this means the Workers runtime did not attach bindings to this request — escalate to Cloudflare support with the cf-ray above if it recurs on real traffic.'
-      )
 
-      if (process.env.CI === 'true') {
+      // A nested internal self-fetch (event.$fetch/useRequestFetch inside SSR) never
+      // carries the original edge request's cf-ray — it's a synthetic event that Nitro
+      // dispatches locally without re-attaching event.context.cloudflare. That's an
+      // expected limitation of internal dispatch, not a real bindings outage, so it's
+      // only logged at `warn` to avoid false-alarming on every such call. Real inbound
+      // requests always carry cf-ray, so a missing cf-ray there is the actual incident.
+      const isRealInboundRequest = Boolean(cfRay)
+      const logMessage =
+        `[cloudflareEnv] Missing bindings: ${missing.join(', ')} ` +
+        `for ${host}${path} (cf-ray: ${cfRay ?? 'no-cf-ray'}). In local dev, run via wrangler dev/yarn dev. ` +
+        (isRealInboundRequest
+          ? 'In production this means the Workers runtime did not attach bindings to this request — escalate to Cloudflare support with the cf-ray above if it recurs on real traffic.'
+          : 'No cf-ray present — this looks like a nested internal self-fetch (event.$fetch/useRequestFetch), which does not inherit Cloudflare bindings. Fetch the data directly instead of self-fetching if this is unexpected.')
+
+      if (isRealInboundRequest) {
+        console.error(logMessage)
+      } else {
+        console.warn(logMessage)
+      }
+
+      if (process.env.CI === 'true' && isRealInboundRequest) {
         throw createError({
           statusCode: 503,
           statusMessage: `Cloudflare bindings missing: ${missing.join(', ')}`

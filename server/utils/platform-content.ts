@@ -769,6 +769,67 @@ export function attachFeaturedImageFromBareJoin(record: ApiRecord) {
   }
 }
 
+/**
+ * Shared by the public blog API route and the blog page's SSR data fetch.
+ * The page must call this directly (with its own request's `db` binding)
+ * rather than doing a nested self-fetch back to the API route — Nitro's
+ * internal dispatch for multi-segment dynamic routes does not reliably
+ * reproduce the same route-param/binding resolution as a real external
+ * request, which was causing the page to 404 on posts the API itself
+ * served fine.
+ */
+export async function getPublishedPlatformBlogPost(db: DbClient, category: string, slug: string) {
+  const post = await queryFirst<ApiRecord>(db, `
+    SELECT
+      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_description, p.seo_keywords,
+      p.canonical_url, p.robots,
+      p.published_at, p.created_at, p.updated_at,
+      p.featured_image_asset_id,
+      u.name AS author_name,
+      u.image AS author_image,
+      ma.public_url,
+      ma.kind,
+      ma.width,
+      ma.height
+    FROM blog_posts p
+    LEFT JOIN user u ON u.id = p.author_id
+    LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
+    WHERE p.slug = ? AND p.category = ? AND p.status = 'published' AND p.site_id IS NULL
+  `, [slug, category])
+
+  if (!post) return null
+
+  const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'blog_post', String(post.id), { activeOnly: true }))
+
+  return attachFeaturedImageFromBareJoin({ ...post, components })
+}
+
+/**
+ * Shared by the public docs API route and the docs page's SSR data fetch.
+ * See getPublishedPlatformBlogPost above for why the page must call this
+ * directly rather than doing a nested self-fetch back to the API route.
+ */
+export async function getPublishedPlatformDoc(db: DbClient, category: string, slug: string) {
+  const doc = await queryFirst<ApiRecord>(
+    db,
+    `SELECT
+       p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.difficulty_level,
+       p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
+       p.featured_image_asset_id, p.published_at, p.updated_at,
+       ma.public_url, ma.kind, ma.width, ma.height
+     FROM platform_docs p
+     LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
+     WHERE p.slug = ? AND p.category = ? AND p.status = 'published'`,
+    [slug, category],
+  )
+
+  if (!doc) return null
+
+  const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'doc', String(doc.id), { activeOnly: true }))
+
+  return attachFeaturedImageFromBareJoin({ ...doc, components })
+}
+
 function normalizeBlankToNull(input: { canonical_url?: string | null; robots?: string | null }) {
   if (input.canonical_url !== undefined && input.canonical_url?.trim() === '') input.canonical_url = null
   if (input.robots !== undefined && input.robots?.trim() === '') input.robots = null

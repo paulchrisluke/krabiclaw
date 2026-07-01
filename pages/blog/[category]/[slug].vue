@@ -137,7 +137,7 @@
 <script setup lang="ts">
 import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
-import { blogCategoryClass, blogCategoryToSlug, getBlogPostPath } from '~/utils/blog-categories'
+import { blogCategoryClass, blogCategoryToSlug, getBlogPostPath, slugToBlogCategory } from '~/utils/blog-categories'
 import { buildContentBlocks, normalizeContentComponent, type ContentComponent } from '~/utils/content-blocks'
 import { resolveContentComponent } from '~/utils/content-component-resolver'
 
@@ -176,34 +176,56 @@ interface BlogPost {
 }
 
 const route = useRoute()
-const requestFetch = useRequestFetch()
 const postEndpoint = computed(() => `/api/public/blog/${String(route.params.category)}/${String(route.params.slug)}`)
 
 const { data, pending, error } = await useAsyncData(
   () => `blog-post-${postEndpoint.value}`,
   async () => {
-    let payload: { post?: BlogPost }
-    try {
-      payload = import.meta.server
-        ? await requestFetch<{ post?: BlogPost }>(postEndpoint.value)
-        : await $fetch<{ post?: BlogPost }>(postEndpoint.value)
-    } catch (err) {
-      const statusCode = typeof err === 'object' && err !== null
-        ? Number((err as { statusCode?: unknown; status?: unknown }).statusCode ?? (err as { status?: unknown }).status)
-        : undefined
-      if (statusCode === 404) {
-        throw createError({ statusCode: 404, statusMessage: 'Article not found' })
+    let post: BlogPost | null | undefined
+
+    // Fetch directly against the real request's D1 binding instead of doing a
+    // nested self-fetch back to our own API — Nitro's internal dispatch for
+    // this two-segment dynamic route doesn't reliably reproduce the same
+    // route-param/binding resolution as a real external request, which was
+    // causing this page to 404 on posts the API itself served correctly.
+    if (import.meta.server) {
+      const category = slugToBlogCategory(String(route.params.category))
+      if (!category) throw createError({ statusCode: 404, statusMessage: 'Article not found' })
+
+      const requestEvent = useRequestEvent()
+      if (!requestEvent) throw createError({ statusCode: 404, statusMessage: 'Article not found' })
+
+      const [{ cloudflareEnv }, { getPublishedPlatformBlogPost }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/platform-content'),
+      ])
+      const db = cloudflareEnv(requestEvent).db
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+
+      post = await getPublishedPlatformBlogPost(db, category, String(route.params.slug)) as BlogPost | null
+    } else {
+      let payload: { post?: BlogPost }
+      try {
+        payload = await $fetch<{ post?: BlogPost }>(postEndpoint.value)
+      } catch (err) {
+        const statusCode = typeof err === 'object' && err !== null
+          ? Number((err as { statusCode?: unknown; status?: unknown }).statusCode ?? (err as { status?: unknown }).status)
+          : undefined
+        if (statusCode === 404) {
+          throw createError({ statusCode: 404, statusMessage: 'Article not found' })
+        }
+        throw err
       }
-      throw err
+      post = payload.post
     }
 
-    if (!payload.post) {
+    if (!post) {
       throw createError({ statusCode: 404, statusMessage: 'Article not found' })
     }
     return {
       post: {
-        ...payload.post,
-        author_subtitle: payload.post.author_subtitle || payload.post.author_bio || '',
+        ...post,
+        author_subtitle: post.author_subtitle || post.author_bio || '',
       },
     }
   }

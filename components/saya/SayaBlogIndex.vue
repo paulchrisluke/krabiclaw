@@ -71,10 +71,8 @@ if (!siteId) throw createError({ statusCode: 404 })
 const { resolveMedia } = useMedia()
 const siteName = computed(() => site?.brand_name || 'Our Site')
 
-const { data, error } = await useFetch<{ posts: TenantBlogPost[] }>(`/api/public/sites/${siteId}/blog`, {
-  key: `tenant-blog-${siteId}`,
-})
-const posts = computed(() => data.value?.posts ?? [])
+const { blogList, error } = useBootstrap()
+const posts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 
 const currentPageUrl = useSeoUrl('/blog')
 useSeoMeta({

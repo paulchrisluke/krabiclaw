@@ -287,7 +287,7 @@ import { formatMoneyAmount } from '~/shared/money'
 
 const { resolveMedia } = useMedia()
 const route = useRoute()
-const { siteId, site } = useTenantSite()
+const { site } = useTenantSite()
 const siteName = computed(() => site?.brand_name || 'KrabiClaw')
 const config = useRuntimeConfig()
 const turnstileEnabled = computed(() => config.public.turnstileEnabled === true)
@@ -340,11 +340,6 @@ interface MenuItemType {
   reviews?: Review[]
 }
 
-interface ApiValue {
-  item: MenuItemType | null
-  currency?: string
-}
-
 interface ReviewsResponse {
   reviews: Review[]
 }
@@ -386,14 +381,15 @@ type PropertyValue = {
   value: string
 }
 
-const { data: itemData } = await useFetch<ApiValue>(
-  () => `/api/public/sites/${siteId}/menu-items/${route.params.slug}`,
-  { key: `menu-item-${siteId}-${route.params.slug}` }
-)
+// Item already ships in the layout's single bootstrap payload (page=menu, menu=1) —
+// look it up by slug instead of firing a second SSR round trip.
+const { menu, config: siteConfig } = useBootstrap()
 
-const item = computed(() => itemData.value?.item ?? null)
+const item = computed<MenuItemType | null>(
+  () => (menu.value?.items as MenuItemType[] | undefined)?.find((i) => i.slug === route.params.slug) ?? null
+)
 const category = computed(() => ({ name: item.value?.section }))
-const currency = computed(() => itemData.value?.currency || 'THB')
+const currency = computed(() => siteConfig.value.default_currency || 'THB')
 
 const formatPrice = (menuItem: MenuItemType | null) => {
   return formatMoneyAmount(menuItem?.price_amount, currency.value)

@@ -504,7 +504,7 @@ export function buildBlogJsonFeed(origin: string, posts: PlatformLlmLinkEntry[])
   }
 }
 
-export function resolvePublicOrigin(event: H3Event) {
+export function resolvePublicOrigin(_event: H3Event) {
   const runtimeConfig = useRuntimeConfig()
   // Only trust runtime-configured siteUrl; avoid untrusted Host header from getRequestURL
   const origin = runtimeConfig.public.siteUrl
