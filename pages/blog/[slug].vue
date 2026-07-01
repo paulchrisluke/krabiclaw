@@ -100,10 +100,37 @@ interface TenantBlogPost {
 }
 
 // Post ships in the layout's single bootstrap payload (page=blog, blogSlug=slug) —
-// no separate fetch.
-const { blogPost, pending } = useBootstrap()
+// no separate fetch. useBootstrap() itself is lazy/non-blocking (fine for the
+// layout's header/footer), but a missing post here must produce a real HTTP 404
+// for search engines, which requires blocking on the fetch during SSR — so this
+// page awaits its own useAsyncData call against the exact same key/URL the
+// layout uses, and Nuxt's key-based dedup collapses both to one request.
+const params = useBootstrapParams()
+const bootstrapKey = computed(() => useBootstrapKey(siteId, params.value))
+const bootstrapUrl = computed(() => useBootstrapUrl(siteId, params.value))
+const requestFetch = useRequestFetch()
 
-const post = computed(() => (blogPost.value as unknown as TenantBlogPost | null) ?? null)
+interface BootstrapBlogResponse {
+  blogPost: TenantBlogPost | null
+}
+
+const { data, pending } = await useAsyncData<BootstrapBlogResponse>(
+  bootstrapKey,
+  () => (import.meta.server
+    ? requestFetch<BootstrapBlogResponse>(bootstrapUrl.value)
+    : $fetch<BootstrapBlogResponse>(bootstrapUrl.value)),
+  {
+    getCachedData(k, nuxtApp) {
+      return nuxtApp.payload.data[k] as BootstrapBlogResponse | undefined
+    },
+  },
+)
+
+if (!data.value?.blogPost) {
+  throw createError({ statusCode: 404, statusMessage: 'Post not found', fatal: true })
+}
+
+const post = computed(() => data.value?.blogPost ?? null)
 const siteName = computed(() => site?.brand_name || 'Our Site')
 
 function renderMarkdown(markdown: string) {
