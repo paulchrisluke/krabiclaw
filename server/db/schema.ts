@@ -168,6 +168,7 @@ export const contact_submissions = sqliteTable("contact_submissions", {
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
 	name: text().notNull(),
 	email: text().notNull(),
+	subject: text(),
 	message: text().notNull(),
 	status: text().default("new").notNull(),
 	ip_hash: text(),
@@ -759,7 +760,7 @@ export const posts = sqliteTable("posts", {
 	created_by: text().notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
+}, (_table) => [
 	check("posts_source_check", sql`source IN ('manual', 'template')`),
 ]);
 

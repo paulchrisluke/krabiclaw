@@ -8,7 +8,12 @@
     </header>
 
     <div class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
-    <div v-if="error" class="py-24 text-center text-muted">
+    <div v-if="pending" class="py-24 text-center text-muted">
+      <p class="mb-2 text-xl">Loading posts</p>
+      <p class="text-sm">Please wait a moment...</p>
+    </div>
+
+    <div v-else-if="error" class="py-24 text-center text-muted">
       <p class="mb-2 text-xl">Unable to load posts</p>
       <p class="text-sm">Please try again in a moment.</p>
     </div>
@@ -71,10 +76,8 @@ if (!siteId) throw createError({ statusCode: 404 })
 const { resolveMedia } = useMedia()
 const siteName = computed(() => site?.brand_name || 'Our Site')
 
-const { data, error } = await useFetch<{ posts: TenantBlogPost[] }>(`/api/public/sites/${siteId}/blog`, {
-  key: `tenant-blog-${siteId}`,
-})
-const posts = computed(() => data.value?.posts ?? [])
+const { blogList, error, pending } = useBootstrap()
+const posts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 
 const currentPageUrl = useSeoUrl('/blog')
 useSeoMeta({

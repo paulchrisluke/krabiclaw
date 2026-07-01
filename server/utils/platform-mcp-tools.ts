@@ -97,19 +97,6 @@ const FAQ_ITEM_SCHEMA = {
   additionalProperties: false,
 }
 
-const HOW_TO_STEP_INPUT_SCHEMA = {
-  type: 'object',
-  properties: {
-    name: { type: 'string' },
-    text: { type: 'string' },
-    image_asset_id: { type: 'string' },
-    url: { type: 'string' },
-    position: { type: 'number' },
-  },
-  required: ['name', 'text'],
-  additionalProperties: false,
-}
-
 const HOW_TO_STEP_OUTPUT_SCHEMA = {
   type: 'object',
   properties: {

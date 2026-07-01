@@ -82,7 +82,7 @@ export default defineEventHandler(async (event) => {
 });
 
 function shouldRenderWithNuxtErrorPage(
-  event: Parameters<typeof defineEventHandler>[0] extends (event: infer T) => unknown ? T : never,
+  event: Parameters<typeof defineEventHandler>[0] extends (_evt: infer T) => unknown ? T : never,
   pathname: string,
 ) {
   if (event.method !== "GET") return false;

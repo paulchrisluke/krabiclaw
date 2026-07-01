@@ -38,11 +38,13 @@
 
         <div ref="articleBodyRef" class="space-y-14">
           <template v-for="(block, blockIndex) in renderedBlocks" :key="`block-${blockIndex}`">
+            <!-- eslint-disable vue/no-v-html -->
             <div
               v-if="block.kind === 'html'"
               class="prose prose-lg max-w-none text-default prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-h4:text-base dark:prose-invert"
               v-html="block.html"
             />
+            <!-- eslint-enable vue/no-v-html -->
 
             <component
               :is="resolveContentComponent(block.type)"
@@ -127,7 +129,6 @@ interface DocListItem {
 }
 
 const route = useRoute()
-const requestFetch = useRequestFetch()
 const segments = computed(() => {
   const raw = route.params.segments
   if (Array.isArray(raw)) return raw.filter(Boolean)
@@ -169,18 +170,39 @@ const { data: doc, pending: loading, error } = await useAsyncData(
   `doc-${categoryParam.value}-${slugParam.value ?? 'index'}`,
   async () => {
     if (!slugParam.value) return null
-    const endpoint = `/api/public/docs/${categoryParam.value}/${slugParam.value}`
-    // Bare $fetch loses the event's Cloudflare bindings on this nested SSR call (the
-    // request never reaches the Workers fetch() entrypoint that attaches them) and the
-    // API then 500s with "Database not available" — useRequestFetch() preserves the
-    // parent event's context. Matches pages/blog/[category]/[slug].vue.
-    const response = import.meta.server
-      ? await requestFetch<{ doc?: Doc }>(endpoint)
-      : await $fetch<{ doc?: Doc }>(endpoint)
-    if (!response?.doc) {
+
+    let doc: Doc | null | undefined
+
+    // Fetch directly against the real request's D1 binding instead of doing a nested
+    // self-fetch back to our own API — Nitro's internal dispatch for this two-segment
+    // dynamic route doesn't reliably reproduce the same route-param/binding resolution
+    // as a real external request, which caused pages/blog/[category]/[slug].vue to 404
+    // on posts its own API served correctly. Same fix applied here.
+    if (import.meta.server) {
+      const category = slugToCategory(categoryParam.value)
+      if (!category) throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
+
+      const requestEvent = useRequestEvent()
+      if (!requestEvent) throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
+
+      const [{ cloudflareEnv }, { getPublishedPlatformDoc }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/platform-content'),
+      ])
+      const db = cloudflareEnv(requestEvent).db
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+
+      doc = await getPublishedPlatformDoc(db, category, slugParam.value) as Doc | null
+    } else {
+      const endpoint = `/api/public/docs/${categoryParam.value}/${slugParam.value}`
+      const response = await $fetch<{ doc?: Doc }>(endpoint)
+      doc = response?.doc
+    }
+
+    if (!doc) {
       throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
     }
-    return response.doc
+    return doc
   },
   {
     default: () => null,

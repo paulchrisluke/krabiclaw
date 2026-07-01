@@ -9,6 +9,8 @@ const hashIp = async (ip: string) => {
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
+const VALID_SUBJECTS = ['general', 'press', 'partnerships', 'catering', 'careers']
+
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
@@ -25,12 +27,15 @@ export default defineEventHandler(async (event) => {
   const name    = cleanString(body.name, 100)
   const email   = cleanString(body.email, 200)
   const message = cleanString(body.message, 2000)
+  const subject = cleanString(body.subject, 30)
 
   if (!name) return jsonResponse({ error: 'Please enter your name.' }, { status: 400 })
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     return jsonResponse({ error: 'Please enter a valid email address.' }, { status: 400 })
   if (message.length < 10)
     return jsonResponse({ error: 'Message must be at least 10 characters.' }, { status: 400 })
+  if (subject && !VALID_SUBJECTS.includes(subject))
+    return jsonResponse({ error: 'Please choose a valid subject.' }, { status: 400 })
 
   const site = await queryFirst<{ id: string; organization_id: string; brand_name?: string | null }>(
     db,
@@ -43,9 +48,9 @@ export default defineEventHandler(async (event) => {
   const ipHash = await hashIp(getHeader(event, 'CF-Connecting-IP') ?? getHeader(event, 'x-forwarded-for') ?? '')
 
   await execute(db, `
-    INSERT INTO contact_submissions (id, organization_id, site_id, name, email, message, ip_hash)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `, [id, site.organization_id, siteId, name, email, message, ipHash])
+    INSERT INTO contact_submissions (id, organization_id, site_id, name, email, subject, message, ip_hash)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, site.organization_id, siteId, name, email, subject || null, message, ipHash])
 
   try {
     await notifyContactSubmitted(env, db, {
@@ -55,6 +60,7 @@ export default defineEventHandler(async (event) => {
       contactId: id,
       guestName: name,
       email,
+      subject: subject || null,
       message
     })
   } catch (error) {

@@ -19,6 +19,18 @@ import {
 import { verifyPreviewToken } from "~/server/utils/preview-token";
 import { type Experience } from "~/server/utils/experiences";
 import { type MenuWithItems } from "~/server/types/menu";
+import {
+  attachFeaturedImageFromBareJoin,
+  listContentComponents,
+  resolveContentComponentsMedia,
+} from "~/server/utils/platform-content";
+import {
+  buildBootstrapCacheKey,
+  getBootstrapCache,
+  putBootstrapCache,
+} from "~/server/utils/bootstrap-cache";
+import { getCloudflareWaitUntil } from "~/server/utils/mcp-route-helpers";
+import { isPreviewContext } from "~/server/utils/tenant-hosts";
 
 function groupContentBlocks(rows: SiteContent[]): Array<SiteContent & { _section: string }> {
   const groups: Record<string, SiteContent & { _section: string }> = {}
@@ -230,8 +242,68 @@ export default defineEventHandler(async (event) => {
   const experienceSlug =
     typeof query.experience === "string" ? query.experience : null;
   const includeMenu = query.menu === "1" || query.menu === "true";
-  const dataType = typeof query.data === "string" ? query.data : null; // 'reviews' | 'photos' | 'qa'
+  const dataType = typeof query.data === "string" ? query.data : null; // 'reviews' | 'photos' | 'qa' | 'blog' | 'blogPost'
+  const blogSlug = typeof query.blogSlug === "string" ? query.blogSlug : null;
   const locale = typeof query.locale === "string" ? query.locale : undefined;
+
+  // Validate query inputs before using KV cache — only allow known-safe values
+  // to prevent unbounded cache entries from arbitrary variants.
+  const VALID_DATA_TYPES = new Set(['reviews', 'photos', 'qa', 'blog', 'blogPost', 'posts']);
+  // Mirrors composables/useBootstrapParams.ts's getBootstrapParams() — the only
+  // page values the frontend ever requests. A regex alone (e.g. /^[a-z0-9_-]+$/)
+  // would still let an attacker mint unlimited distinct cache keys by varying
+  // the page value; allowlisting against the real route set bounds that space.
+  const VALID_PAGES = new Set([
+    'home', 'locations', 'location', 'about', 'contact', 'reservations',
+    'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'blog',
+  ]);
+  const isValidDataType = dataType === null || VALID_DATA_TYPES.has(dataType);
+  const isValidLocale = locale === undefined || /^[a-z]{2}(-[A-Z]{2})?$/.test(locale);
+  const isValidPage = page === null || VALID_PAGES.has(page);
+  // locationSlug/experienceSlug/blogSlug can't be allowlisted up front — they're
+  // arbitrary per-tenant slugs resolved against D1. The regex here only bounds
+  // the character set for a cheap pre-DB shape check; the actual cache *write*
+  // below is additionally gated on the slug having resolved to a real row, so
+  // slugs that don't correspond to an existing entity never populate the cache.
+  const isValidLocation = locationSlug === null || /^[a-z0-9_-]+$/.test(locationSlug);
+  const isValidExperience = experienceSlug === null || /^[a-z0-9_-]+$/.test(experienceSlug);
+  const isValidBlogSlug = blogSlug === null || /^[a-z0-9_-]+$/.test(blogSlug);
+
+  const allInputsValid = isValidDataType && isValidLocale && isValidPage &&
+    isValidLocation && isValidExperience && isValidBlogSlug;
+
+  // Read-through KV cache for the D1 batch below. Skipped for preview-authorized
+  // requests (isPreviewAuthorized gates the whole read/write, not just the key —
+  // omitting the token from the key alone would let a preview response collide
+  // with the public cache entry for the same page/location) and for preview/staging
+  // hosts, whose D1 gets reseeded on every CI push (see CLAUDE.md's E2E architecture) —
+  // a 60s-old cached response could serve pre-reseed content into a fresh E2E run.
+  // Also skipped if any query input is invalid to prevent unbounded cache entries.
+  const host = getHeader(event, "host") ?? "";
+  const useBootstrapCache = !isPreviewAuthorized && !isPreviewContext(host) && allInputsValid;
+  const cacheKey = buildBootstrapCacheKey(siteId, {
+    page,
+    location: locationSlug,
+    experience: experienceSlug,
+    menu: includeMenu,
+    data: dataType,
+    blogSlug,
+    locale,
+  });
+  if (useBootstrapCache) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const kv = (env as any).SITE_CACHE as KVNamespace | undefined;
+    if (kv) {
+      const cached = await getBootstrapCache(kv, cacheKey);
+      if (cached) {
+        try {
+          return jsonResponse(JSON.parse(cached));
+        } catch {
+          // Invalid cached JSON — treat as a miss and regenerate
+        }
+      }
+    }
+  }
 
   // Parallelize site auth + location slug resolution — both only need siteId
   const [site, locationRow] = await Promise.all([
@@ -304,6 +376,8 @@ export default defineEventHandler(async (event) => {
     idxMenuItemTranslations = -1;
   let idxExperiencesList = -1,
     idxExperienceDetail = -1;
+  let idxBlogList = -1,
+    idxBlogPost = -1;
 
   const push = (q: string, params: unknown[]) => {
     const i = batchStmts.length;
@@ -558,6 +632,34 @@ export default defineEventHandler(async (event) => {
            WHERE site_id = ? AND kind = 'image' AND status = 'active'
            ORDER BY created_at DESC LIMIT 100`,
       locationId ? [siteId, locationId] : [siteId],
+    );
+
+  if (dataType === "blog")
+    idxBlogList = push(
+      `SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords,
+              p.canonical_url, p.robots, p.published_at, p.featured_image_asset_id,
+              ma.public_url, ma.kind, ma.width, ma.height
+       FROM blog_posts p
+       LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
+       WHERE p.status = 'published' AND p.site_id = ?
+       ORDER BY p.published_at IS NULL, p.published_at DESC, p.id DESC
+       LIMIT 50`,
+      [siteId],
+    );
+
+  if (dataType === "blogPost" && blogSlug)
+    idxBlogPost = push(
+      `SELECT p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_description, p.seo_keywords,
+              p.canonical_url, p.robots, p.published_at, p.created_at, p.updated_at,
+              p.featured_image_asset_id,
+              u.name AS author_name, u.image AS author_image,
+              ma.public_url, ma.kind, ma.width, ma.height
+       FROM blog_posts p
+       LEFT JOIN user u ON u.id = p.author_id
+       LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
+       WHERE p.slug = ? AND p.site_id = ? AND p.status = 'published'
+       LIMIT 1`,
+      [blogSlug, siteId],
     );
 
   if (dataType === "qa")
@@ -923,7 +1025,32 @@ export default defineEventHandler(async (event) => {
     location_id: asset.location_id ?? null,
   }));
 
-  return jsonResponse({
+  // Shape blog list
+  const blogList =
+    idxBlogList >= 0
+      ? (
+          (batchResults[idxBlogList] as { results: ApiRecord[] })?.results ?? []
+        ).map(attachFeaturedImageFromBareJoin)
+      : [];
+
+  // Shape blog post detail — content components require the post's id, so this
+  // is one more D1 round trip server-side, but still a single client request.
+  let blogPost: ApiRecord | null = null;
+  if (idxBlogPost >= 0) {
+    const postRow = (batchResults[idxBlogPost] as { results: ApiRecord[] })
+      ?.results?.[0];
+    if (postRow) {
+      const components = await resolveContentComponentsMedia(
+        db,
+        await listContentComponents(db, "blog_post", String(postRow.id), {
+          activeOnly: true,
+        }),
+      );
+      blogPost = attachFeaturedImageFromBareJoin({ ...postRow, components });
+    }
+  }
+
+  const payload = {
     success: true,
     locations,
     config,
@@ -950,6 +1077,10 @@ export default defineEventHandler(async (event) => {
     ...(dataType === "photos" ? { photosList: photos } : {}),
     // Type F — Q&A for /locations/[slug]/qa
     ...(dataType === "qa" ? { qaList: qaRows?.results ?? [] } : {}),
+    // Blog list for /blog
+    ...(dataType === "blog" ? { blogList } : {}),
+    // Blog post detail for /blog/[slug]
+    ...(dataType === "blogPost" ? { blogPost } : {}),
     // Type G — posts for /locations/[slug]/posts
     ...(dataType === "posts"
       ? {
@@ -971,5 +1102,30 @@ export default defineEventHandler(async (event) => {
     hasExperiences: experienceCountVal > 0,
     experiencesList,
     experienceDetail,
-  });
+  };
+
+  // Slug-shaped inputs are only worth caching once they've resolved to a real
+  // row — otherwise a stream of made-up slugs (still regex-valid) would each
+  // mint their own permanent KV entry. locationRow/experienceDetail/blogPost
+  // are the actual D1-resolved lookups for locationSlug/experienceSlug/blogSlug.
+  const resolvedSlugsValid =
+    (!locationSlug || !!locationRow) &&
+    (!experienceSlug || !!experienceDetail) &&
+    (!blogSlug || !!blogPost);
+
+  if (useBootstrapCache && resolvedSlugsValid) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const kv = (env as any).SITE_CACHE as KVNamespace | undefined;
+    if (kv) {
+      const putAsync = putBootstrapCache(kv, cacheKey, JSON.stringify(payload)).catch(
+        (err: unknown) => {
+          console.warn("[bootstrap-cache] put failed:", String(err));
+        },
+      );
+      const waitUntil = getCloudflareWaitUntil(event);
+      if (waitUntil) waitUntil(putAsync);
+    }
+  }
+
+  return jsonResponse(payload);
 });

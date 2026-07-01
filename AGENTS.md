@@ -49,7 +49,7 @@ Dashboard CMS pages remain supported. When changing editing behavior, prefer sha
 
 ## Database Schema Workflow
 
-`server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical, hand-authored, **already applied to every real environment (staging, production) and immutable** — never rename, edit, renumber, or re-squash them. From `0008` onward, migrations are *generated* from `schema.ts` via `drizzle-kit generate` and applied via wrangler D1 migrations.
+`server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical, hand-authored, **already applied to every real environment (staging, production) and immutable** — never rename, edit, renumber, or re-squash them. From `0008` onward, migrations are _generated_ from `schema.ts` via `drizzle-kit generate` and applied via wrangler D1 migrations.
 
 **Why the split:** `wrangler d1 migrations apply` tracks applied migrations by **filename**, not content/checksum. An environment that already ran `0001_initial.sql`...`0007_*.sql` has those exact filenames recorded — it has no idea a squashed `0000_something.sql` is "the same" schema. Renaming/squashing history that's already applied anywhere makes wrangler treat the new file as unapplied and try to re-run it, immediately failing with `table X already exists`. There is no clever flag around this; the only safe move is to never touch an already-applied filename and always add new migrations with higher numbers.
 
@@ -103,7 +103,7 @@ Dashboard CMS pages remain supported. When changing editing behavior, prefer sha
 
 ### Re-establishing the baseline (rare — only if `migrations/meta/` is ever lost or corrupted)
 
-The baseline snapshot was created once by running `yarn db:generate` against an *empty* `migrations/meta/`, then **discarding the generated `.sql` file** (it would just recreate every existing table — never apply it) and keeping only the snapshot/journal, with the journal's single entry hand-edited to `idx: 7` / `tag: "0007_baseline"` (matching the count of real, already-applied files) so the *next* real generate continues at `0008` instead of colliding with `0001`-`0007`. Re-derive the same way if this ever needs to be redone, and bump the `idx` to match however many numbered migration files actually exist at the time.
+The baseline snapshot was created once by running `yarn db:generate` against an _empty_ `migrations/meta/`, then **discarding the generated `.sql` file** (it would just recreate every existing table — never apply it) and keeping only the snapshot/journal, with the journal's single entry hand-edited to `idx: 7` / `tag: "0007_baseline"` (matching the count of real, already-applied files) so the _next_ real generate continues at `0008` instead of colliding with `0001`-`0007`. Re-derive the same way if this ever needs to be redone, and bump the `idx` to match however many numbered migration files actually exist at the time.
 
 **Incident — 2026-06-25.** A migration was squashed by running `drizzle-kit generate` straight from `schema.ts` and committing the output as a new baseline (`migrations/0000_living_blockbuster.sql`), replacing `0001_initial.sql`-`0007_*.sql`. Two independent problems surfaced:
 
@@ -111,6 +111,14 @@ The baseline snapshot was created once by running `yarn db:generate` against an 
 2. **`drizzle-kit generate` silently drops anything not declared in `schema.ts`.** Because `schema.ts` had never been annotated with `.unique()`/composite-unique/composite-PK, and triggers/`CHECK`s aren't representable in it at all, the generated squash was missing: every `sync_media_assets_old_*` trigger (which is what kept the legacy `media_assets_old` FK target populated), the `trg_chowbot_*` consistency triggers, ~60 unique/performance indexes (uniqueness on `user.email`, `sites.slug`/`subdomain`, `organization.slug`, Stripe IDs, etc.), and the composite `PRIMARY KEY` on `site_config`. Separately, three boolean columns (`menu_items.featured`, `experiences.featured`, `site_locales.is_source`) had silently lost their `DEFAULT false` in `schema.ts` itself — omitting them in a seed insert hit `NOT NULL` with no default, which `INSERT OR IGNORE` swallows without error, leaving rows missing and causing downstream FK failures that looked unrelated. None of this was caught by `drizzle:check`, which only diffs table/column shape.
 
 The fix that stuck: revert the squash, keep `0001`-`0007` exactly as they are, model every constraint drizzle supports directly in `schema.ts` (step 3), and establish the `meta/` baseline (above) so future changes generate additively as `0008+`. **Lesson: a migration that applies without error is not proof it's correct — always do a full wipe + reapply + reseed locally (step 11) before trusting a generated migration, and never rename or squash a migration filename that any real environment has already applied.**
+
+### D1 does not support raw transactions
+
+Cloudflare D1 rejects `BEGIN`/`COMMIT`/`ROLLBACK` sent as raw SQL, full stop — it doesn't matter whether they're sent through Drizzle's `.run()` (`execute(db, 'BEGIN')` from `server/db/index.ts`) or directly on the raw binding (`db.exec('BEGIN IMMEDIATE TRANSACTION')`). Confirmed locally: `wrangler d1 execute DB --local --command "BEGIN IMMEDIATE TRANSACTION;"` fails with `D1_EXEC_ERROR: ... please use the state.storage.transaction() ... instead of the SQL BEGIN TRANSACTION`. This is not a local-emulator quirk — D1 is backed by Durable Object storage in both local and production, and neither supports session-level transaction control this way.
+
+- The only real cross-statement atomicity primitive is `db.batch([...])`, wrapped as `executeBatch()` in `server/db/index.ts`. It requires the full statement list up front — it can't interleave with reads whose results determine later statements in the same call.
+- For write sequences that need to react to intermediate results (e.g. insert, then a dependent lookup, then a conditional update), don't wrap them in a fake transaction — just run the statements sequentially and, if a later step fails, do manual compensating cleanup (delete/undo the earlier writes) in a `catch` block. This is the pattern used throughout the codebase (`post-management.ts`, most of `domains.ts`) and is what `createPlatformBlogPost` was reverted to.
+- **Incident — 2026-06-27.** Commit `ca8f5a6` ("Fix blog content and schema regressions") wrapped `createPlatformBlogPost`/`updatePlatformBlogPost`/`deletePlatformBlogPost` in `server/utils/platform-content.ts` with `execute(db, 'BEGIN')`/`'COMMIT'`/`'ROLLBACK'`. This silently broke every platform _and_ tenant blog mutation (`create_blog_post`, `update_blog_post`, `set_blog_post_image`, `delete_blog_post`, and the platform-only equivalents all funnel through these same three functions, scoped by `site_id`) with a generic MCP `-32603` internal error — reads were unaffected, which is what made it look narrower than it was. `server/utils/domains.ts` (`setCanonicalDomain`, `createCustomDomainPair`) and `server/api/sites/[siteId]/domains/[domainId].patch.ts` (disable-domain path) had the same `db.exec('BEGIN...')` pattern from an earlier, unrelated change and were fixed the same way. **Lesson: if a D1 write path wraps multiple statements in `BEGIN`/`COMMIT`, it is broken — verify with a local `wrangler d1 execute --local` repro before trusting either the bug report or a proposed fix, don't reason about it from code alone.**
 
 ---
 
@@ -149,6 +157,19 @@ There are three independent analytics layers — do not conflate them or assume 
 
 There used to be a fourth "platform-wide rollup GA4" (`G-Z18L1Y4G7K`, via `nuxt.config.ts` `scripts.registry.googleAnalytics`) — removed 2026-06-25. It was never an owned property; the "intentional cross-tenant rollup" rationale was a retroactive guess, not a real decision. Do not re-add it.
 
+### Stripe → GA4 (billing lifecycle events)
+
+`server/utils/ga4-measurement-protocol.ts` sends server-side events into the platform GA4 property (`GA4_MEASUREMENT_ID`/`GA4_API_SECRET` env vars) from `server/api/billing/webhook.post.ts` — this is the only correct place to fire billing-truth GA4 events, not the browser, since only the webhook knows a payment actually succeeded/failed/renewed.
+
+- `subscription_created` — fires on `checkout.session.completed` for standard plan checkouts. This is the revenue-confirming event; `checkout_started` (browser-side, `useAnalytics.ts`) only signals intent.
+- `plan_upgraded` / `plan_downgraded` — fires on `customer.subscription.updated` when the resolved plan differs from the previously stored `site_billing.plan`, ranked via `PLAN_RANK` in the webhook handler.
+- `subscription_cancelled` — fires on `customer.subscription.deleted`.
+- `payment_failed` — fires on `invoice.payment_failed` (tracked, but not a GA4 key event — it's a churn signal, not a conversion).
+
+Identity stitching: `getGaClientId()` in `composables/useAnalytics.ts` reads the GA4 `_ga` cookie client-side and is passed as `gaClientId` into `POST /api/billing/checkout`, which stores it as `ga_client_id` in both the Checkout Session metadata and `subscription_data.metadata` so it survives into every later webhook event for that subscription. Without a `client_id`, GA4 Measurement Protocol events still land but can't join back to the browsing session that started checkout.
+
+Recommended GA4 key events: `sign_up`, `checkout_started`, `subscription_created`, `plan_upgraded`, `onboarding_completed`. Do not mark `subscription_cancelled` or `payment_failed` as key events — they're churn/diagnostic signals, not conversions.
+
 ---
 
 ## File Conventions
@@ -159,7 +180,7 @@ There used to be a fourth "platform-wide rollup GA4" (`G-Z18L1Y4G7K`, via `nuxt.
 - `lib/auth-client.ts` — client-side Better Auth instance
 - `composables/` — Nuxt auto-imported
 - `migrations/` — D1 schema; `0001`-`0007` are historical and immutable, `0008+` are generated from `server/db/schema.ts` via `yarn db:generate`; `migrations/meta/` is drizzle-kit's own bookkeeping, never hand-edited except when re-establishing the baseline
-- `server/db/schema.ts` — Drizzle ORM schema, hand-maintained to mirror `migrations/`; `server/db/index.ts` — `createDb()` and query helpers
+- `server/db/schema.ts` — Drizzle ORM schema, the source of truth for `migrations/`; `server/db/index.ts` — `createDb()` and query helpers
 - `seed-definitions/demo.ts` — typed source of truth for the hybrid platform demo tenant
 - `seed-definitions/pottery-house.ts`, `seed-definitions/kikuzuki.ts` — client site seed definitions
 - `scripts/generate-demo-seed.ts` — ephemeral demo seed generator; applies from `/tmp`, never from a checked-in SQL file

@@ -15,7 +15,8 @@ export interface BootstrapParams {
   location: string | null;
   experience: string | null;
   menu: boolean;
-  data: string | null; // 'reviews' | 'photos' | 'qa' — triggers full dataset in bootstrap
+  data: string | null; // 'reviews' | 'photos' | 'qa' | 'blog' | 'blogPost' — triggers full dataset in bootstrap
+  blogSlug: string | null; // set when data === 'blogPost'
   locale: string | null;
   token: string | null; // signed preview token — non-null only on /preview/site/... routes
 }
@@ -47,6 +48,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       experience: null,
       menu: true,
       data: fullData,
+      blogSlug: null,
     };
   }
 
@@ -59,6 +61,22 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       experience: experienceMatch[1] ?? null,
       menu: true,
       data: null,
+      blogSlug: null,
+    };
+  }
+
+  // Blog post detail: /blog/[slug] — single segment only. Deeper paths like
+  // /blog/[category]/[slug] belong to pages/blog/[category]/[slug].vue and
+  // must not be captured here, or the wrong segment ends up as blogSlug.
+  const blogMatch = path.match(/^\/blog\/([^/]+)\/?$/);
+  if (blogMatch) {
+    return {
+      page: "blog",
+      location: null,
+      experience: null,
+      menu: false,
+      data: "blogPost",
+      blogSlug: blogMatch[1] ?? null,
     };
   }
 
@@ -70,6 +88,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       experience: null,
       menu: true,
       data: null,
+      blogSlug: null,
     };
   if (path.startsWith("/locations"))
     return {
@@ -78,6 +97,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       experience: null,
       menu: true,
       data: null,
+      blogSlug: null,
     };
   if (path.startsWith("/about"))
     return {
@@ -86,6 +106,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       experience: null,
       menu: true,
       data: null,
+      blogSlug: null,
     };
   if (path.startsWith("/contact"))
     return {
@@ -94,6 +115,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       experience: null,
       menu: true,
       data: null,
+      blogSlug: null,
     };
   if (path.startsWith("/reservations"))
     return {
@@ -102,6 +124,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       experience: null,
       menu: true,
       data: null,
+      blogSlug: null,
     };
   if (path.startsWith("/order"))
     return {
@@ -110,6 +133,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       experience: null,
       menu: true,
       data: null,
+      blogSlug: null,
     };
   if (path.startsWith("/qa"))
     return {
@@ -118,6 +142,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       experience: null,
       menu: true,
       data: "qa",
+      blogSlug: null,
     };
   if (path.startsWith("/reviews"))
     return {
@@ -126,6 +151,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       experience: null,
       menu: true,
       data: null,
+      blogSlug: null,
     };
   if (path.startsWith("/posts"))
     return {
@@ -134,6 +160,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       experience: null,
       menu: true,
       data: null,
+      blogSlug: null,
     };
   if (path.startsWith("/experiences"))
     return {
@@ -142,6 +169,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       experience: null,
       menu: true,
       data: null,
+      blogSlug: null,
     };
   if (path.startsWith("/photos"))
     return {
@@ -150,6 +178,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       experience: null,
       menu: true,
       data: "photos",
+      blogSlug: null,
     };
   if (path === "/menu" || path.startsWith("/menu/"))
     return {
@@ -158,6 +187,16 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       experience: null,
       menu: true,
       data: null,
+      blogSlug: null,
+    };
+  if (path === "/blog" || path === "/blog/")
+    return {
+      page: "blog",
+      location: null,
+      experience: null,
+      menu: false,
+      data: "blog",
+      blogSlug: null,
     };
 
     return {
@@ -166,6 +205,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       experience: null,
       menu: false,
       data: null,
+      blogSlug: null,
     };
 }
 
@@ -187,11 +227,30 @@ export const useBootstrapParams = () => {
   });
 };
 
+// Each field is percent-encoded and joined with "~" (not a valid URI-component
+// character) so a hyphen inside a slug/locale can't be mistaken for a field
+// separator and collide two otherwise-distinct param combinations.
+// encodeURIComponent doesn't escape "~", so we replace it explicitly to avoid
+// delimiter collisions.
+const encodeKeyField = (value: string | null | undefined): string =>
+  encodeURIComponent(value ?? "").replace(/~/g, '%7E');
+
 export const useBootstrapKey = (
   siteId: string | null | undefined,
   params: BootstrapParams,
 ) =>
-  `bs-${siteId ?? "none"}-${params.page ?? ""}-${params.location ?? ""}-${params.experience ?? ""}-${params.menu ? "m" : ""}-${params.data ?? ""}-${params.locale ?? ""}-${params.token ?? ""}`;
+  [
+    "bs",
+    encodeKeyField(siteId ?? "none"),
+    encodeKeyField(params.page),
+    encodeKeyField(params.location),
+    encodeKeyField(params.experience),
+    params.menu ? "m" : "",
+    encodeKeyField(params.data),
+    encodeKeyField(params.blogSlug),
+    encodeKeyField(params.locale),
+    encodeKeyField(params.token),
+  ].join("~");
 
 export const useBootstrapUrl = (
   siteId: string | null | undefined,
@@ -204,6 +263,7 @@ export const useBootstrapUrl = (
   if (params.experience) qs.set("experience", params.experience);
   if (params.menu) qs.set("menu", "1");
   if (params.data) qs.set("data", params.data);
+  if (params.blogSlug) qs.set("blogSlug", params.blogSlug);
   if (params.locale) qs.set("locale", params.locale);
   if (params.token) {
     qs.set("preview", "true");
