@@ -487,10 +487,10 @@ async function persistCloudflareState(
     })
   }
 
-  // promoteCanonicalIfReady can call setCanonicalDomain, which opens its own
-  // BEGIN IMMEDIATE TRANSACTION — D1/SQLite doesn't support nested
-  // transactions, so callers already inside one (createCustomDomainPair)
-  // must defer this until after their own transaction commits.
+  // promoteCanonicalIfReady can call setCanonicalDomain, which reads/writes
+  // site_domains rows for this site — callers still inserting other domain
+  // rows for the same batch (createCustomDomainPair) must defer this until
+  // after those inserts are done, so the candidate rows already exist.
   if (options.skipPromotion) return after
   if (after.status === 'active') await promoteCanonicalIfReady(db, after.site_id)
   else await queueReconciliation(db, domainId, after.next_check_at || undefined)
@@ -522,6 +522,7 @@ export async function createCustomDomainPair(
   }))
   const cloudflareByDomainId = new Map<string, CloudflareCustomHostname>()
   const createdHostnameIds: string[] = []
+  const insertedDomainIds: string[] = []
   const records: DomainRecord[] = []
 
   try {
@@ -532,41 +533,34 @@ export async function createCustomDomainPair(
       if (hostname.id) createdHostnameIds.push(hostname.id)
     }
 
-    await db.exec('BEGIN IMMEDIATE TRANSACTION')
-    try {
-      for (const entry of entries) {
-        await execute(db, `
-          INSERT INTO site_domains
-          (id, organization_id, site_id, domain, type, role, status, dns_target, dns_status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 'custom', ?, 'pending', ?, 'pending', ?, ?)
-        `, [entry.id, opts.organizationId, opts.siteId, entry.domain, entry.role, env.CF_SAAS_CNAME_TARGET, now, now])
+    for (const entry of entries) {
+      await execute(db, `
+        INSERT INTO site_domains
+        (id, organization_id, site_id, domain, type, role, status, dns_target, dns_status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'custom', ?, 'pending', ?, 'pending', ?, ?)
+      `, [entry.id, opts.organizationId, opts.siteId, entry.domain, entry.role, env.CF_SAAS_CNAME_TARGET, now, now])
+      insertedDomainIds.push(entry.id)
 
-        await logDomainEvent(db, {
-          organizationId: opts.organizationId,
-          siteId: opts.siteId,
-          domainId: entry.id,
-          eventType: 'domain_added',
-          actorType: opts.actorType ?? 'owner',
-          actorId: opts.actorId ?? null,
-          message: `${entry.domain} added`
-        })
-      }
+      await logDomainEvent(db, {
+        organizationId: opts.organizationId,
+        siteId: opts.siteId,
+        domainId: entry.id,
+        eventType: 'domain_added',
+        actorType: opts.actorType ?? 'owner',
+        actorId: opts.actorId ?? null,
+        message: `${entry.domain} added`
+      })
+    }
 
-      for (const entry of entries) {
-        const hostname = cloudflareByDomainId.get(entry.id)
-        if (!hostname) throw new Error(`Missing Cloudflare hostname for ${entry.domain}`)
-        records.push(await persistCloudflareState(env, db, entry.id, hostname, { actorType: 'cloudflare', skipPromotion: true }))
-      }
-
-      await db.exec('COMMIT')
-    } catch (error) {
-      await db.exec('ROLLBACK')
-      throw error
+    for (const entry of entries) {
+      const hostname = cloudflareByDomainId.get(entry.id)
+      if (!hostname) throw new Error(`Missing Cloudflare hostname for ${entry.domain}`)
+      records.push(await persistCloudflareState(env, db, entry.id, hostname, { actorType: 'cloudflare', skipPromotion: true }))
     }
 
     // Deferred from persistCloudflareState (skipPromotion: true) — must run
-    // after COMMIT since promoteCanonicalIfReady/setCanonicalDomain open their
-    // own transaction, which can't nest inside the one above.
+    // after the inserts above since promoteCanonicalIfReady/setCanonicalDomain
+    // write to the same rows and should see them already committed.
     for (const record of records) {
       if (record.status === 'active') await promoteCanonicalIfReady(db, record.site_id)
       else await queueReconciliation(db, record.id, record.next_check_at || undefined)
@@ -588,10 +582,24 @@ export async function createCustomDomainPair(
       }
     }
 
+    // Clean up partially inserted site_domains rows to avoid blocking retries.
+    for (const domainId of insertedDomainIds) {
+      try {
+        await execute(db, 'DELETE FROM site_domains WHERE id = ?', [domainId])
+      } catch (cleanupError) {
+        const normalizedCleanupError = cleanupError instanceof Error ? cleanupError : new Error('unknown cleanup error')
+        console.error('createCustomDomainPair: site_domains cleanup failed', {
+          domainId,
+          error: normalizedCleanupError.message
+        })
+      }
+    }
+
     for (const entry of entries) {
       await logDomainEvent(db, {
         organizationId: opts.organizationId,
         siteId: opts.siteId,
+        domainId: entry.id,
         eventType: 'cloudflare_create_failed',
         actorType: 'cloudflare',
         message: `${entry.domain}: ${message}`,
@@ -752,8 +760,11 @@ export async function setCanonicalDomain(
   `, [domainId, siteId])
   if (!domain) throw new Error('Only active domains can be canonical')
 
+  const priorCanonical = await queryFirst<DomainRecord>(db, `
+    SELECT * FROM site_domains WHERE site_id = ? AND role = 'canonical' LIMIT 1
+  `, [siteId])
+
   const now = new Date().toISOString()
-  await db.exec('BEGIN IMMEDIATE TRANSACTION')
   try {
     await execute(db, `UPDATE site_domains SET role = 'secondary', updated_at = ? WHERE site_id = ? AND role = 'canonical'`, [now, siteId])
     await execute(db, `UPDATE site_domains SET role = 'canonical', updated_at = ? WHERE id = ?`, [now, domainId])
@@ -767,9 +778,13 @@ export async function setCanonicalDomain(
       actorId,
       message: `${domain.domain} set as primary`
     })
-    await db.exec('COMMIT')
   } catch (error) {
-    await db.exec('ROLLBACK')
+    if (priorCanonical) {
+      await execute(db, `UPDATE site_domains SET role = 'canonical', updated_at = ? WHERE id = ?`, [now, priorCanonical.id])
+    }
+    if (domain.role !== 'canonical') {
+      await execute(db, `UPDATE site_domains SET role = ?, updated_at = ? WHERE id = ?`, [domain.role, now, domainId])
+    }
     throw error
   }
 

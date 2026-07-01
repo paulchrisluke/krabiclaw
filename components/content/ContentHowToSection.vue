@@ -33,12 +33,12 @@
             </div>
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div class="prose max-w-none text-muted dark:prose-invert" v-html="step.textHtml" />
-            <img
+            <UImage
               v-if="step.image_public_url"
               :src="step.image_public_url"
               :alt="step.name"
               class="max-h-72 w-full rounded-xl object-cover"
-            >
+            />
           </div>
         </div>
       </div>

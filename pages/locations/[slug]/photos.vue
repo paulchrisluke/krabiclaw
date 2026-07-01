@@ -47,7 +47,7 @@
               class="group relative block w-full overflow-hidden rounded-2xl bg-black"
               @click="openLightbox(i)"
             >
-              <img
+              <UImage
                 :src="photo.local_url || photo.google_url || photo.thumbnail_url"
                 :alt="photo.description || ''"
                 loading="lazy"

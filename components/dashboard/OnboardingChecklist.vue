@@ -19,12 +19,7 @@
           <span>{{ completedCount }} of {{ total }} complete</span>
           <span v-if="allDone" class="text-primary font-medium">All done!</span>
         </div>
-        <div class="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-          <div
-            class="h-full bg-primary rounded-full transition-all duration-500"
-            :style="{ width: `${(completedCount / total) * 100}%` }"
-          />
-        </div>
+        <UProgress :value="(completedCount / total) * 100" class="h-1.5" />
       </div>
 
       <div class="space-y-2">
@@ -77,11 +72,11 @@
       </ul>
 
       <div class="pt-1 flex items-center gap-3">
-        <UButton :to="`/dashboard/${props.orgSlug}/~/settings/chatgpt`" size="sm">
-          Install ChatGPT app
+        <UButton to="/docs/integrations/mcp-setup" size="sm">
+          Open setup docs
         </UButton>
-        <UButton to="/docs/integrations/mcp-setup" variant="outline" color="neutral" size="sm">
-          MCP setup guide
+        <UButton :to="`/dashboard/${props.orgSlug}/~/settings/chatgpt`" variant="outline" color="neutral" size="sm">
+          Open ChatGPT settings
         </UButton>
         <UButton variant="ghost" color="neutral" size="sm" @click="dismiss">
           Dismiss

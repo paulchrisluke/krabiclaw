@@ -143,6 +143,8 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
   siteConfig: [
     { key: 'source_locale', value: 'en' },
     { key: 'brand_color', value: '#ea201c' },
+    { key: 'whatsapp_phone', value: '+66952932112' },
+    { key: 'owner_notification_channels', value: '["whatsapp"]' },
   ],
   siteLocales: [
     {
@@ -212,6 +214,7 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
       isPrimary: true,
       status: 'active',
       heroVideoAssetId: 'media-kiku-location-hero-video',
+      notificationPhone: '+66952932112',
     },
     {
       id: 'loc-kikuzuki-tkma',
@@ -250,7 +253,7 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
       isPrimary: false,
       status: 'active',
       heroImageAssetId: 'media-tkma-hero',
-      notificationPhone: '081 154 3606',
+      notificationPhone: '+66952932112',
     },
   ],
   mediaAssets: [

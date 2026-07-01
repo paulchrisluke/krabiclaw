@@ -27,7 +27,7 @@
         >
           <div class="h-full overflow-hidden rounded-xl border border-default bg-elevated shadow-sm transition-shadow hover:shadow-md">
             <div v-if="resolveMedia(post.featured_image).url" class="h-48 overflow-hidden">
-              <img
+              <UImage
                 :src="resolveMedia(post.featured_image).url ?? undefined"
                 :alt="post.title"
                 class="h-full w-full object-cover"

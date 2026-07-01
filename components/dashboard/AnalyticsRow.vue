@@ -7,9 +7,7 @@
       </div>
       <span class="shrink-0 text-muted">{{ value }}</span>
     </div>
-    <div class="h-1.5 overflow-hidden rounded-full bg-muted">
-      <div class="h-full rounded-full bg-primary transition-[width] duration-300" :style="{ width: `${boundedPercent}%` }" />
-    </div>
+    <UProgress :value="boundedPercent" class="h-1.5" />
   </div>
 </template>
 

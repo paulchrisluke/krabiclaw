@@ -173,8 +173,8 @@
                     primary-label="Open the dashboard"
                   />
                   <McpEditCard
-                    :guide-to="`/dashboard/${orgSlug}/~/settings/chatgpt`"
-                    guide-label="Install ChatGPT app"
+                    guide-to="/docs/integrations/mcp-setup"
+                    guide-label="Open setup docs"
                     :starter-prompt="transferStarterPrompt"
                     :dashboard-to="`/dashboard/${orgSlug}`"
                     dashboard-label="Open the dashboard"

@@ -1,4 +1,4 @@
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, type PropType } from 'vue'
 import { ESection, EText } from 'vue-email'
 import EmailShell from '../layouts/EmailShell'
 
@@ -15,6 +15,9 @@ export default defineComponent({
     time: { type: String, required: true },
     guests: { type: String, required: true },
     phone: { type: String, required: true },
+    email: { type: String, required: true },
+    locationName: { type: String as PropType<string | null>, default: null },
+    specialRequests: { type: String as PropType<string | null>, default: null },
     platformDomain: { type: String, required: true },
   },
   setup(props) {
@@ -26,10 +29,17 @@ export default defineComponent({
       h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => 'New reservation request from your website.'),
       h(ESection, { style: CARD }, () => [
         h(EText, { style: ROW }, () => [h('strong', null, 'Customer: '), props.guestName]),
+        props.locationName
+          ? h(EText, { style: ROW_TOP }, () => [h('strong', null, 'Location: '), props.locationName])
+          : null,
         h(EText, { style: ROW_TOP }, () => [h('strong', null, 'Date: '), props.date]),
         h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Time: '), props.time]),
         h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Party size: '), props.guests]),
         h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Phone: '), props.phone]),
+        h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Email: '), props.email]),
+        props.specialRequests
+          ? h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Special requests: '), props.specialRequests])
+          : null,
       ]),
       h(EText, { style: 'margin:0;font-size:15px;color:#52525b;line-height:1.6' }, () => 'Reply or contact the customer to confirm the reservation.'),
     ])
