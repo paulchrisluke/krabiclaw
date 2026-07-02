@@ -92,6 +92,176 @@
       </div>
     </section>
 
+    <section v-else-if="mode === 'saya-header'" class="dev-perf-section dev-perf-platform-shell" aria-label="Saya header render test">
+      <h2>Saya header render test</h2>
+      <p>
+        This mode renders the real Saya header around static text.
+      </p>
+      <div class="dev-perf-shell-frame saya-theme">
+        <UTheme :ui="{}">
+          <SayaHeader />
+          <main class="dev-perf-shell-body">
+            <h3>Static body</h3>
+            <p>The Saya header is the variable.</p>
+          </main>
+        </UTheme>
+      </div>
+    </section>
+
+    <section v-else-if="mode === 'saya-footer'" class="dev-perf-section dev-perf-platform-shell" aria-label="Saya footer render test">
+      <h2>Saya footer render test</h2>
+      <p>
+        This mode renders the real Saya footer around static text.
+      </p>
+      <div class="dev-perf-shell-frame saya-theme">
+        <UTheme :ui="{}">
+          <main class="dev-perf-shell-body">
+            <h3>Static body</h3>
+            <p>The Saya footer is the variable.</p>
+          </main>
+          <SayaFooter />
+        </UTheme>
+      </div>
+    </section>
+
+    <section v-else-if="mode === 'saya-shell'" class="dev-perf-section dev-perf-platform-shell" aria-label="Saya shell render test">
+      <h2>Saya shell render test</h2>
+      <p>
+        This mode renders the real Saya header and footer around static text.
+      </p>
+      <div class="dev-perf-shell-frame saya-theme">
+        <UTheme :ui="{}">
+          <SayaHeader />
+          <main class="dev-perf-shell-body">
+            <h3>Static body</h3>
+            <p>No production tenant page content is rendered here.</p>
+          </main>
+          <SayaFooter />
+        </UTheme>
+      </div>
+    </section>
+
+    <section v-else-if="mode === 'saya-static-shell'" class="dev-perf-section dev-perf-platform-shell" aria-label="Static Saya shell render test">
+      <h2>Static Saya shell render test</h2>
+      <p>
+        This mode renders Saya-shaped header/footer markup without real Saya components.
+      </p>
+      <div class="dev-perf-shell-frame saya-theme">
+        <header class="dev-perf-static-header">
+          <NuxtLink to="/" class="dev-perf-static-brand">
+            <span class="dev-perf-static-mark">S</span>
+            <span>Saya tenant</span>
+          </NuxtLink>
+          <nav class="dev-perf-static-nav" aria-label="Static Saya test navigation">
+            <NuxtLink v-for="item in sayaStaticNavItems" :key="item.to" :to="item.to">
+              {{ item.label }}
+            </NuxtLink>
+          </nav>
+        </header>
+        <main class="dev-perf-shell-body">
+          <h3>Static body</h3>
+          <p>This is the tenant static shell control.</p>
+        </main>
+        <footer class="dev-perf-static-footer">
+          Static Saya footer text
+        </footer>
+      </div>
+    </section>
+
+    <section v-else-if="mode === 'simple-icons'" class="dev-perf-section" aria-label="Simple Icons render test">
+      <h2>Simple Icons render test</h2>
+      <p>
+        This mode renders the social icon collection used by Saya footer social links.
+      </p>
+      <ul>
+        <li v-for="icon in simpleIcons" :key="icon">
+          <UIcon :name="icon" class="dev-perf-icon" />
+          <span>{{ icon }}</span>
+        </li>
+      </ul>
+    </section>
+
+    <section v-else-if="mode === 'text-no-icons'" class="dev-perf-section" aria-label="No-icons baseline test">
+      <h2>No-icons baseline test</h2>
+      <p>
+        Explicit alias for the plain-text baseline — same as the default
+        <code>text</code> mode, given its own name so the timing script's
+        mode list is self-documenting and can't silently fall back to
+        <code>text</code> on a typo.
+      </p>
+    </section>
+
+    <section v-else-if="mode === 'text-with-one-icon'" class="dev-perf-section" aria-label="Single icon render test">
+      <h2>Single icon render test</h2>
+      <p>
+        This mode renders exactly one UIcon, to isolate the fixed cost of
+        engaging the Icon module/server bundle at all from the marginal
+        per-icon cost measured by the full <code>icons</code> mode.
+      </p>
+      <UIcon name="i-heroicons-bolt" class="dev-perf-icon" />
+    </section>
+
+    <section v-else-if="mode === 'text-with-ui-button'" class="dev-perf-section" aria-label="Single UI button render test">
+      <h2>Single UI button render test</h2>
+      <p>
+        This mode renders a single UButton with no icon and no UCard wrapper,
+        to isolate baseline Nuxt UI component overhead from the heavier
+        <code>ui</code> mode (card + two buttons).
+      </p>
+      <UButton label="Primary action" color="primary" />
+    </section>
+
+    <section v-else-if="mode === 'text-with-i18n'" class="dev-perf-section" aria-label="i18n render test">
+      <h2>i18n render test</h2>
+      <p>
+        This mode calls <code>useI18n()</code> and renders one real
+        <code>$t()</code> lookup, to isolate the cost of engaging the i18n
+        runtime/locale message resolution during SSR.
+      </p>
+      <p>{{ t('saya.header.menu') }} (locale: {{ locale }})</p>
+    </section>
+
+    <section v-else-if="mode === 'text-with-analytics-plugin'" class="dev-perf-section" aria-label="Analytics composable render test">
+      <h2>Analytics composable render test</h2>
+      <p>
+        This mode calls <code>useAnalytics()</code> and <code>getGaClientId()</code>
+        on the page, to isolate whether wiring in the analytics composable adds
+        any SSR cost. Note: the GA4 `&lt;script&gt;` tag itself is injected
+        globally by <code>app.vue</code> on every page (including the
+        <code>text</code> baseline), so this mode only isolates the
+        composable call, not the script tag.
+      </p>
+      <p>GA client id (client-only, expect null during SSR): {{ gaClientId }}</p>
+    </section>
+
+    <section v-else-if="mode === 'text-with-layout'" class="dev-perf-section" aria-label="Layout mechanism render test">
+      <h2>Layout mechanism render test</h2>
+      <p>
+        This mode wraps static text in the real <code>default</code> layout
+        (an empty passthrough <code>&lt;div&gt;&lt;slot /&gt;&lt;/div&gt;</code>)
+        via <code>&lt;NuxtLayout&gt;</code>, to isolate the cost of Nuxt's
+        layout-resolution machinery itself from the header/footer component
+        cost already measured by the shell modes above.
+      </p>
+      <NuxtLayout name="default">
+        <p>Static body rendered inside the default layout.</p>
+      </NuxtLayout>
+    </section>
+
+    <section v-else-if="mode === 'text-with-saya-css'" class="dev-perf-section" aria-label="Saya theme CSS render test">
+      <h2>Saya theme CSS render test</h2>
+      <p>
+        This mode applies the <code>saya-theme</code> class and the same
+        brand-color CSS custom property computation the Saya layout runs
+        (<code>calculateThemeColors</code>), without rendering any Saya
+        component, to isolate theme-color computation/CSS scoping cost from
+        component-tree cost.
+      </p>
+      <div class="saya-theme dev-perf-saya-css-frame" :style="sayaThemeStyles">
+        <p>Static text under saya-theme styling.</p>
+      </div>
+    </section>
+
     <section v-else-if="mode === 'static-shell'" class="dev-perf-section dev-perf-platform-shell" aria-label="Static shell render test">
       <h2>Static shell render test</h2>
       <p>
@@ -126,6 +296,10 @@
 <script setup lang="ts">
 import PlatformFooter from '~/components/platform/PlatformFooter.vue'
 import PlatformHeader from '~/components/platform/PlatformHeader.vue'
+import SayaFooter from '~/components/saya/SayaFooter.vue'
+import SayaHeader from '~/components/saya/SayaHeader.vue'
+import { getGaClientId, useAnalytics } from '~/composables/useAnalytics'
+import { calculateThemeColors } from '~/utils/color-utils'
 
 definePageMeta({
   layout: false,
@@ -136,7 +310,27 @@ const requestHeaders = useRequestHeaders(['host', 'cf-ray'])
 const allowedHosts = new Set(['localhost', '127.0.0.1', '0.0.0.0', 'local.krabiclaw.com'])
 const isLocalWranglerPlatformHost = requestHeaders.host === 'krabiclaw.com' && !requestHeaders['cf-ray']
 const route = useRoute()
-const modes = new Set(['text', 'ui', 'icons', 'icons-client-only', 'icon-placeholders', 'platform-shell', 'static-shell'])
+const modes = new Set([
+  'text',
+  'ui',
+  'icons',
+  'icons-client-only',
+  'icon-placeholders',
+  'platform-shell',
+  'static-shell',
+  'saya-header',
+  'saya-footer',
+  'saya-shell',
+  'saya-static-shell',
+  'simple-icons',
+  'text-no-icons',
+  'text-with-one-icon',
+  'text-with-ui-button',
+  'text-with-i18n',
+  'text-with-analytics-plugin',
+  'text-with-layout',
+  'text-with-saya-css',
+])
 const mode = computed(() => {
   const requestedMode = Array.isArray(route.query.mode) ? route.query.mode[0] : route.query.mode
   return requestedMode && modes.has(requestedMode) ? requestedMode : 'text'
@@ -155,6 +349,11 @@ const icons = [
   'i-lucide-moon',
   'i-lucide-sun',
 ]
+const simpleIcons = [
+  'i-simple-icons-facebook',
+  'i-simple-icons-instagram',
+  'i-simple-icons-tiktok',
+]
 const staticNavItems = [
   { label: 'Plugin', to: '/plugin' },
   { label: 'Features', to: '/features' },
@@ -163,6 +362,41 @@ const staticNavItems = [
   { label: 'Docs', to: '/docs' },
   { label: 'Blog', to: '/blog' },
 ]
+const sayaStaticNavItems = [
+  { label: 'Menu', to: '/menu' },
+  { label: 'Reservations', to: '/reservations' },
+  { label: 'Experiences', to: '/experiences' },
+  { label: 'Contact', to: '/contact' },
+]
+
+// useI18n()/useAnalytics() are only invoked for their own mode — calling
+// them unconditionally would leak their setup cost into every other mode's
+// timing, defeating the point of isolating one variable at a time.
+const isI18nMode = mode.value === 'text-with-i18n'
+const i18n = isI18nMode ? useI18n() : null
+const t = i18n ? i18n.t : (key: string) => key
+const locale = i18n ? i18n.locale : ref('en')
+
+const isAnalyticsMode = mode.value === 'text-with-analytics-plugin'
+const analytics = isAnalyticsMode ? useAnalytics() : null
+const gaClientId = ref<string | null>(null)
+onMounted(() => {
+  if (!isAnalyticsMode || !analytics) return
+  gaClientId.value = getGaClientId()
+  analytics.trackEvent('dashboard_visited')
+})
+// Same brand-color test input the Saya layout would receive from a real
+// site's config.brand_color — kept static here since this page has no
+// tenant/bootstrap context.
+const sayaThemeStyles = computed(() => {
+  const colors = calculateThemeColors('#e11d48')
+  return {
+    '--brand-color': colors.brandColor,
+    '--ui-primary': colors.brandColor,
+    '--color-primary': colors.brandColor,
+    '--brand-color-foreground': colors.brandColorForeground,
+  }
+})
 
 if (!allowedHosts.has(url.hostname) && !isLocalWranglerPlatformHost) {
   throw createError({
@@ -300,6 +534,17 @@ li {
   border-radius: 9px;
 }
 
+.dev-perf-static-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: #111827;
+  color: #ffffff;
+}
+
 .dev-perf-static-nav {
   display: flex;
   flex-wrap: wrap;
@@ -318,5 +563,14 @@ li {
   border-top: 1px solid #e5e7eb;
   color: #6b7280;
   font-size: 14px;
+}
+
+.dev-perf-saya-css-frame {
+  margin-top: 18px;
+  padding: 24px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: var(--brand-color, transparent);
+  color: var(--brand-color-foreground, inherit);
 }
 </style>
