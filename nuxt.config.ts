@@ -338,19 +338,6 @@ export default defineNuxtConfig({
     '/assets/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
     '/_nuxt/**':  { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
 
-    // MCP widget assets — must be loadable from ChatGPT sandbox iframes on any origin.
-    // The sandbox iframe origin is <slug>.web-sandbox.oaiusercontent.com, which changes
-    // per environment (staging-krabiclaw-com.web-sandbox.oaiusercontent.com on staging).
-    // Wildcard ACAO is safe here: these are public, unauthenticated static JS/CSS files.
-    '/mcp-assets/**': {
-      headers: {
-        'access-control-allow-origin': '*',
-        'access-control-allow-methods': 'GET, OPTIONS',
-        'access-control-allow-headers': '*',
-        'cache-control': 'public, max-age=3600, stale-while-revalidate=60',
-      },
-    },
-
     // OAuth consent + login pages — anti-framing required by OpenAI MCP CSP spec.
     // frame-ancestors 'none' prevents clickjacking on the consent/auth flow.
     // X-Frame-Options: DENY is the legacy fallback for older browsers.

@@ -327,6 +327,7 @@ Flow:
 - Nuxt UI MCP server is required for building UI components with Nuxt UI integration.
 - Content creation and editing must go through the KrabiClaw MCP server.
 - Do not build parallel dashboard CMS flows when the equivalent MCP tool should be the primary surface.
+- Client MCP and ChowBot share one curated conversational surface policy in `server/utils/conversational-tool-surface.ts`. Do not add one-off tools to either surface without updating `docs/tool-parity.md`. Translations/locales, social/OAuth publishing, domains, and managed-service work requests are hidden by default and require explicit `CONVERSATIONAL_TOOLS_*_ENABLED=true` flags before they are exposed.
 
 ---
 

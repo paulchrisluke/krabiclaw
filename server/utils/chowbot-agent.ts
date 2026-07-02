@@ -93,6 +93,12 @@ import {
   CHOWBOT_TOOLS,
   CHOWBOT_CONFIRM_REQUIRED,
 } from "~/server/utils/chowbot-tools";
+import {
+  assertConversationalToolEnabled,
+  filterConversationalTools,
+  isConversationalToolGroupEnabled,
+  normalizeChowBotToolForConversationalSurface,
+} from "~/server/utils/conversational-tool-surface";
 import { SUPPORTED_CURRENCIES } from "~/shared/currencies";
 import { queryAll, queryFirst } from "~/server/db";
 import {
@@ -544,6 +550,14 @@ async function executeTool(
   },
 ): Promise<ApiValue> {
   const { db, env, orgId, siteId, userId } = ctx;
+
+  try {
+    assertConversationalToolEnabled(name, env);
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : `Tool ${name} is not available.`,
+    };
+  }
 
   if (requiresConfirmation(name, ctx.agentMessages ?? [])) {
     return {
@@ -2942,6 +2956,19 @@ Rules in setup mode:
 `
     : "";
 
+  const managedServiceGuidance = isConversationalToolGroupEnabled(env, "managed_service")
+    ? "- Managed service requests: submit work to Paul & Julia's queue (content, translation, SEO, Google Business, seasonal, photos, social media)\n"
+    : "";
+  const translationCapabilityGuidance = isConversationalToolGroupEnabled(env, "translations")
+    ? "- Languages and translations: manage locales, estimate site translation cost, queue translation jobs, inspect translation jobs, run translation batches, publish reviewed drafts\n"
+    : "";
+  const translationWorkflowGuidance = isConversationalToolGroupEnabled(env, "translations")
+    ? "- Use list_locales, upsert_locale, and delete_locale when the user asks to add, publish, disable, delete, or change the source language for translated site versions\n- Use get_translation_inventory before start_translation_job; tell the owner item count and estimated credits, then get confirmation before queuing the job\n- Use run_translation_job_batch only after a job exists and the owner confirms spending credits; it processes one batch and saves translations as drafts\n- Use publish_translations after the owner confirms drafted translations should go live; published languages become visible on the public site\n"
+    : "- If the owner asks for translations or language management, direct them to the dashboard; conversational translation tools are not enabled here.\n";
+  const translationConfirmationGuidance = isConversationalToolGroupEnabled(env, "translations")
+    ? "- Before delete_locale, start_translation_job, run_translation_job_batch, or publish_translations — confirm first\n"
+    : "";
+
   const SYSTEM = `You are ChowBot, an AI assistant for restaurant website owners using Krabiclaw.
 Help manage all site content with concise, action-oriented responses.
 ${SETUP_PREAMBLE}
@@ -2954,16 +2981,13 @@ Capabilities (always use tools — never say you can't do something the tools su
 - Posts: list, create, update, delete, publish (standard/offer/event/update with CTA) — optionally location-scoped
 - Menus: create, rename, view, rename/delete sections/categories, add brand-new items, reconcile/update item lists, update/delete individual items, publish, delete
 - Locations: list, create, update, delete (title syncs slug, plus manual address, hours, maps URL, Place ID, rating, review count, description, email, website, socials, price level, hero media), lookup from Google Maps URL
-- Reviews: get, create manual reviews, update manual reviews, reply as owner, delete reviews
+- Reviews: list location reviews and reply as owner
 - Media: list per location, delete, generate AI images with the configured OpenAI image model (auto-saved, returns asset_id)
 - Q&A: list, add, delete per location
 - Experiences: list, create (title, tagline, rich body, price, duration, capacity, time slots, image, SEO), update, delete, view/confirm/cancel guest bookings
 - Contact & reservation submissions: read
-- Managed service requests: submit work to Paul & Julia's queue (content, translation, SEO, Google Business, seasonal, photos, social media)
-- Site: rename (updates subdomain), set default menu currency, manage languages, read/write site page content (including reservation policies via reservations page)
-- Translations: estimate site translation cost, queue translation jobs, inspect translation jobs, run translation batches, publish reviewed drafts
-- Platform admin pages: read/write/delete about, contact, help content
-- Stats: posts, menus, locations, reviews
+${managedServiceGuidance}- Site: rename (updates subdomain), set default menu currency, read/write site page content (including reservation policies via reservations page)
+${translationCapabilityGuidance}- Stats: posts, menus, locations, reviews
 
 Guidelines:
 - Use tools immediately — never say "I'll do that" without calling a tool
@@ -2976,12 +3000,8 @@ Guidelines:
 - Never use add_menu_items_batch to replace, revise, rename, or update existing menu items
 - When creating menus, omit location_id — the server links it to the current location automatically
 - Use get_page_fields, update_page_content, and delete_content_field with page: 'reservations' when the user asks about reservation rules, hold times, cancellation windows, or deposits
-- Use list_locales, upsert_locale, and delete_locale when the user asks to add, publish, disable, delete, or change the source language for translated site versions
-- Use get_translation_inventory before start_translation_job; tell the owner item count and estimated credits, then get confirmation before queuing the job
-- Use run_translation_job_batch only after a job exists and the owner confirms spending credits; it processes one batch and saves translations as drafts
-- Use publish_translations after the owner confirms drafted translations should go live; published languages become visible on the public site
-- Use get_page_fields, update_page_content, and delete_content_field for tenant page content such as home, about, contact, location notes, and reservations
-- Before publish_post, delete_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_media_asset, delete_location_qa, delete_content_field, delete_locale, start_translation_job, run_translation_job_batch, publish_translations — confirm first
+${translationWorkflowGuidance}- Use get_page_fields, update_page_content, and delete_content_field for tenant page content such as home, about, contact, location notes, and reservations
+${translationConfirmationGuidance}- Before publish_post, delete_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_media_asset, delete_location_qa, or delete_content_field — confirm first
 - Menus are live immediately when created — use publish_menu only to republish a menu that was set to unpublished
 - Keep responses short — this is a chat panel`;
 
@@ -3022,6 +3042,8 @@ Guidelines:
     pendingMedia: opts.pendingMedia,
   };
   const toolCalls: ChowBotToolCall[] = [];
+  const tools = filterConversationalTools(CHOWBOT_TOOLS, env)
+    .map((tool) => normalizeChowBotToolForConversationalSurface(tool, env));
   let totalInput = 0,
     totalOutput = 0,
     cfLogId: string | null = null;
@@ -3033,7 +3055,7 @@ Guidelines:
       try {
         aiResponse = await callAiGateway(env, agentMessages, {
           system: SYSTEM,
-          tools: CHOWBOT_TOOLS,
+          tools,
           maxTokens: 8192,
           metadata: { org_id: orgId, site_id: siteId, action: "chowbot" },
         });

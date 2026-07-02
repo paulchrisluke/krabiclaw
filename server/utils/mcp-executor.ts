@@ -1,25 +1,20 @@
-import { createError, getRequestURL, type H3Event } from "h3";
+import { createError, type H3Event } from "h3";
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery } from "~/server/db";
 import { createPreviewToken } from "~/server/utils/preview-token";
 import { getFreeSiteDomain } from "~/server/utils/tenant-hosts";
-import { cloudflareEnv } from "~/server/utils/api-response";
 import { hasSiteEntitlement } from "~/server/utils/billing";
 import { getPageContent } from "~/server/utils/content-management";
 import {
-  requestImageUpload,
-  buildImageUrl,
   uploadImageBuffer,
   hasCloudflareImagesConfig,
 } from "~/server/utils/cloudflare-images";
 import {
   createMediaAsset,
-  activateMediaAsset,
   deleteMediaAsset,
   getMediaAsset,
   listMediaAssets,
   updateMediaAssetMetadata,
 } from "~/server/utils/media-asset-manager";
-import { createMediaActivationToken } from "~/server/utils/media-activation-token";
 import { aggregateAnalyticsForRange } from "~/server/utils/analytics";
 import {
   createLocation,
@@ -124,7 +119,8 @@ import {
   type DashboardDestination,
 } from "~/server/utils/dashboard-links";
 import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
-import { renderWidget } from "~/server/utils/mcp-render";
+import { renderStructuredResponse } from "~/server/utils/mcp-render";
+import { isConversationalToolGroupEnabled } from "~/server/utils/conversational-tool-surface";
 import {
   resolveMcpWorkspace,
   upsertMcpWorkspacePreference,
@@ -296,14 +292,6 @@ function expandSlotGeneratorArgs(args: Record<string, unknown>): Record<string, 
   const { recurring_slots: omittedRecurringSlots, ...restWithoutRecurringSlots } = rest;
   void omittedRecurringSlots;
   return { ...restWithoutRecurringSlots, time_slots: generated };
-}
-
-function resolveMcpBaseUrl(event: H3Event): string {
-  const env = cloudflareEnv(event);
-  return (env.BETTER_AUTH_URL ?? getRequestURL(event).origin).replace(
-    /\/$/,
-    "",
-  );
 }
 
 type GeneratedImageTarget =
@@ -942,8 +930,7 @@ export async function executeMcpToolCall(
       role: userRecord?.role ?? null,
       isPlatformAdmin: user.isPlatformAdmin,
     };
-    return renderWidget(
-      "list_sites",
+    return renderStructuredResponse(
       { sites, currentUser },
       sites.length === 0
         ? "Welcome to KrabiClaw. You have no sites yet — let's create one."
@@ -1272,8 +1259,7 @@ export async function executeMcpToolCall(
       missingPhotos: photos.length < 3,
     };
 
-    return renderWidget(
-      "import_from_maps",
+    return renderStructuredResponse(
       structuredContent,
       `Imported: ${details.name} — ${details.formattedAddress}. ${photos.length} photo${photos.length !== 1 ? "s" : ""} found.`,
     );
@@ -1327,8 +1313,7 @@ export async function executeMcpToolCall(
 
     const picker = pickerConfigFromShowGeneratedImages(normalizedArguments, activeSiteName);
     const isDebug = normalizedArguments.debug === true;
-    return renderWidget(
-      "show_generated_images",
+    return renderStructuredResponse(
       {
         title: picker.title,
         subtitle: picker.subtitle,
@@ -1464,8 +1449,7 @@ export async function executeMcpToolCall(
       const pages = [{ label: "Home", path: "/" }, ...locationPages];
       const ogImageUrl = locationRows[0]?.hero_image_public_url ?? null;
       const siteName = String((siteRow as Record<string, unknown>).brand_name ?? subdomain ?? site.siteId);
-      return renderWidget(
-        "show_site_preview",
+      return renderStructuredResponse(
         {
           site: {
             id: site.siteId,
@@ -2202,6 +2186,15 @@ export async function executeMcpToolCall(
     }
     case "publish_post": {
       const channels = normalizeChannelsInput(args);
+      if (
+        channels.some((channel) => channel !== "site") &&
+        !isConversationalToolGroupEnabled(site.env, "social_publishing")
+      ) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          "Social publishing is not exposed on this conversational surface. Publish to the site here, or use the dashboard for Facebook, Instagram, and Google Business publishing.",
+        );
+      }
       const postId = requiredString(args, "post_id");
       const wantsFacebook = channels.includes("facebook");
       const wantsInstagram = channels.includes("instagram");
@@ -2420,82 +2413,6 @@ export async function executeMcpToolCall(
           locationId: optionalString(args, "location_id") ?? undefined,
         }),
       };
-    case "request_media_upload":
-    case "request_photo_upload": {
-      if (!hasCloudflareImagesConfig(site.env))
-        throw new Error("Cloudflare Images not configured");
-      if (toolName === "request_photo_upload") {
-        return renderWidget(
-          "photo-upload",
-          { status: "awaiting_user_upload" },
-          "Photo upload widget is open. Wait for the user to select and upload their photo — the widget will return the assetId and publicUrl via model context when the upload completes. Do not call set_logo or any image assignment tool until you receive that context.",
-        );
-      }
-
-      const assetId = crypto.randomUUID();
-      const upload = await requestImageUpload(site.env);
-      await createMediaAsset(site.db, {
-        id: assetId,
-        organization_id: site.organizationId,
-        site_id: site.siteId,
-        location_id: optionalString(args, "location_id") ?? null,
-        kind: "image",
-        provider: "cloudflare_images",
-        source: "uploaded",
-        cloudflare_image_id: upload.imageId,
-        status: "pending",
-        file_name: optionalString(args, "filename") ?? "image",
-        category: (optionalString(args, "category") as never) ?? null,
-        created_by_user_id: site.userId,
-      });
-      const baseUrl = resolveMcpBaseUrl(event);
-      const activationSecret = typeof site.env.CRON_SECRET === 'string' ? site.env.CRON_SECRET : '';
-      if (!activationSecret) {
-        throw createError({
-          statusCode: 500,
-          statusMessage: 'Server configuration error: CRON_SECRET is not configured',
-        })
-      }
-      const activationToken = await createMediaActivationToken(activationSecret, assetId, site.siteId);
-      const uploadPayload = {
-        asset_id: assetId,
-        upload_url: upload.uploadUrl,
-        image_id: upload.imageId,
-        site_id: site.siteId,
-        activate_url: `${baseUrl}/api/mcp/media/${assetId}/activate`,
-        activation_token: activationToken,
-        context: await mutationContextPayload(site, {
-          locationId: optionalString(args, "location_id"),
-        }),
-      };
-      return uploadPayload;
-    }
-    case "confirm_media_upload": {
-      const assetId = requiredString(args, "asset_id");
-      const asset = await getMediaAsset(site.db, assetId, site.siteId);
-      if (!asset?.cloudflare_image_id) throw new Error("Asset not found");
-      const publicUrl = buildImageUrl(
-        site.env,
-        asset.cloudflare_image_id,
-        "public",
-      );
-      const thumbnailUrl = buildImageUrl(
-        site.env,
-        asset.cloudflare_image_id,
-        "thumbnail",
-      );
-      await activateMediaAsset(site.db, assetId, site.siteId, {
-        public_url: publicUrl,
-        thumbnail_url: thumbnailUrl,
-      });
-      return {
-        asset_id: assetId,
-        public_url: publicUrl,
-        thumbnail_url: thumbnailUrl,
-        status: "active",
-        context: await mutationContextPayload(site),
-      };
-    }
     case "update_media_asset": {
       const updated = await updateMediaAssetMetadata(
         site.db,

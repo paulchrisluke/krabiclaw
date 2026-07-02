@@ -15,10 +15,6 @@ export interface McpToolDefinition {
   inputSchema: Record<string, unknown>
   outputSchema: Record<string, unknown>
   fileParams?: string[]
-  /** Widget name served at ui://widget/{widgetName} — marks this as a render tool */
-  widgetName?: string
-  widgetInvoking?: string
-  widgetInvoked?: string
 }
 
 export interface McpToolAnnotations {
@@ -576,9 +572,6 @@ function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'output
       ...combinators,
     },
     outputSchema: definition.outputSchema ?? { type: 'object' },
-    widgetName: definition.widgetName,
-    widgetInvoking: definition.widgetInvoking,
-    widgetInvoked: definition.widgetInvoked,
     fileParams: definition.fileParams,
   })
 }
@@ -665,7 +658,6 @@ const BOUNDED_WRITE_TOOL_NAMES = [
   'save_generated_image',
   'save_generated_image_file',
   'upload_user_photo',
-  'request_photo_upload',
   'set_logo',
   'set_brand_color',
   'set_home_hero_image',
@@ -688,8 +680,6 @@ const BOUNDED_WRITE_TOOL_NAMES = [
   'create_site',
   'create_post',
   'update_post',
-  'request_media_upload',
-  'confirm_media_upload',
   'update_media_asset',
   'import_menu_from_media',
   'update_experience_booking',
@@ -953,15 +943,15 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         target: {
           type: 'string',
           enum: ['logo', 'home_hero', 'about_story_image', 'home_story_image', 'location_hero', 'post_image', 'menu_item_image', 'experience_image'],
-          description: 'Optional target that the widget should update directly after the user selects an image.',
+          description: 'Optional target that should be updated directly after the user selects an image.',
         },
         site_id: { type: 'string', description: 'Required with target. Site ID that owns the target content.' },
         location_id: { type: 'string' },
         post_id: { type: 'string' },
         menu_item_id: { type: 'string' },
         experience_id: { type: 'string' },
-        title: { type: 'string', description: 'Optional widget title override.' },
-        subtitle: { type: 'string', description: 'Optional widget subtitle override.' },
+        title: { type: 'string', description: 'Optional title override.' },
+        subtitle: { type: 'string', description: 'Optional subtitle override.' },
         use_label: { type: 'string', description: 'Optional label for the primary button.' },
         regenerate_label: { type: 'string', description: 'Optional label for the secondary button.' },
       },
@@ -1042,32 +1032,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       required: ['assetId', 'publicUrl'],
     },
   }),
-  globalTool(withToolAnnotations({
-    name: 'request_photo_upload',
-    description: 'Deprecated compatibility tool. Do not call this in the Client MCP ChatGPT app. If the user wants to provide a photo, ask them to attach it directly in ChatGPT and then use upload_user_photo. The KrabiClaw uploader should only be recommended for videos.',
-    domain: 'media',
-    minimumRole: 'editor',
-    confirmRequired: false,
-    widgetName: 'photo-upload',
-    widgetInvoking: 'Opening upload form…',
-    widgetInvoked: 'Upload your photo',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        ...siteIdSchema,
-        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this photo will be used for.' },
-      },
-      required: ['site_id'],
-      additionalProperties: false,
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        status: { type: 'string', enum: ['awaiting_user_upload'] },
-      },
-      required: ['status'],
-    },
-  })),
   globalTool(withToolAnnotations({
     name: 'list_sites',
     description: 'List the caller\'s accessible sites and current authenticated account identity.',
@@ -2097,45 +2061,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       type: 'object',
       properties: { assets: { type: 'array', items: mediaAssetObject } },
       required: ['assets'],
-    },
-  }),
-  siteTool({
-    name: 'request_media_upload',
-    description: 'Legacy dashboard/CMS image upload primitive. Do not call this from the Client MCP ChatGPT app for user photos; ask the user to attach photos directly in ChatGPT and use upload_user_photo. Videos still go through the dashboard media library.',
-    domain: 'media',
-    minimumRole: 'editor',
-    confirmRequired: false,
-    inputSchema: { filename: { type: 'string' }, location_id: { type: 'string' }, category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo'] } },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        asset_id: { type: 'string', description: 'Pass to confirm_media_upload after the browser finishes uploading.' },
-        upload_url: { type: 'string', description: 'Cloudflare direct-upload URL — POST the image file here from the browser.' },
-        image_id: { type: 'string', description: 'Cloudflare Images ID.' },
-        site_id: { type: 'string' },
-        activate_url: { type: 'string', description: 'URL to POST after upload to activate the asset.' },
-        activation_token: { type: 'string', description: 'Bearer token required when calling activate_url.' },
-      },
-      required: ['asset_id', 'upload_url', 'image_id', 'site_id', 'activate_url', 'activation_token'],
-    },
-  }),
-  siteTool({
-    name: 'confirm_media_upload',
-    description: 'Confirm a pending uploaded image.',
-    domain: 'media',
-    minimumRole: 'editor',
-    confirmRequired: false,
-    inputSchema: { asset_id: { type: 'string' } },
-    required: ['asset_id'],
-    outputSchema: {
-      type: 'object',
-      properties: {
-        asset_id: { type: 'string' },
-        public_url: { type: 'string' },
-        thumbnail_url: { type: 'string' },
-        status: { type: 'string', enum: ['active'] },
-      },
-      required: ['asset_id', 'public_url', 'status'],
     },
   }),
   siteTool({

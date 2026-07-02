@@ -1,4 +1,4 @@
-import { createError, getHeader, getRequestURL } from "h3";
+import { createError, getHeader } from "h3";
 import {
   asMcpError,
   mcpFailure,
@@ -19,10 +19,14 @@ import {
 import { MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
 import { cloudflareEnv } from "~/server/utils/api-response";
-import { isWidgetEnabledForTool } from "~/server/utils/mcp-widget-config";
 import { queryAll } from "~/server/db";
 import { purgeSiteKvCache } from "~/server/utils/edge-cache";
 import { purgeBootstrapCache } from "~/server/utils/bootstrap-cache";
+import {
+  assertConversationalToolEnabled,
+  filterConversationalTools,
+  normalizeMcpToolForConversationalSurface,
+} from "~/server/utils/conversational-tool-surface";
 import {
   buildMcpAuthChallengeForError,
   buildMcpOAuthChallenge,
@@ -34,37 +38,9 @@ import {
 
 const TENANT_AUTH_DESCRIPTION = "Connect KrabiClaw to continue.";
 const TENANT_AUTH_REQUIRED_TEXT = "Authentication required: connect KrabiClaw to continue.";
-const DEPRECATED_CLIENT_MCP_PHOTO_UPLOAD_TOOLS = new Set([
-  "request_photo_upload",
-  "request_media_upload",
-  "confirm_media_upload",
-]);
 
 function resourceMetadataUrl(baseUrl: string) {
   return `${baseUrl}/.well-known/oauth-protected-resource`;
-}
-
-const WIDGET_RESOURCE_MIME_TYPE = "text/html;profile=mcp-app";
-
-// Increment this whenever widgets are changed to bust ChatGPT's ui:// cache.
-// ChatGPT caches widget resources by URI, so the same ui://widget/foo.html
-// URI will continue to serve the old widget until the URI changes.
-const WIDGET_VERSION = "v9";
-
-function widgetResourceUri(name: string) {
-  return `ui://widget/${name}@${WIDGET_VERSION}.html`;
-}
-
-// Prefer BETTER_AUTH_URL from Cloudflare env — it is set correctly per environment
-// (krabiclaw.com for prod, staging.krabiclaw.com for staging, etc.).
-// Falling back to the raw request URL origin can return a Workers internal hostname
-// on Cloudflare, which the ChatGPT sandbox then blocks in CSP.
-function resolveBaseUrl(event: Parameters<typeof getRequestURL>[0]): string {
-  const cfEnv = cloudflareEnv(event);
-  return (cfEnv.BETTER_AUTH_URL ?? getRequestURL(event).origin).replace(
-    /\/$/,
-    "",
-  );
 }
 
 export default defineEventHandler(async (event) => {
@@ -212,7 +188,7 @@ After applying, always confirm: "[Placement] updated for [site name]." — never
 
 All other tools require a site_id obtained from list_sites. Never guess or invent site IDs. Use get_current_user when the user asks which account is connected.
 
-Common workflows: update menus and items, create and publish posts, triage contact and reservation submissions, update page content directly, upload media, translate content, reply to reviews, manage experiences and bookings, and generate or replace images for any content section.`,
+Common workflows: update menus and items, create and publish site posts, triage contact and reservation submissions, update page content directly, upload media, reply to reviews, manage experiences and bookings, and generate or replace images for any content section. Translations, social publishing, domains, and managed-service requests are available only when explicitly enabled for this connector; otherwise direct the user to the dashboard.`,
       });
     }
 
@@ -227,37 +203,9 @@ Common workflows: update menus and items, create and publish posts, triage conta
       return mcpSuccess(request.id, {});
     }
 
-    // Widget resources served as ui://widget/{name}.html with the MCP Apps UI MIME type.
-    // ChatGPT fetches these when it sees openai/outputTemplate on a tool definition.
-    const WIDGETS = [
-      { name: "photo-upload", title: "Photo Upload" },
-    ] as const;
-
-    function widgetHtml(name: string, baseUrl: string) {
-      return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>KrabiClaw</title>
-<script>window.__KC_WIDGET_VERSION__="${WIDGET_VERSION}";</script>
-<script type="module" crossorigin src="${baseUrl}/mcp-assets/${name}.js"></script>
-<link rel="modulepreload" crossorigin href="${baseUrl}/mcp-assets/jsx-runtime-chunk.js">
-</head>
-<body><div id="app"></div></body>
-</html>`;
-    }
-
     if (request.method === "resources/list") {
       await requireMcpUser(event, tenantAuthOptions);
-      return mcpSuccess(request.id, {
-        resources: WIDGETS.map((w) => ({
-          uri: widgetResourceUri(w.name),
-          name: w.title,
-          description: `${w.title} widget`,
-          mimeType: WIDGET_RESOURCE_MIME_TYPE,
-        })),
-      });
+      return mcpSuccess(request.id, { resources: [] });
     }
 
     if (request.method === "resources/templates/list") {
@@ -269,67 +217,10 @@ Common workflows: update menus and items, create and publish posts, triage conta
       await requireMcpUser(event, tenantAuthOptions);
       const uri =
         typeof request.params?.uri === "string" ? request.params.uri : "";
-      // Accept both versioned (name@vN.html) and plain (name.html) forms so that
-      // older cached tool references from prior sessions can still resolve.
-      const match = uri.match(
-        /^ui:\/\/widget\/([^@]+?)(?:@[^.]+)?(?:\.html)?$/,
+      throw mcpProtocolError(
+        MCP_ERROR.methodNotFound,
+        `Client MCP does not expose resources: ${uri}`,
       );
-      if (!match) {
-        throw mcpProtocolError(
-          MCP_ERROR.invalidParams,
-          `Unknown resource: ${uri}`,
-        );
-      }
-      const widgetName = match[1]!;
-      if (!WIDGETS.some((w) => w.name === widgetName)) {
-        throw mcpProtocolError(
-          MCP_ERROR.invalidParams,
-          `Unknown widget: ${widgetName}`,
-        );
-      }
-      const baseUrl = resolveBaseUrl(event);
-      const r2MediaOrigin = (() => {
-        try {
-          const base = cfEnv.MEDIA_BASE_URL as string | undefined;
-          return base ? new URL(base).origin : null;
-        } catch { return null; }
-      })();
-      const extraDomains = r2MediaOrigin ? [r2MediaOrigin] : [];
-      return mcpSuccess(request.id, {
-        contents: [
-          {
-            uri: widgetResourceUri(widgetName),
-            mimeType: WIDGET_RESOURCE_MIME_TYPE,
-            text: widgetHtml(widgetName, baseUrl),
-            _meta: {
-              ui: {
-                prefersBorder: true,
-                domain: baseUrl,
-                csp: {
-                  connectDomains: [...extraDomains, baseUrl, "https://upload.imagedelivery.net", "https://imagedelivery.net"],
-                  resourceDomains: [...extraDomains, baseUrl, "https://imagedelivery.net"],
-                  imageDomains: [...extraDomains, "https://imagedelivery.net"],
-                },
-              },
-              "openai/widgetDescription": `${WIDGETS.find((w) => w.name === widgetName)?.title ?? "KrabiClaw"} widget`,
-              "openai/widgetPrefersBorder": true,
-              "openai/widgetDomain": baseUrl,
-              "openai/widgetCSP": {
-                connect_domains: [...extraDomains, baseUrl, "https://upload.imagedelivery.net", "https://imagedelivery.net"],
-                resource_domains: [...extraDomains, baseUrl, "https://imagedelivery.net"],
-                image_domains: [...extraDomains, "https://imagedelivery.net"],
-                redirect_domains: [
-                  ...new Set([
-                    baseUrl,
-                    cloudflareEnv(event).NUXT_PUBLIC_PLATFORM_DOMAIN?.replace(/\/$/, "") ??
-                      "https://krabiclaw.com",
-                  ]),
-                ],
-              },
-            },
-          },
-        ],
-      });
     }
 
     if (request.method === "prompts/list") {
@@ -392,10 +283,13 @@ Common workflows: update menus and items, create and publish posts, triage conta
         ? await getVisibleSiteContext(event, siteId)
         : null;
 
+      const visibleSurfaceTools = filterConversationalTools(MCP_TOOLS, cfEnv)
+        .map((tool) => normalizeMcpToolForConversationalSurface(tool, cfEnv));
+
       const entitlementKeys = siteCtx
         ? [
             ...new Set(
-              MCP_TOOLS.map((t) => t.requiredEntitlement).filter(
+              visibleSurfaceTools.map((t) => t.requiredEntitlement).filter(
                 Boolean,
               ) as string[],
             ),
@@ -410,10 +304,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
           )
         : new Set<string>();
 
-      const tools = MCP_TOOLS.filter((tool) => {
-        if (DEPRECATED_CLIENT_MCP_PHOTO_UPLOAD_TOOLS.has(tool.name)) {
-          return false;
-        }
+      const tools = visibleSurfaceTools.filter((tool) => {
         // Without a site_id, return all tools so AI clients (e.g. ChatGPT) can discover
         // the full capability set on first connection. Security is enforced at execution time.
         if (!siteId || !siteCtx) return true;
@@ -431,48 +322,17 @@ Common workflows: update menus and items, create and publish posts, triage conta
         outputSchema: tool.outputSchema,
         annotations: tool.annotations,
         securitySchemes: tool.securitySchemes,
-        ...(isWidgetEnabledForTool(tool.name) && tool.widgetName
-          ? {
-              _meta: {
-                securitySchemes: tool.securitySchemes,
-                "krabiclaw/toolInfo": {
-                  domain: tool.domain,
-                  minimumRole: tool.minimumRole,
-                  confirmRequired: tool.confirmRequired,
-                },
-                ui: { resourceUri: widgetResourceUri(tool.widgetName) },
-                "openai/outputTemplate": widgetResourceUri(tool.widgetName),
-                "openai/widgetAccessible": true,
-                "openai/toolInvocation/invoking":
-                  tool.widgetInvoking ?? "Loading…",
-                "openai/toolInvocation/invoked": tool.widgetInvoked ?? "Done",
-                ...(tool.fileParams?.length
-                  ? { "openai/fileParams": tool.fileParams }
-                  : {}),
-              },
-            }
-          : tool.fileParams?.length
-            ? {
-                _meta: {
-                  securitySchemes: tool.securitySchemes,
-                  "krabiclaw/toolInfo": {
-                    domain: tool.domain,
-                    minimumRole: tool.minimumRole,
-                    confirmRequired: tool.confirmRequired,
-                  },
-                  "openai/fileParams": tool.fileParams,
-                },
-              }
-            : {
-                _meta: {
-                  securitySchemes: tool.securitySchemes,
-                  "krabiclaw/toolInfo": {
-                    domain: tool.domain,
-                    minimumRole: tool.minimumRole,
-                    confirmRequired: tool.confirmRequired,
-                  },
-                },
-              }),
+        _meta: {
+          securitySchemes: tool.securitySchemes,
+          "krabiclaw/toolInfo": {
+            domain: tool.domain,
+            minimumRole: tool.minimumRole,
+            confirmRequired: tool.confirmRequired,
+          },
+          ...(tool.fileParams?.length
+            ? { "openai/fileParams": tool.fileParams }
+            : {}),
+        },
       }));
 
       return mcpSuccess(request.id, { tools });
@@ -492,12 +352,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
               ),
             );
 
-      if (DEPRECATED_CLIENT_MCP_PHOTO_UPLOAD_TOOLS.has(toolName)) {
-        throw mcpProtocolError(
-          MCP_ERROR.methodNotFound,
-          `Tool ${toolName} is deprecated and blocked.`
-        );
-      }
+      assertConversationalToolEnabled(toolName, cfEnv as ApiRecord);
 
       const result = await executeMcpToolCall(event, toolName, rawArgs);
 
@@ -565,25 +420,16 @@ Common workflows: update menus and items, create and publish posts, triage conta
         }
       }
 
-      const tool =
-        isWidgetEnabledForTool(toolName) && isRender
-          ? MCP_TOOLS.find((t) => t.name === toolName)
-          : null;
       return mcpSuccess(request.id, {
         isError: false,
         structuredContent,
         content: [
           { type: "text", text: modelText },
         ],
-        ...(tool
+        ...(isRender && result.privateMeta
           ? {
               _meta: {
-                "openai/toolInvocation/invoking":
-                  tool.widgetInvoking ?? "Loading…",
-                "openai/toolInvocation/invoked": tool.widgetInvoked ?? "Done",
-                ...(isRender && result.privateMeta
-                  ? { "krabiclaw/widgetData": result.privateMeta }
-                  : {}),
+                "krabiclaw/privateMeta": result.privateMeta,
               },
             }
           : {}),
