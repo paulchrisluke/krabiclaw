@@ -39,6 +39,18 @@ const skipGlobalCss = process.env.PERF_NO_GLOBAL_CSS === 'true'
 // the ~511KB entry chunk. Set PERF_BUNDLE_ANALYZE=true and rebuild.
 const analyzeBundle = process.env.PERF_BUNDLE_ANALYZE === 'true'
 
+// PERF DEBUG PATCH (temporary — remove once the entry.css contributor matrix
+// is done): main.css's individual @import/@plugin lines can't be toggled via
+// css: [...] (that only swaps whole files), so this strips one line at a
+// time from the source before Tailwind's own Vite plugin consumes it. Only
+// one flag is meant to be set per build.
+const cssStrips: [envVar: string, line: string][] = [
+  ['PERF_NO_SAYA_CSS', '@import "./saya.css";'],
+  ['PERF_NO_TYPOGRAPHY_CSS', '@plugin "@tailwindcss/typography";'],
+  ['PERF_NO_NUXT_UI_CSS', '@import "@nuxt/ui";'],
+  ['PERF_NO_TAILWIND_CSS', '@import "tailwindcss";'],
+]
+
 export default defineNuxtConfig({
   modules: [
     'nitro-cloudflare-dev',
@@ -129,13 +141,36 @@ export default defineNuxtConfig({
   // treemap output on whichever build ran second.
   hooks: {
     'vite:extendConfig'(viteConfig, { isClient }) {
-      if (!analyzeBundle || !isClient) return
-      viteConfig.plugins?.push(visualizer({
-        filename: process.env.PERF_BUNDLE_ANALYZE_OUT || 'bundle-analysis.html',
-        template: 'treemap',
-        gzipSize: true,
-        brotliSize: true,
-      }))
+      if (analyzeBundle && isClient) {
+        viteConfig.plugins?.push(visualizer({
+          filename: process.env.PERF_BUNDLE_ANALYZE_OUT || 'bundle-analysis.html',
+          template: 'treemap',
+          gzipSize: true,
+          brotliSize: true,
+        }))
+      }
+
+      // PERF DEBUG PATCH: see cssStrips above. enforce: 'pre' so this runs
+      // before Tailwind's own Vite plugin consumes the @import/@plugin
+      // at-rules in main.css.
+      const activeStrip = cssStrips.find(([envVar]) => process.env[envVar] === 'true')
+      if (activeStrip) {
+        const [, line] = activeStrip
+        // unshift, not push: Tailwind's own Vite plugin is also enforce:'pre'
+        // and already registered by the time this hook runs, so a same-
+        // priority plugin appended via push still runs after it (same-enforce
+        // plugins execute in array order). Putting this one first in the
+        // array is what actually lets it see the raw source before Tailwind
+        // resolves/inlines the @import chain.
+        viteConfig.plugins?.unshift({
+          name: 'perf-debug-strip-css',
+          enforce: 'pre',
+          transform(code: string, id: string) {
+            if (!id.endsWith('assets/css/main.css')) return
+            return code.replace(line, `/* PERF DEBUG PATCH: stripped "${line}" */`)
+          },
+        })
+      }
     },
   },
 
