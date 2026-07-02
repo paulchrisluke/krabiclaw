@@ -35,7 +35,20 @@ export default defineNuxtConfig({
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         { name: 'theme-color', content: '#1F2547' }
-      ]
+      ],
+      link: [
+        // Every Saya hero/content image is served from Cloudflare Images
+        // (imagedelivery.net) — a third-party origin the browser otherwise
+        // doesn't discover until it parses the <img> tag deep in <body>,
+        // paying DNS+TCP+TLS setup serially after that. Preconnecting lets
+        // that handshake happen in parallel with initial HTML parsing,
+        // which matters most for the LCP image on image-heavy hero pages.
+        // No `crossorigin` here deliberately — our <img> tags don't set it
+        // either (plain no-cors requests), and Chrome only reuses a
+        // preconnected connection when its CORS mode matches the real
+        // request; a mismatched crossorigin attribute makes this a no-op.
+        { rel: 'preconnect', href: 'https://imagedelivery.net' },
+      ],
     },
   },
 
@@ -43,6 +56,12 @@ export default defineNuxtConfig({
   debug: false,
   devtools: { enabled: false },
   css: ['~/assets/css/main.css'],
+  icon: {
+    fallbackToApi: false,
+    serverBundle: {
+      collections: ['heroicons', 'lucide'],
+    },
+  },
   runtimeConfig: {
     defaultCurrency: isCurrencyCode(configuredDefaultCurrency) ? configuredDefaultCurrency : DEFAULT_CURRENCY,
     public: {
