@@ -51,6 +51,15 @@ const cssStrips: [envVar: string, line: string][] = [
   ['PERF_NO_TAILWIND_CSS', '@import "tailwindcss";'],
 ]
 
+// PERF DEBUG PATCH (temporary — remove once the client JS/hydration floor is
+// attributed): Nuxt's built-in features.noScripts strips every script chunk
+// from the production build entirely (no entry.js, no modulepreload, no
+// hydration at all) — it only takes effect outside dev mode, so it fits the
+// same build-once-and-measure pattern as the CSS flags above. Set
+// PERF_NO_SCRIPTS=true and rebuild to compare pure static-HTML SSR timing
+// against the normal hydrated build on /dev/perf-text.
+const skipClientScripts = process.env.PERF_NO_SCRIPTS === 'true'
+
 export default defineNuxtConfig({
   modules: [
     'nitro-cloudflare-dev',
@@ -96,6 +105,10 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   debug: false,
   devtools: { enabled: false },
+  // PERF DEBUG PATCH: see skipClientScripts above.
+  features: {
+    noScripts: skipClientScripts,
+  },
   // PERF DEBUG PATCH: see skipGlobalCss above.
   css: skipGlobalCss ? [] : ['~/assets/css/main.css'],
   icon: {
