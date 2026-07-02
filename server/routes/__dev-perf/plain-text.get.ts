@@ -2,8 +2,9 @@ import { isDevPerfHostAllowed } from '~/shared/dev-perf'
 
 export default defineEventHandler((event) => {
   const rawHost = getRequestHost(event)
+  const runtimeConfig = useRuntimeConfig(event)
 
-  if (!isDevPerfHostAllowed(rawHost, !!getHeader(event, 'cf-ray'))) {
+  if (!isDevPerfHostAllowed(rawHost, !!getHeader(event, 'cf-ray'), runtimeConfig.public.perfPublicTestPage)) {
     throw createError({
       statusCode: 404,
       statusMessage: 'Not Found',

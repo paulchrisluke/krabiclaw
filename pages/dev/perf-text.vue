@@ -308,8 +308,8 @@ definePageMeta({
   layout: false,
 })
 
-const url = useRequestURL()
 const requestHeaders = useRequestHeaders(['host', 'cf-ray'])
+const runtimeConfig = useRuntimeConfig()
 const route = useRoute()
 const modes = new Set([
   'text',
@@ -399,7 +399,7 @@ const sayaThemeStyles = computed(() => {
   }
 })
 
-if (!isDevPerfHostAllowed(requestHeaders.host, !!requestHeaders['cf-ray'])) {
+if (!isDevPerfHostAllowed(requestHeaders.host, !!requestHeaders['cf-ray'], runtimeConfig.public.perfPublicTestPage)) {
   throw createError({
     statusCode: 404,
     statusMessage: 'Not Found',

@@ -1,11 +1,10 @@
 // Shared retry wrapper for `wrangler d1 execute --remote --file` seed applies.
 //
-// Preview's D1 database is shared across concurrent/overlapping PR runs (see
-// .github/workflows/ci.yml), and the demo/pottery-house/kikuzuki seed scripts
-// run three back-to-back bulk imports against it in the same CI step. Under
-// concurrent load, Cloudflare's D1 bulk-import API can occasionally race and
-// reject an import with "Not currently importing anything" even though the
-// command itself was correct — retrying after a short delay clears it.
+// `wrangler d1 execute --file` can intermittently fail with errors like
+// "Not currently importing anything" for reasons that aren't fully
+// understood yet — retrying after a short delay has been observed to clear
+// it in some cases, but not reliably (see the kikuzuki seed failures on
+// 2026-07-02, which exhausted all retries).
 export async function execWithRetry(run: () => void, label: string, attempts = 5, delayMs = 8000): Promise<void> {
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {

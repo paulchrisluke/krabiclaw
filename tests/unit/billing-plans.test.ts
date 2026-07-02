@@ -9,7 +9,7 @@ function makeKv(initial: Record<string, string> = {}): KVNamespace {
   return {
     get: async (key: string) => store[key] ?? null,
     put: async (key: string, value: string) => { store[key] = value },
-    delete: async (key: string) => { delete store[key] },
+    delete: async (key: string) => { Reflect.deleteProperty(store, key) },
     list: async () => ({ keys: [], list_complete: true, cursor: '', cacheStatus: null }),
     getWithMetadata: async () => ({ value: null, metadata: null, cacheStatus: null }),
   } as unknown as KVNamespace

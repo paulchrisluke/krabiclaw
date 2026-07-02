@@ -82,7 +82,7 @@ jobs:
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://preview.krabiclaw.com
       NUXT_PUBLIC_FREE_SITE_DOMAIN: https://preview.krabiclaw.com
       NUXT_PUBLIC_APP_NAME: KrabiClaw
-      NUXT_PUBLIC_TURNSTILE_ENABLED: "false"
+
       BETTER_AUTH_SECRET: test-secret-for-ci
       BETTER_AUTH_URL: https://preview.krabiclaw.com
       E2E_ALLOW_DEV_ROUTES: "true"
@@ -157,7 +157,7 @@ jobs:
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://staging.krabiclaw.com
       NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
       NUXT_PUBLIC_APP_NAME: KrabiClaw
-      NUXT_PUBLIC_TURNSTILE_ENABLED: "false"
+
       BETTER_AUTH_SECRET: test-secret-for-ci
       BETTER_AUTH_URL: https://staging.krabiclaw.com
       E2E_ALLOW_DEV_ROUTES: "true"
@@ -237,7 +237,7 @@ jobs:
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://krabiclaw.com
       NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
       NUXT_PUBLIC_APP_NAME: KrabiClaw
-      NUXT_PUBLIC_TURNSTILE_ENABLED: "false"
+
       BETTER_AUTH_URL: https://krabiclaw.com
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5

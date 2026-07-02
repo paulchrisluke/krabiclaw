@@ -65,6 +65,13 @@ const cssStrips: [envVar: string, line: string][] = [
 // against the normal hydrated build on /dev/perf-text.
 const skipClientScripts = process.env.PERF_NO_SCRIPTS === 'true'
 
+// PERF DEBUG PATCH (temporary): build/runtime flags for isolating global
+// client-floor items that affect every /dev/perf-text mode before the page
+// branch can opt in/out. Set one flag at a time and rebuild.
+const skipGa4 = process.env.PERF_NO_GA4 === 'true'
+const skipDompurifyHooks = process.env.PERF_NO_DOMPURIFY_HOOKS === 'true'
+const publicPerfTestPage = process.env.PERF_PUBLIC_TEST_PAGE !== 'false'
+
 // Tried (2026-07-02): a `PERF_CSS_EXCLUDE_DASHBOARD` flag appending
 // `@source not "<glob>";` to main.css for dashboard/admin/editor/billing/
 // onboarding/media paths, to measure how much of entry.css a public/tenant
@@ -151,11 +158,13 @@ export default defineNuxtConfig({
       freeSiteDomain: process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN || '',
       appName: process.env.NUXT_PUBLIC_APP_NAME || '',
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://krabiclaw.com',
-      turnstileEnabled: process.env.NUXT_PUBLIC_TURNSTILE_ENABLED === 'true',
-      turnstileSiteKey: process.env.NUXT_PUBLIC_TURNSTILE_SITE_KEY || '',
-      whatsappNumber: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER || '16197200000'
+
+      whatsappNumber: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER || '16197200000',
+      perfNoGa4: skipGa4,
+      perfNoDompurifyHooks: skipDompurifyHooks,
+      perfPublicTestPage: publicPerfTestPage,
     },
-    turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || ''
+
   },
 
   vite: {
@@ -373,7 +382,7 @@ export default defineNuxtConfig({
   //
   // Poppins: only the weights actually used in CSS (NOT all 18 variants).
   // Instrument Serif: italic is the LCP font on tenant hero pages — kept minimal.
-  // Fredoka: platform wordmark / display, all 4 weights used.
+  // Fredoka: platform wordmark only, weight 600 only (not all 4 weights).
   //
   // All three families are Google Fonts — pin `provider: 'google'` per family and
   // disable the other providers so unifont never registers/queries them (e.g. the
@@ -392,9 +401,9 @@ export default defineNuxtConfig({
       npm: false,
     },
     families: [
-      { name: 'Instrument Serif', provider: 'google', weights: [400], styles: ['normal', 'italic'], display: 'swap' },
+      // Instrument Serif removed from global load — loaded conditionally on tenant routes via plugin
       { name: 'Poppins', provider: 'google', weights: [400, 500, 600, 700], display: 'swap' },
-      { name: 'Fredoka', provider: 'google', weights: [400, 500, 600, 700], display: 'swap' },
+      { name: 'Fredoka', provider: 'google', weights: [600], display: 'swap' },
     ],
   },
 

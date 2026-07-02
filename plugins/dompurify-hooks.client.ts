@@ -3,6 +3,9 @@ let hooksConfigured = false
 export default defineNuxtPlugin(async () => {
   if (import.meta.server) return
 
+  const runtimeConfig = useRuntimeConfig()
+  if (runtimeConfig.public.perfNoDompurifyHooks) return
+
   const DOMPurify = (await import('isomorphic-dompurify')).default
 
   if (hooksConfigured) return
