@@ -3,7 +3,12 @@
 
 declare global {
   interface Window {
-    gtag?: (_command: string, _eventName: string, _params?: Record<string, unknown>) => void
+    // gtag.js's real contract is variadic — 'js'+Date, 'config'+id, 'event'+name+params,
+    // 'consent'+... all shipped through the same function. Narrowing this to the
+    // trackEvent()-shaped 3-arg form below broke app.vue's own gtag bootstrap
+    // (`gtag('js', new Date())`), which is equally legitimate usage of the same global.
+    gtag?: (..._args: unknown[]) => void
+    dataLayer?: unknown[]
   }
 }
 

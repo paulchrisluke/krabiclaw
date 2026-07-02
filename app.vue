@@ -21,6 +21,7 @@ if (tenantType === TENANT_TYPES.TENANT_404) {
 }
 
 const { config } = useBootstrap()
+const runtimeConfig = useRuntimeConfig()
 const route = useRoute()
 const defaultOgImage = useSharedOgImage()
 const defaultPageUrl = useSeoUrl(() => route.path)
@@ -57,30 +58,78 @@ const GA4_MEASUREMENT_ID_RE = /^G-[A-Z0-9]+$/
 // pages use the site's own connected GA4 property (server/utils/google-analytics.ts),
 // surfaced via site_config → bootstrap config.google_analytics_measurement_id.
 // Sites without a GA connection get no tag at all.
-useHead(() => {
-  const measurementId = isPlatform
-    ? 'G-NJ1BSP9BYG'
-    : config.value.google_analytics_measurement_id
+//
+// Deferred loading: GA4 is loaded after hydration/idle to avoid blocking LCP/FCP.
+// This reduces initial JS execution cost while still capturing analytics.
+if (import.meta.client) {
+  const loadGa4 = () => {
+    if (runtimeConfig.public.perfNoGa4) return
 
-  const normalizedMeasurementId = String(measurementId || '').trim().toUpperCase()
-  if (!normalizedMeasurementId || !GA4_MEASUREMENT_ID_RE.test(normalizedMeasurementId)) return {}
+    const measurementId = isPlatform
+      ? 'G-NJ1BSP9BYG'
+      : config.value.google_analytics_measurement_id
 
-  return {
-    script: [
-      {
-        src: `https://www.googletagmanager.com/gtag/js?id=${normalizedMeasurementId}`,
-        async: true
-      },
-      {
-        key: 'krabiclaw-ga-init',
-        innerHTML: `window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', '${normalizedMeasurementId}');`
-      }
-    ],
-    __dangerouslyDisableSanitizersByTagID: {
-      'krabiclaw-ga-init': ['innerHTML']
+    const normalizedMeasurementId = String(measurementId || '').trim().toUpperCase()
+    if (!normalizedMeasurementId || !GA4_MEASUREMENT_ID_RE.test(normalizedMeasurementId)) return
+
+    // Load gtag script
+    const script = document.createElement('script')
+    script.async = true
+    script.src = `https://www.googletagmanager.com/gtag/js?id=${normalizedMeasurementId}`
+    document.head.appendChild(script)
+
+    // Initialize gtag
+    const dataLayer = window.dataLayer || []
+    window.dataLayer = dataLayer
+    window.gtag = function gtag(...args: unknown[]) { dataLayer.push(args) }
+    window.gtag('js', new Date())
+    window.gtag('config', normalizedMeasurementId)
+  }
+
+  // Load GA4 after hydration/idle to avoid blocking paint
+  // Use longer timeout (8s) to protect Lighthouse TTI while still capturing analytics
+  let loaded = false
+  
+  const loadWhenIdle = () => {
+    if (loaded) return
+    if (typeof window.requestIdleCallback !== 'undefined') {
+      window.requestIdleCallback(() => {
+        if (!loaded) {
+          loaded = true
+          loadGa4()
+        }
+      }, { timeout: 8000 })
+    } else {
+      // Fallback for browsers without requestIdleCallback
+      setTimeout(() => {
+        if (!loaded) {
+          loaded = true
+          loadGa4()
+        }
+      }, 8000)
     }
   }
-})
+  
+  // Also load on first user interaction (click, scroll, keypress) for better analytics capture
+  const loadOnInteraction = () => {
+    if (!loaded) {
+      loaded = true
+      loadGa4()
+      // Remove event listeners after loading
+      document.removeEventListener('click', loadOnInteraction)
+      document.removeEventListener('scroll', loadOnInteraction)
+      document.removeEventListener('keydown', loadOnInteraction)
+    }
+  }
+  
+  // Start idle timer
+  loadWhenIdle()
+  
+  // Set up interaction listeners
+  document.addEventListener('click', loadOnInteraction, { once: true, passive: true })
+  document.addEventListener('scroll', loadOnInteraction, { once: true, passive: true })
+  document.addEventListener('keydown', loadOnInteraction, { once: true, passive: true })
+}
 
 const loadingColor = computed(() => {
   if (isPlatform) return 'var(--kc-loading-rainbow)'

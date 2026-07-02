@@ -6,6 +6,13 @@ declare global {
 }
 
 export default defineNuxtPlugin(() => {
+  const route = useRoute()
+  
+  // Only run on tenant routes — early exit for platform/dashboard/admin pages
+  const platformRoutes = ['/', '/plugin', '/features', '/pricing', '/templates', '/docs', '/blog', '/login', '/signup', '/forgot-password', '/reset-password', '/oauth', '/dashboard', '/admin', '/auth', '/dev']
+  const isPlatformRoute = platformRoutes.some(r => route.path === r || route.path.startsWith(`${r}/`))
+  if (isPlatformRoute) return
+
   const setDarkClass = (isDark: boolean) => {
     const html = document.documentElement
     if (isDark) {

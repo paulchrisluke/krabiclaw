@@ -4,7 +4,7 @@
 import { defineEventHandler, getRequestURL, getHeader, type H3Event } from 'h3'
 import { queryFirst } from '~/server/db'
 import { TENANT_TYPES, type TenantType } from '~/utils/tenant-routing'
-import { cloudflareEnv } from '../utils/api-response'
+import { cloudflareEnv, isInternalSelfFetch } from '../utils/api-response'
 import { deriveSubdomain, getFreeSiteDomain, hostnameOf, isPlatformHost, isPreviewContext } from '../utils/tenant-hosts'
 import { verifyScopedPreviewToken } from '../utils/preview-token'
 
@@ -33,6 +33,12 @@ function setTenantType(
 }
 
 export default defineEventHandler(async (event) => {
+  // Nested self-fetches (i18n/icon/internal API calls during SSR) never carry
+  // tenant context downstream handlers rely on — the real inbound request
+  // already resolved tenant type/host before triggering these. Skip the DB
+  // lookup and host parsing entirely rather than redoing it per phantom request.
+  if (isInternalSelfFetch(event)) return
+
   const url = getRequestURL(event)
   const host = getHeader(event, 'host') || ''
   const env = cloudflareEnv(event)

@@ -14,7 +14,7 @@
             </span>
           </NuxtLink>
           <p class="text-[13px] leading-relaxed text-inverted/60 max-w-75">
-            The Shopify for local businesses. Empowering independent businesses globally. 🦀
+            The ChatGPT-powered website builder for local businesses. Empowering independent businesses globally. 🦀
           </p>
         </div>
 

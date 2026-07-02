@@ -167,7 +167,7 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
     const siteLogoUrl = value.siteLogoUrl?.trim()
       ? normalizeAbsoluteUrl(value.siteLogoUrl.trim(), origin)
       : (tenantPublisherFields ? undefined : `${siteRoot}/krabi-claw-logo.png`)
-    const siteDescription = value.siteDescription?.trim() || (tenantPublisherFields ? undefined : 'The Shopify for restaurants. AI-powered website builder for independent restaurants.')
+    const siteDescription = value.siteDescription?.trim() || (tenantPublisherFields ? undefined : 'The AI-powered website builder for local businesses. Build your web presence through conversation with ChatGPT.')
 
     const graph: ApiRecord[] = [
       {

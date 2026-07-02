@@ -218,7 +218,7 @@
                 class="mt-2 block w-full rounded-md bg-default px-3 py-2 text-base text-highlighted outline-solid outline-1 -outline-offset-1 outline-default placeholder:text-dimmed focus:outline-2 focus:-outline-offset-2 focus:outline-black"
               />
             </div>
-            <div v-if="turnstileEnabled" ref="turnstileContainer" class="min-h-16"></div>
+
             <p v-if="reviewMessage" :class="['text-sm', reviewError ? 'text-red-600' : 'text-green-700']">
               {{ reviewMessage }}
             </p>
@@ -294,9 +294,6 @@ const { resolveMedia } = useMedia()
 const route = useRoute()
 const { site, siteId, draftId } = useTenantSite()
 const siteName = computed(() => site?.brand_name || 'KrabiClaw')
-const config = useRuntimeConfig()
-const turnstileEnabled = computed(() => config.public.turnstileEnabled === true)
-const turnstileSiteKey = computed(() => config.public.turnstileSiteKey)
 
 interface Review {
   id: string
@@ -309,23 +306,7 @@ interface Review {
   datetime?: string
 }
 
-interface TurnstileApi {
-  render: (
-    _container: HTMLElement,
-    _options: {
-      sitekey: string
-      callback: (_token: string) => void
-      'expired-callback': () => void
-    }
-  ) => string
-  reset: (_widgetId: string) => void
-}
 
-declare global {
-  interface Window {
-    turnstile?: TurnstileApi
-  }
-}
 
 interface MenuItemType {
   id: string
@@ -477,9 +458,7 @@ const reviewsLoading = ref(true)
 const reviewSubmitting = ref(false)
 const reviewMessage = ref('')
 const reviewError = ref(false)
-const turnstileToken = ref('')
-const turnstileContainer = ref<HTMLElement | null>(null)
-const turnstileWidgetId = ref<string | null>(null)
+
 const reviewForm = reactive({
   author: '',
   rating: 5,
@@ -534,10 +513,7 @@ const resetReviewForm = () => {
   reviewForm.rating = 5
   reviewForm.title = ''
   reviewForm.content = ''
-  turnstileToken.value = ''
-  if (window.turnstile && turnstileWidgetId.value !== null) {
-    window.turnstile.reset(turnstileWidgetId.value)
-  }
+
 }
 
 const submitReview = async () => {
@@ -555,8 +531,7 @@ const submitReview = async () => {
         author: reviewForm.author,
         rating: reviewForm.rating,
         title: reviewForm.title,
-        content: reviewForm.content,
-        turnstileToken: turnstileToken.value
+        content: reviewForm.content
       }
     })
 
@@ -570,44 +545,15 @@ const submitReview = async () => {
   }
 }
 
-const renderTurnstile = () => {
-  if (!turnstileEnabled.value || !turnstileSiteKey.value || !turnstileContainer.value || !window.turnstile) return
-  if (turnstileWidgetId.value !== null) return
 
-  turnstileWidgetId.value = window.turnstile.render(turnstileContainer.value, {
-    sitekey: turnstileSiteKey.value,
-    callback: (token: string) => {
-      turnstileToken.value = token
-    },
-    'expired-callback': () => {
-      turnstileToken.value = ''
-    }
-  })
-}
-
-useHead(() => ({
-  script: turnstileEnabled.value
-    ? [
-        {
-          src: 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit',
-          async: true,
-          defer: true,
-          onload: () => renderTurnstile()
-        }
-      ]
-    : []
-}))
 
 onMounted(async () => {
   await loadReviews()
-  renderTurnstile()
 })
 
 watch(() => item.value?.slug, async () => {
   approvedReviews.value = []
   await loadReviews()
-  turnstileWidgetId.value = null
-  nextTick(() => renderTurnstile())
 })
 
 // SEO Meta

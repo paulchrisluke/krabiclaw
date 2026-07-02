@@ -8,10 +8,7 @@ export default defineNitroPlugin(() => {
     { key: 'public.appName', env: 'NUXT_PUBLIC_APP_NAME' }
   ]
 
-  const requiredTurnstileVars = [
-    { key: 'public.turnstileSiteKey', env: 'NUXT_PUBLIC_TURNSTILE_SITE_KEY' },
-    { key: 'turnstileSecretKey', env: 'TURNSTILE_SECRET_KEY' }
-  ]
+
   
   const missingVars: string[] = []
   
@@ -23,16 +20,7 @@ export default defineNitroPlugin(() => {
     }
   }
   
-  const turnstileEnabled = config.public.turnstileEnabled === true
 
-  if (turnstileEnabled) {
-    for (const { key, env } of requiredTurnstileVars) {
-      const value = getNestedValue(config, key)
-      if (!value || value.trim() === '') {
-        missingVars.push(env)
-      }
-    }
-  }
   
   if (missingVars.length > 0) {
     throw new Error(
