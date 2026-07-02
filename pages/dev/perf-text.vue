@@ -80,14 +80,14 @@
       </p>
       <div class="dev-perf-shell-frame">
         <UTheme :ui="{}">
-          <PlatformHeader />
+          <LazyPlatformHeader />
           <main class="dev-perf-shell-body">
             <h3>Static body</h3>
             <p>
               No production page content is rendered here. The shell is the variable.
             </p>
           </main>
-          <PlatformFooter />
+          <LazyPlatformFooter />
         </UTheme>
       </div>
     </section>
@@ -99,7 +99,7 @@
       </p>
       <div class="dev-perf-shell-frame saya-theme">
         <UTheme :ui="{}">
-          <SayaHeader />
+          <LazySayaHeader />
           <main class="dev-perf-shell-body">
             <h3>Static body</h3>
             <p>The Saya header is the variable.</p>
@@ -119,7 +119,7 @@
             <h3>Static body</h3>
             <p>The Saya footer is the variable.</p>
           </main>
-          <SayaFooter />
+          <LazySayaFooter />
         </UTheme>
       </div>
     </section>
@@ -131,12 +131,12 @@
       </p>
       <div class="dev-perf-shell-frame saya-theme">
         <UTheme :ui="{}">
-          <SayaHeader />
+          <LazySayaHeader />
           <main class="dev-perf-shell-body">
             <h3>Static body</h3>
             <p>No production tenant page content is rendered here.</p>
           </main>
-          <SayaFooter />
+          <LazySayaFooter />
         </UTheme>
       </div>
     </section>
@@ -294,10 +294,12 @@
 </template>
 
 <script setup lang="ts">
-import PlatformFooter from '~/components/platform/PlatformFooter.vue'
-import PlatformHeader from '~/components/platform/PlatformHeader.vue'
-import SayaFooter from '~/components/saya/SayaFooter.vue'
-import SayaHeader from '~/components/saya/SayaHeader.vue'
+// Intentionally no static imports of PlatformHeader/PlatformFooter/SayaHeader/
+// SayaFooter here — the template uses the Lazy* auto-imported variants so
+// Vite code-splits them into their own async chunks. A static top-level
+// import of an SFC gets bundled into this page's own chunk graph regardless
+// of which v-else-if branch actually renders it, which was silently forcing
+// every mode (including text-no-icons) to preload the same ~35 chunks.
 import { getGaClientId, useAnalytics } from '~/composables/useAnalytics'
 import { calculateThemeColors } from '~/utils/color-utils'
 
