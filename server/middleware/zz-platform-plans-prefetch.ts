@@ -9,7 +9,7 @@
 // middleware for the same reason.
 import { defineEventHandler, getRequestURL } from 'h3'
 import { cloudflareEnv, isInternalSelfFetch } from '~/server/utils/api-response'
-import { getCachedPlans } from '~/server/api/billing/plans.get'
+import { getCachedPlans, type EnvWithSiteCache } from '~/server/utils/billing-plans'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 
 export default defineEventHandler(async (event) => {
@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     event.context.platformPlans = await getCachedPlans(
-      env as Record<string, string | undefined> & { SITE_CACHE?: KVNamespace },
+      env as EnvWithSiteCache,
     )
   } catch (error) {
     // Non-fatal — usePlans.ts falls back to a self-fetch (uncached, but

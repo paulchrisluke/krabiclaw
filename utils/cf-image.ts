@@ -28,13 +28,17 @@ export function cfImageVariant(
   // aspect ratio, never upscale) when only one dimension is supplied; only
   // use cover when the caller explicitly provides both.
   const hasBothDimensions = Boolean(opts.width) && Boolean(opts.height)
-  const defaultFit = hasBothDimensions ? 'cover' : 'scale-down'
+  let fit = opts.fit ?? (hasBothDimensions ? 'cover' : 'scale-down')
+  if (fit === 'cover' && !hasBothDimensions) {
+    console.warn('[cf-image] fit="cover" requires both width and height. Falling back to scale-down.')
+    fit = 'scale-down'
+  }
 
   const params = [
     opts.width ? `width=${opts.width}` : null,
     opts.height ? `height=${opts.height}` : null,
     `quality=${opts.quality ?? 75}`,
-    `fit=${opts.fit ?? defaultFit}`,
+    `fit=${fit}`,
     `format=${opts.format ?? 'auto'}`,
   ].filter(Boolean)
 

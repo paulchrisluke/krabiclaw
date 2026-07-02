@@ -18,7 +18,7 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const execFileAsync = promisify(execFile);
@@ -77,8 +77,8 @@ async function runOnce(url, formFactor, outDir, index) {
   ];
   await execFileAsync("npx", ["--yes", "lighthouse", ...args], {
     maxBuffer: 1024 * 1024 * 50,
+    timeout: 120_000, // 2-minute hard cap per Lighthouse run
   });
-  const { readFile } = await import("node:fs/promises");
   const report = JSON.parse(await readFile(outPath, "utf8"));
   const audits = report.audits ?? {};
   const result = {
@@ -110,9 +110,17 @@ async function main() {
   const results = [];
   for (let i = 0; i < runs; i += 1) {
     process.stdout.write(`  run ${i + 1}/${runs}... `);
-    const result = await runOnce(url, formFactor, outDir, i);
-    console.log(`score=${result.score} LCP=${formatMs(result["largest-contentful-paint"])} TTFB=${formatMs(result["server-response-time"])}`);
-    results.push(result);
+    try {
+      const result = await runOnce(url, formFactor, outDir, i);
+      console.log(`score=${result.score} LCP=${formatMs(result["largest-contentful-paint"])} TTFB=${formatMs(result["server-response-time"])}`);
+      results.push(result);
+    } catch (runErr) {
+      console.error(`  run ${i + 1}/${runs} FAILED:`, runErr instanceof Error ? runErr.message : String(runErr));
+    }
+  }
+  if (results.length === 0) {
+    console.error('[lighthouse-check] All runs failed — exiting.');
+    process.exit(1);
   }
 
   const summary = { url, formFactor, runs, timestamp: new Date().toISOString(), metrics: {} };
@@ -120,6 +128,10 @@ async function main() {
   for (const [key, label] of METRIC_AUDITS) {
     if (key === "performance-score") {
       const scores = results.map((r) => r.score).filter((v) => v != null);
+      if (scores.length === 0) {
+        console.log('Performance score: n/a');
+        continue;
+      }
       const m = median(scores);
       console.log(`Performance score: ${m?.toFixed(2) ?? "n/a"} (min=${Math.min(...scores).toFixed(2)}, max=${Math.max(...scores).toFixed(2)})`);
       summary.metrics.performanceScore = { median: m, min: Math.min(...scores), max: Math.max(...scores) };

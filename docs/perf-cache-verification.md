@@ -22,18 +22,18 @@ verify against a real build.
 ## Steps
 
 1. Build and run the real Worker locally:
-   ```
+   ```bash
    yarn build
    npx wrangler dev
    ```
 2. In a second terminal, tail requests to capture `wallTime`/`cpuTime` per request:
-   ```
+   ```bash
    npx wrangler tail <worker-name> --format json
    ```
    (Use the deployed environment's worker name if testing against a real deploy instead of
    local `wrangler dev`.)
 3. Hit the same tenant page URL twice within 60 seconds (the cache TTL):
-   ```
+   ```bash
    curl -sD - -o /dev/null -H "Host: <tenant>.localhost:8787" http://localhost:8787/
    curl -sD - -o /dev/null -H "Host: <tenant>.localhost:8787" http://localhost:8787/
    ```

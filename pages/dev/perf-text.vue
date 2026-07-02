@@ -80,14 +80,14 @@
       </p>
       <div class="dev-perf-shell-frame">
         <UTheme :ui="{}">
-          <LazyPlatformHeader />
+          <LazyPlatformHeader :hydrate-on-idle="2000" />
           <main class="dev-perf-shell-body">
             <h3>Static body</h3>
             <p>
               No production page content is rendered here. The shell is the variable.
             </p>
           </main>
-          <LazyPlatformFooter />
+          <LazyPlatformFooter hydrate-on-visible />
         </UTheme>
       </div>
     </section>
@@ -99,7 +99,7 @@
       </p>
       <div class="dev-perf-shell-frame saya-theme">
         <UTheme :ui="{}">
-          <LazySayaHeader />
+          <LazySayaHeader :hydrate-on-idle="2000" />
           <main class="dev-perf-shell-body">
             <h3>Static body</h3>
             <p>The Saya header is the variable.</p>
@@ -119,7 +119,7 @@
             <h3>Static body</h3>
             <p>The Saya footer is the variable.</p>
           </main>
-          <LazySayaFooter />
+          <LazySayaFooter hydrate-on-visible />
         </UTheme>
       </div>
     </section>
@@ -131,12 +131,12 @@
       </p>
       <div class="dev-perf-shell-frame saya-theme">
         <UTheme :ui="{}">
-          <LazySayaHeader />
+          <LazySayaHeader :hydrate-on-idle="2000" />
           <main class="dev-perf-shell-body">
             <h3>Static body</h3>
             <p>No production tenant page content is rendered here.</p>
           </main>
-          <LazySayaFooter />
+          <LazySayaFooter hydrate-on-visible />
         </UTheme>
       </div>
     </section>
@@ -399,7 +399,7 @@ const sayaThemeStyles = computed(() => {
   }
 })
 
-if (!isDevPerfHostAllowed(url.hostname, requestHeaders.host, !!requestHeaders['cf-ray'])) {
+if (!isDevPerfHostAllowed(requestHeaders.host, !!requestHeaders['cf-ray'])) {
   throw createError({
     statusCode: 404,
     statusMessage: 'Not Found',

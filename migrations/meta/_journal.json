@@ -99,6 +99,13 @@
       "when": 1782902652125,
       "tag": "0020_lazy_callisto",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1783051200000,
+      "tag": "0021_convert_better_auth_timestamps_to_integer",
+      "breakpoints": true
     }
   ]
 }

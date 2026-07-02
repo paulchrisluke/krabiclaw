@@ -14,12 +14,11 @@ const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
 const requireFromConfig = createRequire(import.meta.url)
 function pickIcons(collection: string, names: string[]) {
   const data = requireFromConfig(`@iconify-json/${collection}/icons.json`)
-  const subset = getIcons(data, names)
+  const subset = getIcons(data, names, true)
   if (!subset) throw new Error(`Missing icon(s) in @iconify-json/${collection}: ${names.join(', ')}`)
   
-  const missing = names.filter(name => !subset.icons?.[name] && !subset.aliases?.[name])
-  if (missing.length > 0) {
-    throw new Error(`Missing icon(s) in @iconify-json/${collection}: ${missing.join(', ')}`)
+  if (subset.not_found && subset.not_found.length > 0) {
+    throw new Error(`Missing icon(s) in @iconify-json/${collection}: ${subset.not_found.join(', ')}`)
   }
   
   return subset
@@ -138,12 +137,12 @@ export default defineNuxtConfig({
       collections: [
         'heroicons',
         'lucide',
-        // Brand icons: only the exact marks referenced in the app (see
-        // pickIcons above) — not the full simple-icons/logos collections.
-        pickIcons('simple-icons', ['facebook', 'instagram', 'tiktok', 'google', 'googlemaps', 'openai', 'whatsapp']),
-        pickIcons('logos', ['google-icon', 'whatsapp-icon']),
       ],
     },
+    customCollections: [
+      pickIcons('simple-icons', ['facebook', 'instagram', 'tiktok', 'google', 'googlemaps', 'openai', 'whatsapp']),
+      pickIcons('logos', ['google-icon', 'whatsapp-icon']),
+    ],
   },
   runtimeConfig: {
     defaultCurrency: isCurrencyCode(configuredDefaultCurrency) ? configuredDefaultCurrency : DEFAULT_CURRENCY,

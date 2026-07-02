@@ -6,7 +6,7 @@
 // concurrent load, Cloudflare's D1 bulk-import API can occasionally race and
 // reject an import with "Not currently importing anything" even though the
 // command itself was correct — retrying after a short delay clears it.
-export async function execWithRetry(run: () => void, label: string, attempts = 3, delayMs = 5000): Promise<void> {
+export async function execWithRetry(run: () => void, label: string, attempts = 5, delayMs = 8000): Promise<void> {
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       run()

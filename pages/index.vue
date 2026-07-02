@@ -156,7 +156,7 @@
       <!-- ── Brand hero ─────────────────────────────────────── -->
       <SayaHomeHero
         :data="{
-          hero: getHero(),
+          hero: hero,
           eyebrow: getField('hero.eyebrow', businessCity),
           locations: bootstrapLocations,
           businessTitle: businessTitle,

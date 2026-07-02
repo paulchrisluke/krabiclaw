@@ -110,7 +110,6 @@ import { cfImageSrcset, cfImageVariant } from '~/utils/cf-image'
 interface HeroData {
   title?: string
   subtitle?: string
-  eyebrow?: string
   image?: string
   imageKind?: string
   video?: string
@@ -159,9 +158,9 @@ const businessPrimaryPhoto = computed(() => props.data?.businessPrimaryPhoto)
 const hasOrderLinks = computed(() => props.data?.hasOrderLinks || false)
 const ctaRoute = computed(() => props.data?.ctaRoute || '')
 const reserveCta = computed(() => props.data?.reserveCta || '')
-const orderNowCta = computed(() => props.data?.orderNowCta || 'Order Now')
-const viewMenuCta = computed(() => props.data?.viewMenuCta || 'View Menu')
-const viewMenuRoute = computed(() => props.data?.viewMenuRoute || '/menu')
+const orderNowCta = computed(() => props.data?.orderNowCta || 'Action')
+const viewMenuCta = computed(() => props.data?.viewMenuCta || 'Explore')
+const viewMenuRoute = computed(() => props.data?.viewMenuRoute || '/')
 // Neutral default until the owner picks a brand color in onboarding.
 const brandColor = computed(() => props.data?.brandColor || '#3F3F46')
 const verticalIcon = computed(() => props.data?.vertical === 'experience' ? 'i-heroicons-sparkles' : 'i-heroicons-building-storefront')
