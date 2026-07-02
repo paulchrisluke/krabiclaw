@@ -1,7 +1,28 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { createRequire } from 'node:module'
+import { getIcons } from '@iconify/utils'
+import { visualizer } from 'rollup-plugin-visualizer'
 import { DEFAULT_CURRENCY, isCurrencyCode } from './shared/currencies'
 
 const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
+
+// nuxt/icon's serverBundle bundles a named collection in full — no usage-based
+// tree-shaking. heroicons/lucide are used broadly enough that this is fine, but
+// simple-icons (~3000 icons) and logos (719 icons, multi-color art) are only
+// used for a handful of brand marks, so pull just those icons out of the full
+// collection JSON instead of shipping the whole package into the Worker bundle.
+const requireFromConfig = createRequire(import.meta.url)
+function pickIcons(collection: string, names: string[]) {
+  const data = requireFromConfig(`@iconify-json/${collection}/icons.json`)
+  const subset = getIcons(data, names, true)
+  if (!subset) throw new Error(`Missing icon(s) in @iconify-json/${collection}: ${names.join(', ')}`)
+  
+  if (subset.not_found && subset.not_found.length > 0) {
+    throw new Error(`Missing icon(s) in @iconify-json/${collection}: ${subset.not_found.join(', ')}`)
+  }
+  
+  return subset
+}
 // Opt-out only: GitHub Actions sets CI=true on every runner, including the
 // preview/staging/prod deploy jobs that build the artifact actually shipped
 // to Cloudflare, so gating this on ambient CI silently strips every
@@ -9,6 +30,62 @@ const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
 // from production. Set NUXT_DISABLE_NITRO_TASKS=true explicitly if a local
 // dev/E2E run needs to avoid task-import side effects on the D1 proxy binding.
 const enableNitroTasks = process.env.NUXT_DISABLE_NITRO_TASKS !== 'true'
+
+// PERF DEBUG PATCH (temporary — remove once the entry.css floor is attributed):
+// build-time-only flag, not a runtime one, since global css: [...] is compiled
+// into a single stylesheet at build time and can't be conditionally skipped
+// per-request. Set PERF_NO_GLOBAL_CSS=true and rebuild to measure
+// /dev/perf-text?mode=text-no-icons with no global CSS at all.
+const skipGlobalCss = process.env.PERF_NO_GLOBAL_CSS === 'true'
+
+// PERF DEBUG PATCH (temporary — remove once the entry.js floor is attributed):
+// generates a client-bundle treemap at PERF_BUNDLE_ANALYZE_OUT (or
+// bundle-analysis.html in the repo root) to identify what's actually inside
+// the ~511KB entry chunk. Set PERF_BUNDLE_ANALYZE=true and rebuild.
+const analyzeBundle = process.env.PERF_BUNDLE_ANALYZE === 'true'
+
+// PERF DEBUG PATCH (temporary — remove once the entry.css contributor matrix
+// is done): main.css's individual @import/@plugin lines can't be toggled via
+// css: [...] (that only swaps whole files), so this strips one line at a
+// time from the source before Tailwind's own Vite plugin consumes it. Only
+// one flag is meant to be set per build.
+const cssStrips: [envVar: string, line: string][] = [
+  ['PERF_NO_SAYA_CSS', '@import "./saya.css";'],
+  ['PERF_NO_TYPOGRAPHY_CSS', '@plugin "@tailwindcss/typography";'],
+  ['PERF_NO_NUXT_UI_CSS', '@import "@nuxt/ui";'],
+  ['PERF_NO_TAILWIND_CSS', '@import "tailwindcss";'],
+]
+
+// PERF DEBUG PATCH (temporary — remove once the client JS/hydration floor is
+// attributed): Nuxt's built-in features.noScripts strips every script chunk
+// from the production build entirely (no entry.js, no modulepreload, no
+// hydration at all) — it only takes effect outside dev mode, so it fits the
+// same build-once-and-measure pattern as the CSS flags above. Set
+// PERF_NO_SCRIPTS=true and rebuild to compare pure static-HTML SSR timing
+// against the normal hydrated build on /dev/perf-text.
+const skipClientScripts = process.env.PERF_NO_SCRIPTS === 'true'
+
+// PERF DEBUG PATCH (temporary): build/runtime flags for isolating global
+// client-floor items that affect every /dev/perf-text mode before the page
+// branch can opt in/out. Set one flag at a time and rebuild.
+const skipGa4 = process.env.PERF_NO_GA4 === 'true'
+const skipDompurifyHooks = process.env.PERF_NO_DOMPURIFY_HOOKS === 'true'
+const publicPerfTestPage = process.env.PERF_PUBLIC_TEST_PAGE !== 'false'
+
+// Tried (2026-07-02): a `PERF_CSS_EXCLUDE_DASHBOARD` flag appending
+// `@source not "<glob>";` to main.css for dashboard/admin/editor/billing/
+// onboarding/media paths, to measure how much of entry.css a public/tenant
+// visitor pays for but never renders. Removed — `@source not` had no
+// measurable effect in this stack: a class unique to a single dashboard-only
+// component (`[320px]` in components/dashboard/McpQuickActions.vue) still
+// appeared in the compiled entry.css after excluding its exact path, tested
+// with both relative and absolute glob paths, and even edited directly into
+// assets/css/main.css (not just via the build-flag injection). Most likely
+// cause: @nuxt/ui's own Tailwind integration performs its own unconditional
+// project-wide content scan that a `@source not` in the app's own main.css
+// can't override. Don't re-attempt this exact approach without first
+// confirming (e.g. via @nuxt/ui's own docs/issues) whether their Tailwind
+// integration exposes a way to scope its content scan at all.
 
 export default defineNuxtConfig({
   modules: [
@@ -35,14 +112,45 @@ export default defineNuxtConfig({
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         { name: 'theme-color', content: '#1F2547' }
-      ]
+      ],
+      link: [
+        // Every Saya hero/content image is served from Cloudflare Images
+        // (imagedelivery.net) — a third-party origin the browser otherwise
+        // doesn't discover until it parses the <img> tag deep in <body>,
+        // paying DNS+TCP+TLS setup serially after that. Preconnecting lets
+        // that handshake happen in parallel with initial HTML parsing,
+        // which matters most for the LCP image on image-heavy hero pages.
+        // No `crossorigin` here deliberately — our <img> tags don't set it
+        // either (plain no-cors requests), and Chrome only reuses a
+        // preconnected connection when its CORS mode matches the real
+        // request; a mismatched crossorigin attribute makes this a no-op.
+        { rel: 'preconnect', href: 'https://imagedelivery.net' },
+      ],
     },
   },
 
   compatibilityDate: '2024-11-01',
   debug: false,
   devtools: { enabled: false },
-  css: ['~/assets/css/main.css'],
+  // PERF DEBUG PATCH: see skipClientScripts above.
+  features: {
+    noScripts: skipClientScripts,
+  },
+  // PERF DEBUG PATCH: see skipGlobalCss above.
+  css: skipGlobalCss ? [] : ['~/assets/css/main.css'],
+  icon: {
+    fallbackToApi: false,
+    serverBundle: {
+      collections: [
+        'heroicons',
+        'lucide',
+      ],
+    },
+    customCollections: [
+      pickIcons('simple-icons', ['facebook', 'instagram', 'tiktok', 'google', 'googlemaps', 'openai', 'whatsapp']),
+      pickIcons('logos', ['google-icon', 'whatsapp-icon']),
+    ],
+  },
   runtimeConfig: {
     defaultCurrency: isCurrencyCode(configuredDefaultCurrency) ? configuredDefaultCurrency : DEFAULT_CURRENCY,
     public: {
@@ -50,11 +158,13 @@ export default defineNuxtConfig({
       freeSiteDomain: process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN || '',
       appName: process.env.NUXT_PUBLIC_APP_NAME || '',
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://krabiclaw.com',
-      turnstileEnabled: process.env.NUXT_PUBLIC_TURNSTILE_ENABLED === 'true',
-      turnstileSiteKey: process.env.NUXT_PUBLIC_TURNSTILE_SITE_KEY || '',
-      whatsappNumber: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER || '16197200000'
+
+      whatsappNumber: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER || '16197200000',
+      perfNoGa4: skipGa4,
+      perfNoDompurifyHooks: skipDompurifyHooks,
+      perfPublicTestPage: publicPerfTestPage,
     },
-    turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || ''
+
   },
 
   vite: {
@@ -63,6 +173,53 @@ export default defineNuxtConfig({
         ignored: ['**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
       },
       allowedHosts: ['.trycloudflare.com', 'local.krabiclaw.com']
+    },
+  },
+
+  // PERF DEBUG PATCH (temporary — remove once the entry.js floor is attributed):
+  // vite.plugins is shared between the client and server Vite builds, so the
+  // visualizer is attached via this hook instead, gated to isClient only —
+  // otherwise the server (Nitro/SSR) build would overwrite the client's
+  // treemap output on whichever build ran second.
+  hooks: {
+    'vite:extendConfig'(viteConfig, { isClient }) {
+      if (analyzeBundle && isClient) {
+        viteConfig.plugins?.push(visualizer({
+          filename: process.env.PERF_BUNDLE_ANALYZE_OUT || 'bundle-analysis.html',
+          template: 'treemap',
+          gzipSize: true,
+          brotliSize: true,
+        }))
+      }
+
+      // PERF DEBUG PATCH: see cssStrips above. enforce: 'pre' so this runs
+      // before Tailwind's own Vite plugin consumes the @import/@plugin
+      // at-rules in main.css.
+      const activeStrips = cssStrips.filter(([envVar]) => process.env[envVar] === 'true')
+      if (activeStrips.length > 1) {
+        throw new Error(`Multiple PERF_NO_* CSS strip flags enabled: ${activeStrips.map(s => s[0]).join(', ')}. Only one is allowed.`)
+      }
+      if (activeStrips.length === 1) {
+        const activeStrip = activeStrips[0]
+        if (activeStrip) {
+          const [, line] = activeStrip
+          // unshift, not push: Tailwind's own Vite plugin is also enforce:'pre'
+          // and already registered by the time this hook runs, so a same-
+          // priority plugin appended via push still runs after it (same-enforce
+          // plugins execute in array order). Putting this one first in the
+          // array is what actually lets it see the raw source before Tailwind
+          // resolves/inlines the @import chain.
+          viteConfig.plugins?.unshift({
+            name: 'perf-debug-strip-css',
+            enforce: 'pre',
+            transform(code: string, id: string) {
+              if (!id.endsWith('assets/css/main.css')) return
+              if (!code.includes(line)) throw new Error(`Target CSS line not found for stripping: ${line}`)
+              return code.replace(line, `/* PERF DEBUG PATCH: stripped "${line}" */`)
+            },
+          })
+        }
+      }
     },
   },
 
@@ -88,6 +245,23 @@ export default defineNuxtConfig({
     defaultLocale: 'en',
     strategy: 'no_prefix',
     detectBrowserLanguage: false,
+    // @nuxtjs/i18n defaults runtimeOnly to false — surprising, since the
+    // underlying @intlify/unplugin-vue-i18n itself defaults it to true.
+    // Aliases vue-i18n to its runtime-only build in production, dropping
+    // the full compiler vue-i18n itself doesn't need since messages are
+    // static JSON compiled at build time.
+    //
+    // bundle.dropMessageCompiler was also tried (attributed as ~7.5KB gzip
+    // in the entry bundle) but is NOT enabled here — verified it breaks SSR
+    // for at least one real translation key (`saya.header.menu` on
+    // /dev/perf-text?mode=text-with-i18n rendered an empty <div id="__nuxt">
+    // with no thrown error), while simpler top-level keys elsewhere (e.g.
+    // pages/about.vue) kept working. That inconsistency — some keys silently
+    // failing SSR while others don't — makes it unsafe to ship without a
+    // much deeper audit of every real locale key against every real page.
+    bundle: {
+      runtimeOnly: true,
+    },
   },
 
   // Robots.txt configuration
@@ -208,7 +382,7 @@ export default defineNuxtConfig({
   //
   // Poppins: only the weights actually used in CSS (NOT all 18 variants).
   // Instrument Serif: italic is the LCP font on tenant hero pages — kept minimal.
-  // Fredoka: platform wordmark / display, all 4 weights used.
+  // Fredoka: platform wordmark only, weight 600 only (not all 4 weights).
   //
   // All three families are Google Fonts — pin `provider: 'google'` per family and
   // disable the other providers so unifont never registers/queries them (e.g. the
@@ -227,9 +401,9 @@ export default defineNuxtConfig({
       npm: false,
     },
     families: [
-      { name: 'Instrument Serif', provider: 'google', weights: [400], styles: ['normal', 'italic'], display: 'swap' },
+      // Instrument Serif removed from global load — loaded conditionally on tenant routes via plugin
       { name: 'Poppins', provider: 'google', weights: [400, 500, 600, 700], display: 'swap' },
-      { name: 'Fredoka', provider: 'google', weights: [400, 500, 600, 700], display: 'swap' },
+      { name: 'Fredoka', provider: 'google', weights: [600], display: 'swap' },
     ],
   },
 

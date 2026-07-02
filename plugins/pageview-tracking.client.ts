@@ -7,6 +7,11 @@
 //   for the page that's being left, never as a pageview trigger itself.
 // - All calls fail silently — analytics must never break the public site.
 export default defineNuxtPlugin(() => {
+  const route = useRoute()
+  
+  // Early exit for auth/admin/dev routes that don't need pageview tracking
+  if (route.path.startsWith('/auth') || route.path.startsWith('/admin') || route.path.startsWith('/dev')) return
+
   const pluginKey = '__kc_pageview_tracking_registered'
   const win = typeof window !== 'undefined' ? (window as unknown as Record<string, unknown>) : null
   if (win && win[pluginKey]) return

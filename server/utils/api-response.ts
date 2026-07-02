@@ -27,6 +27,15 @@ export const textResponse = (
 export const cleanString = (value: ApiValue, maxLength: number) =>
   typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
 
+// A nested internal self-fetch (event.$fetch/useRequestFetch inside SSR) is a
+// synthetic event that Nitro dispatches locally without re-attaching
+// event.context.cloudflare — that's the direct, reliable signal to detect it,
+// rather than inferring it from an absent cf-ray header. Middleware that does
+// real work (DB pragmas, tenant resolution) should guard on this before doing
+// anything, not just when deciding a log level.
+export const isInternalSelfFetch = (event: H3Event): boolean =>
+  !event.context.cloudflare?.env
+
 export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
   const runtimeEnv = (() => {
     const env = event.context.cloudflare?.env as Record<string, unknown> | undefined
@@ -37,14 +46,7 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
       const cfRay = getHeader(event, 'cf-ray')
       const host = getHeader(event, 'host') ?? 'no-host'
       const path = event.path ?? 'no-path'
-
-      // A nested internal self-fetch (event.$fetch/useRequestFetch inside SSR) never
-      // carries the original edge request's cf-ray — it's a synthetic event that Nitro
-      // dispatches locally without re-attaching event.context.cloudflare. That's an
-      // expected limitation of internal dispatch, not a real bindings outage, so it's
-      // only logged at `warn` to avoid false-alarming on every such call. Real inbound
-      // requests always carry cf-ray, so a missing cf-ray there is the actual incident.
-      const isRealInboundRequest = Boolean(cfRay)
+      const isRealInboundRequest = !isInternalSelfFetch(event)
       const logMessage =
         `[cloudflareEnv] Missing bindings: ${missing.join(', ')} ` +
         `for ${host}${path} (cf-ray: ${cfRay ?? 'no-cf-ray'}). In local dev, run via wrangler dev/yarn dev. ` +

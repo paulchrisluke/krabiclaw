@@ -155,114 +155,24 @@
 
       <!-- ── Brand hero ─────────────────────────────────────── -->
       <SayaHomeHero
-        v-if="contentBlocks.find(b => b.component === 'SayaHomeHero')"
         :data="{
-          hero: getHero(),
+          hero: hero,
+          eyebrow: getField('hero.eyebrow', businessCity),
           locations: bootstrapLocations,
-          businessTitle: googleBusiness?.title,
-          businessSubtitle: googleBusiness?.profile?.description,
-          businessCity: googleBusiness?.storefrontAddress?.locality,
-          businessPrimaryPhoto: googleBusiness?.media?.[0],
+          businessTitle: businessTitle,
+          businessSubtitle: businessSubtitle,
+          businessCity: businessCity,
+          businessPrimaryPhoto: businessPrimaryPhoto,
           hasOrderLinks: hasOrderLinks,
           ctaRoute: homeCopy.ctaRoute,
           reserveCta: homeCopy.reserveCta,
+          orderNowCta: homeCopy.orderNowCta,
+          viewMenuCta: homeCopy.viewMenuCta,
+          viewMenuRoute: homeCopy.viewMenuRoute,
           brandColor: bootstrapConfig.value?.brand_color,
           vertical: site?.vertical
         }"
       />
-      <section v-else id="section-hero" class="relative min-h-160 overflow-hidden flex items-center">
-        <!-- Background media — poster is always in SSR HTML (LCP candidate).
-             Video deferred until window.load + idle, fades in after canplay. -->
-        <div class="absolute inset-0">
-          <!-- Poster image: present in SSR, fetchpriority high — this is the LCP element -->
-          <img
-            v-if="hero.thumbnail_url"
-            :src="hero.thumbnail_url"
-            alt="" aria-hidden="true" fetchpriority="high" decoding="async"
-            class="absolute inset-0 h-full w-full object-cover"
-          />
-          <img
-            v-else-if="hero.image && hero.imageKind === 'image'"
-            :src="hero.image"
-            alt="" aria-hidden="true" fetchpriority="high" decoding="async"
-            class="absolute inset-0 h-full w-full object-cover"
-          />
-          <img
-            v-else-if="businessPrimaryPhoto?.googleUrl"
-            :src="businessPrimaryPhoto.googleUrl"
-            alt="" aria-hidden="true" fetchpriority="high" decoding="async"
-            class="absolute inset-0 h-full w-full object-cover"
-          />
-          <!-- Fallback: brand color + icon when no media available -->
-          <div
-            v-else
-            class="absolute inset-0 flex items-center justify-center"
-            :style="{ background: `linear-gradient(135deg, ${bootstrapConfig.value?.brand_color || '#1F2547'} 0%, color-mix(in srgb, ${bootstrapConfig.value?.brand_color || '#1F2547'} 60%, black) 100%)` }"
-            aria-hidden="true"
-          >
-            <UIcon :name="verticalIcon" class="size-24 text-white/25" />
-          </div>
-
-          <!-- Deferred video: not in SSR, starts opacity-0, fades in after canplay -->
-          <ClientOnly v-if="hero.video && hero.videoKind === 'video'">
-            <video
-              v-if="heroVideoShow"
-              ref="heroVideoEl"
-              :poster="hero.thumbnail_url"
-              muted loop playsinline preload="none"
-              aria-hidden="true" role="presentation"
-              class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-700"
-            />
-          </ClientOnly>
-        </div>
-        <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.3) 100%)" />
-        <div class="relative mx-auto w-full max-w-7xl px-4 py-36 sm:px-6 lg:px-8">
-          <p v-if="getField('hero.eyebrow', businessCity)" data-field="hero.eyebrow" class="saya-eyebrow mb-8 text-white/70">
-            {{ getField('hero.eyebrow', businessCity) }}
-          </p>
-          <h1 data-field="hero.title" class="saya-display-lg text-white max-w-4xl">
-            {{ hero.title || businessTitle }}<br>
-            <em v-if="hero.subtitle" data-field="hero.subtitle" class="saya-italic">{{ hero.subtitle }}</em>
-            <em v-else-if="businessSubtitle" data-field="hero.subtitle" class="saya-italic">{{ businessSubtitle }}</em>
-          </h1>
-
-          <!-- Location pills -->
-          <div v-if="hasLocations" class="mt-12 flex flex-wrap gap-3">
-            <NuxtLink
-              v-for="loc in locations"
-              :key="loc.id"
-              :to="`/locations/${loc.slug}`"
-              class="inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/5 px-5 py-2.5 text-sm text-white backdrop-blur-sm no-underline transition hover:bg-white/10"
-            >
-              <UIcon name="i-heroicons-map-pin" class="size-3.5 opacity-70" />
-              {{ loc.title }}
-            </NuxtLink>
-          </div>
-          <div v-else class="mt-12 flex flex-wrap gap-4">
-            <UButton v-if="hasOrderLinks" to="/order" color="neutral" variant="solid" size="xl" class="rounded-full bg-white! text-black! hover:bg-zinc-100!">{{ homeCopy.orderNowCta }}</UButton>
-            <UButton
-              :to="homeCopy.ctaRoute"
-              color="neutral"
-              :variant="hasOrderLinks ? 'outline' : 'solid'"
-              size="xl"
-              class="rounded-full"
-              :class="hasOrderLinks ? 'border-white/50 text-white hover:bg-white/10' : 'bg-white! text-black! hover:bg-zinc-100!'"
-            >
-              {{ homeCopy.reserveCta }}
-            </UButton>
-            <UButton
-              v-if="!hasOrderLinks"
-              :to="homeCopy.viewMenuRoute"
-              color="neutral"
-              variant="outline"
-              size="xl"
-              class="rounded-full border-white/50 text-white hover:bg-white/10"
-            >
-              {{ homeCopy.viewMenuCta }}
-            </UButton>
-          </div>
-        </div>
-      </section>
 
       <!-- ── Featured content (dishes / experiences) ─────────── -->
       <LazySayaFeaturedContent
@@ -727,9 +637,9 @@ const googleReviewSummary = computed(() => {
 })
 
 const restaurantName = computed(() => site?.brand_name || businessTitle.value || 'Business')
-const verticalIcon = computed(() => site?.vertical === 'experience' ? 'i-heroicons-sparkles' : 'i-heroicons-building-storefront')
 
-// Hero from CMS with Google Business fallbacks
+// Hero from CMS with Google Business fallbacks — used for OG image metadata below,
+// SayaHomeHero.vue resolves its own copy via getHero() from its :data prop.
 const hero = computed(() => getHero({
   title: businessTitle.value || '',
   subtitle: businessSubtitle.value || '',
@@ -737,13 +647,11 @@ const hero = computed(() => getHero({
   video: ''
 }))
 
-const { videoEl: heroVideoEl, showVideo: heroVideoShow } = useHeroVideo(() => hero.value?.video)
-
 const currentPageUrl = useSeoUrl('/')
 
 // SEO for KrabiClaw Platform
 if (isPlatform) {
-  const platformOgDescription = 'Beautiful restaurant websites edited through ChatGPT. Google Business sync, bookings, and real-time analytics included.'
+  const platformOgDescription = 'Beautiful local business websites edited through ChatGPT. Google Business sync, bookings, and real-time analytics included.'
 
   usePlatformPageSeo({
     path: '/',

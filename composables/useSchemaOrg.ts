@@ -26,7 +26,7 @@ export function useOrganizationSchema() {
     name: 'KrabiClaw',
     url: 'https://krabiclaw.com',
     logo: 'https://krabiclaw.com/krabi-claw-logo.png',
-    description: 'The Shopify for restaurants. AI-powered website builder for independent restaurants.',
+    description: 'The AI-powered website builder for local businesses. Build your web presence through conversation with ChatGPT.',
     contactPoint: {
       '@type': 'ContactPoint',
       email: 'hello@krabiclaw.com',
@@ -41,7 +41,7 @@ export function useWebSiteSchema() {
     '@type': 'WebSite',
     name: 'KrabiClaw',
     url: 'https://krabiclaw.com',
-    description: 'AI-powered restaurant website builder',
+    description: 'AI-powered website builder for local businesses',
     potentialAction: {
       '@type': 'SearchAction',
       target: 'https://krabiclaw.com/search?q={search_term_string}',

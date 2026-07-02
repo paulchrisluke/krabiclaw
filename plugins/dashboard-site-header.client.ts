@@ -18,10 +18,14 @@
 // never actually attached; multi-site dashboard pages were silently relying
 // entirely on the single-site auto-resolve fallback in dashboard-context.ts.)
 export default defineNuxtPlugin(() => {
+  const route = useRoute()
+  
+  // Only run on dashboard routes — early exit for platform/tenant pages
+  if (!route.path.startsWith('/dashboard')) return
+
   // Captured once, synchronously, while still inside the Nuxt app context for this
   // request/app instance — `route` stays a live reactive ref we can read later from
   // inside onRequest, where calling useRoute() again would be outside that context.
-  const route = useRoute()
 
   globalThis.$fetch = $fetch.create({
     onRequest({ request, options }) {

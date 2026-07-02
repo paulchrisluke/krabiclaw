@@ -8,10 +8,10 @@
 
       <form class="space-y-4" @submit.prevent="submit">
         <UFormField label="Site name">
-          <UInput v-model="name" placeholder="My Second Restaurant" autofocus />
+          <UInput v-model="name" placeholder="My Second Business" autofocus />
         </UFormField>
         <UFormField label="Subdomain">
-          <UInput v-model="subdomain" placeholder="my-second-restaurant" />
+          <UInput v-model="subdomain" placeholder="my-second-business" />
         </UFormField>
         <UFormField label="Vertical">
           <USelect v-model="vertical" :items="['restaurant', 'experience']" />
