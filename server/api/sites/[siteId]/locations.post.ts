@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { createLocation } from '~/server/utils/location-management'
+import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { queryFirst } from '~/server/db'
 
 function parseLocationPayload<T>(value: T) {
@@ -101,6 +102,7 @@ export default defineEventHandler(async (event) => {
   if (result.status >= 400) {
     return jsonResponse(result.data, { status: result.status })
   }
+  await purgeBootstrapCacheSafe(env, siteId)
 
   const location = (result.data as { location?: unknown }).location
   return jsonResponse({

@@ -5,6 +5,7 @@ import { updateLocation } from '~/server/utils/location-management'
 import { parseOnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
 import { runSiteCreation } from '~/server/utils/site-creation'
 import { setConfig } from '~/server/utils/site-config'
+import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 
 type SiteEnv = Parameters<typeof runSiteCreation>[0]
 
@@ -342,6 +343,7 @@ export default defineEventHandler(async (event) => {
       throw batchError
     }
     draftCommitted = true
+    if (siteId) await purgeBootstrapCacheSafe(env, siteId)
 
     // If anything fails after this point, the draft is already committed - we don't reset it
     // since the site was successfully created. The user can continue from the dashboard.

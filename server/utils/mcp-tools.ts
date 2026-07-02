@@ -1015,7 +1015,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'upload_user_photo',
-    description: 'Primary path for a user-provided image attachment. This tool only uploads the image into the site media library; it does not place the image on any page by itself. First inspect the attached image visually and ask the user to confirm the target site, placement, and that this exact image should be used. Pass an authorized file reference or attachment identifier that the host can resolve; do not pass raw local paths. Prefer file_id or an equivalent resolved identifier when available. After upload succeeds, immediately call the appropriate assignment tool such as set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, or set_experience_image. Do NOT use save_generated_image_file for user uploads; that tool is only for ChatGPT native image_generation output.',
+    description: 'Primary and only supported Client MCP path for a user-provided photo. Ask the user to attach the image directly in ChatGPT, inspect it visually, confirm the target site/placement, then pass the authorized ChatGPT file argument here. This tool uploads the image into the site media library but does not place it on a page by itself. Do not send users to a KrabiClaw photo uploader or dashboard media-library upload from this MCP app. Do not pass raw local paths. Prefer the file argument over file_id when available. After upload succeeds, immediately call the appropriate assignment tool such as set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, or set_experience_image. Do NOT use save_generated_image_file for user uploads; that tool is only for ChatGPT native image_generation output.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1044,7 +1044,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   globalTool(withToolAnnotations({
     name: 'request_photo_upload',
-    description: 'Secondary fallback only. Open an in-chat file picker when the user has not already attached an image in ChatGPT and still wants to provide their own photo. Prefer the native attachment flow plus upload_user_photo for the default path.',
+    description: 'Deprecated compatibility tool. Do not call this in the Client MCP ChatGPT app. If the user wants to provide a photo, ask them to attach it directly in ChatGPT and then use upload_user_photo. The KrabiClaw uploader should only be recommended for videos.',
     domain: 'media',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -2101,7 +2101,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'request_media_upload',
-    description: 'Create a pending image upload request. Use category "logo" for brand logos.',
+    description: 'Legacy dashboard/CMS image upload primitive. Do not call this from the Client MCP ChatGPT app for user photos; ask the user to attach photos directly in ChatGPT and use upload_user_photo. Videos still go through the dashboard media library.',
     domain: 'media',
     minimumRole: 'editor',
     confirmRequired: false,

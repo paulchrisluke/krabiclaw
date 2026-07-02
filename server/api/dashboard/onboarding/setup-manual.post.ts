@@ -5,6 +5,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
 import { updateLocation } from '~/server/utils/location-management'
+import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { queryFirst } from '~/server/db'
 
 type SiteEnv = Parameters<typeof runSiteCreation>[0]
@@ -82,6 +83,7 @@ export default defineEventHandler(async (event) => {
         status: 'active',
       }, session.user.id)
     }
+    await purgeBootstrapCacheSafe(env, siteId)
   }
 
   return jsonResponse({ success: true, orgSlug: orgRow.slug, siteId, siteSlug, locationSlug: locationRow?.slug ?? null })

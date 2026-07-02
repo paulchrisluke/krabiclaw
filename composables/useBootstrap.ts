@@ -108,6 +108,14 @@ export const useBootstrap = () => {
             // hasn't been reproduced failing the same way, but it's the highest-traffic
             // self-fetch in the app (every tenant page goes through it) — log on failure so
             // a future occurrence leaves evidence instead of a silent wrong render.
+            //
+            // A same-process direct-call fix (bypassing Nitro's router entirely) was tried
+            // and reverted: Nuxt's build-time import-protection plugin hard-blocks any import
+            // from server/** into composables/**, even dynamic ones, specifically to keep
+            // server-only code (D1/KV/H3 event) out of the client bundle. Eliminating this
+            // self-fetch for real would require moving bootstrap-building into server
+            // middleware (stashing the payload on event.context before SSR starts) — a
+            // bigger, more novel restructuring than this self-fetch-only fix, not attempted here.
             try {
               return await requestFetch<BootstrapPayload>(url.value)
             } catch (err) {

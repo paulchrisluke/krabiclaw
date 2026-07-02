@@ -3,7 +3,7 @@
     class="tenant-layout saya-theme min-h-screen flex flex-col font-sans bg-default text-default"
     :style="themeStyles"
   >
-    <UTheme :ui="{ button: { compoundVariants: [{ color: 'primary', variant: 'solid', class: 'text-[var(--brand-color-foreground)] bg-primary hover:bg-primary/75 active:bg-primary/75 disabled:bg-primary aria-disabled:bg-primary outline-primary/25 focus-visible:outline-3' }] } }">
+    <UTheme :ui="{ button: { compoundVariants: [{ color: 'primary', variant: 'solid', class: 'text-[var(--brand-color-foreground)] bg-[var(--brand-color)] hover:bg-[var(--brand-color)]/75 active:bg-[var(--brand-color)]/75 disabled:bg-[var(--brand-color)] aria-disabled:bg-[var(--brand-color)] outline-[var(--brand-color)]/25 focus-visible:outline-3' }] } }">
       <SayaHeader />
       <main class="grow">
         <slot />
@@ -28,7 +28,10 @@ const themeStyles = computed(() => {
     '--brand-color': brandColor.value,
     '--ui-primary': brandColor.value,
     '--color-primary': brandColor.value,
-    '--brand-color-foreground': brandTextColor.value
+    '--brand-color-foreground': brandTextColor.value,
+    // Ensure Nuxt UI primary color resolves correctly
+    '--primary': brandColor.value,
+    '--primary-foreground': brandTextColor.value
   }
 })
 
