@@ -1,3 +1,8 @@
+// Relative (not '~/...') import — this file is loaded directly by the plain
+// node:test runner in tests/unit/conversational-tool-surface.test.ts, outside
+// Nuxt's build context, where the '~' alias doesn't resolve.
+import { mcpProtocolError, MCP_ERROR } from './mcp-protocol.ts'
+
 type ToolLike = {
   name: string
   description?: string
@@ -98,7 +103,15 @@ export function assertConversationalToolEnabled(name: string, env?: ApiRecord) {
   if (!group || isConversationalToolGroupEnabled(env, group)) return
 
   const flag = GROUP_FLAG_ENV[group]
-  throw new Error(`Tool ${name} is not exposed on the conversational surface. Enable ${flag}=true to opt into ${group.replaceAll('_', ' ')} tools.`)
+  // MCP-shaped (not a plain Error) so mcp.post.ts's asMcpError() preserves
+  // methodNotFound instead of falling back to a generic internal (-32603)
+  // error for a tools/call against a surface-disabled tool. chowbot-agent.ts's
+  // `error instanceof Error` catch still works — mcpProtocolError() returns a
+  // real Error with an extra `.mcp` property attached.
+  throw mcpProtocolError(
+    MCP_ERROR.methodNotFound,
+    `Tool ${name} is not exposed on the conversational surface. Enable ${flag}=true to opt into ${group.replaceAll('_', ' ')} tools.`,
+  )
 }
 
 function stripExternalChannelsFromProperties(properties: Record<string, unknown>) {

@@ -6,6 +6,7 @@ import {
   isConversationalToolEnabled,
   normalizeMcpToolForConversationalSurface,
 } from '../../server/utils/conversational-tool-surface.ts'
+import { asMcpError, MCP_ERROR } from '../../server/utils/mcp-protocol.ts'
 
 describe('conversational tool surface policy', () => {
   test('hides experimental conversational groups by default', () => {
@@ -38,6 +39,19 @@ describe('conversational tool surface policy', () => {
       () => assertConversationalToolEnabled('sync_google_business_locations'),
       /CONVERSATIONAL_TOOLS_SOCIAL_PUBLISHING_ENABLED/,
     )
+  })
+
+  test('blocked-tool error is MCP-shaped with methodNotFound, not a generic internal error', () => {
+    try {
+      assertConversationalToolEnabled('sync_google_business_locations')
+      assert.fail('expected assertConversationalToolEnabled to throw')
+    } catch (error) {
+      // This is what mcp.post.ts's catch block does with a thrown auth/gating
+      // error to build the JSON-RPC response — asserting through asMcpError
+      // (not just error.mcp directly) proves a plain `new Error(...)` here
+      // would regress to the generic internal (-32603) fallback.
+      assert.equal(asMcpError(error).code, MCP_ERROR.methodNotFound)
+    }
   })
 
   test('narrows publish_post social channels while social publishing is disabled', () => {
