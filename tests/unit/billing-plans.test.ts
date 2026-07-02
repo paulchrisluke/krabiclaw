@@ -1,14 +1,13 @@
 import { test, describe, mock, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
+import type { EnvWithSiteCache } from '../../server/utils/billing-plans.ts'
 
-// ── Minimal stub types ──────────────────────────────────────────────────────
-
-type KvValue = string | null
+// ── KV stub ──────────────────────────────────────────────────────────────────
 
 function makeKv(initial: Record<string, string> = {}): KVNamespace {
   const store: Record<string, string> = { ...initial }
   return {
-    get: async (key: string, _type?: string) => (store[key] ?? null) as KvValue,
+    get: async (key: string) => store[key] ?? null,
     put: async (key: string, value: string) => { store[key] = value },
     delete: async (key: string) => { delete store[key] },
     list: async () => ({ keys: [], list_complete: true, cursor: '', cacheStatus: null }),
@@ -16,104 +15,132 @@ function makeKv(initial: Record<string, string> = {}): KVNamespace {
   } as unknown as KVNamespace
 }
 
-// ── Isolate: inline a testable subset of getCachedPlans logic ───────────────
+// ── Fake Stripe SDK ──────────────────────────────────────────────────────────
 //
-// We cannot import '../../server/utils/billing-plans' directly in a Node test
-// runner without Nuxt auto-imports resolved, so we replicate the minimal KV
-// read-through + JSON-parse logic here to prove the cache contract.
+// fetchStripeProducts() does `new Stripe(...)` internally, so the only way to
+// intercept it without changing production code is mocking the 'stripe'
+// module itself. This must happen before the real billing-plans module is
+// imported, since ESM resolves the 'stripe' specifier at that import's
+// evaluation time.
 
-async function readFromKv(kv: KVNamespace | undefined, key: string): Promise<unknown[] | null> {
-  if (!kv) return null
-  const raw = await kv.get(key, 'text').catch(() => null) as string | null
-  if (!raw) return null
-  try {
-    return JSON.parse(raw) as unknown[]
-  } catch {
-    return null // invalid JSON → cache miss
+let stripeProducts: unknown[] = []
+let stripePrices: unknown[] = []
+let stripeCallCount = 0
+
+class FakeStripe {
+  products = {
+    list: async () => {
+      stripeCallCount++
+      return { data: stripeProducts, has_more: false }
+    },
+  }
+
+  prices = {
+    list: async () => {
+      return { data: stripePrices, has_more: false }
+    },
   }
 }
 
-async function writeToKv(kv: KVNamespace | undefined, key: string, data: unknown[], ttl: number) {
-  if (!kv) return
-  await kv.put(key, JSON.stringify(data), { expirationTtl: ttl } as Parameters<KVNamespace['put']>[2]).catch(() => {})
-}
+mock.module('stripe', {
+  defaultExport: FakeStripe,
+})
+
+const { getCachedPlans } = await import('../../server/utils/billing-plans.ts')
 
 const CACHE_KEY = 'stripe-plans:v1'
-const CACHE_TTL = 3600
 
-// ── Tests ────────────────────────────────────────────────────────────────────
+const GROWTH_PRODUCT = {
+  id: 'prod_growth',
+  name: 'Growth',
+  description: 'Growth plan',
+  images: [],
+  metadata: { plan_id: 'growth' },
+}
+
+const GROWTH_PRICE = {
+  id: 'price_growth_month',
+  unit_amount: 4900,
+  currency: 'usd',
+  type: 'recurring',
+  recurring: { interval: 'month' },
+  product: 'prod_growth',
+}
+
+function baseEnv(siteCache?: KVNamespace): EnvWithSiteCache {
+  const env: EnvWithSiteCache = { STRIPE_SECRET_KEY: 'sk_test_123' }
+  if (siteCache) env.SITE_CACHE = siteCache
+  return env
+}
+
+beforeEach(() => {
+  stripeProducts = []
+  stripePrices = []
+  stripeCallCount = 0
+})
 
 describe('getCachedPlans — KV read-through cache', () => {
-  test('returns parsed plans on KV hit', async () => {
-    const plans = [{ id: 'free', name: 'Starter' }]
-    const kv = makeKv({ [CACHE_KEY]: JSON.stringify(plans) })
+  test('returns parsed plans from KV without calling Stripe', async () => {
+    const cached = [{ id: 'free', name: 'Starter' }]
+    const kv = makeKv({ [CACHE_KEY]: JSON.stringify(cached) })
 
-    const result = await readFromKv(kv, CACHE_KEY)
-    assert.deepEqual(result, plans)
+    const result = await getCachedPlans(baseEnv(kv))
+
+    assert.deepEqual(result, cached)
+    assert.equal(stripeCallCount, 0)
   })
 
-  test('returns null on KV miss', async () => {
+  test('fetches from Stripe on KV miss and writes the result back to KV', async () => {
+    stripeProducts = [GROWTH_PRODUCT]
+    stripePrices = [GROWTH_PRICE]
     const kv = makeKv({})
-    const result = await readFromKv(kv, CACHE_KEY)
-    assert.equal(result, null)
+
+    const result = await getCachedPlans(baseEnv(kv))
+
+    assert.equal(stripeCallCount, 1)
+    assert.ok(result.some((p) => p.id === 'free'), 'includes the static Starter plan')
+    const growth = result.find((p) => p.id === 'growth')
+    assert.ok(growth, 'includes the fetched Growth plan')
+    assert.equal(growth?.prices[0]?.amount, 4900)
+
+    const stored = await kv.get(CACHE_KEY, 'text')
+    // Compare through a JSON round-trip on both sides: KV storage always
+    // JSON-serializes, which drops `undefined` properties (e.g. badge/image)
+    // that are still present as explicit keys on the in-memory result.
+    assert.deepEqual(JSON.parse(stored as string), JSON.parse(JSON.stringify(result)))
   })
 
-  test('returns null on invalid JSON in KV', async () => {
+  test('falls back to Stripe when cached JSON is invalid', async () => {
+    stripeProducts = [GROWTH_PRODUCT]
+    stripePrices = [GROWTH_PRICE]
     const kv = makeKv({ [CACHE_KEY]: 'not-valid-json{{{' })
-    const result = await readFromKv(kv, CACHE_KEY)
-    assert.equal(result, null)
-  })
 
-  test('writes fetched plans to KV', async () => {
-    const kv = makeKv({})
-    const fetched = [{ id: 'growth', name: 'Growth' }]
-    await writeToKv(kv, CACHE_KEY, fetched, CACHE_TTL)
+    const result = await getCachedPlans(baseEnv(kv))
 
-    const stored = await readFromKv(kv, CACHE_KEY)
-    assert.deepEqual(stored, fetched)
-  })
-
-  test('swallows KV write errors silently', async () => {
-    // KV that throws on put
-    const failingKv = {
-      get: async () => null,
-      put: async () => { throw new Error('KV write failed') },
-    } as unknown as KVNamespace
-
-    // Should not throw
-    await assert.doesNotReject(
-      writeToKv(failingKv, CACHE_KEY, [{ id: 'free' }], CACHE_TTL)
-    )
+    assert.equal(stripeCallCount, 1)
+    assert.ok(result.some((p) => p.id === 'growth'))
   })
 
   test('skips KV entirely when SITE_CACHE is undefined', async () => {
-    const result = await readFromKv(undefined, CACHE_KEY)
-    assert.equal(result, null)
+    stripeProducts = [GROWTH_PRODUCT]
+    stripePrices = [GROWTH_PRICE]
+
+    const result = await getCachedPlans(baseEnv())
+
+    assert.equal(stripeCallCount, 1)
+    assert.ok(result.some((p) => p.id === 'growth'))
   })
 })
 
 describe('getCachedPlans — in-flight coalescing', () => {
-  test('two concurrent callers sharing an inflight promise receive the same result', async () => {
-    let callCount = 0
-    async function fakeFetch(): Promise<{ id: string }[]> {
-      callCount++
-      // Simulate async Stripe latency
-      await new Promise(r => setTimeout(r, 10))
-      return [{ id: 'growth' }]
-    }
+  test('two concurrent cache misses share a single Stripe fetch', async () => {
+    stripeProducts = [GROWTH_PRODUCT]
+    stripePrices = [GROWTH_PRICE]
+    const env = baseEnv()
 
-    // Simulate the coalescing pattern from billing-plans.ts
-    let inflight: Promise<{ id: string }[]> | null = null
+    const [a, b] = await Promise.all([getCachedPlans(env), getCachedPlans(env)])
 
-    async function getWithCoalescing() {
-      if (inflight) return inflight
-      inflight = fakeFetch().finally(() => { inflight = null })
-      return inflight
-    }
-
-    const [a, b] = await Promise.all([getWithCoalescing(), getWithCoalescing()])
-
-    assert.equal(callCount, 1, 'fetchStripeProducts should only be called once')
+    assert.equal(stripeCallCount, 1, 'fetchStripeProducts should only be called once')
     assert.deepEqual(a, b)
   })
 })

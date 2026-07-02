@@ -17,7 +17,7 @@
     "lint:fix": "eslint . --fix --ignore-pattern '.agents/**'",
     "quality": "yarn typecheck && yarn lint",
     "test": "yarn test:unit && yarn test:e2e",
-    "test:unit": "node --experimental-strip-types --test tests/unit/**/*.test.ts",
+    "test:unit": "node --experimental-strip-types --experimental-test-module-mocks --test tests/unit/**/*.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test tests/e2e/public.spec.ts tests/e2e/pottery-house.spec.ts tests/e2e/billing.spec.ts tests/e2e/billing-webhook.spec.ts tests/e2e/notifications.spec.ts",
     "test:e2e:full": "playwright test",

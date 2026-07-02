@@ -99,10 +99,17 @@ function parseOptionalInt(value?: string): number | undefined {
 function parseLimits(metadata: Record<string, string>): Partial<PlanLimits> {
   const result: Partial<PlanLimits> = {}
   if ('ai_credits' in metadata) {
-    result.aiCredits =
-      metadata.ai_credits === 'unlimited' || metadata.ai_credits === '-1'
-        ? 'unlimited'
-        : parseOptionalInt(metadata.ai_credits)
+    if (metadata.ai_credits === 'unlimited' || metadata.ai_credits === '-1') {
+      result.aiCredits = 'unlimited'
+    } else {
+      const parsed = parseOptionalInt(metadata.ai_credits)
+      // Only assign on a successful parse — an explicit `aiCredits: undefined`
+      // here would still override DEFAULT_PLAN_LIMITS.aiCredits in the
+      // `{ ...DEFAULT_PLAN_LIMITS, ...parseLimits(meta) }` spread.
+      if (parsed !== undefined) {
+        result.aiCredits = parsed
+      }
+    }
   }
   if ('custom_domain' in metadata || 'custom_domains' in metadata) {
     result.customDomain =

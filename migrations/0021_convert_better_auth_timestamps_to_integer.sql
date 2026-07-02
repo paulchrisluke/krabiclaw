@@ -29,12 +29,19 @@
 -- this bug at all — its tables were built from 0001_initial.sql's INTEGER
 -- declaration from the start, so its data is already correctly typed.
 -- Every conversion below is therefore
--- `CASE WHEN typeof(x) = 'integer' THEN x ELSE COALESCE(unixepoch(x), CAST(x AS INTEGER)) END`
+-- `CASE WHEN typeof(x) = 'integer' THEN x ELSE COALESCE(unixepoch(x), CASE WHEN x GLOB '[0-9]*' THEN CAST(x AS INTEGER) ELSE NULL END) END`
 -- so this migration is idempotent: already-integer columns pass through
 -- untouched (no Julian-day misinterpretation from feeding a bare integer
--- to unixepoch()), already-numeric text falls back to a plain cast
--- instead of failing the NOT NULL rebuild, and ISO text still converts
--- normally.
+-- to unixepoch()), already-numeric text falls back to a plain cast, and
+-- ISO text still converts normally. The GLOB '[0-9]*' guard is
+-- deliberate: bare CAST(x AS INTEGER) on non-numeric text silently
+-- returns 0 in SQLite, which would write a garbage 1970 timestamp
+-- instead of failing. Restricting CAST to digit-leading text means any
+-- truly blank/garbage value falls through to NULL, which then aborts
+-- the whole migration via the destination column's NOT NULL constraint
+-- (verified: no such values exist in prod/staging/preview as of
+-- 2026-07-02, but this keeps future/other environments failing loudly
+-- instead of writing wrong data).
 
 PRAGMA foreign_keys = OFF;
 
@@ -57,7 +64,7 @@ CREATE TABLE "user_new" (
 
 INSERT INTO "user_new" SELECT
   id, name, email, emailVerified, image, phoneNumber, phoneNumberVerified, role,
-  banned, banReason, CASE WHEN typeof(banExpires) = 'integer' THEN banExpires ELSE COALESCE(unixepoch(banExpires), CAST(banExpires AS INTEGER)) END, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CAST(createdAt AS INTEGER)) END, CASE WHEN typeof(updatedAt) = 'integer' THEN updatedAt ELSE COALESCE(unixepoch(updatedAt), CAST(updatedAt AS INTEGER)) END
+  banned, banReason, CASE WHEN typeof(banExpires) = 'integer' THEN banExpires ELSE COALESCE(unixepoch(banExpires), CASE WHEN banExpires GLOB '[0-9]*' THEN CAST(banExpires AS INTEGER) ELSE NULL END) END, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CASE WHEN createdAt GLOB '[0-9]*' THEN CAST(createdAt AS INTEGER) ELSE NULL END) END, CASE WHEN typeof(updatedAt) = 'integer' THEN updatedAt ELSE COALESCE(unixepoch(updatedAt), CASE WHEN updatedAt GLOB '[0-9]*' THEN CAST(updatedAt AS INTEGER) ELSE NULL END) END
 FROM "user";
 
 DROP TABLE "user";
@@ -74,7 +81,7 @@ CREATE TABLE "organization_new" (
 );
 
 INSERT INTO "organization_new" SELECT
-  id, name, slug, logo, metadata, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CAST(createdAt AS INTEGER)) END
+  id, name, slug, logo, metadata, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CASE WHEN createdAt GLOB '[0-9]*' THEN CAST(createdAt AS INTEGER) ELSE NULL END) END
 FROM "organization";
 
 DROP TABLE "organization";
@@ -101,8 +108,8 @@ CREATE TABLE "account_new" (
 
 INSERT INTO "account_new" SELECT
   id, accountId, providerId, userId, accessToken, refreshToken, idToken,
-  CASE WHEN typeof(expiresAt) = 'integer' THEN expiresAt ELSE COALESCE(unixepoch(expiresAt), CAST(expiresAt AS INTEGER)) END, CASE WHEN typeof(accessTokenExpiresAt) = 'integer' THEN accessTokenExpiresAt ELSE COALESCE(unixepoch(accessTokenExpiresAt), CAST(accessTokenExpiresAt AS INTEGER)) END, CASE WHEN typeof(refreshTokenExpiresAt) = 'integer' THEN refreshTokenExpiresAt ELSE COALESCE(unixepoch(refreshTokenExpiresAt), CAST(refreshTokenExpiresAt AS INTEGER)) END,
-  scope, password, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CAST(createdAt AS INTEGER)) END, CASE WHEN typeof(updatedAt) = 'integer' THEN updatedAt ELSE COALESCE(unixepoch(updatedAt), CAST(updatedAt AS INTEGER)) END
+  CASE WHEN typeof(expiresAt) = 'integer' THEN expiresAt ELSE COALESCE(unixepoch(expiresAt), CASE WHEN expiresAt GLOB '[0-9]*' THEN CAST(expiresAt AS INTEGER) ELSE NULL END) END, CASE WHEN typeof(accessTokenExpiresAt) = 'integer' THEN accessTokenExpiresAt ELSE COALESCE(unixepoch(accessTokenExpiresAt), CASE WHEN accessTokenExpiresAt GLOB '[0-9]*' THEN CAST(accessTokenExpiresAt AS INTEGER) ELSE NULL END) END, CASE WHEN typeof(refreshTokenExpiresAt) = 'integer' THEN refreshTokenExpiresAt ELSE COALESCE(unixepoch(refreshTokenExpiresAt), CASE WHEN refreshTokenExpiresAt GLOB '[0-9]*' THEN CAST(refreshTokenExpiresAt AS INTEGER) ELSE NULL END) END,
+  scope, password, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CASE WHEN createdAt GLOB '[0-9]*' THEN CAST(createdAt AS INTEGER) ELSE NULL END) END, CASE WHEN typeof(updatedAt) = 'integer' THEN updatedAt ELSE COALESCE(unixepoch(updatedAt), CASE WHEN updatedAt GLOB '[0-9]*' THEN CAST(updatedAt AS INTEGER) ELSE NULL END) END
 FROM "account";
 
 DROP TABLE "account";
@@ -123,7 +130,7 @@ CREATE TABLE "invitation_new" (
 );
 
 INSERT INTO "invitation_new" SELECT
-  id, organizationId, email, role, status, CASE WHEN typeof(expiresAt) = 'integer' THEN expiresAt ELSE COALESCE(unixepoch(expiresAt), CAST(expiresAt AS INTEGER)) END, inviterId, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CAST(createdAt AS INTEGER)) END
+  id, organizationId, email, role, status, CASE WHEN typeof(expiresAt) = 'integer' THEN expiresAt ELSE COALESCE(unixepoch(expiresAt), CASE WHEN expiresAt GLOB '[0-9]*' THEN CAST(expiresAt AS INTEGER) ELSE NULL END) END, inviterId, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CASE WHEN createdAt GLOB '[0-9]*' THEN CAST(createdAt AS INTEGER) ELSE NULL END) END
 FROM "invitation";
 
 DROP TABLE "invitation";
@@ -141,7 +148,7 @@ CREATE TABLE "jwks_new" (
 );
 
 INSERT INTO "jwks_new" SELECT
-  id, publicKey, privateKey, alg, crv, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CAST(createdAt AS INTEGER)) END, CASE WHEN typeof(expiresAt) = 'integer' THEN expiresAt ELSE COALESCE(unixepoch(expiresAt), CAST(expiresAt AS INTEGER)) END
+  id, publicKey, privateKey, alg, crv, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CASE WHEN createdAt GLOB '[0-9]*' THEN CAST(createdAt AS INTEGER) ELSE NULL END) END, CASE WHEN typeof(expiresAt) = 'integer' THEN expiresAt ELSE COALESCE(unixepoch(expiresAt), CASE WHEN expiresAt GLOB '[0-9]*' THEN CAST(expiresAt AS INTEGER) ELSE NULL END) END
 FROM "jwks";
 
 DROP TABLE "jwks";
@@ -159,7 +166,7 @@ CREATE TABLE "member_new" (
 );
 
 INSERT INTO "member_new" SELECT
-  id, organizationId, userId, role, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CAST(createdAt AS INTEGER)) END
+  id, organizationId, userId, role, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CASE WHEN createdAt GLOB '[0-9]*' THEN CAST(createdAt AS INTEGER) ELSE NULL END) END
 FROM "member";
 
 DROP TABLE "member";
@@ -182,7 +189,7 @@ CREATE TABLE "session_new" (
 );
 
 INSERT INTO "session_new" SELECT
-  id, CASE WHEN typeof(expiresAt) = 'integer' THEN expiresAt ELSE COALESCE(unixepoch(expiresAt), CAST(expiresAt AS INTEGER)) END, token, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CAST(createdAt AS INTEGER)) END, CASE WHEN typeof(updatedAt) = 'integer' THEN updatedAt ELSE COALESCE(unixepoch(updatedAt), CAST(updatedAt AS INTEGER)) END,
+  id, CASE WHEN typeof(expiresAt) = 'integer' THEN expiresAt ELSE COALESCE(unixepoch(expiresAt), CASE WHEN expiresAt GLOB '[0-9]*' THEN CAST(expiresAt AS INTEGER) ELSE NULL END) END, token, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CASE WHEN createdAt GLOB '[0-9]*' THEN CAST(createdAt AS INTEGER) ELSE NULL END) END, CASE WHEN typeof(updatedAt) = 'integer' THEN updatedAt ELSE COALESCE(unixepoch(updatedAt), CASE WHEN updatedAt GLOB '[0-9]*' THEN CAST(updatedAt AS INTEGER) ELSE NULL END) END,
   ipAddress, userAgent, activeOrganizationId, activeTeamId, impersonatedBy, userId
 FROM "session";
 
@@ -200,7 +207,7 @@ CREATE TABLE "verification_new" (
 );
 
 INSERT INTO "verification_new" SELECT
-  id, identifier, value, CASE WHEN typeof(expiresAt) = 'integer' THEN expiresAt ELSE COALESCE(unixepoch(expiresAt), CAST(expiresAt AS INTEGER)) END, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CAST(createdAt AS INTEGER)) END, CASE WHEN typeof(updatedAt) = 'integer' THEN updatedAt ELSE COALESCE(unixepoch(updatedAt), CAST(updatedAt AS INTEGER)) END
+  id, identifier, value, CASE WHEN typeof(expiresAt) = 'integer' THEN expiresAt ELSE COALESCE(unixepoch(expiresAt), CASE WHEN expiresAt GLOB '[0-9]*' THEN CAST(expiresAt AS INTEGER) ELSE NULL END) END, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CASE WHEN createdAt GLOB '[0-9]*' THEN CAST(createdAt AS INTEGER) ELSE NULL END) END, CASE WHEN typeof(updatedAt) = 'integer' THEN updatedAt ELSE COALESCE(unixepoch(updatedAt), CASE WHEN updatedAt GLOB '[0-9]*' THEN CAST(updatedAt AS INTEGER) ELSE NULL END) END
 FROM "verification";
 
 DROP TABLE "verification";
@@ -242,7 +249,7 @@ CREATE TABLE "oauthClient_new" (
 
 INSERT INTO "oauthClient_new" SELECT
   id, clientId, clientSecret, name, redirectUris, scopes, public, requirePkce, skipConsent,
-  userId, metadata, disabled, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CAST(createdAt AS INTEGER)) END, CASE WHEN typeof(updatedAt) = 'integer' THEN updatedAt ELSE COALESCE(unixepoch(updatedAt), CAST(updatedAt AS INTEGER)) END,
+  userId, metadata, disabled, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CASE WHEN createdAt GLOB '[0-9]*' THEN CAST(createdAt AS INTEGER) ELSE NULL END) END, CASE WHEN typeof(updatedAt) = 'integer' THEN updatedAt ELSE COALESCE(unixepoch(updatedAt), CASE WHEN updatedAt GLOB '[0-9]*' THEN CAST(updatedAt AS INTEGER) ELSE NULL END) END,
   enableEndSession, subjectType, uri, icon, contacts, tos, policy, softwareId,
   softwareVersion, softwareStatement, postLogoutRedirectUris, tokenEndpointAuthMethod,
   grantTypes, responseTypes, type, referenceId
@@ -266,7 +273,7 @@ CREATE TABLE "oauthAccessToken_new" (
 );
 
 INSERT INTO "oauthAccessToken_new" SELECT
-  id, clientId, userId, token, scopes, CASE WHEN typeof(expiresAt) = 'integer' THEN expiresAt ELSE COALESCE(unixepoch(expiresAt), CAST(expiresAt AS INTEGER)) END, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CAST(createdAt AS INTEGER)) END,
+  id, clientId, userId, token, scopes, CASE WHEN typeof(expiresAt) = 'integer' THEN expiresAt ELSE COALESCE(unixepoch(expiresAt), CASE WHEN expiresAt GLOB '[0-9]*' THEN CAST(expiresAt AS INTEGER) ELSE NULL END) END, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CASE WHEN createdAt GLOB '[0-9]*' THEN CAST(createdAt AS INTEGER) ELSE NULL END) END,
   sessionId, referenceId, refreshId
 FROM "oauthAccessToken";
 
@@ -286,7 +293,7 @@ CREATE TABLE "oauthConsent_new" (
 );
 
 INSERT INTO "oauthConsent_new" SELECT
-  id, clientId, userId, scopes, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CAST(createdAt AS INTEGER)) END, CASE WHEN typeof(updatedAt) = 'integer' THEN updatedAt ELSE COALESCE(unixepoch(updatedAt), CAST(updatedAt AS INTEGER)) END, referenceId
+  id, clientId, userId, scopes, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CASE WHEN createdAt GLOB '[0-9]*' THEN CAST(createdAt AS INTEGER) ELSE NULL END) END, CASE WHEN typeof(updatedAt) = 'integer' THEN updatedAt ELSE COALESCE(unixepoch(updatedAt), CASE WHEN updatedAt GLOB '[0-9]*' THEN CAST(updatedAt AS INTEGER) ELSE NULL END) END, referenceId
 FROM "oauthConsent";
 
 DROP TABLE "oauthConsent";
@@ -309,8 +316,8 @@ CREATE TABLE "oauthRefreshToken_new" (
 );
 
 INSERT INTO "oauthRefreshToken_new" SELECT
-  id, clientId, userId, token, scopes, accessTokenId, CASE WHEN typeof(expiresAt) = 'integer' THEN expiresAt ELSE COALESCE(unixepoch(expiresAt), CAST(expiresAt AS INTEGER)) END, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CAST(createdAt AS INTEGER)) END,
-  sessionId, referenceId, CASE WHEN typeof(revoked) = 'integer' THEN revoked ELSE COALESCE(unixepoch(revoked), CAST(revoked AS INTEGER)) END, CASE WHEN typeof(authTime) = 'integer' THEN authTime ELSE COALESCE(unixepoch(authTime), CAST(authTime AS INTEGER)) END
+  id, clientId, userId, token, scopes, accessTokenId, CASE WHEN typeof(expiresAt) = 'integer' THEN expiresAt ELSE COALESCE(unixepoch(expiresAt), CASE WHEN expiresAt GLOB '[0-9]*' THEN CAST(expiresAt AS INTEGER) ELSE NULL END) END, CASE WHEN typeof(createdAt) = 'integer' THEN createdAt ELSE COALESCE(unixepoch(createdAt), CASE WHEN createdAt GLOB '[0-9]*' THEN CAST(createdAt AS INTEGER) ELSE NULL END) END,
+  sessionId, referenceId, CASE WHEN typeof(revoked) = 'integer' THEN revoked ELSE COALESCE(unixepoch(revoked), CASE WHEN revoked GLOB '[0-9]*' THEN CAST(revoked AS INTEGER) ELSE NULL END) END, CASE WHEN typeof(authTime) = 'integer' THEN authTime ELSE COALESCE(unixepoch(authTime), CASE WHEN authTime GLOB '[0-9]*' THEN CAST(authTime AS INTEGER) ELSE NULL END) END
 FROM "oauthRefreshToken";
 
 DROP TABLE "oauthRefreshToken";
