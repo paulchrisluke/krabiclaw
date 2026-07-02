@@ -37,36 +37,41 @@
             {{ $t('saya.header.experiences') }}
           </NuxtLink>
 
-          <UDropdownMenu v-if="locations.length > 1" :items="locationDropdownItems" :ui="{ content: 'saya-theme min-w-64' }">
-            <button class="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default">
-              {{ $t('saya.header.locations') }}
-              <UIcon name="i-heroicons-chevron-down" class="size-3 opacity-60" />
-            </button>
-          </UDropdownMenu>
+          <SayaDropdown v-if="locations.length > 1" :items="locationDropdownItems" panel-class="saya-theme min-w-64">
+            <template #default="{ open, toggle, triggerKeydown }">
+              <button
+                type="button"
+                class="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
+                aria-haspopup="menu"
+                :aria-expanded="open"
+                @click="toggle"
+                @keydown="triggerKeydown"
+              >
+                {{ $t('saya.header.locations') }}
+                <svg viewBox="0 0 20 20" fill="currentColor" class="size-3 opacity-60"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" /></svg>
+              </button>
+            </template>
+          </SayaDropdown>
         </nav>
 
         <div class="flex items-center justify-end gap-2 col-start-3">
           <!-- Primary CTA: Order Now if delivery links exist, otherwise dynamic Reserve/Book -->
-          <UButton
+          <NuxtLink
             :to="primaryCtaPath"
-            color="primary"
-            variant="solid"
-            size="sm"
-            class="rounded-full"
+            class="inline-flex items-center justify-center rounded-full bg-(--brand-color) px-3.5 py-1.5 text-sm font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90"
           >
             {{ primaryCtaLabel }}
-          </UButton>
+          </NuxtLink>
 
           <!-- Mobile menu toggle -->
-          <UButton
-            icon="i-heroicons-bars-3"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            class="lg:hidden"
+          <button
+            type="button"
+            class="lg:hidden inline-flex size-8 items-center justify-center rounded-full text-muted transition hover:bg-muted hover:text-default"
             :aria-label="mobileMenuOpen ? $t('saya.header.close_navigation') : $t('saya.header.open_navigation')"
             @click="mobileMenuOpen = !mobileMenuOpen"
-          />
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" class="size-5"><path fill-rule="evenodd" d="M2.75 5.75a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13a.75.75 0 01-.75-.75zM2.75 10a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13A.75.75 0 012.75 10zM2.75 14.25a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13a.75.75 0 01-.75-.75z" clip-rule="evenodd" /></svg>
+          </button>
         </div>
       </div>
 
@@ -207,11 +212,10 @@ const primaryCtaLabel = computed(() => {
   return verticalCopy.value.reserveCta
 })
 
-const locationDropdownItems = computed(() => [
+const locationDropdownItems = computed(() =>
   locations.value.map((loc: { title: string; slug: string }) => ({
     label: loc.title,
     to: `/locations/${loc.slug}`,
-    icon: 'i-heroicons-map-pin'
   }))
-].filter((group: ApiRecord[]) => group.length > 0))
+)
 </script>

@@ -7,7 +7,11 @@
 // each field percent-encoded (mirrors composables/useBootstrapParams.ts's
 // useBootstrapKey(), minus `token` — cached entries are never preview/draft-authorized,
 // see the isPreviewAuthorized guard at the call site in bootstrap.get.ts).
-export const BOOTSTRAP_CACHE_TTL_SECONDS = 60
+// Raised from 60s to 300s once every bootstrap-relevant write path was confirmed to call
+// purgeBootstrapCache/purgeBootstrapCacheSafe (dashboard editor routes + MCP were already
+// covered; location CRUD, onboarding setup/commit, and Google Business/Places sync were a
+// gap closed alongside this change — see those call sites for purgeBootstrapCacheSafe).
+export const BOOTSTRAP_CACHE_TTL_SECONDS = 300
 
 export interface BootstrapCacheParams {
   page: string | null
@@ -77,4 +81,36 @@ export async function purgeBootstrapCache(kv: KVNamespace, siteId: string): Prom
     cursor = list.list_complete ? undefined : list.cursor
   } while (cursor)
   await Promise.all(deletions)
+}
+
+/**
+ * Convenience wrapper for call sites outside /api/editor/sites/** and mcp.post.ts
+ * (the two paths already covered by a blanket afterResponse hook / direct call —
+ * see server/plugins/bootstrap-cache-invalidate.ts). Non-fatal: swallows KV errors
+ * and missing bindings so a cache purge failure never breaks the write it follows.
+ */
+export async function purgeBootstrapCacheSafe(
+  env: unknown,
+  siteId: string,
+): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const kv = (env as any)?.SITE_CACHE as KVNamespace | undefined
+  if (!kv) return
+  
+  const purgePromise = purgeBootstrapCache(kv, siteId).catch(err => {
+    console.warn('[bootstrap-cache] purge failed:', String(err))
+  })
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const waitUntil = (env as any)?.ctx?.waitUntil
+  if (typeof waitUntil === 'function') {
+    waitUntil.call((env as any).ctx, purgePromise)
+    return
+  }
+
+  // Hard timeout fallback if waitUntil is not available
+  await Promise.race([
+    purgePromise,
+    new Promise(resolve => setTimeout(resolve, 500))
+  ])
 }

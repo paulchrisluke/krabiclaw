@@ -11,9 +11,9 @@
     </div>
 
     <UCard v-else>
-      <UFormGroup label="Page content">
+      <UFormField label="Page content">
         <UTextarea id="content" v-model="content" :rows="20" placeholder="Enter page content..." class="mb-4" />
-      </UFormGroup>
+      </UFormField>
       <div class="flex gap-4">
         <UButton @click="saveContent" :loading="saving">Save</UButton>
         <UButton color="neutral" variant="soft" :loading="deleting" @click="deleteContent">Delete</UButton>

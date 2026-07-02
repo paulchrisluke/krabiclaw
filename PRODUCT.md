@@ -18,7 +18,7 @@ Customer-facing ChatGPT app for tenant site management.
 - MCP endpoint at `/api/mcp` (`server/api/mcp.post.ts`)
 - Scope: `tenant`
 - 90+ MCP tools covering: site setup, locations, menus, experiences, posts, media, translation, Google Business, Facebook, analytics, work requests
-- Widget system (HTML responses rendered inline in ChatGPT) — currently scoped to `request_photo_upload` only; `list_sites`, `import_from_maps`, `show_site_preview`, `show_generated_images`, and onboarding all return plain text (a custom widget was overkill for basic list/selection output)
+- Widget system is legacy/deprecated for client photo uploads; Client MCP should ask users to attach photos directly in ChatGPT and then use `upload_user_photo`. `list_sites`, `import_from_maps`, `show_site_preview`, `show_generated_images`, and onboarding return plain text.
 - Image generation via ChatGPT's native `image_generation` Responses API tool (`gpt-image-1` / `gpt-image-2`) — not DALL-E
 - Plugin landing page at `/plugin`
 

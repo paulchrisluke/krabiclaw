@@ -3,6 +3,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { syncPlaceToLocation } from '../../../utils/google-places'
 import { getDashboardSite } from '~/server/utils/dashboard-context'
 import { hasSiteEntitlement } from '~/server/utils/billing'
+import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -57,6 +58,7 @@ export default defineEventHandler(async (event) => {
       locationId,
       location.google_place_id
     )
+    await purgeBootstrapCacheSafe(env, site.id)
 
     return jsonResponse({
       success: true,

@@ -6,8 +6,8 @@
 // list_sites) deliberately have no widgetName in mcp-tools.ts — a custom widget was overkill
 // for basic list/selection output, so they always fall back to plain text. show_welcome and
 // show_vertical_picker were removed entirely (duplicated list_sites / added no value without
-// a widget). request_photo_upload is the only tool that still needs a real widget (an in-chat
-// file picker can't be expressed as text).
+// a widget). request_photo_upload is kept only for deprecated compatibility; Client MCP should
+// ask users to attach photos directly in ChatGPT and then call upload_user_photo.
 export const WIDGETS_ENABLED = false;
 
 export const ENABLED_WIDGET_TOOLS = new Set([

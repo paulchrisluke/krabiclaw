@@ -59,7 +59,6 @@
 
       <!-- Right actions -->
       <div class="flex items-center gap-2 shrink-0">
-        <UColorModeButton variant="ghost" color="neutral" size="sm" />
         <template v-if="isAuthenticated">
           <NuxtLink
             to="/dashboard"

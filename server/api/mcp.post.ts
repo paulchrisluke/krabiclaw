@@ -34,6 +34,11 @@ import {
 
 const TENANT_AUTH_DESCRIPTION = "Connect KrabiClaw to continue.";
 const TENANT_AUTH_REQUIRED_TEXT = "Authentication required: connect KrabiClaw to continue.";
+const DEPRECATED_CLIENT_MCP_PHOTO_UPLOAD_TOOLS = new Set([
+  "request_photo_upload",
+  "request_media_upload",
+  "confirm_media_upload",
+]);
 
 function resourceMetadataUrl(baseUrl: string) {
   return `${baseUrl}/.well-known/oauth-protected-resource`;
@@ -155,17 +160,17 @@ Whenever an image is needed (hero, logo, post thumbnail, menu photo, experience 
 This entire flow runs within the current conversation — do not tell the user to leave the app or use a different context.
 
 **User-uploaded (user provides their own photo):**
-- Primary happy path:
-  1. When the user has already attached an image in ChatGPT, inspect it visually first. Do not upload or mutate anything yet.
-  2. If the intended use is obvious, describe it briefly and ask the user to confirm the target site, the target placement, and that the attached image should be used.
-  3. Do not upload media, assign an image, publish, or overwrite anything until the user explicitly confirms.
-  4. After confirmation, call upload_user_photo({ site_id, file: <attached local file argument>, category, description }).
-  5. The file argument is the primary contract. Pass the ChatGPT attachment through the file field and let the host rewrite it into an authorized file reference for KrabiClaw. Do not fabricate download URLs or wrap fake file objects.
-  6. After upload_user_photo returns assetId/publicUrl, call the appropriate assignment tool such as set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, or set_experience_image.
-  7. Reply with the exact site, placement, assetId, and publicUrl that were updated.
-- Secondary fallback only:
-  - If the user wants to provide an image but has not attached one in ChatGPT, call request_photo_upload({ site_id, category }) to open the in-chat file picker widget.
-  - Use file_id-only upload_user_photo calls only when the file argument rewrite path is unavailable.
+1. Ask the user to attach the photo directly in ChatGPT if they have not already done so. Do not send users to the KrabiClaw dashboard/media uploader for photos from this MCP app.
+2. When the user has attached an image in ChatGPT, inspect it visually first. Do not upload or mutate anything yet.
+3. If the intended use is obvious, describe it briefly and ask the user to confirm the target site, the target placement, and that the attached image should be used.
+4. Do not upload media, assign an image, publish, or overwrite anything until the user explicitly confirms.
+5. After confirmation, call upload_user_photo({ site_id, file: <attached local file argument>, category, description }).
+6. The file argument is the primary contract. Pass the ChatGPT attachment through the file field and let the host rewrite it into an authorized file reference for KrabiClaw. Do not fabricate download URLs, wrap fake file objects, or suggest an in-app photo uploader.
+7. After upload_user_photo returns assetId/publicUrl, call the appropriate assignment tool such as set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, or set_experience_image.
+8. Reply with the exact site, placement, assetId, and publicUrl that were updated.
+
+**Videos:**
+- ChatGPT photo attachment flow is for images only. For video uploads, direct the user to the dashboard media library, then use get_site_media_assets and the appropriate video assignment tool after the video is uploaded.
 
 ## Session start
 Start every conversation by calling get_workspace_context. If no active site is set yet, call list_sites to discover the user's sites and present them clearly.
@@ -406,6 +411,9 @@ Common workflows: update menus and items, create and publish posts, triage conta
         : new Set<string>();
 
       const tools = MCP_TOOLS.filter((tool) => {
+        if (DEPRECATED_CLIENT_MCP_PHOTO_UPLOAD_TOOLS.has(tool.name)) {
+          return false;
+        }
         // Without a site_id, return all tools so AI clients (e.g. ChatGPT) can discover
         // the full capability set on first connection. Security is enforced at execution time.
         if (!siteId || !siteCtx) return true;
@@ -479,10 +487,15 @@ Common workflows: update menus and items, create and publish posts, triage conta
         !Array.isArray(request.params.arguments)
           ? (request.params.arguments as Record<string, unknown>)
           : Object.fromEntries(
-              Object.entries(request.params ?? {}).filter(
-                ([key]) => key !== "name",
               ),
             );
+
+      if (DEPRECATED_CLIENT_MCP_PHOTO_UPLOAD_TOOLS.has(toolName)) {
+        throw mcpProtocolError(
+          MCP_ERROR.methodNotFound,
+          `Tool ${toolName} is deprecated and blocked.`
+        );
+      }
 
       const result = await executeMcpToolCall(event, toolName, rawArgs);
 

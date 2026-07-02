@@ -7,6 +7,7 @@ import { getPlaceDetailsByUrl, getPlaceDetails, PlaceDetailsError } from '~/serv
 import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
 import { updateLocation } from '~/server/utils/location-management'
 import { setConfig } from '~/server/utils/site-config'
+import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { execute, queryFirst } from '~/server/db'
 
 type SiteEnv = Parameters<typeof runSiteCreation>[0]
@@ -181,6 +182,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const orgRow = await queryFirst<{ slug: string }>(db, `SELECT slug FROM organization WHERE id = ? LIMIT 1`, [organizationId])
+  await purgeBootstrapCacheSafe(env, siteId)
 
   return jsonResponse({
     success: true,

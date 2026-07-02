@@ -106,7 +106,7 @@ Platform Admin MCP is intentionally excluded from the parity tables below becaus
 | `set_default_currency` | **Alias** — MCP folds into `update_site_settings`; consider removing |
 | `save_brand_description` | **Alias** — MCP folds into `update_site_settings` / `update_page_content`; consider removing |
 | `update_site_social` | **Alias** — MCP folds into `update_site_settings`; consider removing |
-| `resolve_pending_media` | **Different flow** — WhatsApp pending-media specific; MCP has `confirm_media_upload` for browser uploads |
+| `resolve_pending_media` | **Different flow** — WhatsApp pending-media specific; Client MCP uses ChatGPT attachments for photos and dashboard upload handoff only for videos |
 
 ---
 
@@ -116,7 +116,7 @@ Platform Admin MCP is intentionally excluded from the parity tables below becaus
 |----------|--------|
 | `show_site_preview`, `show_generated_images` | MCP-only onboarding/preview tools (plain text response, no widget — MCP/ChatGPT canvas only) |
 | `save_generated_image`, `save_generated_image_file`, `upload_user_photo` | MCP native image generation save flow; ChowBot auto-saves inline |
-| `request_media_upload`, `confirm_media_upload`, `request_photo_upload` | Browser upload flow; ChowBot uses WhatsApp pending media |
+| `request_media_upload`, `confirm_media_upload`, `request_photo_upload` | Deprecated Client MCP photo/browser-upload flow; ChatGPT photo attachments use `upload_user_photo`, while ChowBot uses WhatsApp pending media |
 | `create_site`, `list_sites` | Platform-level onboarding; ChowBot is always scoped to one org |
 | `get_current_user` | MCP session context tool |
 | `create_domain`, `delete_domain`, `set_canonical_domain`, `sync_domain`, `get_site_domains` | Domain management — dashboard only today |
