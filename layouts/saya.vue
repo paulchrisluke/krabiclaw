@@ -18,8 +18,24 @@
 if (import.meta.dev) useDebugLCP()
 
 const { config, locations } = useBootstrap()
+const { siteId, isTenant } = useTenantSite()
 
-const brandColor = computed(() => config.value?.brand_color || null)
+// The full bootstrap payload above is intentionally `lazy: true` (see
+// useBootstrap.ts) so SSR doesn't block the whole page on it. But that means
+// brand_color isn't known yet on first paint, and the CTA button's Tailwind
+// class falls back to Nuxt UI's default color, then snaps to the real brand
+// color once bootstrap resolves client-side — a visible flash of the wrong
+// color. This tiny, non-lazy fetch blocks SSR just long enough to know the
+// real brand_color before anything paints, so no fallback color is ever shown.
+const { data: brandConfigData } = isTenant && siteId
+  ? await useFetch(`/api/public/sites/${siteId}/config`, {
+      key: `site-brand-config-${siteId}`,
+    })
+  : { data: ref(null) }
+
+const brandColor = computed(
+  () => brandConfigData.value?.config?.brand_color || config.value?.brand_color || null
+)
 const brandTextColor = computed(() => getContrastColor(brandColor.value))
 
 const themeStyles = computed(() => {
