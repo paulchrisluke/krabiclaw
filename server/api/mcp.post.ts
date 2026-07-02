@@ -487,6 +487,8 @@ Common workflows: update menus and items, create and publish posts, triage conta
         !Array.isArray(request.params.arguments)
           ? (request.params.arguments as Record<string, unknown>)
           : Object.fromEntries(
+              Object.entries(request.params ?? {}).filter(
+                ([key]) => key !== "name",
               ),
             );
 

@@ -185,8 +185,7 @@ export default defineEventHandler(async (event) => {
 
   if (result.status !== 200 && result.status !== 201) {
     return jsonResponse({ error: (result.data as { error?: string }).error ?? 'Could not add location.' }, { status: result.status })
-
-
+  }
   // Upsert reviews for the new location
   const locationId = (result.data as { location?: { id: string } }).location?.id
   if (locationId) {
