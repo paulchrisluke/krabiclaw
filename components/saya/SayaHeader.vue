@@ -58,7 +58,7 @@
           <!-- Primary CTA: Order Now if delivery links exist, otherwise dynamic Reserve/Book -->
           <NuxtLink
             :to="primaryCtaPath"
-            class="inline-flex items-center justify-center rounded-full bg-(--brand-color) px-3.5 py-1.5 text-sm font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90"
+            class="inline-flex items-center justify-center rounded-full bg-(--brand-color) px-3 py-1.5 text-xs sm:text-sm font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90"
           >
             {{ primaryCtaLabel }}
           </NuxtLink>
