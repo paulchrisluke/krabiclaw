@@ -2,6 +2,10 @@
   <UPage>
 
     <UPageBody>
+      <div v-if="!loading" class="mb-4 flex items-center justify-end">
+        <UButton icon="i-heroicons-plus" @click="openCreate">Add experience</UButton>
+      </div>
+
       <div v-if="loading" class="space-y-3">
         <USkeleton v-for="i in 3" :key="i" class="h-20 w-full rounded-lg" />
       </div>
