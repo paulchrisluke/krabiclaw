@@ -11,7 +11,8 @@ KrabiClaw now ships two separate MCP surfaces. They must stay separate in auth, 
 - Protected resource: `/.well-known/oauth-protected-resource`
 - Server entrypoint: `server/api/mcp.post.ts`
 - Scope: `tenant`
-- Exposes: site setup, menus, experiences, posts, media, translation, reviews, analytics, work requests
+- Exposes by default: site setup, menus, experiences, posts, media, reviews, submissions, notifications, content, QA, analytics
+- Feature-flagged conversational groups: translations/locales, social/OAuth publishing, domains, managed-service work requests. See `docs/tool-parity.md`.
 
 ### Platform Admin MCP
 

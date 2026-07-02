@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const rawArguments = { site_id: body.siteId, ...body.input }
   const result = await executeMcpToolCall(event, body.toolName, rawArguments)
 
-  // Unwrap widget render responses — tests care about structured content, not the widget shell
+  // Unwrap structured MCP responses — tests care about the payload, not fallback text.
   if (isMcpRenderResponse(result)) {
     return { result: result.structuredContent }
   }

@@ -1,139 +1,75 @@
-# ChowBot / MCP / Dashboard Tool Parity
+# ChowBot / Client MCP Conversational Tool Surface
 
-Tracks which tools exist across surfaces and where gaps are. Update this when adding tools to any surface.
+This document tracks the customer-facing conversational surfaces:
 
-**Surfaces:**
-- **ChowBot** — conversational assistant embedded in the dashboard and WhatsApp
-- **Client MCP** — customer ChatGPT connector (`server/api/mcp.post.ts`)
-- **Platform Admin MCP** — internal ChatGPT connector (`server/api/mcp/platform.post.ts`)
-- **Dashboard** — CMS pages and direct UI flows
+- **Client MCP** — ChatGPT connector at `server/api/mcp.post.ts`
+- **ChowBot** — dashboard and WhatsApp assistant driven by `server/utils/chowbot-agent.ts`
+- **Dashboard/CMS** — full UI and API workflows that do not need a conversational tool equivalent
 
-Platform Admin MCP is intentionally excluded from the parity tables below because it is a separate internal-only surface for platform blog/docs operations, not a tenant-management surface. See `docs/mcp-surface-split.md`.
+Platform Admin MCP is intentionally excluded because it is a separate internal-only surface. See `docs/mcp-surface-split.md`.
 
----
+## Policy
 
-## ✅ Exact name match — true parity (74 tools)
+Client MCP and ChowBot are not required to have identical tool names. They must share the same curated conversational capability policy:
 
-| Tool |
-|------|
-| `add_menu_items_batch` |
-| `create_experience` |
-| `create_location` |
-| `create_location_qa` |
-| `create_menu` |
-| `create_menu_item` |
-| `create_post` |
-| `create_work_request` |
-| `delete_content_field` |
-| `delete_experience` |
-| `delete_locale` |
-| `delete_location` |
-| `delete_location_qa` |
-| `delete_media_asset` |
-| `delete_menu` |
-| `delete_menu_item` |
-| `delete_menu_section` |
-| `delete_post` |
-| `get_contact_inquiries` |
-| `get_experience` |
-| `get_location` |
-| `get_menu` |
-| `get_notification_settings` |
-| `get_page_fields` |
-| `get_post` |
-| `get_reservation_inquiries` |
-| `get_site_media_assets` |
-| `get_site_settings` |
-| `get_translation_inventory` |
-| `get_translation_job` |
-| `get_translation_review_items` |
-| `import_from_maps` |
-| `import_menu_from_media` |
-| `list_experience_bookings` |
-| `list_experiences` |
-| `list_locales` |
-| `list_location_qa` |
-| `list_location_reviews` |
-| `list_locations` |
-| `list_menus` |
-| `list_posts` |
-| `list_translation_jobs` |
-| `list_work_requests` |
-| `publish_post` |
-| `publish_translations` |
-| `rename_menu_section` |
-| `reorder_location_qa` |
-| `reorder_menu_items` |
-| `reply_to_review` |
-| `run_translation_job_batch` |
-| `save_translation_review_item` |
-| `set_about_story_image` |
-| `set_experience_image` |
-| `set_experience_video` |
-| `set_home_hero_image` |
-| `set_home_hero_video` |
-| `set_home_story_image` |
-| `set_location_hero_image` |
-| `set_location_hero_video` |
-| `set_logo` |
-| `set_menu_item_image` |
-| `set_post_image` |
-| `start_translation_job` |
-| `update_experience` |
-| `update_experience_booking` |
-| `update_home_hero` |
-| `update_location` |
-| `update_location_qa` |
-| `update_media_asset` |
-| `update_menu` |
-| `update_menu_item` |
-| `update_notification_settings` |
-| `update_page_content` |
-| `update_post` |
-| `upsert_locale` |
+- A workflow belongs on both conversational surfaces only when it is safe, natural, and tested as a chat turn.
+- Dashboard/CMS remains the source for setup-heavy or OAuth-heavy workflows.
+- New surface-specific tools need a documented reason in this file.
+- Feature-flagged groups must be hidden from tool discovery and blocked at execution.
+- Do not keep deprecated tools in the active registry. Remove stale definitions, executor cases, tests, and docs together.
 
----
+The shared gate lives in `server/utils/conversational-tool-surface.ts`.
 
-## 🟠 ChowBot-only — no MCP equivalent (9 tools)
+## Default Visible Surface
 
-| ChowBot tool | Status / Action |
-|--------------|----------------|
-| `sync_menu_items` | **Gap** — MCP has no reconcile/upsert tool |
-| `publish_menu` | **Gap** — MCP has no menu publish step |
-| `generate_image` | **Design divergence** — MCP uses 7 targeted `generate_*` tools; ChowBot collapses to one generic — decide whether to split |
-| `get_site_stats` | **Different scope** — ChowBot gives content counts; MCP has `get_site_analytics` (traffic/SEO); keep as-is |
-| `rename_site` | **Alias** — MCP folds into `update_site_settings`; consider removing |
-| `set_default_currency` | **Alias** — MCP folds into `update_site_settings`; consider removing |
-| `save_brand_description` | **Alias** — MCP folds into `update_site_settings` / `update_page_content`; consider removing |
-| `update_site_social` | **Alias** — MCP folds into `update_site_settings`; consider removing |
-| `resolve_pending_media` | **Different flow** — WhatsApp pending-media specific; Client MCP uses ChatGPT attachments for photos and dashboard upload handoff only for videos |
+As of 2026-07-02:
 
----
+| Surface | Raw tools | Default visible tools | Notes |
+| --- | ---: | ---: | --- |
+| Client MCP | 115 | 90 | Deprecated upload primitives removed; feature-flagged groups hidden |
+| ChowBot | 94 | 81 | Same feature-flag policy; WhatsApp-specific tools remain ChowBot-only |
 
-## ⚪ MCP-only — intentionally surface-specific (35 tools)
+## Feature-Flagged Groups
 
-| MCP tool | Reason |
-|----------|--------|
-| `show_site_preview`, `show_generated_images` | MCP-only onboarding/preview tools (plain text response, no widget — MCP/ChatGPT canvas only) |
-| `save_generated_image`, `save_generated_image_file`, `upload_user_photo` | MCP native image generation save flow; ChowBot auto-saves inline |
-| `request_media_upload`, `confirm_media_upload`, `request_photo_upload` | Deprecated Client MCP photo/browser-upload flow; ChatGPT photo attachments use `upload_user_photo`, while ChowBot uses WhatsApp pending media |
-| `create_site`, `list_sites` | Platform-level onboarding; ChowBot is always scoped to one org |
-| `get_current_user` | MCP session context tool |
-| `create_domain`, `delete_domain`, `set_canonical_domain`, `sync_domain`, `get_site_domains` | Domain management — dashboard only today |
-| `publish_to_facebook`, `sync_facebook_page`, `get_facebook_connection` | Requires OAuth; feasible in ChowBot but not yet wired |
-| `get_google_business_connection`, `get_google_business_auth_url`, `list_google_business_accounts`, `sync_google_business_locations` | OAuth-gated; dashboard only today |
-| `update_site_settings` | All-in-one site config; ChowBot has 4 specific commands (`rename_site`, `set_default_currency`, `save_brand_description`, `update_site_social`) |
-| `get_site` | Site metadata; ChowBot's `get_site_settings` covers the same data |
-| `get_site_analytics` | Traffic/SEO analytics; ChowBot has `get_site_stats` (content counts, different focus) |
-| `generate_experience_image`, `generate_home_hero_image`, `generate_location_hero_image`, `generate_logo`, `generate_menu_item_image`, `generate_post_image`, `generate_story_image` | Targeted image generation; ChowBot uses one generic `generate_image` tool |
+These groups are hidden by default on both conversational surfaces where present.
 
----
+| Group | Env flag | Client MCP tools | ChowBot tools |
+| --- | --- | --- | --- |
+| Translations/locales | `CONVERSATIONAL_TOOLS_TRANSLATIONS_ENABLED=true` | `list_locales`, `upsert_locale`, `delete_locale`, `get_translation_inventory`, `start_translation_job`, `list_translation_jobs`, `get_translation_job`, `run_translation_job_batch`, `get_translation_review_items`, `save_translation_review_item`, `publish_translations` | Same names |
+| Social/OAuth publishing | `CONVERSATIONAL_TOOLS_SOCIAL_PUBLISHING_ENABLED=true` | `get_facebook_connection`, `publish_to_facebook`, `sync_facebook_page`, `get_google_business_connection`, `get_google_business_auth_url`, `list_google_business_accounts`, `sync_google_business_locations`; external `publish_post` channels are also blocked while disabled | None today; `publish_post` already publishes site-only |
+| Domains | `CONVERSATIONAL_TOOLS_DOMAINS_ENABLED=true` | `get_site_domains`, `create_domain`, `set_canonical_domain`, `delete_domain`, `sync_domain` | None |
+| Managed service | `CONVERSATIONAL_TOOLS_MANAGED_SERVICE_ENABLED=true` | `list_work_requests`, `create_work_request` | Same names |
 
-## Summary
+## Intentional Differences
 
-| Category | Count |
-|----------|-------|
-| True parity (exact name match) | 74 |
-| ChowBot-only (gaps or candidates for removal) | 9 |
-| MCP-only, intentionally surface-specific | 35 |
-| **MCP-only, ChowBot should add** | **0** |
+| ChowBot-only tool | Reason |
+| --- | --- |
+| `sync_menu_items` | WhatsApp/chat reconciliation workflow; Client MCP uses explicit menu item calls |
+| `publish_menu` | ChowBot menu workflow step; Client MCP menu writes publish immediately through canonical APIs |
+| `generate_image` | ChowBot has one generic image tool; Client MCP uses ChatGPT native image generation plus `save_generated_image_file` |
+| `get_site_stats` | ChowBot content-count helper; Client MCP has `get_site_analytics` for traffic/SEO analytics |
+| `rename_site`, `set_default_currency`, `save_brand_description`, `update_site_social` | Narrow ChowBot aliases for owner-friendly chat turns; Client MCP uses `update_site_settings` plus specific tools where available |
+| `resolve_pending_media` | WhatsApp pending-media flow only |
+| `get_experience_availability`, `set_experience_slot_override`, `list_experience_slot_overrides` | ChowBot booking operations not yet exposed to Client MCP |
+
+| Client MCP-only tool | Reason |
+| --- | --- |
+| `get_current_user`, `get_workspace_context`, `set_workspace_context` | ChatGPT connector workspace/session context |
+| `list_sites`, `create_site`, `show_site_preview` | ChatGPT connector onboarding and site selection |
+| `show_generated_images`, `save_generated_image`, `save_generated_image_file`, `upload_user_photo` | ChatGPT native image/file flow |
+| `get_site`, `update_site_settings`, `set_brand_color`, `clear_home_hero_image`, `clear_home_hero_video`, `clear_location_hero_image`, `clear_location_hero_video`, `copy_location_batch`, `reorder_experience_gallery`, `get_site_analytics` | Client MCP-specific granularity or dashboard-backed utility not currently present in ChowBot |
+
+## Verification
+
+Before merging surface changes:
+
+1. Run `yarn test:unit`.
+2. Run `yarn typecheck`.
+3. Confirm no removed tool names remain in code or docs with `rg`.
+4. In staging, call `tools/list` and confirm default counts are lower than the raw registries.
+5. In ChatGPT, reconnect the KrabiClaw connector and smoke-test:
+   - update a menu item
+   - update homepage content or hero image
+   - create a post
+   - create or update an experience
+   - ask for domains/translations/social publishing and confirm ChatGPT routes to the dashboard unless the relevant flag is enabled

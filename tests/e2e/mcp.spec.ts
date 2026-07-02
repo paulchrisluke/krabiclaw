@@ -751,34 +751,6 @@ test.describe('stateless MCP server', () => {
     })
     expect(mediaList.status()).toBe(200)
 
-    const mediaUpload = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'request_media_upload',
-      args: { site_id: siteId, filename: 'mcp-test.png', category: 'gallery', location_id: locationId },
-    })
-    expect([200, 500]).toContain(mediaUpload.status())
-
-    let uploadedAssetId: string | null = null
-    if (mediaUpload.status() === 200) {
-      const mediaUploadBody = await mediaUpload.json()
-      uploadedAssetId = mcpData<{ asset_id?: string }>(mediaUploadBody).asset_id ?? null
-      expect(uploadedAssetId).toEqual(expect.any(String))
-
-      const mediaConfirm = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'confirm_media_upload',
-        args: { site_id: siteId, asset_id: uploadedAssetId },
-      })
-      expect(mediaConfirm.status()).toBe(200)
-
-      const mediaUpdate = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'update_media_asset',
-        args: { site_id: siteId, asset_id: uploadedAssetId, alt_text: 'MCP upload', category: 'hero' },
-      })
-      expect(mediaUpdate.status()).toBe(200)
-    }
-
     const experience = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'create_experience',
@@ -923,15 +895,6 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, type: 'content_update', title: 'Need copy update', description: 'Please update homepage copy', priority: 'normal' },
     })
     expect([200, 403]).toContain(workRequest.status())
-
-    if (uploadedAssetId) {
-      const mediaDelete = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'delete_media_asset',
-        args: { site_id: siteId, asset_id: uploadedAssetId },
-      })
-      expect(mediaDelete.status()).toBe(200)
-    }
 
     const deleteMenuRes = await mcpRequest(request, baseURL!, {
       method: 'tools/call',

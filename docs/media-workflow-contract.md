@@ -44,7 +44,7 @@ Related workflow helpers:
 
 ## Product rules
 
-- Do not invent a separate `create media` MCP tool that bypasses `request-upload` and `confirm`.
+- Do not invent a separate `create media` MCP tool that bypasses the canonical Cloudflare upload and media-asset manager paths.
 - Do not treat pending assets as usable by public-site workflows.
 - Menu extraction must only operate on confirmed or explicitly pending-media workflow inputs.
 - AI-generated images still end as normal media assets and must be visible through the canonical media listing surface.
@@ -52,16 +52,15 @@ Related workflow helpers:
   - ChatGPT native image-generation output: `save_generated_image_file({ site_id, attachment_id, prompt })`
   - Raw base64 from a non-native image source: `save_generated_image({ site_id, image_data_base64, prompt })`
 - For user-attached ChatGPT images, use `upload_user_photo({ site_id, file, category, description })` and pass the attachment via the `file` argument so ChatGPT can rewrite the local mounted path into an authorized file reference before KrabiClaw receives it.
-- In the Client MCP ChatGPT app, this ChatGPT attachment path is the only recommended user-photo path. Do not direct users to the KrabiClaw dashboard/media uploader, `request_photo_upload`, or `request_media_upload` for photos; reserve the dashboard media library handoff for videos.
+- In the Client MCP ChatGPT app, this ChatGPT attachment path is the only supported user-photo path. Do not direct users to the KrabiClaw dashboard/media uploader for photos; reserve the dashboard media library handoff for videos.
 - Do not bypass the ChatGPT file-argument rewrite by fabricating `download_url` objects or inventing attachment transport.
 - Prefer business-level image workflows over generic file handoff when the user intent is domain-specific:
   - Generate into KrabiClaw first, persist to Cloudflare Images immediately, then assign by `assetId`
   - Assignment should happen through the canonical entity mutation tools such as `set_logo`, `set_home_hero_image`, `set_about_story_image`, `set_home_story_image`, `set_location_hero_image`, `set_menu_item_image`, `set_post_image`, and `set_experience_image`
   - `set_about_story_image` and `set_home_story_image` are separate tools because `/about` and `/` each have their own `story.image` content field — they commonly point at the same asset, but the page is never inferred
 - MCP tools should be coarse-grained and business-level:
-  - `list_media`
-  - `request_media_upload` (dashboard/CMS compatibility; not a Client MCP photo path)
-  - `confirm_media_upload` (dashboard/CMS compatibility; not a Client MCP photo path)
+  - `get_site_media_assets`
+  - `upload_user_photo`
   - `update_media_asset`
   - `delete_media_asset`
   - `save_generated_image`
