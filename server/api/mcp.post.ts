@@ -487,10 +487,15 @@ Common workflows: update menus and items, create and publish posts, triage conta
         !Array.isArray(request.params.arguments)
           ? (request.params.arguments as Record<string, unknown>)
           : Object.fromEntries(
-              Object.entries(request.params ?? {}).filter(
-                ([key]) => key !== "name",
               ),
             );
+
+      if (DEPRECATED_CLIENT_MCP_PHOTO_UPLOAD_TOOLS.has(toolName)) {
+        throw mcpProtocolError(
+          MCP_ERROR.methodNotFound,
+          `Tool ${toolName} is deprecated and blocked.`
+        );
+      }
 
       const result = await executeMcpToolCall(event, toolName, rawArgs);
 

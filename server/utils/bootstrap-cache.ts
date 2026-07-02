@@ -96,9 +96,21 @@ export async function purgeBootstrapCacheSafe(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const kv = (env as any)?.SITE_CACHE as KVNamespace | undefined
   if (!kv) return
-  try {
-    await purgeBootstrapCache(kv, siteId)
-  } catch (err) {
+  
+  const purgePromise = purgeBootstrapCache(kv, siteId).catch(err => {
     console.warn('[bootstrap-cache] purge failed:', String(err))
+  })
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const waitUntil = (env as any)?.ctx?.waitUntil
+  if (typeof waitUntil === 'function') {
+    waitUntil.call((env as any).ctx, purgePromise)
+    return
   }
+
+  // Hard timeout fallback if waitUntil is not available
+  await Promise.race([
+    purgePromise,
+    new Promise(resolve => setTimeout(resolve, 500))
+  ])
 }

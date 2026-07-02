@@ -185,8 +185,7 @@ export default defineEventHandler(async (event) => {
 
   if (result.status !== 200 && result.status !== 201) {
     return jsonResponse({ error: (result.data as { error?: string }).error ?? 'Could not add location.' }, { status: result.status })
-  }
-  await purgeBootstrapCacheSafe(env, siteId)
+
 
   // Upsert reviews for the new location
   const locationId = (result.data as { location?: { id: string } }).location?.id
@@ -211,6 +210,7 @@ export default defineEventHandler(async (event) => {
       } catch { /* non-fatal */ }
     }
   }
+  await purgeBootstrapCacheSafe(env, siteId)
 
   // Get org slug for navigation
   const orgRow = await queryFirst<{ slug: string }>(db, 'SELECT slug FROM organization WHERE id = ? LIMIT 1', [organizationId])

@@ -11,20 +11,21 @@
       <NuxtLink
         v-for="(loc, locIdx) in locations"
         :key="loc.id"
-        :ref="(el: Element | { $el?: Element } | null) => { const node = el && ('$el' in el ? el.$el : el); if (node) locCardRefs[locIdx] = node as HTMLElement }"
+        :ref="(el: Element | { $el?: Element } | null) => { const node = el && ('$el' in el ? el.$el : el); if (node) locCardRefs[locIdx] = node as HTMLElement; else locCardRefs[locIdx] = null; }"
         :to="`/locations/${loc.slug}`"
         class="group block overflow-hidden border border-default text-default no-underline transition hover:border-muted"
       >
         <div class="aspect-video overflow-hidden bg-muted">
           <!-- Poster image: always present for LCP. Video swaps in when card scrolls into view. -->
-          <ClientOnly v-if="loc.kind === 'video' && loc.public_url">
-            <video
-              v-if="visibleLocCards.has(locIdx)"
-              :src="loc.public_url"
-              :poster="loc.thumbnail_url || undefined"
-              autoplay muted loop playsinline preload="none"
-              class="aspect-video w-full object-contain"
-            />
+          <template v-if="loc.kind === 'video' && loc.public_url">
+            <ClientOnly v-if="visibleLocCards.has(locIdx)">
+              <video
+                :src="loc.public_url"
+                :poster="loc.thumbnail_url || undefined"
+                autoplay muted loop playsinline preload="none"
+                class="aspect-video w-full object-contain"
+              />
+            </ClientOnly>
             <UImage
               v-else-if="loc.thumbnail_url"
               :src="loc.thumbnail_url"
@@ -32,7 +33,7 @@
               loading="lazy"
               class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
             />
-          </ClientOnly>
+          </template>
           <UImage
             v-else-if="loc.public_url"
             :src="loc.public_url"

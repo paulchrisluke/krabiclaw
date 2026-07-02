@@ -343,7 +343,14 @@ export default defineEventHandler(async (event) => {
       throw batchError
     }
     draftCommitted = true
-    if (siteId) await purgeBootstrapCacheSafe(env, siteId)
+    if (siteId) {
+      const waitUntil = event.context.cloudflare?.context?.waitUntil
+      if (typeof waitUntil === 'function') {
+        waitUntil.call(event.context.cloudflare.context, purgeBootstrapCacheSafe(env, siteId))
+      } else {
+        await purgeBootstrapCacheSafe(env, siteId)
+      }
+    }
 
     // If anything fails after this point, the draft is already committed - we don't reset it
     // since the site was successfully created. The user can continue from the dashboard.

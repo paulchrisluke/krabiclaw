@@ -3,7 +3,7 @@
     class="tenant-layout saya-theme min-h-screen flex flex-col font-sans bg-default text-default"
     :style="themeStyles"
   >
-    <UTheme :ui="{ button: { compoundVariants: [{ color: 'primary', variant: 'solid', class: 'text-[var(--brand-color-foreground)] bg-[var(--brand-color)] hover:bg-[var(--brand-color)]/75 active:bg-[var(--brand-color)]/75 disabled:bg-[var(--brand-color)] aria-disabled:bg-[var(--brand-color)] outline-[var(--brand-color)]/25 focus-visible:outline-3' }] } }">
+    <UTheme :ui="{ button: { compoundVariants: [{ color: 'primary', variant: 'solid', class: 'text-[var(--brand-color-foreground,white)] bg-[var(--brand-color,var(--color-primary-500))] hover:bg-[var(--brand-color,var(--color-primary-600))]/75 active:bg-[var(--brand-color,var(--color-primary-600))]/75 disabled:bg-[var(--brand-color,var(--color-primary-500))] aria-disabled:bg-[var(--brand-color,var(--color-primary-500))] outline-[var(--brand-color,var(--color-primary-500))]/25 focus-visible:outline-3' }] } }">
       <SayaHeader />
       <main class="grow">
         <slot />

@@ -11,7 +11,7 @@
     >
       <button
         v-for="(item, index) in items"
-        :key="item.label"
+        :key="item.to ? `${item.to}-${index}` : index"
         :ref="(el) => setItemRef(el, index)"
         type="button"
         role="menuitem"
@@ -55,6 +55,7 @@ function toggle() {
   // the caller via scoped slot, so this is the only handle we have on it.
   triggerEl.value = document.activeElement as HTMLElement | null
   open.value = true
+  nextTick(() => itemEls[0]?.focus())
 }
 
 // restoreFocus is true for Escape and non-navigating selection (matches
@@ -93,10 +94,18 @@ function onPanelKeydown(event: KeyboardEvent) {
   const currentIndex = itemEls.findIndex((el) => el === document.activeElement)
   if (event.key === 'ArrowDown') {
     event.preventDefault()
-    itemEls[(currentIndex + 1) % itemEls.length]?.focus()
+    if (currentIndex === -1) {
+      itemEls[0]?.focus()
+    } else {
+      itemEls[(currentIndex + 1) % itemEls.length]?.focus()
+    }
   } else if (event.key === 'ArrowUp') {
     event.preventDefault()
-    itemEls[(currentIndex - 1 + itemEls.length) % itemEls.length]?.focus()
+    if (currentIndex === -1) {
+      itemEls[itemEls.length - 1]?.focus()
+    } else {
+      itemEls[(currentIndex - 1 + itemEls.length) % itemEls.length]?.focus()
+    }
   } else if (event.key === 'Home') {
     event.preventDefault()
     itemEls[0]?.focus()
@@ -129,6 +138,7 @@ function onDocumentClick(event: MouseEvent) {
 }
 
 function onDocumentKeydown(event: KeyboardEvent) {
+  if (!open.value) return
   if (event.key === 'Escape') close({ restoreFocus: true })
 }
 

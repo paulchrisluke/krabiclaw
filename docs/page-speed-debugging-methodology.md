@@ -26,7 +26,7 @@ The same routes are intentionally available on production while
 - `https://krabiclaw.com/dev/perf-text?mode=<mode>`
 
 These pages are restricted to owned KrabiClaw hosts and emit `noindex,nofollow`.
-Turn them off after the investigation with:
+Turn them off after the investigation by updating the deployed environment variable and redeploying/restarting the affected service:
 
 ```bash
 PERF_PUBLIC_TEST_PAGE=false
