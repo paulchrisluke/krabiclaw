@@ -1,25 +1,23 @@
-export interface McpRenderResponse {
-  __widget: string
+export interface McpStructuredResponse {
+  __mcpStructuredResponse: true
   structuredContent: unknown
   fallbackText?: string
   privateMeta?: Record<string, unknown>
 }
 
-export function renderWidget(
-  widgetName: string,
+export function renderStructuredResponse(
   structuredContent: unknown,
   fallbackText?: string,
   privateMeta?: Record<string, unknown>,
-): McpRenderResponse {
-  return { __widget: widgetName, structuredContent, fallbackText, privateMeta }
+): McpStructuredResponse {
+  return { __mcpStructuredResponse: true, structuredContent, fallbackText, privateMeta }
 }
 
-export function isMcpRenderResponse(value: unknown): value is McpRenderResponse {
+export function isMcpRenderResponse(value: unknown): value is McpStructuredResponse {
   return (
     typeof value === 'object'
     && value !== null
-    && '__widget' in value
-    && typeof (value as Record<string, unknown>).__widget === 'string'
+    && (value as Record<string, unknown>).__mcpStructuredResponse === true
     && 'structuredContent' in value
   )
 }

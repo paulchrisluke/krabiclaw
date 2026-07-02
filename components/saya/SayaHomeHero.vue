@@ -53,8 +53,12 @@
     </div>
     <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.3) 100%)" />
 
-    <!-- Content -->
-    <AppSection bg="black" padding="none" class="relative z-10 py-36">
+    <!-- Content — plain transparent wrapper matching the proven inline hero
+         (pages/index.vue, pre-consolidation): AppSection bg="black" rendered
+         an opaque bg-inverted section here that painted over the hero image
+         behind it. The dark look comes entirely from the image + gradient
+         overlay above, not from a background on this wrapper. -->
+    <div class="relative z-10 mx-auto w-full max-w-7xl px-4 py-36 sm:px-6 lg:px-8">
       <p v-if="eyebrow" data-field="hero.eyebrow" class="saya-eyebrow mb-8 text-white/70">
         {{ eyebrow }}
       </p>
@@ -70,9 +74,8 @@
           v-for="loc in locations"
           :key="loc.id"
           :to="`/locations/${loc.slug}`"
-          class="inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/5 px-5 py-2.5 text-sm text-white backdrop-blur-sm no-underline transition hover:bg-white/10"
+          class="inline-flex items-center rounded-full border border-white/40 bg-white/5 px-5 py-2.5 text-sm text-white backdrop-blur-sm no-underline transition hover:bg-white/10"
         >
-          <UIcon name="i-heroicons-map-pin" class="size-3.5 opacity-70" />
           {{ loc.title }}
         </NuxtLink>
       </div>
@@ -99,12 +102,11 @@
           {{ viewMenuCta }}
         </UButton>
       </div>
-    </AppSection>
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import AppSection from '~/components/ui/AppSection.vue'
 import { cfImageSrcset, cfImageVariant } from '~/utils/cf-image'
 
 interface HeroData {

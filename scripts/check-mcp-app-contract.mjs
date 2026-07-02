@@ -145,7 +145,7 @@ async function main() {
   }
   const renderTools = toolList.filter(tool => tool?._meta?.ui?.resourceUri || tool?._meta?.['openai/outputTemplate'])
   if (renderTools.length > 0) pass(`found ${renderTools.length} render tools`)
-  else skip('no render tools advertised; widgets are currently disabled by design')
+  else skip('no render tools advertised; Client MCP currently uses structured text results')
 
   for (const tool of renderTools) {
     const standardUri = tool._meta?.ui?.resourceUri
@@ -157,8 +157,8 @@ async function main() {
   const resources = await request('resources/list', {}, headers)
   expectStatus('resources/list succeeds', resources.res.status, 200)
   const resourceList = resources.body?.result?.resources ?? []
-  if (resourceList.length > 0) pass(`found ${resourceList.length} widget resources`)
-  else fail('no widget resources advertised', resources.body)
+  if (resourceList.length > 0) pass(`found ${resourceList.length} MCP resources`)
+  else skip('no resources advertised; Client MCP currently uses structured text results only')
 
   for (const resource of resourceList) {
     if (resource.mimeType === 'text/html;profile=mcp-app') pass(`${resource.uri} uses MCP Apps MIME type`)

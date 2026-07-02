@@ -37,7 +37,6 @@ ChowBot and dashboard CMS are supported product surfaces. Keep MCP and ChowBot a
   3. Call `show_generated_images` with returned `assetId` and `publicUrl`
 
 Canonical generated-image contracts:
-
 - Native generation: `save_generated_image_file({ site_id, attachment_id, prompt })` — always use this after `image_generation`; passing base64 to `save_generated_image` is blocked by OpenAI safety checks
 - Raw base64 (non-native, rare): `save_generated_image({ site_id, image_data_base64, prompt })`
 
@@ -49,7 +48,7 @@ Dashboard CMS pages remain supported. When changing editing behavior, prefer sha
 
 ## Database Schema Workflow
 
-`server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical, hand-authored, **already applied to every real environment (staging, production) and immutable** — never rename, edit, renumber, or re-squash them. From `0008` onward, migrations are _generated_ from `schema.ts` via `drizzle-kit generate` and applied via wrangler D1 migrations.
+`server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical, hand-authored, **already applied to every real environment (staging, production) and immutable** — never rename, edit, renumber, or re-squash them. From `0008` onward, migrations are *generated* from `schema.ts` via `drizzle-kit generate` and applied via wrangler D1 migrations.
 
 **Why the split:** `wrangler d1 migrations apply` tracks applied migrations by **filename**, not content/checksum. An environment that already ran `0001_initial.sql`...`0007_*.sql` has those exact filenames recorded — it has no idea a squashed `0000_something.sql` is "the same" schema. Renaming/squashing history that's already applied anywhere makes wrangler treat the new file as unapplied and try to re-run it, immediately failing with `table X already exists`. There is no clever flag around this; the only safe move is to never touch an already-applied filename and always add new migrations with higher numbers.
 
@@ -103,7 +102,7 @@ Dashboard CMS pages remain supported. When changing editing behavior, prefer sha
 
 ### Re-establishing the baseline (rare — only if `migrations/meta/` is ever lost or corrupted)
 
-The baseline snapshot was created once by running `yarn db:generate` against an _empty_ `migrations/meta/`, then **discarding the generated `.sql` file** (it would just recreate every existing table — never apply it) and keeping only the snapshot/journal, with the journal's single entry hand-edited to `idx: 7` / `tag: "0007_baseline"` (matching the count of real, already-applied files) so the _next_ real generate continues at `0008` instead of colliding with `0001`-`0007`. Re-derive the same way if this ever needs to be redone, and bump the `idx` to match however many numbered migration files actually exist at the time.
+The baseline snapshot was created once by running `yarn db:generate` against an *empty* `migrations/meta/`, then **discarding the generated `.sql` file** (it would just recreate every existing table — never apply it) and keeping only the snapshot/journal, with the journal's single entry hand-edited to `idx: 7` / `tag: "0007_baseline"` (matching the count of real, already-applied files) so the *next* real generate continues at `0008` instead of colliding with `0001`-`0007`. Re-derive the same way if this ever needs to be redone, and bump the `idx` to match however many numbered migration files actually exist at the time.
 
 **Incident — 2026-06-25.** A migration was squashed by running `drizzle-kit generate` straight from `schema.ts` and committing the output as a new baseline (`migrations/0000_living_blockbuster.sql`), replacing `0001_initial.sql`-`0007_*.sql`. Two independent problems surfaced:
 
@@ -118,7 +117,7 @@ Cloudflare D1 rejects `BEGIN`/`COMMIT`/`ROLLBACK` sent as raw SQL, full stop —
 
 - The only real cross-statement atomicity primitive is `db.batch([...])`, wrapped as `executeBatch()` in `server/db/index.ts`. It requires the full statement list up front — it can't interleave with reads whose results determine later statements in the same call.
 - For write sequences that need to react to intermediate results (e.g. insert, then a dependent lookup, then a conditional update), don't wrap them in a fake transaction — just run the statements sequentially and, if a later step fails, do manual compensating cleanup (delete/undo the earlier writes) in a `catch` block. This is the pattern used throughout the codebase (`post-management.ts`, most of `domains.ts`) and is what `createPlatformBlogPost` was reverted to.
-- **Incident — 2026-06-27.** Commit `ca8f5a6` ("Fix blog content and schema regressions") wrapped `createPlatformBlogPost`/`updatePlatformBlogPost`/`deletePlatformBlogPost` in `server/utils/platform-content.ts` with `execute(db, 'BEGIN')`/`'COMMIT'`/`'ROLLBACK'`. This silently broke every platform _and_ tenant blog mutation (`create_blog_post`, `update_blog_post`, `set_blog_post_image`, `delete_blog_post`, and the platform-only equivalents all funnel through these same three functions, scoped by `site_id`) with a generic MCP `-32603` internal error — reads were unaffected, which is what made it look narrower than it was. `server/utils/domains.ts` (`setCanonicalDomain`, `createCustomDomainPair`) and `server/api/sites/[siteId]/domains/[domainId].patch.ts` (disable-domain path) had the same `db.exec('BEGIN...')` pattern from an earlier, unrelated change and were fixed the same way. **Lesson: if a D1 write path wraps multiple statements in `BEGIN`/`COMMIT`, it is broken — verify with a local `wrangler d1 execute --local` repro before trusting either the bug report or a proposed fix, don't reason about it from code alone.**
+- **Incident — 2026-06-27.** Commit `ca8f5a6` ("Fix blog content and schema regressions") wrapped `createPlatformBlogPost`/`updatePlatformBlogPost`/`deletePlatformBlogPost` in `server/utils/platform-content.ts` with `execute(db, 'BEGIN')`/`'COMMIT'`/`'ROLLBACK'`. This silently broke every platform *and* tenant blog mutation (`create_blog_post`, `update_blog_post`, `set_blog_post_image`, `delete_blog_post`, and the platform-only equivalents all funnel through these same three functions, scoped by `site_id`) with a generic MCP `-32603` internal error — reads were unaffected, which is what made it look narrower than it was. `server/utils/domains.ts` (`setCanonicalDomain`, `createCustomDomainPair`) and `server/api/sites/[siteId]/domains/[domainId].patch.ts` (disable-domain path) had the same `db.exec('BEGIN...')` pattern from an earlier, unrelated change and were fixed the same way. **Lesson: if a D1 write path wraps multiple statements in `BEGIN`/`COMMIT`, it is broken — verify with a local `wrangler d1 execute --local` repro before trusting either the bug report or a proposed fix, don't reason about it from code alone.**
 
 ---
 
@@ -127,7 +126,7 @@ Cloudflare D1 rejects `BEGIN`/`COMMIT`/`ROLLBACK` sent as raw SQL, full stop —
 - Organizations map to a team or agency using Better Auth’s `organization` plugin.
 - **One org can have multiple sites** — there is no unique-per-org constraint on sites.
 - Each site has its own plan and Stripe subscription (`site_billing` table).
-- The Stripe _customer_ stays at the org level (`organization_billing.stripe_customer_id`) — one payment method per team.
+- The Stripe *customer* stays at the org level (`organization_billing.stripe_customer_id`) — one payment method per team.
 - Multiple physical locations live under `business_locations`, not separate orgs. Locations are **unlimited on all plans**.
 - Dashboard route shape (site is always explicit — no implicit "first site in org"):
   - `/dashboard/{orgSlug}` — org root; lists sites, auto-redirects to the single site if the org has exactly one
@@ -194,7 +193,6 @@ Seeds use a two-tier insert strategy so that MCP edits survive a reseed:
 - **Content tables** (`site_content`, `menu_items`, `reviews`, `location_qa`, `posts`, `post_channel_jobs`, `*_translations`) → `INSERT OR IGNORE` — first seed wins; MCP changes are never overwritten by a reseed
 
 Production is never reseeded (only migrated), so this only affects local dev, preview, and staging. If you need to force-push updated content from a seed definition to an already-seeded environment, delete the affected rows first or use an MCP tool call directly.
-
 - Layout name for Saya theme pages: `layout: 'saya'`
 - `tenant` layout is dead
 
@@ -329,6 +327,7 @@ Flow:
 - Nuxt UI MCP server is required for building UI components with Nuxt UI integration.
 - Content creation and editing must go through the KrabiClaw MCP server.
 - Do not build parallel dashboard CMS flows when the equivalent MCP tool should be the primary surface.
+- Client MCP and ChowBot share one curated conversational surface policy in `server/utils/conversational-tool-surface.ts`. Do not add one-off tools to either surface without updating `docs/tool-parity.md`. Translations/locales, social/OAuth publishing, domains, and managed-service work requests are hidden by default and require explicit `CONVERSATIONAL_TOOLS_*_ENABLED=true` flags before they are exposed.
 
 ---
 
@@ -472,12 +471,23 @@ Flow:
 
 ## Design System Enforcement
 
+**Nuxt UI is the default for the dashboard, not a blanket rule for the whole app.** Dashboard/admin surfaces (auth-gated, not part of any tenant's public page weight) should keep using Nuxt UI. Saya's public, high-traffic surface (header/footer and anything else rendered on every tenant page load) is being moved off Nuxt UI's interactive components on purpose — see below.
+
 - Dashboard pages use Nuxt UI layout primitives rather than custom Tailwind page shells.
 - Use:
   - `UCard`
   - `UPage`
   - `UPageBody`
 - Saya theme pages keep their established raw layout shell and theme-specific components, rather than being forced into dashboard page primitives.
+
+### Saya public surface — prefer native Tailwind + Vue over Nuxt UI
+
+Lighthouse isolation testing (`pages/dev/perf-text.vue`, see `docs/page-speed-debugging-methodology.md`) showed Nuxt UI's interactive components (`UButton`, `UDropdownMenu`, `UIcon`) are the real cost behind `SayaHeader`/`SayaFooter`'s LCP/FCP/TTI regression versus a plain-text baseline — not markup size or any single icon. Reka UI's primitives (floating-ui, focus-trap, etc.) add ~19-22 modulepreloads and ~70-80KB transfer to every tenant page load, since header/footer render on every route.
+
+- On Saya's public component tree (`components/saya/**`), prefer plain `<button>`/`<NuxtLink>`/`<a>` + Tailwind classes over `UButton`, and inline SVG over `UIcon`, for anything in the always-rendered header/footer path. This is a *perf-driven exception* to the Nuxt UI default, scoped to public/high-traffic Saya components — it does not apply to the dashboard, to Saya's own auth-gated dashboard-CMS edit affordances, or to low-traffic Saya pages that aren't part of every page load.
+- For dropdowns/menus on this surface, use `components/saya/SayaDropdown.vue` — a small headless local component (open/close, click-outside, Escape, arrow-key nav, ARIA) built specifically to replace `UDropdownMenu` without pulling in Reka. Reuse it rather than reaching for `UDropdownMenu` or hand-rolling another dropdown.
+- Before replacing more Nuxt UI usage on this surface, re-measure with the same isolation-mode + modulepreload-count method (compare `.output` production build via local `wrangler dev`, not the Vite dev server — dev mode doesn't emit `modulepreload` tags) to confirm the change is actually load-bearing, not just done on suspicion.
+- This does not extend to Saya pages/components outside the always-rendered header/footer path unless the same measurement shows a real win there too — don't preemptively de-Nuxt-UI-ify Saya wholesale.
 
 - UCard `:ui` prop only accepts:
   - `root`
@@ -516,7 +526,7 @@ Saya components never render a blank section or a skeleton-only placeholder when
 - `components/saya/SayaEmptyExample.vue` renders one example card; `components/saya/SayaMcpHint.vue` renders the owner-only "Try: ..." affordance that pre-fills and opens ChowBot via `useChowBot().setDraftMessage()` + `.open()`.
 - The hint only renders in dashboard edit mode (`useEditMode().editMode`, i.e. `?edit=true`) — real site visitors only ever see the clean example, never the hint UI.
 - Filled examples are only for **core** sections (menu, experiences, locations) where an empty section usually means an unfinished site. **Supplementary/optional** sections (posts, reviews, Q&A) use the low-key icon+message empty state instead — a live, fully-operational business may legitimately never post updates or get reviews, so a fabricated "Example post title" shown to a real visitor would incorrectly imply the site is broken. Posts/Reviews/Q&A still get a hint when merchant-actionable (posts, Q&A; not reviews, which aren't merchant-authored).
-- `config/content-registry.ts` field `defaultValue` is the render-time fallback for scalar `site_content` fields (`usePageContent().getField()` falls back to it automatically when no value is in the DB and the caller passes no explicit default). **These must always be generic, vertical-neutral copy** — never tenant- or demo-identity-specific text (no business names, no "Saya Kitchen", no real addresses/phone numbers). The "Saya fallback copy on any tenant page" regression below is about leaking _demo-tenant identity_, not about having a generic instructional fallback — a generic fallback rendering on an empty tenant page is the intended behavior, not the regression.
+- `config/content-registry.ts` field `defaultValue` is the render-time fallback for scalar `site_content` fields (`usePageContent().getField()` falls back to it automatically when no value is in the DB and the caller passes no explicit default). **These must always be generic, vertical-neutral copy** — never tenant- or demo-identity-specific text (no business names, no "Saya Kitchen", no real addresses/phone numbers). The "Saya fallback copy on any tenant page" regression below is about leaking *demo-tenant identity*, not about having a generic instructional fallback — a generic fallback rendering on an empty tenant page is the intended behavior, not the regression.
 
 ---
 

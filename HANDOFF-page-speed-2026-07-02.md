@@ -1,5 +1,81 @@
 # Handoff: KrabiClaw page speed — stop adding, start removing
 
+## Latest update: public perf page is live, next target is Saya shell
+
+Use this section first. The older sections below are historical context from
+earlier page-speed work and are useful, but they predate the dedicated
+`/dev/perf-text` methodology and the latest production measurements.
+
+The user wants methodical benchmarking and direction for larger changes, not
+speculative implementation. Keep using the test page to isolate one global layer
+at a time before moving to real tenant pages.
+
+Public test routes are currently available on production while
+`PERF_PUBLIC_TEST_PAGE` is not set to `false`:
+
+- `https://krabiclaw.com/__dev-perf/plain-text`
+- `https://krabiclaw.com/dev/perf-text?mode=text-no-icons`
+- `https://krabiclaw.com/dev/perf-text?mode=<mode>`
+
+They are restricted to owned KrabiClaw hosts and emit `noindex,nofollow`. Disable
+them after testing with `PERF_PUBLIC_TEST_PAGE=false`.
+
+Production snapshot from July 2, 2026:
+
+| Route / mode | LCP | FCP | TTI | TTFB | Transfer |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `/__dev-perf/plain-text` | 0.81s | 0.81s | 0.81s | 0.54s | 20.9KB |
+| `/dev/perf-text?mode=text-no-icons` | 1.37s | 1.37s | 4.86s | 0.60s | 518.6KB |
+| `/dev/perf-text?mode=text-with-one-icon` | 1.58s | 1.50s | 4.84s | n/a | 519.0KB |
+| `/dev/perf-text?mode=text-with-ui-button` | 1.54s | 1.54s | 5.72s | n/a | 518.7KB |
+| `/dev/perf-text?mode=platform-shell` | 1.43s | 1.36s | 5.91s | 1.04s | 543.3KB |
+| `/dev/perf-text?mode=saya-shell` | 3.00s | 2.93s | 5.97s | n/a | 597.3KB |
+
+What this means:
+
+- Raw Worker/Nitro is healthy enough that it is not the current global blocker.
+- The icon fix worked; a single icon no longer reproduces the old 1.5s timeout.
+- A single Nuxt UI button is not the 1s+ problem.
+- Tailwind/global CSS is very large, but the measured LCP gain from stripping it
+  locally was only about 160ms. It is worth budgeting later, not the next
+  1.5s-class lever.
+- GA4 and DOMPurify are not current LCP blockers on the text page. GA4 is
+  network/TTI weight, so delaying it is reasonable, but do not keep treating it
+  as the main LCP issue.
+- The next concrete test is Saya shell isolation. Add/measure modes:
+  `saya-header`, `saya-footer`, and `saya-static-shell`.
+
+For the next session, start here:
+
+```bash
+yarn perf:lighthouse --url 'https://krabiclaw.com/dev/perf-text?mode=text-no-icons' --runs 3 --form-factor mobile --output-dir test-results/lighthouse-prod-text
+yarn perf:lighthouse --url 'https://krabiclaw.com/dev/perf-text?mode=saya-shell' --runs 3 --form-factor mobile --output-dir test-results/lighthouse-prod-saya-shell
+```
+
+Then add the three Saya isolation modes to `/dev/perf-text` and measure those
+same way. Also inspect emitted HTML for modulepreloads, stylesheet count, scripts,
+and top resources before recommending an architectural change.
+
+After the Saya shell is isolated, use the attached tenant HAR/Pingdom evidence as
+the next queue:
+
+1. Verify real public tenant HTML edge caching by `host + path + locale`, not
+   just cache headers. Bypass dashboard/admin/api/auth/preview/draft/edit.
+2. Verify whether tenant SSR still self-fetches bootstrap through
+   `useBootstrap` -> `/api/public/sites/:siteId/bootstrap`; if yes, move the
+   build/query logic into a shared server function and call it directly.
+3. Increase public bootstrap TTL to 300-900s only with purge on content/menu/site
+   media mutations.
+4. Stop duplicate Cloudflare Image variants where the same asset loads as both a
+   sized variant and `/public`.
+5. Investigate public tenant JS splitting. The HAR had about 513KB uncompressed /
+   175KB transferred JS.
+6. Investigate CSS splitting. The HAR had about 303KB uncompressed global CSS.
+7. Lazy-load below-fold recent post media in `pages/index.vue`.
+8. Add budgets for TTFB, JS transfer, CSS transfer, image bytes, and duplicate
+   image URLs. HAR baseline: about 5.5s fully loaded, 978KB transferred, 175KB
+   JS, 41KB CSS, and 682KB images.
+
 Written for whoever picks this up next (Codex or otherwise). The person who
 asked for this handoff explicitly said: *"you are making things worse... you
 keep adding more code rather than finding and removing over-customizations...

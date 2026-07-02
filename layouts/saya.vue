@@ -3,7 +3,7 @@
     class="tenant-layout saya-theme min-h-screen flex flex-col font-sans bg-default text-default"
     :style="themeStyles"
   >
-    <UTheme :ui="{ button: { compoundVariants: [{ color: 'primary', variant: 'solid', class: 'text-[var(--brand-color-foreground)] bg-primary hover:bg-primary/75 active:bg-primary/75 disabled:bg-primary aria-disabled:bg-primary outline-primary/25 focus-visible:outline-3' }] } }">
+    <UTheme :ui="{ button: { compoundVariants: [{ color: 'primary', variant: 'solid', class: 'text-[var(--brand-color-foreground,white)] bg-[var(--brand-color,var(--color-primary-500))] hover:bg-[var(--brand-color,var(--color-primary-600))]/75 active:bg-[var(--brand-color,var(--color-primary-600))]/75 disabled:bg-[var(--brand-color,var(--color-primary-500))] aria-disabled:bg-[var(--brand-color,var(--color-primary-500))] outline-[var(--brand-color,var(--color-primary-500))]/25 focus-visible:outline-3' }] } }">
       <SayaHeader />
       <main class="grow">
         <slot />
@@ -18,8 +18,24 @@
 if (import.meta.dev) useDebugLCP()
 
 const { config, locations } = useBootstrap()
+const { siteId, isTenant } = useTenantSite()
 
-const brandColor = computed(() => config.value?.brand_color || null)
+// The full bootstrap payload above is intentionally `lazy: true` (see
+// useBootstrap.ts) so SSR doesn't block the whole page on it. But that means
+// brand_color isn't known yet on first paint, and the CTA button's Tailwind
+// class falls back to Nuxt UI's default color, then snaps to the real brand
+// color once bootstrap resolves client-side — a visible flash of the wrong
+// color. This tiny, non-lazy fetch blocks SSR just long enough to know the
+// real brand_color before anything paints, so no fallback color is ever shown.
+const { data: brandConfigData } = isTenant && siteId
+  ? await useFetch(`/api/public/sites/${siteId}/config`, {
+      key: `site-brand-config-${siteId}`,
+    })
+  : { data: ref(null) }
+
+const brandColor = computed(
+  () => brandConfigData.value?.config?.brand_color || config.value?.brand_color || null
+)
 const brandTextColor = computed(() => getContrastColor(brandColor.value))
 
 const themeStyles = computed(() => {
@@ -28,7 +44,10 @@ const themeStyles = computed(() => {
     '--brand-color': brandColor.value,
     '--ui-primary': brandColor.value,
     '--color-primary': brandColor.value,
-    '--brand-color-foreground': brandTextColor.value
+    '--brand-color-foreground': brandTextColor.value,
+    // Ensure Nuxt UI primary color resolves correctly
+    '--primary': brandColor.value,
+    '--primary-foreground': brandTextColor.value
   }
 })
 

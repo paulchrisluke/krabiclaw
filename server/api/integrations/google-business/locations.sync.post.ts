@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '../../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getGoogleBusinessConnection, syncGoogleLocations } from '../../../utils/google-business'
+import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { execute, queryFirst } from '~/server/db'
 
 interface SyncLocationsRequest {
@@ -111,6 +112,8 @@ export default defineEventHandler(async (event) => {
       SELECT COUNT(*) as count FROM business_locations
       WHERE organization_id = ? AND site_id = ? AND status = 'active'
     `, [site.organization_id, siteId])
+
+    await purgeBootstrapCacheSafe(env, siteId)
 
     return jsonResponse({
       success: true,

@@ -6,6 +6,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getPlaceDetailsByUrl, getPlaceDetails, searchPlaces } from '~/server/utils/google-places'
 import { createLocation } from '~/server/utils/location-management'
+import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { execute, queryFirst, type DbClient } from '~/server/db'
 
 type SetupEnv = Parameters<typeof createLocation>[0]
@@ -89,6 +90,7 @@ export default defineEventHandler(async (event) => {
     if (result.status !== 200 && result.status !== 201) {
       return jsonResponse({ error: (result.data as { error?: string }).error ?? 'Could not add location.' }, { status: result.status })
     }
+    await purgeBootstrapCacheSafe(env, siteId)
 
     const orgRow = await queryFirst<{ slug: string }>(db, 'SELECT slug FROM organization WHERE id = ? LIMIT 1', [organizationId])
 
@@ -184,7 +186,6 @@ export default defineEventHandler(async (event) => {
   if (result.status !== 200 && result.status !== 201) {
     return jsonResponse({ error: (result.data as { error?: string }).error ?? 'Could not add location.' }, { status: result.status })
   }
-
   // Upsert reviews for the new location
   const locationId = (result.data as { location?: { id: string } }).location?.id
   if (locationId) {
@@ -208,6 +209,7 @@ export default defineEventHandler(async (event) => {
       } catch { /* non-fatal */ }
     }
   }
+  await purgeBootstrapCacheSafe(env, siteId)
 
   // Get org slug for navigation
   const orgRow = await queryFirst<{ slug: string }>(db, 'SELECT slug FROM organization WHERE id = ? LIMIT 1', [organizationId])

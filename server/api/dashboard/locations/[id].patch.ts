@@ -4,6 +4,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { updateLocation } from '~/server/utils/location-management'
 import { parseLocationPayload } from './location-helpers'
+import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -104,6 +105,7 @@ export default defineEventHandler(async (event) => {
   if (result.status >= 400) {
     return jsonResponse(result.data, { status: result.status })
   }
+  await purgeBootstrapCacheSafe(env, siteId)
 
   const location = (result.data as { location?: unknown }).location
   return jsonResponse({

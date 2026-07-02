@@ -7,9 +7,7 @@
     "node": ">=22.6.0"
   },
   "scripts": {
-    "build": "yarn build:widgets && nuxi build --preset=cloudflare-module",
-    "build:widgets": "vite build --config vite.config.widgets.ts",
-    "test:widgets": "yarn build:widgets && python3 -m http.server 4444 --directory public",
+    "build": "nuxi build --preset=cloudflare-module",
     "postbuild": "node patch.cjs",
     "build:cf": "nuxt build",
     "typecheck": "nuxi typecheck",

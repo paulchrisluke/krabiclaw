@@ -1,6 +1,7 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { deleteLocation } from '~/server/utils/location-management'
+import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -14,6 +15,7 @@ export default defineEventHandler(async (event) => {
   if (result.status >= 400) {
     return jsonResponse(result.data, { status: result.status })
   }
+  await purgeBootstrapCacheSafe(env, siteId)
 
   return jsonResponse({
     success: true,

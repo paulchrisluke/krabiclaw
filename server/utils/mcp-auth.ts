@@ -138,12 +138,21 @@ async function verifyBearerToken(
   const verification = await verifyJwtOrOpaqueToken(token, baseUrl, db, audiences, requiredScopes)
   if (!verification.identity) {
     const authChallenge = mcpAuthChallengeDetails(verification, requiredScopes)
+    // claimed_* fields are decoded WITHOUT signature verification — never use
+    // them for auth decisions, only to see what a rejected token *claims*
+    // (aud/exp/iss mismatches are otherwise invisible: the verifier only
+    // reports a reason code, not the values that produced it).
     logMcpAuth(event, 'warn', 'credential_rejected', {
+      path: event.path,
       token_fingerprint: tokenFingerprint,
       token_shape: token.split('.').length === 3 ? 'jwt' : 'opaque',
       jwt_reason: verification.jwtReason,
       opaque_reason: verification.opaqueReason,
       oauth_error: authChallenge.error,
+      audiences_checked: audiences,
+      required_scopes: requiredScopes,
+      now_iso: new Date().toISOString(),
+      ...(await decodeJwtClaimsUnsafe(token)),
     })
     throw createError({
       statusCode: 401,
@@ -162,6 +171,7 @@ async function verifyBearerToken(
 
   if (!user) {
     logMcpAuth(event, 'warn', 'credential_rejected', {
+      path: event.path,
       token_fingerprint: tokenFingerprint,
       token_kind: identity.tokenKind,
       reason: 'user_not_found',
@@ -170,8 +180,10 @@ async function verifyBearerToken(
   }
 
   logMcpAuth(event, 'info', 'credential_accepted', {
+    path: event.path,
     token_fingerprint: tokenFingerprint,
     token_kind: identity.tokenKind,
+    audiences_checked: audiences,
   })
 
   return {
@@ -318,6 +330,33 @@ async function verifyOpaqueAccessToken(
   if (missingScope) return { userId: null, reason: `${missingScope}_scope_missing`, scopes }
 
   return { userId: accessToken.userId, reason: 'accepted', scopes }
+}
+
+// Decodes a JWT's payload segment without verifying the signature — used only
+// for diagnostic logging on a REJECTED token, so we can see what it claims
+// (aud/exp/iss/sub) instead of just a reason code. Never use this output for
+// an auth decision. Silently returns {} for opaque tokens or malformed JWTs.
+// claimed_sub is hashed+truncated the same way token_fingerprint is — it's a
+// stable per-user identifier decoded from an unverified token, so it's logged
+// as a correlatable fingerprint rather than the raw id. aud/iss/scope aren't
+// user-identifying (they're the resource URL and permission strings), so
+// those are logged as-is for debugging value.
+async function decodeJwtClaimsUnsafe(token: string): Promise<Record<string, unknown>> {
+  const parts = token.split('.')
+  if (parts.length !== 3) return {}
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1]!, 'base64url').toString('utf8')) as Record<string, unknown>
+    return {
+      claimed_aud: Array.isArray(payload.aud) ? payload.aud.slice(0, 5).join(', ').substring(0, 100) : (typeof payload.aud === 'string' ? payload.aud.substring(0, 100) : null),
+      claimed_iss: typeof payload.iss === 'string' ? payload.iss.substring(0, 100) : null,
+      claimed_sub_fingerprint: typeof payload.sub === 'string' ? (await sha256Base64Url(payload.sub)).slice(0, 12) : null,
+      claimed_scope: typeof payload.scope === 'string' ? payload.scope.substring(0, 200) : null,
+      claimed_exp_iso: typeof payload.exp === 'number' ? new Date(payload.exp * 1000).toISOString() : null,
+      claimed_iat_iso: typeof payload.iat === 'number' ? new Date(payload.iat * 1000).toISOString() : null,
+    }
+  } catch {
+    return { claimed_decode_error: true }
+  }
 }
 
 function joseErrorReason(error: unknown) {

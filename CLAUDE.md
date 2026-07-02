@@ -327,6 +327,7 @@ Flow:
 - Nuxt UI MCP server is required for building UI components with Nuxt UI integration.
 - Content creation and editing must go through the KrabiClaw MCP server.
 - Do not build parallel dashboard CMS flows when the equivalent MCP tool should be the primary surface.
+- Client MCP and ChowBot share one curated conversational surface policy in `server/utils/conversational-tool-surface.ts`. Do not add one-off tools to either surface without updating `docs/tool-parity.md`. Translations/locales, social/OAuth publishing, domains, and managed-service work requests are hidden by default and require explicit `CONVERSATIONAL_TOOLS_*_ENABLED=true` flags before they are exposed.
 
 ---
 
@@ -470,12 +471,23 @@ Flow:
 
 ## Design System Enforcement
 
+**Nuxt UI is the default for the dashboard, not a blanket rule for the whole app.** Dashboard/admin surfaces (auth-gated, not part of any tenant's public page weight) should keep using Nuxt UI. Saya's public, high-traffic surface (header/footer and anything else rendered on every tenant page load) is being moved off Nuxt UI's interactive components on purpose — see below.
+
 - Dashboard pages use Nuxt UI layout primitives rather than custom Tailwind page shells.
 - Use:
   - `UCard`
   - `UPage`
   - `UPageBody`
 - Saya theme pages keep their established raw layout shell and theme-specific components, rather than being forced into dashboard page primitives.
+
+### Saya public surface — prefer native Tailwind + Vue over Nuxt UI
+
+Lighthouse isolation testing (`pages/dev/perf-text.vue`, see `docs/page-speed-debugging-methodology.md`) showed Nuxt UI's interactive components (`UButton`, `UDropdownMenu`, `UIcon`) are the real cost behind `SayaHeader`/`SayaFooter`'s LCP/FCP/TTI regression versus a plain-text baseline — not markup size or any single icon. Reka UI's primitives (floating-ui, focus-trap, etc.) add ~19-22 modulepreloads and ~70-80KB transfer to every tenant page load, since header/footer render on every route.
+
+- On Saya's public component tree (`components/saya/**`), prefer plain `<button>`/`<NuxtLink>`/`<a>` + Tailwind classes over `UButton`, and inline SVG over `UIcon`, for anything in the always-rendered header/footer path. This is a *perf-driven exception* to the Nuxt UI default, scoped to public/high-traffic Saya components — it does not apply to the dashboard, to Saya's own auth-gated dashboard-CMS edit affordances, or to low-traffic Saya pages that aren't part of every page load.
+- For dropdowns/menus on this surface, use `components/saya/SayaDropdown.vue` — a small headless local component (open/close, click-outside, Escape, arrow-key nav, ARIA) built specifically to replace `UDropdownMenu` without pulling in Reka. Reuse it rather than reaching for `UDropdownMenu` or hand-rolling another dropdown.
+- Before replacing more Nuxt UI usage on this surface, re-measure with the same isolation-mode + modulepreload-count method (compare `.output` production build via local `wrangler dev`, not the Vite dev server — dev mode doesn't emit `modulepreload` tags) to confirm the change is actually load-bearing, not just done on suspicion.
+- This does not extend to Saya pages/components outside the always-rendered header/footer path unless the same measurement shows a real win there too — don't preemptively de-Nuxt-UI-ify Saya wholesale.
 
 - UCard `:ui` prop only accepts:
   - `root`

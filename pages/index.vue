@@ -185,97 +185,15 @@
 
       <!-- ── Locations grid ─────────────────────────────────── -->
       <LazySayaLocationsGrid
-        v-if="contentBlocks.find(b => b.component === 'SayaLocationsGrid')"
         :data="{
           locations: locations,
           heading: homeCopy.locationGroupLine(locations.length),
-          isAuthenticated: isAuthenticated
+          isAuthenticated: isAuthenticated,
+          findUsKicker: homeCopy.findUsKicker,
+          visitLocationCta: homeCopy.visitLocationCta,
+          connectGoogleCta: homeCopy.connectGoogleCta
         }"
       />
-      <section v-else class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-        <div class="mb-16 max-w-2xl">
-          <p class="saya-kicker mb-6">{{ homeCopy.findUsKicker }}</p>
-          <h2 class="saya-display-md text-default">
-            {{ homeCopy.locationGroupLine(locations.length) }}
-          </h2>
-        </div>
-        <!-- Real locations -->
-        <div v-if="hasLocations" :class="['grid gap-8', locations.length > 1 ? 'md:grid-cols-2' : '']">
-          <NuxtLink
-            v-for="(loc, locIdx) in locations"
-            :key="loc.id"
-            :ref="el => { const node = el && (el.$el || el); if (node) locCardRefs[locIdx] = node }"
-            :to="`/locations/${loc.slug}`"
-            class="group block overflow-hidden border border-default text-default no-underline transition hover:border-muted"
-          >
-            <div class="aspect-video overflow-hidden bg-muted">
-              <!-- Poster image: always present for LCP. Video swaps in when card enters viewport. -->
-              <ClientOnly v-if="loc.kind === 'video' && loc.public_url">
-                <video
-                  v-if="visibleLocCards.has(locIdx)"
-                  :src="loc.public_url"
-                  :poster="loc.thumbnail_url || undefined"
-                  autoplay muted loop playsinline preload="none"
-                  class="aspect-video w-full object-cover"
-                />
-                <img
-                  v-else-if="loc.thumbnail_url"
-                  :src="loc.thumbnail_url"
-                  :alt="loc.title"
-                  loading="lazy"
-                  class="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                >
-              </ClientOnly>
-              <img
-                v-else-if="loc.public_url"
-                :src="loc.public_url"
-                :alt="loc.title"
-                loading="lazy"
-                class="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              >
-              <div v-else class="flex h-full w-full items-center justify-center">
-                <UIcon name="i-heroicons-map-pin" class="size-10 text-muted" />
-              </div>
-            </div>
-            <div class="p-8 pb-9">
-              <div v-if="loc.city" class="saya-eyebrow mb-5 flex items-center gap-2 text-muted">
-                <span class="size-1.5 rounded-full bg-zinc-300" />
-                {{ loc.city }}
-              </div>
-              <div class="saya-display saya-italic text-4xl text-default leading-none">{{ loc.title }}</div>
-              <div class="mt-6 border-t border-default pt-5">
-                <span class="saya-eyebrow text-muted">{{ homeCopy.visitLocationCta }}</span>
-              </div>
-            </div>
-          </NuxtLink>
-        </div>
-
-        <!-- Empty state: no locations yet -->
-        <div v-else class="grid gap-8 md:grid-cols-2">
-          <div
-            v-for="i in 2"
-            :key="i"
-            class="overflow-hidden border border-dashed border-default"
-          >
-            <div class="flex aspect-video items-center justify-center bg-muted">
-              <UIcon name="i-heroicons-map-pin" class="size-10 text-muted" />
-            </div>
-            <div class="p-8 pb-9">
-              <div class="saya-display saya-italic text-4xl text-muted leading-none">
-                {{ i === 1 ? homeCopy.mainLocationLabel : homeCopy.secondLocationLabel }}
-              </div>
-              <p class="mt-4 text-sm text-muted">
-                {{ i === 1 ? homeCopy.connectGoogleAddressNote : homeCopy.addSecondLocationNote }}
-              </p>
-            </div>
-          </div>
-          <div v-if="isAuthenticated" class="md:col-span-2 text-center pt-2">
-            <UButton to="/dashboard" color="neutral" variant="outline" size="sm" class="rounded-full">
-              {{ homeCopy.connectGoogleCta }}
-            </UButton>
-          </div>
-        </div>
-      </section>
 
       <!-- ── Posts / Lately ────────────────────────────────── -->
       <section v-if="recentPosts.length" class="bg-elevated">
@@ -361,63 +279,18 @@
 
       <!-- ── Brand story ─────────────────────────────────────── -->
       <LazySayaBrandStory
-        v-if="contentBlocks.find(b => b.component === 'SayaBrandStory')"
         :data="{
           headline: getField('story.headline', businessTitle),
           body: getField('story.body', businessSubtitle),
           image: getField('story.image'),
-          isAuthenticated: isAuthenticated
+          isAuthenticated: isAuthenticated,
+          ourStoryKicker: homeCopy.ourStoryKicker,
+          readMoreCta: homeCopy.readMoreCta,
+          brandStoryPlaceholder: homeCopy.brandStoryPlaceholder,
+          brandStoryDescription: homeCopy.brandStoryDescription,
+          addStoryCta: homeCopy.addStoryCta
         }"
       />
-      <section v-else class="bg-inverted text-inverted">
-        <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-
-          <!-- Filled state -->
-          <template v-if="getField('story.headline') || hasGoogleBusiness">
-            <div :class="getField('story.image') ? 'grid gap-16 lg:grid-cols-2 lg:items-center' : ''">
-              <div>
-                <p class="saya-eyebrow mb-8 text-inverted/60">{{ homeCopy.ourStoryKicker }}</p>
-                <h2 class="saya-display-md text-inverted" :class="getField('story.image') ? '' : 'max-w-3xl'">
-                  {{ getField('story.headline', businessTitle) }}
-                </h2>
-                <p class="mt-8 text-base leading-relaxed text-inverted/60" :class="getField('story.image') ? '' : 'max-w-2xl'">
-                  {{ getField('story.body', businessSubtitle) }}
-                </p>
-                <NuxtLink
-                  to="/about"
-                  class="mt-8 inline-block border-b border-inverted pb-1 text-xs uppercase tracking-widest text-inverted no-underline transition hover:opacity-60"
-                >
-                  {{ homeCopy.readMoreCta }}
-                </NuxtLink>
-              </div>
-              <div v-if="getField('story.image')" class="overflow-hidden">
-                <img
-                  :src="getField('story.image')"
-                  alt=""
-                  aria-hidden="true"
-                  class="h-full w-full object-cover aspect-4/3"
-                >
-              </div>
-            </div>
-          </template>
-
-          <!-- Empty state: owner hasn't added story yet -->
-          <template v-else>
-            <p class="saya-eyebrow mb-8 text-inverted/60">{{ homeCopy.ourStoryKicker }}</p>
-            <h2 class="saya-display-md max-w-3xl text-inverted/30">{{ homeCopy.brandStoryPlaceholder }}</h2>
-            <p class="mt-6 max-w-lg text-sm leading-relaxed text-inverted/30">
-              {{ homeCopy.brandStoryDescription }}
-            </p>
-            <NuxtLink
-              v-if="isAuthenticated"
-              to="/dashboard"
-              class="mt-8 inline-flex items-center gap-2 rounded-full border border-inverted/20 px-5 py-2.5 text-xs uppercase tracking-widest text-inverted/60 no-underline transition hover:border-inverted/40 hover:text-inverted/80"
-            >
-              {{ homeCopy.addStoryCta }}
-            </NuxtLink>
-          </template>
-        </div>
-      </section>
 
       <!-- ── Aggregated reviews ──────────────────────────────── -->
       <section
@@ -536,21 +409,6 @@ const plans = computed(() => isPlatform ? platformPlans.value : null)
 const { isAuthenticated } = useAuth()
 const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 
-// Inline location grid — load videos via IntersectionObserver when cards scroll into view
-const locCardRefs = ref([])
-const visibleLocCards = ref(new Set())
-onMounted(() => {
-  if (!('IntersectionObserver' in window)) return
-  const obs = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (!entry.isIntersecting) return
-      const i = locCardRefs.value.indexOf(entry.target)
-      if (i >= 0) { visibleLocCards.value = new Set([...visibleLocCards.value, i]); obs.unobserve(entry.target) }
-    })
-  }, { rootMargin: '200px' })
-  watch(() => locations.value.length, () => { nextTick(() => locCardRefs.value.forEach(el => el && obs.observe(el))) }, { immediate: true })
-  onUnmounted(() => obs.disconnect())
-})
 const { resolveComponent } = useDynamicComponent()
 
 // Platform homepage data
@@ -591,7 +449,6 @@ const {
 } = useBootstrap()
 
 const locations = computed(() => bootstrapLocations.value)
-const hasLocations = computed(() => locations.value.length > 0)
 const hasOrderLinks = computed(() =>
   locations.value.some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )

@@ -4,12 +4,6 @@ import { loginAs } from './helpers/auth'
 import { MCP_FREE_USER_ID, MCP_GROWTH_USER_ID, MCP_MANAGED_USER_ID } from './helpers/plan-fixtures'
 
 const MCP_VERSION = '2026-07-28'
-// 'user-demo' is the platform admin seeded by generate-demo-seed.ts (role='admin'),
-// so requireMcpSite's admin branch grants access to org-pottery-house without
-// needing a member row there.
-const POTTERY_HOUSE_USER_ID = 'user-demo'
-const POTTERY_HOUSE_SITE_ID = 'site-pottery-house'
-const POTTERY_HOUSE_LOCATION_ID = 'loc-pottery-beachfront'
 // Fixed fixture sites seeded by generate-demo-seed.ts with the matching plan already
 // active. Entitlement checks are site-scoped (hasSiteEntitlement), so a plan-gated tool
 // call needs the org's actual paid site, not a brand-new site from ensureSite() (which
@@ -81,17 +75,6 @@ async function ensureSite(request: APIRequestContext, baseURL: string) {
   const siteId = mcpData<{ siteId?: string }>(body).siteId
   expect(siteId).toEqual(expect.any(String))
   return siteId as string
-}
-
-async function resetPotteryHouseTransferFixture(request: APIRequestContext, baseURL: string) {
-  const res = await request.post(`${baseURL}/api/dev/site-transfer-reset`, {
-    headers: devLoginHeaders(),
-    data: {
-      siteId: POTTERY_HOUSE_SITE_ID,
-      organizationId: 'org-pottery-house',
-    },
-  })
-  expect(res.status()).toBe(200)
 }
 
 async function getSiteOrg(request: APIRequestContext, baseURL: string, siteId: string) {
@@ -168,13 +151,18 @@ test.describe('stateless MCP server', () => {
     const toolsList = await mcpRequest(request, baseURL!, { method: 'tools/list', id: 'list-no-site' })
     expect(toolsList.status()).toBe(200)
     const listBody = await toolsList.json() as { result: { tools: Array<{ name: string }> } }
-    // Without site_id, all tools must be discoverable so AI clients (e.g. ChatGPT) see the full
-    // capability set on first connection. Security gates enforce at execution time, not at discovery.
+    // Without site_id, all non-gated tools must be discoverable so AI clients (e.g. ChatGPT) see
+    // the full capability set on first connection. Security gates enforce at execution time, not
+    // at discovery. Translations/social-publishing/domains/managed-service tools are hidden here
+    // by the conversational-surface flags (see conversational-tool-surface.ts) — CI runs with
+    // those flags unset, matching production default — so they're intentionally excluded below.
     const allToolNames = listBody.result.tools.map(tool => tool.name)
     expect(allToolNames).toEqual(expect.arrayContaining([
       'list_sites', 'create_site',
       'get_site', 'list_locations', 'list_menus', 'list_posts', 'get_site_media_assets',
       'get_page_fields', 'list_experiences', 'get_contact_inquiries',
+    ]))
+    expect(allToolNames).not.toEqual(expect.arrayContaining([
       'get_translation_inventory', 'list_work_requests', 'get_google_business_connection',
     ]))
     expect(allToolNames.length).toBeGreaterThan(50)
@@ -186,7 +174,7 @@ test.describe('stateless MCP server', () => {
     expect(invalidBody.error.message).toContain('Unsupported MCP method')
   })
 
-  test('owner can use content, notifications, submissions, and translation workflow tools', async ({ request, baseURL }) => {
+  test('owner can use content, notifications, and submissions workflow tools', async ({ request, baseURL }) => {
     test.setTimeout(180_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = MCP_GROWTH_SITE_ID
@@ -375,21 +363,6 @@ test.describe('stateless MCP server', () => {
     expect(toolNames).not.toContain('update_contact_submission')
     expect(toolNames).not.toContain('update_reservation_submission')
 
-    const localeCode = `qaa-${Date.now().toString(36).slice(-6)}`
-    const locale = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'upsert_locale',
-      args: { site_id: siteId, locale: localeCode, label: 'MCP Locale', status: 'draft', fallback_enabled: true },
-    })
-    expect(locale.status()).toBe(200)
-
-    const localesList = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'list_locales',
-      args: { site_id: siteId },
-    })
-    expect(localesList.status()).toBe(200)
-
     const reviewsList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'list_location_reviews',
@@ -445,106 +418,6 @@ test.describe('stateless MCP server', () => {
     })
     expect(qaReorder.status()).toBe(200)
 
-    const inventory = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'get_translation_inventory',
-      args: { site_id: siteId, locale: localeCode, scope: 'content' },
-    })
-    expect(inventory.status()).toBe(200)
-    const inventoryBody = await inventory.json()
-    expect(mcpData<{ estimate: { total_items: number } }>(inventoryBody).estimate.total_items).toBeGreaterThan(0)
-
-    const translationJobs = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'list_translation_jobs',
-      args: { site_id: siteId },
-    })
-    expect(translationJobs.status()).toBe(200)
-
-    const translationReview = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'get_translation_review_items',
-      args: { site_id: siteId, locale: localeCode, scope: 'content', status: 'all' },
-    })
-    expect(translationReview.status()).toBe(200)
-    const translationReviewBody = await translationReview.json()
-    const reviewItem = mcpData<{ items: Array<{ entity_type: string; entity_id: string; field: string; source_fields: Record<string, string> }> }>(translationReviewBody).items[0]
-    expect(reviewItem).toBeDefined()
-
-    const translationFields = Object.fromEntries(
-      Object.entries(reviewItem!.source_fields).map(([key, value]) => [key, `${value} (${localeCode})`]),
-    )
-    const translationSave = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'save_translation_review_item',
-      args: {
-        site_id: siteId,
-        locale: localeCode,
-        scope: 'content',
-        entity_type: reviewItem!.entity_type,
-        entity_id: reviewItem!.entity_id,
-        field: reviewItem!.field,
-        fields: translationFields,
-      },
-    })
-    expect(translationSave.status()).toBe(200)
-
-    const publishTranslations = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'publish_translations',
-      args: { site_id: siteId, locale: localeCode, scope: 'content' },
-    })
-    expect(publishTranslations.status()).toBe(200)
-
-    const jobLocale = `qab-${Date.now().toString(36).slice(-6)}`
-    const jobLocaleCreate = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'upsert_locale',
-      args: { site_id: siteId, locale: jobLocale, label: 'MCP Job Locale', status: 'draft', fallback_enabled: true },
-    })
-    expect(jobLocaleCreate.status()).toBe(200)
-
-    const translationJobStart = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'start_translation_job',
-      args: { site_id: siteId, locale: jobLocale, scope: 'content', includePublished: true },
-    })
-    expect([200, 500]).toContain(translationJobStart.status())
-
-    const translationJobsAfterStart = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'list_translation_jobs',
-      args: { site_id: siteId },
-    })
-    expect(translationJobsAfterStart.status()).toBe(200)
-    const translationJobsAfterStartBody = await translationJobsAfterStart.json()
-    let startedJob = mcpData<{ jobs: Array<{ id: string; target_locale: string }> }>(translationJobsAfterStartBody).jobs.find(job => job.target_locale === jobLocale)
-    if (!startedJob) {
-      const seedTranslationJob = await request.post(`${baseURL}/api/editor/sites/${siteId}/translations/jobs`, {
-        data: { locale: jobLocale, scope: 'content', includePublished: true },
-      })
-      expect(seedTranslationJob.status()).toBe(200)
-      const seedTranslationJobBody = await seedTranslationJob.json() as { job?: { id?: string } }
-      if (seedTranslationJobBody.job?.id) {
-        startedJob = { id: seedTranslationJobBody.job.id, target_locale: jobLocale }
-      }
-    }
-    expect(startedJob?.id).toEqual(expect.any(String))
-
-    const translationJobRead = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'get_translation_job',
-      args: { site_id: siteId, job_id: startedJob!.id },
-    })
-    expect(translationJobRead.status()).toBe(200)
-
-    const translationJobBatch = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'run_translation_job_batch',
-      args: { site_id: siteId, job_id: startedJob!.id },
-    })
-    expect([200, 500]).toContain(translationJobBatch.status())
-
     const qaDelete = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'delete_location_qa',
@@ -559,20 +432,6 @@ test.describe('stateless MCP server', () => {
     })
     expect(qaDeleteSecond.status()).toBe(200)
 
-    const localeDelete = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'delete_locale',
-      args: { site_id: siteId, locale: localeCode },
-    })
-    expect(localeDelete.status()).toBe(200)
-
-    const jobLocaleDelete = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'delete_locale',
-      args: { site_id: siteId, locale: jobLocale },
-    })
-    expect(jobLocaleDelete.status()).toBe(200)
-
     const deleteLocationRes = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'delete_location',
@@ -581,7 +440,7 @@ test.describe('stateless MCP server', () => {
     expect(deleteLocationRes.status()).toBe(200)
   })
 
-  test('owner can use menus, posts, media, experiences, and Google Business workflow tools', async ({ request, baseURL }) => {
+  test('owner can use menus, posts, media, and experiences workflow tools', async ({ request, baseURL }) => {
     test.setTimeout(180_000)
     await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
     const siteId = MCP_MANAGED_SITE_ID
@@ -751,34 +610,6 @@ test.describe('stateless MCP server', () => {
     })
     expect(mediaList.status()).toBe(200)
 
-    const mediaUpload = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'request_media_upload',
-      args: { site_id: siteId, filename: 'mcp-test.png', category: 'gallery', location_id: locationId },
-    })
-    expect([200, 500]).toContain(mediaUpload.status())
-
-    let uploadedAssetId: string | null = null
-    if (mediaUpload.status() === 200) {
-      const mediaUploadBody = await mediaUpload.json()
-      uploadedAssetId = mcpData<{ asset_id?: string }>(mediaUploadBody).asset_id ?? null
-      expect(uploadedAssetId).toEqual(expect.any(String))
-
-      const mediaConfirm = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'confirm_media_upload',
-        args: { site_id: siteId, asset_id: uploadedAssetId },
-      })
-      expect(mediaConfirm.status()).toBe(200)
-
-      const mediaUpdate = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'update_media_asset',
-        args: { site_id: siteId, asset_id: uploadedAssetId, alt_text: 'MCP upload', category: 'hero' },
-      })
-      expect(mediaUpdate.status()).toBe(200)
-    }
-
     const experience = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'create_experience',
@@ -875,64 +706,6 @@ test.describe('stateless MCP server', () => {
     })
     expect(deleteExperienceRes.status()).toBe(200)
 
-    const workRequests = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'list_work_requests',
-      args: { site_id: siteId },
-    })
-    expect(workRequests.status()).toBe(200)
-
-    await resetPotteryHouseTransferFixture(request, baseURL!)
-    await loginAs(request, baseURL!, POTTERY_HOUSE_USER_ID)
-
-    const googleConnection = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'get_google_business_connection',
-      args: { site_id: POTTERY_HOUSE_SITE_ID, location_id: POTTERY_HOUSE_LOCATION_ID },
-    })
-    expect(googleConnection.status()).toBe(200)
-    const googleConnectionBody = await googleConnection.json()
-    expect(mcpData<{ connection: unknown }>(googleConnectionBody).connection ?? null).toBeNull()
-
-    const googleAccounts = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'list_google_business_accounts',
-      args: { site_id: POTTERY_HOUSE_SITE_ID },
-    })
-    expect(googleAccounts.status()).toBe(500)
-
-    const googleAuth = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'get_google_business_auth_url',
-      args: { site_id: POTTERY_HOUSE_SITE_ID, location_id: POTTERY_HOUSE_LOCATION_ID },
-    })
-    expect(googleAuth.status()).toBe(500)
-
-    const googleSync = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'sync_google_business_locations',
-      args: { site_id: POTTERY_HOUSE_SITE_ID, account_id: 'accounts/missing', location_ids: ['locations/missing'] },
-    })
-    expect(googleSync.status()).toBe(400)
-
-    await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
-
-    const workRequest = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'create_work_request',
-      args: { site_id: siteId, type: 'content_update', title: 'Need copy update', description: 'Please update homepage copy', priority: 'normal' },
-    })
-    expect([200, 403]).toContain(workRequest.status())
-
-    if (uploadedAssetId) {
-      const mediaDelete = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'delete_media_asset',
-        args: { site_id: siteId, asset_id: uploadedAssetId },
-      })
-      expect(mediaDelete.status()).toBe(200)
-    }
-
     const deleteMenuRes = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'delete_menu',
@@ -981,7 +754,7 @@ test.describe('stateless MCP server', () => {
     expect(wrongSite.status()).toBe(404)
   })
 
-  test('translation tools are entitlement-gated — free plan gets 403 and tools are hidden from list', async ({ request, baseURL }) => {
+  test('translation, google business, and work request tools are hidden from the conversational surface by default', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, MCP_FREE_USER_ID)
     const siteId = await ensureSite(request, baseURL!)
 
@@ -1000,19 +773,23 @@ test.describe('stateless MCP server', () => {
     expect(toolNames).not.toContain('list_work_requests')
     expect(toolNames).not.toContain('create_work_request')
 
+    // Blocked by the conversational-surface flag (see conversational-tool-surface.ts) before
+    // ever reaching the free-plan entitlement check, so these now 404 (methodNotFound) rather
+    // than the old plan-based 403 — CI runs with CONVERSATIONAL_TOOLS_*_ENABLED unset, matching
+    // production default.
     const inventoryCall = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'get_translation_inventory',
       args: { site_id: siteId, locale: 'th' },
     })
-    expect(inventoryCall.status()).toBe(403)
+    expect(inventoryCall.status()).toBe(404)
 
     const startJobCall = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'start_translation_job',
       args: { site_id: siteId, locale: 'th' },
     })
-    expect(startJobCall.status()).toBe(403)
+    expect(startJobCall.status()).toBe(404)
 
     const locationId = await ensureLocation(request, baseURL!, siteId)
     const gbConnectionCall = await mcpRequest(request, baseURL!, {
@@ -1020,7 +797,7 @@ test.describe('stateless MCP server', () => {
       toolName: 'get_google_business_connection',
       args: { site_id: siteId, location_id: locationId },
     })
-    expect(gbConnectionCall.status()).toBe(403)
+    expect(gbConnectionCall.status()).toBe(404)
   })
 
   test('cross-tenant isolation — owner of site A cannot read or mutate site B through MCP', async ({ request, baseURL }) => {
