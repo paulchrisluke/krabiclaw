@@ -66,6 +66,21 @@ const cssStrips: [envVar: string, line: string][] = [
 // against the normal hydrated build on /dev/perf-text.
 const skipClientScripts = process.env.PERF_NO_SCRIPTS === 'true'
 
+// Tried (2026-07-02): a `PERF_CSS_EXCLUDE_DASHBOARD` flag appending
+// `@source not "<glob>";` to main.css for dashboard/admin/editor/billing/
+// onboarding/media paths, to measure how much of entry.css a public/tenant
+// visitor pays for but never renders. Removed — `@source not` had no
+// measurable effect in this stack: a class unique to a single dashboard-only
+// component (`[320px]` in components/dashboard/McpQuickActions.vue) still
+// appeared in the compiled entry.css after excluding its exact path, tested
+// with both relative and absolute glob paths, and even edited directly into
+// assets/css/main.css (not just via the build-flag injection). Most likely
+// cause: @nuxt/ui's own Tailwind integration performs its own unconditional
+// project-wide content scan that a `@source not` in the app's own main.css
+// can't override. Don't re-attempt this exact approach without first
+// confirming (e.g. via @nuxt/ui's own docs/issues) whether their Tailwind
+// integration exposes a way to scope its content scan at all.
+
 export default defineNuxtConfig({
   modules: [
     'nitro-cloudflare-dev',
