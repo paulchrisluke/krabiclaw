@@ -1,6 +1,7 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { createRequire } from 'node:module'
 import { getIcons } from '@iconify/utils'
+import { visualizer } from 'rollup-plugin-visualizer'
 import { DEFAULT_CURRENCY, isCurrencyCode } from './shared/currencies'
 
 const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
@@ -24,6 +25,19 @@ function pickIcons(collection: string, names: string[]) {
 // from production. Set NUXT_DISABLE_NITRO_TASKS=true explicitly if a local
 // dev/E2E run needs to avoid task-import side effects on the D1 proxy binding.
 const enableNitroTasks = process.env.NUXT_DISABLE_NITRO_TASKS !== 'true'
+
+// PERF DEBUG PATCH (temporary — remove once the entry.css floor is attributed):
+// build-time-only flag, not a runtime one, since global css: [...] is compiled
+// into a single stylesheet at build time and can't be conditionally skipped
+// per-request. Set PERF_NO_GLOBAL_CSS=true and rebuild to measure
+// /dev/perf-text?mode=text-no-icons with no global CSS at all.
+const skipGlobalCss = process.env.PERF_NO_GLOBAL_CSS === 'true'
+
+// PERF DEBUG PATCH (temporary — remove once the entry.js floor is attributed):
+// generates a client-bundle treemap at PERF_BUNDLE_ANALYZE_OUT (or
+// bundle-analysis.html in the repo root) to identify what's actually inside
+// the ~511KB entry chunk. Set PERF_BUNDLE_ANALYZE=true and rebuild.
+const analyzeBundle = process.env.PERF_BUNDLE_ANALYZE === 'true'
 
 export default defineNuxtConfig({
   modules: [
@@ -70,7 +84,8 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   debug: false,
   devtools: { enabled: false },
-  css: ['~/assets/css/main.css'],
+  // PERF DEBUG PATCH: see skipGlobalCss above.
+  css: skipGlobalCss ? [] : ['~/assets/css/main.css'],
   icon: {
     fallbackToApi: false,
     serverBundle: {
@@ -104,6 +119,23 @@ export default defineNuxtConfig({
         ignored: ['**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
       },
       allowedHosts: ['.trycloudflare.com', 'local.krabiclaw.com']
+    },
+  },
+
+  // PERF DEBUG PATCH (temporary — remove once the entry.js floor is attributed):
+  // vite.plugins is shared between the client and server Vite builds, so the
+  // visualizer is attached via this hook instead, gated to isClient only —
+  // otherwise the server (Nitro/SSR) build would overwrite the client's
+  // treemap output on whichever build ran second.
+  hooks: {
+    'vite:extendConfig'(viteConfig, { isClient }) {
+      if (!analyzeBundle || !isClient) return
+      viteConfig.plugins?.push(visualizer({
+        filename: process.env.PERF_BUNDLE_ANALYZE_OUT || 'bundle-analysis.html',
+        template: 'treemap',
+        gzipSize: true,
+        brotliSize: true,
+      }))
     },
   },
 
