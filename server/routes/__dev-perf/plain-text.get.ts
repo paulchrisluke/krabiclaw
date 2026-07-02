@@ -1,9 +1,9 @@
+import { isDevPerfHostAllowed } from '~/shared/dev-perf'
+
 export default defineEventHandler((event) => {
   const host = getRequestHost(event).split(':')[0] || ''
-  const allowedHosts = new Set(['localhost', '127.0.0.1', '0.0.0.0', 'local.krabiclaw.com'])
-  const isLocalWranglerPlatformHost = host === 'krabiclaw.com' && !getHeader(event, 'cf-ray')
-
-  if (!allowedHosts.has(host) && !isLocalWranglerPlatformHost) {
+  
+  if (!isDevPerfHostAllowed(host, getRequestHost(event), !!getHeader(event, 'cf-ray'))) {
     throw createError({
       statusCode: 404,
       statusMessage: 'Not Found',

@@ -14,7 +14,7 @@
     <div class="flex items-center justify-center px-8 py-12">
         <div class="w-full max-w-105">
           <h1 class="text-[36px] font-extrabold tracking-tight text-default m-0 mb-2">{{ isOAuthFlow ? 'Connect your account' : 'Welcome back' }}</h1>
-          <p class="text-[15px] text-muted mb-7">{{ isOAuthFlow ? 'Sign in to grant access to an external application.' : 'Sign in to manage your restaurant.' }}</p>
+          <p class="text-[15px] text-muted mb-7">{{ isOAuthFlow ? 'Sign in to grant access to an external application.' : 'Sign in to manage your local business.' }}</p>
 
           <UAlert v-if="notice" color="success" variant="soft" :description="notice" class="mb-4" />
           <UAlert v-if="error" color="error" variant="soft" :description="error" class="mb-4" />

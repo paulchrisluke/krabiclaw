@@ -21,11 +21,20 @@ export function cfImageVariant(
   if (!url) return null
   if (!url.includes('imagedelivery.net')) return url
 
+  // fit=cover requires both width AND height (Cloudflare needs both to know
+  // how to crop) — passing only one dimension with fit=cover is invalid and
+  // returns a "cover fit mode needs both width and height" warning. Default
+  // to scale-down (resize to fit within the given dimension, preserving
+  // aspect ratio, never upscale) when only one dimension is supplied; only
+  // use cover when the caller explicitly provides both.
+  const hasBothDimensions = Boolean(opts.width) && Boolean(opts.height)
+  const defaultFit = hasBothDimensions ? 'cover' : 'scale-down'
+
   const params = [
     opts.width ? `width=${opts.width}` : null,
     opts.height ? `height=${opts.height}` : null,
     `quality=${opts.quality ?? 75}`,
-    `fit=${opts.fit ?? 'cover'}`,
+    `fit=${opts.fit ?? defaultFit}`,
     `format=${opts.format ?? 'auto'}`,
   ].filter(Boolean)
 

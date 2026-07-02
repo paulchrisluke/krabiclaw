@@ -145,7 +145,7 @@ jobs:
             test-results/
           retention-days: 7
 
- didn't   perf-benchmark:
+  perf-benchmark:
     name: Perf benchmark (reporting only)
     if: github.event_name == 'pull_request'
     needs: e2e-smoke

@@ -127,7 +127,7 @@
               </div>
               <p class="text-muted">Instagram publishing is available when the connected Page has a linked Instagram Business account.</p>
             </div>
-            <p v-else class="text-sm text-muted">Connect a Facebook Page to sync page info and publish posts from this restaurant site.</p>
+            <p v-else class="text-sm text-muted">Connect a Facebook Page to sync page info and publish posts from this site.</p>
 
             <UButton
               icon="i-simple-icons-facebook"

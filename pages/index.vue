@@ -651,7 +651,7 @@ const currentPageUrl = useSeoUrl('/')
 
 // SEO for KrabiClaw Platform
 if (isPlatform) {
-  const platformOgDescription = 'Beautiful restaurant websites edited through ChatGPT. Google Business sync, bookings, and real-time analytics included.'
+  const platformOgDescription = 'Beautiful local business websites edited through ChatGPT. Google Business sync, bookings, and real-time analytics included.'
 
   usePlatformPageSeo({
     path: '/',

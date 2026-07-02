@@ -45,7 +45,7 @@ interface PlatformPageSeoInput {
 }
 
 const PLATFORM_NAME = 'KrabiClaw'
-const PLATFORM_DESCRIPTION = 'The Shopify for restaurants. AI-powered website builder for independent restaurants.'
+const PLATFORM_DESCRIPTION = 'The AI-powered website builder for local businesses. Build your web presence through conversation with ChatGPT.'
 
 /**
  * Shared SEO setup for static marketing pages (platform surface only).

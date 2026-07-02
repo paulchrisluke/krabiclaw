@@ -16,6 +16,12 @@ function pickIcons(collection: string, names: string[]) {
   const data = requireFromConfig(`@iconify-json/${collection}/icons.json`)
   const subset = getIcons(data, names)
   if (!subset) throw new Error(`Missing icon(s) in @iconify-json/${collection}: ${names.join(', ')}`)
+  
+  const missing = names.filter(name => !subset.icons?.[name] && !subset.aliases?.[name])
+  if (missing.length > 0) {
+    throw new Error(`Missing icon(s) in @iconify-json/${collection}: ${missing.join(', ')}`)
+  }
+  
   return subset
 }
 // Opt-out only: GitHub Actions sets CI=true on every runner, including the
@@ -166,23 +172,30 @@ export default defineNuxtConfig({
       // PERF DEBUG PATCH: see cssStrips above. enforce: 'pre' so this runs
       // before Tailwind's own Vite plugin consumes the @import/@plugin
       // at-rules in main.css.
-      const activeStrip = cssStrips.find(([envVar]) => process.env[envVar] === 'true')
-      if (activeStrip) {
-        const [, line] = activeStrip
-        // unshift, not push: Tailwind's own Vite plugin is also enforce:'pre'
-        // and already registered by the time this hook runs, so a same-
-        // priority plugin appended via push still runs after it (same-enforce
-        // plugins execute in array order). Putting this one first in the
-        // array is what actually lets it see the raw source before Tailwind
-        // resolves/inlines the @import chain.
-        viteConfig.plugins?.unshift({
-          name: 'perf-debug-strip-css',
-          enforce: 'pre',
-          transform(code: string, id: string) {
-            if (!id.endsWith('assets/css/main.css')) return
-            return code.replace(line, `/* PERF DEBUG PATCH: stripped "${line}" */`)
-          },
-        })
+      const activeStrips = cssStrips.filter(([envVar]) => process.env[envVar] === 'true')
+      if (activeStrips.length > 1) {
+        throw new Error(`Multiple PERF_NO_* CSS strip flags enabled: ${activeStrips.map(s => s[0]).join(', ')}. Only one is allowed.`)
+      }
+      if (activeStrips.length === 1) {
+        const activeStrip = activeStrips[0]
+        if (activeStrip) {
+          const [, line] = activeStrip
+          // unshift, not push: Tailwind's own Vite plugin is also enforce:'pre'
+          // and already registered by the time this hook runs, so a same-
+          // priority plugin appended via push still runs after it (same-enforce
+          // plugins execute in array order). Putting this one first in the
+          // array is what actually lets it see the raw source before Tailwind
+          // resolves/inlines the @import chain.
+          viteConfig.plugins?.unshift({
+            name: 'perf-debug-strip-css',
+            enforce: 'pre',
+            transform(code: string, id: string) {
+              if (!id.endsWith('assets/css/main.css')) return
+              if (!code.includes(line)) throw new Error(`Target CSS line not found for stripping: ${line}`)
+              return code.replace(line, `/* PERF DEBUG PATCH: stripped "${line}" */`)
+            },
+          })
+        }
       }
     },
   },
@@ -209,6 +222,23 @@ export default defineNuxtConfig({
     defaultLocale: 'en',
     strategy: 'no_prefix',
     detectBrowserLanguage: false,
+    // @nuxtjs/i18n defaults runtimeOnly to false — surprising, since the
+    // underlying @intlify/unplugin-vue-i18n itself defaults it to true.
+    // Aliases vue-i18n to its runtime-only build in production, dropping
+    // the full compiler vue-i18n itself doesn't need since messages are
+    // static JSON compiled at build time.
+    //
+    // bundle.dropMessageCompiler was also tried (attributed as ~7.5KB gzip
+    // in the entry bundle) but is NOT enabled here — verified it breaks SSR
+    // for at least one real translation key (`saya.header.menu` on
+    // /dev/perf-text?mode=text-with-i18n rendered an empty <div id="__nuxt">
+    // with no thrown error), while simpler top-level keys elsewhere (e.g.
+    // pages/about.vue) kept working. That inconsistency — some keys silently
+    // failing SSR while others don't — makes it unsafe to ship without a
+    // much deeper audit of every real locale key against every real page.
+    bundle: {
+      runtimeOnly: true,
+    },
   },
 
   // Robots.txt configuration

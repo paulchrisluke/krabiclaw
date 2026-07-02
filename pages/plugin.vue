@@ -111,7 +111,7 @@
       <!-- Description & Information Table Area -->
       <div class="max-w-4xl mx-auto px-4 sm:px-6 mb-24">
         <p class="text-default text-[15px] leading-relaxed mb-12">
-          KrabiClaw for ChatGPT makes managing your restaurant or experience website simple and free for everyone. Just describe the changes you want and transform your site in seconds. Type to add menu items, translate pages, upload photos, or tweak your design. Custom UI widgets help you bring your vision to life without ever touching a dashboard. From hero images to SEO settings, manage it all just by chatting.
+          KrabiClaw for ChatGPT makes managing your local business website simple and free for everyone. Just describe the changes you want and transform your site in seconds. Type to add menu items, translate pages, upload photos, or tweak your design. Custom UI widgets help you bring your vision to life without ever touching a dashboard. From hero images to SEO settings, manage it all just by chatting.
         </p>
 
         <h3 class="text-xl font-bold text-default mb-6">Information</h3>
@@ -233,7 +233,7 @@ async function copyUrl() {
 usePlatformPageSeo({
   path: '/plugin',
   title: 'Get the KrabiClaw App for ChatGPT',
-  description: 'Add KrabiClaw to ChatGPT and manage your restaurant or experience website entirely through conversation.',
+  description: 'Add KrabiClaw to ChatGPT and manage your local business website entirely through conversation.',
   pageType: 'SoftwareApplication',
   breadcrumbs: [
     { name: 'Home', url: '/' },

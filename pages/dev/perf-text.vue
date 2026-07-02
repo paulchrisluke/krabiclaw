@@ -302,6 +302,7 @@
 // every mode (including text-no-icons) to preload the same ~35 chunks.
 import { getGaClientId, useAnalytics } from '~/composables/useAnalytics'
 import { calculateThemeColors } from '~/utils/color-utils'
+import { isDevPerfHostAllowed } from '~/shared/dev-perf'
 
 definePageMeta({
   layout: false,
@@ -309,8 +310,6 @@ definePageMeta({
 
 const url = useRequestURL()
 const requestHeaders = useRequestHeaders(['host', 'cf-ray'])
-const allowedHosts = new Set(['localhost', '127.0.0.1', '0.0.0.0', 'local.krabiclaw.com'])
-const isLocalWranglerPlatformHost = requestHeaders.host === 'krabiclaw.com' && !requestHeaders['cf-ray']
 const route = useRoute()
 const modes = new Set([
   'text',
@@ -400,7 +399,7 @@ const sayaThemeStyles = computed(() => {
   }
 })
 
-if (!allowedHosts.has(url.hostname) && !isLocalWranglerPlatformHost) {
+if (!isDevPerfHostAllowed(url.hostname, requestHeaders.host, !!requestHeaders['cf-ray'])) {
   throw createError({
     statusCode: 404,
     statusMessage: 'Not Found',
