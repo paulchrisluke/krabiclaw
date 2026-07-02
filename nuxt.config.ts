@@ -1,7 +1,22 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { createRequire } from 'node:module'
+import { getIcons } from '@iconify/utils'
 import { DEFAULT_CURRENCY, isCurrencyCode } from './shared/currencies'
 
 const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
+
+// nuxt/icon's serverBundle bundles a named collection in full — no usage-based
+// tree-shaking. heroicons/lucide are used broadly enough that this is fine, but
+// simple-icons (~3000 icons) and logos (719 icons, multi-color art) are only
+// used for a handful of brand marks, so pull just those icons out of the full
+// collection JSON instead of shipping the whole package into the Worker bundle.
+const requireFromConfig = createRequire(import.meta.url)
+function pickIcons(collection: string, names: string[]) {
+  const data = requireFromConfig(`@iconify-json/${collection}/icons.json`)
+  const subset = getIcons(data, names)
+  if (!subset) throw new Error(`Missing icon(s) in @iconify-json/${collection}: ${names.join(', ')}`)
+  return subset
+}
 // Opt-out only: GitHub Actions sets CI=true on every runner, including the
 // preview/staging/prod deploy jobs that build the artifact actually shipped
 // to Cloudflare, so gating this on ambient CI silently strips every
@@ -59,7 +74,14 @@ export default defineNuxtConfig({
   icon: {
     fallbackToApi: false,
     serverBundle: {
-      collections: ['heroicons', 'lucide'],
+      collections: [
+        'heroicons',
+        'lucide',
+        // Brand icons: only the exact marks referenced in the app (see
+        // pickIcons above) — not the full simple-icons/logos collections.
+        pickIcons('simple-icons', ['facebook', 'instagram', 'tiktok', 'google', 'googlemaps', 'openai', 'whatsapp']),
+        pickIcons('logos', ['google-icon', 'whatsapp-icon']),
+      ],
     },
   },
   runtimeConfig: {
