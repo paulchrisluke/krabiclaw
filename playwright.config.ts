@@ -5,9 +5,13 @@ const port = Number(testEnv('PORT') || 3000)
 const previewUrl = testEnv('PLAYWRIGHT_PREVIEW_URL')
 const baseURL = previewUrl || testBaseUrl()
 const devRouteSecret = testEnv('E2E_DEV_ROUTE_SECRET') || 'ci-dev-route-secret'
-const shellSafeSecret = `'${devRouteSecret.replace(/'/g, "'\\''")}'`
+const emailDeliveryMode = process.env.EMAIL_DELIVERY_MODE || 'log_only'
+const whatsAppDeliveryMode = process.env.WHATSAPP_DELIVERY_MODE || 'log_only'
+const shellQuote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`
 
 process.env.E2E_DEV_ROUTE_SECRET = devRouteSecret
+process.env.EMAIL_DELIVERY_MODE = emailDeliveryMode
+process.env.WHATSAPP_DELIVERY_MODE = whatsAppDeliveryMode
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -31,7 +35,7 @@ export default defineConfig({
   // CI tests real edge behavior (real bindings, real runtime) rather than
   // Nuxt dev + getPlatformProxy's local binding emulation.
   webServer: previewUrl ? undefined : {
-    command: `PORT=${port} E2E_ALLOW_DEV_ROUTES=true E2E_DEV_ROUTE_SECRET=${shellSafeSecret} yarn dev`,
+    command: `PORT=${port} E2E_ALLOW_DEV_ROUTES=true E2E_DEV_ROUTE_SECRET=${shellQuote(devRouteSecret)} EMAIL_DELIVERY_MODE=${shellQuote(emailDeliveryMode)} WHATSAPP_DELIVERY_MODE=${shellQuote(whatsAppDeliveryMode)} yarn dev`,
     url: `http://localhost:${port}/api/dev/ready`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
