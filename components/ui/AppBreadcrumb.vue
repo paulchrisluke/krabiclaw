@@ -13,7 +13,7 @@
           {{ crumb.label }}
         </span>
         <span v-if="i < crumbs.length - 1" class="text-muted/30" aria-hidden="true">
-          <UIcon name="i-heroicons-chevron-right" class="size-3" />
+          <SayaIcon name="chevron-right" class="size-3" />
         </span>
       </li>
     </ol>

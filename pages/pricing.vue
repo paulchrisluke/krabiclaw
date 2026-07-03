@@ -56,10 +56,7 @@
                 class="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300"
                 :class="openFaq === faq.q ? 'bg-primary/10 text-primary rotate-180' : 'bg-default text-muted group-hover:bg-primary/5 group-hover:text-primary'"
               >
-                <UIcon
-                  name="i-heroicons-chevron-down"
-                  class="shrink-0 w-5 h-5"
-                />
+                <PlatformIcon name="chevron-down" class="shrink-0 w-5 h-5" />
               </div>
             </button>
             

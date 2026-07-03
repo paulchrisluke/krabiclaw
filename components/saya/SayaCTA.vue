@@ -14,16 +14,14 @@
         </div>
       </div>
       <div class="flex flex-wrap gap-4">
-        <UButton v-if="hasOrderLinks" to="/order" color="primary" variant="solid" size="xl" class="rounded-full">{{ $t('saya.cta.order_now') }}</UButton>
-        <UButton
+        <NuxtLink v-if="hasOrderLinks" to="/order" class="inline-flex items-center justify-center rounded-full bg-(--brand-color) px-6 py-3 text-base font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90">{{ $t('saya.cta.order_now') }}</NuxtLink>
+        <NuxtLink
           :to="ctaRoute"
-          color="primary"
-          :variant="hasOrderLinks ? 'outline' : 'solid'"
-          size="xl"
-          class="rounded-full"
+          class="inline-flex items-center justify-center rounded-full px-6 py-3 text-base font-medium no-underline transition"
+          :class="hasOrderLinks ? 'ring-1 ring-inset ring-(--brand-color) text-(--brand-color) hover:bg-(--brand-color)/10' : 'bg-(--brand-color) text-(--brand-color-foreground) hover:opacity-90'"
         >
           {{ reserveCta || $t('saya.cta.reserve') }}
-        </UButton>
+        </NuxtLink>
       </div>
     </div>
   </AppSection>

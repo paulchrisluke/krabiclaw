@@ -99,7 +99,7 @@
       </p>
       <div class="dev-perf-shell-frame saya-theme">
         <UTheme :ui="{}">
-          <LazySayaHeader />
+          <LazySayaHeader :site="null" :locations="[]" :menu="null" :has-experiences="false" />
           <main class="dev-perf-shell-body">
             <h3>Static body</h3>
             <p>The Saya header is the variable.</p>
@@ -119,7 +119,16 @@
             <h3>Static body</h3>
             <p>The Saya footer is the variable.</p>
           </main>
-          <LazySayaFooter />
+          <LazySayaFooter
+            :site="null"
+            :is-platform="false"
+            :locations="[]"
+            :locales="[]"
+            :error="null"
+            :config="{}"
+            :menu="null"
+            :has-experiences="false"
+          />
         </UTheme>
       </div>
     </section>
@@ -131,12 +140,21 @@
       </p>
       <div class="dev-perf-shell-frame saya-theme">
         <UTheme :ui="{}">
-          <LazySayaHeader />
+          <LazySayaHeader :site="null" :locations="[]" :menu="null" :has-experiences="false" />
           <main class="dev-perf-shell-body">
             <h3>Static body</h3>
             <p>No production tenant page content is rendered here.</p>
           </main>
-          <LazySayaFooter />
+          <LazySayaFooter
+            :site="null"
+            :is-platform="false"
+            :locations="[]"
+            :locales="[]"
+            :error="null"
+            :config="{}"
+            :menu="null"
+            :has-experiences="false"
+          />
         </UTheme>
       </div>
     </section>

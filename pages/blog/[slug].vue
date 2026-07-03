@@ -57,19 +57,19 @@
     </div>
 
     <div class="mt-16 border-t border-default pt-8">
-      <UButton to="/blog" variant="outline" color="neutral" size="sm">More Posts</UButton>
+      <PlatformButton to="/blog" variant="outline" size="sm">More Posts</PlatformButton>
     </div>
   </article>
 
   <div v-else class="mx-auto max-w-3xl px-4 py-32 text-center">
     <h1 class="text-2xl font-bold text-default">Post not found</h1>
     <p class="mt-3 text-muted">This post may have been moved or removed.</p>
-    <UButton to="/blog" variant="outline" color="neutral" size="sm" class="mt-6">More Posts</UButton>
+    <PlatformButton to="/blog" variant="outline" size="sm" class="mt-6">More Posts</PlatformButton>
   </div>
 </template>
 
 <script setup lang="ts">
-import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
+import { renderMarkdownToHtml, sanitizeHtmlForSsr, stripLeadingTitleHeading } from '~/utils/markdown'
 import { buildContentBlocks, normalizeContentComponent, type ContentComponent } from '~/utils/content-blocks'
 import { resolveContentComponent } from '~/utils/content-component-resolver'
 
@@ -145,7 +145,7 @@ function renderMarkdown(markdown: string) {
 
 const hasExplicitEmbeds = computed(() => /\{\{\s*component\s+type\s*=/.test(post.value?.body ?? ''))
 const renderedBlocks = computed(() => {
-  const blocks = buildContentBlocks(post.value?.body ?? '', post.value?.components ?? [], renderMarkdown)
+  const blocks = buildContentBlocks(stripLeadingTitleHeading(post.value?.body ?? '', post.value?.title), post.value?.components ?? [], renderMarkdown)
   if (hasExplicitEmbeds.value) return blocks
 
   const fallbackBlocks = (post.value?.components ?? [])

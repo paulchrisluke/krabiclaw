@@ -10,21 +10,16 @@
       >
         <BillingPlanCard :plan="plan" :annual="false" class="h-full flex-1">
           <template v-if="plan.prices.length" #cta>
-            <UButton
+            <PlatformButton
               size="xl"
               block
               :loading="upgrading === plan.id"
-              class="rounded-xl font-bold cursor-pointer transition-all duration-300 shadow-sm"
-              :class="[
-                plan.highlighted
-                  ? 'bg-primary hover:bg-primary/95 text-white hover:scale-[1.01]'
-                  : 'text-default border-default hover:bg-primary/5 hover:border-primary/50'
-              ]"
               :variant="plan.highlighted ? 'solid' : 'outline'"
+              class="font-bold shadow-sm transition-all duration-300"
               @click="handleUpgrade(plan.id)"
             >
               Get Started
-            </UButton>
+            </PlatformButton>
           </template>
         </BillingPlanCard>
       </div>
@@ -35,13 +30,13 @@
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 mb-1">
           <span class="text-xs font-bold uppercase tracking-widest text-primary">Premium Add-on</span>
-          <UBadge v-if="seoAcceleratorPlan.badge" :label="seoAcceleratorPlan.badge" color="primary" variant="soft" size="xs" />
+          <PlatformBadge v-if="seoAcceleratorPlan.badge" color="primary">{{ seoAcceleratorPlan.badge }}</PlatformBadge>
         </div>
         <h3 class="text-xl font-bold text-highlighted">{{ seoAcceleratorPlan.name }}</h3>
         <p class="mt-1 text-sm text-muted">{{ seoAcceleratorPlan.tagline }}</p>
         <ul class="mt-3 grid sm:grid-cols-2 gap-x-6 gap-y-1.5">
           <li v-for="f in seoAcceleratorPlan.features" :key="f" class="flex items-start gap-2 text-sm text-default">
-            <UIcon name="i-heroicons-check-circle" class="mt-0.5 size-4 shrink-0 text-primary" />
+            <PlatformIcon name="check-circle" class="mt-0.5 size-4 shrink-0 text-primary" />
             <span>{{ f }}</span>
           </li>
         </ul>
@@ -56,34 +51,34 @@
             <span class="text-error">No monthly price configured</span>
           </template>
         </p>
-        <UButton
+        <PlatformButton
           size="lg"
           :loading="upgrading === seoAcceleratorPlan.id"
           class="font-bold"
           @click="handleUpgrade(seoAcceleratorPlan.id)"
         >
           Get SEO Accelerator
-        </UButton>
+        </PlatformButton>
       </div>
     </div>
 
     <!-- Checkout error -->
     <div v-if="checkoutError" class="max-w-3xl mx-auto mt-8 bg-error-50 dark:bg-error-950/30 border border-error-200 dark:border-error-800/60 rounded-2xl p-6 text-center">
       <div class="flex items-center justify-center gap-2 text-error-600 dark:text-error-400">
-        <UIcon name="i-heroicons-exclamation-triangle" class="size-5" />
+        <PlatformIcon name="exclamation-triangle" class="size-5" />
         <span class="font-medium text-sm">{{ checkoutError }}</span>
       </div>
     </div>
 
     <!-- Managed service callout -->
-    <UCard class="max-w-3xl mx-auto mt-20 relative overflow-hidden text-center bg-linear-to-br from-primary/5 via-elevated/40 to-(--kc-teal)/5 border-default/70 rounded-3xl shadow-lg hover:shadow-xl transition-shadow duration-300">
+    <div class="max-w-3xl mx-auto mt-20 relative overflow-hidden text-center bg-linear-to-br from-primary/5 via-elevated/40 to-(--kc-teal)/5 border border-default/70 rounded-3xl shadow-lg hover:shadow-xl transition-shadow duration-300">
       <div class="p-8 sm:p-10">
       <div class="absolute -top-24 -right-24 w-48 h-48 bg-primary/10 rounded-full blur-3xl opacity-40" />
       <div class="absolute -bottom-24 -left-24 w-48 h-48 bg-(--kc-teal)/10 rounded-full blur-3xl opacity-40" />
 
       <div class="relative z-10 flex flex-col items-center gap-3">
         <div class="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-1">
-          <UIcon name="i-heroicons-sparkles" class="size-6" />
+          <PlatformIcon name="sparkles" class="size-6" />
         </div>
         <h3 class="text-xl font-extrabold text-default tracking-tight">Send us a WhatsApp. We handle the rest.</h3>
         <p class="text-sm leading-relaxed text-muted max-w-2xl">
@@ -93,7 +88,7 @@
         </p>
       </div>
       </div>
-    </UCard>
+    </div>
 
     <!-- Feature comparison table -->
     <div class="max-w-5xl mx-auto mt-24">
@@ -123,7 +118,7 @@
                 <td v-for="plan in mainPlans" :key="plan.id" class="py-4 px-4 text-center">
                   <template v-if="cellValue(row, plan.id) === true">
                     <div class="inline-flex w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 items-center justify-center">
-                      <UIcon name="i-heroicons-check" class="size-3.5" />
+                      <PlatformIcon name="check" class="size-3.5" />
                     </div>
                   </template>
                   <template v-else-if="cellValue(row, plan.id) === false">

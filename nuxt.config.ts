@@ -296,15 +296,15 @@ export default defineNuxtConfig({
       pathPrefix: false,
     },
     {
-      path: '~/components/editor',
+      path: '~/components/workspace/editor',
       pathPrefix: false,
     },
     {
-      path: '~/components/dashboard',
+      path: '~/components/workspace/dashboard',
       pathPrefix: false,
     },
     {
-      path: '~/components/media',
+      path: '~/components/workspace/media',
       pathPrefix: false,
     },
     {
@@ -313,7 +313,7 @@ export default defineNuxtConfig({
       pathPrefix: false,
     },
     {
-      path: '~/components/onboarding',
+      path: '~/components/workspace/onboarding',
       pathPrefix: false,
     },
     {

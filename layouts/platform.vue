@@ -1,12 +1,10 @@
 <template>
   <div class="platform-layout platform-theme min-h-screen flex flex-col font-sans selection:bg-stone-900 selection:text-white">
-    <UTheme :ui="{}">
-      <PlatformHeader />
-      <main class="grow">
-        <slot />
-      </main>
-      <LazyPlatformFooter />
-    </UTheme>
+    <PlatformHeader />
+    <main class="grow">
+      <slot />
+    </main>
+    <LazyPlatformFooter />
   </div>
 </template>
 

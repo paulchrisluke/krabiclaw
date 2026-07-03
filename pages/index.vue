@@ -39,13 +39,13 @@
                 style="background: linear-gradient(135deg, var(--kc-coral) 0%, #e0524c 100%); box-shadow: 0 4px 20px rgba(251,116,97,0.35);"
               >
                 Start free
-                <UIcon name="i-heroicons-arrow-right" class="size-4" />
+                <PlatformIcon name="arrow-right" class="size-4" />
               </NuxtLink>
               <NuxtLink
                 to="/plugin"
                 class="inline-flex items-center gap-2 bg-transparent text-(--kc-teal-600) border border-(--kc-teal)/50 font-semibold text-[15px] px-6 py-3.5 rounded-full hover:bg-(--kc-teal-100) transition-colors no-underline"
               >
-                <UIcon name="i-heroicons-puzzle-piece" class="size-4" />
+                <PlatformIcon name="puzzle" class="size-4" />
                 Get the ChatGPT app
               </NuxtLink>
             </div>
@@ -114,7 +114,7 @@
                 class="w-12 h-12 rounded-xl flex items-center justify-center mb-5 shadow-sm"
                 style="background: linear-gradient(135deg, var(--kc-navy) 0%, var(--kc-navy-700) 100%); box-shadow: 0 4px 12px rgba(31,37,71,0.15);"
               >
-                <UIcon :name="feat.icon" class="size-5 text-white" />
+                <PlatformIcon :name="feat.icon" class="size-5 text-white" />
               </div>
               <h3
                 class="text-lg font-bold mb-2 m-0 text-default"
@@ -203,15 +203,15 @@
             <h2 class="saya-display-md text-default">{{ homeCopy.highlightsSectionHeading }}</h2>
           </div>
           <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <UModal
+            <template
               v-for="post in recentPosts"
               :key="post.id"
-              fullscreen
             >
               <!-- Trigger tile -->
               <article
                 class="group cursor-pointer overflow-hidden bg-default text-default transition hover:opacity-90"
                 :class="post.wide ? 'sm:col-span-2' : ''"
+                @click="selectedPostId = post.id"
               >
                 <div v-if="post.image" class="overflow-hidden bg-muted" :class="post.wide ? 'aspect-video' : 'aspect-square'">
                   <video
@@ -236,46 +236,48 @@
                   <p class="mt-3 saya-eyebrow text-muted opacity-60">{{ homeCopy.readMoreCta }}</p>
                 </div>
               </article>
-
-              <!-- Modal: full post -->
-              <template #body>
-                <UCard
-                  class="relative h-full w-full overflow-hidden border-0 bg-transparent shadow-none"
-                  :ui="{ body: 'p-0 sm:p-0' }"
-                >
-                  <!-- Media - full bleed -->
-                  <div v-if="post.image" class="h-full w-full">
-                    <video
-                      v-if="post.imageKind === 'video'"
-                      :src="post.image"
-                      autoplay
-                      muted
-                      loop
-                      playsinline
-                      class="h-full w-full object-cover"
-                    />
-                    <img
-                      v-else
-                      :src="post.image"
-                      :alt="post.alt"
-                      class="h-full w-full object-cover"
-                    >
-                  </div>
-
-                  <!-- Content overlay at bottom -->
-                  <UCard
-                    class="absolute bottom-0 left-0 right-0 z-20 border-0 bg-linear-to-t from-black/90 via-black/60 to-transparent shadow-none"
-                    :ui="{ body: 'p-6 pt-32 sm:p-6 sm:pt-32' }"
-                  >
-                    <p class="saya-eyebrow mb-3 text-white/60 text-[10px] font-bold uppercase tracking-widest">{{ homeCopy.postsEyebrow }}</p>
-                    <p class="text-white/90 text-sm leading-relaxed whitespace-pre-line">{{ post.text }}</p>
-                  </UCard>
-                </UCard>
-              </template>
-            </UModal>
+            </template>
           </div>
         </div>
       </section>
+
+      <!-- Modal: full post (Teleported) -->
+      <Teleport to="body">
+        <div v-if="selectedPost" class="fixed inset-0 z-[100] flex flex-col bg-black">
+          <button @click="selectedPostId = null" class="absolute top-4 right-4 z-[110] p-2 text-white bg-black/50 rounded-full hover:bg-black/70 transition">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+              <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
+            </svg>
+          </button>
+          
+          <div class="relative flex-1 h-full w-full overflow-hidden">
+            <!-- Media - full bleed -->
+            <div v-if="selectedPost.image" class="h-full w-full">
+              <video
+                v-if="selectedPost.imageKind === 'video'"
+                :src="selectedPost.image"
+                autoplay
+                muted
+                loop
+                playsinline
+                class="h-full w-full object-cover"
+              />
+              <img
+                v-else
+                :src="selectedPost.image"
+                :alt="selectedPost.alt"
+                class="h-full w-full object-cover"
+              >
+            </div>
+
+            <!-- Content overlay at bottom -->
+            <div class="absolute bottom-0 left-0 right-0 z-20 bg-linear-to-t from-black/90 via-black/60 to-transparent p-6 pt-32 sm:p-6 sm:pt-32">
+              <p class="saya-eyebrow mb-3 text-white/60 text-[10px] font-bold uppercase tracking-widest">{{ homeCopy.postsEyebrow }}</p>
+              <p class="text-white/90 text-sm leading-relaxed whitespace-pre-line">{{ selectedPost.text }}</p>
+            </div>
+          </div>
+        </div>
+      </Teleport>
 
       <!-- ── Brand story ─────────────────────────────────────── -->
       <LazySayaBrandStory
@@ -301,7 +303,9 @@
           <p class="saya-kicker mb-6">{{ homeCopy.reviewsKicker }}</p>
           <template v-if="hasGoogleBusiness && googleReviewSummary && Number(googleReviewSummary.average) > 0">
             <h2 class="saya-display-md flex flex-wrap items-center gap-4 text-default">
-              <UIcon name="i-heroicons-star-solid" class="size-8 text-primary" />
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-8 text-primary">
+                <path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.006 5.404.434c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.434 2.082-5.005Z" clip-rule="evenodd" />
+              </svg>
               {{ googleReviewSummary.average }}
               <span v-if="googleReviewSummary.count" class="text-muted">· {{ googleReviewSummary.count?.toLocaleString() }} reviews</span>
             </h2>
@@ -353,13 +357,15 @@
             class="bg-elevated p-8"
           >
             <div class="mb-3 flex gap-1">
-              <UIcon
+              <svg
                 v-for="s in 5"
                 :key="s"
-                name="i-heroicons-star-solid"
+                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"
                 class="size-3.5"
                 :class="s <= googleReviewRating(review) ? 'text-primary' : 'text-muted'"
-              />
+              >
+                <path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.006 5.404.434c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.434 2.082-5.005Z" clip-rule="evenodd" />
+              </svg>
             </div>
             <p class="text-sm leading-relaxed text-default">"{{ review.comment?.text || review.content }}"</p>
             <div class="mt-6 border-t border-default pt-4">
@@ -419,12 +425,12 @@ const avatars = [
   { color: '#1F2547', letter: 'A' },
 ]
 const features = [
-  { icon: 'i-heroicons-chat-bubble-left-right', title: 'Edit through ChatGPT', body: 'Update menus, content, and photos by talking to ChatGPT. No CMS to learn.' },
-  { icon: 'i-heroicons-paint-brush', title: 'Beautiful themes', body: 'Conversion-optimized themes for local businesses. Pick one, swap a color, you\'re live.' },
-  { icon: 'i-heroicons-globe-alt', title: 'Google Business sync', body: 'Hours, photos, offerings — pushed to Google so guests find the right info every time.' },
-  { icon: 'i-heroicons-calendar-days', title: 'Bookings + waitlist', body: 'Take bookings 24/7 with WhatsApp confirmations. Walk-ins go on the waitlist automatically.' },
-  { icon: 'i-heroicons-shopping-bag', title: 'Online ordering', body: 'Pickup & delivery with no commission. Stripe payouts straight to your bank.' },
-  { icon: 'i-heroicons-chart-bar', title: 'Real-time insights', body: 'See visits, top pages, and busy hours — ask ChatGPT or check the analytics tab.' },
+  { icon: 'message-circle', title: 'Edit through ChatGPT', body: 'Update menus, content, and photos by talking to ChatGPT. No CMS to learn.' },
+  { icon: 'sparkles', title: 'Beautiful themes', body: 'Conversion-optimized themes for local businesses. Pick one, swap a color, you\'re live.' },
+  { icon: 'globe', title: 'Google Business sync', body: 'Hours, photos, offerings — pushed to Google so guests find the right info every time.' },
+  { icon: 'calendar', title: 'Bookings + waitlist', body: 'Take bookings 24/7 with WhatsApp confirmations. Walk-ins go on the waitlist automatically.' },
+  { icon: 'shopping-bag', title: 'Online ordering', body: 'Pickup & delivery with no commission. Stripe payouts straight to your bank.' },
+  { icon: 'bar-chart', title: 'Real-time insights', body: 'See visits, top pages, and busy hours — ask ChatGPT or check the analytics tab.' },
 ]
 // Validate tenant context ONLY for tenant sites
 if (!isPlatform && !siteId) {
@@ -601,6 +607,9 @@ const recentPosts = computed(() => {
     wide: i === 0,
   }))
 })
+
+const selectedPostId = ref(null)
+const selectedPost = computed(() => selectedPostId.value ? recentPosts.value.find(p => p.id === selectedPostId.value) : null)
 
 // Featured content — dishes or experiences, shown right below the hero
 const featuredContent = computed(() => {

@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-default text-default">
     <div v-if="pending" class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-      <USkeleton class="h-64 w-full" />
+      <div class="h-64 w-full animate-pulse rounded bg-elevated" />
     </div>
 
     <template v-else>
@@ -18,7 +18,7 @@
             :to="`/locations/${loc.slug}/photos`"
             class="inline-flex items-center gap-2 rounded-full border border-default px-5 py-2.5 text-sm text-muted no-underline transition hover:bg-muted hover:text-default"
           >
-            <UIcon name="i-heroicons-map-pin" class="size-3.5 opacity-70" />
+            <SayaIcon name="map-pin" class="size-3.5 opacity-70" />
             {{ loc.title }}
           </NuxtLink>
         </div>
@@ -35,30 +35,28 @@
         <SayaFilterTabs v-model="activeCategory" :tabs="cats" />
 
         <!-- Gallery -->
-        <UPage class="mx-auto max-w-7xl px-4 pt-12 pb-24 sm:px-6 lg:px-8">
-          <UPageBody>
-            <div class="saya-masonry">
-              <button
-                v-for="(photo, i) in sorted"
-                :key="photo.id"
-                class="group relative block w-full overflow-hidden rounded-2xl bg-black"
-                @click="openLightbox(i)"
-              >
-                <img
-                  :src="photo.local_url || photo.google_url || photo.thumbnail_url"
-                  :alt="photo.description || ''"
-                  loading="lazy"
-                  class="block w-full transition-opacity duration-200 group-hover:opacity-80"
-                />
-                <div class="absolute inset-0 flex items-end bg-linear-to-t from-black/60 to-transparent p-6 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                  <span class="saya-eyebrow rounded-full bg-white/25 px-4 py-1.5 text-[10px] font-bold tracking-widest text-white backdrop-blur-md border border-white/20">
-                    {{ locationTitle(photo) || photo.category || 'Gallery' }}
-                  </span>
-                </div>
-              </button>
-            </div>
-          </UPageBody>
-        </UPage>
+        <div class="mx-auto max-w-7xl px-4 pt-12 pb-24 sm:px-6 lg:px-8">
+          <div class="saya-masonry">
+            <button
+              v-for="(photo, i) in sorted"
+              :key="photo.id"
+              class="group relative block w-full overflow-hidden rounded-2xl bg-black"
+              @click="openLightbox(i)"
+            >
+              <img
+                :src="photo.local_url || photo.google_url || photo.thumbnail_url"
+                :alt="photo.description || ''"
+                loading="lazy"
+                class="block w-full transition-opacity duration-200 group-hover:opacity-80"
+              />
+              <div class="absolute inset-0 flex items-end bg-linear-to-t from-black/60 to-transparent p-6 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                <span class="saya-eyebrow rounded-full bg-white/25 px-4 py-1.5 text-[10px] font-bold tracking-widest text-white backdrop-blur-md border border-white/20">
+                  {{ locationTitle(photo) || photo.category || 'Gallery' }}
+                </span>
+              </div>
+            </button>
+          </div>
+        </div>
 
         <!-- Lightbox -->
         <SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIdx" :items="lightboxItems" :title="siteName" />

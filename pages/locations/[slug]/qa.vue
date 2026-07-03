@@ -46,7 +46,7 @@
     <section class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
       <div v-if="sorted.length === 0" class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-default bg-muted/30 py-20 text-center">
         <div class="flex size-14 items-center justify-center rounded-full bg-elevated/50 text-muted shadow-sm">
-          <UIcon name="i-heroicons-question-mark-circle" class="size-7" />
+          <SayaIcon name="question-mark-circle" class="size-7" />
         </div>
         <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ t('saya.qa_page.no_questions_title') }}</h3>
         <p class="mt-2 max-w-sm text-sm text-muted">{{ t('saya.qa_page.no_questions_desc') }}</p>
@@ -80,7 +80,7 @@
                 <template v-if="q.upvote_count > 0">
                   <span>·</span>
                   <span class="inline-flex items-center gap-1">
-                    <UIcon name="i-heroicons-hand-thumb-up" class="size-3" />
+                    <SayaIcon name="hand-thumb-up" class="size-3" />
                     {{ q.upvote_count }} {{ t('saya.qa_page.helpful') }}
                   </span>
                 </template>
@@ -100,9 +100,9 @@
             <div class="flex-1 min-w-0">
               <p class="text-sm leading-relaxed text-default">{{ q.answer }}</p>
               <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
-                <UBadge v-if="q.is_owner_answer" color="neutral" size="xs" class="font-semibold">
+                <span v-if="q.is_owner_answer" class="inline-flex items-center rounded-full border border-default px-2 py-0.5 text-xs font-semibold text-muted">
                   {{ siteName }} · {{ t('saya.qa_page.owner') }}
-                </UBadge>
+                </span>
                 <span v-else>{{ q.answer_author }}</span>
                 <span>·</span>
                 <span>{{ formatQaDate(q.answer_date) }}</span>
@@ -112,7 +112,7 @@
 
           <!-- Awaiting answer -->
           <div v-else class="ml-13 mt-4 flex items-center gap-2 text-xs text-muted">
-            <UIcon name="i-heroicons-clock" class="size-3.5 opacity-50" />
+            <SayaIcon name="clock" class="size-3.5 opacity-50" />
             {{ t('saya.qa_page.awaiting_answer') }}
           </div>
         </article>

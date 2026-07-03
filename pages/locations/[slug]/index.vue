@@ -39,7 +39,7 @@
           :style="{ background: `linear-gradient(135deg, ${locationHeroBrandColor} 0%, color-mix(in srgb, ${locationHeroBrandColor} 60%, black) 100%)` }"
           aria-hidden="true"
         >
-          <UIcon :name="locationHeroIcon" class="size-24 text-white/25" />
+          <SayaIcon :name="locationHeroIcon" class="size-24 text-white/25" />
         </div>
         <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.3) 100%)" />
         <div class="relative flex min-h-160 items-end">
@@ -75,14 +75,13 @@
               <span v-else>Contact us for hours</span>
             </div>
             <div class="mt-10 flex flex-wrap gap-3">
-              <UButton
+              <SayaButton
                 :to="primaryCtaPath"
                 size="lg"
-                color="primary"
-                class="rounded-full bg-white! text-black! hover:bg-zinc-100!"
+                class="bg-white! text-black! hover:bg-zinc-100!"
               >
                 {{ primaryCtaLabel }}
-              </UButton>
+              </SayaButton>
               <NuxtLink
                 v-if="secondaryCtaPath"
                 :to="secondaryCtaPath"
@@ -169,7 +168,7 @@
           <div class="mb-16 max-w-2xl">
             <p class="saya-kicker mb-6">From our guests</p>
             <h2 class="saya-display-md flex items-center gap-3 text-default">
-              <UIcon name="i-heroicons-star-solid" class="size-8 text-primary" />
+              <svg viewBox="0 0 24 24" fill="currentColor" class="size-8 text-primary"><path d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z"/></svg>
               {{ location.rating ? Number(location.rating).toFixed(1) : '—' }}
               <span v-if="location.review_count" class="text-muted">· {{ location.review_count }} reviews</span>
             </h2>
@@ -177,14 +176,15 @@
           <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <div v-for="review in reviewsPreview" :key="review.id" class="border border-default bg-default p-8">
               <div class="mb-3 flex gap-1" :aria-label="`${review.rating} out of 5 stars`">
-                <UIcon
+                <svg
                   v-for="s in 5"
                   :key="s"
-                  name="i-heroicons-star-solid"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
                   aria-hidden="true"
                   class="size-3.5"
                   :class="s <= review.rating ? 'text-primary' : 'text-muted'"
-                />
+                ><path d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z"/></svg>
                 <span class="sr-only">{{ review.rating }} out of 5 stars</span>
               </div>
               <p class="text-sm leading-relaxed text-default">"{{ review.content }}"</p>
@@ -249,15 +249,9 @@
         <div class="flex flex-wrap items-center justify-between gap-8">
           <h2 class="saya-display-md saya-italic text-default">See you soon.</h2>
           <div class="flex flex-wrap gap-3">
-            <UButton
-              :to="primaryCtaPath"
-              color="primary"
-              variant="solid"
-              size="xl"
-              class="rounded-full"
-            >
+            <SayaButton :to="primaryCtaPath" size="lg">
               {{ primaryCtaLabel }}
-            </UButton>
+            </SayaButton>
             <NuxtLink
               :to="`/locations/${slug}/contact`"
               class="inline-flex items-center rounded-full border border-default px-6 py-2.5 text-xs font-medium uppercase tracking-widest text-default transition hover:bg-muted"
@@ -282,9 +276,9 @@
 
     <!-- Not found -->
     <div v-else class="mx-auto max-w-xl px-4 py-24 text-center">
-      <UIcon name="i-heroicons-map-pin" class="mx-auto mb-4 size-12 text-muted" />
+      <SayaIcon name="map-pin" class="mx-auto mb-4 size-12 text-muted" />
       <h1 class="saya-display-sm text-default">Location Not Found</h1>
-      <UButton to="/locations" color="primary" variant="solid" class="mt-8 rounded-full">View all locations</UButton>
+      <SayaButton to="/locations" class="mt-8">View all locations</SayaButton>
     </div>
   </div>
 </template>
@@ -365,7 +359,7 @@ const reviewsPreview = computed(() => locationReviews.value.slice(0, 3))
 
 // Neutral default until the owner picks a brand color in onboarding.
 const locationHeroBrandColor = computed(() => bootstrapConfig.value?.brand_color || '#3F3F46')
-const locationHeroIcon = computed(() => (site as ApiValue)?.vertical === 'experience' ? 'i-heroicons-sparkles' : 'i-heroicons-building-storefront')
+const locationHeroIcon = computed(() => (site as ApiValue)?.vertical === 'experience' ? 'sparkles' : 'map-pin')
 
 // Sanitize hero background URL to prevent CSS injection
 const heroBackgroundStyle = computed(() => {

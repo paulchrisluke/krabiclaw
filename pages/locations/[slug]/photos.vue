@@ -31,39 +31,37 @@
     />
 
       <!-- Gallery -->
-      <UPage class="mx-auto max-w-7xl px-4 pt-12 pb-24 sm:px-6 lg:px-8">
-        <UPageBody>
-          <!-- Empty -->
-          <div v-if="sorted.length === 0" class="py-24 text-center">
-            <div class="saya-display saya-italic text-3xl text-default">No photos yet.</div>
-            <p class="mt-2 text-sm text-muted">Photos synced from Google Business will appear here.</p>
-          </div>
+      <div class="mx-auto max-w-7xl px-4 pt-12 pb-24 sm:px-6 lg:px-8">
+        <!-- Empty -->
+        <div v-if="sorted.length === 0" class="py-24 text-center">
+          <div class="saya-display saya-italic text-3xl text-default">No photos yet.</div>
+          <p class="mt-2 text-sm text-muted">Photos synced from Google Business will appear here.</p>
+        </div>
 
-          <!-- Masonry -->
-          <div v-else class="saya-masonry">
-            <button
-              v-for="(photo, i) in sorted"
-              :key="photo.id"
-              class="group relative block w-full overflow-hidden rounded-2xl bg-black"
-              @click="openLightbox(i)"
-            >
-              <UImage
-                :src="photo.local_url || photo.google_url || photo.thumbnail_url"
-                :alt="photo.description || ''"
-                loading="lazy"
-                class="block w-full transition-opacity duration-200 group-hover:opacity-80"
-              />
-              <!-- If the sticky tab/header div is needed, move it here, outside the <img> -->
-              <!-- <div class="sticky top-0 z-40 border-b border-default bg-default"> ... </div> -->
-              <div class="absolute inset-0 flex items-end bg-linear-to-t from-black/60 to-transparent p-6 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                <span class="saya-eyebrow rounded-full bg-white/25 px-4 py-1.5 text-[10px] font-bold tracking-widest text-white backdrop-blur-md border border-white/20">
-                  {{ photo.category || 'Gallery' }}
-                </span>
-              </div>
-            </button>
-          </div>
-        </UPageBody>
-      </UPage>
+        <!-- Masonry -->
+        <div v-else class="saya-masonry">
+          <button
+            v-for="(photo, i) in sorted"
+            :key="photo.id"
+            class="group relative block w-full overflow-hidden rounded-2xl bg-black"
+            @click="openLightbox(i)"
+          >
+            <UImage
+              :src="photo.local_url || photo.google_url || photo.thumbnail_url"
+              :alt="photo.description || ''"
+              loading="lazy"
+              class="block w-full transition-opacity duration-200 group-hover:opacity-80"
+            />
+            <!-- If the sticky tab/header div is needed, move it here, outside the <img> -->
+            <!-- <div class="sticky top-0 z-40 border-b border-default bg-default"> ... </div> -->
+            <div class="absolute inset-0 flex items-end bg-linear-to-t from-black/60 to-transparent p-6 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+              <span class="saya-eyebrow rounded-full bg-white/25 px-4 py-1.5 text-[10px] font-bold tracking-widest text-white backdrop-blur-md border border-white/20">
+                {{ photo.category || 'Gallery' }}
+              </span>
+            </div>
+          </button>
+        </div>
+      </div>
 
     <!-- Lightbox -->
     <SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIdx" :items="lightboxItems" :title="location?.title" />

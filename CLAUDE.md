@@ -156,6 +156,8 @@ There are three independent analytics layers — do not conflate them or assume 
 
 There used to be a fourth "platform-wide rollup GA4" (`G-Z18L1Y4G7K`, via `nuxt.config.ts` `scripts.registry.googleAnalytics`) — removed 2026-06-25. It was never an owned property; the "intentional cross-tenant rollup" rationale was a retroactive guess, not a real decision. Do not re-add it.
 
+**Known perf issue, not yet fixed (2026-07-02):** `app.vue`'s `loadGa4()` is deferred via `requestIdleCallback(loadGa4, { timeout: 8000 })` with a comment claiming this "protects Lighthouse TTI." It does the opposite — `requestIdleCallback` fires as soon as the main thread goes idle, which on a content-light page happens almost immediately, injecting a 166KB `gtag.js` fetch right into the window Lighthouse needs quiet to mark the page interactive. Reproduced via interleaved A/B (GA4 on vs `PERF_NO_GA4=true`, 8 rounds, real production builds via local `wrangler dev`, simulated mobile throttling): GA4-on TTI median 4.51s vs GA4-off 2.98s, GA4 slower in 8/8 rounds. This affects every platform page (and every tenant page with a connected GA4) equally — it is not specific to any one page or component. See `HANDOFF-page-speed-2026-07-02.md` for the full repro methodology and raw data before touching this.
+
 ### Stripe → GA4 (billing lifecycle events)
 
 `server/utils/ga4-measurement-protocol.ts` sends server-side events into the platform GA4 property (`GA4_MEASUREMENT_ID`/`GA4_API_SECRET` env vars) from `server/api/billing/webhook.post.ts` — this is the only correct place to fire billing-truth GA4 events, not the browser, since only the webhook knows a payment actually succeeded/failed/renewed.

@@ -1,14 +1,19 @@
 <template>
-  <UAvatar
-    :src="src || undefined"
+  <img
+    v-if="src"
+    :src="src"
     :alt="avatarAlt"
-    :size="size"
-    :ui="{ fallback: fallbackClass }"
+    class="shrink-0 rounded-full object-cover"
+    :class="sizeClass"
   >
-    <template v-if="!src" #fallback>
-      {{ initials }}
-    </template>
-  </UAvatar>
+  <div
+    v-else
+    class="flex shrink-0 items-center justify-center rounded-full"
+    :class="[sizeClass, fallbackClass]"
+    :aria-label="avatarAlt"
+  >
+    {{ initials }}
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -25,6 +30,19 @@ const props = withDefaults(defineProps<{
   size: 'md',
   fallbackClass: 'bg-primary text-white text-sm font-semibold'
 })
+
+const sizeClasses = {
+  '3xs': 'size-4',
+  '2xs': 'size-5',
+  xs: 'size-6',
+  sm: 'size-7',
+  md: 'size-8',
+  lg: 'size-9',
+  xl: 'size-10',
+  '2xl': 'size-11',
+  '3xl': 'size-12',
+}
+const sizeClass = computed(() => sizeClasses[props.size])
 
 const avatarAlt = computed(() => props.alt || props.name || 'Avatar')
 

@@ -15,127 +15,125 @@
         <div>
           <h2 class="mb-6 text-2xl font-bold text-default md:text-3xl">{{ resCopy.reservationFormTitle }}</h2>
 
-          <UCard class="rounded-2xl bg-muted">
+          <div class="rounded-2xl bg-muted p-6 sm:p-8">
 
             <!-- ── Form ────────────────────────────────────────────── -->
-            <UForm :state="reservationForm" :validate="validateReservation" class="space-y-6" @submit="handleReservation">
+            <form class="space-y-6" novalidate @submit.prevent="handleReservation">
+              <div v-if="submitError" role="alert" class="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
+                {{ submitError }}
+              </div>
 
               <!-- Name + Email -->
               <div class="grid gap-5 sm:grid-cols-2">
-                <UFormField :label="resCopy.nameLabel" name="name" required>
-                  <UInput v-model="reservationForm.name" size="lg" :placeholder="resCopy.namePlaceholder" />
-                </UFormField>
-                <UFormField :label="resCopy.emailLabel" name="email" required>
-                  <UInput v-model="reservationForm.email" size="lg" type="email" :placeholder="resCopy.emailPlaceholder" />
-                </UFormField>
+                <SayaFormField v-slot="{ id, describedBy, invalid }" :label="resCopy.nameLabel" name="name" required :error="fieldError('name')">
+                  <input :id="id" v-model="reservationForm.name" type="text" :placeholder="resCopy.namePlaceholder" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid" />
+                </SayaFormField>
+                <SayaFormField v-slot="{ id, describedBy, invalid }" :label="resCopy.emailLabel" name="email" required :error="fieldError('email')">
+                  <input :id="id" v-model="reservationForm.email" type="email" :placeholder="resCopy.emailPlaceholder" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid" />
+                </SayaFormField>
               </div>
 
               <!-- Phone -->
-              <UFormField :label="resCopy.phoneLabel" name="phone" required>
-                <UInput v-model="reservationForm.phone" size="lg" type="tel" :placeholder="resCopy.phonePlaceholder" class="w-full" />
-              </UFormField>
+              <SayaFormField v-slot="{ id, describedBy, invalid }" :label="resCopy.phoneLabel" name="phone" required :error="fieldError('phone')">
+                <input :id="id" v-model="reservationForm.phone" type="tel" :placeholder="resCopy.phonePlaceholder" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid" />
+              </SayaFormField>
 
-              <UFormField v-if="hasMultipleLocations" :label="resCopy.locationLabel" name="location_id" required>
-                <USelect
-                  v-model="reservationForm.location_id"
-                  size="lg"
-                  :items="locationSelectOptions"
-                  :placeholder="resCopy.selectLocationLabel"
-                  class="w-full"
-                />
-              </UFormField>
+              <SayaFormField
+                v-if="hasMultipleLocations"
+                v-slot="{ id, describedBy, invalid }"
+                :label="resCopy.locationLabel"
+                name="location_id"
+                required
+                :error="fieldError('location_id')"
+              >
+                <select :id="id" v-model="reservationForm.location_id" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid">
+                  <option value="" disabled>{{ resCopy.selectLocationLabel }}</option>
+                  <option v-for="opt in locationSelectOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </select>
+              </SayaFormField>
 
-              <!-- Date — Calendar (client-only: skips SSR of the full date grid) -->
-              <UFormField :label="resCopy.dateLabel" name="date" required>
+              <!-- Date -->
+              <SayaFormField v-slot="{ id, describedBy, invalid }" :label="resCopy.dateLabel" name="date" required :error="fieldError('date')">
                 <div class="space-y-3">
-                  <ClientOnly>
-                    <UCalendar
-                      v-model="selectedDate"
-                      class="w-full rounded-xl"
-                    />
-                    <template #fallback>
-                      <div class="h-64 w-full rounded-xl bg-muted/40 animate-pulse" />
-                    </template>
-                  </ClientOnly>
+                  <input :id="id" v-model="reservationForm.date" type="date" :min="todayIso" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid" />
                   <p v-if="reservationForm.date" class="text-sm font-medium text-default">
                     Selected: <span class="text-primary">{{ readableDate }}</span>
                   </p>
                   <p v-else class="text-xs text-muted">{{ resCopy.pickDayLabel }}</p>
                 </div>
-              </UFormField>
+              </SayaFormField>
 
               <!-- Time + Guests -->
               <div class="grid gap-5 sm:grid-cols-2">
-                <UFormField :label="resCopy.timeLabel" name="time" required>
-                  <USelect
-                    v-model="reservationForm.time"
-                    size="lg"
-                    :items="timeSelectOptions"
-                    :placeholder="resCopy.selectTimeLabel"
-                    class="w-full"
-                  />
-                </UFormField>
-                <UFormField :label="resCopy.guestsLabel" name="guests" required>
-                  <USelect
-                    v-model="reservationForm.guests"
-                    size="lg"
-                    :items="guestOptions"
-                    :placeholder="resCopy.selectGuestsLabel"
-                    class="w-full"
-                  />
-                </UFormField>
+                <SayaFormField v-slot="{ id, describedBy, invalid }" :label="resCopy.timeLabel" name="time" required :error="fieldError('time')">
+                  <select :id="id" v-model="reservationForm.time" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid">
+                    <option value="" disabled>{{ resCopy.selectTimeLabel }}</option>
+                    <option v-for="opt in timeSelectOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                  </select>
+                </SayaFormField>
+                <SayaFormField v-slot="{ id, describedBy, invalid }" :label="resCopy.guestsLabel" name="guests" required :error="fieldError('guests')">
+                  <select :id="id" v-model="reservationForm.guests" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid">
+                    <option value="" disabled>{{ resCopy.selectGuestsLabel }}</option>
+                    <option v-for="opt in guestOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                  </select>
+                </SayaFormField>
               </div>
 
               <!-- Special requests -->
-              <UFormField
+              <SayaFormField
+                v-slot="{ id, describedBy, invalid }"
                 :label="resCopy.specialRequestsLabel"
                 name="requests"
                 :description="resCopy.bookingNotesPlaceholder"
               >
-                <UTextarea
+                <textarea
+                  :id="id"
                   v-model="reservationForm.requests"
-                  size="lg"
                   :placeholder="resCopy.specialRequestsPlaceholder"
-                  :rows="3"
-                  class="w-full"
+                  rows="3"
+                  :class="inputClass"
+                  :aria-describedby="describedBy"
+                  :aria-invalid="invalid"
                 />
-              </UFormField>
+              </SayaFormField>
 
-              <UButton type="submit" color="primary" variant="solid" size="xl" block :loading="submitting">
+              <SayaButton type="submit" size="lg" block :loading="submitting">
                 {{ resCopy.reservationRequestButton }}
-              </UButton>
-            </UForm>
+              </SayaButton>
+            </form>
 
-          </UCard>
+          </div>
         </div>
 
         <!-- Sidebar -->
         <div>
           <h2 class="mb-6 text-2xl font-bold text-default md:text-3xl">{{ resCopy.reservationFormTitle }} Details</h2>
 
-          <UCard class="mb-6 rounded-2xl bg-muted">
+          <div class="mb-6 rounded-2xl bg-muted p-6">
             <h3 class="mb-4 text-lg font-semibold text-default">{{ resCopy.contactInfoHeading }}</h3>
             <p v-if="selectedLocation" class="mb-3 text-sm text-muted">{{ selectedLocation.title }}</p>
             <div class="space-y-2">
               <p v-if="contactPhone" class="text-muted"><strong class="text-default">{{ resCopy.phoneLabelShort }}:</strong> {{ contactPhone }}</p>
               <p v-if="contactEmail" class="text-muted"><strong class="text-default">{{ resCopy.emailLabelShort }}:</strong> {{ contactEmail }}</p>
             </div>
-          </UCard>
+          </div>
 
-          <UCard class="mb-6 rounded-2xl bg-muted">
+          <div class="mb-6 rounded-2xl bg-muted p-6">
             <h3 class="mb-4 text-lg font-semibold text-default">{{ resCopy.reservationPoliciesHeading }}</h3>
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div v-html="policiesBody" class="text-muted" />
-          </UCard>
+          </div>
 
           <div class="space-y-4">
-            <UButton v-if="contactPhone" :to="`tel:${contactPhone?.replace(/\s/g, '') ?? ''}`" color="primary" variant="outline" class="w-full">
+            <SayaButton v-if="contactPhone" :href="`tel:${contactPhone?.replace(/\s/g, '') ?? ''}`" variant="outline" block>
               {{ resCopy.callButtonLabel }} {{ contactPhone }}
-            </UButton>
-            <UButton to="/contact" color="primary" variant="outline" class="w-full">{{ resCopy.contactFormButtonLabel }}</UButton>
-            <UButton :to="resCopy.reservationExploreRoute" color="primary" variant="outline" class="w-full">
+            </SayaButton>
+            <SayaButton to="/contact" variant="outline" block>
+              {{ resCopy.contactFormButtonLabel }}
+            </SayaButton>
+            <SayaButton :to="resCopy.reservationExploreRoute" variant="outline" block>
               {{ resCopy.reservationExploreLabel }}
-            </UButton>
+            </SayaButton>
           </div>
         </div>
 
@@ -171,19 +169,26 @@ watch([isExperienceSite, hasExperiences], ([isExp, hasExp]) => {
   }
 }, { immediate: true })
 
-// ── Calendar ──────────────────────────────────────────────────────────────
-// selectedDate is untyped to bridge the two moduleResolution instances of
-// @internationalized/date that Nuxt UI and our component see. The server already
-// rejects past dates so no min-value constraint is needed client-side.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const selectedDate = ref<any>(null)
+// ── Date ──────────────────────────────────────────────────────────────────
+// Native <input type="date"> replaces UCalendar/@internationalized/date — same
+// "YYYY-MM-DD" string shape reservationForm.date already expected, no bridging
+// needed. Server already rejects past dates; `min` is just a UX nicety.
+// Use local time instead of UTC to show visitor's actual today.
+const todayIso = (() => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const date = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${date}`
+})()
 
-watch(selectedDate, (d: unknown) => {
-  reservationForm.value.date = d ? String(d) : ''
-})
+// Plain-Tailwind form styling — replaces UInput/UTextarea/USelect's default
+// look now that this page no longer depends on Nuxt UI (see SayaFormField.vue).
+import { FORM_INPUT_CLASS } from '~/utils/form-constants'
+const inputClass = FORM_INPUT_CLASS
 
 const readableDate = computed(() => {
-  if (!selectedDate.value) return ''
+  if (!reservationForm.value.date) return ''
   return formatDate(`${reservationForm.value.date}T12:00:00`)
 })
 
@@ -278,17 +283,23 @@ const validateReservation = (state: typeof reservationForm.value) => {
   else if (!emailPattern.test(state.email)) errors.push({ name: 'email', message: 'Please enter a valid email address.' })
   if (!state.phone)   errors.push({ name: 'phone',  message: 'Please enter your phone number.' })
   if (hasMultipleLocations.value && !state.location_id) errors.push({ name: 'location_id', message: resCopy.value.chooseLocationLabel })
-  if (!state.date)    errors.push({ name: 'date',   message: 'Please pick a date on the calendar.' })
+  if (!state.date)    errors.push({ name: 'date',   message: 'Please pick a date.' })
   if (!state.time)    errors.push({ name: 'time',   message: 'Please choose a time.' })
   if (!state.guests)  errors.push({ name: 'guests', message: 'Please choose your party size.' })
   return errors
 }
 
-const toast = useToast()
 const submitting = ref(false)
+const submitError = ref<string | null>(null)
+const reservationErrors = ref<{ name: string; message: string }[]>([])
+const fieldError = (name: string) => reservationErrors.value.find(e => e.name === name)?.message ?? null
 
 async function handleReservation() {
   if (submitting.value || !siteId) return
+  submitError.value = null
+  reservationErrors.value = validateReservation(reservationForm.value)
+  if (reservationErrors.value.length > 0) return
+
   submitting.value = true
   try {
     const res = await $fetch<{ id: string; cancellationToken: string }>(`/api/public/sites/${siteId}/reservations`, {
@@ -310,7 +321,7 @@ async function handleReservation() {
     })
     await navigateTo('/reservations/confirmed')
   } catch (err) {
-    toast.add({ description: (err as ApiValue)?.data?.error ?? 'Failed to submit. Please try again.', color: 'error' })
+    submitError.value = (err as ApiValue)?.data?.error ?? 'Failed to submit. Please try again.'
   } finally {
     submitting.value = false
   }

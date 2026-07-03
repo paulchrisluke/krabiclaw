@@ -6,6 +6,8 @@
 // - visibilitychange/pagehide + sendBeacon is used only to report time-on-page
 //   for the page that's being left, never as a pageview trigger itself.
 // - All calls fail silently — analytics must never break the public site.
+import { isPlatformPath } from '~/utils/platform-routes'
+
 export default defineNuxtPlugin(() => {
   const route = useRoute()
   
@@ -75,6 +77,10 @@ export default defineNuxtPlugin(() => {
     }
     if (to.fullPath === from.fullPath) return
     if (to.fullPath === lastTrackedPath) return
+
+    // If this is a platform route (e.g. /docs, /blog, /pricing) and we're
+    // currently in tenant context, don't record it against the tenant site.
+    if (isTenant && isPlatformPath(to.path)) return
 
     // Report duration for the page we're leaving, then start the new page's clock.
     sendDurationBeacon()

@@ -3,22 +3,32 @@
     class="tenant-layout saya-theme min-h-screen flex flex-col font-sans bg-default text-default"
     :style="themeStyles"
   >
-    <UTheme :ui="{ button: { compoundVariants: [{ color: 'primary', variant: 'solid', class: 'text-[var(--brand-color-foreground,white)] bg-[var(--brand-color,var(--color-primary-500))] hover:bg-[var(--brand-color,var(--color-primary-600))]/75 active:bg-[var(--brand-color,var(--color-primary-600))]/75 disabled:bg-[var(--brand-color,var(--color-primary-500))] aria-disabled:bg-[var(--brand-color,var(--color-primary-500))] outline-[var(--brand-color,var(--color-primary-500))]/25 focus-visible:outline-3' }] } }">
-      <SayaHeader />
-      <main class="grow">
-        <slot />
-      </main>
-      <LazySayaFooter />
-      <LazySayaUpgradeModal />
-    </UTheme>
+    <SayaHeader :site="site" :locations="locations" :menu="menu" :has-experiences="hasExperiences" />
+    <main class="grow">
+      <slot />
+    </main>
+    <LazySayaFooter
+      :site="site"
+      :is-platform="isPlatform"
+      :locations="locations"
+      :locales="locales"
+      :error="bootstrapError"
+      :config="config"
+      :menu="menu"
+      :has-experiences="hasExperiences"
+    />
   </div>
 </template>
 
 <script setup>
 if (import.meta.dev) useDebugLCP()
 
-const { config, locations } = useBootstrap()
-const { siteId, isTenant } = useTenantSite()
+// Single owner of the shared bootstrap/tenant-site fetch for this tree —
+// header/footer receive the fields they need as props instead of each
+// independently calling useBootstrap()/useTenantSite() and relying on
+// cache-key coincidence to dedupe.
+const { config, locations, menu, hasExperiences, locales, error: bootstrapError } = useBootstrap()
+const { siteId, isTenant, isPlatform, site } = useTenantSite()
 
 // The full bootstrap payload above is intentionally `lazy: true` (see
 // useBootstrap.ts) so SSR doesn't block the whole page on it. But that means
@@ -42,12 +52,7 @@ const themeStyles = computed(() => {
   if (!brandColor.value) return {}
   return {
     '--brand-color': brandColor.value,
-    '--ui-primary': brandColor.value,
-    '--color-primary': brandColor.value,
     '--brand-color-foreground': brandTextColor.value,
-    // Ensure Nuxt UI primary color resolves correctly
-    '--primary': brandColor.value,
-    '--primary-foreground': brandTextColor.value
   }
 })
 
@@ -121,9 +126,8 @@ useHead(() => {
 </script>
 
 <style>
-/* Nuxt UI v3 uses these variables for the primary color palette */
+/* Saya theme CSS variables */
 .saya-theme {
-  --ui-primary: var(--brand-color);
-  --color-primary: var(--brand-color);
+  --brand-color: var(--brand-color, #16a34a);
 }
 </style>

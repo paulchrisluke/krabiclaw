@@ -26,7 +26,7 @@
                 class="aspect-video w-full object-contain"
               />
             </ClientOnly>
-            <UImage
+            <img
               v-else-if="loc.thumbnail_url"
               :src="loc.thumbnail_url"
               :alt="loc.title"
@@ -34,7 +34,7 @@
               class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
             />
           </template>
-          <UImage
+          <img
             v-else-if="loc.public_url"
             :src="loc.public_url"
             :alt="loc.title"
@@ -42,7 +42,7 @@
             class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
           />
           <div v-else class="flex h-full w-full items-center justify-center">
-            <UIcon name="i-heroicons-map-pin" class="size-10 text-muted" />
+            <svg viewBox="0 0 24 24" class="size-10 text-muted" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><g><path d="M15 10.5a3 3 0 1 1-6 0a3 3 0 0 1 6 0"/><path d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0"/></g></svg>
           </div>
         </div>
         <div class="p-8 pb-9">
@@ -64,7 +64,7 @@
           v-for="(example, i) in sayaEmptyStates.locations.examples"
           :key="i"
           :item="example"
-          icon="i-heroicons-map-pin"
+          icon="map-pin"
           aspect="video"
           dashed
         />
@@ -72,9 +72,9 @@
       <div class="text-center pt-8">
         <SayaMcpHint :hint="sayaEmptyStates.locations.hint" />
         <div v-if="isAuthenticated" class="mt-2">
-          <UButton to="/dashboard" color="neutral" variant="outline" size="sm" class="rounded-full">
+          <NuxtLink to="/dashboard" class="inline-flex items-center justify-center rounded-full border border-default px-3 py-1.5 text-sm font-medium text-default no-underline transition hover:bg-muted">
             {{ connectGoogleCta }}
-          </UButton>
+          </NuxtLink>
         </div>
       </div>
     </div>

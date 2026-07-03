@@ -4,24 +4,27 @@
       <h1 class="m-0 mb-2 text-[36px] font-extrabold tracking-tight text-default">Choose a new password</h1>
       <p class="mb-7 text-[15px] text-muted">Use a strong password you haven’t used elsewhere.</p>
 
-      <UAlert v-if="notice" color="success" variant="soft" :description="notice" class="mb-4" />
-      <UAlert v-if="error" color="error" variant="soft" :description="error" class="mb-4" />
+      <div v-if="notice" role="status" class="mb-4 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3 text-sm text-green-600">{{ notice }}</div>
+      <div v-if="error" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">{{ error }}</div>
 
       <div v-if="!token" class="rounded-xl border border-default/60 bg-elevated/60 p-4 text-sm text-muted">
-        This reset link is missing a token or has already been used. Request a fresh email to continue.
+        <p class="mb-3">This reset link is missing a token or has already been used. Request a fresh email to continue.</p>
+        <NuxtLink to="/forgot-password" class="inline-flex items-center gap-1.5 rounded-lg bg-inverted px-3.5 py-2 text-sm font-medium text-inverted no-underline transition-colors hover:opacity-90">
+          Request new reset link
+        </NuxtLink>
       </div>
 
       <form v-else class="space-y-4" @submit.prevent="handleSubmit">
-        <UFormField label="New password" :error="passwordError">
-          <UInput v-model="password" type="password" placeholder="••••••••" size="lg" class="w-full" :disabled="loading" autocomplete="new-password" />
-        </UFormField>
+        <SayaFormField v-slot="{ id, describedBy, invalid }" label="New password" name="password" :error="passwordError">
+          <input :id="id" v-model="password" type="password" placeholder="••••••••" :disabled="loading" autocomplete="new-password" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid" />
+        </SayaFormField>
         <div class="flex items-center justify-between gap-3">
           <NuxtLink to="/login" class="text-sm text-primary font-medium hover:underline no-underline">
             Back to sign in
           </NuxtLink>
-          <UButton type="submit" size="lg" :loading="loading">
+          <PlatformButton type="submit" :loading="loading">
             Save new password
-          </UButton>
+          </PlatformButton>
         </div>
       </form>
     </div>
@@ -33,10 +36,13 @@ definePageMeta({ layout: 'platform', auth: false })
 
 import { authClient } from '~/lib/auth-client'
 import { validatePassword } from '~/utils/password-validation'
+import { FORM_INPUT_CLASS } from '~/utils/form-constants'
 
 useSeoMeta({
   robots: 'noindex, nofollow'
 })
+
+const inputClass = FORM_INPUT_CLASS
 
 const route = useRoute()
 const router = useRouter()

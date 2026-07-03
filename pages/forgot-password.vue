@@ -4,20 +4,20 @@
       <h1 class="m-0 mb-2 text-[36px] font-extrabold tracking-tight text-default">Reset your password</h1>
       <p class="mb-7 text-[15px] text-muted">Enter the email you use for KrabiClaw and we’ll send you a secure reset link.</p>
 
-      <UAlert v-if="notice" color="success" variant="soft" :description="notice" class="mb-4" />
-      <UAlert v-if="error" color="error" variant="soft" :description="error" class="mb-4" />
+      <div v-if="notice" role="status" class="mb-4 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3 text-sm text-green-600">{{ notice }}</div>
+      <div v-if="error" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">{{ error }}</div>
 
       <form class="space-y-4" @submit.prevent="handleSubmit">
-        <UFormField label="Email">
-          <UInput v-model="email" type="email" placeholder="you@example.com" size="lg" class="w-full" :disabled="loading" autocomplete="email" />
-        </UFormField>
+        <SayaFormField v-slot="{ id, describedBy, invalid }" label="Email" name="email">
+          <input :id="id" v-model="email" type="email" placeholder="you@example.com" :disabled="loading" autocomplete="email" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid" />
+        </SayaFormField>
         <div class="flex items-center justify-between gap-3">
           <NuxtLink to="/login" class="text-sm text-primary font-medium hover:underline no-underline">
             Back to sign in
           </NuxtLink>
-          <UButton type="submit" size="lg" :loading="loading">
+          <PlatformButton type="submit" :loading="loading">
             Send reset link
-          </UButton>
+          </PlatformButton>
         </div>
       </form>
     </div>
@@ -28,10 +28,13 @@
 definePageMeta({ layout: 'platform', auth: false })
 
 import { authClient } from '~/lib/auth-client'
+import { FORM_INPUT_CLASS } from '~/utils/form-constants'
 
 useSeoMeta({
   robots: 'noindex, nofollow'
 })
+
+const inputClass = FORM_INPUT_CLASS
 
 const loading = ref(false)
 const email = ref('')

@@ -1,62 +1,61 @@
 <template>
-  <UModal v-model:open="openModel" fullscreen :ui="{ content: 'bg-black overflow-hidden' }">
-    <template #content>
-      <div class="relative h-dvh w-full bg-black text-white">
-        <!-- Header -->
-        <div class="absolute inset-x-0 top-0 z-30 flex items-center gap-3 px-4 pt-4 pb-4 bg-gradient-to-b from-black/70 to-transparent">
-          <button
-            class="flex size-10 items-center justify-center rounded-full bg-black/30 backdrop-blur-md"
-            aria-label="Close"
-            @click="openModel = false"
-          >
-            <UIcon name="i-heroicons-chevron-left" class="size-6" />
-          </button>
-
-          <div class="min-w-0 flex-1">
-            <div v-if="title" class="truncate text-base font-semibold">{{ title }}</div>
-            <div v-if="items.length > 1" class="text-xs text-white/70">{{ currentIndex + 1 }} / {{ items.length }}</div>
-          </div>
-        </div>
-
-        <!-- Vertical viewer -->
-        <div
-          ref="scroller"
-          class="h-full w-full snap-y snap-mandatory overflow-y-auto overscroll-contain touch-pan-y scrollbar-hide"
-          @scroll.passive="onScroll"
+  <Teleport to="body">
+    <div v-if="openModel" class="fixed inset-0 z-100 h-dvh w-full overflow-hidden bg-black text-white" role="dialog" aria-modal="true" :aria-label="title">
+      <!-- Header -->
+      <div class="absolute inset-x-0 top-0 z-30 flex items-center gap-3 px-4 pt-4 pb-4 bg-linear-to-b from-black/70 to-transparent">
+        <button
+          ref="closeButton"
+          class="flex size-10 items-center justify-center rounded-full bg-black/30 backdrop-blur-md"
+          aria-label="Close"
+          @click="openModel = false"
         >
-          <section
-            v-for="(item, i) in items"
-            :key="`${item.url}-${i}`"
-            class="relative h-dvh w-full snap-start snap-always"
-          >
-            <video
-              v-if="item.kind === 'video'"
-              :ref="el => setVideoRef(el, i)"
-              :src="item.url"
-              muted
-              loop
-              playsinline
-              preload="metadata"
-              class="h-full w-full object-cover"
-            />
-            <img
-              v-else
-              :src="item.url"
-              :alt="item.alt || ''"
-              class="h-full w-full object-cover"
-            >
+          <svg viewBox="0 0 24 24" class="size-6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="M15.75 19.5 8.25 12l7.5-7.5"/></svg>
+        </button>
 
-            <!-- Bottom caption gradient -->
-            <div class="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-5 pb-8 pt-40">
-              <slot name="caption" :item="item" :index="i">
-                <p v-if="item.description" class="text-lg leading-snug">{{ item.description }}</p>
-              </slot>
-            </div>
-          </section>
+        <div class="min-w-0 flex-1">
+          <div v-if="title" class="truncate text-base font-semibold">{{ title }}</div>
+          <div v-if="items.length > 1" class="text-xs text-white/70">{{ currentIndex + 1 }} / {{ items.length }}</div>
         </div>
       </div>
-    </template>
-  </UModal>
+
+      <!-- Vertical viewer -->
+      <div
+        ref="scroller"
+        class="h-full w-full snap-y snap-mandatory overflow-y-auto overscroll-contain touch-pan-y scrollbar-hide"
+        @scroll.passive="onScroll"
+      >
+        <section
+          v-for="(item, i) in items"
+          :key="`${item.url}-${i}`"
+          class="relative h-dvh w-full snap-start snap-always"
+        >
+          <video
+            v-if="item.kind === 'video'"
+            :ref="el => setVideoRef(el, i)"
+            :src="item.url"
+            muted
+            loop
+            playsinline
+            preload="metadata"
+            class="h-full w-full object-cover"
+          />
+          <img
+            v-else
+            :src="item.url"
+            :alt="item.alt || ''"
+            class="h-full w-full object-cover"
+          >
+
+          <!-- Bottom caption gradient -->
+          <div class="absolute inset-x-0 bottom-0 z-20 bg-linear-to-t from-black/90 via-black/55 to-transparent px-5 pb-8 pt-40">
+            <slot name="caption" :item="item" :index="i">
+              <p v-if="item.description" class="text-lg leading-snug">{{ item.description }}</p>
+            </slot>
+          </div>
+        </section>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -101,7 +100,10 @@ const indexModel = computed({
 
 const items = computed(() => props.items ?? [])
 const scroller = ref<HTMLElement | null>(null)
+const closeButton = ref<HTMLElement | null>(null)
 const videoRefs = ref<Record<number, HTMLVideoElement>>({})
+
+const { acquire: acquireScrollLock, release: releaseScrollLock } = useScrollLock()
 
 const currentIndex = computed(() => {
   if (!items.value.length) return 0
@@ -140,12 +142,18 @@ watch(indexModel, async () => {
 })
 
 watch(() => props.open, async (open) => {
-  await nextTick()
-
-  if (!open) {
+  if (open) {
+    acquireScrollLock()
+    await nextTick()
+    // Focus the close button when lightbox opens
+    closeButton.value?.focus()
+  } else {
+    releaseScrollLock()
     Object.values(videoRefs.value).forEach(video => video.pause())
     return
   }
+
+  await nextTick()
 
   scroller.value?.scrollTo({
     top: currentIndex.value * getPageHeight(),
@@ -153,6 +161,46 @@ watch(() => props.open, async (open) => {
   })
 
   syncVideos()
+})
+
+function handleKeyDown(e: KeyboardEvent) {
+  if (!openModel.value) return
+  
+  if (e.key === 'Tab') {
+    const focusableElements = closeButton.value ? [closeButton.value] : []
+    if (focusableElements.length === 0) return
+    
+    const firstElement = focusableElements[0]
+    const lastElement = focusableElements[focusableElements.length - 1]
+    if (!firstElement || !lastElement) return
+    
+    if (e.shiftKey) {
+      // Shift+Tab on first element → focus last element
+      if (document.activeElement === firstElement) {
+        e.preventDefault()
+        lastElement.focus()
+      }
+    } else {
+      // Tab on last element → focus first element
+      if (document.activeElement === lastElement) {
+        e.preventDefault()
+        firstElement.focus()
+      }
+    }
+  }
+}
+
+onMounted(() => {
+  if (import.meta.client) {
+    document.addEventListener('keydown', handleKeyDown)
+  }
+})
+
+onUnmounted(() => {
+  if (import.meta.client) {
+    document.removeEventListener('keydown', handleKeyDown)
+    releaseScrollLock()
+  }
 })
 
 function onScroll() {
@@ -176,5 +224,8 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 onMounted(() => window.addEventListener('keydown', onKeydown))
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown)
+  document.body.style.overflow = ''
+})
 </script>

@@ -16,7 +16,7 @@
               aria-label="Close demo preview"
               @click="closeDemoPreview"
             >
-              <UIcon name="i-heroicons-x-mark" class="size-5" />
+              <PlatformIcon name="x" class="size-5" />
             </button>
             <div class="flex min-w-0 items-center gap-3">
               <SayaLogoMark />
@@ -32,7 +32,7 @@
               >
                 <span class="sm:hidden">Start free</span>
                 <span class="hidden sm:inline">Get started free</span>
-                <UIcon name="i-heroicons-arrow-right" class="size-4" />
+                <PlatformIcon name="arrow-right" class="size-4" />
               </NuxtLink>
             </div>
           </div>
@@ -106,7 +106,7 @@
                 class="inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-default px-4 text-sm font-medium text-default no-underline transition hover:bg-elevated"
                 @click="openDemoPreview"
               >
-                <UIcon name="i-lucide-arrow-up-right" class="size-4" />
+                <PlatformIcon name="arrow-up-right" class="size-4" />
                 Open demo
               </button>
               <NuxtLink
@@ -115,7 +115,7 @@
                 style="background: linear-gradient(135deg, var(--kc-coral) 0%, #e0524c 100%); box-shadow: 0 3px 12px rgba(251,116,97,0.3);"
               >
                 Try free
-                <UIcon name="i-lucide-arrow-right" class="size-4" />
+                <PlatformIcon name="arrow-right" class="size-4" />
               </NuxtLink>
             </div>
           </div>
@@ -145,7 +145,7 @@
               <div class="relative flex aspect-video items-center justify-center overflow-hidden" style="background: linear-gradient(135deg, var(--ui-bg-muted) 0%, var(--ui-bg-elevated) 100%);">
                 <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity" style="background: linear-gradient(135deg, var(--kc-coral-50) 0%, var(--kc-teal-100)/30 100%);"></div>
                 <div class="relative w-14 h-14 rounded-2xl flex items-center justify-center" style="background: linear-gradient(135deg, var(--kc-navy) 0%, var(--kc-navy-700) 100%); box-shadow: 0 8px 24px rgba(31,37,71,0.2);">
-                  <UIcon :name="feature.icon" class="size-6 text-white" />
+                  <PlatformIcon :name="feature.icon" class="size-6 text-white" />
                 </div>
               </div>
               <div class="p-4">
@@ -160,7 +160,7 @@
             <h2 class="text-xl font-semibold text-default mb-6">What's included</h2>
             <div class="grid gap-3 sm:grid-cols-2">
               <div v-for="item in included" :key="item" class="flex items-start gap-3">
-                <UIcon name="i-heroicons-check" class="mt-0.5 size-4 shrink-0 text-primary" />
+                <PlatformIcon name="check" class="mt-0.5 size-4 shrink-0 text-primary" />
                 <span class="text-sm text-default">{{ item }}</span>
               </div>
             </div>
@@ -191,14 +191,14 @@
                   style="background: linear-gradient(135deg, var(--kc-coral) 0%, #e0524c 100%); box-shadow: 0 4px 16px rgba(251,116,97,0.2);"
                 >
                   Get started free
-                  <UIcon name="i-heroicons-arrow-right" class="size-4" />
+                  <PlatformIcon name="arrow-right" class="size-4" />
                 </NuxtLink>
                 <button
                   type="button"
                   class="flex w-full items-center justify-center gap-2 rounded-full border border-default px-5 py-3 text-sm font-medium text-default no-underline transition hover:bg-elevated"
                   @click="openDemoPreview"
                 >
-                  <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-4" />
+                  <PlatformIcon name="arrow-up-right" class="size-4" />
                   View live demo
                 </button>
               </div>
@@ -259,22 +259,22 @@ onUnmounted(() => {
 
 const featureScreenshots = [
   {
-    icon: 'i-heroicons-map-pin',
+    icon: 'map-pin',
     label: 'Location pages',
     description: 'Hours, map embed, address, offerings preview, reviews, photos, and Q&A — all under one location URL.'
   },
   {
-    icon: 'i-heroicons-star',
+    icon: 'star',
     label: 'Reviews & ratings',
     description: 'Star distribution histogram, owner replies, and a filterable review feed.'
   },
   {
-    icon: 'i-heroicons-list-bullet',
+    icon: 'list',
     label: 'Full offerings',
     description: 'Sections, item photos, prices, details, and availability — all editable through ChatGPT.'
   },
   {
-    icon: 'i-heroicons-sparkles',
+    icon: 'sparkles',
     label: 'ChatGPT Plugin',
     description: 'Update content, generate descriptions, publish posts, and manage your site by chatting directly in ChatGPT.'
   }

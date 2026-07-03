@@ -4,12 +4,12 @@
     <!-- Loading -->
     <div v-if="pending" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
       <div class="grid gap-10 lg:grid-cols-[1fr_420px] lg:items-start">
-        <USkeleton class="aspect-4/3 rounded-xl" />
+        <div class="aspect-4/3 animate-pulse rounded-xl bg-elevated" />
         <div class="space-y-4">
-          <USkeleton class="h-6 w-24" />
-          <USkeleton class="h-10 w-full" />
-          <USkeleton class="h-24 w-full" />
-          <USkeleton class="h-12 w-full rounded-full" />
+          <div class="h-6 w-24 animate-pulse rounded bg-elevated" />
+          <div class="h-10 w-full animate-pulse rounded bg-elevated" />
+          <div class="h-24 w-full animate-pulse rounded bg-elevated" />
+          <div class="h-12 w-full animate-pulse rounded-full bg-elevated" />
         </div>
       </div>
     </div>
@@ -18,7 +18,7 @@
     <div v-else-if="!experience" class="mx-auto max-w-7xl px-4 py-32 text-center">
       <h1 class="text-2xl font-semibold text-default">Experience not found</h1>
       <p class="mt-3 text-muted">This experience may no longer be available.</p>
-      <UButton to="/experiences" class="mt-6" variant="soft">View all experiences</UButton>
+      <NuxtLink to="/experiences" class="mt-6 inline-flex items-center rounded-full bg-muted px-5 py-2.5 text-sm font-medium text-default no-underline transition hover:bg-elevated">View all experiences</NuxtLink>
     </div>
 
     <div v-else>
@@ -32,9 +32,9 @@
           <p v-if="experience.price" class="font-semibold text-default leading-tight">{{ experience.price }}</p>
           <p class="text-xs text-muted">per person</p>
         </div>
-        <UButton color="primary" size="lg" class="rounded-full shrink-0" @click="scrollToBooking">
+        <SayaButton class="shrink-0" @click="scrollToBooking">
           Reserve Now
-        </UButton>
+        </SayaButton>
       </div>
 
       <!-- ── Main layout ────────────────────────────────────── -->
@@ -43,9 +43,9 @@
         <!-- Breadcrumb -->
         <nav class="mb-8 flex items-center gap-2 text-xs text-muted">
           <NuxtLink to="/" class="hover:text-default transition-colors">Home</NuxtLink>
-          <UIcon name="i-heroicons-chevron-right" class="size-3.5" />
+          <SayaIcon name="chevron-right" class="size-3.5" />
           <NuxtLink to="/experiences" class="hover:text-default transition-colors">Experiences</NuxtLink>
-          <UIcon name="i-heroicons-chevron-right" class="size-3.5" />
+          <SayaIcon name="chevron-right" class="size-3.5" />
           <span class="text-default">{{ experience.title }}</span>
         </nav>
 
@@ -56,17 +56,16 @@
 
             <!-- Gallery -->
             <div class="rounded-xl bg-muted overflow-hidden">
-              <UCarousel
-                v-if="mediaItems.length > 1"
-                :items="mediaItems"
-                arrows
-                dots
-                class="lg:h-120"
-                :ui="{ item: 'min-h-0 basis-full' }"
-              >
-                <template #default="{ item, index }">
+              <div v-if="mediaItems.length > 1" class="relative lg:h-120">
+                <div
+                  ref="carouselTrack"
+                  class="saya-carousel-track flex h-full snap-x snap-mandatory overflow-x-auto scroll-smooth"
+                  @scroll="onCarouselScroll"
+                >
                   <div
-                    class="relative aspect-4/3 lg:aspect-auto lg:h-120 overflow-hidden cursor-zoom-in"
+                    v-for="(item, index) in mediaItems"
+                    :key="item.url"
+                    class="relative aspect-4/3 lg:aspect-auto lg:h-120 w-full shrink-0 snap-center overflow-hidden cursor-zoom-in"
                     @click="item.kind === 'image' && openLightbox(index)"
                   >
                     <video
@@ -85,8 +84,37 @@
                       class="h-full w-full object-contain"
                     />
                   </div>
-                </template>
-              </UCarousel>
+                </div>
+                <button
+                  type="button"
+                  class="absolute left-2 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-default/80 text-default shadow backdrop-blur-sm transition hover:bg-default disabled:opacity-40"
+                  aria-label="Previous slide"
+                  :disabled="carouselIndex === 0"
+                  @click="scrollCarousel(-1)"
+                >
+                  <SayaIcon name="chevron-left" class="size-5" />
+                </button>
+                <button
+                  type="button"
+                  class="absolute right-2 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-default/80 text-default shadow backdrop-blur-sm transition hover:bg-default disabled:opacity-40"
+                  aria-label="Next slide"
+                  :disabled="carouselIndex === mediaItems.length - 1"
+                  @click="scrollCarousel(1)"
+                >
+                  <SayaIcon name="chevron-right" class="size-5" />
+                </button>
+                <div class="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
+                  <button
+                    v-for="(item, index) in mediaItems"
+                    :key="`dot-${item.url}`"
+                    type="button"
+                    class="size-1.5 rounded-full transition"
+                    :class="carouselIndex === index ? 'bg-default' : 'bg-default/40'"
+                    :aria-label="`Go to slide ${index + 1}`"
+                    @click="scrollToSlide(index)"
+                  />
+                </div>
+              </div>
               <div
                 v-else-if="mediaItems.length === 1"
                 class="relative aspect-4/3 lg:aspect-auto lg:h-120 overflow-hidden"
@@ -110,7 +138,7 @@
                 />
               </div>
               <div v-else class="flex aspect-4/3 lg:h-120 items-center justify-center">
-                <UIcon name="i-heroicons-sparkles" class="size-16 text-dimmed" />
+                <SayaIcon name="sparkles" class="size-16 text-dimmed" />
               </div>
             </div>
 
@@ -133,21 +161,21 @@
                   v-if="experience.duration_minutes"
                   class="inline-flex items-center gap-1.5 rounded-full border border-default bg-elevated px-3 py-1 text-xs font-medium text-muted"
                 >
-                  <UIcon name="i-heroicons-clock" class="size-3.5" />
+                  <SayaIcon name="clock" class="size-3.5" />
                   {{ formatDuration(experience.duration_minutes) }}
                 </span>
                 <span
                   v-if="experience.max_capacity"
                   class="inline-flex items-center gap-1.5 rounded-full border border-default bg-elevated px-3 py-1 text-xs font-medium text-muted"
                 >
-                  <UIcon name="i-heroicons-user-group" class="size-3.5" />
+                  <SayaIcon name="user-group" class="size-3.5" />
                   Up to {{ experience.max_capacity }} guests
                 </span>
                 <span
                   v-if="experience.available_note"
                   class="inline-flex items-center gap-1.5 rounded-full border border-default bg-elevated px-3 py-1 text-xs font-medium text-muted"
                 >
-                  <UIcon name="i-heroicons-calendar-days" class="size-3.5" />
+                  <SayaIcon name="calendar-days" class="size-3.5" />
                   {{ experience.available_note }}
                 </span>
               </div>
@@ -165,7 +193,7 @@
               <h2 class="text-xl font-semibold text-default mb-6">Highlights</h2>
               <ul class="space-y-3 text-default">
                 <li v-for="item in experience.highlights" :key="item" class="flex items-start gap-3">
-                  <UIcon name="i-heroicons-sparkles" class="mt-0.5 size-4 shrink-0 text-primary" />
+                  <SayaIcon name="sparkles" class="mt-0.5 size-4 shrink-0 text-primary" />
                   <span>{{ item }}</span>
                 </li>
               </ul>
@@ -175,7 +203,7 @@
               <h2 class="text-xl font-semibold text-default mb-6">What's included</h2>
               <ul class="space-y-3 text-default">
                 <li v-for="item in experience.included_items" :key="item" class="flex items-start gap-3">
-                  <UIcon name="i-heroicons-check-circle" class="mt-0.5 size-4 shrink-0 text-primary" />
+                  <SayaIcon name="check-circle" class="mt-0.5 size-4 shrink-0 text-primary" />
                   <span>{{ item }}</span>
                 </li>
               </ul>
@@ -185,7 +213,7 @@
               <h2 class="text-xl font-semibold text-default mb-6">What to bring</h2>
               <ul class="space-y-3 text-default">
                 <li v-for="item in experience.what_to_bring" :key="item" class="flex items-start gap-3">
-                  <UIcon name="i-heroicons-briefcase" class="mt-0.5 size-4 shrink-0 text-primary" />
+                  <SayaIcon name="briefcase" class="mt-0.5 size-4 shrink-0 text-primary" />
                   <span>{{ item }}</span>
                 </li>
               </ul>
@@ -206,7 +234,7 @@
               <h2 class="text-xl font-semibold text-default mb-5">Where you'll meet</h2>
               <div class="rounded-xl border border-default bg-elevated overflow-hidden">
                 <div class="p-6 flex items-start gap-4">
-                  <UIcon name="i-heroicons-map-pin" class="mt-0.5 size-5 shrink-0 text-primary" />
+                  <SayaIcon name="map-pin" class="mt-0.5 size-5 shrink-0 text-primary" />
                   <div class="min-w-0">
                     <p class="font-semibold text-default">{{ (experienceLocation as ApiRecord).title }}</p>
                     <p v-if="locationAddress" class="mt-1 text-sm text-muted">{{ locationAddress }}</p>
@@ -224,7 +252,7 @@
                       class="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
                     >
                       Open in Maps
-                      <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-3" />
+                      <SayaIcon name="arrow-top-right-on-square" class="size-3" />
                     </a>
                   </div>
                 </div>
@@ -269,21 +297,21 @@
                   v-if="experience.duration_minutes"
                   class="inline-flex items-center gap-1.5 rounded-full border border-default bg-default px-3 py-1 text-xs font-medium text-muted"
                 >
-                  <UIcon name="i-heroicons-clock" class="size-3.5" />
+                  <SayaIcon name="clock" class="size-3.5" />
                   {{ formatDuration(experience.duration_minutes) }}
                 </span>
                 <span
                   v-if="experience.max_capacity"
                   class="inline-flex items-center gap-1.5 rounded-full border border-default bg-default px-3 py-1 text-xs font-medium text-muted"
                 >
-                  <UIcon name="i-heroicons-user-group" class="size-3.5" />
+                  <SayaIcon name="user-group" class="size-3.5" />
                   Up to {{ experience.max_capacity }} guests
                 </span>
                 <span
                   v-if="experience.available_note"
                   class="inline-flex items-center gap-1.5 rounded-full border border-default bg-default px-3 py-1 text-xs font-medium text-muted"
                 >
-                  <UIcon name="i-heroicons-calendar-days" class="size-3.5" />
+                  <SayaIcon name="calendar-days" class="size-3.5" />
                   {{ experience.available_note }}
                 </span>
               </div>
@@ -301,19 +329,21 @@
                 <form class="space-y-4" @submit.prevent="submitBooking">
                   <!-- Date + party size row -->
                   <div class="grid grid-cols-2 gap-3">
-                    <UFormField label="Date" required>
-                      <UInput v-model="form.booking_date" type="date" :min="minDate" size="md" :disabled="submitting" />
-                    </UFormField>
-                    <UFormField label="Guests" required>
-                      <USelect v-model="form.party_size" :items="partySizeOptions" size="md" :disabled="submitting" />
-                    </UFormField>
+                    <SayaFormField v-slot="{ id }" label="Date" name="booking_date" required>
+                      <input :id="id" v-model="form.booking_date" type="date" :min="minDate" :disabled="submitting" :class="inputClass" />
+                    </SayaFormField>
+                    <SayaFormField v-slot="{ id }" label="Guests" name="party_size" required>
+                      <select :id="id" v-model="form.party_size" :disabled="submitting" :class="inputClass">
+                        <option v-for="opt in partySizeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                      </select>
+                    </SayaFormField>
                   </div>
 
                   <!-- Time slots -->
-                  <UFormField v-if="hasAnySlots" label="Choose a time slot" required>
+                  <SayaFormField v-if="hasAnySlots" label="Choose a time slot" name="time_slot" required>
                     <div v-if="!availabilityInitialized || availabilityLoading" class="flex flex-wrap gap-2">
-                      <USkeleton class="h-10 w-20 rounded-lg" />
-                      <USkeleton class="h-10 w-20 rounded-lg" />
+                      <div class="h-10 w-20 animate-pulse rounded-lg bg-elevated" />
+                      <div class="h-10 w-20 animate-pulse rounded-lg bg-elevated" />
                     </div>
                     <p v-else-if="slotAvailability.length === 0" class="text-sm text-muted">
                       No availability on this day — try another date.
@@ -341,37 +371,32 @@
                       </button>
                     </div>
                     <p v-if="availabilityTimezone" class="mt-2 text-xs text-muted">Times shown in {{ availabilityTimezone }}.</p>
-                  </UFormField>
-                  <UFormField v-else label="Preferred Time" required>
-                    <UInput v-model="form.time_slot" placeholder="e.g. 10:00" size="md" :disabled="submitting" />
-                  </UFormField>
+                  </SayaFormField>
+                  <SayaFormField v-else v-slot="{ id }" label="Preferred Time" name="time_slot" required>
+                    <input :id="id" v-model="form.time_slot" placeholder="e.g. 10:00" :disabled="submitting" :class="inputClass" />
+                  </SayaFormField>
 
                   <!-- Name + email -->
-                  <UFormField label="Your Name" required>
-                    <UInput v-model="form.guest_name" placeholder="Full name" size="md" :disabled="submitting" />
-                  </UFormField>
-                  <UFormField label="Email Address" required>
-                    <UInput v-model="form.guest_email" type="email" placeholder="you@email.com" size="md" :disabled="submitting" />
-                  </UFormField>
-                  <UFormField label="Phone (optional)">
-                    <UInput v-model="form.guest_phone" type="tel" placeholder="+66 81 234 5678" size="md" :disabled="submitting" />
-                  </UFormField>
-                  <UFormField label="Special requests (optional)">
-                    <UTextarea v-model="form.notes" placeholder="Dietary requirements, celebrations, anything we should know…" :rows="2" :disabled="submitting" />
-                  </UFormField>
+                  <SayaFormField v-slot="{ id }" label="Your Name" name="guest_name" required>
+                    <input :id="id" v-model="form.guest_name" placeholder="Full name" :disabled="submitting" :class="inputClass" />
+                  </SayaFormField>
+                  <SayaFormField v-slot="{ id }" label="Email Address" name="guest_email" required>
+                    <input :id="id" v-model="form.guest_email" type="email" placeholder="you@email.com" :disabled="submitting" :class="inputClass" />
+                  </SayaFormField>
+                  <SayaFormField v-slot="{ id }" label="Phone (optional)" name="guest_phone">
+                    <input :id="id" v-model="form.guest_phone" type="tel" placeholder="+66 81 234 5678" :disabled="submitting" :class="inputClass" />
+                  </SayaFormField>
+                  <SayaFormField v-slot="{ id }" label="Special requests (optional)" name="notes">
+                    <textarea :id="id" v-model="form.notes" placeholder="Dietary requirements, celebrations, anything we should know…" rows="2" :disabled="submitting" :class="inputClass" />
+                  </SayaFormField>
 
-                  <UAlert v-if="bookingError" color="error" variant="soft" :description="bookingError" />
+                  <div v-if="bookingError" role="alert" class="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
+                    {{ bookingError }}
+                  </div>
 
-                  <UButton
-                    type="submit"
-                    color="primary"
-                    size="lg"
-                    class="w-full rounded-full"
-                    :loading="submitting"
-                    :disabled="!canSubmit"
-                  >
+                  <SayaButton type="submit" block :disabled="!canSubmit" :loading="submitting">
                     Reserve Now
-                  </UButton>
+                  </SayaButton>
                 </form>
               </div>
 
@@ -463,6 +488,33 @@ function formatDuration(minutes: number): string {
 
 function scrollToBooking() {
   document.getElementById('booking')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+// Plain-Tailwind form styling — replaces UInput/UTextarea/USelect's default
+// look now that this page no longer depends on Nuxt UI (see SayaFormField.vue).
+const inputClass = 'block w-full rounded-lg border border-default bg-default px-3.5 py-2 text-sm text-default placeholder:text-muted focus:border-inverted focus:outline-none focus:ring-1 focus:ring-inverted disabled:opacity-60'
+
+// ── Gallery carousel ────────────────────────────────────────────────────────
+// Native scroll-snap replaces UCarousel/embla — mobile swipe works for free,
+// arrows/dots just scroll the track programmatically.
+const carouselTrack = ref<HTMLElement | null>(null)
+const carouselIndex = ref(0)
+
+function scrollToSlide(index: number) {
+  const track = carouselTrack.value
+  if (!track) return
+  track.scrollTo({ left: track.clientWidth * index, behavior: 'smooth' })
+}
+
+function scrollCarousel(delta: number) {
+  const next = Math.min(Math.max(carouselIndex.value + delta, 0), mediaItems.value.length - 1)
+  scrollToSlide(next)
+}
+
+function onCarouselScroll() {
+  const track = carouselTrack.value
+  if (!track || !track.clientWidth) return
+  carouselIndex.value = Math.round(track.scrollLeft / track.clientWidth)
 }
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
@@ -789,3 +841,15 @@ useHead({
   ],
 })
 </script>
+
+<style scoped>
+/* Hide the native scrollbar on the gallery track — arrows/dots + touch swipe
+   are the intended controls, matching the previous UCarousel's look. */
+.saya-carousel-track {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.saya-carousel-track::-webkit-scrollbar {
+  display: none;
+}
+</style>

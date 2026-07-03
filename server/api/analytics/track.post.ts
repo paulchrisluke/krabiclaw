@@ -15,6 +15,7 @@ import {
   isTrackablePath,
   resolveLocationIdFromPath
 } from '~/server/utils/pageview-tracking'
+import { isPlatformPath } from '~/utils/platform-routes'
 
 interface PageviewRequest {
   siteId?: string
@@ -84,6 +85,10 @@ export default defineEventHandler(async (event) => {
     }
 
     if (!isTrackablePath(pagePath)) {
+      return jsonResponse({ ok: true })
+    }
+
+    if (!isPlatform && isPlatformPath(pagePath)) {
       return jsonResponse({ ok: true })
     }
 

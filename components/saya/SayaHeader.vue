@@ -37,21 +37,13 @@
             {{ $t('saya.header.experiences') }}
           </NuxtLink>
 
-          <SayaDropdown v-if="locations.length > 1" :items="locationDropdownItems" panel-class="saya-theme min-w-64">
-            <template #default="{ open, toggle, triggerKeydown }">
-              <button
-                type="button"
-                class="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
-                aria-haspopup="menu"
-                :aria-expanded="open"
-                @click="toggle"
-                @keydown="triggerKeydown"
-              >
-                {{ $t('saya.header.locations') }}
-                <svg viewBox="0 0 20 20" fill="currentColor" class="size-3 opacity-60"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" /></svg>
-              </button>
-            </template>
-          </SayaDropdown>
+          <NuxtLink
+            v-if="locations.length > 1"
+            to="/locations"
+            class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
+          >
+            {{ $t('saya.header.locations') }}
+          </NuxtLink>
         </nav>
 
         <div class="flex items-center justify-end gap-2 col-start-3">
@@ -89,20 +81,14 @@
           >
             {{ $t('saya.header.menu') }}
           </NuxtLink>
-          <template v-if="locations.length > 1">
-            <div class="pb-2 pt-1">
-              <p class="px-4 text-xs font-medium uppercase tracking-widest text-muted">{{ $t('saya.header.locations') }}</p>
-            </div>
-            <NuxtLink
-              v-for="loc in locations"
-              :key="loc.id"
-              :to="`/locations/${loc.slug}`"
-              class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
-              @click="mobileMenuOpen = false"
-            >
-              {{ loc.title }}
-            </NuxtLink>
-          </template>
+          <NuxtLink
+            v-if="locations.length > 1"
+            to="/locations"
+            class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
+            @click="mobileMenuOpen = false"
+          >
+            {{ $t('saya.header.locations') }}
+          </NuxtLink>
           <div class="my-1 border-t border-default" />
           <NuxtLink
             v-if="hasOrderLinks && !isExperienceSite"
@@ -146,6 +132,7 @@ interface Site {
   brand_name?: string | null
   logo_url?: string | null
   plan?: string
+  vertical?: string | null
 }
 
 interface I18nComposable {
@@ -159,11 +146,18 @@ interface I18nComposable {
 import { getVerticalCopy } from '~/utils/vertical-copy'
 import { DEFAULT_BUSINESS_NAME } from '~/config/constants'
 
-const { site } = useTenantSite()
-const { locale } = useI18n()
-const verticalCopy = computed(() => getVerticalCopy((site as { vertical?: string } | null)?.vertical, locale.value))
+// Data comes from layouts/saya.vue, which already owns the single shared
+// bootstrap/tenant-site fetch — header is presentation-only, not a fetcher.
+const props = defineProps<{
+  site: Site | null
+  locations: ApiRecord[]
+  menu: ApiRecord | null
+  hasExperiences: boolean
+}>()
+
 const i18n = useI18n() as ApiValue as I18nComposable
-const { t } = i18n
+const { locale, t } = i18n
+const verticalCopy = computed(() => getVerticalCopy(props.site?.vertical, locale.value))
 const mobileMenuOpen = ref(false)
 const headerRef = ref<HTMLElement | null>(null)
 let headerResizeObserver: ResizeObserver | null = null
@@ -185,21 +179,13 @@ onUnmounted(() => {
   window.removeEventListener('resize', syncHeaderHeight)
 })
 
-const restaurantName = computed(() => (site as Site | null)?.brand_name || DEFAULT_BUSINESS_NAME)
-const logoUrl = computed(() => (site as Site | null)?.logo_url || null)
-const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
+const restaurantName = computed(() => props.site?.brand_name || DEFAULT_BUSINESS_NAME)
+const logoUrl = computed(() => props.site?.logo_url || null)
+const isExperienceSite = computed(() => props.site?.vertical === 'experience')
 
-useUpgradeModal()
-
-// Shared bootstrap — same key as page component + footer → single SSR request
-const { locations: bootstrapLocations, hasExperiences, menu } = useBootstrap()
-
-const hasMenu = computed(() => (menu.value?.items?.length ?? 0) > 0)
-
-
-const locations = computed(() => bootstrapLocations.value)
+const hasMenu = computed(() => (props.menu?.items?.length ?? 0) > 0)
 const hasOrderLinks = computed(() =>
-  locations.value.some((loc: ApiRecord) => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
+  props.locations.some((loc: ApiRecord) => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )
 
 const primaryCtaPath = computed(() => {
@@ -212,10 +198,4 @@ const primaryCtaLabel = computed(() => {
   return verticalCopy.value.reserveCta
 })
 
-const locationDropdownItems = computed(() =>
-  locations.value.map((loc: { title: string; slug: string }) => ({
-    label: loc.title,
-    to: `/locations/${loc.slug}`,
-  }))
-)
 </script>

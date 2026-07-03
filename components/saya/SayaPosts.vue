@@ -27,7 +27,7 @@
               playsinline
               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
-            <UImage
+            <img
               v-else
               :src="post.media[0].googleUrl"
               :alt="post.title || t('saya.posts.image_alt')"
@@ -39,9 +39,9 @@
           </div>
 
           <div class="absolute top-4 left-4 flex gap-2">
-            <UBadge v-if="post.event" color="neutral" variant="solid" size="xs" class="bg-black/80 backdrop-blur shadow-sm text-white">{{ t('saya.posts.badge.event') }}</UBadge>
-            <UBadge v-else-if="post.offer" color="neutral" variant="solid" size="xs" class="bg-black/80 backdrop-blur shadow-sm text-white">{{ t('saya.posts.badge.offer') }}</UBadge>
-            <UBadge v-else color="neutral" variant="solid" size="xs" class="bg-black/80 backdrop-blur shadow-sm text-white">{{ t('saya.posts.badge.update') }}</UBadge>
+            <span v-if="post.event" class="inline-flex items-center rounded bg-black/80 px-2 py-0.5 text-[10px] font-medium text-white shadow-sm backdrop-blur">{{ t('saya.posts.badge.event') }}</span>
+            <span v-else-if="post.offer" class="inline-flex items-center rounded bg-black/80 px-2 py-0.5 text-[10px] font-medium text-white shadow-sm backdrop-blur">{{ t('saya.posts.badge.offer') }}</span>
+            <span v-else class="inline-flex items-center rounded bg-black/80 px-2 py-0.5 text-[10px] font-medium text-white shadow-sm backdrop-blur">{{ t('saya.posts.badge.update') }}</span>
           </div>
         </div>
 
@@ -81,7 +81,7 @@
          rather than "this site is unfinished". -->
     <div v-if="posts.length === 0 && showEmptyState" class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-default bg-muted/20 py-20 text-center">
       <div class="flex size-14 items-center justify-center rounded-full bg-elevated/50 text-muted shadow-sm">
-        <UIcon name="i-heroicons-newspaper" class="size-7" />
+        <svg viewBox="0 0 24 24" class="size-7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 0 1-2.25 2.25M16.5 7.5V18a2.25 2.25 0 0 0 2.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 0 0 2.25 2.25h13.5M6 7.5h3v3H6z"/></svg>
       </div>
       <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ t('saya.posts.empty_title') }}</h3>
       <p class="mt-2 max-w-sm text-sm text-muted">{{ t('saya.posts.empty_desc') }}</p>
@@ -89,9 +89,9 @@
     </div>
 
     <div v-if="showViewMore && limit && posts.length > 0" class="mt-12 text-center">
-      <UButton to="/posts" color="primary" variant="outline" size="xl">
+      <NuxtLink to="/posts" class="inline-flex items-center justify-center rounded ring-1 ring-inset ring-(--brand-color) px-6 py-3 text-base font-medium text-(--brand-color) no-underline transition hover:bg-(--brand-color)/10">
         {{ t('saya.posts.view_all') }}
-      </UButton>
+      </NuxtLink>
     </div>
 
     <!-- Full-screen lightbox for post details -->
@@ -115,16 +115,13 @@
           <p class="mb-1 font-bold text-white">{{ t('saya.posts.special_offer_label') }}</p>
           <p class="text-white/90">{{ selectedPost.offer.title }} <span v-if="selectedPost.offer.couponCode">• {{ t('saya.posts.code_label') }} {{ selectedPost.offer.couponCode }}</span></p>
         </div>
-        <UButton
+        <NuxtLink
           v-if="selectedPost.callToAction"
           :to="selectedPost.callToAction.url"
-          variant="solid"
-          color="neutral"
-          size="lg"
-          class="mt-4 rounded-full bg-white! text-black! hover:bg-zinc-200!"
+          class="mt-4 inline-flex items-center justify-center rounded-full bg-white px-5 py-2.5 text-base font-medium text-black no-underline transition hover:bg-zinc-200"
         >
           {{ (selectedPost.callToAction.actionType ?? '').replaceAll('_', ' ') }}
-        </UButton>
+        </NuxtLink>
       </template>
     </SayaLightbox>
   </AppSection>

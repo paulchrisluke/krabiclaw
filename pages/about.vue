@@ -68,16 +68,14 @@
           {{ getField('cta.title', copy.ctaTitle) }}
         </h3>
         <div class="flex flex-wrap gap-3">
-          <UButton v-if="hasOrderLinks" to="/order" color="primary" variant="solid" size="xl" class="rounded-full">{{ copy.orderNowCta }}</UButton>
-          <UButton
+          <SayaButton v-if="hasOrderLinks" to="/order" variant="solid" size="lg">{{ copy.orderNowCta }}</SayaButton>
+          <SayaButton
             :to="copy.ctaRoute"
-            color="primary"
             :variant="hasOrderLinks ? 'outline' : 'solid'"
-            size="xl"
-            class="rounded-full"
+            size="lg"
           >
             {{ copy.reserveCta }}
-          </UButton>
+          </SayaButton>
         </div>
       </section>
 
@@ -152,22 +150,21 @@
             <div class="absolute inset-0 bg-gradient-to-tr from-primary/10 via-(--kc-coral)/15 to-(--kc-teal)/10 rounded-full blur-3xl -z-10 animate-pulse duration-[8s]"></div>
             <div class="relative z-10 flex flex-col items-center gap-4">
               <div class="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-                <UIcon name="i-heroicons-envelope" class="size-6" />
+                <PlatformIcon name="envelope" class="size-6" />
               </div>
               <h3 class="text-xl font-extrabold text-default">Get in Touch</h3>
               <p class="text-sm text-muted max-w-xl">
                 Have questions, partnership ideas, or just want to talk business and technology? We'd love to hear from you.
               </p>
               <div class="mt-2 flex flex-wrap justify-center gap-4">
-                <UButton 
-                  to="/contact" 
-                  color="primary" 
-                  size="xl" 
-                  class="rounded-xl font-bold cursor-pointer transition-all duration-300 hover:scale-[1.02]"
+                <PlatformButton
+                  to="/contact"
+                  size="xl"
+                  class="font-bold transition-all duration-300 hover:scale-[1.02]"
                 >
                   Contact Us
-                  <UIcon name="i-heroicons-arrow-right" class="size-4" />
-                </UButton>
+                  <PlatformIcon name="arrow-right" class="size-4" />
+                </PlatformButton>
               </div>
             </div>
           </div>

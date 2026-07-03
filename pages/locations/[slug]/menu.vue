@@ -32,9 +32,9 @@
     <div v-else-if="!hasMenu" class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
       <div class="saya-display saya-italic text-3xl text-default mb-4">{{ $t('saya.menu_page.coming_soon_title') }}</div>
       <p class="text-sm text-muted mb-6">{{ $t('saya.menu_page.coming_soon_desc', { location: location?.title }) }}</p>
-      <UButton v-if="hasExperiences" to="/experiences" color="primary" variant="solid" class="rounded-full">
+      <SayaButton v-if="hasExperiences" to="/experiences">
         {{ $t('saya.menu_page.view_experiences') }}
-      </UButton>
+      </SayaButton>
     </div>
 
     <!-- Sticky category tab bar -->
@@ -102,19 +102,15 @@
                       :class="['text-default no-underline hover:underline underline-offset-2', !item.available && 'opacity-50']"
                     >{{ item.name }}</NuxtLink>
                     <span v-else class="text-default opacity-50">{{ item.name }}</span>
-                    <UBadge
+                    <span
                       v-if="!item.available"
-                      variant="outline"
-                      size="xs"
-                      class="shrink-0 font-medium"
-                    >{{ $t('saya.menu_page.unavailable') }}</UBadge>
-                    <UBadge
+                      class="inline-flex shrink-0 items-center rounded-full border border-default px-2 py-0.5 text-xs font-medium text-muted"
+                    >{{ $t('saya.menu_page.unavailable') }}</span>
+                    <span
                       v-for="tag in getDietaryTags(item)"
                       :key="tag"
-                      variant="outline"
-                      size="xs"
-                      class="shrink-0 font-medium"
-                    >{{ tag }}</UBadge>
+                      class="inline-flex shrink-0 items-center rounded-full border border-default px-2 py-0.5 text-xs font-medium text-muted"
+                    >{{ tag }}</span>
                   </div>
                   <div class="saya-dotted-leader" />
                   <div class="shrink-0 tabular-nums text-base text-default">{{ formatMenuPrice(item.price_amount, '—') }}</div>

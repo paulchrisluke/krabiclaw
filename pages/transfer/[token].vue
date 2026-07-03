@@ -4,7 +4,10 @@
     <!-- Loading -->
     <div v-if="loading" class="min-h-screen flex items-center justify-center">
       <div class="text-center space-y-3">
-        <UIcon name="i-heroicons-arrow-path" class="animate-spin text-4xl text-muted" />
+        <svg viewBox="0 0 24 24" fill="none" class="mx-auto size-10 animate-spin text-muted">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" stroke-opacity="0.25" />
+          <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+        </svg>
         <p class="text-muted text-sm">Loading…</p>
       </div>
     </div>
@@ -13,18 +16,21 @@
     <div v-else-if="loadError" class="min-h-screen flex items-center justify-center px-4">
       <div class="text-center space-y-4 max-w-sm">
         <div class="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto">
-          <UIcon name="i-heroicons-x-circle" class="text-3xl text-red-500" />
+          <PlatformIcon name="exclamation-triangle" class="size-8 text-red-500" />
         </div>
         <h1 class="text-xl font-bold text-highlighted">Transfer unavailable</h1>
         <p class="text-muted text-sm">{{ loadError }}</p>
-        <UButton to="/dashboard" variant="soft">Go to Dashboard</UButton>
+        <PlatformButton to="/dashboard" variant="outline">Go to Dashboard</PlatformButton>
       </div>
     </div>
 
     <!-- Redirecting to checkout -->
     <div v-else-if="redirectingToCheckout" class="min-h-screen flex items-center justify-center">
       <div class="text-center space-y-4">
-        <UIcon name="i-heroicons-arrow-path" class="animate-spin text-4xl text-muted" />
+        <svg viewBox="0 0 24 24" fill="none" class="mx-auto size-10 animate-spin text-muted">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" stroke-opacity="0.25" />
+          <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+        </svg>
         <h1 class="text-xl font-bold text-highlighted">Transfer complete!</h1>
         <p class="text-muted text-sm">Setting up your plan…</p>
       </div>
@@ -34,11 +40,11 @@
     <div v-else-if="accepted" class="min-h-screen flex items-center justify-center px-4">
       <div class="text-center space-y-4 max-w-sm">
         <div class="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto">
-          <UIcon name="i-heroicons-check-circle" class="text-3xl text-green-500" />
+          <PlatformIcon name="check-circle" class="size-8 text-green-500" />
         </div>
         <h1 class="text-xl font-bold text-highlighted">It's yours!</h1>
         <p class="text-muted text-sm"><strong class="text-default">{{ transfer!.site_name }}</strong> is now in your account.</p>
-        <UButton to="/dashboard" color="primary">Open Dashboard</UButton>
+        <PlatformButton to="/dashboard">Open Dashboard</PlatformButton>
       </div>
     </div>
 
@@ -67,7 +73,7 @@
           <!-- Details -->
           <div class="mt-6 space-y-3">
             <div v-if="transfer.invited_domain && transfer.domain_active" class="flex items-start gap-3 text-sm">
-              <UIcon name="i-heroicons-globe-alt" class="size-4 text-muted mt-0.5 shrink-0" />
+              <PlatformIcon name="globe" class="size-4 text-muted mt-0.5 shrink-0" />
               <span class="text-muted">Ready to launch at <strong class="text-default">{{ transfer.invited_domain }}</strong> (hosting included).</span>
             </div>
 
@@ -127,47 +133,37 @@
 
             <!-- Not logged in -->
             <template v-if="!isAuthenticated && !sessionLoading">
-              <UButton block color="primary" size="xl" class="rounded-[10px] font-semibold text-[15px] shadow-sm hover:scale-[1.01] transition-all duration-300" @click="signInWithGoogle">
-                <UIcon name="i-simple-icons-google" class="mr-2" />
+              <PlatformButton block size="xl" class="rounded-[10px] shadow-sm hover:opacity-90" @click="signInWithGoogle">
                 Continue with Google
-              </UButton>
-              <UButton block variant="outline" size="xl" class="rounded-[10px] font-semibold text-[15px]" :to="`/login?next=/transfer/${token}`">
+              </PlatformButton>
+              <PlatformButton block variant="outline" size="xl" class="rounded-[10px]" :to="`/login?next=/transfer/${token}`">
                 Sign in with email
-              </UButton>
+              </PlatformButton>
               <p class="text-xs text-center text-muted">Sign in or create a free account to claim this site.</p>
             </template>
 
             <!-- Wrong email -->
             <template v-else-if="isAuthenticated && !emailMatches">
-              <UAlert
-                color="warning"
-                variant="soft"
-                icon="i-heroicons-exclamation-triangle"
-                title="Wrong account"
-                :description="`This was sent to ${transfer.to_email}. You're signed in as ${user?.email}.`"
-              />
-              <UButton block variant="soft" @click="switchAccount">Sign in with a different account</UButton>
+              <PlatformNotice tone="warning" title="Wrong account">
+                This was sent to {{ transfer.to_email }}. You're signed in as {{ user?.email }}.
+              </PlatformNotice>
+              <PlatformButton block variant="outline" @click="switchAccount">Sign in with a different account</PlatformButton>
             </template>
 
             <!-- Ready -->
             <template v-else-if="isAuthenticated">
-              <UAlert
-                color="success"
-                variant="soft"
-                icon="i-heroicons-check-badge"
-                :description="`Signed in as ${user?.email}`"
-              />
-              <UAlert
-                v-if="transfer.requires_payment"
-                color="warning"
-                variant="soft"
-                icon="i-heroicons-credit-card"
-                description="This is a paid handoff. Checkout completes before the site moves into your account."
-              />
-              <UAlert v-if="acceptError" color="error" variant="soft" :description="acceptError" />
-              <UButton block color="primary" size="xl" class="rounded-[10px] font-semibold text-[15px] shadow-sm hover:scale-[1.01] transition-all duration-300" :loading="accepting" @click="acceptTransfer">
+              <PlatformNotice tone="success">
+                Signed in as {{ user?.email }}
+              </PlatformNotice>
+              <PlatformNotice v-if="transfer.requires_payment" tone="warning">
+                This is a paid handoff. Checkout completes before the site moves into your account.
+              </PlatformNotice>
+              <PlatformNotice v-if="acceptError" tone="error">
+                {{ acceptError }}
+              </PlatformNotice>
+              <PlatformButton block size="xl" class="rounded-[10px] shadow-sm hover:opacity-90" :loading="accepting" @click="acceptTransfer">
                 {{ transfer.requires_payment ? 'Continue to checkout' : `Claim ${transfer.site_name}` }}
-              </UButton>
+              </PlatformButton>
             </template>
 
           </div>
@@ -190,7 +186,7 @@
               />
               <a :href="iframeUrl" target="_blank" rel="noopener" class="absolute inset-0 flex items-end justify-end p-3">
                 <span class="flex items-center gap-1.5 bg-default/90 backdrop-blur-sm rounded-lg px-3 py-1.5 text-xs font-medium text-default shadow border border-default">
-                  <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-3.5" />
+                  <PlatformIcon name="arrow-up-right" class="size-3.5" />
                   Open full site
                 </span>
               </a>
@@ -207,7 +203,7 @@
               <!-- open button pinned top-right, doesn't block iframe -->
               <div class="absolute top-4 right-4 pointer-events-none">
                 <a :href="iframeUrl" target="_blank" rel="noopener" class="pointer-events-auto flex items-center gap-1.5 bg-default/90 backdrop-blur-sm rounded-lg px-3 py-2 text-sm font-medium text-default shadow border border-default">
-                  <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-4" />
+                  <PlatformIcon name="arrow-up-right" class="size-4" />
                   Open full site
                 </a>
               </div>

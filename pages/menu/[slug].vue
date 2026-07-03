@@ -38,7 +38,7 @@
         <section class="mt-8 lg:col-span-7 lg:col-start-1 lg:row-span-3 lg:row-start-1 lg:mt-0" aria-labelledby="item-images-heading">
           <h2 id="item-images-heading" class="sr-only">Dish images</h2>
           <div class="grid grid-cols-1 gap-4 lg:grid-cols-1 lg:gap-6">
-            <UCard class="bg-default rounded-lg overflow-hidden border-0">
+            <div class="overflow-hidden rounded-lg bg-default">
               <video
                 v-if="mainMedia.isVideo"
                 :src="mainMedia.url ?? undefined"
@@ -57,7 +57,7 @@
               <div v-else class="flex aspect-4/3 w-full items-center justify-center px-6 text-center bg-muted">
                 <span class="text-sm text-dimmed">No image available yet</span>
               </div>
-            </UCard>
+            </div>
           </div>
         </section>
 
@@ -102,9 +102,9 @@
           </div>
 
           <div class="mt-8">
-            <UButton to="/menu" color="neutral" variant="outline">
+            <SayaButton to="/menu" variant="outline">
               Back to Menu
-            </UButton>
+            </SayaButton>
           </div>
         </section>
       </div>
@@ -149,14 +149,14 @@
 
         <div v-else class="mt-6 flex flex-col items-center justify-center rounded-xl border border-dashed border-default bg-muted/30 py-16 text-center">
           <div class="flex size-12 items-center justify-center rounded-full bg-elevated/50 text-muted shadow-sm">
-            <UIcon name="i-heroicons-chat-bubble-bottom-center-text" class="size-6" />
+            <SayaIcon name="chat-bubble-bottom-center-text" class="size-6" />
           </div>
           <h3 class="mt-4 text-sm font-medium text-highlighted">No reviews yet</h3>
           <p class="mt-1 text-sm text-muted">Have you tried this dish? Be the first to share your experience.</p>
           <div class="mt-6">
-            <UButton color="primary" variant="soft" size="sm" @click="scrollToReviewForm">
+            <SayaButton variant="outline" size="md" @click="scrollToReviewForm">
               Write a review
-            </UButton>
+            </SayaButton>
           </div>
         </div>
       </section>
