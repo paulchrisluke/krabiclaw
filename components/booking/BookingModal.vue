@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { watch, onMounted, onUnmounted, ref, nextTick } from 'vue'
+import { watch, onUnmounted, ref, nextTick } from 'vue'
 import { useScrollLock } from '~/composables/useScrollLock'
 
 const props = defineProps<{
@@ -65,13 +65,14 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: boolean): void
-  (e: 'back'): void
+  'update:modelValue': [value: boolean]
+  back: []
 }>()
 
 const modalRef = ref<HTMLElement | null>(null)
 const titleId = `modal-title-${Math.random().toString(36).slice(2, 9)}`
 const previousActiveElement = ref<HTMLElement | null>(null)
+const hasAcquired = ref(false)
 const { acquire, release } = useScrollLock()
 
 function close() {
@@ -124,22 +125,24 @@ watch(() => props.modelValue, async (isOpen) => {
   if (isOpen) {
     previousActiveElement.value = document.activeElement as HTMLElement
     acquire()
+    hasAcquired.value = true
+    document.addEventListener('keydown', handleKeyDown)
     await nextTick()
     modalRef.value?.querySelector('button')?.focus()
   } else {
-    release()
+    document.removeEventListener('keydown', handleKeyDown)
+    if (hasAcquired.value) {
+      release()
+      hasAcquired.value = false
+    }
     restoreFocus()
-  }
-})
-
-onMounted(() => {
-  if (props.modelValue) {
-    document.addEventListener('keydown', handleKeyDown)
   }
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyDown)
-  release()
+  if (hasAcquired.value) {
+    release()
+  }
 })
 </script>

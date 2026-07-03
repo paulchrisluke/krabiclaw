@@ -315,7 +315,7 @@ async function runExtraction() {
     const res = await $fetch<{
       success: boolean
       menuId: string
-      menuItems: ApiRecord[]
+      menuItems: Array<Record<string, unknown>>
       warning?: string | null
       credits: { charged: number; remaining: number }
       error?: string
@@ -326,12 +326,12 @@ async function runExtraction() {
     creditsRemaining.value = res.credits?.remaining ?? null
     extractWarning.value = res.warning ?? null
 
-    editedItems.value = (res.menuItems ?? []).map((item: ApiValue) => ({
-      id: item.id ?? '',
-      section: item.section ?? '',
-      name: item.name ?? '',
-      description: item.description ?? '',
-      price_amount: item.price_amount ?? '',
+    editedItems.value = (res.menuItems ?? []).map((item: Record<string, unknown>) => ({
+      id: String(item.id ?? ''),
+      section: String(item.section ?? ''),
+      name: String(item.name ?? ''),
+      description: String(item.description ?? ''),
+      price_amount: String(item.price_amount ?? ''),
     }))
     originalItemIds.value = editedItems.value.map(i => i.id)
 

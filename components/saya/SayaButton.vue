@@ -1,5 +1,5 @@
 <template>
-  <NuxtLink v-if="to" :to="to" :class="[classes, { 'pointer-events-none opacity-60': disabled || loading }]" :tabindex="disabled || loading ? -1 : undefined" @click="handleClick">
+  <NuxtLink v-if="to" :to="to" :class="[classes, { 'pointer-events-none opacity-60': disabled || loading }]" :aria-disabled="disabled || loading || undefined" :tabindex="disabled || loading ? -1 : undefined" @click="handleClick">
     <SayaIcon v-if="loading" name="arrow-path" class="size-4 animate-spin" />
     <slot v-else name="leading" />
     <slot />
@@ -9,7 +9,7 @@
     <slot v-else name="leading" />
     <slot />
   </a>
-  <button v-else :type="type" :disabled="disabled || loading" :class="classes">
+  <button v-else :type="type" :disabled="disabled || loading" :class="classes" @click="handleClick">
     <SayaIcon v-if="loading" name="arrow-path" class="size-4 animate-spin" />
     <slot v-else name="leading" />
     <slot />
@@ -74,7 +74,7 @@ const classes = computed(() => [
 ])
 
 const emit = defineEmits<{
-  click?: (e: Event) => void
+  click: [event: Event]
 }>()
 
 const handleClick = (e: Event) => {

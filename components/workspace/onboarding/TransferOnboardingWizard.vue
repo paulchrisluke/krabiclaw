@@ -305,6 +305,10 @@ function advance(target: WizardStep) {
     })
   }
 
+  if (target === 'social') {
+    checkFacebookConnection()
+  }
+
   if (target === 'notifications') {
     pushMessage({
       text: `First, let's confirm where alerts should go so bookings and messages land with the right person at each location.`,
@@ -358,19 +362,38 @@ async function saveNotifications() {
   savingNotifs.value = true
   notificationError.value = null
   try {
-    await Promise.all([
-      $fetch(`/api/editor/sites/${props.siteId}/notifications`, {
-        method: 'PATCH',
-        body: { whatsapp_phone: notifForm.ownerPhone, channels: notifForm.channels },
-      }),
-      ...notifForm.locations.map(loc =>
+    const siteResult = await $fetch(`/api/editor/sites/${props.siteId}/notifications`, {
+      method: 'PATCH',
+      body: { whatsapp_phone: notifForm.ownerPhone, channels: notifForm.channels },
+    }).catch(e => ({ error: e }))
+    
+    const locationResults = await Promise.allSettled(
+      notifForm.locations.map(loc =>
         $fetch(`/api/dashboard/locations/${loc.id}`, {
           method: 'PATCH',
           body: { notification_phone: loc.notificationPhone || null },
         })
-      ),
-    ])
-    advance('team')
+      )
+    )
+
+    const errors: string[] = []
+    if ('error' in siteResult) {
+      errors.push(`Site notifications: ${getErrorMessage(siteResult.error, 'failed to save')}`)
+    }
+    
+    locationResults.forEach((result, idx) => {
+      if (result.status === 'rejected') {
+        const locName = notifForm.locations[idx]?.title || `Location ${idx + 1}`
+        errors.push(`${locName}: ${getErrorMessage(result.reason, 'failed to save')}`)
+      }
+    })
+
+    if (errors.length > 0) {
+      notificationError.value = errors.join('\n')
+      toast.add({ title: 'Failed to save notification settings', description: notificationError.value, color: 'error' })
+    } else {
+      advance('team')
+    }
   } catch (e) {
     console.error('save_notifications_failed', e)
     notificationError.value = notificationSaveErrorMessage(e)
@@ -407,6 +430,16 @@ async function sendInvite() {
 
 function skipTeam() {
   advance(showSocialStep.value ? 'social' : showDomainStep.value ? 'domain' : 'done')
+}
+
+async function checkFacebookConnection() {
+  try {
+    const res = await $fetch<{ connected: boolean }>(`/api/editor/sites/${props.siteId}/integrations/facebook-pages/status`)
+    facebookConnected.value = res.connected ?? false
+  } catch (e) {
+    console.error('check_facebook_connection_failed', e)
+    facebookConnected.value = false
+  }
 }
 
 async function startFacebookConnect() {

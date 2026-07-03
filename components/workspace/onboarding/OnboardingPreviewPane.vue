@@ -160,7 +160,7 @@ const iframeLoading = ref(false)
 
 watch(() => props.iframeSrc, (newSrc, oldSrc) => {
   if (newSrc && newSrc !== oldSrc) iframeLoading.value = true
-}, { immediate: false })
+}, { immediate: true })
 
 const locationScopedPages = new Set(['location', 'menu'])
 

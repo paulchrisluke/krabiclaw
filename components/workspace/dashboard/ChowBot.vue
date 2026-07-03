@@ -223,7 +223,6 @@
 </template>
 
 <script setup lang="ts">
-// -nocheck
 import { useChowBot } from '~/composables/useChowBot'
 import { useAiCredits } from '~/composables/useAiCredits'
 import { getQuickActionPrompts } from '~/composables/useOnboardingPrompts'
@@ -235,6 +234,7 @@ const setupMode = computed(() => Boolean(props.setupMode))
 
 const dashboard = useDashboardSite()
 const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages, currentPageOverride, draftMessage } = useChowBot()
+const { paths: dashboardSiteLinkPaths } = useDashboardSiteLinks(siteId.value ?? '')
 const orgSettings = useOrgSettings()
 const DOMPurify = import.meta.client
   ? (await import('isomorphic-dompurify')).default
@@ -612,7 +612,7 @@ const processFile = async (file: File, caption = '') => {
       throw new Error(tip)
     }
 
-    const res: { success: boolean; menuId: string; menuItems: ApiRecord[]; warning: string | null } = json
+    const res: { success: boolean; menuId: string; menuItems: Array<Record<string, unknown>>; warning: string | null } = json
 
     const count = res.menuItems?.length ?? 0
     const msg = count > 0
@@ -621,8 +621,7 @@ const processFile = async (file: File, caption = '') => {
 
     messages.value = [...messages.value, { role: 'assistant', content: msg }]
     if (count > 0) {
-      const { paths } = useDashboardSiteLinks(siteId.value)
-      await navigateTo(paths.value.menu)
+      await navigateTo(dashboardSiteLinkPaths.value.menu)
     }
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err))
@@ -723,6 +722,7 @@ function renderMarkdown(text: string): string {
   // Restore code blocks
   html = html.replace(/__CODE_BLOCK_(\d+)__/g, (_, index) => {
     const code = codeBlocks[parseInt(index)]
+    if (!code) return ''
     return `<pre><code>${code.slice(3, -3).replace(/^[^\n]*\n/, '')}</code></pre>`
   })
 

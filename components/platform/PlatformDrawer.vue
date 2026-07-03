@@ -60,8 +60,8 @@ function onKeydown(event: KeyboardEvent) {
       'a[href], button:not([disabled]), textarea:not([disabled]), input[type="text"]:not([disabled]), input[type="radio"]:not([disabled]), input[type="checkbox"]:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
     )
     if (focusableElements.length > 0) {
-      const firstElement = focusableElements[0]
-      const lastElement = focusableElements[focusableElements.length - 1]
+      const firstElement = focusableElements[0]!
+      const lastElement = focusableElements[focusableElements.length - 1]!
       
       if (event.shiftKey && document.activeElement === firstElement) {
         event.preventDefault()
@@ -90,7 +90,7 @@ watch(() => props.modelValue, (open) => {
     releaseScrollLock()
     previousFocus.value?.focus()
   }
-})
+}, { immediate: true })
 
 onMounted(() => document.addEventListener('keydown', onKeydown))
 onUnmounted(() => {

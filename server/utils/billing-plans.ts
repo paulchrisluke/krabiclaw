@@ -1,4 +1,5 @@
 import Stripe from 'stripe'
+import { isManagedServiceEnabled } from './feature-flags'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,8 +51,9 @@ const STARTER_PLAN: Plan = {
   highlighted: false,
   prices: [],
   features: [
-    'AI-built site live in minutes',
-    'Bookings & ordering links',
+    'Free KrabiClaw ChatGPT app — build & edit your site by chatting',
+    'Bookings & ticketed experiences',
+    'Email notifications for reservations & bookings',
     '500 AI credits to start',
     'Basic SEO — get found by search & AI',
   ],
@@ -201,12 +203,16 @@ export async function fetchStripeProducts(
     startingAfter = prices.data[prices.data.length - 1]?.id
   }
 
+  const managedServiceEnabled = isManagedServiceEnabled(env)
+  const CONCIERGE_PLAN_IDS = new Set(['managed', 'seo_accelerator'])
+
   const plans: Plan[] = []
 
   for (const product of products) {
     const meta = (product.metadata ?? {}) as Record<string, string>
     const planId = meta.plan_id
     if (!planId || planId === 'free') continue
+    if (CONCIERGE_PLAN_IDS.has(planId) && !managedServiceEnabled) continue
 
     const productWithMarketing = product as Stripe.Product & {
       marketing_features?: ApiValue
@@ -245,8 +251,13 @@ export async function fetchStripeProducts(
 
 // ── KV-backed cache with in-flight coalescing ────────────────────────────────
 
-const PLANS_CACHE_KEY = 'stripe-plans:v1'
 const PLANS_CACHE_TTL_SECONDS = 3600
+
+// Cache key includes the managed-service flag state so toggling it doesn't
+// require waiting out the TTL to see hidden/restored concierge plans.
+function plansCacheKey(env: EnvWithSiteCache): string {
+  return `stripe-plans:v2:${isManagedServiceEnabled(env) ? 'ms1' : 'ms0'}`
+}
 
 // Single-instance in-flight guard — prevents a cache stampede where multiple
 // concurrent Worker requests all miss the KV cache simultaneously and each
@@ -259,9 +270,10 @@ let _inflight: Promise<Plan[]> | null = null
 
 export async function getCachedPlans(env: EnvWithSiteCache): Promise<Plan[]> {
   const kv = env.SITE_CACHE
+  const cacheKey = plansCacheKey(env)
 
   if (kv) {
-    const cached = await kv.get(PLANS_CACHE_KEY, 'text').catch(() => null)
+    const cached = await kv.get(cacheKey, 'text').catch(() => null)
     if (cached) {
       try {
         return JSON.parse(cached) as Plan[]
@@ -278,7 +290,7 @@ export async function getCachedPlans(env: EnvWithSiteCache): Promise<Plan[]> {
   _inflight = fetchStripeProducts(env).then(async (plans) => {
     if (kv) {
       await kv
-        .put(PLANS_CACHE_KEY, JSON.stringify(plans), {
+        .put(cacheKey, JSON.stringify(plans), {
           expirationTtl: PLANS_CACHE_TTL_SECONDS,
         })
         .catch(() => {})

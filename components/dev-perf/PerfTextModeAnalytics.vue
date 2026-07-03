@@ -16,11 +16,16 @@
 <script setup lang="ts">
 import { getGaClientId, useAnalytics } from '~/composables/useAnalytics'
 
+const runtimeConfig = useRuntimeConfig()
 const analytics = useAnalytics()
 const gaClientId = ref<string | null>(null)
 
 onMounted(() => {
   gaClientId.value = getGaClientId()
-  analytics.trackEvent('dashboard_visited')
+  // Only fire synthetic GA4 event on private perf pages, not public /dev/perf-text
+  // where GA4 is already initialized by app.vue
+  if (!runtimeConfig.public.perfPublicTestPage) {
+    analytics.trackEvent('dashboard_visited')
+  }
 })
 </script>

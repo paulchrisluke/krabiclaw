@@ -1,9 +1,12 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getPlaceDetails } from '~/server/utils/google-places'
+import { chargeFlatCredits } from '~/server/utils/ai-credits'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
+  const db = env.DB
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) {
     return jsonResponse({ error: 'Authentication required' }, { status: 401 })
@@ -21,6 +24,17 @@ export default defineEventHandler(async (event) => {
 
   try {
     const details = await getPlaceDetails(apiKey, placeId)
+    if (db) {
+      const userOrg = await queryFirst<{ organizationId: string }>(db, `
+        SELECT o.id AS organizationId FROM organization o
+        JOIN member m ON o.id = m.organizationId
+        WHERE m.userId = ?
+        ORDER BY o.createdAt ASC LIMIT 1
+      `, [session.user.id])
+      if (userOrg) {
+        await chargeFlatCredits(db, userOrg.organizationId, { action: 'google_places_details' }).catch(() => {})
+      }
+    }
     return jsonResponse({ success: true, details })
   } catch (error) {
     console.error('Places detail error:', error)

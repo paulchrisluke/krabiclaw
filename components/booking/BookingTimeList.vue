@@ -60,13 +60,13 @@ export interface TimeSlot {
   spotsLeft?: number
 }
 
-const props = defineProps<{
+defineProps<{
   modelValue?: string | null // slot.id
   slots: TimeSlot[]
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', id: string): void
+  'update:modelValue': [id: string]
 }>()
 
 function selectSlot(id: string) {

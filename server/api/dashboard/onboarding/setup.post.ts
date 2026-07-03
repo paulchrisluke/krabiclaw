@@ -4,6 +4,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getPlaceDetailsByUrl, getPlaceDetails, PlaceDetailsError } from '~/server/utils/google-places'
+import { chargeFlatCredits } from '~/server/utils/ai-credits'
 import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
 import { updateLocation } from '~/server/utils/location-management'
 import { setConfig } from '~/server/utils/site-config'
@@ -99,6 +100,9 @@ export default defineEventHandler(async (event) => {
     siteId = result.data.siteId as string
     organizationId = result.data.organizationId as string
     siteSubdomain = result.data.subdomain as string
+    // The Places lookup above happened before the org existed (preview-mode
+    // calls have no org to charge yet); recover the cost now that it does.
+    await chargeFlatCredits(db, organizationId, { siteId, action: 'google_places_details' }).catch(() => {})
   } else {
     return jsonResponse({ error: 'You already have a site. Onboarding is for new sites only.' }, { status: 400 })
   }

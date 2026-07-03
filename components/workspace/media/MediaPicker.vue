@@ -148,6 +148,7 @@ interface PickerMediaAsset {
   publicUrl?: string | null
   thumbnailUrl?: string | null
   alt_text?: string | null
+  size?: number | null
 }
 
 const isOpen = ref(false)
@@ -230,6 +231,7 @@ function onSelect(asset: PickerMediaAsset) {
 function onUploaded(asset: PickerMediaAsset) {
   const url = asset.publicUrl ?? asset.public_url ?? ''
   const kind = asset.kind ?? (url.toLowerCase().endsWith('.mp4') ? 'video' : 'image')
+  const size = asset.size ?? 0
   pendingAsset.value = {
     id: asset.id,
     publicUrl: url,
@@ -237,9 +239,9 @@ function onUploaded(asset: PickerMediaAsset) {
     kind,
   }
   if (kind === 'image') {
-    trackImageUploaded(props.siteId, 0, 'cloudflare_images')
+    trackImageUploaded(props.siteId, size, 'cloudflare_images')
   } else {
-    trackVideoUploaded(props.siteId, 0, 'cloudflare_r2')
+    trackVideoUploaded(props.siteId, size, 'cloudflare_r2')
   }
 }
 

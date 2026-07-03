@@ -6,6 +6,7 @@
         class="p-2 -ml-2 rounded-full hover:bg-muted/10 text-default disabled:opacity-50"
         :disabled="isPrevDisabled"
         @click="prevMonth"
+        aria-label="Previous month"
       >
         <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
       </button>
@@ -16,6 +17,7 @@
         type="button" 
         class="p-2 -mr-2 rounded-full hover:bg-muted/10 text-default"
         @click="nextMonth"
+        aria-label="Next month"
       >
         <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
       </button>
@@ -63,10 +65,11 @@ import { ref, computed } from 'vue'
 const props = defineProps<{
   modelValue?: Date | null
   availableDates?: string[] // YYYY-MM-DD
+  today?: Date // Timezone-aware reference date; defaults to browser's local today
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', date: Date): void
+  'update:modelValue': [date: Date]
 }>()
 
 // Current viewing month/year
@@ -88,10 +91,19 @@ const daysInMonth = computed(() => {
   return new Date(viewDate.value.getFullYear(), viewDate.value.getMonth() + 1, 0).getDate()
 })
 
-const today = new Date()
-today.setHours(0, 0, 0, 0)
+const referenceToday = computed(() => {
+  if (props.today) {
+    const d = new Date(props.today)
+    d.setHours(0, 0, 0, 0)
+    return d
+  }
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  return d
+})
 
 const isPrevDisabled = computed(() => {
+  const today = referenceToday.value
   return viewDate.value.getFullYear() === today.getFullYear() && viewDate.value.getMonth() <= today.getMonth()
 })
 
@@ -103,7 +115,7 @@ const calendarDays = computed(() => {
     let disabled = false
     
     // Disable past dates
-    if (d < today) {
+    if (d < referenceToday.value) {
       disabled = true
     } 
     // If availableDates array provided, disable if not in it
@@ -145,6 +157,7 @@ function isSelected(d: Date) {
 }
 
 function isToday(d: Date) {
+  const today = referenceToday.value
   return (
     d.getDate() === today.getDate() &&
     d.getMonth() === today.getMonth() &&

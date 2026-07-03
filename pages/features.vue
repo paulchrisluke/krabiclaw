@@ -195,11 +195,11 @@ const faqItems = [
   },
   {
     q: 'How does Google Business Profile sync work?',
-    a: 'Connect your Google Business account and KrabiClaw pulls in your verified hours, photos, reviews, and details automatically. On Managed plans, we keep your Google Business profile up to date for you.'
+    a: 'Connect your Google Business account and KrabiClaw pulls in your verified hours, photos, reviews, and details automatically. Growth keeps your profile synced on an ongoing basis.'
   },
   {
     q: 'Is there a contract or setup fee?',
-    a: 'No contracts, no setup fees. Start free, upgrade to Growth ($49/mo) or Managed ($149/mo) month-to-month. Cancel anytime.'
+    a: 'No contracts, no setup fees. Start free, upgrade to Growth ($49/mo) month-to-month. Cancel anytime.'
   }
 ]
 
@@ -247,7 +247,7 @@ const detailedFeatures = [
     specs: [
       'Table reservations and ticketed experience bookings',
       'Capacity and time-slot control per experience',
-      'Automated WhatsApp booking confirmations',
+      'Automated booking confirmations — email free, WhatsApp on Growth',
       'No commissions or per-cover fees'
     ]
   },

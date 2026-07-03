@@ -558,9 +558,19 @@ const locationNavigation = computed(() => {
   ]
 })
 
+const adminManagedServiceEnabled = ref(false)
+watch(inAdminWorkspace, (isAdmin) => {
+  if (!isAdmin) return
+  $fetch<{ managedServiceEnabled: boolean }>('/api/admin/feature-flags')
+    .then((res) => { adminManagedServiceEnabled.value = res.managedServiceEnabled })
+    .catch(() => {})
+}, { immediate: true })
+
 const adminTab = computed(() => String(route.query.tab || 'queue'))
 const adminNavigation = computed(() => [[
-  { label: 'Work Queue', icon: 'i-lucide-list-todo',       to: '/admin?tab=work',      active: adminTab.value === 'work' },
+  ...(adminManagedServiceEnabled.value
+    ? [{ label: 'Work Queue', icon: 'i-lucide-list-todo', to: '/admin?tab=work', active: adminTab.value === 'work' }]
+    : []),
   { label: 'Add-ons',  icon: 'i-lucide-inbox',           to: '/admin?tab=queue',     active: adminTab.value === 'queue' },
   { label: 'Clients',  icon: 'i-lucide-building-2',       to: '/admin?tab=clients',   active: adminTab.value === 'clients' },
   { label: 'Members',  icon: 'i-lucide-user-plus',        to: '/admin?tab=members',   active: adminTab.value === 'members' },

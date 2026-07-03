@@ -3,8 +3,28 @@
     <UPageBody>
       <div class="max-w-2xl space-y-6">
 
+        <!-- Managed service not currently offered -->
+        <template v-if="!managedServiceEnabled">
+          <UCard>
+            <div class="flex flex-col items-center text-center gap-4 py-4">
+              <div class="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                <UIcon name="i-lucide-headphones" class="size-7" />
+              </div>
+              <div>
+                <h2 class="text-lg font-bold text-highlighted">Managed support isn't available yet</h2>
+                <p class="mt-1 text-sm text-muted max-w-md">
+                  We're not taking managed-service requests right now. For anything urgent, message us directly.
+                </p>
+              </div>
+              <UButton color="neutral" variant="soft" size="lg" :href="whatsappLink" target="_blank">
+                Ask us on WhatsApp
+              </UButton>
+            </div>
+          </UCard>
+        </template>
+
         <!-- Free plan upsell -->
-        <template v-if="isFree">
+        <template v-else-if="isFree">
           <UCard>
             <div class="flex flex-col items-center text-center gap-4 py-4">
               <div class="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
@@ -132,6 +152,7 @@ const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 const plan = computed(() => dashboard.site.value?.plan ?? 'free')
 const isFree = computed(() => !plan.value || plan.value === 'free')
+const managedServiceEnabled = dashboard.managedServiceEnabled
 const { open: openUpsell } = useServiceUpsell()
 
 const TYPE_LABELS: Record<string, string> = {

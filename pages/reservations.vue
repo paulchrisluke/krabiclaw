@@ -6,106 +6,29 @@
         <em class="saya-italic">{{ getField('hero.title', resCopy.reserveCta) }}</em>
       </h1>
       <p v-if="getField('hero.subtitle')" class="mt-5 max-w-xl text-sm leading-relaxed text-muted">{{ getField('hero.subtitle') }}</p>
+      
+      <!-- Desktop Make a Reservation Button -->
+      <div class="mt-8 hidden lg:block">
+        <SayaButton size="lg" @click="openBookingModal">
+          {{ resCopy.reservationRequestButton }}
+        </SayaButton>
+      </div>
     </header>
 
-    <div class="mx-auto max-w-6xl px-4 pb-24">
+    <!-- Mobile Make a Reservation sticky bottom bar -->
+    <div class="lg:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-between gap-4 border-t border-default bg-default/95 backdrop-blur-sm px-5 py-4 shadow-lg">
+      <div class="min-w-0">
+        <p class="font-semibold text-default leading-tight">{{ resCopy.reservationFormTitle }}</p>
+      </div>
+      <SayaButton class="shrink-0" @click="openBookingModal">
+        {{ resCopy.reservationRequestButton }}
+      </SayaButton>
+    </div>
+
+    <div class="mx-auto max-w-6xl px-4 pb-28 lg:pb-24">
       <div class="grid gap-12 md:grid-cols-2">
 
-        <!-- Reservation Form / Thank-you -->
-        <div>
-          <h2 class="mb-6 text-2xl font-bold text-default md:text-3xl">{{ resCopy.reservationFormTitle }}</h2>
-
-          <div class="rounded-2xl bg-muted p-6 sm:p-8">
-
-            <!-- ── Form ────────────────────────────────────────────── -->
-            <form class="space-y-6" novalidate @submit.prevent="handleReservation">
-              <div v-if="submitError" role="alert" class="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
-                {{ submitError }}
-              </div>
-
-              <!-- Name + Email -->
-              <div class="grid gap-5 sm:grid-cols-2">
-                <SayaFormField v-slot="{ id, describedBy, invalid }" :label="resCopy.nameLabel" name="name" required :error="fieldError('name')">
-                  <input :id="id" v-model="reservationForm.name" type="text" :placeholder="resCopy.namePlaceholder" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid" />
-                </SayaFormField>
-                <SayaFormField v-slot="{ id, describedBy, invalid }" :label="resCopy.emailLabel" name="email" required :error="fieldError('email')">
-                  <input :id="id" v-model="reservationForm.email" type="email" :placeholder="resCopy.emailPlaceholder" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid" />
-                </SayaFormField>
-              </div>
-
-              <!-- Phone -->
-              <SayaFormField v-slot="{ id, describedBy, invalid }" :label="resCopy.phoneLabel" name="phone" required :error="fieldError('phone')">
-                <input :id="id" v-model="reservationForm.phone" type="tel" :placeholder="resCopy.phonePlaceholder" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid" />
-              </SayaFormField>
-
-              <SayaFormField
-                v-if="hasMultipleLocations"
-                v-slot="{ id, describedBy, invalid }"
-                :label="resCopy.locationLabel"
-                name="location_id"
-                required
-                :error="fieldError('location_id')"
-              >
-                <select :id="id" v-model="reservationForm.location_id" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid">
-                  <option value="" disabled>{{ resCopy.selectLocationLabel }}</option>
-                  <option v-for="opt in locationSelectOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                </select>
-              </SayaFormField>
-
-              <!-- Date -->
-              <SayaFormField v-slot="{ id, describedBy, invalid }" :label="resCopy.dateLabel" name="date" required :error="fieldError('date')">
-                <div class="space-y-3">
-                  <input :id="id" v-model="reservationForm.date" type="date" :min="todayIso" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid" />
-                  <p v-if="reservationForm.date" class="text-sm font-medium text-default">
-                    Selected: <span class="text-primary">{{ readableDate }}</span>
-                  </p>
-                  <p v-else class="text-xs text-muted">{{ resCopy.pickDayLabel }}</p>
-                </div>
-              </SayaFormField>
-
-              <!-- Time + Guests -->
-              <div class="grid gap-5 sm:grid-cols-2">
-                <SayaFormField v-slot="{ id, describedBy, invalid }" :label="resCopy.timeLabel" name="time" required :error="fieldError('time')">
-                  <select :id="id" v-model="reservationForm.time" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid">
-                    <option value="" disabled>{{ resCopy.selectTimeLabel }}</option>
-                    <option v-for="opt in timeSelectOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                  </select>
-                </SayaFormField>
-                <SayaFormField v-slot="{ id, describedBy, invalid }" :label="resCopy.guestsLabel" name="guests" required :error="fieldError('guests')">
-                  <select :id="id" v-model="reservationForm.guests" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid">
-                    <option value="" disabled>{{ resCopy.selectGuestsLabel }}</option>
-                    <option v-for="opt in guestOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                  </select>
-                </SayaFormField>
-              </div>
-
-              <!-- Special requests -->
-              <SayaFormField
-                v-slot="{ id, describedBy, invalid }"
-                :label="resCopy.specialRequestsLabel"
-                name="requests"
-                :description="resCopy.bookingNotesPlaceholder"
-              >
-                <textarea
-                  :id="id"
-                  v-model="reservationForm.requests"
-                  :placeholder="resCopy.specialRequestsPlaceholder"
-                  rows="3"
-                  :class="inputClass"
-                  :aria-describedby="describedBy"
-                  :aria-invalid="invalid"
-                />
-              </SayaFormField>
-
-              <SayaButton type="submit" size="lg" block :loading="submitting">
-                {{ resCopy.reservationRequestButton }}
-              </SayaButton>
-            </form>
-
-          </div>
-        </div>
-
-        <!-- Sidebar -->
+        <!-- Sidebar / Info -->
         <div>
           <h2 class="mb-6 text-2xl font-bold text-default md:text-3xl">{{ resCopy.reservationFormTitle }} Details</h2>
 
@@ -131,14 +54,87 @@
             <SayaButton to="/contact" variant="outline" block>
               {{ resCopy.contactFormButtonLabel }}
             </SayaButton>
-            <SayaButton :to="resCopy.reservationExploreRoute" variant="outline" block>
-              {{ resCopy.reservationExploreLabel }}
-            </SayaButton>
           </div>
         </div>
 
       </div>
     </div>
+
+    <!-- Booking Modal Flow -->
+    <BookingModal
+      v-model="isBookingModalOpen"
+      :title="resCopy.reservationFormTitle"
+      :can-go-back="bookingStep > startStep && !submitting"
+      @back="prevStep"
+    >
+      <!-- STEP 1: LOCATION (Only if multiple locations) -->
+      <div v-if="bookingStep === 1">
+        <BookingLocationStep
+          v-model="reservationForm.location_id"
+          :locations="locations"
+          @next="nextStep"
+        />
+        
+        <div v-if="submitError" role="alert" class="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
+          {{ submitError }}
+        </div>
+      </div>
+
+      <!-- STEP 2: DATE -->
+      <div v-if="bookingStep === 2">
+        <BookingDateSelector
+          v-model="bookingDateObj"
+        />
+        <div class="mt-6">
+          <SayaButton block size="lg" :disabled="!reservationForm.date" @click="nextStep">
+            Continue
+          </SayaButton>
+        </div>
+        <div v-if="submitError" role="alert" class="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
+          {{ submitError }}
+        </div>
+      </div>
+
+      <!-- STEP 3: TIME & GUESTS -->
+      <div v-if="bookingStep === 3">
+        <div class="space-y-8">
+          <div>
+            <h3 class="text-sm font-semibold text-default mb-4">{{ resCopy.guestsLabel }}</h3>
+            <BookingGuestCounter v-model="formGuestsNumber" />
+          </div>
+
+          <div>
+            <h3 class="text-sm font-semibold text-default mb-4">{{ resCopy.timeLabel }}</h3>
+            <BookingTimeList
+              v-model="reservationForm.time"
+              :slots="timeSlots"
+            />
+          </div>
+        </div>
+        <div class="mt-6">
+          <SayaButton block size="lg" :disabled="!reservationForm.time || !reservationForm.guests" @click="nextStep">
+            Continue
+          </SayaButton>
+        </div>
+        <div v-if="submitError" role="alert" class="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
+          {{ submitError }}
+        </div>
+      </div>
+
+      <!-- STEP 4: CONTACT -->
+      <div v-if="bookingStep === 4">
+        <BookingContactForm
+          :initial-state="{ name: reservationForm.name, email: reservationForm.email, phone: reservationForm.phone, notes: reservationForm.requests }"
+          :loading="submitting"
+          :submit-text="resCopy.reservationRequestButton"
+          phone-required
+          @submit="handleContactSubmit"
+        />
+        <div v-if="submitError" role="alert" class="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
+          {{ submitError }}
+        </div>
+      </div>
+    </BookingModal>
   </div>
 </template>
 
@@ -155,71 +151,26 @@ const { getField } = usePageContent('reservations')
 const { site, siteId } = useTenantSite()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
-const { hasExperiences, locations, config } = useBootstrap()
-const { formatDate } = useLocaleDate()
+const { locations, config } = useBootstrap()
 const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
-// Pure experience-vertical sites book per-experience on /experiences/[slug]; this
-// generic table-reservation form doesn't apply there. Restaurants that also have
-// experiences attached (e.g. Ember & Slice, Kikuzuki) still need this page for
-// regular table bookings alongside their experience bookings.
-watch([isExperienceSite, hasExperiences], ([isExp, hasExp]) => {
-  if (isExp && hasExp) {
+// Pure experience-vertical sites book per-experience on /experiences/[slug].
+// The /reservations page has no meaning for them. Redirect as soon as the
+// site vertical is known — do NOT gate on hasExperiences, because a freshly
+// seeded site with vertical='experience' and no experiences yet should still
+// not show this page.
+watch(isExperienceSite, (isExp) => {
+  if (isExp) {
     navigateTo('/experiences', { replace: true, redirectCode: 302 })
   }
 }, { immediate: true })
 
-// ── Date ──────────────────────────────────────────────────────────────────
-// Native <input type="date"> replaces UCalendar/@internationalized/date — same
-// "YYYY-MM-DD" string shape reservationForm.date already expected, no bridging
-// needed. Server already rejects past dates; `min` is just a UX nicety.
-// Use local time instead of UTC to show visitor's actual today.
-const todayIso = computed(() => {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const date = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${date}`
+// Belt-and-suspenders: prevent this page from being indexed on experience sites
+// while the async bootstrap resolves on the client (server redirect above already
+// handles SSR, but client-side navigation hydration can briefly render the page).
+useSeoMeta({
+  robots: computed(() => isExperienceSite.value ? 'noindex,follow' : 'index,follow')
 })
-
-// Plain-Tailwind form styling — replaces UInput/UTextarea/USelect's default
-// look now that this page no longer depends on Nuxt UI (see SayaFormField.vue).
-import { FORM_INPUT_CLASS } from '~/utils/form-constants'
-const inputClass = FORM_INPUT_CLASS
-
-const readableDate = computed(() => {
-  if (!reservationForm.value.date) return ''
-  return formatDate(`${reservationForm.value.date}T12:00:00`)
-})
-
-// ── Options ───────────────────────────────────────────────────────────────
-// Fallback used when the location has no structured opening_hours (e.g. Google Places imports,
-// which store hours as free-text weekday descriptions that can't be parsed into slots).
-const FALLBACK_TIMES = ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00']
-const availableTimes = computed(() => {
-  const hours = selectedLocation.value?.opening_hours
-  if (!reservationForm.value.date || !isStructuredOpeningHours(hours)) return FALLBACK_TIMES
-  const times = generateReservationTimes(hours, reservationForm.value.date)
-  return times
-})
-const timeSelectOptions = computed(() => availableTimes.value.map(t => ({ label: t, value: t })))
-
-watch(availableTimes, (times) => {
-  if (reservationForm.value.time && !times.includes(reservationForm.value.time)) {
-    reservationForm.value.time = ''
-  }
-})
-
-const guestOptions = computed(() => [
-  { value: '1', label: resCopy.value.oneGuestLabel },
-  { value: '2', label: `2 ${resCopy.value.guestsLabelPlural}` },
-  { value: '3', label: `3 ${resCopy.value.guestsLabelPlural}` },
-  { value: '4', label: `4 ${resCopy.value.guestsLabelPlural}` },
-  { value: '5', label: `5 ${resCopy.value.guestsLabelPlural}` },
-  { value: '6', label: `6 ${resCopy.value.guestsLabelPlural}` },
-  { value: '7', label: `7 ${resCopy.value.guestsLabelPlural}` },
-  { value: '8+', label: `8+ ${resCopy.value.guestsLabelPlural}` },
-])
 
 // ── Policies ──────────────────────────────────────────────────────────────
 const policiesBody = ref('')
@@ -234,16 +185,9 @@ if (!process.client) policiesBody.value = rawPoliciesHtml
 
 // ── Form state ────────────────────────────────────────────────────────────
 const reservationForm = ref({ name: '', email: '', phone: '', location_id: '', date: '', time: '', guests: '', requests: '' })
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-// ── Contact ───────────────────────────────────────────────────────────────
+// ── Contact & Locations ───────────────────────────────────────────────────
 const hasMultipleLocations = computed(() => locations.value.length > 1)
-const locationSelectOptions = computed(() =>
-  locations.value.map(location => ({
-    label: String(location.title ?? ''),
-    value: String(location.id ?? ''),
-  })),
-)
 const selectedLocation = computed(() =>
   locations.value.find(location => String(location.id ?? '') === reservationForm.value.location_id)
   ?? locations.value.find(location => Boolean(location.is_primary))
@@ -276,31 +220,95 @@ const contactEmail = computed(() =>
   ),
 )
 
-const validateReservation = (state: typeof reservationForm.value) => {
-  const errors: { name: string; message: string }[] = []
-  if (!state.name)    errors.push({ name: 'name',   message: 'Please enter your name.' })
-  if (!state.email)   errors.push({ name: 'email',  message: 'Please enter your email.' })
-  else if (!emailPattern.test(state.email)) errors.push({ name: 'email', message: 'Please enter a valid email address.' })
-  if (!state.phone)   errors.push({ name: 'phone',  message: 'Please enter your phone number.' })
-  if (hasMultipleLocations.value && !state.location_id) errors.push({ name: 'location_id', message: resCopy.value.chooseLocationLabel })
-  if (!state.date)    errors.push({ name: 'date',   message: 'Please pick a date.' })
-  if (!state.time)    errors.push({ name: 'time',   message: 'Please choose a time.' })
-  if (!state.guests)  errors.push({ name: 'guests', message: 'Please choose your party size.' })
-  return errors
+// ── Modal State ───────────────────────────────────────────────────────────
+const isBookingModalOpen = ref(false)
+const startStep = computed(() => hasMultipleLocations.value ? 1 : 2)
+const bookingStep = ref(startStep.value)
+
+function openBookingModal() {
+  bookingStep.value = startStep.value
+  isBookingModalOpen.value = true
 }
 
+function nextStep() {
+  submitError.value = null
+  bookingStep.value++
+}
+
+function prevStep() {
+  submitError.value = null
+  if (bookingStep.value > startStep.value) {
+    bookingStep.value--
+  } else {
+    isBookingModalOpen.value = false
+  }
+}
+
+// ── Date ──────────────────────────────────────────────────────────────────
+const bookingDateObj = ref<Date | null>(null)
+watch(bookingDateObj, (newDate) => {
+  if (newDate) {
+    const y = newDate.getFullYear()
+    const m = String(newDate.getMonth() + 1).padStart(2, '0')
+    const d = String(newDate.getDate()).padStart(2, '0')
+    reservationForm.value.date = `${y}-${m}-${d}`
+  } else {
+    reservationForm.value.date = ''
+  }
+})
+
+// ── Guests ────────────────────────────────────────────────────────────────
+const formGuestsNumber = ref<number>(
+  reservationForm.value.guests === '8+' 
+    ? 8 
+    : (parseInt(reservationForm.value.guests) || 2)
+)
+watch(formGuestsNumber, (val) => {
+  if (val > 7) {
+    reservationForm.value.guests = '8+'
+  } else {
+    reservationForm.value.guests = String(val)
+  }
+}, { immediate: true })
+
+// ── Time ──────────────────────────────────────────────────────────────────
+const FALLBACK_TIMES = ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00']
+const availableTimes = computed(() => {
+  const hours = selectedLocation.value?.opening_hours
+  if (!reservationForm.value.date || !isStructuredOpeningHours(hours)) return FALLBACK_TIMES
+  return generateReservationTimes(hours, reservationForm.value.date)
+})
+
+const timeSlots = computed(() => {
+  return availableTimes.value.map(t => ({
+    id: t,
+    startTime: t,
+    durationMinutes: null
+  }))
+})
+
+watch(availableTimes, (times) => {
+  if (reservationForm.value.time && !times.includes(reservationForm.value.time)) {
+    reservationForm.value.time = ''
+  }
+})
+
+// ── Submission ────────────────────────────────────────────────────────────
 const submitting = ref(false)
 const submitError = ref<string | null>(null)
-const reservationErrors = ref<{ name: string; message: string }[]>([])
-const fieldError = (name: string) => reservationErrors.value.find(e => e.name === name)?.message ?? null
+
+async function handleContactSubmit(contactState: { name: string, email: string, phone?: string, notes?: string }) {
+  reservationForm.value.name = contactState.name
+  reservationForm.value.email = contactState.email
+  reservationForm.value.phone = contactState.phone ?? ''
+  reservationForm.value.requests = contactState.notes ?? ''
+  
+  await handleReservation()
+}
 
 async function handleReservation() {
   if (submitting.value || !siteId) return
   submitError.value = null
-  reservationErrors.value = validateReservation(reservationForm.value)
-  if (reservationErrors.value.length > 0) return
-
-  submitting.value = true
   try {
     const res = await $fetch<{ id: string; cancellationToken: string }>(`/api/public/sites/${siteId}/reservations`, {
       method: 'POST',

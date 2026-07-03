@@ -1,11 +1,14 @@
-import { jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import {
   getDashboardContext,
   listOrganizationSites,
   resolveSelectedDashboardLocation
 } from '~/server/utils/dashboard-context'
+import { isManagedServiceEnabled } from '~/server/utils/feature-flags'
 
 export default defineEventHandler(async (event) => {
+  const managedServiceEnabled = isManagedServiceEnabled(cloudflareEnv(event))
+
   // afterTransfer: opt-in for the post-transfer onboarding page, which has no
   // siteSlug route segment to attach a header from and needs to resolve the
   // specific site this user just received — see resolveRecentlyTransferredSite.
@@ -23,7 +26,8 @@ export default defineEventHandler(async (event) => {
       site: null,
       sites,
       locations: [],
-      selectedLocation: null
+      selectedLocation: null,
+      managedServiceEnabled
     })
   }
 
@@ -40,6 +44,7 @@ export default defineEventHandler(async (event) => {
     site,
     sites,
     locations,
-    selectedLocation
+    selectedLocation,
+    managedServiceEnabled
   })
 })

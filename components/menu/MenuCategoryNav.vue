@@ -22,7 +22,7 @@
 </template>
 
 <script setup>
-const props = defineProps({
+defineProps({
   categories: { type: Array, required: true },
   active: { type: String, required: true }
 })

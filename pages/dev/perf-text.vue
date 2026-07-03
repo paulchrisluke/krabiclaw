@@ -20,16 +20,45 @@
       </p>
     </section>
 
-    <component
-      :is="currentModeComponent"
-      v-else-if="currentModeComponent"
-      v-bind="currentModeProps"
+    <LazyPerfTextModeUi v-else-if="mode === 'ui'" />
+    <LazyPerfTextModeIcons
+      v-else-if="mode === 'icons'"
+      v-bind="iconModeVariants.icons"
     />
+    <LazyPerfTextModeIcons
+      v-else-if="mode === 'icons-client-only'"
+      v-bind="iconModeVariants['icons-client-only']"
+    />
+    <LazyPerfTextModeIcons
+      v-else-if="mode === 'icon-placeholders'"
+      v-bind="iconModeVariants['icon-placeholders']"
+    />
+    <LazyPerfTextModePlatformShell v-else-if="mode === 'platform-shell'" />
+    <LazyPerfTextModeStaticShell
+      v-else-if="mode === 'static-shell'"
+      :static-nav-items="staticNavItems"
+    />
+    <LazyPerfTextModeSayaHeader v-else-if="mode === 'saya-header'" />
+    <LazyPerfTextModeSayaFooter v-else-if="mode === 'saya-footer'" />
+    <LazyPerfTextModeSayaShell v-else-if="mode === 'saya-shell'" />
+    <LazyPerfTextModeSayaStaticShell
+      v-else-if="mode === 'saya-static-shell'"
+      :saya-static-nav-items="sayaStaticNavItems"
+    />
+    <LazyPerfTextModeIcons
+      v-else-if="mode === 'simple-icons'"
+      v-bind="iconModeVariants['simple-icons']"
+    />
+    <LazyPerfTextModeSingleIcon v-else-if="mode === 'text-with-one-icon'" />
+    <LazyPerfTextModeUIButton v-else-if="mode === 'text-with-ui-button'" />
+    <LazyPerfTextModeI18n v-else-if="mode === 'text-with-i18n'" />
+    <LazyPerfTextModeAnalytics v-else-if="mode === 'text-with-analytics-plugin'" />
+    <LazyPerfTextModeLayout v-else-if="mode === 'text-with-layout'" />
+    <LazyPerfTextModeSayaCss v-else-if="mode === 'text-with-saya-css'" />
   </main>
 </template>
 
 <script setup lang="ts">
-import { defineAsyncComponent, type Component } from 'vue'
 import { isDevPerfHostAllowed } from '~/shared/dev-perf'
 
 definePageMeta({
@@ -65,29 +94,6 @@ const mode = computed(() => {
   return requestedMode && modes.has(requestedMode) ? requestedMode : 'text'
 })
 
-// Keep every non-baseline mode behind an async component so `text` and
-// `text-no-icons` don't carry the code for shell probes, Nuxt UI probes,
-// or composable-specific experiments in the same route chunk.
-const asyncModeComponents: Partial<Record<string, Component>> = {
-  ui: defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeUi.vue')),
-  icons: defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeIcons.vue')),
-  'icons-client-only': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeIcons.vue')),
-  'icon-placeholders': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeIcons.vue')),
-  'platform-shell': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModePlatformShell.vue')),
-  'static-shell': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeStaticShell.vue')),
-  'saya-header': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeSayaHeader.vue')),
-  'saya-footer': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeSayaFooter.vue')),
-  'saya-shell': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeSayaShell.vue')),
-  'saya-static-shell': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeSayaStaticShell.vue')),
-  'simple-icons': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeIcons.vue')),
-  'text-with-one-icon': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeSingleIcon.vue')),
-  'text-with-ui-button': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeUIButton.vue')),
-  'text-with-i18n': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeI18n.vue')),
-  'text-with-analytics-plugin': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeAnalytics.vue')),
-  'text-with-layout': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeLayout.vue')),
-  'text-with-saya-css': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeSayaCss.vue')),
-}
-const currentModeComponent = computed(() => asyncModeComponents[mode.value] ?? null)
 const icons = [
   'i-heroicons-bolt',
   'i-heroicons-globe-alt',
@@ -151,21 +157,6 @@ const sayaStaticNavItems = [
   { label: 'Experiences', to: '/experiences' },
   { label: 'Contact', to: '/contact' },
 ]
-const currentModeProps = computed(() => {
-  switch (mode.value) {
-    case 'icons':
-    case 'icons-client-only':
-    case 'icon-placeholders':
-    case 'simple-icons':
-      return iconModeVariants[mode.value]
-    case 'static-shell':
-      return { staticNavItems }
-    case 'saya-static-shell':
-      return { sayaStaticNavItems }
-    default:
-      return {}
-  }
-})
 
 if (!isDevPerfHostAllowed(requestHeaders.host, !!requestHeaders['cf-ray'], runtimeConfig.public.perfPublicTestPage)) {
   throw createError({

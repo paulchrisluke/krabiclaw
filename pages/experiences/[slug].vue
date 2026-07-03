@@ -542,11 +542,6 @@ function handleContactSubmit(contactData: ContactFormState) {
   submitBooking()
 }
 
-// Plain-Tailwind form styling — replaces UInput/UTextarea/USelect's default
-// look now that this page no longer depends on Nuxt UI (see SayaFormField.vue).
-const inputClass = 'block w-full rounded-lg border border-default bg-default px-3.5 py-2 text-sm text-default placeholder:text-muted focus:border-inverted focus:outline-none focus:ring-1 focus:ring-inverted disabled:opacity-60'
-
-
 // ── Lightbox ──────────────────────────────────────────────────────────────────
 
 const imageItems = computed(() => mediaItems.value.filter(i => i.kind === 'image'))
@@ -608,11 +603,6 @@ const minDate = computed(() => {
   const now = new Date(clockNow.value)
   return formatDateInTimeZone(now, bookingTimezone.value)
 })
-
-const maxCap = computed(() => experience.value?.max_capacity ?? 20)
-const partySizeOptions = computed(() =>
-  Array.from({ length: maxCap.value }, (_, i) => ({ label: `${i + 1} guest${i > 0 ? 's' : ''}`, value: String(i + 1) })),
-)
 
 const form = reactive({
   guest_name: '',

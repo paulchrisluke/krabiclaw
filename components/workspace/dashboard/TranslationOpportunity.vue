@@ -197,8 +197,8 @@ const canStart = computed(() =>
 )
 
 watch(
-  eligible,
-  (value) => {
+  [eligible, statusLoaded],
+  ([value]) => {
     if (value) loadStatus()
   }
 )

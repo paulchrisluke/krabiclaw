@@ -1,4 +1,5 @@
 import { hasEntitlement, hasSiteEntitlement } from '~/server/utils/billing'
+import { isManagedServiceEnabled } from '~/server/utils/feature-flags'
 import { execute } from '~/server/db'
 
 type SetupEnv = Parameters<typeof hasEntitlement>[0]
@@ -51,6 +52,10 @@ export async function createWorkRequest(
   const description = input.description?.trim() || null
   const priority = (input.priority as WorkRequestPriority | undefined) ?? 'normal'
   const source = input.source ?? 'dashboard'
+
+  if (!isManagedServiceEnabled(env as ApiRecord)) {
+    return { status: 403, data: { error: 'Managed service is not currently available.' } }
+  }
 
   const entitled = siteId
     ? await hasSiteEntitlement(db, siteId, 'managed_service')

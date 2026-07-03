@@ -124,6 +124,9 @@
 </template>
 
 <script setup lang="ts">
+import { ref, computed, onUnmounted } from 'vue'
+import { useMediaUpload } from '~/composables/useMediaUpload'
+
 const props = defineProps<{
   siteId: string
 }>()
@@ -155,11 +158,20 @@ async function onLogoSelected(event: Event) {
   errorMessage.value = null
   logoAssetId.value = null
   try {
+    if (logoPreviewUrl.value?.startsWith('blob:')) {
+      URL.revokeObjectURL(logoPreviewUrl.value)
+    }
     logoPreviewUrl.value = URL.createObjectURL(file)
     const result = await uploadLogo(file, { category: 'logo' })
-    if (result) logoAssetId.value = result.id
+    if (result) {
+      logoAssetId.value = result.id
+      if (logoInput.value) logoInput.value.value = ''
+    }
   } catch {
     errorMessage.value = 'Could not upload that logo. Try a different image.'
+    if (logoPreviewUrl.value?.startsWith('blob:')) {
+      URL.revokeObjectURL(logoPreviewUrl.value)
+    }
     logoPreviewUrl.value = null
   }
 }
@@ -170,14 +182,32 @@ async function onHeroSelected(event: Event) {
   errorMessage.value = null
   heroAssetId.value = null
   try {
+    if (heroPreviewUrl.value?.startsWith('blob:')) {
+      URL.revokeObjectURL(heroPreviewUrl.value)
+    }
     heroPreviewUrl.value = URL.createObjectURL(file)
     const result = await uploadHero(file)
-    if (result) heroAssetId.value = result.id
+    if (result) {
+      heroAssetId.value = result.id
+      if (heroInput.value) heroInput.value.value = ''
+    }
   } catch {
     errorMessage.value = 'Could not upload that photo. Try a different image.'
+    if (heroPreviewUrl.value?.startsWith('blob:')) {
+      URL.revokeObjectURL(heroPreviewUrl.value)
+    }
     heroPreviewUrl.value = null
   }
 }
+
+onUnmounted(() => {
+  if (logoPreviewUrl.value?.startsWith('blob:')) {
+    URL.revokeObjectURL(logoPreviewUrl.value)
+  }
+  if (heroPreviewUrl.value?.startsWith('blob:')) {
+    URL.revokeObjectURL(heroPreviewUrl.value)
+  }
+})
 
 async function save() {
   saving.value = true

@@ -23,11 +23,12 @@
     </div>
 
     <div>
-      <label for="booking-phone" class="block text-sm font-medium text-default mb-1">Phone number <span class="text-muted font-normal">(Optional)</span></label>
+      <label for="booking-phone" class="block text-sm font-medium text-default mb-1">Phone number <span v-if="!phoneRequired" class="text-muted font-normal">(Optional)</span></label>
       <input 
         id="booking-phone"
         v-model="form.phone"
         type="tel"
+        :required="phoneRequired"
         class="w-full px-3 py-2 border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-transparent text-default"
       />
     </div>
@@ -75,13 +76,15 @@ const props = withDefaults(defineProps<{
   initialState?: Partial<ContactFormState>
   loading?: boolean
   submitText?: string
+  phoneRequired?: boolean
 }>(), {
   submitText: 'Confirm booking',
-  loading: false
+  loading: false,
+  phoneRequired: false
 })
 
 const emit = defineEmits<{
-  (e: 'submit', form: ContactFormState): void
+  submit: [form: ContactFormState]
 }>()
 
 const form = reactive<ContactFormState>({

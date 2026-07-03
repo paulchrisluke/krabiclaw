@@ -8,7 +8,7 @@
  * If a date is provided, it combines them. If no timezone is provided, it uses the local browser timezone.
  * We use Intl.DateTimeFormat to ensure consistent, localized formatting.
  */
-export function formatTime12Hour(timeStr: string, timezone?: string | null): string {
+export function formatTime12Hour(timeStr: string, _timezone?: string | null): string {
   if (!timeStr) return ''
   
   // Create a dummy date using the provided time.

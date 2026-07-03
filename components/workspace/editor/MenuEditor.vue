@@ -445,8 +445,9 @@ const handleQuickUpdateItem = async (item: MenuItem, updates: UpdateMenuItemRequ
 
 const handlePriceChange = (item: MenuItem, event: Event) => {
   const target = event.target as HTMLInputElement | null
-  const value = target?.value.trim() || undefined
-  if ((item.price_amount ?? undefined) === value) return
+  const trimmed = target?.value.trim() ?? ''
+  const value = trimmed || null
+  if ((item.price_amount ?? null) === value) return
   handleQuickUpdateItem(item, { price_amount: value })
 }
 

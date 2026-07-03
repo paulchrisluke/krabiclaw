@@ -34,7 +34,7 @@
           <img
             v-else-if="item.image"
             :src="item.image"
-            :srcset="item.image.includes('imagedelivery.net') || item.image.includes('cloudflare') ? cfImageSrcset(item.image) : undefined"
+            :srcset="item.image.includes('imagedelivery.net') || item.image.includes('cloudflare') ? cfImageSrcset(item.image) ?? undefined : undefined"
             :sizes="item.image.includes('imagedelivery.net') || item.image.includes('cloudflare') ? '(max-width:640px) 50vw, 25vw' : undefined"
             :alt="item.alt"
             loading="lazy"

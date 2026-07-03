@@ -2,6 +2,7 @@ import Stripe from 'stripe'
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, getPriceIdForPlan, requireBillingAccess } from '../../utils/billing'
+import { isManagedServiceEnabled } from '../../utils/feature-flags'
 import { execute, queryFirst } from '~/server/db'
 
 interface CheckoutRequest {
@@ -21,7 +22,11 @@ export default defineEventHandler(async (event) => {
 
   if (!plan) return jsonResponse({ error: 'Plan is required' }, { status: 400 })
 
-  const ALLOWED_PLANS = ['growth', 'managed', 'seo_accelerator']
+  const env = cloudflareEnv(event)
+
+  const ALLOWED_PLANS = isManagedServiceEnabled(env)
+    ? ['growth', 'managed', 'seo_accelerator']
+    : ['growth']
   if (!ALLOWED_PLANS.includes(plan)) {
     return jsonResponse({ error: `Invalid plan. Allowed values are ${ALLOWED_PLANS.join(', ')}` }, { status: 400 })
   }
@@ -29,7 +34,6 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Invalid interval. Allowed values are month or year' }, { status: 400 })
   }
 
-  const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
   if (!env.STRIPE_SECRET_KEY) return jsonResponse({ error: 'Stripe not configured' }, { status: 503 })

@@ -1,7 +1,10 @@
 <template>
   <div>
-    <!-- Primary 3 plans -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+    <!-- Primary plans -->
+    <div
+      class="grid grid-cols-1 gap-6 items-stretch mx-auto"
+      :class="mainPlans.length >= 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2 max-w-3xl'"
+    >
       <div
         v-for="plan in mainPlans"
         :key="plan.id"
@@ -71,7 +74,7 @@
     </div>
 
     <!-- Managed service callout -->
-    <div class="max-w-3xl mx-auto mt-20 relative overflow-hidden text-center bg-linear-to-br from-primary/5 via-elevated/40 to-(--kc-teal)/5 border border-default/70 rounded-3xl shadow-lg hover:shadow-xl transition-shadow duration-300">
+    <div v-if="hasManagedTier" class="max-w-3xl mx-auto mt-20 relative overflow-hidden text-center bg-linear-to-br from-primary/5 via-elevated/40 to-(--kc-teal)/5 border border-default/70 rounded-3xl shadow-lg hover:shadow-xl transition-shadow duration-300">
       <div class="p-8 sm:p-10">
       <div class="absolute -top-24 -right-24 w-48 h-48 bg-primary/10 rounded-full blur-3xl opacity-40" />
       <div class="absolute -bottom-24 -left-24 w-48 h-48 bg-(--kc-teal)/10 rounded-full blur-3xl opacity-40" />
@@ -151,6 +154,7 @@ const planList = computed(() => props.plans ?? [])
 const MAIN_PLAN_IDS = ['free', 'growth', 'managed']
 const mainPlans = computed(() => planList.value.filter(p => MAIN_PLAN_IDS.includes(p.id)))
 const seoAcceleratorPlan = computed(() => planList.value.find(p => p.id === 'seo_accelerator') ?? null)
+const hasManagedTier = computed(() => mainPlans.value.some(p => p.id === 'managed') || Boolean(seoAcceleratorPlan.value))
 const seoAcceleratorMonthlyPrice = computed(() => {
   const plan = seoAcceleratorPlan.value
   if (!plan) return null
@@ -199,12 +203,10 @@ const comparisonRows: ComparisonRow[] = [
   { feature: 'AI site builder (live in minutes)', free: true,    growth: true,      managed: true },
   { feature: 'WhatsApp content updates',          free: false,   growth: true,      managed: true },
   { feature: 'Bookings & experiences',            free: true,    growth: true,      managed: true },
-  { feature: 'Order & delivery links',            free: true,    growth: true,      managed: true },
   { feature: 'AI content generation',             free: '500 credits', growth: '2,000 credits', managed: 'Unlimited' },
   { feature: 'LLM-ready SEO (get found by AI)',   free: 'Basic', growth: 'Advanced', managed: 'Advanced' },
-  { feature: 'Multi-language support',            free: false,   growth: '1 language', managed: 'Unlimited' },
   { feature: 'Custom domain',                     free: false,   growth: true,      managed: true },
-  { feature: 'Facebook auto-sync',                free: false,   growth: false,     managed: true },
+  { feature: 'Facebook auto-sync',                free: false,   growth: true,      managed: true },
   { feature: 'Google Business sync',              free: false,   growth: 'Basics',  managed: 'Full management' },
   { feature: 'WhatsApp notifications',            free: false,   growth: true,      managed: true },
   { feature: 'Managed by Paul & Julia',           free: false,   growth: false,     managed: true },

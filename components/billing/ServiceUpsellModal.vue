@@ -118,13 +118,14 @@ function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent>
 
   return {
     growth: {
-      headline: 'Let us handle translations & updates',
-      subheading: `You focus on the ${foodWord} — we keep your site accurate, translated, and found by tourists.`,
+      headline: 'Your own domain, synced everywhere',
+      subheading: `You focus on the ${foodWord} — we keep your site accurate, notified, and found by tourists.`,
       bullets: [
-        'One language translation (English, Chinese, or German)',
-        `${menuCapitalized} updates via WhatsApp — just send us a message`,
-        'Monthly traffic & performance snapshot',
-        'Google Business profile basics included',
+        'Your own domain (yourbusiness.com)',
+        `${menuCapitalized} updates via ChatGPT — just send us a message`,
+        'WhatsApp booking & reservation notifications',
+        'Auto-sync from Facebook & Instagram',
+        'Google Business profile sync',
       ],
       price: '$49',
       priceNote: '/ month',

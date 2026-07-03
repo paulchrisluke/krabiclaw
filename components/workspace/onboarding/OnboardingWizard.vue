@@ -821,7 +821,7 @@ async function runLookup(mapsUrl: string) {
 async function submitDetails() {
   const basicRequired = detailsRequireBasics.value
   const requiredFields = basicRequired
-    ? [detailsForm.name, detailsForm.city, detailsForm.address, detailsForm.phone, detailsForm.openingHours]
+    ? [detailsForm.name, detailsForm.city, detailsForm.address, detailsForm.phone, detailsForm.notificationPhone, detailsForm.openingHours]
     : [detailsForm.name]
   if (!requiredFields.every(value => value.trim().length > 0)) {
     importError.value = 'Please fill in the required fields before continuing.'

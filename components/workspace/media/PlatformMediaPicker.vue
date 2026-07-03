@@ -118,6 +118,7 @@ interface PlatformMediaAsset {
 const isOpen = ref(false)
 const pendingAsset = ref<{ id: string; publicUrl: string; thumbnailUrl: string; altText: string } | null>(null)
 const loading = ref(false)
+const error = ref<string | null>(null)
 const images = ref<PlatformMediaAsset[]>([])
 
 const selectedUrl = ref<string | null>(null)
@@ -179,6 +180,7 @@ async function loadImages() {
   libraryLoadController.value = controller
 
   loading.value = true
+  error.value = null
   try {
     const res = await $fetch<{ media: PlatformMediaAsset[] }>('/api/admin/platform/media?limit=50', {
       signal: controller.signal
@@ -188,6 +190,7 @@ async function loadImages() {
   } catch (err) {
     if (controller.signal.aborted || isAbortError(err)) return
     console.error('Failed to load platform images:', err)
+    error.value = err instanceof Error ? err.message : 'Failed to load images'
     images.value = []
   } finally {
     if (libraryLoadController.value === controller) {

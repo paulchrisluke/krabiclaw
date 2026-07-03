@@ -42,68 +42,87 @@
           </UCard>
         </template>
 
-        <!-- Growth plan — 1 language included -->
+        <!-- Growth plan — translation request fulfillment isn't available right now -->
         <template v-else-if="isGrowth">
-          <UCard>
-            <div class="flex items-start gap-4">
-              <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <UIcon name="i-heroicons-language" class="size-5" />
+          <UCard v-if="!managedServiceEnabled">
+            <div class="flex flex-col items-center text-center gap-4 py-4">
+              <div class="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                <UIcon name="i-heroicons-language" class="size-7" />
               </div>
-              <div class="flex-1 min-w-0">
-                <h2 class="font-bold text-highlighted">1 language translation included</h2>
-                <p class="mt-1 text-sm text-muted">Your Growth plan includes one full site translation. Tell us which language and we'll get it done.</p>
+              <div>
+                <h2 class="text-lg font-bold text-highlighted">Translations aren't available yet</h2>
+                <p class="mt-1 text-sm text-muted max-w-md">
+                  We're not taking translation requests right now. For anything urgent, message us directly.
+                </p>
               </div>
+              <UButton color="neutral" variant="soft" size="lg" :href="whatsappLink('I need a language translation for my site')" target="_blank" rel="noopener noreferrer">
+                Ask us on WhatsApp
+              </UButton>
             </div>
+          </UCard>
 
-            <div v-if="activeLocales.length" class="mt-5 space-y-2">
-              <p class="text-xs font-semibold uppercase tracking-wide text-muted">Active language</p>
-              <div
-                v-for="locale in activeLocales"
-                :key="locale.locale"
-                class="flex items-center justify-between rounded-lg border border-default px-4 py-3"
-              >
-                <div class="flex items-center gap-2">
-                  <UIcon name="i-heroicons-check-circle" class="size-4 text-success" />
-                  <span class="font-medium text-default">{{ localeLabel(locale.locale) }}</span>
-                  <UBadge :color="locale.status === 'published' ? 'success' : 'warning'" variant="soft" size="xs">
-                    {{ locale.status }}
-                  </UBadge>
+          <template v-else>
+            <UCard>
+              <div class="flex items-start gap-4">
+                <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <UIcon name="i-heroicons-language" class="size-5" />
                 </div>
-                <UButton size="xs" color="neutral" variant="soft" :href="whatsappLink(`I need an update to my ${localeLabel(locale.locale)} translation`)" target="_blank" rel="noopener noreferrer">
-                  Request update
-                </UButton>
+                <div class="flex-1 min-w-0">
+                  <h2 class="font-bold text-highlighted">1 language translation included</h2>
+                  <p class="mt-1 text-sm text-muted">Your Growth plan includes one full site translation. Tell us which language and we'll get it done.</p>
+                </div>
               </div>
-            </div>
 
-            <div v-else class="mt-5">
-              <p class="text-sm font-medium text-default mb-3">Which language would you like?</p>
-              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <UButton
-                  v-for="option in popularLocales"
-                  :key="option.value"
-                  color="neutral"
-                  variant="outline"
-                  :href="whatsappLink(`I'd like my site translated into ${option.label}`)"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="justify-start"
+              <div v-if="activeLocales.length" class="mt-5 space-y-2">
+                <p class="text-xs font-semibold uppercase tracking-wide text-muted">Active language</p>
+                <div
+                  v-for="locale in activeLocales"
+                  :key="locale.locale"
+                  class="flex items-center justify-between rounded-lg border border-default px-4 py-3"
                 >
-                  {{ option.label }}
-                </UButton>
+                  <div class="flex items-center gap-2">
+                    <UIcon name="i-heroicons-check-circle" class="size-4 text-success" />
+                    <span class="font-medium text-default">{{ localeLabel(locale.locale) }}</span>
+                    <UBadge :color="locale.status === 'published' ? 'success' : 'warning'" variant="soft" size="xs">
+                      {{ locale.status }}
+                    </UBadge>
+                  </div>
+                  <UButton size="xs" color="neutral" variant="soft" :href="whatsappLink(`I need an update to my ${localeLabel(locale.locale)} translation`)" target="_blank" rel="noopener noreferrer">
+                    Request update
+                  </UButton>
+                </div>
               </div>
-              <p class="mt-3 text-xs text-muted">Need a different language? <a :href="whatsappLink('I need a language translation not listed')" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">Message us on WhatsApp</a></p>
-            </div>
-          </UCard>
 
-          <UCard v-if="activeLocales.length === 0">
-            <div class="flex items-start gap-3">
-              <UIcon name="i-heroicons-information-circle" class="size-5 text-primary shrink-0 mt-0.5" />
-              <p class="text-sm text-muted">
-                Want unlimited languages and full managed service?
-                <button class="text-primary hover:underline font-medium" @click="openUpsell('managed', 'translations-page')">Upgrade to Managed ($149/mo)</button>
-              </p>
-            </div>
-          </UCard>
+              <div v-else class="mt-5">
+                <p class="text-sm font-medium text-default mb-3">Which language would you like?</p>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <UButton
+                    v-for="option in popularLocales"
+                    :key="option.value"
+                    color="neutral"
+                    variant="outline"
+                    :href="whatsappLink(`I'd like my site translated into ${option.label}`)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="justify-start"
+                  >
+                    {{ option.label }}
+                  </UButton>
+                </div>
+                <p class="mt-3 text-xs text-muted">Need a different language? <a :href="whatsappLink('I need a language translation not listed')" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">Message us on WhatsApp</a></p>
+              </div>
+            </UCard>
+
+            <UCard v-if="activeLocales.length === 0 && managedPlan">
+              <div class="flex items-start gap-3">
+                <UIcon name="i-heroicons-information-circle" class="size-5 text-primary shrink-0 mt-0.5" />
+                <p class="text-sm text-muted">
+                  Want unlimited languages and full managed service?
+                  <button class="text-primary hover:underline font-medium" @click="openUpsell('managed', 'translations-page')">Upgrade to Managed ({{ managedPriceLabel }})</button>
+                </p>
+              </div>
+            </UCard>
+          </template>
         </template>
 
         <!-- Managed / SEO Accelerator — unlimited -->
@@ -174,12 +193,22 @@ const plan = computed(() => dashboard.site.value?.plan ?? 'free')
 
 const isFree = computed(() => !plan.value || plan.value === 'free')
 const isGrowth = computed(() => plan.value === 'growth')
+const managedServiceEnabled = dashboard.managedServiceEnabled
 
 const { open: openUpsell } = useServiceUpsell()
+const { managedPlan, monthlyPrice, formatPrice } = usePlans()
+const managedPriceLabel = computed(() => {
+  const cents = managedPlan.value ? monthlyPrice(managedPlan.value) : null
+  return cents !== null ? `${formatPrice(cents)}/mo` : 'contact us'
+})
 
 const headerDescription = computed(() => {
   if (isFree.value) return 'Reach more tourists by translating your site into their language.'
-  if (isGrowth.value) return 'Your Growth plan includes one full site translation, managed by our team.'
+  if (isGrowth.value) {
+    return managedServiceEnabled.value
+      ? 'Your Growth plan includes one full site translation, managed by our team.'
+      : "Translation requests aren't available right now."
+  }
   return 'Unlimited translations, managed by Paul & Julia. Request any language anytime.'
 })
 

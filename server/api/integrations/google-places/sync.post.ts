@@ -3,6 +3,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { syncPlaceToLocation } from '../../../utils/google-places'
 import { getDashboardSite } from '~/server/utils/dashboard-context'
 import { hasSiteEntitlement } from '~/server/utils/billing'
+import { chargeFlatCredits } from '~/server/utils/ai-credits'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { queryFirst } from '~/server/db'
 
@@ -58,6 +59,7 @@ export default defineEventHandler(async (event) => {
       locationId,
       location.google_place_id
     )
+    await chargeFlatCredits(db, site.organization_id, { siteId: site.id, action: 'google_places_details' }).catch(() => {})
     await purgeBootstrapCacheSafe(env, site.id)
 
     return jsonResponse({

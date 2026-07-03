@@ -65,14 +65,14 @@
       <div v-for="i in 12" :key="i" class="aspect-square rounded-lg bg-elevated animate-pulse" />
     </div>
 
-    <div v-else-if="assets.length === 0" class="py-10 text-center">
+    <div v-else-if="filteredAssets.length === 0" class="py-10 text-center">
       <UIcon name="i-heroicons-photo" class="mx-auto size-8 text-muted" />
       <p class="mt-3 text-sm text-muted">No media yet. Upload or generate your first image.</p>
     </div>
 
     <div v-else class="grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-6 overflow-y-auto max-h-80">
       <button
-        v-for="asset in assets"
+        v-for="asset in filteredAssets"
         :key="asset.id"
         type="button"
         class="group relative aspect-square overflow-hidden rounded-lg border-2 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -181,6 +181,17 @@ const kindOptions = [
   { label: 'Videos', value: 'video' },
   { label: 'All', value: ALL_MEDIA_KIND },
 ]
+
+const filteredAssets = computed(() => {
+  const query = search.value.toLowerCase().trim()
+  if (!query) return assets.value
+  return assets.value.filter(asset =>
+    asset.title?.toLowerCase().includes(query) ||
+    asset.file_name?.toLowerCase().includes(query) ||
+    asset.public_url?.toLowerCase().includes(query) ||
+    asset.id.toLowerCase().includes(query)
+  )
+})
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError'
@@ -301,7 +312,7 @@ async function uploadImage(file: File) {
       throw new Error(`Confirmation failed for asset ${assetId}`)
     }
 
-    toast.addToast('File uploaded', 'success')
+    toast.add({ title: 'File uploaded', color: 'success' })
     await loadAssets()
     emit('uploaded', asset)
   } catch (err) {
@@ -322,7 +333,7 @@ async function uploadVideo(file: File) {
     form.append('file', file)
     if (props.locationId) form.append('locationId', props.locationId)
     const asset = await $fetch<MediaAsset>(`/api/dashboard/editor/media/upload`, { method: 'POST', body: form })
-    toast.addToast('File uploaded', 'success')
+    toast.add({ title: 'File uploaded', color: 'success' })
     await loadAssets()
     emit('uploaded', asset)
   } catch (err) {
