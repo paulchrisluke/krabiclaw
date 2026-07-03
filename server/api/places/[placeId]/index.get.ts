@@ -22,22 +22,27 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Invalid place ID' }, { status: 400 })
   }
 
+  let details
   try {
-    const details = await getPlaceDetails(apiKey, placeId)
-    if (db) {
-      const userOrg = await queryFirst<{ organizationId: string }>(db, `
-        SELECT o.id AS organizationId FROM organization o
-        JOIN member m ON o.id = m.organizationId
-        WHERE m.userId = ?
-        ORDER BY o.createdAt ASC LIMIT 1
-      `, [session.user.id])
-      if (userOrg) {
-        await chargeFlatCredits(db, userOrg.organizationId, { action: 'google_places_details' }).catch(() => {})
-      }
-    }
-    return jsonResponse({ success: true, details })
+    details = await getPlaceDetails(apiKey, placeId)
   } catch (error) {
     console.error('Places detail error:', error)
     return jsonResponse({ error: 'Failed to fetch place details' }, { status: 502 })
   }
+
+  if (db) {
+    const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string }
+    const activeOrgId = typeof sessionRecord.activeOrganizationId === 'string' ? sessionRecord.activeOrganizationId : ''
+    const userOrg = await queryFirst<{ organizationId: string }>(db, `
+      SELECT o.id AS organizationId FROM organization o
+      JOIN member m ON o.id = m.organizationId
+      WHERE m.userId = ?
+      ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC LIMIT 1
+    `, [session.user.id, activeOrgId]).catch(() => null)
+    if (userOrg) {
+      await chargeFlatCredits(db, userOrg.organizationId, { action: 'google_places_details' }).catch(() => {})
+    }
+  }
+
+  return jsonResponse({ success: true, details })
 })

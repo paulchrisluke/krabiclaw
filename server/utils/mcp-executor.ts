@@ -1151,15 +1151,6 @@ export async function executeMcpToolCall(
       let results;
       try {
         results = await searchPlaces(apiKey, nameHint, locationBias);
-        const orgRow = await queryFirst<{ organizationId: string }>(user.db, `
-          SELECT o.id AS organizationId FROM organization o
-          JOIN member m ON o.id = m.organizationId
-          WHERE m.userId = ?
-          ORDER BY o.createdAt ASC LIMIT 1
-        `, [user.userId]);
-        if (orgRow) {
-          await chargeFlatCredits(user.db, orgRow.organizationId, { action: "google_places_search" }).catch(() => {});
-        }
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Google Places search failed.";
@@ -1167,6 +1158,15 @@ export async function executeMcpToolCall(
           statusCode: 502,
           statusMessage: message,
         });
+      }
+      const orgRow = await queryFirst<{ organizationId: string }>(user.db, `
+        SELECT o.id AS organizationId FROM organization o
+        JOIN member m ON o.id = m.organizationId
+        WHERE m.userId = ?
+        ORDER BY o.createdAt ASC LIMIT 1
+      `, [user.userId]).catch(() => null);
+      if (orgRow) {
+        await chargeFlatCredits(user.db, orgRow.organizationId, { action: "google_places_search" }).catch(() => {});
       }
       const candidate = results[0];
       if (!candidate?.placeId) {
@@ -1208,15 +1208,6 @@ export async function executeMcpToolCall(
     let details;
     try {
       details = await getPlaceDetails(apiKey, placeId, true);
-      const orgRow = await queryFirst<{ organizationId: string }>(user.db, `
-        SELECT o.id AS organizationId FROM organization o
-        JOIN member m ON o.id = m.organizationId
-        WHERE m.userId = ?
-        ORDER BY o.createdAt ASC LIMIT 1
-      `, [user.userId]);
-      if (orgRow) {
-        await chargeFlatCredits(user.db, orgRow.organizationId, { action: "google_places_details" }).catch(() => {});
-      }
     } catch (error) {
       const message =
         error instanceof PlaceDetailsError || error instanceof Error
@@ -1226,6 +1217,15 @@ export async function executeMcpToolCall(
         statusCode: 502,
         statusMessage: message,
       });
+    }
+    const orgRow = await queryFirst<{ organizationId: string }>(user.db, `
+      SELECT o.id AS organizationId FROM organization o
+      JOIN member m ON o.id = m.organizationId
+      WHERE m.userId = ?
+      ORDER BY o.createdAt ASC LIMIT 1
+    `, [user.userId]).catch(() => null);
+    if (orgRow) {
+      await chargeFlatCredits(user.db, orgRow.organizationId, { action: "google_places_details" }).catch(() => {});
     }
 
     // Upload Google Photos to Cloudflare Images for stable preview URLs.

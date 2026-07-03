@@ -94,11 +94,13 @@ function handleKeyDown(e: KeyboardEvent) {
 
 function trapFocus(e: KeyboardEvent) {
   if (!modalRef.value) return
-  const focusableElements = modalRef.value.querySelectorAll(
-    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-  )
-  const firstElement = focusableElements[0] as HTMLElement
-  const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement
+  const focusableElements = Array.from(
+    modalRef.value.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+  ).filter((el) => !el.hasAttribute('disabled') && el.getAttribute('aria-disabled') !== 'true')
+  const firstElement = focusableElements[0]
+  const lastElement = focusableElements[focusableElements.length - 1]
 
   if (e.shiftKey) {
     if (document.activeElement === firstElement) {
@@ -137,7 +139,7 @@ watch(() => props.modelValue, async (isOpen) => {
     }
     restoreFocus()
   }
-})
+}, { immediate: true })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyDown)

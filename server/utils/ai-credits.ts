@@ -165,45 +165,66 @@ export async function chargeFlatCredits(
   const now = new Date().toISOString()
   const logId = crypto.randomUUID()
 
-  await getOrCreateCredits(db, organizationId)
+  try {
+    await getOrCreateCredits(db, organizationId)
 
-  const updateResult = await execute(
-    db,
-    `UPDATE ai_credits
-       SET balance = balance - ?,
-           lifetime_used = lifetime_used + ?,
-           updated_at = ?
-       WHERE organization_id = ? AND balance >= ?`,
-    [credits, credits, now, organizationId, credits],
-  )
+    const updateResult = await execute(
+      db,
+      `UPDATE ai_credits
+         SET balance = balance - ?,
+             lifetime_used = lifetime_used + ?,
+             updated_at = ?
+         WHERE organization_id = ? AND balance >= ?`,
+      [credits, credits, now, organizationId, credits],
+    )
 
-  if (!updateResult || Number(updateResult.meta.changes ?? 0) === 0) {
-    const row = await queryFirst<{ balance: number }>(db, 'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1', [organizationId])
+    if (!updateResult || Number(updateResult.meta.changes ?? 0) === 0) {
+      const row = await queryFirst<{ balance: number }>(db, 'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1', [organizationId])
+      return { charged: false, creditsCharged: 0, newBalance: row?.balance ?? 0 }
+    }
+
+    try {
+      await execute(
+        db,
+        `INSERT INTO ai_usage_log
+             (id, organization_id, site_id, action, model, input_tokens, output_tokens, credits_charged, cf_gateway_log_id, created_at)
+           VALUES (?, ?, ?, ?, 'flat', 0, 0, ?, ?, ?)`,
+        [
+          logId,
+          organizationId,
+          opts.siteId ?? null,
+          opts.action,
+          credits,
+          opts.cfGatewayLogId ?? null,
+          now,
+        ],
+      )
+    } catch (logErr) {
+      // Compensate: the log insert failed, so undo the debit to avoid a
+      // charge with no corresponding ai_usage_log row.
+      await execute(
+        db,
+        `UPDATE ai_credits
+           SET balance = balance + ?,
+               lifetime_used = lifetime_used - ?,
+               updated_at = ?
+           WHERE organization_id = ?`,
+        [credits, credits, new Date().toISOString(), organizationId],
+      ).catch(() => {})
+      throw logErr
+    }
+
+    const updated = await queryFirst<{ balance: number }>(db, 'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1', [organizationId])
+    const newBalance = updated?.balance ?? 0
+
+    if (billingEnv) {
+      triggerAutoTopupIfNeeded(db, billingEnv, organizationId, newBalance).catch(() => {})
+    }
+
+    return { charged: true, creditsCharged: credits, newBalance }
+  } catch (err) {
+    console.error('chargeFlatCredits failed:', err)
+    const row = await queryFirst<{ balance: number }>(db, 'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1', [organizationId]).catch(() => null)
     return { charged: false, creditsCharged: 0, newBalance: row?.balance ?? 0 }
   }
-
-  await execute(
-    db,
-    `INSERT INTO ai_usage_log
-         (id, organization_id, site_id, action, model, input_tokens, output_tokens, credits_charged, cf_gateway_log_id, created_at)
-       VALUES (?, ?, ?, ?, 'flat', 0, 0, ?, ?, ?)`,
-    [
-      logId,
-      organizationId,
-      opts.siteId ?? null,
-      opts.action,
-      credits,
-      opts.cfGatewayLogId ?? null,
-      now,
-    ],
-  )
-
-  const updated = await queryFirst<{ balance: number }>(db, 'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1', [organizationId])
-  const newBalance = updated?.balance ?? 0
-
-  if (billingEnv) {
-    triggerAutoTopupIfNeeded(db, billingEnv, organizationId, newBalance).catch(() => {})
-  }
-
-  return { charged: true, creditsCharged: credits, newBalance }
 }

@@ -193,9 +193,11 @@ const sectionOptions = computed(() => {
   return Array.from(sections).map((section) => ({ label: section, value: section }))
 })
 
-const canSave = computed(() => 
-  !error.value && form.name.trim().length > 0 && form.section.trim().length > 0
+const canSave = computed(() =>
+  form.name.trim().length > 0 && form.section.trim().length > 0
 )
+
+watch(form, () => { error.value = null })
 
 const suggestedPrompt = computed(() => {
   const name = form.name.trim()

@@ -3,8 +3,16 @@
     <UPageBody>
       <div class="max-w-2xl space-y-6">
 
-        <!-- Managed service not currently offered -->
-        <template v-if="!managedServiceEnabled">
+        <!--
+          managedServiceEnabled is a global marketing/checkout flag (whether
+          Managed/SEO Accelerator plans are being sold right now) — it must
+          never hide the request form from a site that already has the
+          managed_service entitlement (e.g. existing Growth customers).
+          Entitlement (non-free plan) always wins; the flag only controls
+          what free-plan users are shown.
+        -->
+        <!-- Managed service not currently offered to new customers -->
+        <template v-if="isFree && !managedServiceEnabled">
           <UCard>
             <div class="flex flex-col items-center text-center gap-4 py-4">
               <div class="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
@@ -50,7 +58,7 @@
         </template>
 
         <!-- Managed plans — request form + history -->
-        <template v-else>
+        <template v-if="!isFree">
           <!-- New request form -->
           <UCard>
             <template #header>

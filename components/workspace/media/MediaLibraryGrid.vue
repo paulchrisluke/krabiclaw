@@ -227,10 +227,7 @@ async function loadAssets() {
 
     if (controller.signal.aborted || requestId !== loadRequestId.value) return
 
-    const all = res.media ?? []
-    assets.value = search.value
-      ? all.filter(a => (a.file_name ?? '').toLowerCase().includes(search.value.toLowerCase()))
-      : all
+    assets.value = res.media ?? []
   } catch (err) {
     if (controller.signal.aborted || isAbortError(err instanceof Error ? err : new Error(String(err)))) return
     if (requestId === loadRequestId.value) {

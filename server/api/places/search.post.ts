@@ -26,22 +26,27 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'query too long' }, { status: 400 })
   }
 
+  let results
   try {
-    const results = await searchPlaces(apiKey, query)
-    if (db) {
-      const userOrg = await queryFirst<{ organizationId: string }>(db, `
-        SELECT o.id AS organizationId FROM organization o
-        JOIN member m ON o.id = m.organizationId
-        WHERE m.userId = ?
-        ORDER BY o.createdAt ASC LIMIT 1
-      `, [session.user.id])
-      if (userOrg) {
-        await chargeFlatCredits(db, userOrg.organizationId, { action: 'google_places_search' }).catch(() => {})
-      }
-    }
-    return jsonResponse({ success: true, results })
+    results = await searchPlaces(apiKey, query)
   } catch (error) {
     console.error('Places search error:', error)
     return jsonResponse({ error: 'Places search failed' }, { status: 502 })
   }
+
+  if (db) {
+    const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string }
+    const activeOrgId = typeof sessionRecord.activeOrganizationId === 'string' ? sessionRecord.activeOrganizationId : ''
+    const userOrg = await queryFirst<{ organizationId: string }>(db, `
+      SELECT o.id AS organizationId FROM organization o
+      JOIN member m ON o.id = m.organizationId
+      WHERE m.userId = ?
+      ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC LIMIT 1
+    `, [session.user.id, activeOrgId]).catch(() => null)
+    if (userOrg) {
+      await chargeFlatCredits(db, userOrg.organizationId, { action: 'google_places_search' }).catch(() => {})
+    }
+  }
+
+  return jsonResponse({ success: true, results })
 })

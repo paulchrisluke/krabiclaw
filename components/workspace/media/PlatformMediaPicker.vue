@@ -60,6 +60,12 @@
           <p class="text-sm text-muted">Loading images...</p>
         </div>
 
+        <div v-else-if="error" class="text-center py-12">
+          <UIcon name="i-heroicons-exclamation-triangle" class="size-8 text-error mx-auto mb-2" />
+          <p class="text-sm text-error">{{ error }}</p>
+          <UButton class="mt-3" size="sm" color="neutral" variant="soft" @click="loadImages">Retry</UButton>
+        </div>
+
         <div v-else-if="images.length === 0" class="text-center py-12">
           <UIcon name="i-heroicons-photo" class="size-8 text-muted mx-auto mb-2" />
           <p class="text-sm text-muted">No uploaded images yet</p>
