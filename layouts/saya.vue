@@ -17,6 +17,13 @@
       :menu="menu"
       :has-experiences="hasExperiences"
     />
+
+    <!-- Teleport target for Saya components (e.g. BookingModal) that need to escape
+         page overflow/stacking contexts but still must render inside this div to
+         inherit the --ui-*/--brand-color tokens .saya-theme and themeStyles set here.
+         Teleporting straight to <body> puts them outside this scope entirely, which
+         reads as the modal falling back to the platform's default (non-Saya) theme. -->
+    <div id="saya-portal-root" />
   </div>
 </template>
 

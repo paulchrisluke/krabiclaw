@@ -93,6 +93,7 @@ type VerticalCopy = {
   phoneLabelShort: string
   emailLabelShort: string
   reservationPoliciesHeading: string
+  goodToKnowKicker: string
   callButtonLabel: string
   contactFormButtonLabel: string
   locationLabel: string
@@ -209,6 +210,7 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
       phoneLabelShort: "Phone",
       emailLabelShort: "Email",
       reservationPoliciesHeading: "Reservation Policies",
+      goodToKnowKicker: "Good to know",
       callButtonLabel: "Call",
       contactFormButtonLabel: "Contact Form",
       locationLabel: "Location",
@@ -323,6 +325,7 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
       phoneLabelShort: "Phone",
       emailLabelShort: "Email",
       reservationPoliciesHeading: "Booking Policies",
+      goodToKnowKicker: "Good to know",
       callButtonLabel: "Call",
       contactFormButtonLabel: "Contact Form",
       locationLabel: "Studio",
@@ -439,6 +442,7 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
       phoneLabelShort: "โทรศัพท์",
       emailLabelShort: "อีเมล",
       reservationPoliciesHeading: "นโยบายการจอง",
+      goodToKnowKicker: "ควรทราบ",
       callButtonLabel: "โทร",
       contactFormButtonLabel: "แบบฟอร์มติดต่อ",
       locationLabel: "สาขา",
@@ -553,6 +557,7 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
       phoneLabelShort: "โทรศัพท์",
       emailLabelShort: "อีเมล",
       reservationPoliciesHeading: "นโยบายการจอง",
+      goodToKnowKicker: "ควรทราบ",
       callButtonLabel: "โทร",
       contactFormButtonLabel: "แบบฟอร์มติดต่อ",
       locationLabel: "สตูดิโอ",

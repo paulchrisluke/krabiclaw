@@ -17,9 +17,9 @@
         @click="$emit('update:modelValue', loc.id)"
       >
         <!-- Location image if available -->
-        <div v-if="loc.image_url" class="aspect-[16/7] w-full overflow-hidden bg-muted shrink-0">
+        <div v-if="loc.public_url" class="aspect-16/7 w-full overflow-hidden bg-muted shrink-0">
           <img
-            :src="loc.image_url ?? ''"
+            :src="loc.public_url ?? ''"
             :alt="loc.title ?? ''"
             class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
           />
@@ -57,8 +57,8 @@
           </p>
 
           <!-- Today's hours -->
-          <p v-if="todayHours(loc)" class="text-sm text-muted">
-            <span class="text-default font-medium">Today: </span>{{ todayHours(loc) }}
+          <p v-if="getTodayHoursLabel(loc.opening_hours)" class="text-sm text-muted">
+            <span class="text-default font-medium">Today: </span>{{ getTodayHoursLabel(loc.opening_hours) }}
           </p>
 
           <!-- Phone -->
@@ -82,14 +82,14 @@
 </template>
 
 <script setup lang="ts">
-import { isStructuredOpeningHours } from '@/shared/reservation-hours'
+import { getTodayHoursLabel } from '@/shared/reservation-hours'
 
 export interface BookingLocation {
   id: string
   title?: string | null
   address?: unknown
   phone?: string | null
-  image_url?: string | null
+  public_url?: string | null
   opening_hours?: unknown
 }
 
@@ -113,23 +113,4 @@ function formatAddress(address: unknown): string {
     .join(', ')
 }
 
-const WEEKDAYS = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
-
-function todayHours(loc: BookingLocation): string | null {
-  const hours = loc.opening_hours
-  if (!isStructuredOpeningHours(hours)) return null
-  const today = WEEKDAYS[new Date().getDay()]
-  const todaysEntry = hours.find(e => e.openDay.toUpperCase() === today)
-  if (!todaysEntry) return 'Closed today'
-  return `${fmt12(todaysEntry.openTime)} – ${fmt12(todaysEntry.closeTime)}`
-}
-
-function fmt12(timeStr: string): string {
-  const parts = timeStr.split(':')
-  const h = parseInt(parts[0] ?? '0', 10)
-  const m = parseInt(parts[1] ?? '0', 10)
-  const ampm = h >= 12 ? 'PM' : 'AM'
-  const h12 = h % 12 || 12
-  return m === 0 ? `${h12} ${ampm}` : `${h12}:${String(m).padStart(2, '0')} ${ampm}`
-}
 </script>

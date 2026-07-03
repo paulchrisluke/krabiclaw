@@ -48,6 +48,9 @@ For local Miniflare-backed tests, keep bindings with `remote = false` in `wrangl
 - `[[d1_databases]]`
 - `[[r2_buckets]]`
 - `[[kv_namespaces]]`
+- `[ai]`
+
+`yarn dev` also disables Wrangler remote bindings at the bridge layer by default (`NUXT_CF_REMOTE_BINDINGS` must be explicitly set to `true` to opt back in). Without that, Wrangler can try to open a remote Workers AI proxy session before attaching local tenant bindings, which makes seeded `*.localhost` tenant routes fail as `Site Not Found`.
 
 ## Triage checklist when CI fails but local passes
 

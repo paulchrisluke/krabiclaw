@@ -60,3 +60,41 @@ export function generateReservationTimes(
   }
   return [...new Set(slots)].sort()
 }
+
+const fmt12Hour = (timeStr: string): string => {
+  const [hStr, mStr] = timeStr.split(':')
+  const h = Number(hStr)
+  const m = Number(mStr)
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  const h12 = h % 12 || 12
+  return m === 0 ? `${h12} ${ampm}` : `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+}
+
+/**
+ * Today's opening hours as a display label (e.g. "11:30 AM – 10:30 PM"), or "Closed today"
+ * when the location has structured hours but isn't open today. Returns null when the location
+ * has no structured opening_hours to read (e.g. Google Places free-text hours).
+ */
+export function getTodayHoursLabel(openingHours: unknown, now = new Date()): string | null {
+  if (!isStructuredOpeningHours(openingHours)) return null
+  const weekdayName = WEEKDAY_BY_INDEX[now.getDay()]!
+  const todaysEntry = openingHours.find(entry => entry.openDay.toUpperCase() === weekdayName)
+  if (!todaysEntry) return 'Closed today'
+  return `${fmt12Hour(todaysEntry.openTime)} – ${fmt12Hour(todaysEntry.closeTime)}`
+}
+
+/**
+ * Whether the location is open right now, based on structured opening_hours. Returns false
+ * (rather than throwing) when hours aren't structured — callers should treat that as "unknown"
+ * and avoid rendering an open/closed badge at all rather than trusting a false negative.
+ */
+export function isOpenNow(openingHours: unknown, now = new Date()): boolean {
+  if (!isStructuredOpeningHours(openingHours)) return false
+  const weekdayName = WEEKDAY_BY_INDEX[now.getDay()]!
+  const nowMinutes = now.getHours() * 60 + now.getMinutes()
+  return openingHours.some(entry =>
+    entry.openDay.toUpperCase() === weekdayName
+    && nowMinutes >= toMinutes(entry.openTime)
+    && nowMinutes < toMinutes(entry.closeTime)
+  )
+}

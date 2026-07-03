@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { getIcons } from '@iconify/utils'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { DEFAULT_CURRENCY, isCurrencyCode } from './shared/currencies'
+import cloudflareDevModule from './build/cloudflare-dev-module'
 
 const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
 
@@ -89,7 +90,7 @@ const publicPerfTestPage = process.env.PERF_PUBLIC_TEST_PAGE !== 'false'
 
 export default defineNuxtConfig({
   modules: [
-    'nitro-cloudflare-dev',
+    cloudflareDevModule,
     '@nuxt/scripts',
     '@nuxtjs/robots',
     '@nuxtjs/sitemap',
@@ -293,6 +294,10 @@ export default defineNuxtConfig({
     },
     {
       path: '~/components/ui',
+      pathPrefix: false,
+    },
+    {
+      path: '~/components/dev-perf',
       pathPrefix: false,
     },
     {

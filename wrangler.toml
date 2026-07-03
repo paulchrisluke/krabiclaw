@@ -63,6 +63,7 @@ remote = false
 
 [ai]
 binding = "AI"
+remote = false
 
 [observability]
 enabled = true
@@ -114,6 +115,7 @@ remote = false
 
 [env.preview.ai]
 binding = "AI"
+remote = false
 
 [env.preview.observability]
 enabled = false
@@ -158,6 +160,7 @@ remote = false
 
 [env.staging.ai]
 binding = "AI"
+remote = false
 
 [env.staging.observability]
 enabled = true

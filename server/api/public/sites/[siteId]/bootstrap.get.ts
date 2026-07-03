@@ -943,6 +943,8 @@ export default defineEventHandler(async (event) => {
       thumbnail_url: thumbnailUrl,
       city: loc.city,
       neighborhood: loc.neighborhood || null,
+      short_description: loc.short_description || null,
+      description: loc.description || null,
       grab_url: loc.grab_url || null,
       uber_eats_url: loc.uber_eats_url || null,
       foodpanda_url: loc.foodpanda_url || null,

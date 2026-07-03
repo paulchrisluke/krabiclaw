@@ -1,4 +1,4 @@
-import { execute, queryFirst } from '~/server/db'
+import { execute, queryFirst, type DbClient } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { notifyReservationCreated } from '~/server/utils/notifications'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
@@ -6,11 +6,42 @@ import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { resolveLocationTimezone, isDateBeforeTimezoneToday } from '~/server/utils/site-config'
 import { generateReservationTimes, isStructuredOpeningHours } from '~/shared/reservation-hours'
 
+const IP_HOURLY_LIMIT = 5
+const EMAIL_DAILY_LIMIT = 3
+
 const hashIp = async (ip: string) => {
   if (!ip) return null
   const bytes = new TextEncoder().encode(ip)
   const digest = await crypto.subtle.digest('SHA-256', bytes)
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+async function hashValue(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value.toLowerCase().trim())
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+function getClientIp(event: ApiValue): string {
+  const cfIp = getHeader(event, 'CF-Connecting-IP')
+  if (cfIp) return cfIp
+  const fwd = getHeader(event, 'x-forwarded-for') ?? ''
+  return fwd.split(',').map(part => part.trim()).find(Boolean) || 'unknown'
+}
+
+async function incrementRateLimit(db: DbClient, key: string, limit: number, expireMs: number): Promise<boolean> {
+  const now = new Date().toISOString()
+  const expiresAt = new Date(Date.now() + expireMs).toISOString()
+  const result = await execute(db,
+    `INSERT INTO rate_limits (key, count, updated_at, expires_at) VALUES (?, 1, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET
+         count = CASE WHEN rate_limits.expires_at <= ? THEN 1 ELSE rate_limits.count + 1 END,
+         expires_at = CASE WHEN rate_limits.expires_at <= ? THEN ? ELSE rate_limits.expires_at END,
+         updated_at = ?
+       WHERE (CASE WHEN rate_limits.expires_at <= ? THEN 1 ELSE rate_limits.count + 1 END) <= ?`,
+    [key, now, expiresAt, now, now, expiresAt, now, now, limit],
+  )
+  return Boolean(result?.success && result?.meta?.changes)
 }
 
 // Fallback used only when a location has no structured opening_hours (e.g. Google Places imports,
@@ -104,9 +135,24 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Please choose a valid time — this location is closed at that time.' }, { status: 400 })
 
   const id = crypto.randomUUID()
-  const ipHash = await hashIp(getHeader(event, 'CF-Connecting-IP') ?? getHeader(event, 'x-forwarded-for') ?? '')
+  const clientIp = getClientIp(event)
+  const ipHash = await hashIp(clientIp)
+  const emailHash = await hashValue(email)
   const cancellation = createReservationCancelToken()
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
+
+  // Rate limiting (skipped in dev so local work and E2E can submit repeatedly)
+  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  if (!import.meta.dev && !e2eOverride) {
+    const hourWindow = Math.floor(Date.now() / 3_600_000)
+    const today = new Date().toISOString().split('T')[0]
+
+    const ipOk = await incrementRateLimit(db, `rate:reservation:ip:${await hashValue(clientIp)}:${hourWindow}`, IP_HOURLY_LIMIT, 3_600_000)
+    if (!ipOk) return jsonResponse({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+
+    const emailOk = await incrementRateLimit(db, `rate:reservation:email:${emailHash}:${today}`, EMAIL_DAILY_LIMIT, 86_400_000)
+    if (!emailOk) return jsonResponse({ error: 'Too many reservation requests from this email. Please try again tomorrow.' }, { status: 429 })
+  }
 
   await execute(db, `
     INSERT INTO reservation_submissions (

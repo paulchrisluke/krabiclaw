@@ -1,5 +1,5 @@
 <template>
-  <Teleport to="body">
+  <Teleport to="#saya-portal-root">
     <Transition
       enter-active-class="transition duration-200 ease-out"
       enter-from-class="opacity-0 scale-95"
@@ -13,26 +13,26 @@
         <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
         
         <!-- Modal content -->
-        <div class="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col">
+        <div class="relative bg-default border border-default rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col">
           <!-- Header -->
           <div class="flex items-center justify-between p-4 border-b border-default shrink-0">
-            <button 
-              v-if="canGoBack" 
-              type="button" 
-              class="p-2 -ml-2 rounded-full hover:bg-muted/10 text-default transition-colors"
+            <button
+              v-if="canGoBack"
+              type="button"
+              class="p-2 -ml-2 rounded-full hover:bg-muted text-default transition-colors"
               @click="goBack"
             >
               <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
             </button>
             <div v-else class="w-9 h-9"></div> <!-- Spacer for alignment -->
-            
-            <h2 :id="titleId" class="text-base font-semibold text-default flex-1 text-center truncate px-2">
+
+            <h2 :id="titleId" class="saya-display text-lg text-default flex-1 text-center truncate px-2">
               {{ title }}
             </h2>
-            
-            <button 
-              type="button" 
-              class="p-2 -mr-2 rounded-full hover:bg-muted/10 text-default transition-colors"
+
+            <button
+              type="button"
+              class="p-2 -mr-2 rounded-full hover:bg-muted text-default transition-colors"
               @click="close"
             >
               <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>

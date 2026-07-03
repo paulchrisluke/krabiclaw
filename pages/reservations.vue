@@ -9,7 +9,7 @@
       
       <!-- Desktop Make a Reservation Button -->
       <div class="mt-8 hidden lg:block">
-        <SayaButton size="lg" @click="openBookingModal">
+        <SayaButton size="lg" @click="openBookingModal()">
           {{ resCopy.reservationRequestButton }}
         </SayaButton>
       </div>
@@ -20,45 +20,102 @@
       <div class="min-w-0">
         <p class="font-semibold text-default leading-tight">{{ resCopy.reservationFormTitle }}</p>
       </div>
-      <SayaButton class="shrink-0" @click="openBookingModal">
+      <SayaButton class="shrink-0" @click="openBookingModal()">
         {{ resCopy.reservationRequestButton }}
       </SayaButton>
     </div>
 
-    <div class="mx-auto max-w-6xl px-4 pb-28 lg:pb-24">
-      <div class="grid gap-12 md:grid-cols-2">
-
-        <!-- Sidebar / Info -->
-        <div>
-          <h2 class="mb-6 text-2xl font-bold text-default md:text-3xl">{{ resCopy.reservationFormTitle }} Details</h2>
-
-          <div class="mb-6 rounded-2xl bg-muted p-6">
-            <h3 class="mb-4 text-lg font-semibold text-default">{{ resCopy.contactInfoHeading }}</h3>
-            <p v-if="selectedLocation" class="mb-3 text-sm text-muted">{{ selectedLocation.title }}</p>
-            <div class="space-y-2">
-              <p v-if="contactPhone" class="text-muted"><strong class="text-default">{{ resCopy.phoneLabelShort }}:</strong> {{ contactPhone }}</p>
-              <p v-if="contactEmail" class="text-muted"><strong class="text-default">{{ resCopy.emailLabelShort }}:</strong> {{ contactEmail }}</p>
+    <!-- Location cards -->
+    <section v-if="locations.length > 0" class="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
+      <div
+        class="grid gap-6"
+        :class="locations.length > 1 ? 'md:grid-cols-2' : 'grid-cols-1'"
+      >
+        <article
+          v-for="loc in locations"
+          :key="loc.id"
+          class="overflow-hidden border border-default"
+        >
+          <div class="relative aspect-video bg-muted">
+            <img
+              v-if="loc.public_url"
+              :src="loc.public_url"
+              :alt="loc.title"
+              loading="lazy"
+              class="h-full w-full object-cover"
+            />
+            <div v-else class="flex h-full w-full items-center justify-center" aria-hidden="true">
+              <svg viewBox="0 0 24 24" class="size-10 text-muted" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><g><path d="M15 10.5a3 3 0 1 1-6 0a3 3 0 0 1 6 0"/><path d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0"/></g></svg>
+            </div>
+            <div
+              v-if="getTodayHoursLabel(loc.opening_hours)"
+              class="absolute bottom-4 left-4 inline-flex items-center gap-2 rounded-full bg-default/95 px-4 py-2 text-xs font-medium uppercase tracking-wide text-default"
+            >
+              <span class="size-1.5 rounded-full" :class="isOpenNow(loc.opening_hours) ? 'bg-green-500' : 'bg-zinc-400'" />
+              {{ isOpenNow(loc.opening_hours) ? resCopy.openNowLabel : resCopy.closedLabel }} · {{ getTodayHoursLabel(loc.opening_hours) }}
             </div>
           </div>
 
-          <div class="mb-6 rounded-2xl bg-muted p-6">
-            <h3 class="mb-4 text-lg font-semibold text-default">{{ resCopy.reservationPoliciesHeading }}</h3>
-            <!-- eslint-disable-next-line vue/no-v-html -->
-            <div v-html="policiesBody" class="text-muted" />
-          </div>
+          <div class="p-6 sm:p-8">
+            <p v-if="loc.neighborhood" class="saya-eyebrow mb-3 text-muted">{{ loc.neighborhood }}</p>
+            <h3 class="saya-display saya-italic text-3xl text-default leading-none">{{ loc.title }}</h3>
+            <p v-if="loc.short_description" class="mt-3 text-sm leading-relaxed text-muted">{{ loc.short_description }}</p>
 
-          <div class="space-y-4">
-            <SayaButton v-if="contactPhone" :href="`tel:${contactPhone?.replace(/\s/g, '') ?? ''}`" variant="outline" block>
-              {{ resCopy.callButtonLabel }} {{ contactPhone }}
-            </SayaButton>
-            <SayaButton to="/contact" variant="outline" block>
-              {{ resCopy.contactFormButtonLabel }}
-            </SayaButton>
+            <div class="mt-6 flex flex-wrap items-center gap-3">
+              <SayaButton @click="openBookingModal(loc)">{{ resCopy.reservationRequestButton }}</SayaButton>
+              <SayaButton v-if="loc.phone" :href="`tel:${loc.phone.replace(/\s/g, '')}`" variant="outline">
+                {{ loc.phone }}
+              </SayaButton>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <div class="mx-auto max-w-7xl px-4 pb-28 sm:px-6 lg:px-8 lg:pb-24">
+      <div class="max-w-xl">
+        <h2 class="mb-6 text-2xl font-bold text-default md:text-3xl">{{ resCopy.reservationFormTitle }} Details</h2>
+
+        <div class="mb-6 rounded-2xl bg-muted p-6">
+          <h3 class="mb-4 text-lg font-semibold text-default">{{ resCopy.contactInfoHeading }}</h3>
+          <p v-if="selectedLocation" class="mb-3 text-sm text-muted">{{ selectedLocation.title }}</p>
+          <div class="space-y-2">
+            <p v-if="contactPhone" class="text-muted"><strong class="text-default">{{ resCopy.phoneLabelShort }}:</strong> {{ contactPhone }}</p>
+            <p v-if="contactEmail" class="text-muted"><strong class="text-default">{{ resCopy.emailLabelShort }}:</strong> {{ contactEmail }}</p>
           </div>
         </div>
 
+        <div class="space-y-4">
+          <SayaButton v-if="contactPhone" :href="`tel:${contactPhone?.replace(/\s/g, '') ?? ''}`" variant="outline" block>
+            {{ resCopy.callButtonLabel }} {{ contactPhone }}
+          </SayaButton>
+          <SayaButton to="/contact" variant="outline" block>
+            {{ resCopy.contactFormButtonLabel }}
+          </SayaButton>
+        </div>
       </div>
     </div>
+
+    <!-- Policies: "Before you book" strip. Reuses the tenant's existing policies.body
+         CMS list (one card per <li>) rather than a separate structured field — falls
+         back to the raw richtext block for tenants who wrote freeform text instead
+         of a list. -->
+    <section v-if="policiesBody" class="bg-muted">
+      <div class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+        <div class="mb-10 max-w-xl">
+          <p class="saya-kicker mb-4">{{ resCopy.goodToKnowKicker }}</p>
+          <h2 class="saya-display-sm text-default">{{ resCopy.reservationPoliciesHeading }}</h2>
+        </div>
+        <div v-if="policyItems.length > 0" class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          <div v-for="(item, i) in policyItems" :key="i" class="border-t border-default pt-5">
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <p class="text-sm leading-relaxed text-muted" v-html="item" />
+          </div>
+        </div>
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <div v-else class="max-w-2xl text-sm leading-relaxed text-muted" v-html="policiesBody" />
+      </div>
+    </section>
 
     <!-- Booking Modal Flow -->
     <BookingModal
@@ -139,10 +196,16 @@
 </template>
 
 <script setup lang="ts">
+import BookingContactForm from '@/components/booking/BookingContactForm.vue'
+import BookingDateSelector from '@/components/booking/BookingDateSelector.vue'
+import BookingGuestCounter from '@/components/booking/BookingGuestCounter.vue'
+import BookingLocationStep from '@/components/booking/BookingLocationStep.vue'
+import BookingModal from '@/components/booking/BookingModal.vue'
+import BookingTimeList from '@/components/booking/BookingTimeList.vue'
 import { getFieldDef } from '~/config/content-registry'
 import { usePageContent } from '~/composables/usePageContent'
 import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
-import { generateReservationTimes, isStructuredOpeningHours } from '~/shared/reservation-hours'
+import { generateReservationTimes, getTodayHoursLabel, isOpenNow, isStructuredOpeningHours } from '~/shared/reservation-hours'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 
 definePageMeta({ layout: 'saya' })
@@ -183,6 +246,12 @@ onMounted(async () => {
 })
 if (!process.client) policiesBody.value = rawPoliciesHtml
 
+// One card per <li> in the tenant's policies.body list, for the "Before you book"
+// strip — substrings of already-sanitized HTML, so no separate sanitize pass needed.
+// Falls back to rendering policiesBody as-is when the tenant wrote freeform text
+// instead of a list (no <li> to split on).
+const policyItems = computed(() => [...policiesBody.value.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)].map(m => m[1].trim()))
+
 // ── Form state ────────────────────────────────────────────────────────────
 const reservationForm = ref({ name: '', email: '', phone: '', location_id: '', date: '', time: '', guests: '', requests: '' })
 
@@ -222,10 +291,15 @@ const contactEmail = computed(() =>
 
 // ── Modal State ───────────────────────────────────────────────────────────
 const isBookingModalOpen = ref(false)
-const startStep = computed(() => hasMultipleLocations.value ? 1 : 2)
+// Skipped when opened from a location card (location is already pre-selected)
+// or when the site only has one location to begin with.
+const skipLocationStep = ref(false)
+const startStep = computed(() => (hasMultipleLocations.value && !skipLocationStep.value) ? 1 : 2)
 const bookingStep = ref(startStep.value)
 
-function openBookingModal() {
+function openBookingModal(loc?: ApiRecord) {
+  skipLocationStep.value = Boolean(loc)
+  if (loc) reservationForm.value.location_id = String(loc.id ?? '')
   bookingStep.value = startStep.value
   isBookingModalOpen.value = true
 }
@@ -308,6 +382,7 @@ async function handleContactSubmit(contactState: { name: string, email: string, 
 
 async function handleReservation() {
   if (submitting.value || !siteId) return
+  submitting.value = true
   submitError.value = null
   try {
     const res = await $fetch<{ id: string; cancellationToken: string }>(`/api/public/sites/${siteId}/reservations`, {
