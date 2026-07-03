@@ -10,8 +10,12 @@
 // untouched so the flag can be flipped back on without re-seeding), not drift
 // to "fix" by deleting or archiving them here.
 import { readFileSync, existsSync } from 'node:fs'
-import { resolve, extname, basename } from 'node:path'
+import { resolve, extname, basename, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import Stripe from 'stripe'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const STRIPE_ASSETS_DIR = resolve(__dirname, 'assets/stripe')
 
 // --- Parse .env manually (no dotenv dependency needed) ---
 function loadEnv() {
@@ -238,7 +242,7 @@ async function main() {
     // whether Managed should reclaim "highlighted" once it's re-enabled.
     highlighted: true,
     badge: 'Most Popular',
-    imagePath: '/Users/paulchrisluke/Downloads/growth.png',
+    imagePath: resolve(STRIPE_ASSETS_DIR, 'growth.png'),
     features: [
       'Restaurant or experience site live in minutes',
       'Your own domain (yourbusiness.com)',
@@ -257,7 +261,7 @@ async function main() {
     amountCents: 14900,
     highlighted: true,
     badge: 'Best Value',
-    imagePath: '/Users/paulchrisluke/Downloads/managed.png',
+    imagePath: resolve(STRIPE_ASSETS_DIR, 'managed.png'),
     features: [
       'Everything in Growth, plus:',
       'We manage your site for you — just WhatsApp us',

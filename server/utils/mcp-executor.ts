@@ -132,7 +132,8 @@ import {
   PlaceDetailsError,
   searchPlaces,
 } from "~/server/utils/google-places";
-import { chargeFlatCredits } from "~/server/utils/ai-credits";
+import { chargeFlatCredits, type FlatCreditAction } from "~/server/utils/ai-credits";
+import type { McpUserContext } from "~/server/utils/mcp-auth";
 import type { SiteVertical } from "~/utils/vertical-copy";
 import {
   deleteContentField,
@@ -156,6 +157,35 @@ import {
   updateLocationQa,
   updateNotificationsSettings,
 } from "~/server/utils/mcp-workflows";
+
+// Prefers the user's active organization (session-based auth only — see
+// McpUserContext.activeOrganizationId) and falls back to the oldest
+// membership, matching the REST places endpoints. Never throws: billing
+// failures must not surface as a Google Places tool failure.
+async function chargeFlatCreditsForUser(
+  user: McpUserContext,
+  action: FlatCreditAction,
+): Promise<void> {
+  const activeOrgId = user.activeOrganizationId ?? "";
+  const orgRow = await queryFirst<{ organizationId: string }>(user.db, `
+    SELECT o.id AS organizationId FROM organization o
+    JOIN member m ON o.id = m.organizationId
+    WHERE m.userId = ?
+    ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC LIMIT 1
+  `, [user.userId, activeOrgId]).catch(() => null);
+  if (!orgRow) return;
+
+  const result = await chargeFlatCredits(user.db, orgRow.organizationId, { action }).catch((error) => {
+    console.error(`chargeFlatCredits threw for ${action}:`, error);
+    return null;
+  });
+  if (result && !result.charged) {
+    console.error(`chargeFlatCredits did not charge for ${action}`, {
+      organizationId: orgRow.organizationId,
+      newBalance: result.newBalance,
+    });
+  }
+}
 
 function haversineKm(
   lat1: number,
@@ -1159,15 +1189,7 @@ export async function executeMcpToolCall(
           statusMessage: message,
         });
       }
-      const orgRow = await queryFirst<{ organizationId: string }>(user.db, `
-        SELECT o.id AS organizationId FROM organization o
-        JOIN member m ON o.id = m.organizationId
-        WHERE m.userId = ?
-        ORDER BY o.createdAt ASC LIMIT 1
-      `, [user.userId]).catch(() => null);
-      if (orgRow) {
-        await chargeFlatCredits(user.db, orgRow.organizationId, { action: "google_places_search" }).catch(() => {});
-      }
+      await chargeFlatCreditsForUser(user, "google_places_search");
       const candidate = results[0];
       if (!candidate?.placeId) {
         throw mcpProtocolError(
@@ -1218,15 +1240,7 @@ export async function executeMcpToolCall(
         statusMessage: message,
       });
     }
-    const orgRow = await queryFirst<{ organizationId: string }>(user.db, `
-      SELECT o.id AS organizationId FROM organization o
-      JOIN member m ON o.id = m.organizationId
-      WHERE m.userId = ?
-      ORDER BY o.createdAt ASC LIMIT 1
-    `, [user.userId]).catch(() => null);
-    if (orgRow) {
-      await chargeFlatCredits(user.db, orgRow.organizationId, { action: "google_places_details" }).catch(() => {});
-    }
+    await chargeFlatCreditsForUser(user, "google_places_details");
 
     // Upload Google Photos to Cloudflare Images for stable preview URLs.
     // We don't have an org/site yet, so we do NOT persist media_asset rows here.

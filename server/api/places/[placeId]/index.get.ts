@@ -40,7 +40,17 @@ export default defineEventHandler(async (event) => {
       ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC LIMIT 1
     `, [session.user.id, activeOrgId]).catch(() => null)
     if (userOrg) {
-      await chargeFlatCredits(db, userOrg.organizationId, { action: 'google_places_details' }).catch(() => {})
+      const chargeResult = await chargeFlatCredits(db, userOrg.organizationId, { action: 'google_places_details' })
+        .catch((error) => {
+          console.error('chargeFlatCredits threw for google_places_details:', error)
+          return null
+        })
+      if (chargeResult && !chargeResult.charged) {
+        console.error('chargeFlatCredits did not charge for google_places_details', {
+          organizationId: userOrg.organizationId,
+          newBalance: chargeResult.newBalance,
+        })
+      }
     }
   }
 

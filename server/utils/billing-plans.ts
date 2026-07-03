@@ -1,5 +1,5 @@
 import Stripe from 'stripe'
-import { isManagedServiceEnabled } from './feature-flags'
+import { isManagedServiceEnabled } from './feature-flags.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

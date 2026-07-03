@@ -18,6 +18,9 @@ export interface McpUserContext {
   userId: string
   isPlatformAdmin: boolean
   scopes: string[]
+  // Only populated for session-based auth (ChowBot/dashboard) — bearer-token
+  // auth (e.g. ChatGPT connector) has no browser session to read this from.
+  activeOrganizationId?: string
 }
 
 export interface McpSiteContext extends McpUserContext {
@@ -94,6 +97,7 @@ export async function requireMcpUser(
   // Session-based auth has no token to derive scopes from, so we assume the caller's
   // requested scopes are granted outright. This is safe because forbiddenScopes and
   // requirePlatformAdmin below still enforce the real restrictions for this surface.
+  const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string }
   const user = {
     env,
     db,
@@ -106,6 +110,7 @@ export async function requireMcpUser(
       env,
     ),
     scopes: normalizedOptions.requiredScopes ?? ['tenant'],
+    activeOrganizationId: typeof sessionRecord.activeOrganizationId === 'string' ? sessionRecord.activeOrganizationId : undefined,
   }
   ensureForbiddenScopesAbsent(user.scopes, normalizedOptions.forbiddenScopes)
   if (normalizedOptions.requirePlatformAdmin && !user.isPlatformAdmin) {
