@@ -12,85 +12,44 @@
 
       <!-- Pill nav (desktop) -->
       <nav class="hidden lg:flex items-center gap-1 bg-elevated/50 border border-muted rounded-full px-1 py-1">
-        <template v-for="item in navItems" :key="item.label">
-          <UDropdownMenu
-            v-if="item.label === 'Docs' && categories.length"
-            :items="[[{ label: 'All docs', to: '/docs' }], categories.map(cat => ({ label: cat.category, to: `/docs/${cat.categorySlug}/${cat.docs[0]?.slug}` }))]"
-            :content="{ align: 'start', collisionPadding: 12 }"
-          >
-            <UButton
-              :label="item.label"
-              trailing-icon="i-lucide-chevron-down"
-              color="neutral"
-              variant="ghost"
-              class="px-4 py-2 rounded-full text-[13.5px] font-medium"
-              :class="isActiveRoute(item.to) ? 'bg-elevated text-default' : 'text-muted'"
-              :ui="{ base: 'hover:bg-transparent hover:text-default' }"
-            />
-          </UDropdownMenu>
-          <UDropdownMenu
-            v-else-if="item.label === 'Blog' && blogCategories.length"
-            :items="[
-              [{ label: 'All blog', to: '/blog' }],
-              blogCategories.map(cat => ({ label: cat.category, to: `/blog#${cat.categorySlug}` }))
-            ]"
-            :content="{ align: 'start', collisionPadding: 12 }"
-          >
-            <UButton
-              :label="item.label"
-              trailing-icon="i-lucide-chevron-down"
-              color="neutral"
-              variant="ghost"
-              class="px-4 py-2 rounded-full text-[13.5px] font-medium"
-              :class="isActiveRoute(item.to) ? 'bg-elevated text-default' : 'text-muted'"
-              :ui="{ base: 'hover:bg-transparent hover:text-default' }"
-            />
-          </UDropdownMenu>
-          <NuxtLink
-            v-else
-            :to="item.to"
-            class="px-4 py-2 rounded-full text-[13.5px] font-medium text-muted transition-colors hover:text-default no-underline"
-            :class="isActiveRoute(item.to) ? 'bg-elevated text-default shadow-[0_1px_2px_rgba(31,37,71,0.06)]' : ''"
-          >
-            {{ item.label }}
-          </NuxtLink>
-        </template>
+        <NuxtLink
+          v-for="item in navItems"
+          :key="item.label"
+          :to="item.to"
+          class="px-4 py-2 rounded-full text-[13.5px] font-medium text-muted transition-colors hover:text-default no-underline"
+          :class="isActiveRoute(item.to) ? 'bg-elevated text-default shadow-[0_1px_2px_rgba(31,37,71,0.06)]' : ''"
+        >
+          {{ item.label }}
+        </NuxtLink>
       </nav>
 
       <!-- Right actions -->
       <div class="flex items-center gap-2 shrink-0">
         <template v-if="isAuthenticated">
-          <NuxtLink
-            to="/dashboard"
-            class="hidden sm:inline-flex items-center gap-1.5 bg-primary text-inverted text-[13.5px] font-semibold px-4 py-2.5 rounded-[9px] hover:bg-primary/90 transition-colors no-underline"
-          >
+          <PlatformButton to="/dashboard" class="hidden sm:inline-flex">
             Dashboard
-            <UIcon name="i-heroicons-arrow-right" class="size-3.5" />
-          </NuxtLink>
+            <PlatformIcon name="arrow-right" class="size-3.5" />
+          </PlatformButton>
         </template>
         <template v-else>
-          <NuxtLink to="/login" class="hidden sm:block text-[13.5px] font-medium text-default px-3 py-2 hover:text-muted transition-colors no-underline">
+          <PlatformButton to="/login" variant="ghost" class="hidden sm:inline-flex">
             Login
-          </NuxtLink>
-          <NuxtLink
-            to="/signup"
-            class="hidden sm:inline-flex items-center gap-1.5 bg-primary text-inverted text-[13.5px] font-semibold px-4 py-2.5 rounded-[9px] hover:bg-primary/90 transition-colors no-underline"
-          >
+          </PlatformButton>
+          <PlatformButton to="/signup" class="hidden sm:inline-flex">
             Start free
-            <UIcon name="i-heroicons-arrow-right" class="size-3.5" />
-          </NuxtLink>
+            <PlatformIcon name="arrow-right" class="size-3.5" />
+          </PlatformButton>
         </template>
-        <UButton
-          icon="i-heroicons-bars-3"
-          variant="ghost"
-          color="neutral"
-          size="sm"
-          class="lg:hidden"
+        <button
+          type="button"
+          class="flex size-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-muted hover:text-default lg:hidden"
           aria-label="Toggle menu"
           :aria-expanded="isMobileMenuOpen"
           aria-controls="mobile-menu"
           @click="toggleMobileMenu"
-        />
+        >
+          <PlatformIcon :name="isMobileMenuOpen ? 'x' : 'menu'" class="size-5" />
+        </button>
       </div>
     </div>
 
@@ -140,8 +99,6 @@ const navItems = [
 ]
 
 const route = useRoute()
-const { categories } = useDocsNav()
-const { categories: blogCategories } = useBlogNav()
 
 function isActiveRoute(to: string) {
   const path = to.split('#')[0]!

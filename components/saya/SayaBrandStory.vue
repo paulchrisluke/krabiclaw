@@ -20,7 +20,7 @@
             </NuxtLink>
           </div>
           <div v-if="image" class="overflow-hidden">
-            <UImage
+            <img
               :src="image"
               alt=""
               aria-hidden="true"

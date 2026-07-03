@@ -107,7 +107,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
 
-import VideoPosterPrompt from '~/components/media/VideoPosterPrompt.vue'
+import VideoPosterPrompt from '~/components/workspace/media/VideoPosterPrompt.vue'
 
 interface LocationRow {
   id: string

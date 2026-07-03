@@ -1,9 +1,21 @@
 // Stripe product/price seeder for managed service plans.
 // Run: node scripts/seed-stripe.mjs
 // Requires STRIPE_SECRET_KEY in .env (reads via dotenv-style manual parse).
+//
+// Launch note: Managed and SEO Accelerator are intentionally NOT marketed or
+// purchasable in the app right now — gated off by MANAGED_SERVICE_ENABLED
+// (server/utils/feature-flags.ts, off by default) because a lean launch team
+// can't reliably deliver their concierge promise yet. This script still seeds
+// them into Stripe as-is; that's deliberate (the Stripe products/prices stay
+// untouched so the flag can be flipped back on without re-seeding), not drift
+// to "fix" by deleting or archiving them here.
 import { readFileSync, existsSync } from 'node:fs'
-import { resolve, extname, basename } from 'node:path'
+import { resolve, extname, basename, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import Stripe from 'stripe'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const STRIPE_ASSETS_DIR = resolve(__dirname, 'assets/stripe')
 
 // --- Parse .env manually (no dotenv dependency needed) ---
 function loadEnv() {
@@ -225,18 +237,20 @@ async function main() {
     description: 'Your site, your domain — go live in minutes and edit everything through ChatGPT.',
     planId: 'growth',
     amountCents: 4900,
-    highlighted: false,
-    imagePath: '/Users/paulchrisluke/Downloads/growth.png',
+    // Flagship purchasable plan while Managed/SEO Accelerator are hidden
+    // (MANAGED_SERVICE_ENABLED off) — see launch note at top of file. Revisit
+    // whether Managed should reclaim "highlighted" once it's re-enabled.
+    highlighted: true,
+    badge: 'Most Popular',
+    imagePath: resolve(STRIPE_ASSETS_DIR, 'growth.png'),
     features: [
       'Restaurant or experience site live in minutes',
       'Your own domain (yourbusiness.com)',
-      'Unlimited locations per site — add more sites anytime',
       'Edit menus, content & photos through ChatGPT',
-      'Bookings, ticketed experiences & delivery links',
+      'Bookings & ticketed experiences',
       'WhatsApp booking & reservation notifications',
       'Auto-sync from Facebook & Instagram',
       'Google Business profile sync',
-      '1 language translation included',
     ],
   })
 
@@ -247,7 +261,7 @@ async function main() {
     amountCents: 14900,
     highlighted: true,
     badge: 'Best Value',
-    imagePath: '/Users/paulchrisluke/Downloads/managed.png',
+    imagePath: resolve(STRIPE_ASSETS_DIR, 'managed.png'),
     features: [
       'Everything in Growth, plus:',
       'We manage your site for you — just WhatsApp us',
@@ -275,6 +289,10 @@ async function main() {
   })
 
   // One-time add-ons
+  // Translation add-on: not currently marketed anywhere in the app (no UI
+  // triggers it) — the human-fulfilled translation work isn't something the
+  // launch team is taking on right now, same reasoning as MANAGED_SERVICE_ENABLED.
+  // Still seeded into Stripe as-is; don't delete or "fix" this as drift.
   const { price: translationPrice } = await createOneTimePrice({
     productName: 'Additional Language Translation',
     amountCents: 4500,

@@ -52,7 +52,7 @@
           </span>
         </div>
         <p v-if="annual && savingsNote" class="text-xs font-semibold mt-2.5 flex items-center gap-1.5" :class="isHighlighted ? 'text-emerald-400' : 'text-emerald-600'">
-          <UIcon name="i-heroicons-sparkles" class="size-3.5 shrink-0" />
+          <PlatformIcon name="sparkles" class="size-3.5 shrink-0" />
           {{ savingsNote }}
         </p>
       </template>
@@ -73,7 +73,7 @@
           class="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5"
           :class="isHighlighted ? 'bg-primary/20 text-primary-300' : 'bg-primary/10 text-primary-600'"
         >
-          <UIcon name="i-heroicons-check" class="size-3" />
+          <PlatformIcon name="check" class="size-3" />
         </div>
         <span>{{ feature }}</span>
       </li>
@@ -82,21 +82,16 @@
     <!-- CTA -->
     <div class="relative z-10 mt-auto pt-4">
       <slot name="cta">
-        <UButton
+        <PlatformButton
           v-if="plan.cta"
           :to="plan.cta.href"
           :variant="isHighlighted ? 'solid' : 'outline'"
           size="xl"
           block
-          class="rounded-xl font-bold transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md"
-          :class="[
-            isHighlighted 
-              ? 'bg-primary hover:bg-primary/95 text-white hover:scale-[1.01]' 
-              : 'text-default border-default hover:bg-primary/5 hover:border-primary/50'
-          ]"
+          class="font-bold shadow-sm transition-all duration-300 hover:shadow-md"
         >
           {{ plan.cta.label }}
-        </UButton>
+        </PlatformButton>
       </slot>
     </div>
   </div>

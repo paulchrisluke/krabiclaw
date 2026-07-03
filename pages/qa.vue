@@ -13,7 +13,7 @@
           :to="`/locations/${loc.slug}/qa`"
           class="inline-flex items-center gap-2 rounded-full border border-default px-5 py-2.5 text-sm text-muted no-underline transition hover:bg-muted hover:text-default"
         >
-          <UIcon name="i-heroicons-map-pin" class="size-3.5 opacity-70" />
+          <SayaIcon name="map-pin" class="size-3.5 opacity-70" />
           {{ loc.title }}
         </NuxtLink>
       </div>

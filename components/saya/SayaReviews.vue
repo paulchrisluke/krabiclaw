@@ -23,10 +23,10 @@
 
     <div :class="['grid gap-8', layoutClass]">
       <!-- Real reviews -->
-      <UCard
+      <div
         v-for="review in displayedReviews"
         :key="review.reviewId || review.id || review.name || review.createTime"
-        class="flex flex-col bg-default p-8 shadow-sm border border-default hover:shadow-md transition-all"
+        class="flex flex-col rounded-lg bg-default p-8 shadow-sm border border-default hover:shadow-md transition-all"
       >
         <div
           class="flex items-center gap-1 text-yellow-400 mb-4"
@@ -51,9 +51,9 @@
         </div>
 
         <div class="mt-6 flex items-center gap-3 pt-6 border-t border-default">
-          <UAvatar size="md" class="bg-inverted text-inverted font-bold text-xs uppercase">
+          <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-inverted text-xs font-bold uppercase text-inverted">
             {{ reviewAuthor(review).charAt(0) }}
-          </UAvatar>
+          </span>
           <div>
             <p class="text-sm font-bold text-default">{{ reviewAuthor(review) }}</p>
             <time v-if="review.createTime || review.created_at" :datetime="review.createTime || review.created_at" class="block text-xs text-muted">
@@ -61,30 +61,29 @@
             </time>
           </div>
         </div>
-      </UCard>
+      </div>
 
     </div>
 
     <!-- Empty state -->
     <div v-if="displayedReviews.length === 0" class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-default bg-muted/20 py-20 text-center">
       <div class="flex size-14 items-center justify-center rounded-full bg-elevated/50 text-muted shadow-sm">
-        <UIcon name="i-heroicons-chat-bubble-bottom-center-text" class="size-7" />
+        <svg viewBox="0 0 24 24" class="size-7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227q1.694.25 3.423.379c.35.026.67.21.865.501L12 21l2.755-4.132a1.14 1.14 0 0 1 .865-.502a48 48 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.4 48.4 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741z"/></svg>
       </div>
       <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ $t('saya.reviews.empty_title') }}</h3>
       <p class="mt-2 max-w-sm text-sm text-muted">{{ $t('saya.reviews.empty_desc') }}</p>
     </div>
     
     <div v-if="showViewMore && reviews.length > 0" class="mt-12 text-center">
-      <UButton to="/reviews" color="primary" variant="outline" size="xl">
+      <NuxtLink to="/reviews" class="inline-flex items-center justify-center rounded ring-1 ring-inset ring-(--brand-color) px-6 py-3 text-base font-medium text-(--brand-color) no-underline transition hover:bg-(--brand-color)/10">
         {{ $t('saya.reviews.view_all') }}
-      </UButton>
+      </NuxtLink>
     </div>
   </AppSection>
 </template>
 
 <script setup>
 import AppSection from '~/components/ui/AppSection.vue'
-import { UButton } from '#components'
 
 const props = defineProps({
   reviews: {

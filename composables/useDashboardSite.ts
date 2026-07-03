@@ -46,6 +46,7 @@ interface DashboardContextResponse {
   sites: DashboardSiteSummary[]
   locations: DashboardLocation[]
   selectedLocation: DashboardLocation | null
+  managedServiceEnabled: boolean
 }
 
 export function useDashboardSite() {
@@ -82,6 +83,7 @@ export function useDashboardSite() {
   const sites = computed(() => state.value?.sites ?? [])
   const locations = computed(() => state.value?.locations ?? [])
   const selectedLocation = computed(() => state.value?.selectedLocation ?? null)
+  const managedServiceEnabled = computed(() => state.value?.managedServiceEnabled ?? false)
 
   return {
     state,
@@ -92,6 +94,7 @@ export function useDashboardSite() {
     sites,
     locations,
     selectedLocation,
+    managedServiceEnabled,
     refresh,
     selectLocation
   }

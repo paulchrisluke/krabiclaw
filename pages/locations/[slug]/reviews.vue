@@ -4,7 +4,7 @@
     <!-- Loading -->
     <template v-if="pending">
       <div class="mx-auto max-w-2xl px-4 py-20 text-center">
-        <USkeleton class="mx-auto h-24 w-48 rounded-lg" />
+        <div class="mx-auto h-24 w-48 animate-pulse rounded-lg bg-elevated" />
       </div>
     </template>
 
@@ -37,10 +37,11 @@
               {{ aggregate?.rating ? Number(aggregate.rating).toFixed(1) : '—' }}
             </div>
             <div class="mt-3 flex gap-1">
-              <UIcon
+              <SayaIcon
                 v-for="s in 5"
                 :key="s"
-                name="i-heroicons-star-solid"
+                name="star"
+                solid
                 class="size-5"
                 :class="s <= Math.round(aggregate?.rating ?? 0) ? 'text-primary' : 'text-muted'"
               />
@@ -54,7 +55,7 @@
             <div v-for="star in [5, 4, 3, 2, 1]" :key="star" class="grid grid-cols-[40px_1fr_36px] items-center gap-4">
               <div class="flex items-center gap-1 text-sm text-muted">
                 {{ star }}
-                <UIcon name="i-heroicons-star-solid" class="size-3 text-primary" />
+                <SayaIcon name="star" solid class="size-3 text-primary" />
               </div>
               <div class="h-2 overflow-hidden rounded-full bg-muted">
                 <div
@@ -84,7 +85,7 @@
         <!-- True empty: no reviews at all -->
         <div v-if="reviews.length === 0" class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-default py-20 text-center">
           <div class="flex size-14 items-center justify-center rounded-full bg-elevated text-muted">
-            <UIcon name="i-heroicons-star" class="size-7" />
+            <SayaIcon name="star" class="size-7" />
           </div>
           <div class="mt-6 saya-display saya-italic text-3xl text-default">{{ t('saya.reviews_page.no_reviews_title') }}</div>
           <p class="mt-2 max-w-sm text-sm text-muted">{{ t('saya.reviews_page.no_reviews_desc') }}</p>
@@ -118,14 +119,15 @@
               <div class="flex-1 min-w-0">
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="font-medium text-default">{{ review.author_name }}</span>
-                  <UBadge v-if="review.source === 'gmb'" variant="outline" size="xs">{{ t('saya.reviews_page.via_google') }}</UBadge>
+                  <span v-if="review.source === 'gmb'" class="inline-flex items-center rounded-full border border-default px-2 py-0.5 text-xs font-medium text-muted">{{ t('saya.reviews_page.via_google') }}</span>
                 </div>
                 <div class="mt-1 flex items-center gap-2">
                   <div class="flex gap-0.5">
-                    <UIcon
+                    <SayaIcon
                       v-for="s in 5"
                       :key="s"
-                      name="i-heroicons-star-solid"
+                      name="star"
+                      solid
                       class="size-3"
                       :class="s <= review.rating ? 'text-primary' : 'text-muted'"
                     />
@@ -164,7 +166,7 @@
               class="mt-6 rounded-2xl border-l-4 border-primary bg-elevated p-5"
             >
               <div class="mb-2 flex items-center gap-3">
-                <UBadge color="neutral" size="xs" class="font-semibold">{{ siteName }}</UBadge>
+                <span class="inline-flex items-center rounded-full border border-default px-2 py-0.5 text-xs font-semibold text-muted">{{ siteName }}</span>
                 <span class="text-xs text-muted">{{ t('saya.reviews_page.owner_response') }} · {{ formatReviewDate(review.owner_reply_at) }}</span>
               </div>
               <p class="text-sm leading-relaxed text-default">{{ review.owner_reply }}</p>

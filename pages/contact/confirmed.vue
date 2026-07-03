@@ -4,7 +4,7 @@
       <div class="rounded-3xl border border-default bg-elevated p-10 text-center shadow-sm sm:p-12">
         <div class="mb-8 flex justify-center">
           <div class="flex size-20 items-center justify-center rounded-full bg-primary/10">
-            <UIcon name="i-heroicons-check-circle" class="size-12 text-primary" />
+            <SayaIcon name="check-circle" class="size-12 text-primary" />
           </div>
         </div>
 
@@ -12,8 +12,8 @@
         <p class="mt-4 text-muted">{{ t('saya.contact_page.reply_within') }}</p>
 
         <div class="mt-8 flex flex-col gap-3">
-          <UButton to="/" color="primary" variant="soft" class="rounded-full">{{ t('saya.contact_page.back_home') }}</UButton>
-          <UButton to="/contact" color="primary" variant="ghost" size="sm">{{ t('saya.contact_page.send_another') }}</UButton>
+          <SayaButton to="/" variant="soft">{{ t('saya.contact_page.back_home') }}</SayaButton>
+          <SayaButton to="/contact" variant="ghost" size="md">{{ t('saya.contact_page.send_another') }}</SayaButton>
         </div>
       </div>
     </div>

@@ -160,10 +160,10 @@
             </p>
             <div class="flex items-center justify-center gap-3">
               <a href="/web-app-manifest-192x192.png" download class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline bg-primary/10 px-3 py-1.5 rounded-lg transition-colors">
-                <UIcon name="i-heroicons-arrow-down-tray" class="size-4" /> Download App Icon
+                <PlatformIcon name="download" class="size-4" /> Download App Icon
               </a>
               <a href="/install-krabiclaw-chatgpt-plugin.png" target="_blank" class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline bg-primary/10 px-3 py-1.5 rounded-lg transition-colors">
-                <UIcon name="i-heroicons-photo" class="size-4" /> View Setup Screenshot
+                <PlatformIcon name="image" class="size-4" /> View Setup Screenshot
               </a>
             </div>
           </div>
@@ -192,7 +192,7 @@
               <div class="flex items-center gap-2 bg-muted/50 border border-default rounded-xl px-3 py-2 font-mono text-[12px] text-highlighted">
                 <span class="truncate">https://krabiclaw.com/api/mcp</span>
                 <button class="ml-auto flex items-center justify-center w-6 h-6 rounded bg-white border border-default text-muted hover:text-default transition-all cursor-pointer shadow-sm" aria-label="Copy server URL" @click="copyUrl">
-                  <UIcon :name="copied ? 'i-heroicons-check' : 'i-heroicons-clipboard'" class="size-3.5" :class="copied ? 'text-green-500' : ''" />
+                  <PlatformIcon :name="copied ? 'check' : 'clipboard'" class="size-3.5" :class="copied ? 'text-green-500' : ''" />
                 </button>
               </div>
             </div>

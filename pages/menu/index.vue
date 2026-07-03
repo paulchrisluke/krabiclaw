@@ -20,7 +20,7 @@
             :to="`/locations/${loc.slug}/menu`"
             class="inline-flex items-center gap-2 rounded-full border border-default px-5 py-2.5 text-sm text-muted no-underline transition hover:bg-muted hover:text-default"
           >
-            <UIcon name="i-heroicons-map-pin" class="size-3.5 opacity-70" />
+            <SayaIcon name="map-pin" class="size-3.5 opacity-70" />
             {{ loc.title }}
           </NuxtLink>
         </div>
@@ -30,9 +30,9 @@
       <div v-if="!hasMenu" class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
         <div class="saya-display saya-italic text-3xl text-default mb-4">Menu coming soon.</div>
         <p class="text-sm text-muted mb-6">Our menu is being prepared. Check back soon.</p>
-        <UButton v-if="hasExperiences" to="/experiences" color="primary" variant="solid" class="rounded-full">
+        <SayaButton v-if="hasExperiences" to="/experiences">
           View experiences
-        </UButton>
+        </SayaButton>
       </div>
 
       <!-- Sticky category tab bar -->
@@ -100,14 +100,12 @@
                         class="text-default no-underline hover:underline underline-offset-2"
                       >{{ item.name }}</NuxtLink>
                       <span v-else class="text-default opacity-50">{{ item.name }}</span>
-                      <UBadge v-if="!item.available" variant="outline" size="xs" class="shrink-0 font-medium">Unavailable</UBadge>
-                      <UBadge
+                      <span v-if="!item.available" class="inline-flex shrink-0 items-center rounded-full border border-default px-2 py-0.5 text-xs font-medium text-muted">Unavailable</span>
+                      <span
                         v-for="tag in getDietaryTags(item)"
                         :key="tag"
-                        variant="outline"
-                        size="xs"
-                        class="shrink-0 font-medium"
-                      >{{ tag }}</UBadge>
+                        class="inline-flex shrink-0 items-center rounded-full border border-default px-2 py-0.5 text-xs font-medium text-muted"
+                      >{{ tag }}</span>
                     </div>
                     <div class="saya-dotted-leader" />
                     <div class="shrink-0 tabular-nums text-base text-default">{{ formatMenuPrice(item.price_amount, '—') }}</div>

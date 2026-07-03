@@ -4,6 +4,7 @@
 
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { logOnlyWhatsAppMessageId, shouldSendRealWhatsApp } from './whatsapp-delivery'
+import { chargeFlatCredits } from './ai-credits'
 
 function maskPhone(phone: string): string {
   if (!phone || phone.length < 4) return '***';
@@ -323,6 +324,15 @@ export async function sendWhatsAppNotification(
       [errMsg, now, notificationId],
     )
     result = { success: false, error: errMsg }
+  }
+
+  if (result.success) {
+    // Soft-fail: a real send already went out, so an exhausted balance never
+    // blocks the notification — it just skips the charge.
+    await chargeFlatCredits(db, opts.organizationId, {
+      siteId: opts.siteId ?? undefined,
+      action: 'whatsapp_notification',
+    }).catch(() => {})
   }
 
   return result

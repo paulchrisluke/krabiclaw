@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { updateNotificationsSettings } from '~/server/utils/mcp-workflows'
+import { hasSiteEntitlement } from '~/server/utils/billing'
 import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -37,6 +38,11 @@ export default defineEventHandler(async (event) => {
   `, [siteId, session.user.id])
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+
+  const wantsWhatsApp = Boolean(body.whatsapp_phone?.trim()) || (body.channels?.includes('whatsapp') ?? false)
+  if (wantsWhatsApp && !(await hasSiteEntitlement(db, siteId, 'whatsapp_notifications'))) {
+    return jsonResponse({ error: 'WhatsApp notifications require a Growth plan or higher.' }, { status: 403 })
+  }
 
   const notifications = await updateNotificationsSettings(db, site.organization_id, siteId, body.whatsapp_phone?.trim(), body.channels)
   return jsonResponse({ success: true, notifications })

@@ -5,6 +5,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getPlaceDetailsByUrl, getPlaceDetails, searchPlaces } from '~/server/utils/google-places'
+import { chargeFlatCredits } from '~/server/utils/ai-credits'
 import { createLocation } from '~/server/utils/location-management'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { execute, queryFirst, type DbClient } from '~/server/db'
@@ -112,12 +113,14 @@ export default defineEventHandler(async (event) => {
       place = await getPlaceDetailsByUrl(apiKey, mapsUrl, false)
     } else {
       const results = await searchPlaces(apiKey, query)
+      await chargeFlatCredits(db, organizationId, { siteId, action: 'google_places_search' }).catch(() => {})
       const top = results[0]
       if (!top?.placeId) {
         return jsonResponse({ error: `No results found for "${query}". Try a more specific name.` }, { status: 404 })
       }
       place = await getPlaceDetails(apiKey, top.placeId, false)
     }
+    await chargeFlatCredits(db, organizationId, { siteId, action: 'google_places_details' }).catch(() => {})
   } catch (err) {
     return jsonResponse({
       error: err instanceof Error ? err.message : 'Could not fetch place details. Try again.',

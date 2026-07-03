@@ -86,7 +86,7 @@
 </template>
 
 <script setup lang="ts">
-import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
+import { renderMarkdownToHtml, sanitizeHtmlForSsr, stripLeadingTitleHeading } from '~/utils/markdown'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
 import { categoryToSlug, slugToCategory } from '~/utils/docs-categories'
 import { buildContentBlocks, normalizeContentComponent, type ContentComponent } from '~/utils/content-blocks'
@@ -218,7 +218,7 @@ function renderMarkdown(markdown: string) {
 }
 
 const contentBlocks = computed(() =>
-  buildContentBlocks(doc.value?.body ?? '', doc.value?.components ?? [], renderMarkdown),
+  buildContentBlocks(stripLeadingTitleHeading(doc.value?.body ?? '', doc.value?.title), doc.value?.components ?? [], renderMarkdown),
 )
 const hasExplicitEmbeds = computed(() => /\{\{\s*component\s+type\s*=/.test(doc.value?.body ?? ''))
 const tocHtml = computed(() => contentBlocks.value

@@ -8,7 +8,7 @@
       <!-- Hero Section -->
       <div class="text-center max-w-3xl mx-auto mb-20 flex flex-col items-center gap-6">
         <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
-          <UIcon name="i-heroicons-bolt" class="size-3.5" />
+          <PlatformIcon name="zap" class="size-3.5" />
           The Ultimate Platform
         </span>
         <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight leading-[1.05] text-default m-0 text-balance">
@@ -19,12 +19,12 @@
           Say goodbye to expensive agencies and clunky dashboards. KrabiClaw gives local businesses a high-converting site, direct bookings, and automated local SEO — managed through a ChatGPT conversation.
         </p>
         <div class="flex flex-wrap items-center justify-center gap-4 mt-2">
-          <UButton to="/signup" size="lg" class="font-semibold bg-primary text-inverted rounded-[9px] hover:bg-primary/90 shadow-sm transition-transform hover:-translate-y-0.5">
+          <PlatformButton to="/signup" size="lg" class="shadow-sm transition-transform hover:-translate-y-0.5">
             Start Free Today
-          </UButton>
-          <UButton to="/pricing" variant="outline" color="neutral" size="lg" class="font-semibold rounded-[9px] transition-transform hover:-translate-y-0.5">
+          </PlatformButton>
+          <PlatformButton to="/pricing" variant="outline" size="lg" class="transition-transform hover:-translate-y-0.5">
             View Pricing
-          </UButton>
+          </PlatformButton>
         </div>
       </div>
 
@@ -44,7 +44,7 @@
               class="w-12 h-12 rounded-xl flex items-center justify-center mb-6 shadow-sm"
               style="background: linear-gradient(135deg, var(--kc-navy) 0%, var(--kc-navy-700) 100%); box-shadow: 0 4px 12px rgba(31,37,71,0.15);"
             >
-              <UIcon :name="feature.icon" class="size-6 text-white" />
+              <PlatformIcon :name="feature.icon" class="size-6 text-white" />
             </div>
 
             <!-- Title & Description -->
@@ -62,7 +62,7 @@
                 :key="spec"
                 class="flex items-start gap-2 text-[13px] text-muted leading-snug"
               >
-                <UIcon name="i-heroicons-check-circle" class="size-4 shrink-0 text-(--kc-teal) mt-0.5" />
+                <PlatformIcon name="check-circle" class="size-4 shrink-0 text-(--kc-teal) mt-0.5" />
                 <span>{{ spec }}</span>
               </li>
             </ul>
@@ -75,7 +75,7 @@
               class="inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:text-primary/80 transition-colors no-underline group/link"
             >
               Learn how to set this up
-              <UIcon name="i-heroicons-arrow-right" class="size-3.5 transition-transform group-hover/link:translate-x-1" />
+              <PlatformIcon name="arrow-right" class="size-3.5 transition-transform group-hover/link:translate-x-1" />
             </NuxtLink>
           </div>
         </div>
@@ -89,7 +89,7 @@
         <div class="relative z-10 grid lg:grid-cols-12 gap-8 items-center">
           <div class="lg:col-span-7 space-y-6">
             <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-white/10 text-white/90 border border-white/20">
-              <UIcon name="i-heroicons-presentation-chart-line" class="size-3.5" />
+              <PlatformIcon name="bar-chart" class="size-3.5" />
               Integrated Analytics & SEO
             </span>
             <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white m-0">
@@ -104,7 +104,7 @@
                 class="inline-flex items-center gap-1.5 bg-white text-(--kc-navy) text-[14px] font-bold px-5 py-3 rounded-[9px] hover:bg-white/90 transition-colors no-underline"
               >
                 Read our SEO Strategy Guide
-                <UIcon name="i-heroicons-book-open" class="size-4" />
+                <PlatformIcon name="book" class="size-4" />
               </NuxtLink>
               <NuxtLink
                 to="/docs"
@@ -120,7 +120,7 @@
               <div class="flex items-center justify-between border-b border-white/10 pb-4">
                 <div class="flex items-center gap-2.5">
                   <div class="w-8 h-8 rounded-lg bg-(--kc-coral) flex items-center justify-center">
-                    <UIcon name="i-heroicons-presentation-chart-bar" class="size-4 text-white" />
+                    <PlatformIcon name="bar-chart" class="size-4 text-white" />
                   </div>
                   <span class="font-semibold text-sm">Direct Storefront Stats</span>
                 </div>
@@ -160,7 +160,7 @@
             class="bg-elevated/40 border border-default p-6 rounded-2xl flex flex-col gap-2"
           >
             <h4 class="text-base font-bold text-default m-0 flex items-center gap-2">
-              <UIcon name="i-heroicons-question-mark-circle" class="size-5 text-primary shrink-0" />
+              <PlatformIcon name="question-circle" class="size-5 text-primary shrink-0" />
               {{ faq.q }}
             </h4>
             <p class="text-[13.5px] leading-relaxed text-muted m-0">
@@ -195,11 +195,11 @@ const faqItems = [
   },
   {
     q: 'How does Google Business Profile sync work?',
-    a: 'Connect your Google Business account and KrabiClaw pulls in your verified hours, photos, reviews, and details automatically. On Managed plans, we keep your Google Business profile up to date for you.'
+    a: 'Connect your Google Business account and KrabiClaw pulls in your verified hours, photos, reviews, and details automatically. Growth keeps your profile synced on an ongoing basis.'
   },
   {
     q: 'Is there a contract or setup fee?',
-    a: 'No contracts, no setup fees. Start free, upgrade to Growth ($49/mo) or Managed ($149/mo) month-to-month. Cancel anytime.'
+    a: 'No contracts, no setup fees. Start free, upgrade to Growth ($49/mo) month-to-month. Cancel anytime.'
   }
 ]
 
@@ -216,7 +216,7 @@ usePlatformPageSeo({
 
 const detailedFeatures = [
   {
-    icon: 'i-heroicons-globe-alt',
+    icon: 'globe',
     title: 'SEO & Custom Domains',
     description: 'Ensure local searchers find your site instantly. Our platform features edge performance and clean HTML optimized directly for search crawlers.',
     docLink: '/docs',
@@ -228,7 +228,7 @@ const detailedFeatures = [
     ]
   },
   {
-    icon: 'i-heroicons-chat-bubble-left-right',
+    icon: 'message-circle',
     title: 'Edit Everything Through ChatGPT',
     description: 'Update menus, page content, photos, and posts by talking to ChatGPT. No CMS to learn — just describe what you want changed.',
     docLink: '/plugin',
@@ -240,19 +240,19 @@ const detailedFeatures = [
     ]
   },
   {
-    icon: 'i-heroicons-calendar-days',
+    icon: 'calendar',
     title: 'Bookings & Experience Reservations',
     description: 'Accept table bookings and ticketed experience reservations 24/7. Automate confirmations so your team focuses on guests, not admin.',
     docLink: '/docs',
     specs: [
       'Table reservations and ticketed experience bookings',
       'Capacity and time-slot control per experience',
-      'Automated WhatsApp booking confirmations',
+      'Automated booking confirmations — email free, WhatsApp on Growth',
       'No commissions or per-cover fees'
     ]
   },
   {
-    icon: 'i-heroicons-document-text',
+    icon: 'file-text',
     title: 'Menus, Experiences & Offerings',
     description: 'Restaurants publish multi-section menus. Experience businesses list ticketed activities with pricing, capacity, and scheduling — all on the same platform.',
     docLink: '/docs',
@@ -264,7 +264,7 @@ const detailedFeatures = [
     ]
   },
   {
-    icon: 'i-heroicons-shopping-bag',
+    icon: 'shopping-bag',
     title: 'Delivery & Order Links',
     description: 'Connect your Grab, Uber Eats, and FoodPanda pages so guests can order from the platform they already use — without leaving your site.',
     docLink: '/docs',
@@ -276,7 +276,7 @@ const detailedFeatures = [
     ]
   },
   {
-    icon: 'i-heroicons-chart-bar',
+    icon: 'bar-chart',
     title: 'Real-Time Insights',
     description: 'See exactly how your business is performing. Ask ChatGPT for a summary, or check the analytics tab directly.',
     docLink: '/docs',

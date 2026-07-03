@@ -41,7 +41,7 @@
               class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             />
             <div v-else class="flex h-full items-center justify-center">
-              <UIcon name="i-heroicons-sparkles" class="size-12 text-dimmed" />
+              <SayaIcon name="sparkles" class="size-12 text-dimmed" />
             </div>
             <div
               v-if="exp.status === 'sold_out'"
@@ -61,22 +61,22 @@
 
             <div class="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted">
               <span v-if="exp.price" class="flex items-center gap-1">
-                <UIcon name="i-heroicons-banknotes" class="size-3.5" />
+                <SayaIcon name="banknotes" class="size-3.5" />
                 {{ exp.price }}
               </span>
               <span v-if="exp.duration_minutes" class="flex items-center gap-1">
-                <UIcon name="i-heroicons-clock" class="size-3.5" />
+                <SayaIcon name="clock" class="size-3.5" />
                 {{ formatDuration(exp.duration_minutes) }}
               </span>
               <span v-if="exp.max_capacity" class="flex items-center gap-1">
-                <UIcon name="i-heroicons-user-group" class="size-3.5" />
+                <SayaIcon name="user-group" class="size-3.5" />
                 {{ exp.max_capacity }} {{ expCopy.guestsMaxLabel }}
               </span>
             </div>
 
             <div class="mt-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
               {{ expCopy.viewExperienceCta }}
-              <UIcon name="i-heroicons-arrow-right" class="size-3.5 transition-transform group-hover:translate-x-1" />
+              <SayaIcon name="arrow-right" class="size-3.5 transition-transform group-hover:translate-x-1" />
             </div>
           </div>
         </NuxtLink>

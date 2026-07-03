@@ -180,6 +180,32 @@ Compare each mode against `text-no-icons` and `saya-shell` for LCP/FCP, TTI,
 HTML bytes, modulepreload count, stylesheet count, total transferred bytes, and
 top resources.
 
+Preview rerun on July 3, 2026 after the public-surface cleanup:
+
+| Route / mode | LCP | FCP | TTI | Transfer |
+| --- | ---: | ---: | ---: | ---: |
+| `/dev/perf-text?mode=text-no-icons` | 1.49s | 1.49s | 3.02s | 339.3KB |
+| `/dev/perf-text?mode=platform-shell` | 2.83s | 2.53s | 2.96s | 380.3KB |
+| `/dev/perf-text?mode=saya-header` | 1.60s | 1.60s | 2.40s | 347.6KB |
+| `/dev/perf-text?mode=saya-footer` | 1.44s | 1.44s | 2.40s | 354.1KB |
+| `/dev/perf-text?mode=saya-shell` | 2.24s | 2.24s | 2.78s | 356.6KB |
+
+This confirms the public Nuxt UI removal was load-bearing: the old July 2
+production snapshot showed `platform-shell` at `543.3KB` transfer and
+`saya-shell` at `597.3KB`; the preview rerun dropped them to `380.3KB` and
+`356.6KB` respectively.
+
+Follow-up harness cleanup on July 3, 2026:
+
+- `pages/dev/perf-text.vue` was split so the baseline route now async-loads
+  `PerfTextMode*` child components per mode instead of embedding every probe in
+  one giant SFC.
+- Local build evidence after that split showed the base perf route server chunk
+  at about `9.0KB`, with mode-specific chunks like platform/saya probes split
+  into separate `~2.8KB` to `~4.3KB` files.
+- Re-measure `text-no-icons` on preview after this deploy before drawing new
+  conclusions about the remaining shared-entry floor.
+
 ## Evidence Needed Before A Change Request
 
 For every proposed optimization, record:
