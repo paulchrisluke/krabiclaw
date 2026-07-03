@@ -48,7 +48,10 @@ mock.module('stripe', {
 
 const { getCachedPlans } = await import('../../server/utils/billing-plans.ts')
 
-const CACHE_KEY = 'stripe-plans:v1'
+// Cache key is versioned by the MANAGED_SERVICE_ENABLED flag state
+// (billing-plans.ts plansCacheKey()) — baseEnv() below never sets the flag,
+// so every test here is in the "off" (ms0) state.
+const CACHE_KEY = 'stripe-plans:v2:ms0'
 
 const GROWTH_PRODUCT = {
   id: 'prod_growth',

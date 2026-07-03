@@ -16,9 +16,9 @@
         class="bg-default border border-default rounded-3xl p-8 shadow-sm hover:shadow-md transition-shadow"
       >
         <div class="flex items-start gap-4 mb-6">
-          <UAvatar size="md" class="bg-inverted text-inverted font-bold text-sm">
+          <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-inverted text-sm font-bold text-inverted">
             Q
-          </UAvatar>
+          </span>
           <div>
             <h3 class="text-lg font-bold text-default mb-1">{{ item.text }}</h3>
             <p class="text-[10px] text-muted font-bold uppercase tracking-widest">
@@ -28,9 +28,9 @@
         </div>
 
         <div v-if="item.topAnswer" class="flex items-start gap-4 bg-muted rounded-2xl p-6">
-          <UAvatar size="sm" class="bg-inverted text-inverted font-bold text-xs">
+          <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-inverted text-xs font-bold text-inverted">
             A
-          </UAvatar>
+          </span>
           <div>
             <p class="text-default leading-relaxed text-sm mb-2">{{ item.topAnswer.text }}</p>
             <p class="text-[10px] text-muted font-bold uppercase tracking-widest">
@@ -46,7 +46,7 @@
       <!-- Placeholder Q&A cards when no items -->
       <div v-if="qa.length === 0 && showEmptyState" class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-default bg-muted/20 py-20 text-center">
         <div class="flex size-14 items-center justify-center rounded-full bg-elevated/50 text-muted shadow-sm">
-          <UIcon name="i-heroicons-question-mark-circle" class="size-7" />
+          <svg viewBox="0 0 24 24" class="size-7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="M9.879 7.519c1.172-1.025 3.071-1.025 4.243 0c1.171 1.025 1.171 2.687 0 3.712q-.308.268-.67.442c-.746.361-1.452.999-1.452 1.827v.75M21 12a9 9 0 1 1-18 0a9 9 0 0 1 18 0m-9 5.25h.008v.008H12z"/></svg>
         </div>
         <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ $t('saya.qa.empty_title') }}</h3>
         <p class="mt-2 max-w-sm text-sm text-muted">{{ $t('saya.qa.empty_prompt') }}</p>
@@ -55,9 +55,9 @@
     </div>
 
     <div v-if="showViewMore && limit && qa.length > limit" class="mt-12 text-center">
-      <UButton to="/qa" color="primary" variant="outline" size="xl">
+      <NuxtLink to="/qa" class="inline-flex items-center justify-center rounded ring-1 ring-inset ring-(--brand-color) px-6 py-3 text-base font-medium text-(--brand-color) no-underline transition hover:bg-(--brand-color)/10">
         {{ $t('saya.qa.view_all') }}
-      </UButton>
+      </NuxtLink>
     </div>
   </AppSection>
 </template>
@@ -66,7 +66,6 @@
 import AppSection from '~/components/ui/AppSection.vue'
 import SayaMcpHint from '~/components/saya/SayaMcpHint.vue'
 import { sayaEmptyStates } from '~/config/saya-empty-states'
-import { UButton } from '#components'
 
 const props = defineProps({
   qa: {

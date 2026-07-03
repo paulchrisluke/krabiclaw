@@ -9,11 +9,11 @@
         >
           {{ crumb.label }}
         </NuxtLink>
-        <span v-else class="inline-flex items-center rounded-full bg-primary px-4 py-2 text-[10px] font-bold uppercase tracking-widest shadow-sm" style="color: var(--brand-text-color, white)" aria-current="page">
+        <span v-else class="inline-flex items-center rounded-full bg-primary px-4 py-2 text-[10px] font-bold uppercase tracking-widest shadow-sm" style="color: var(--brand-color-foreground, white)" aria-current="page">
           {{ crumb.label }}
         </span>
         <span v-if="i < crumbs.length - 1" class="text-muted/30" aria-hidden="true">
-          <UIcon name="i-heroicons-chevron-right" class="size-3" />
+          <SayaIcon name="chevron-right" class="size-3" />
         </span>
       </li>
     </ol>

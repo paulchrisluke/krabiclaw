@@ -13,31 +13,20 @@
     <article>
       <DocsBreadcrumb :crumbs="breadcrumbs" />
 
-      <div class="mb-6 flex flex-wrap items-center gap-3">
-        <span v-if="post.category" class="rounded-full px-3 py-1 text-sm font-medium" :class="blogCategoryClass(post.category)">
-          {{ post.category }}
-        </span>
-        <span v-if="post.published_at" class="text-sm text-dimmed">
-          <NuxtTime :datetime="post.published_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
-        </span>
-        <span class="text-sm text-dimmed">·</span>
-        <span class="text-sm text-dimmed">{{ readTime }} min read</span>
-      </div>
+      <h1 class="mb-3 text-4xl font-bold leading-tight text-default">{{ post.title }}</h1>
+      <p v-if="post.excerpt" class="mb-6 text-xl leading-relaxed text-muted">{{ post.excerpt }}</p>
 
-      <h1 class="mb-5 text-4xl font-bold leading-tight text-default">{{ post.title }}</h1>
-      <p v-if="post.excerpt" class="mb-8 text-xl leading-relaxed text-muted">{{ post.excerpt }}</p>
-
-      <div class="mb-10 flex items-center gap-4 border-y border-default py-6">
+      <div class="mb-10 flex items-center gap-3">
         <div class="shrink-0">
           <img
             v-if="post.author_image"
             :src="post.author_image"
             :alt="post.author_name || 'Author avatar'"
-            class="h-12 w-12 rounded-full object-cover"
+            class="h-10 w-10 rounded-full object-cover"
           />
           <div
             v-else
-            class="flex h-12 w-12 items-center justify-center rounded-full text-lg font-bold text-white"
+            class="flex h-10 w-10 items-center justify-center rounded-full text-base font-bold text-white"
             style="background-color: var(--kc-teal)"
           >
             {{ authorInitial }}
@@ -45,13 +34,13 @@
         </div>
         <div>
           <p class="font-semibold text-default">{{ post.author_name || 'KrabiClaw' }}</p>
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-dimmed">
+          <div class="flex flex-wrap items-center gap-x-2 text-sm text-dimmed">
+            <span>{{ readTime }} min read</span>
+            <span v-if="post.published_at">·</span>
             <span v-if="post.published_at">
-              Published <NuxtTime :datetime="post.published_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
+              <NuxtTime :datetime="post.published_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
             </span>
-            <span v-if="wasUpdated && post.updated_at">
-              · Updated <NuxtTime :datetime="post.updated_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
-            </span>
+            <span v-if="wasUpdated && post.updated_at">(updated <NuxtTime :datetime="post.updated_at" locale="en-US" month="long" day="numeric" time-zone="UTC" />)</span>
           </div>
         </div>
       </div>
@@ -124,7 +113,7 @@
             <p v-if="authorSubtitle" class="text-xs text-dimmed">{{ authorSubtitle }}</p>
           </div>
         </div>
-        <UButton to="/blog" variant="outline" color="neutral" size="sm">More Articles</UButton>
+        <PlatformButton to="/blog" variant="outline" size="sm">More Articles</PlatformButton>
       </div>
     </article>
 
@@ -135,9 +124,9 @@
 </template>
 
 <script setup lang="ts">
-import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
+import { renderMarkdownToHtml, sanitizeHtmlForSsr, stripLeadingTitleHeading } from '~/utils/markdown'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
-import { blogCategoryClass, blogCategoryToSlug, getBlogPostPath, slugToBlogCategory } from '~/utils/blog-categories'
+import { blogCategoryToSlug, getBlogPostPath, slugToBlogCategory } from '~/utils/blog-categories'
 import { buildContentBlocks, normalizeContentComponent, type ContentComponent } from '~/utils/content-blocks'
 import { resolveContentComponent } from '~/utils/content-component-resolver'
 
@@ -249,7 +238,7 @@ function renderMarkdown(markdown: string) {
 
 const hasExplicitEmbeds = computed(() => /\{\{\s*component\s+type\s*=/.test(post.value?.body ?? ''))
 const renderedBlocks = computed(() => {
-  const blocks = buildContentBlocks(post.value?.body ?? '', post.value?.components ?? [], renderMarkdown)
+  const blocks = buildContentBlocks(stripLeadingTitleHeading(post.value?.body ?? '', post.value?.title), post.value?.components ?? [], renderMarkdown)
   if (hasExplicitEmbeds.value) return blocks
 
   const fallbackBlocks = (post.value?.components ?? [])

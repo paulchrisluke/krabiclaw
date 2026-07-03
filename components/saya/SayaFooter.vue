@@ -161,17 +161,14 @@ import { DEFAULT_BUSINESS_NAME } from '~/config/constants'
 import { getTodayGoogleHours } from '~/utils/formatters'
 import { getVerticalCopy } from '~/utils/vertical-copy'
 
-const { isPlatform, site } = useTenantSite()
-const colorMode = useColorMode()
-const isDark = computed(() => colorMode.value === 'dark')
-function toggleColorMode() {
-  colorMode.preference = isDark.value ? 'light' : 'dark'
+interface Site {
+  brand_name?: string | null
+  logo_url?: string | null
+  plan?: string | null
+  vertical?: string | null
+  config?: { phone?: string | null } | null
 }
-const { locale } = useI18n()
-const copy = computed(() => getVerticalCopy((site as { vertical?: string } | null)?.vertical, locale.value))
-const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
-// Shared bootstrap — same key as the page → zero extra SSR requests
 interface I18nComposable {
   locale: Ref<string>
   locales: Ref<Array<{ code: string; name: string }>>
@@ -179,7 +176,46 @@ interface I18nComposable {
   t: (_key: string, _named?: Record<string, unknown>) => string
 }
 
-const { locations: bootstrapLocations, locales: bootstrapLocales, error: bootstrapError, config: siteConfig, menu, hasExperiences } = useBootstrap()
+interface PublicLocation {
+  id: string
+  slug: string
+  title: string
+  address?: {
+    addressLines?: string[]
+    locality?: string
+    administrativeArea?: string
+  } | string | null
+  city?: string | null
+  phone?: string | null
+  email?: string | null
+  googleBusinessHours?: ApiValue
+  is_primary?: boolean
+  grab_url?: string | null
+  uber_eats_url?: string | null
+  foodpanda_url?: string | null
+}
+
+// Data comes from layouts/saya.vue, which already owns the single shared
+// bootstrap/tenant-site fetch — footer is presentation-only, not a fetcher.
+const props = defineProps<{
+  site: Site | null
+  isPlatform: boolean
+  locations: PublicLocation[]
+  locales: { code: string; label: string; is_source: boolean }[]
+  error: unknown
+  config: Record<string, string>
+  menu: ApiRecord | null
+  hasExperiences: boolean
+}>()
+
+const colorMode = useColorMode()
+const isDark = computed(() => colorMode.value === 'dark')
+function toggleColorMode() {
+  colorMode.preference = isDark.value ? 'light' : 'dark'
+}
+const { locale } = useI18n()
+const copy = computed(() => getVerticalCopy(props.site?.vertical, locale.value))
+const isExperienceSite = computed(() => props.site?.vertical === 'experience')
 
 const i18n = useI18n() as ApiValue as I18nComposable
 const { t } = i18n
@@ -189,8 +225,8 @@ const getLocaleFlag = (code: string) =>
 const getCurrentLocaleFlag = () => getLocaleFlag(currentLocale.value)
 
 const availableLocales = computed(() =>
-  bootstrapLocales.value.length
-    ? bootstrapLocales.value.map(l => ({ code: l.code, name: l.label || l.code }))
+  props.locales.length
+    ? props.locales.map(l => ({ code: l.code, name: l.label || l.code }))
     : (i18n.locales?.value ?? []).map((l: { code: string; name: string }) => ({ code: l.code, name: l.name }))
 )
 
@@ -200,23 +236,18 @@ const languageItems = computed(() =>
     onSelect: () => i18n.setLocale(l.code)
   }))
 )
-const locationsError = computed(() => bootstrapError.value)
+const locationsError = computed(() => props.error)
 
-const hasMenu = computed(() => (menu.value?.items?.length ?? 0) > 0)
+const hasMenu = computed(() => (props.menu?.items?.length ?? 0) > 0)
 const year = new Date().getFullYear()
-const logoUrl = computed(() => (site as { logo_url?: string | null } | null)?.logo_url || null)
-const restaurantName = computed(() => {
-  if (site && typeof site === 'object' && 'brand_name' in site && typeof site.brand_name === 'string' && site.brand_name.trim()) {
-    return site.brand_name
-  }
-  return DEFAULT_BUSINESS_NAME
-})
-const tagline = computed(() => siteConfig.value?.footer_tagline || '')
-const sitePlan = computed(() => (site as { plan?: string | null } | null)?.plan)
-const showBrandingCredit = computed(() => !isPlatform && sitePlan.value === 'free')
+const logoUrl = computed(() => props.site?.logo_url || null)
+const restaurantName = computed(() => props.site?.brand_name?.trim() || DEFAULT_BUSINESS_NAME)
+const tagline = computed(() => props.config?.footer_tagline || '')
+const sitePlan = computed(() => props.site?.plan)
+const showBrandingCredit = computed(() => !props.isPlatform && sitePlan.value === 'free')
 
 const primaryLocation = computed<PublicLocation | null>(() =>
-  bootstrapLocations.value.find((l: PublicLocation) => l.is_primary) ?? bootstrapLocations.value[0] ?? null
+  props.locations.find((l: PublicLocation) => l.is_primary) ?? props.locations[0] ?? null
 )
 
 interface OrderLink { label: string; url: string }
@@ -241,32 +272,13 @@ function safeHttpUrl(value: unknown): string | null {
   }
 }
 
-const facebookUrl = computed(() => safeHttpUrl(siteConfig.value?.social_facebook) || '')
-const instagramUrl = computed(() => safeHttpUrl(siteConfig.value?.social_instagram) || '')
-const tiktokUrl = computed(() => safeHttpUrl(siteConfig.value?.social_tiktok) || '')
+const facebookUrl = computed(() => safeHttpUrl(props.config?.social_facebook) || '')
+const instagramUrl = computed(() => safeHttpUrl(props.config?.social_instagram) || '')
+const tiktokUrl = computed(() => safeHttpUrl(props.config?.social_tiktok) || '')
 
 interface SocialLink {
   name: string
   url: string | null
-}
-
-interface PublicLocation {
-  id: string
-  slug: string
-  title: string
-  address?: {
-    addressLines?: string[]
-    locality?: string
-    administrativeArea?: string
-  } | string | null
-  city?: string | null
-  phone?: string | null
-  email?: string | null
-  googleBusinessHours?: ApiValue
-  is_primary?: boolean
-  grab_url?: string | null
-  uber_eats_url?: string | null
-  foodpanda_url?: string | null
 }
 
 const allSocials = computed<SocialLink[]>(() => [
@@ -277,13 +289,12 @@ const allSocials = computed<SocialLink[]>(() => [
 const activeSocials = computed(() =>
   allSocials.value.filter((s: SocialLink): s is { name: string; url: string } => typeof s.url === 'string' && s.url.length > 0)
 )
-const rawLocations = computed(() => bootstrapLocations.value)
 const locations = computed(() =>
-  rawLocations.value.map((loc: PublicLocation) => {
+  props.locations.map((loc: PublicLocation) => {
     let phone = loc.phone
     // Fallback if placeholder-like
     if (!phone || phone.includes('example.com')) {
-      phone = site?.config?.phone || null
+      phone = props.site?.config?.phone || null
     }
     return {
       ...loc,

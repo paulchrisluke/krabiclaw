@@ -5,6 +5,7 @@ const SESSION_KEY = 'kc-upsell-shown'
 export const useUpsellTriggers = () => {
   const { site } = useDashboardSite()
   const { open } = useServiceUpsell()
+  const { managedPlan, seoAcceleratorPlan } = usePlans()
 
   const currentPlan = computed(() => site.value?.plan ?? 'free')
 
@@ -12,12 +13,14 @@ export const useUpsellTriggers = () => {
     currentPlan.value === 'free' || currentPlan.value === null
   )
 
+  // Never suggest a tier that's currently hidden (MANAGED_SERVICE_ENABLED
+  // off) — usePlans() only returns it when it's actually purchasable.
   const shouldSuggestManaged = computed(() =>
-    currentPlan.value === 'growth'
+    currentPlan.value === 'growth' && Boolean(managedPlan.value)
   )
 
   const shouldSuggestSeo = computed(() =>
-    currentPlan.value === 'managed'
+    currentPlan.value === 'managed' && Boolean(seoAcceleratorPlan.value)
   )
 
   function pickBestUpsell(): UpsellType | null {

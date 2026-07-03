@@ -2,7 +2,7 @@
   <AppSection :bg="bg" :padding="padding">
     <div :class="[isTeaser ? 'grid md:grid-cols-2 items-center gap-12' : 'max-w-4xl mx-auto']">
       <div :class="['relative overflow-hidden shadow-2xl transition-all duration-700', isTeaser ? 'rounded-2xl h-80 order-2' : 'rounded-3xl h-150 mb-16']">
-        <UImage
+        <img
           v-if="image"
           :src="image"
           :alt="imageAlt || title || $t('saya.about.image_alt')"
@@ -36,15 +36,13 @@
         </div>
 
         <div v-if="isTeaser" class="mt-10">
-          <UButton
+          <NuxtLink
             to="/about"
-            :variant="bg === 'black' ? 'outline' : 'solid'"
-            color="neutral"
-            size="xl"
-            class="rounded-full"
+            class="inline-flex items-center justify-center rounded-full px-6 py-3 text-base font-medium no-underline transition"
+            :class="bg === 'black' ? 'border border-inverted text-inverted hover:bg-inverted/10' : 'bg-inverted text-inverted hover:opacity-90'"
           >
             {{ $t('saya.about.cta') }}
-          </UButton>
+          </NuxtLink>
         </div>
       </div>
     </div>

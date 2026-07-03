@@ -3,8 +3,36 @@
     <UPageBody>
       <div class="max-w-2xl space-y-6">
 
+        <!--
+          managedServiceEnabled is a global marketing/checkout flag (whether
+          Managed/SEO Accelerator plans are being sold right now) — it must
+          never hide the request form from a site that already has the
+          managed_service entitlement (e.g. existing Growth customers).
+          Entitlement (non-free plan) always wins; the flag only controls
+          what free-plan users are shown.
+        -->
+        <!-- Managed service not currently offered to new customers -->
+        <template v-if="isFree && !managedServiceEnabled">
+          <UCard>
+            <div class="flex flex-col items-center text-center gap-4 py-4">
+              <div class="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                <UIcon name="i-lucide-headphones" class="size-7" />
+              </div>
+              <div>
+                <h2 class="text-lg font-bold text-highlighted">Managed support isn't available yet</h2>
+                <p class="mt-1 text-sm text-muted max-w-md">
+                  We're not taking managed-service requests right now. For anything urgent, message us directly.
+                </p>
+              </div>
+              <UButton color="neutral" variant="soft" size="lg" :href="whatsappLink" target="_blank">
+                Ask us on WhatsApp
+              </UButton>
+            </div>
+          </UCard>
+        </template>
+
         <!-- Free plan upsell -->
-        <template v-if="isFree">
+        <template v-else-if="isFree">
           <UCard>
             <div class="flex flex-col items-center text-center gap-4 py-4">
               <div class="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
@@ -30,7 +58,7 @@
         </template>
 
         <!-- Managed plans — request form + history -->
-        <template v-else>
+        <template v-if="!isFree">
           <!-- New request form -->
           <UCard>
             <template #header>
@@ -132,6 +160,7 @@ const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 const plan = computed(() => dashboard.site.value?.plan ?? 'free')
 const isFree = computed(() => !plan.value || plan.value === 'free')
+const managedServiceEnabled = dashboard.managedServiceEnabled
 const { open: openUpsell } = useServiceUpsell()
 
 const TYPE_LABELS: Record<string, string> = {

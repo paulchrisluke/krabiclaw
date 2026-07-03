@@ -35,7 +35,7 @@
               playsinline
               class="h-full w-full object-cover"
             />
-            <UImage
+            <img
               v-else
               :src="featuredMedia.url ?? undefined"
               :alt="featuredPost.title"
@@ -91,10 +91,11 @@
                   playsinline
                   class="h-full w-full object-cover"
                 />
-                <UImage
+                <img
                   v-else
                   :src="post.media.url ?? undefined"
                   :alt="post.title"
+                  loading="lazy"
                   class="h-full w-full object-cover"
                 />
               </div>

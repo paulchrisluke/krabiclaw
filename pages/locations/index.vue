@@ -15,10 +15,10 @@
         <div v-for="i in 2" :key="i" class="overflow-hidden border border-default">
           <div class="aspect-16/10 animate-[sayaPulse_1.6s_ease-in-out_infinite] bg-muted" />
           <div class="p-8 space-y-3">
-            <USkeleton class="h-8 w-48" />
-            <USkeleton class="h-4 w-28" />
-            <USkeleton class="mt-4 h-3 w-full" />
-            <USkeleton class="h-3 w-2/3" />
+            <div class="h-8 w-48 animate-pulse rounded bg-elevated" />
+            <div class="h-4 w-28 animate-pulse rounded bg-elevated" />
+            <div class="mt-4 h-3 w-full animate-pulse rounded bg-elevated" />
+            <div class="h-3 w-2/3 animate-pulse rounded bg-elevated" />
           </div>
         </div>
       </div>
@@ -54,7 +54,7 @@
               class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             >
             <div v-else class="flex h-full w-full items-center justify-center">
-              <UIcon name="i-heroicons-map-pin" class="size-10 text-muted" />
+              <SayaIcon name="map-pin" class="size-10 text-muted" />
             </div>
           </div>
 
@@ -87,7 +87,7 @@
         <div class="grid gap-8 md:grid-cols-2">
           <div v-for="loc in placeholders" :key="loc.title" class="overflow-hidden border border-dashed border-default">
             <div class="aspect-16/10 flex items-center justify-center bg-muted">
-              <UIcon name="i-heroicons-map-pin" class="size-10 text-muted" />
+              <SayaIcon name="map-pin" class="size-10 text-muted" />
             </div>
             <div class="p-8 pb-9">
               <p v-if="loc.city" class="saya-eyebrow mb-3 text-muted">{{ loc.city }}</p>
@@ -97,14 +97,9 @@
           </div>
         </div>
         <div v-if="isAuthenticated" class="mt-12 text-center">
-          <UButton
-            to="/dashboard"
-            color="primary"
-            variant="solid"
-            class="rounded-full"
-          >
+          <SayaButton to="/dashboard">
             {{ locationsCopy.connectGoogleLocationsCta }}
-          </UButton>
+          </SayaButton>
         </div>
       </div>
     </div>

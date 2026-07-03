@@ -3,7 +3,7 @@
 
     <template v-if="pending">
       <div class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-        <USkeleton class="h-64 rounded-2xl" />
+        <div class="h-64 animate-pulse rounded-2xl bg-elevated" />
       </div>
     </template>
 
@@ -77,7 +77,7 @@
               referrerpolicy="no-referrer-when-downgrade"
             />
             <div v-else class="flex h-full w-full flex-col items-center justify-center gap-3">
-              <UIcon name="i-simple-icons-googlemaps" class="size-8 text-muted" />
+              <SayaIcon name="map-pin" class="size-8 text-muted" />
               <span class="text-sm text-muted">{{ t('saya.location.map_synced') }}</span>
             </div>
           </div>
@@ -94,7 +94,7 @@
               rel="noopener noreferrer"
               class="inline-flex items-center gap-2 rounded-full bg-inverted px-4 py-2 text-[11px] font-medium uppercase tracking-widest text-inverted no-underline transition hover:opacity-80"
             >
-              <UIcon name="i-heroicons-map-pin" class="size-3.5" />
+              <SayaIcon name="map-pin" class="size-3.5" />
               {{ t('saya.location.get_directions') }}
             </a>
             <a
@@ -148,7 +148,7 @@
       <section class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-8 px-4 py-24 sm:px-6 lg:px-8">
         <h3 class="saya-display-md saya-italic text-default">{{ t('saya.location.see_you_soon') }}</h3>
         <div class="flex flex-wrap gap-3">
-          <UButton :to="locationCopy.ctaRoute" color="primary" variant="solid" size="xl" class="rounded-full">{{ locationCopy.reserveCta }}</UButton>
+          <SayaButton :to="locationCopy.ctaRoute" size="lg">{{ locationCopy.reserveCta }}</SayaButton>
           <a
             v-if="location.phone"
             :href="`tel:${location.phone}`"
@@ -161,9 +161,9 @@
     </template>
 
     <div v-else class="mx-auto max-w-xl px-4 py-24 text-center">
-      <UIcon name="i-heroicons-map-pin" class="mx-auto mb-4 size-12 text-muted" />
+      <SayaIcon name="map-pin" class="mx-auto mb-4 size-12 text-muted" />
       <h1 class="saya-display-sm text-default">{{ t('saya.location.not_found') }}</h1>
-      <UButton to="/locations" color="primary" variant="solid" class="mt-8 rounded-full">{{ t('saya.location.view_all_locations') }}</UButton>
+      <SayaButton to="/locations" class="mt-8">{{ t('saya.location.view_all_locations') }}</SayaButton>
     </div>
   </div>
 </template>

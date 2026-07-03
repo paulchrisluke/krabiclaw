@@ -2,6 +2,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getPlaceDetails, PlaceDetailsError } from '~/server/utils/google-places'
+import { chargeFlatCredits } from '~/server/utils/ai-credits'
 import { buildOnboardingDraftPayload, upsertActiveOnboardingDraft } from '~/server/utils/onboarding-drafts'
 import { createScopedPreviewToken } from '~/server/utils/preview-token'
 import { VALID_VERTICALS } from '~/server/utils/site-creation'
@@ -53,6 +54,11 @@ export default defineEventHandler(async (event) => {
     dashboard = await getDashboardContext(event, { requireSite: false })
   } catch {
     dashboard = null
+  }
+  // Only an already-existing org can be charged — a brand new user has none
+  // yet at this draft stage, and this is a one-time onboarding lookup anyway.
+  if (dashboard?.organization?.id) {
+    await chargeFlatCredits(db, dashboard.organization.id, { action: 'google_places_details' }).catch(() => {})
   }
   const payload = buildOnboardingDraftPayload({
     name: place.name,

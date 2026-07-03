@@ -6,11 +6,11 @@
       class="mb-3 flex items-center gap-2 px-2.5 py-1.5 text-sm font-semibold text-muted hover:text-default transition-colors no-underline"
       @click="emit('navigate')"
     >
-      <UIcon name="i-lucide-arrow-left" class="size-4 shrink-0" />
+      <PlatformIcon name="arrow-left" class="size-4 shrink-0" />
       <span class="truncate">Back to Docs</span>
     </NuxtLink>
 
-    <UNavigationMenu :items="navigationItems" orientation="vertical" @click="emit('navigate')" />
+    <PlatformSidebarNav aria-label="Documentation" :groups="groups" @navigate="emit('navigate')" />
   </nav>
 </template>
 
@@ -25,18 +25,18 @@ const { categories } = useDocsNav()
 // showing every category at once.
 const drilledCategory = computed(() => typeof route.params.category === 'string' ? route.params.category : null)
 
-const navigationItems = computed(() => {
+const groups = computed(() => {
   const visible = drilledCategory.value
     ? categories.value.filter(c => c.categorySlug === drilledCategory.value)
     : categories.value
 
-  return visible.map(({ category, categorySlug, docs }) => [
-    { label: category, type: 'label' as const },
-    ...docs.map(doc => ({
+  return visible.map(({ category, categorySlug, docs }) => ({
+    label: category,
+    items: docs.map(doc => ({
       label: doc.title,
       to: `/docs/${categorySlug}/${doc.slug}`,
       active: route.path === `/docs/${categorySlug}/${doc.slug}`,
     })),
-  ])
+  }))
 })
 </script>

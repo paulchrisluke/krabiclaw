@@ -4,12 +4,12 @@
     <!-- Loading -->
     <div v-if="pending" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
       <div class="grid gap-10 lg:grid-cols-[1fr_420px] lg:items-start">
-        <USkeleton class="aspect-4/3 rounded-xl" />
+        <div class="aspect-4/3 animate-pulse rounded-xl bg-elevated" />
         <div class="space-y-4">
-          <USkeleton class="h-6 w-24" />
-          <USkeleton class="h-10 w-full" />
-          <USkeleton class="h-24 w-full" />
-          <USkeleton class="h-12 w-full rounded-full" />
+          <div class="h-6 w-24 animate-pulse rounded bg-elevated" />
+          <div class="h-10 w-full animate-pulse rounded bg-elevated" />
+          <div class="h-24 w-full animate-pulse rounded bg-elevated" />
+          <div class="h-12 w-full animate-pulse rounded-full bg-elevated" />
         </div>
       </div>
     </div>
@@ -18,7 +18,7 @@
     <div v-else-if="!experience" class="mx-auto max-w-7xl px-4 py-32 text-center">
       <h1 class="text-2xl font-semibold text-default">Experience not found</h1>
       <p class="mt-3 text-muted">This experience may no longer be available.</p>
-      <UButton to="/experiences" class="mt-6" variant="soft">View all experiences</UButton>
+      <NuxtLink to="/experiences" class="mt-6 inline-flex items-center rounded-full bg-muted px-5 py-2.5 text-sm font-medium text-default no-underline transition hover:bg-elevated">View all experiences</NuxtLink>
     </div>
 
     <div v-else>
@@ -32,9 +32,9 @@
           <p v-if="experience.price" class="font-semibold text-default leading-tight">{{ experience.price }}</p>
           <p class="text-xs text-muted">per person</p>
         </div>
-        <UButton color="primary" size="lg" class="rounded-full shrink-0" @click="scrollToBooking">
+        <SayaButton class="shrink-0" @click="openBookingModal">
           Reserve Now
-        </UButton>
+        </SayaButton>
       </div>
 
       <!-- ── Main layout ────────────────────────────────────── -->
@@ -43,9 +43,9 @@
         <!-- Breadcrumb -->
         <nav class="mb-8 flex items-center gap-2 text-xs text-muted">
           <NuxtLink to="/" class="hover:text-default transition-colors">Home</NuxtLink>
-          <UIcon name="i-heroicons-chevron-right" class="size-3.5" />
+          <SayaIcon name="chevron-right" class="size-3.5" />
           <NuxtLink to="/experiences" class="hover:text-default transition-colors">Experiences</NuxtLink>
-          <UIcon name="i-heroicons-chevron-right" class="size-3.5" />
+          <SayaIcon name="chevron-right" class="size-3.5" />
           <span class="text-default">{{ experience.title }}</span>
         </nav>
 
@@ -54,65 +54,100 @@
           <!-- ── LEFT: Gallery + Content ───────────────────── -->
           <div class="min-w-0">
 
-            <!-- Gallery -->
-            <div class="rounded-xl bg-muted overflow-hidden">
-              <UCarousel
-                v-if="mediaItems.length > 1"
-                :items="mediaItems"
-                arrows
-                dots
-                class="lg:h-120"
-                :ui="{ item: 'min-h-0 basis-full' }"
-              >
-                <template #default="{ item, index }">
-                  <div
-                    class="relative aspect-4/3 lg:aspect-auto lg:h-120 overflow-hidden cursor-zoom-in"
-                    @click="item.kind === 'image' && openLightbox(index)"
-                  >
-                    <video
-                      v-if="item.kind === 'video'"
-                      :src="item.url"
-                      autoplay
-                      muted
-                      loop
-                      playsinline
-                      class="h-full w-full object-contain"
-                    />
-                    <img
-                      v-else
-                      :src="item.url"
-                      :alt="experience.title"
-                      class="h-full w-full object-contain"
-                    />
-                  </div>
-                </template>
-              </UCarousel>
+            <!-- Gallery: desktop grid (up to 4 items) / mobile hero + "show all" -->
+            <div class="rounded-xl overflow-hidden">
+
+              <!-- No media placeholder -->
+              <div v-if="mediaItems.length === 0" class="flex aspect-4/3 items-center justify-center bg-muted">
+                <SayaIcon name="sparkles" class="size-16 text-dimmed" />
+              </div>
+
+              <!-- Single image / video -->
               <div
                 v-else-if="mediaItems.length === 1"
-                class="relative aspect-4/3 lg:aspect-auto lg:h-120 overflow-hidden"
+                class="relative aspect-4/3 lg:h-[520px] overflow-hidden"
                 :class="mediaItems[0]?.kind === 'image' ? 'cursor-zoom-in' : ''"
                 @click="mediaItems[0]?.kind === 'image' && openLightbox(0)"
               >
                 <video
                   v-if="mediaItems[0]?.kind === 'video'"
                   :src="mediaItems[0]?.url"
-                  autoplay
-                  muted
-                  loop
-                  playsinline
-                  class="h-full w-full object-contain"
+                  autoplay muted loop playsinline
+                  class="h-full w-full object-cover"
                 />
                 <img
                   v-else
                   :src="mediaItems[0]?.url"
                   :alt="experience.title"
-                  class="h-full w-full object-contain"
+                  class="h-full w-full object-cover"
                 />
               </div>
-              <div v-else class="flex aspect-4/3 lg:h-120 items-center justify-center">
-                <UIcon name="i-heroicons-sparkles" class="size-16 text-dimmed" />
+
+              <!-- 2+ items — grid on all screen sizes -->
+              <div v-else>
+                <div
+                  class="grid gap-1 h-[360px] sm:h-[440px] lg:h-[520px]"
+                  :class="mediaItems.length === 2 ? 'grid-cols-2' : 'grid-cols-2 grid-rows-2'"
+                >
+                  <!-- Hero — spans 2 rows when 3+ items -->
+                  <div
+                    class="relative overflow-hidden"
+                    :class="[
+                      mediaItems.length >= 3 ? 'row-span-2' : '',
+                      mediaItems[0]?.kind === 'image' ? 'cursor-zoom-in' : ''
+                    ]"
+                    @click="mediaItems[0]?.kind === 'image' && openLightbox(0)"
+                  >
+                    <video
+                      v-if="mediaItems[0]?.kind === 'video'"
+                      :src="mediaItems[0]?.url"
+                      autoplay muted loop playsinline
+                      class="h-full w-full object-cover"
+                    />
+                    <img
+                      v-else
+                      :src="mediaItems[0]?.url"
+                      :alt="experience.title"
+                      class="h-full w-full object-cover transition-transform duration-300 hover:scale-[1.02]"
+                    />
+                  </div>
+
+                  <!-- Thumbnails 2–4 -->
+                  <div
+                    v-for="(item, i) in mediaItems.slice(1, 4)"
+                    :key="item.url"
+                    class="relative overflow-hidden"
+                    :class="item.kind === 'image' ? 'cursor-zoom-in' : ''"
+                    @click="item.kind === 'image' && openLightbox(i + 1)"
+                  >
+                    <video
+                      v-if="item.kind === 'video'"
+                      :src="item.url"
+                      autoplay muted loop playsinline
+                      class="h-full w-full object-cover"
+                    />
+                    <img
+                      v-else
+                      :src="item.url"
+                      :alt="experience.title"
+                      class="h-full w-full object-cover transition-transform duration-300 hover:scale-[1.02]"
+                    />
+                    <!-- "Show all" overlay only on last thumbnail when extras exist -->
+                    <button
+                      v-if="i === 2 && mediaItems.length > 4"
+                      type="button"
+                      class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 text-white text-sm font-semibold backdrop-blur-[2px] hover:bg-black/60 transition-colors"
+                      @click.stop="openLightbox(0)"
+                    >
+                      <SayaIcon name="squares-2x2" class="size-5" />
+                      Show all {{ mediaItems.length }} photos
+                    </button>
+                  </div>
+                </div>
               </div>
+
             </div>
+
 
             <!-- Lightbox -->
             <SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIdx" :items="imageItems" :title="experience.title">
@@ -133,21 +168,21 @@
                   v-if="experience.duration_minutes"
                   class="inline-flex items-center gap-1.5 rounded-full border border-default bg-elevated px-3 py-1 text-xs font-medium text-muted"
                 >
-                  <UIcon name="i-heroicons-clock" class="size-3.5" />
+                  <SayaIcon name="clock" class="size-3.5" />
                   {{ formatDuration(experience.duration_minutes) }}
                 </span>
                 <span
                   v-if="experience.max_capacity"
                   class="inline-flex items-center gap-1.5 rounded-full border border-default bg-elevated px-3 py-1 text-xs font-medium text-muted"
                 >
-                  <UIcon name="i-heroicons-user-group" class="size-3.5" />
+                  <SayaIcon name="user-group" class="size-3.5" />
                   Up to {{ experience.max_capacity }} guests
                 </span>
                 <span
                   v-if="experience.available_note"
                   class="inline-flex items-center gap-1.5 rounded-full border border-default bg-elevated px-3 py-1 text-xs font-medium text-muted"
                 >
-                  <UIcon name="i-heroicons-calendar-days" class="size-3.5" />
+                  <SayaIcon name="calendar-days" class="size-3.5" />
                   {{ experience.available_note }}
                 </span>
               </div>
@@ -165,7 +200,7 @@
               <h2 class="text-xl font-semibold text-default mb-6">Highlights</h2>
               <ul class="space-y-3 text-default">
                 <li v-for="item in experience.highlights" :key="item" class="flex items-start gap-3">
-                  <UIcon name="i-heroicons-sparkles" class="mt-0.5 size-4 shrink-0 text-primary" />
+                  <SayaIcon name="sparkles" class="mt-0.5 size-4 shrink-0 text-primary" />
                   <span>{{ item }}</span>
                 </li>
               </ul>
@@ -175,7 +210,7 @@
               <h2 class="text-xl font-semibold text-default mb-6">What's included</h2>
               <ul class="space-y-3 text-default">
                 <li v-for="item in experience.included_items" :key="item" class="flex items-start gap-3">
-                  <UIcon name="i-heroicons-check-circle" class="mt-0.5 size-4 shrink-0 text-primary" />
+                  <SayaIcon name="check-circle" class="mt-0.5 size-4 shrink-0 text-primary" />
                   <span>{{ item }}</span>
                 </li>
               </ul>
@@ -185,7 +220,7 @@
               <h2 class="text-xl font-semibold text-default mb-6">What to bring</h2>
               <ul class="space-y-3 text-default">
                 <li v-for="item in experience.what_to_bring" :key="item" class="flex items-start gap-3">
-                  <UIcon name="i-heroicons-briefcase" class="mt-0.5 size-4 shrink-0 text-primary" />
+                  <SayaIcon name="briefcase" class="mt-0.5 size-4 shrink-0 text-primary" />
                   <span>{{ item }}</span>
                 </li>
               </ul>
@@ -206,7 +241,7 @@
               <h2 class="text-xl font-semibold text-default mb-5">Where you'll meet</h2>
               <div class="rounded-xl border border-default bg-elevated overflow-hidden">
                 <div class="p-6 flex items-start gap-4">
-                  <UIcon name="i-heroicons-map-pin" class="mt-0.5 size-5 shrink-0 text-primary" />
+                  <SayaIcon name="map-pin" class="mt-0.5 size-5 shrink-0 text-primary" />
                   <div class="min-w-0">
                     <p class="font-semibold text-default">{{ (experienceLocation as ApiRecord).title }}</p>
                     <p v-if="locationAddress" class="mt-1 text-sm text-muted">{{ locationAddress }}</p>
@@ -224,7 +259,7 @@
                       class="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
                     >
                       Open in Maps
-                      <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-3" />
+                      <SayaIcon name="arrow-top-right-on-square" class="size-3" />
                     </a>
                   </div>
                 </div>
@@ -269,21 +304,21 @@
                   v-if="experience.duration_minutes"
                   class="inline-flex items-center gap-1.5 rounded-full border border-default bg-default px-3 py-1 text-xs font-medium text-muted"
                 >
-                  <UIcon name="i-heroicons-clock" class="size-3.5" />
+                  <SayaIcon name="clock" class="size-3.5" />
                   {{ formatDuration(experience.duration_minutes) }}
                 </span>
                 <span
                   v-if="experience.max_capacity"
                   class="inline-flex items-center gap-1.5 rounded-full border border-default bg-default px-3 py-1 text-xs font-medium text-muted"
                 >
-                  <UIcon name="i-heroicons-user-group" class="size-3.5" />
+                  <SayaIcon name="user-group" class="size-3.5" />
                   Up to {{ experience.max_capacity }} guests
                 </span>
                 <span
                   v-if="experience.available_note"
                   class="inline-flex items-center gap-1.5 rounded-full border border-default bg-default px-3 py-1 text-xs font-medium text-muted"
                 >
-                  <UIcon name="i-heroicons-calendar-days" class="size-3.5" />
+                  <SayaIcon name="calendar-days" class="size-3.5" />
                   {{ experience.available_note }}
                 </span>
               </div>
@@ -296,84 +331,93 @@
                 This experience is currently sold out.
               </div>
 
-              <!-- Booking form -->
-              <div v-else id="booking" class="space-y-4">
-                <form class="space-y-4" @submit.prevent="submitBooking">
-                  <!-- Date + party size row -->
-                  <div class="grid grid-cols-2 gap-3">
-                    <UFormField label="Date" required>
-                      <UInput v-model="form.booking_date" type="date" :min="minDate" size="md" :disabled="submitting" />
-                    </UFormField>
-                    <UFormField label="Guests" required>
-                      <USelect v-model="form.party_size" :items="partySizeOptions" size="md" :disabled="submitting" />
-                    </UFormField>
-                  </div>
+              <!-- Booking Button (Desktop) -->
+              <div v-else class="pt-2">
+                <SayaButton block @click="openBookingModal">
+                  Reserve Now
+                </SayaButton>
+              </div>
 
-                  <!-- Time slots -->
-                  <UFormField v-if="hasAnySlots" label="Choose a time slot" required>
-                    <div v-if="!availabilityInitialized || availabilityLoading" class="flex flex-wrap gap-2">
-                      <USkeleton class="h-10 w-20 rounded-lg" />
-                      <USkeleton class="h-10 w-20 rounded-lg" />
+              <!-- Booking Modal Flow -->
+              <BookingModal
+                v-model="isBookingModalOpen"
+                :title="modalTitle"
+                :can-go-back="bookingStep > 1 && !submitting"
+                @back="prevStep"
+              >
+                <!-- STEP 1: DATE -->
+                <div v-if="bookingStep === 1">
+                  <BookingDateSelector
+                    v-model="form.booking_date_obj"
+                  />
+                  
+                  <div v-if="bookingError" role="alert" class="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
+                    {{ bookingError }}
+                  </div>
+                  
+                  <div class="pt-6">
+                    <button 
+                      class="w-full py-3 px-4 rounded-xl text-white bg-black dark:bg-white dark:text-black font-semibold text-[15px] shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                      :disabled="!form.booking_date_obj"
+                      @click="nextStep"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+
+                <!-- STEP 2: TIME & GUESTS -->
+                <div v-else-if="bookingStep === 2">
+                  <BookingGuestCounter
+                    v-model="form.party_size_num"
+                    :max="experience.max_capacity ?? 20"
+                    label="How many guests?"
+                    class="mb-4"
+                  />
+                  
+                  <div class="mb-4">
+                    <h3 class="font-semibold text-default text-lg mb-2">Choose a time</h3>
+                    
+                    <div v-if="availabilityLoading" class="flex flex-col gap-2">
+                      <div class="h-16 w-full animate-pulse rounded-xl bg-elevated" />
+                      <div class="h-16 w-full animate-pulse rounded-xl bg-elevated" />
                     </div>
+                    
                     <p v-else-if="slotAvailability.length === 0" class="text-sm text-muted">
                       No availability on this day — try another date.
                     </p>
-                    <div v-else class="flex flex-wrap gap-2">
-                      <button
-                        v-for="slot in slotAvailability"
-                        :key="slot.time_slot"
-                        type="button"
-                        :class="[
-                          'rounded-lg border px-4 py-2 text-sm font-medium transition-colors',
-                          form.time_slot === slot.time_slot
-                            ? 'border-primary bg-primary text-white'
-                            : slot.is_closed || slot.is_full || (slot.remaining !== null && slot.remaining < Number(form.party_size))
-                              ? 'border-default bg-muted text-dimmed cursor-not-allowed opacity-60'
-                              : 'border-default bg-default text-default hover:border-primary hover:text-primary'
-                        ]"
-                        :disabled="submitting || slot.is_closed || slot.is_full || (slot.remaining !== null && slot.remaining < Number(form.party_size))"
-                        @click="form.time_slot = slot.time_slot"
-                      >
-                        {{ slot.time_slot }}
-                        <span v-if="!slot.is_closed && slot.remaining !== null && slot.remaining <= 3 && slot.remaining > 0" class="ml-1 text-xs opacity-80">
-                          ({{ slot.remaining }} left)
-                        </span>
-                      </button>
-                    </div>
-                    <p v-if="availabilityTimezone" class="mt-2 text-xs text-muted">Times shown in {{ availabilityTimezone }}.</p>
-                  </UFormField>
-                  <UFormField v-else label="Preferred Time" required>
-                    <UInput v-model="form.time_slot" placeholder="e.g. 10:00" size="md" :disabled="submitting" />
-                  </UFormField>
+                    
+                    <BookingTimeList
+                      v-else
+                      v-model="form.time_slot"
+                      :slots="formattedSlots"
+                    />
+                  </div>
 
-                  <!-- Name + email -->
-                  <UFormField label="Your Name" required>
-                    <UInput v-model="form.guest_name" placeholder="Full name" size="md" :disabled="submitting" />
-                  </UFormField>
-                  <UFormField label="Email Address" required>
-                    <UInput v-model="form.guest_email" type="email" placeholder="you@email.com" size="md" :disabled="submitting" />
-                  </UFormField>
-                  <UFormField label="Phone (optional)">
-                    <UInput v-model="form.guest_phone" type="tel" placeholder="+66 81 234 5678" size="md" :disabled="submitting" />
-                  </UFormField>
-                  <UFormField label="Special requests (optional)">
-                    <UTextarea v-model="form.notes" placeholder="Dietary requirements, celebrations, anything we should know…" :rows="2" :disabled="submitting" />
-                  </UFormField>
+                  <div class="pt-4">
+                    <button 
+                      class="w-full py-3 px-4 rounded-xl text-white bg-black dark:bg-white dark:text-black font-semibold text-[15px] shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                      :disabled="!form.time_slot || slotAvailability.length === 0"
+                      @click="nextStep"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
 
-                  <UAlert v-if="bookingError" color="error" variant="soft" :description="bookingError" />
-
-                  <UButton
-                    type="submit"
-                    color="primary"
-                    size="lg"
-                    class="w-full rounded-full"
+                <!-- STEP 3: CONTACT DETAILS -->
+                <div v-else-if="bookingStep === 3">
+                  <div v-if="bookingError" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
+                    {{ bookingError }}
+                  </div>
+                  <BookingContactForm
+                    :initial-state="{ name: form.guest_name, email: form.guest_email, phone: form.guest_phone, notes: form.notes }"
                     :loading="submitting"
-                    :disabled="!canSubmit"
-                  >
-                    Reserve Now
-                  </UButton>
-                </form>
-              </div>
+                    submit-text="Confirm booking"
+                    @submit="handleContactSubmit"
+                  />
+                </div>
+              </BookingModal>
 
             </div>
           </div>
@@ -461,8 +505,41 @@ function formatDuration(minutes: number): string {
   return m ? `${h} hr ${m} min` : `${h} hr`
 }
 
-function scrollToBooking() {
-  document.getElementById('booking')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+import BookingModal from '@/components/booking/BookingModal.vue'
+import BookingDateSelector from '@/components/booking/BookingDateSelector.vue'
+import BookingGuestCounter from '@/components/booking/BookingGuestCounter.vue'
+import BookingTimeList from '@/components/booking/BookingTimeList.vue'
+import BookingContactForm, { type ContactFormState } from '@/components/booking/BookingContactForm.vue'
+
+const isBookingModalOpen = ref(false)
+const bookingStep = ref(1)
+
+function openBookingModal() {
+  bookingStep.value = 1
+  bookingError.value = null
+  isBookingModalOpen.value = true
+}
+
+function nextStep() {
+  if (bookingStep.value < 3) bookingStep.value++
+}
+
+function prevStep() {
+  if (bookingStep.value > 1) bookingStep.value--
+}
+
+const modalTitle = computed(() => {
+  if (bookingStep.value === 1) return 'Select a date'
+  if (bookingStep.value === 2) return 'Select a time'
+  return 'Your details'
+})
+
+function handleContactSubmit(contactData: ContactFormState) {
+  form.guest_name = contactData.name
+  form.guest_email = contactData.email
+  form.guest_phone = contactData.phone
+  form.notes = contactData.notes
+  submitBooking()
 }
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
@@ -527,35 +604,41 @@ const minDate = computed(() => {
   return formatDateInTimeZone(now, bookingTimezone.value)
 })
 
-const maxCap = computed(() => experience.value?.max_capacity ?? 20)
-const partySizeOptions = computed(() =>
-  Array.from({ length: maxCap.value }, (_, i) => ({ label: `${i + 1} guest${i > 0 ? 's' : ''}`, value: String(i + 1) })),
-)
-
 const form = reactive({
   guest_name: '',
   guest_email: '',
   guest_phone: '',
-  party_size: '1',
-  booking_date: minDate.value,
+  party_size_num: 1, // Using number for the counter
+  booking_date_obj: null as Date | null,
   time_slot: '',
   notes: '',
 })
 
-// Sync booking_date with minDate to prevent stale dates across midnight
-watch(minDate, (newDate) => {
-  if (!form.booking_date || form.booking_date < newDate) {
-    form.booking_date = newDate
-  }
+const formattedBookingDate = computed(() => {
+  if (!form.booking_date_obj) return ''
+  // Format as YYYY-MM-DD for the API
+  const d = form.booking_date_obj
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dStr = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dStr}`
 })
+
+// Initialize booking_date_obj from minDate on first load and keep it from going stale across midnight
+watch(minDate, (newDate) => {
+  if (!form.booking_date_obj && newDate) {
+    const p = newDate.split('-')
+    if (p.length === 3) {
+      form.booking_date_obj = new Date(parseInt(p[0] ?? '2000', 10), parseInt(p[1] ?? '1', 10) - 1, parseInt(p[2] ?? '1', 10))
+    }
+  }
+}, { immediate: true })
 onMounted(() => {
   clockTimer = setInterval(() => {
     clockNow.value = Date.now()
   }, 30_000)
 
-  if (!form.booking_date && minDate.value) {
-    form.booking_date = minDate.value
-  }
+  // booking_date_obj is initialized via the minDate watcher below — no extra init needed here
 })
 onUnmounted(() => {
   if (clockTimer) {
@@ -565,15 +648,41 @@ onUnmounted(() => {
 })
 
 function slotCanAccommodateParty(slot: SlotAvailabilityItem): boolean {
-  return !(slot.remaining !== null && slot.remaining < Number(form.party_size))
+  return !(slot.remaining !== null && slot.remaining < form.party_size_num)
 }
 
 function slotCanBeSelected(slot: SlotAvailabilityItem): boolean {
   return !slot.is_closed && !slot.is_full && slotCanAccommodateParty(slot)
 }
 
+const formattedSlots = computed(() => {
+  return slotAvailability.value.map(s => {
+    // Determine spots left string or number
+    let spotsLeft = undefined
+    if (s.is_closed || s.is_full) {
+      spotsLeft = 0
+    } else if (s.remaining !== null) {
+      spotsLeft = s.remaining
+    }
+    
+    // Check if it can accommodate the selected party size
+    if (spotsLeft !== undefined && spotsLeft < form.party_size_num) {
+      spotsLeft = 0 // Treat as sold out for this party size
+    }
+
+    return {
+      id: s.time_slot,
+      startTime: s.time_slot,
+      durationMinutes: experience.value?.duration_minutes ?? null,
+      priceStr: experience.value?.price ? `${experience.value.price} / guest` : undefined,
+      spotsLeft
+    }
+  })
+})
+
 async function loadSlotAvailability() {
-  if (!siteId || !experience.value || !form.booking_date || !hasAnySlots.value) {
+  const queryDate = formattedBookingDate.value
+  if (!siteId || !experience.value || !queryDate || !hasAnySlots.value) {
     slotAvailability.value = []
     availabilityInitialized.value = true
     return
@@ -582,14 +691,15 @@ async function loadSlotAvailability() {
   try {
     const res = await $fetch<{ timezone: string; dates: Array<{ date: string; slots: SlotAvailabilityItem[] }> }>(
       `/api/public/sites/${siteId}/experiences/${slug}/availability`,
-      { query: { date: form.booking_date } },
+      { query: { date: queryDate } },
     )
     availabilityTimezone.value = res.timezone
     slotAvailability.value = res.dates[0]?.slots ?? []
+    
+    // Auto-select first available if current selection is invalid
     const currentValid = slotAvailability.value.find((s) => s.time_slot === form.time_slot && slotCanBeSelected(s))
     if (!currentValid) {
-      const firstAvailable = slotAvailability.value.find((s) => slotCanBeSelected(s))
-      form.time_slot = firstAvailable?.time_slot ?? ''
+      form.time_slot = '' // Reset slot, forcing user to pick a new one
     }
   } catch {
     slotAvailability.value = []
@@ -599,7 +709,7 @@ async function loadSlotAvailability() {
   }
 }
 
-watch(() => form.booking_date, loadSlotAvailability)
+watch(formattedBookingDate, loadSlotAvailability)
 watch(experience, () => loadSlotAvailability())
 onMounted(loadSlotAvailability)
 
@@ -609,7 +719,7 @@ const bookingError = ref<string | null>(null)
 const canSubmit = computed(() =>
   form.guest_name.trim() &&
   form.guest_email.trim() &&
-  form.booking_date &&
+  formattedBookingDate.value &&
   form.time_slot,
 )
 
@@ -620,6 +730,7 @@ async function submitBooking() {
     const selectedSlot = slotAvailability.value.find((slot) => slot.time_slot === form.time_slot)
     if (!selectedSlot || !slotCanBeSelected(selectedSlot)) {
       bookingError.value = 'Selected time slot is no longer available for this party size. Please choose another slot.'
+      bookingStep.value = 2 // Go back to time slot selection
       return
     }
   }
@@ -635,22 +746,24 @@ async function submitBooking() {
           guest_name: form.guest_name.trim(),
           guest_email: form.guest_email.trim(),
           guest_phone: form.guest_phone.trim() || undefined,
-          party_size: Number(form.party_size),
-          booking_date: form.booking_date,
+          party_size: form.party_size_num,
+          booking_date: formattedBookingDate.value,
           time_slot: form.time_slot,
           notes: form.notes.trim() || undefined,
         },
       },
     )
+    isBookingModalOpen.value = false // Close modal
+    
     setBookingConfirmation({
       type: 'experience',
       siteId,
       siteName: siteName.value,
       guestName: form.guest_name.trim(),
       title: experience.value?.title,
-      date: form.booking_date,
+      date: formattedBookingDate.value,
       time: form.time_slot,
-      guests: form.party_size,
+      guests: String(form.party_size_num),
       requests: form.notes.trim() || null,
       contactPhone: (experienceLocation.value as ApiRecord | null)?.phone ?? null,
       contactEmail: (experienceLocation.value as ApiRecord | null)?.email ?? null,
@@ -789,3 +902,15 @@ useHead({
   ],
 })
 </script>
+
+<style scoped>
+/* Hide the native scrollbar on the gallery track — arrows/dots + touch swipe
+   are the intended controls, matching the previous UCarousel's look. */
+.saya-carousel-track {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.saya-carousel-track::-webkit-scrollbar {
+  display: none;
+}
+</style>

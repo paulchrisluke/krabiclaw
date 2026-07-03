@@ -2,14 +2,14 @@
   <div class="min-h-screen bg-default text-default">
     <div class="mx-auto max-w-xl px-4 pt-16 pb-24 sm:px-6 lg:px-8">
       <template v-if="pending">
-        <UIcon name="i-heroicons-arrow-path" class="mx-auto size-12 animate-spin text-muted" />
+        <SayaIcon name="arrow-path" class="mx-auto size-12 animate-spin text-muted" />
       </template>
 
       <template v-else-if="confirmation">
         <div class="rounded-3xl border border-default bg-elevated p-10 text-center shadow-sm sm:p-12">
           <div class="mb-8 flex justify-center">
             <div class="flex size-20 items-center justify-center rounded-full bg-primary/10">
-              <UIcon name="i-heroicons-check-circle" class="size-12 text-primary" />
+              <SayaIcon name="check-circle" class="size-12 text-primary" />
             </div>
           </div>
 
@@ -36,38 +36,36 @@
           <div v-if="confirmation.cancelUrl" class="mt-8 rounded-2xl border border-default bg-default px-6 py-5">
             <p class="saya-eyebrow mb-1 text-muted">{{ resCopy.manageLabel(resCopy.reservationWord) }}</p>
             <p class="text-sm text-muted">{{ resCopy.cancelAnytimeLabel }}</p>
-            <UButton :to="confirmation.cancelUrl" color="error" variant="ghost" size="sm" class="mt-4 rounded-full">
-              <UIcon name="i-heroicons-x-circle" class="mr-1.5 size-4" />
+            <SayaButton :to="confirmation.cancelUrl" color="error" variant="ghost" size="md" class="mt-4">
+              <SayaIcon name="x-circle" class="mr-1.5 size-4" />
               {{ resCopy.cancelLabel(resCopy.reservationWord) }}
-            </UButton>
+            </SayaButton>
           </div>
 
           <div class="mt-8 flex flex-col gap-3">
-            <UButton color="primary" variant="soft" class="rounded-full" @click="share">
-              <UIcon name="i-heroicons-share" class="mr-1.5 size-4" />
-              Share
-            </UButton>
-            <UButton
+            <SayaButton variant="soft" @click="share">
+              <SayaIcon name="share" class="mr-1.5 size-4" />
+              {{ justCopied ? 'Copied!' : 'Share' }}
+            </SayaButton>
+            <SayaButton
               v-if="confirmation.contactPhone"
-              :to="`tel:${confirmation.contactPhone.replace(/\s/g, '')}`"
-              color="neutral"
+              :href="`tel:${confirmation.contactPhone.replace(/\s/g, '')}`"
               variant="soft"
-              class="rounded-full"
             >
               {{ resCopy.callUsLabel(confirmation.contactPhone) }}
-            </UButton>
-            <UButton to="/reservations" color="primary" variant="ghost" size="sm">
+            </SayaButton>
+            <SayaButton to="/reservations" variant="ghost" size="md">
               {{ resCopy.makeAnotherLabel(resCopy.reservationWord) }}
-            </UButton>
+            </SayaButton>
           </div>
         </div>
       </template>
 
       <div v-else class="rounded-3xl border border-default bg-muted/20 p-12 text-center">
-        <UIcon name="i-heroicons-exclamation-triangle" class="mx-auto size-12 text-error" />
+        <SayaIcon name="exclamation-triangle" class="mx-auto size-12 text-error" />
         <h2 class="mt-6 text-xl font-bold">No reservation found</h2>
         <p class="mt-2 text-muted">We couldn't find a confirmation to show. Check your email for the details.</p>
-        <UButton to="/reservations" color="primary" variant="soft" class="mt-10 rounded-full">Make a reservation</UButton>
+        <SayaButton to="/reservations" variant="soft" class="mt-10">Make a reservation</SayaButton>
       </div>
     </div>
   </div>
@@ -83,7 +81,7 @@ const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 const { formatDate } = useLocaleDate()
 const route = useRoute()
-const toast = useToast()
+const justCopied = ref(false)
 
 const confirmation = ref<BookingConfirmation | null>(null)
 const pending = ref(true)
@@ -146,7 +144,8 @@ async function share() {
   }
   if (import.meta.client && navigator.clipboard) {
     await navigator.clipboard.writeText(text)
-    toast.add({ description: 'Copied to clipboard', color: 'success' })
+    justCopied.value = true
+    setTimeout(() => { justCopied.value = false }, 2000)
   }
 }
 

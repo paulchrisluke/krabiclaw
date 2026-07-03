@@ -1,10 +1,8 @@
 <template>
-  <UApp>
-    <NuxtLoadingIndicator :color="loadingColor" :height="2" :throttle="150" />
-    <NuxtLayout>
-      <NuxtPage />
-    </NuxtLayout>
-  </UApp>
+  <NuxtLoadingIndicator :color="loadingColor" :height="2" :throttle="150" />
+  <NuxtLayout>
+    <NuxtPage />
+  </NuxtLayout>
 </template>
 
 <script setup lang="ts">
@@ -59,8 +57,9 @@ const GA4_MEASUREMENT_ID_RE = /^G-[A-Z0-9]+$/
 // surfaced via site_config → bootstrap config.google_analytics_measurement_id.
 // Sites without a GA connection get no tag at all.
 //
-// Deferred loading: GA4 is loaded after hydration/idle to avoid blocking LCP/FCP.
-// This reduces initial JS execution cost while still capturing analytics.
+// Deferred loading: GA4 is loaded on first interaction (or a long passive
+// fallback) to avoid blocking LCP/FCP/TTI. See the note below for why
+// requestIdleCallback was removed.
 if (import.meta.client) {
   const loadGa4 = () => {
     if (runtimeConfig.public.perfNoGa4) return
@@ -86,31 +85,16 @@ if (import.meta.client) {
     window.gtag('config', normalizedMeasurementId)
   }
 
-  // Load GA4 after hydration/idle to avoid blocking paint
-  // Use longer timeout (8s) to protect Lighthouse TTI while still capturing analytics
+  // Load GA4 on first real user interaction, so it never competes with
+  // Lighthouse's TTI quiet-window on a page nobody is touching.
+  // `requestIdleCallback` was tried here previously and made things worse:
+  // it fires almost immediately on a content-light/quiet page, injecting the
+  // 166KB gtag.js fetch right into the TTI measurement window it was meant to
+  // protect (confirmed via interleaved A/B, see HANDOFF-page-speed-2026-07-02.md).
+  // A passive-visit fallback still exists, but as a fixed timeout well past
+  // any realistic TTI window so it can't preempt the measurement either.
   let loaded = false
-  
-  const loadWhenIdle = () => {
-    if (loaded) return
-    if (typeof window.requestIdleCallback !== 'undefined') {
-      window.requestIdleCallback(() => {
-        if (!loaded) {
-          loaded = true
-          loadGa4()
-        }
-      }, { timeout: 8000 })
-    } else {
-      // Fallback for browsers without requestIdleCallback
-      setTimeout(() => {
-        if (!loaded) {
-          loaded = true
-          loadGa4()
-        }
-      }, 8000)
-    }
-  }
-  
-  // Also load on first user interaction (click, scroll, keypress) for better analytics capture
+
   const loadOnInteraction = () => {
     if (!loaded) {
       loaded = true
@@ -121,10 +105,16 @@ if (import.meta.client) {
       document.removeEventListener('keydown', loadOnInteraction)
     }
   }
-  
-  // Start idle timer
-  loadWhenIdle()
-  
+
+  // Passive fallback for visits with zero interaction (e.g. someone just
+  // reads the page and leaves). 15s is well past any TTI window.
+  setTimeout(() => {
+    if (!loaded) {
+      loaded = true
+      loadGa4()
+    }
+  }, 15000)
+
   // Set up interaction listeners
   document.addEventListener('click', loadOnInteraction, { once: true, passive: true })
   document.addEventListener('scroll', loadOnInteraction, { once: true, passive: true })

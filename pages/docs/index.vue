@@ -27,7 +27,7 @@
             :to="item.to"
             class="inline-flex items-center gap-2 rounded-full border border-default bg-default px-4 py-2 text-sm font-medium text-default no-underline transition hover:border-muted hover:bg-elevated"
           >
-            <UIcon :name="item.icon" class="size-4 text-muted" />
+            <PlatformIcon :name="item.icon" class="size-4 text-muted" />
             {{ item.label }}
           </NuxtLink>
         </div>
@@ -58,7 +58,7 @@
           :to="doc.path"
           class="block no-underline"
         >
-          <UCard class="h-full border border-default transition hover:border-muted hover:shadow-sm">
+          <PlatformCard hover class="h-full">
             <div class="space-y-3">
               <div class="flex items-center justify-between gap-3">
                 <h3 class="text-lg font-semibold text-default">{{ doc.title }}</h3>
@@ -66,7 +66,7 @@
               </div>
               <p v-if="doc.excerpt" class="text-sm leading-6 text-muted">{{ doc.excerpt }}</p>
             </div>
-          </UCard>
+          </PlatformCard>
         </NuxtLink>
       </div>
     </section>
@@ -87,7 +87,7 @@
           :to="doc.path"
           class="block no-underline"
         >
-          <UCard class="h-full border border-default transition hover:border-muted hover:shadow-sm">
+          <PlatformCard hover class="h-full">
             <div class="space-y-3">
               <div class="flex items-center justify-between gap-3">
                 <h3 class="text-lg font-semibold text-default">{{ doc.title }}</h3>
@@ -95,7 +95,7 @@
               </div>
               <p v-if="doc.excerpt" class="text-sm leading-6 text-muted">{{ doc.excerpt }}</p>
             </div>
-          </UCard>
+          </PlatformCard>
         </NuxtLink>
       </div>
     </section>
@@ -116,7 +116,7 @@
           :to="doc.path"
           class="block no-underline"
         >
-          <UCard class="h-full border border-default transition hover:border-muted hover:shadow-sm">
+          <PlatformCard hover class="h-full">
             <div class="space-y-3">
               <div class="flex items-center justify-between gap-3">
                 <h3 class="text-lg font-semibold text-default">{{ doc.title }}</h3>
@@ -124,7 +124,7 @@
               </div>
               <p v-if="doc.excerpt" class="text-sm leading-6 text-muted">{{ doc.excerpt }}</p>
             </div>
-          </UCard>
+          </PlatformCard>
         </NuxtLink>
       </div>
     </section>
@@ -142,7 +142,7 @@
           :to="doc.path"
           class="block no-underline"
         >
-          <UCard class="h-full border border-default transition hover:border-muted hover:shadow-sm">
+          <PlatformCard hover class="h-full">
             <div class="space-y-3">
               <div class="flex items-center justify-between gap-3">
                 <div class="space-y-1">
@@ -153,7 +153,7 @@
               </div>
               <p v-if="doc.excerpt" class="text-sm leading-6 text-muted">{{ doc.excerpt }}</p>
             </div>
-          </UCard>
+          </PlatformCard>
         </NuxtLink>
       </div>
     </section>
@@ -175,7 +175,7 @@
               <p class="text-sm font-semibold text-default">{{ resource.title }}</p>
               <p class="text-sm leading-6 text-muted">{{ resource.description }}</p>
             </div>
-            <UIcon name="i-heroicons-arrow-up-right" class="mt-1 size-4 shrink-0 text-muted" />
+            <PlatformIcon name="arrow-up-right" class="mt-1 size-4 shrink-0 text-muted" />
           </NuxtLink>
         </div>
       </div>
@@ -251,10 +251,10 @@ function findFirstDocPathForCategories(categories: string[], fallback = '/docs')
 }
 
 const quickLinks = computed(() => [
-  { label: 'Start your site', to: findDocPathBySlug('getting-started-with-krabiclaw'), icon: 'i-heroicons-rocket-launch' },
-  { label: 'Edit and publish', to: findFirstDocPathForCategories(['Menu Management', 'Theme Customization'], findDocPathBySlug('mcp-setup')), icon: 'i-heroicons-pencil-square' },
-  { label: 'Manage operations', to: findFirstDocPathForCategories(['Integrations', 'Advanced']), icon: 'i-heroicons-cog-6-tooth' },
-  { label: 'Explore guides', to: '/docs', icon: 'i-heroicons-book-open' },
+  { label: 'Start your site', to: findDocPathBySlug('getting-started-with-krabiclaw'), icon: 'zap' },
+  { label: 'Edit and publish', to: findFirstDocPathForCategories(['Menu Management', 'Theme Customization'], findDocPathBySlug('mcp-setup')), icon: 'pencil' },
+  { label: 'Manage operations', to: findFirstDocPathForCategories(['Integrations', 'Advanced']), icon: 'settings' },
+  { label: 'Explore guides', to: '/docs', icon: 'book' },
 ])
 
 const relatedResources = computed(() => [

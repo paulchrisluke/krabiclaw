@@ -4,7 +4,7 @@
       <h1 class="text-4xl font-bold text-default mb-6">Terms and Conditions</h1>
       <p class="text-lg text-muted mb-12">Our agreement with you</p>
 
-      <article class="prose prose-lg max-w-none text-default">
+      <article class="prose prose-lg max-w-none text-default dark:prose-invert">
         <p><strong>Effective Date:</strong> June 14, 2026</p>
 
         <p>By accessing or using KrabiClaw ("the Service"), you agree to these Terms and Conditions.</p>

@@ -19,7 +19,7 @@
         </h1>
         
         <p class="text-lg leading-relaxed text-muted m-0 max-w-2xl mt-2">
-          Start free. Upgrade to a managed plan when you're ready — we handle translations, marketing, and your Google presence for you.
+          Start free with the KrabiClaw ChatGPT app. Upgrade to Growth when you're ready for your own domain, WhatsApp notifications, and Google presence sync.
         </p>
       </div>
 
@@ -37,7 +37,7 @@
 
         <div class="space-y-4">
           <div
-            v-for="faq in faqs"
+            v-for="faq in visibleFaqs"
             :key="faq.q"
             class="group rounded-2xl border transition-all duration-300 bg-elevated/40 backdrop-blur-sm"
             :class="openFaq === faq.q ? 'border-primary/45 bg-elevated/70 shadow-lg shadow-primary/5' : 'border-default hover:border-primary/25 hover:bg-elevated/60'"
@@ -56,10 +56,7 @@
                 class="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300"
                 :class="openFaq === faq.q ? 'bg-primary/10 text-primary rotate-180' : 'bg-default text-muted group-hover:bg-primary/5 group-hover:text-primary'"
               >
-                <UIcon
-                  name="i-heroicons-chevron-down"
-                  class="shrink-0 w-5 h-5"
-                />
+                <PlatformIcon name="chevron-down" class="shrink-0 w-5 h-5" />
               </div>
             </button>
             
@@ -84,10 +81,13 @@ definePageMeta({ layout: 'platform' })
 
 const openFaq = ref<string | null>(null)
 
+const { managedPlan, seoAcceleratorPlan } = usePlans()
+
 const faqs = [
   {
     q: 'What does "Managed" actually mean?',
     a: "On the Managed plan, Paul & Julia handle your business's online presence entirely. Content changes, seasonal updates, translations, Google Business management — send us a WhatsApp voice note and we take care of it. You focus on your business.",
+    requires: 'managed' as const,
   },
   {
     q: 'Do I need a credit card to start?',
@@ -96,10 +96,11 @@ const faqs = [
   {
     q: 'What is the SEO Accelerator?',
     a: 'Julia grew tiffycooks.com to over 1 million daily impressions. The SEO Accelerator applies that same local & travel SEO playbook to your business — keyword targeting, Google Maps authority, and a monthly content cadence.',
+    requires: 'seo_accelerator' as const,
   },
   {
     q: 'What are the one-time add-ons?',
-    a: 'You can purchase individual services without a monthly plan: an additional language translation ($45), a seasonal relaunch package ($99), or a Google Business optimization ($49). These are fulfilled by Paul & Julia within 3–5 business days.',
+    a: 'You can purchase individual services without a monthly plan: a seasonal relaunch package ($99) or a Google Business optimization ($49). These are fulfilled by Paul & Julia within 3–5 business days.',
   },
   {
     q: 'Do you offer refunds?',
@@ -111,14 +112,35 @@ const faqs = [
   },
 ]
 
+// Drop FAQ entries about tiers that aren't currently purchasable
+// (MANAGED_SERVICE_ENABLED off) rather than advertising something a visitor
+// can't actually buy.
+const visibleFaqs = computed(() => faqs.filter((faq) => {
+  if (faq.requires === 'managed') return Boolean(managedPlan.value)
+  if (faq.requires === 'seo_accelerator') return Boolean(seoAcceleratorPlan.value)
+  return true
+}))
+
 const seoConfig = useRuntimeConfig()
 const seoRequestURL = useRequestURL()
 const pricingPageUrl = resolveSeoUrl('/pricing', seoConfig.public.siteUrl || seoRequestURL.origin)
 
-usePlatformPageSeo({
+// Structured-data descriptions per plan — only plans usePlans() actually
+// returns (i.e. currently purchasable) get an Offer, so hidden tiers never
+// get advertised to crawlers/AI even though the visual table already hides them.
+const OFFER_DESCRIPTIONS: Record<string, string> = {
+  free: 'Free business website with offerings and basic SEO',
+  growth: 'Custom domain, WhatsApp notifications, and Google Business sync',
+  managed: 'Full managed service — Paul & Julia handle everything',
+  seo_accelerator: "Julia's 1M impressions/day SEO playbook applied to your business",
+}
+
+// Reactive getter so this stays correct if plans finish loading after this
+// runs — usePlatformPageSeo accepts MaybeRefOrGetter for exactly this reason.
+usePlatformPageSeo(() => ({
   path: '/pricing',
   title: 'Pricing',
-  description: 'Managed business websites from $49/month. Paul & Julia handle translations, marketing, and Google — or start free and do it yourself. No contracts.',
+  description: 'Business websites from $49/month, built and edited through the free KrabiClaw ChatGPT app. Custom domain, WhatsApp notifications, and Google Business sync on Growth — or start free. No contracts.',
   breadcrumbs: [
     { name: 'Home', url: '/' },
     { name: 'Pricing', url: '/pricing' },
@@ -128,31 +150,19 @@ usePlatformPageSeo({
       '@type': 'OfferCatalog',
       '@id': `${pricingPageUrl}#offers`,
       name: 'KrabiClaw Pricing Plans',
-      itemListElement: [
-        { '@type': 'Offer', name: 'Starter', price: '0', priceCurrency: 'USD', description: 'Free business website with offerings and basic SEO' },
-        {
+      itemListElement: (plans.value ?? []).map((plan) => {
+        const monthly = plan.prices.find((p) => p.interval === 'month')
+        return {
           '@type': 'Offer',
-          name: 'Growth',
+          name: plan.name,
           priceCurrency: 'USD',
-          priceSpecification: [{ '@type': 'UnitPriceSpecification', price: '49', priceCurrency: 'USD', billingDuration: 'P1M' }],
-          description: 'One language translation and AI-assisted content updates',
-        },
-        {
-          '@type': 'Offer',
-          name: 'Managed',
-          priceCurrency: 'USD',
-          priceSpecification: [{ '@type': 'UnitPriceSpecification', price: '149', priceCurrency: 'USD', billingDuration: 'P1M' }],
-          description: 'Full managed service — Paul & Julia handle everything',
-        },
-        {
-          '@type': 'Offer',
-          name: 'SEO Accelerator',
-          priceCurrency: 'USD',
-          priceSpecification: [{ '@type': 'UnitPriceSpecification', price: '349', priceCurrency: 'USD', billingDuration: 'P1M' }],
-          description: "Julia's 1M impressions/day SEO playbook applied to your business",
-        },
-      ],
+          ...(monthly
+            ? { priceSpecification: [{ '@type': 'UnitPriceSpecification', price: String(monthly.amount / 100), priceCurrency: 'USD', billingDuration: 'P1M' }] }
+            : { price: '0' }),
+          description: OFFER_DESCRIPTIONS[plan.id] ?? plan.tagline,
+        }
+      }),
     },
   ],
-})
+}))
 </script>

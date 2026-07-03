@@ -16,59 +16,34 @@
           <h1 class="text-[36px] font-extrabold tracking-tight text-default m-0 mb-2">{{ isOAuthFlow ? 'Connect your account' : 'Welcome back' }}</h1>
           <p class="text-[15px] text-muted mb-7">{{ isOAuthFlow ? 'Sign in to grant access to an external application.' : 'Sign in to manage your local business.' }}</p>
 
-          <UAlert v-if="notice" color="success" variant="soft" :description="notice" class="mb-4" />
-          <UAlert v-if="error" color="error" variant="soft" :description="error" class="mb-4" />
+          <div v-if="notice" role="status" class="mb-4 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3 text-sm text-green-600">{{ notice }}</div>
+          <div v-if="error" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">{{ error }}</div>
 
           <div class="space-y-3">
             <!-- Google -->
-            <UButton
-              @click="handleGoogleSignIn"
-              :disabled="loading"
-              :loading="loading"
-              color="neutral"
-              variant="outline"
-              size="lg"
-              block
-              class="h-11.5"
-            >
-              <template #leading>
-                <svg class="w-5 h-5" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                </svg>
-              </template>
+            <PlatformButton variant="outline" size="lg" block :loading="loading" @click="handleGoogleSignIn">
+              <PlatformGoogleIcon class="w-5 h-5" />
               Continue with Google
-            </UButton>
+            </PlatformButton>
 
             <!-- WhatsApp OTP — Step 1 -->
-            <UButton
-              v-if="otpStep === 'phone'"
-              block
-              size="lg"
-              color="neutral"
-              variant="outline"
-              class="h-11.5"
-              icon="i-heroicons-chat-bubble-left-ellipsis"
-              :disabled="loading"
-              @click="otpStep = 'number'"
-            >
+            <PlatformButton v-if="otpStep === 'phone'" variant="outline" size="lg" block @click="otpStep = 'number'">
+              <SayaIcon name="chat-bubble-left-ellipsis" class="size-5" />
               Continue with WhatsApp
-            </UButton>
+            </PlatformButton>
 
             <!-- WhatsApp OTP — Step 1b: phone entry -->
             <div v-else-if="otpStep === 'number'" class="space-y-3">
-              <UFormField label="WhatsApp number">
-                <UInput v-model="phone" type="tel" placeholder="+1 555 000 0000" size="lg" class="w-full" :disabled="loading" @keydown.enter="handleSendOtp" />
-              </UFormField>
+              <SayaFormField v-slot="{ id }" label="WhatsApp number" name="phone">
+                <input :id="id" v-model="phone" type="tel" placeholder="+1 555 000 0000" :disabled="loading" :class="inputClass" @keydown.enter="handleSendOtp" />
+              </SayaFormField>
               <div class="flex gap-2">
-                <UButton variant="outline" color="neutral" size="lg" @click="otpStep = 'phone'; phone = ''; error = null">
+                <PlatformButton variant="outline" @click="otpStep = 'phone'; phone = ''; error = null">
                   ← Back
-                </UButton>
-                <UButton block size="lg" :loading="loading" :disabled="loading || !isPhoneValid" @click="handleSendOtp">
+                </PlatformButton>
+                <PlatformButton class="flex-1" :disabled="!isPhoneValid" :loading="loading" @click="handleSendOtp">
                   Send code via WhatsApp
-                </UButton>
+                </PlatformButton>
               </div>
             </div>
 
@@ -77,15 +52,15 @@
               <p class="text-sm text-muted">
                 A 6-digit code was sent to <strong class="text-default">{{ phone }}</strong> on WhatsApp.
               </p>
-              <UFormField label="Verification code">
-                <UInput v-model="code" type="text" inputmode="numeric" maxlength="6" placeholder="123456" size="lg" class="w-full font-mono tracking-widest text-center" :disabled="loading" @keydown.enter="handleVerifyOtp" />
-              </UFormField>
-              <UButton block size="lg" :loading="loading" :disabled="code.length < 6" @click="handleVerifyOtp">
+              <SayaFormField v-slot="{ id }" label="Verification code" name="code">
+                <input :id="id" v-model="code" type="text" inputmode="numeric" maxlength="6" placeholder="123456" :disabled="loading" :class="[inputClass, 'font-mono tracking-widest text-center']" @keydown.enter="handleVerifyOtp" />
+              </SayaFormField>
+              <PlatformButton block :disabled="code.length < 6" :loading="loading" @click="handleVerifyOtp">
                 Verify and sign in
-              </UButton>
-              <UButton variant="ghost" color="neutral" size="sm" block @click="otpStep = 'phone'; code = ''; error = null">
+              </PlatformButton>
+              <PlatformButton variant="ghost" size="sm" block @click="otpStep = 'phone'; code = ''; error = null">
                 ← Use a different number
-              </UButton>
+              </PlatformButton>
             </div>
 
             <!-- Divider -->
@@ -96,30 +71,30 @@
             </div>
 
             <form class="space-y-3" @submit.prevent="handleEmailSignIn">
-              <UFormField label="Email">
-                <UInput v-model="emailForm.email" type="email" placeholder="you@example.com" size="lg" class="w-full" :disabled="loading" autocomplete="email" />
-              </UFormField>
-              <UFormField label="Password">
-                <UInput v-model="emailForm.password" type="password" placeholder="••••••••" size="lg" class="w-full" :disabled="loading" autocomplete="current-password" />
-              </UFormField>
+              <SayaFormField v-slot="{ id }" label="Email" name="login-email">
+                <input :id="id" v-model="emailForm.email" type="email" placeholder="you@example.com" :disabled="loading" autocomplete="email" :class="inputClass" />
+              </SayaFormField>
+              <SayaFormField v-slot="{ id }" label="Password" name="login-password">
+                <input :id="id" v-model="emailForm.password" type="password" placeholder="••••••••" :disabled="loading" autocomplete="current-password" :class="inputClass" />
+              </SayaFormField>
               <div class="flex items-center justify-between gap-3 text-sm">
                 <NuxtLink to="/forgot-password" class="text-primary font-medium hover:underline no-underline">
                   Forgot password?
                 </NuxtLink>
-                <UButton type="submit" size="lg" :loading="loading">
+                <PlatformButton type="submit" :loading="loading">
                   Sign in with email
-                </UButton>
+                </PlatformButton>
               </div>
             </form>
 
             <div v-if="showResendVerification" class="rounded-xl border border-default/60 bg-elevated/60 p-3 space-y-2">
               <p class="text-sm text-muted">Need to verify your email before signing in?</p>
-              <div class="flex flex-col gap-2 sm:flex-row">
-                <UInput v-model="verificationEmail" type="email" placeholder="Enter your account email" class="flex-1" :disabled="loading || resendingVerification" />
-                <UButton color="neutral" variant="soft" :loading="resendingVerification" @click="handleResendVerification">
-                  Resend verification
-                </UButton>
-              </div>
+              <SayaFormField v-slot="{ id }" label="Email address" name="verification-email">
+                <input :id="id" v-model="verificationEmail" type="email" placeholder="Enter your account email" :disabled="loading || resendingVerification" :class="inputClass" />
+              </SayaFormField>
+              <PlatformButton variant="outline" :loading="resendingVerification" :disabled="loading" block @click="handleResendVerification">
+                Resend verification
+              </PlatformButton>
             </div>
           </div>
         </div>
@@ -131,10 +106,13 @@
 definePageMeta({ layout: 'platform', auth: false })
 
 import { authClient } from '~/lib/auth-client'
+import { FORM_INPUT_CLASS } from '~/utils/form-constants'
 
 useSeoMeta({
   robots: 'noindex, nofollow'
 })
+
+const inputClass = FORM_INPUT_CLASS
 
 const route = useRoute()
 const isOAuthFlow = computed(() => !!route.query.client_id)

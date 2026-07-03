@@ -142,7 +142,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
 
-import VideoPosterPrompt from '~/components/media/VideoPosterPrompt.vue'
+import VideoPosterPrompt from '~/components/workspace/media/VideoPosterPrompt.vue'
 import { IMAGE_MAX_SIZE_BYTES, VIDEO_MAX_SIZE_BYTES } from '~/composables/useMediaUpload'
 
 const siteId = await useDashboardSiteId()

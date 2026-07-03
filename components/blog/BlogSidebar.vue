@@ -6,11 +6,11 @@
       :class="route.path === '/blog' ? 'text-default' : ''"
       @click="emit('navigate')"
     >
-      <UIcon name="i-lucide-newspaper" class="size-4 shrink-0" />
+      <PlatformIcon name="newspaper" class="size-4 shrink-0" />
       <span class="truncate">All posts</span>
     </NuxtLink>
 
-    <UNavigationMenu :items="navigationItems" orientation="vertical" @click="emit('navigate')" />
+    <PlatformSidebarNav aria-label="Blog" :groups="groups" @navigate="emit('navigate')" />
   </nav>
 </template>
 
@@ -22,9 +22,9 @@ const emit = defineEmits<{ navigate: [] }>()
 const route = useRoute()
 const { categories } = useBlogNav()
 
-const navigationItems = computed(() => categories.value.map(({ category, posts }) => [
-  { label: category, type: 'label' as const },
-  ...posts.reduce<Array<{ label: string; to: string; active: boolean }>>((items, post) => {
+const groups = computed(() => categories.value.map(({ category, posts }) => ({
+  label: category,
+  items: posts.reduce<Array<{ label: string; to: string; active: boolean }>>((items, post) => {
     const to = getBlogPostPath(post.category, post.slug)
     if (!to) return items
     items.push({
@@ -34,5 +34,5 @@ const navigationItems = computed(() => categories.value.map(({ category, posts }
     })
     return items
   }, []),
-]))
+})))
 </script>

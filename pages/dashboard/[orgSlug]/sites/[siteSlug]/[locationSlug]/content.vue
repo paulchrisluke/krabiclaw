@@ -644,6 +644,9 @@ const hasGoogleBusinessEntitlement = computed(() => siteEntitlements.value.googl
 const activeFieldRequiresGoogleUpgrade = computed(() =>
   activeFieldDef.value?.googleLocked === true && !hasGoogleBusinessEntitlement.value
 )
+// Upgrade modal is feature-flagged off (see composables/useUpgradeModal.ts) —
+// open() is currently a no-op, so the "Upgrade to Pro..." button below is a
+// harmless dead click until that flag is re-enabled.
 const { open: openUpgradeModal } = useUpgradeModal()
 
 const fieldSupportsGoogle = (fieldKey: string): boolean =>

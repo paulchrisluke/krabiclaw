@@ -5,7 +5,7 @@
         <div class="rounded-3xl border border-default bg-elevated p-10 text-center shadow-sm sm:p-12">
           <div class="mb-8 flex justify-center">
             <div class="flex size-20 items-center justify-center rounded-full bg-primary/10">
-              <UIcon name="i-heroicons-check-circle" class="size-12 text-primary" />
+              <SayaIcon name="check-circle" class="size-12 text-primary" />
             </div>
           </div>
 
@@ -25,29 +25,27 @@
           </div>
 
           <div class="mt-8 flex flex-col gap-3">
-            <UButton color="primary" variant="soft" class="rounded-full" @click="share">
-              <UIcon name="i-heroicons-share" class="mr-1.5 size-4" />
-              Share
-            </UButton>
-            <UButton
+            <SayaButton variant="soft" @click="share">
+              <SayaIcon name="share" class="mr-1.5 size-4" />
+              {{ justCopied ? 'Copied!' : 'Share' }}
+            </SayaButton>
+            <SayaButton
               v-if="confirmation.contactPhone"
-              :to="`tel:${confirmation.contactPhone.replace(/\s/g, '')}`"
-              color="neutral"
+              :href="`tel:${confirmation.contactPhone.replace(/\s/g, '')}`"
               variant="soft"
-              class="rounded-full"
             >
               Call us: {{ confirmation.contactPhone }}
-            </UButton>
-            <UButton to="/experiences" color="primary" variant="ghost" size="sm">Browse more experiences</UButton>
+            </SayaButton>
+            <SayaButton to="/experiences" variant="ghost" size="md">Browse more experiences</SayaButton>
           </div>
         </div>
       </template>
 
       <div v-else class="rounded-3xl border border-default bg-muted/20 p-12 text-center">
-        <UIcon name="i-heroicons-exclamation-triangle" class="mx-auto size-12 text-error" />
+        <SayaIcon name="exclamation-triangle" class="mx-auto size-12 text-error" />
         <h2 class="mt-6 text-xl font-bold">No booking found</h2>
         <p class="mt-2 text-muted">We couldn't find a confirmation to show. Check your email for the details.</p>
-        <UButton to="/experiences" color="primary" variant="soft" class="mt-10 rounded-full">Browse experiences</UButton>
+        <SayaButton to="/experiences" variant="soft" class="mt-10">Browse experiences</SayaButton>
       </div>
     </div>
   </div>
@@ -59,7 +57,7 @@ import { getBookingConfirmation, type BookingConfirmation } from '~/composables/
 definePageMeta({ layout: 'saya' })
 
 const { formatDate } = useLocaleDate()
-const toast = useToast()
+const justCopied = ref(false)
 const { siteId } = useTenantSite()
 
 const confirmation = ref<BookingConfirmation | null>(null)
@@ -88,7 +86,8 @@ async function share() {
   }
   if (import.meta.client && navigator.clipboard) {
     await navigator.clipboard.writeText(text)
-    toast.add({ description: 'Copied to clipboard', color: 'success' })
+    justCopied.value = true
+    setTimeout(() => { justCopied.value = false }, 2000)
   }
 }
 

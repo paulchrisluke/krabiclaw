@@ -4,7 +4,11 @@
       <h1 class="text-4xl font-bold text-default mb-4">Help Center</h1>
       <p class="text-lg text-muted mb-10">Find answers to common questions about KrabiClaw</p>
 
-      <UInput v-model="searchQuery" placeholder="Search questions…" size="lg" icon="i-heroicons-magnifying-glass" class="mb-12" />
+      <div class="relative mb-12">
+        <label for="help-search" class="sr-only">Search help questions</label>
+        <PlatformIcon name="magnifying-glass" class="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted" aria-hidden="true" />
+        <input id="help-search" v-model="searchQuery" placeholder="Search questions…" class="block w-full rounded-lg border border-default bg-default py-2.5 pl-11 pr-4 text-base text-default placeholder:text-muted focus:border-inverted focus:outline-none focus:ring-1 focus:ring-inverted" />
+      </div>
 
       <div v-for="section in filteredSections" :key="section.title" class="mb-12">
         <h2 class="text-xl font-bold text-default mb-4 pb-2 border-b border-default">{{ section.title }}</h2>
@@ -21,8 +25,8 @@
               @click="toggle(faq.q)"
             >
               <span class="font-medium text-default">{{ faq.q }}</span>
-              <UIcon
-                :name="open === faq.q ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"
+              <PlatformIcon
+                :name="open === faq.q ? 'chevron-up' : 'chevron-down'"
                 class="shrink-0 w-5 h-5 text-muted"
               />
             </button>
@@ -45,7 +49,7 @@
       <div class="mt-12 bg-elevated rounded-2xl p-8 text-center border border-default">
         <p class="text-default font-semibold mb-2">Still need help?</p>
         <p class="text-muted mb-6">Our fully distributed team operates across global timezones and replies within one business day.</p>
-        <UButton color="primary" to="/contact">Contact Support</UButton>
+        <PlatformButton to="/contact">Contact Support</PlatformButton>
       </div>
     </div>
   </div>

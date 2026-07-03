@@ -65,6 +65,17 @@ Locations are unlimited on all plans. Credit top-ups are available as one-time p
 
 **Upgrade modal** triggers on: connecting Google Business, custom domain setup, translation, removing KrabiClaw branding.
 
+**Managed/SEO Accelerator are hidden at launch.** Both tiers' entire pitch (`scripts/seed-stripe.mjs`) is the concierge promise — "Send us a WhatsApp. We run your online presence — no login needed." — which a lean launch team can't reliably deliver yet. They're gated behind `MANAGED_SERVICE_ENABLED` (off by default, `server/utils/feature-flags.ts`), which hides them from `GET /api/billing/plans`, blocks `POST /api/billing/checkout`, hides the dashboard Support page's request form, and hides the admin Work Queue tab. Only Free and Growth ($49, self-serve) are purchasable while it's off. This is UI/marketing visibility only — the underlying `managed_service` DB entitlement, Stripe products, Facebook sync gating, and MCP tool authorization are untouched and ready to flip back on once there's capacity.
+
+### WhatsApp / Google Places cost recovery
+
+WhatsApp Business API sends and Google Places API calls cost real per-use money with no dedicated billing surface — rather than build new metered Stripe billing pre-launch, they draw from the existing `ai_credits` balance (`server/utils/ai-credits.ts`) via `chargeFlatCredits()`, alongside the token-based charging already enforced on `/api/ai/*`.
+
+- Charged: WhatsApp notifications (`sendWhatsAppNotification`), ChowBot free-text WhatsApp replies, and on-demand Google Places search/details calls (dashboard autocomplete, onboarding maps import, manual re-sync, the MCP `import_from_maps` tool).
+- Never charged: WhatsApp OTP (`sendWhatsAppOtp`) — auth-critical, must always send — and the background `google-business-sync` cron task, which is infrastructure upkeep a customer didn't explicitly trigger.
+- Exhaustion is a **soft-fail** for both: the action still goes through at zero balance (losing a reservation confirmation is worse than the unpaid cost), unlike the hard 402 block on `/api/ai/*`.
+- Flat per-action credit costs (`ACTION_CREDIT_COSTS` in `ai-credits.ts`) are launch-time estimates pegged against the cheapest $9/500-credit top-up rate vs. list Meta/Google pricing — revisit once real invoiced volume exists.
+
 ---
 
 ## Current Clients

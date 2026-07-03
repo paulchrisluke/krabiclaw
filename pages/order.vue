@@ -3,12 +3,12 @@
     <div v-if="!isPlatform">
       <!-- No order links configured — redirect feel -->
       <div v-if="!hasOrderLinks" class="flex min-h-96 flex-col items-center justify-center gap-6 px-4 py-24 text-center">
-        <UIcon name="i-heroicons-shopping-bag" class="size-12 text-muted" />
+        <SayaIcon name="shopping-bag" class="size-12 text-muted" />
         <div>
           <h1 class="text-2xl font-bold text-default">{{ orderCopy.onlineOrderingNotAvailable }}</h1>
           <p class="mt-2 text-muted">{{ orderCopy.wedLoveToSeeYou }}</p>
         </div>
-        <UButton :to="orderCopy.ctaRoute" size="lg" color="primary" class="rounded-full">{{ orderCopy.reserveCta }}</UButton>
+        <SayaButton :to="orderCopy.ctaRoute" size="lg">{{ orderCopy.reserveCta }}</SayaButton>
       </div>
 
       <template v-else>
@@ -33,7 +33,7 @@
                 class="inline-flex items-center gap-2 rounded-full border border-default bg-default px-6 py-3 text-sm font-medium text-default transition hover:bg-muted"
               >
                 {{ link.label }}
-                <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-4 text-muted" />
+                <SayaIcon name="arrow-top-right-on-square" class="size-4 text-muted" />
               </a>
             </div>
           </div>
@@ -57,7 +57,7 @@
                   class="inline-flex items-center gap-2 rounded-full border border-default bg-default px-4 py-2 text-sm font-medium text-default transition hover:bg-muted"
                 >
                   {{ link.label }}
-                  <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-3.5 text-muted" />
+                  <SayaIcon name="arrow-top-right-on-square" class="size-3.5 text-muted" />
                 </a>
               </div>
             </div>

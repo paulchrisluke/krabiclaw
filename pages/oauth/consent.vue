@@ -38,7 +38,12 @@
             :key="group.title"
             class="flex items-start gap-3"
           >
-            <UIcon :name="group.icon" class="w-5 h-5 text-default shrink-0 mt-0.5" />
+            <!-- Dynamic SVG Icons based on group.icon -->
+            <svg v-if="group.icon === 'i-lucide-fingerprint'" class="w-5 h-5 text-default shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg>
+            <svg v-else-if="group.icon === 'i-lucide-layout-dashboard'" class="w-5 h-5 text-default shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+            <svg v-else-if="group.icon === 'i-lucide-shield-check'" class="w-5 h-5 text-default shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2-1 4-3 5.33-4.33a2 2 0 0 1 2.82 0C14.49 2 16.28 3 18.28 4a1 1 0 0 1 1 1v6z"/><path d="m9 12 2 2 4-4"/></svg>
+            <svg v-else class="w-5 h-5 text-default shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
+            
             <div>
               <p class="text-sm font-bold text-default">{{ group.title }}</p>
               <ul class="mt-1 space-y-0.5">
@@ -56,19 +61,22 @@
       </div>
 
       <!-- Actions -->
-      <UAlert v-if="error" color="error" variant="soft" :description="error" class="mb-4" />
+      <div v-if="error" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
+        {{ error }}
+      </div>
 
-      <UButton
+      <button
         id="oauth-consent-agree"
-        block
-        size="lg"
-        :loading="accepting"
-        :disabled="denying || switchingAccount"
-        class="rounded-full"
+        class="w-full flex justify-center items-center py-3 px-4 rounded-full text-[15px] font-semibold shadow-sm transition-all text-white bg-black dark:bg-white dark:text-black hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+        :disabled="accepting || denying || switchingAccount"
         @click="accept"
       >
+        <svg v-if="accepting" class="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
         Agree
-      </UButton>
+      </button>
 
       <button
         id="oauth-consent-cancel"

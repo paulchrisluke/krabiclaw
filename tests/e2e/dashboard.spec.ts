@@ -132,7 +132,12 @@ test.describe('dashboard functional smoke', () => {
 
     if (postRes.status() === 403) {
       const body = await postRes.json()
-      expect(String(body.error || '')).toContain('Work requests require')
+      const error = String(body.error || '')
+      // MANAGED_SERVICE_ENABLED is off by default at launch, which now blocks
+      // work-request submission before the per-plan entitlement check even runs.
+      expect(
+        error.includes('Work requests require') || error.includes('Managed service is not currently available'),
+      ).toBe(true)
       return
     }
 

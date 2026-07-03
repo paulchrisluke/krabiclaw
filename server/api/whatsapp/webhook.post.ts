@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { fetchWhatsAppMedia, normalizePhone, sendWhatsAppText } from '~/server/utils/whatsapp'
+import { chargeFlatCredits } from '~/server/utils/ai-credits'
 import { saveInboundMediaAsset } from '~/server/utils/chowbot-media'
 import { runChowBot } from '~/server/utils/chowbot-agent'
 import {
@@ -95,6 +96,15 @@ async function reply(
       status: result.success ? (opts.status ?? 'sent') : 'failed',
       error: result.success ? (opts.error ?? null) : (result.error ?? 'WhatsApp send failed'),
     }, opts.userId ?? opts.conversation.user_id)
+
+    if (result.success) {
+      // Soft-fail: the reply already went out, so an exhausted balance never
+      // blocks the conversation — it just skips the charge.
+      await chargeFlatCredits(db, opts.conversation.organization_id, {
+        siteId: opts.conversation.site_id ?? undefined,
+        action: 'whatsapp_free_text',
+      }).catch(() => {})
+    }
   }
 }
 

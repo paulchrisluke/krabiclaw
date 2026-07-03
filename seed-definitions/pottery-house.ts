@@ -44,7 +44,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
   },
   siteConfig: [
     { key: 'source_locale', value: 'en' },
-    { key: 'brand_color', value: '#8F1D21' },
+    { key: 'brand_color', value: '#96826A' },
     { key: 'whatsapp_phone', value: '+447464115465' },
   ],
   siteLocales: [
