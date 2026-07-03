@@ -251,8 +251,13 @@ const modalTitle = computed(() => {
 })
 
 watch(isOpen, (open: boolean) => {
-  if (!open) reset()
+  if (!open) {
+    abortController.value?.abort()
+    reset()
+  }
 })
+
+const abortController = ref<AbortController | null>(null)
 
 function reset() {
   step.value = 'idle'
@@ -266,6 +271,7 @@ function reset() {
   creditsRemaining.value = null
   resultMenuId.value = null
   originalItemIds.value = []
+  abortController.value = null
 }
 
 function onDrop(e: DragEvent) {
@@ -302,6 +308,9 @@ async function runExtraction() {
   fd.append('file', selectedFile.value)
   if (props.menuId) fd.append('menuId', props.menuId)
 
+  const controller = new AbortController()
+  abortController.value = controller
+
   try {
     const res = await $fetch<{
       success: boolean
@@ -310,7 +319,7 @@ async function runExtraction() {
       warning?: string | null
       credits: { charged: number; remaining: number }
       error?: string
-    }>(`/api/dashboard/ai/menu/extract`, { method: 'POST', body: fd })
+    }>(`/api/dashboard/ai/menu/extract`, { method: 'POST', body: fd, signal: controller.signal })
 
     resultMenuId.value = res.menuId
     creditsCharged.value = res.credits?.charged ?? null
@@ -328,10 +337,15 @@ async function runExtraction() {
 
     step.value = 'preview'
   } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      return
+    }
     const msg = err instanceof Error ? err.message : (err && typeof err === 'object' && 'data' in err && typeof err.data === 'object' && err.data && 'error' in err.data && typeof err.data.error === 'string') ? err.data.error : 'Extraction failed. Please try again.'
     uploadError.value = msg
     step.value = 'idle'
     toast.addToast(msg, 'error')
+  } finally {
+    if (abortController.value === controller) abortController.value = null
   }
 }
 
@@ -342,16 +356,30 @@ async function saveItems() {
     const remainingIds = new Set(editedItems.value.map(i => i.id))
     const deletedIds = originalItemIds.value.filter(id => !remainingIds.has(id))
 
-    await Promise.all(deletedIds.map(id =>
-      $fetch(`/api/editor/sites/${props.siteId}/menus/${resultMenuId.value}/items/${id}`, { method: 'DELETE' })
-    ))
+    // Delete removed items with per-item error tracking
+    const deleteResults = await Promise.allSettled(
+      deletedIds.map(id =>
+        $fetch(`/api/editor/sites/${props.siteId}/menus/${resultMenuId.value}/items/${id}`, { method: 'DELETE' })
+      )
+    )
+    const deleteFailures = deleteResults.filter(r => r.status === 'rejected').length
 
-    await Promise.all(editedItems.value.map(item =>
-      $fetch(`/api/editor/sites/${props.siteId}/menus/${resultMenuId.value}/items/${item.id}`, {
-        method: 'PATCH',
-        body: { name: item.name, description: item.description, section: item.section, price_amount: item.price_amount },
-      })
-    ))
+    // Update items with per-item error tracking
+    const updateResults = await Promise.allSettled(
+      editedItems.value.map(item =>
+        $fetch(`/api/editor/sites/${props.siteId}/menus/${resultMenuId.value}/items/${item.id}`, {
+          method: 'PATCH',
+          body: { name: item.name, description: item.description, section: item.section, price_amount: item.price_amount },
+        })
+      )
+    )
+    const updateFailures = updateResults.filter(r => r.status === 'rejected').length
+
+    const totalFailures = deleteFailures + updateFailures
+    if (totalFailures > 0) {
+      toast.addToast(`Failed to save ${totalFailures} item${totalFailures === 1 ? '' : 's'}. Please try again.`, 'error')
+      return
+    }
 
     savedCount.value = editedItems.value.length
     step.value = 'done'

@@ -1,10 +1,10 @@
 <template>
-  <NuxtLink v-if="to" :to="to" :class="[classes, { 'pointer-events-none opacity-60': disabled || loading }]">
+  <NuxtLink v-if="to" :to="to" :class="[classes, { 'pointer-events-none opacity-60': disabled || loading }]" :tabindex="disabled || loading ? -1 : undefined" @click="handleClick">
     <SayaIcon v-if="loading" name="arrow-path" class="size-4 animate-spin" />
     <slot v-else name="leading" />
     <slot />
   </NuxtLink>
-  <a v-else-if="href" :href="href" :class="[classes, { 'pointer-events-none opacity-60': disabled || loading }]" :aria-disabled="disabled || loading || undefined">
+  <a v-else-if="href" :href="href" :class="[classes, { 'pointer-events-none opacity-60': disabled || loading }]" :aria-disabled="disabled || loading || undefined" :tabindex="disabled || loading ? -1 : undefined" @click="handleClick">
     <SayaIcon v-if="loading" name="arrow-path" class="size-4 animate-spin" />
     <slot v-else name="leading" />
     <slot />
@@ -55,8 +55,8 @@ const variantClasses = {
   primary: {
     solid: 'bg-(--brand-color) text-(--brand-color-foreground) hover:opacity-90',
     soft: 'bg-(--brand-color)/10 text-(--brand-color) hover:bg-(--brand-color)/15',
-    outline: 'border border-primary bg-transparent text-primary hover:bg-primary/10',
-    ghost: 'bg-transparent text-primary hover:bg-primary/10',
+    outline: 'border border-(--brand-color) bg-transparent text-(--brand-color) hover:bg-(--brand-color)/10',
+    ghost: 'bg-transparent text-(--brand-color) hover:bg-(--brand-color)/10',
   },
   error: {
     solid: 'bg-red-600 text-white hover:opacity-90',
@@ -72,4 +72,17 @@ const classes = computed(() => [
   variantClasses[props.color][props.variant],
   props.block && 'w-full',
 ])
+
+const emit = defineEmits<{
+  click?: (e: Event) => void
+}>()
+
+const handleClick = (e: Event) => {
+  if (props.disabled || props.loading) {
+    e.preventDefault()
+    e.stopPropagation()
+    return
+  }
+  emit('click', e)
+}
 </script>

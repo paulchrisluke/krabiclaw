@@ -8,13 +8,16 @@ export function useScrollLock() {
     "scroll-lock-previous-overflow",
     () => "",
   );
+  
+  // Track if this specific instance has acquired the lock
+  const hasLock = ref(false);
 
   /**
    * Acquire a scroll lock. Safe to call multiple times.
    * The document overflow is hidden only when the first lock is acquired.
    */
   function acquire() {
-    if (!import.meta.client) return;
+    if (!import.meta.client || hasLock.value) return;
 
     if (refCount.value === 0) {
       // Save the current overflow value before changing it
@@ -22,6 +25,7 @@ export function useScrollLock() {
       document.body.style.overflow = "hidden";
     }
     refCount.value++;
+    hasLock.value = true;
   }
 
   /**
@@ -29,7 +33,7 @@ export function useScrollLock() {
    * The document overflow is restored only when the last lock is released.
    */
   function release() {
-    if (!import.meta.client) return;
+    if (!import.meta.client || !hasLock.value) return;
 
     if (refCount.value > 0) {
       refCount.value--;
@@ -38,6 +42,7 @@ export function useScrollLock() {
         document.body.style.overflow = previousOverflow.value;
       }
     }
+    hasLock.value = false;
   }
 
   return { acquire, release };

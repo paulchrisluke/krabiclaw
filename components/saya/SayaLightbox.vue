@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="openModel" class="fixed inset-0 z-100 h-dvh w-full overflow-hidden bg-black text-white" role="dialog" aria-modal="true" :aria-label="title">
+    <div ref="lightboxRoot" v-if="openModel" class="fixed inset-0 z-100 h-dvh w-full overflow-hidden bg-black text-white" role="dialog" aria-modal="true" :aria-label="title || 'Media Lightbox'">
       <!-- Header -->
       <div class="absolute inset-x-0 top-0 z-30 flex items-center gap-3 px-4 pt-4 pb-4 bg-linear-to-b from-black/70 to-transparent">
         <button
@@ -100,6 +100,7 @@ const indexModel = computed({
 
 const items = computed(() => props.items ?? [])
 const scroller = ref<HTMLElement | null>(null)
+const lightboxRoot = ref<HTMLElement | null>(null)
 const closeButton = ref<HTMLElement | null>(null)
 const videoRefs = ref<Record<number, HTMLVideoElement>>({})
 
@@ -166,8 +167,11 @@ watch(() => props.open, async (open) => {
 function handleKeyDown(e: KeyboardEvent) {
   if (!openModel.value) return
   
-  if (e.key === 'Tab') {
-    const focusableElements = closeButton.value ? [closeButton.value] : []
+  if (e.key === 'Tab' && lightboxRoot.value) {
+    const focusableElements = Array.from(lightboxRoot.value.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input[type="text"]:not([disabled]), input[type="radio"]:not([disabled]), input[type="checkbox"]:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    ))
+    
     if (focusableElements.length === 0) return
     
     const firstElement = focusableElements[0]
@@ -226,6 +230,6 @@ function onKeydown(e: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
-  document.body.style.overflow = ''
+  releaseScrollLock()
 })
 </script>

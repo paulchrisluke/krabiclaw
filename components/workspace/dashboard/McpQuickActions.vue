@@ -6,13 +6,13 @@
         <h3 class="text-base font-semibold text-highlighted">Quick prompts to try</h3>
       </div>
       <UButton
-        :icon="copiedStarter ? 'i-heroicons-check' : 'i-heroicons-clipboard'"
+        :icon="copied === starterPrompt ? 'i-heroicons-check' : 'i-heroicons-clipboard'"
         color="neutral"
         variant="ghost"
         size="xs"
         @click="copyStarterPrompt"
       >
-        {{ copiedStarter ? 'Copied' : 'Copy prompt' }}
+        {{ copied === starterPrompt ? 'Copied' : 'Copy prompt' }}
       </UButton>
     </div>
 
@@ -66,26 +66,13 @@ const { data } = await useFetch<OnboardingChecklistResponse>('/api/dashboard/onb
 const starterPrompt = computed(() => buildOnboardingStarterPrompt(data.value))
 const quickPrompts = computed(() => getQuickActionPrompts(data.value?.vertical))
 
-const copied = ref<string | null>(null)
-const copiedStarter = ref(false)
+const { copied, copy } = useCopyToClipboard()
 
 async function copyPrompt(prompt: string) {
-  try {
-    await navigator.clipboard.writeText(prompt)
-    copied.value = prompt
-    setTimeout(() => { copied.value = null }, 2000)
-  } catch (err) {
-    console.error('Failed to copy text: ', err)
-  }
+  await copy(prompt)
 }
 
 async function copyStarterPrompt() {
-  try {
-    await navigator.clipboard.writeText(starterPrompt.value)
-    copiedStarter.value = true
-    setTimeout(() => { copiedStarter.value = false }, 2000)
-  } catch (err) {
-    console.error('Failed to copy starter prompt: ', err)
-  }
+  await copy(starterPrompt.value)
 }
 </script>

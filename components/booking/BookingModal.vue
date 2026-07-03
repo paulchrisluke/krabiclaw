@@ -8,7 +8,7 @@
       leave-from-class="opacity-100 scale-100"
       leave-to-class="opacity-0 scale-95"
     >
-      <div v-if="modelValue" class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true">
+      <div v-if="modelValue" ref="modalRef" class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" :aria-labelledby="titleId">
         <!-- Backdrop -->
         <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
         
@@ -26,7 +26,7 @@
             </button>
             <div v-else class="w-9 h-9"></div> <!-- Spacer for alignment -->
             
-            <h2 class="text-base font-semibold text-default flex-1 text-center truncate px-2">
+            <h2 :id="titleId" class="text-base font-semibold text-default flex-1 text-center truncate px-2">
               {{ title }}
             </h2>
             
@@ -55,7 +55,8 @@
 </template>
 
 <script setup lang="ts">
-import { watch, onMounted, onUnmounted } from 'vue'
+import { watch, onMounted, onUnmounted, ref, nextTick } from 'vue'
+import { useScrollLock } from '~/composables/useScrollLock'
 
 const props = defineProps<{
   modelValue: boolean
@@ -68,6 +69,11 @@ const emit = defineEmits<{
   (e: 'back'): void
 }>()
 
+const modalRef = ref<HTMLElement | null>(null)
+const titleId = `modal-title-${Math.random().toString(36).slice(2, 9)}`
+const previousActiveElement = ref<HTMLElement | null>(null)
+const { acquire, release } = useScrollLock()
+
 function close() {
   emit('update:modelValue', false)
 }
@@ -76,19 +82,64 @@ function goBack() {
   emit('back')
 }
 
+function handleKeyDown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    close()
+  }
+  if (e.key === 'Tab') {
+    trapFocus(e)
+  }
+}
+
+function trapFocus(e: KeyboardEvent) {
+  if (!modalRef.value) return
+  const focusableElements = modalRef.value.querySelectorAll(
+    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  )
+  const firstElement = focusableElements[0] as HTMLElement
+  const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement
+
+  if (e.shiftKey) {
+    if (document.activeElement === firstElement) {
+      e.preventDefault()
+      lastElement?.focus()
+    }
+  } else {
+    if (document.activeElement === lastElement) {
+      e.preventDefault()
+      firstElement?.focus()
+    }
+  }
+}
+
+function restoreFocus() {
+  if (previousActiveElement.value) {
+    previousActiveElement.value.focus()
+  }
+}
+
 // Lock body scroll when modal is open
-watch(() => props.modelValue, (isOpen) => {
+watch(() => props.modelValue, async (isOpen) => {
   if (typeof document === 'undefined') return
   if (isOpen) {
-    document.body.style.overflow = 'hidden'
+    previousActiveElement.value = document.activeElement as HTMLElement
+    acquire()
+    await nextTick()
+    modalRef.value?.querySelector('button')?.focus()
   } else {
-    document.body.style.overflow = ''
+    release()
+    restoreFocus()
+  }
+})
+
+onMounted(() => {
+  if (props.modelValue) {
+    document.addEventListener('keydown', handleKeyDown)
   }
 })
 
 onUnmounted(() => {
-  if (typeof document !== 'undefined') {
-    document.body.style.overflow = ''
-  }
+  document.removeEventListener('keydown', handleKeyDown)
+  release()
 })
 </script>

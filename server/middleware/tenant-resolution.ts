@@ -105,7 +105,7 @@ export default defineEventHandler(async (event) => {
   // Only allow preview routes on platform hosts (localhost/krabiclaw.com) to prevent
   // tenant/custom hosts from bypassing normal tenant resolution.
   const previewRouteMatch = url.pathname.match(/^\/preview\/site\/([^/?]+)/);
-  if (previewRouteMatch && isPlatformHost(host, env)) {
+  if (previewRouteMatch && isPlatformHost(host, env) && isPlatformPath(url.pathname)) {
     const previewSiteId = previewRouteMatch[1]!;
     const db = env.db;
     if (db) {
@@ -149,7 +149,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const previewDraftMatch = url.pathname.match(/^\/preview\/draft\/([^/?]+)/);
-  if (previewDraftMatch && isPlatformHost(host, env)) {
+  if (previewDraftMatch && isPlatformHost(host, env) && isPlatformPath(url.pathname)) {
     const draftId = previewDraftMatch[1]!;
     const previewToken = url.searchParams.get("token");
     const db = env.db;

@@ -188,19 +188,20 @@ async function save() {
       errorMessage.value = 'Please wait for uploads to complete before saving.'
       return
     }
-    const calls: Array<Promise<unknown>> = [
-      $fetch<unknown>(`${siteApiBase.value}/settings`, {
-        method: 'PATCH',
-        body: { brand_color: brandColor.value, logo_asset_id: logoAssetId.value },
-      }),
-    ]
+    
+    // Run mutations sequentially to handle partial failures
+    await $fetch<unknown>(`${siteApiBase.value}/settings`, {
+      method: 'PATCH',
+      body: { brand_color: brandColor.value, logo_asset_id: logoAssetId.value },
+    })
+    
     if (heroAssetId.value) {
-      calls.push($fetch<unknown>(`${siteApiBase.value}/content/save`, {
+      await $fetch<unknown>(`${siteApiBase.value}/content/save`, {
         method: 'POST',
         body: { page: 'home', changes: { 'hero.image': heroAssetId.value } },
-      }))
+      })
     }
-    await Promise.all(calls)
+    
     emit('done')
   } catch {
     errorMessage.value = 'Could not save your brand essentials. Please try again.'

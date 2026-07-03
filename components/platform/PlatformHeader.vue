@@ -48,7 +48,7 @@
           aria-controls="mobile-menu"
           @click="toggleMobileMenu"
         >
-          <PlatformIcon name="menu" class="size-5" />
+          <PlatformIcon :name="isMobileMenuOpen ? 'x' : 'menu'" class="size-5" />
         </button>
       </div>
     </div>

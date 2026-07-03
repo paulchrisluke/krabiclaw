@@ -638,9 +638,14 @@ const handleRenameSection = async (section: string) => {
   }
   if (pendingSections.value.includes(section) && !menuItemsBySection.value[section]?.length) {
     pendingSections.value = pendingSections.value.map((pending: string) => pending === section ? name : pending)
-    await saveSectionOrder(allSections.value.map((item: string) => item === section ? name : item))
-    editingSection.value = null
-    sectionEditName.value = ''
+    try {
+      await saveSectionOrder(allSections.value.map((item: string) => item === section ? name : item))
+      editingSection.value = null
+      sectionEditName.value = ''
+    } catch (err) {
+      console.error('handleRenameSection failed:', err)
+      toast.addToast('Failed to rename section', 'error')
+    }
     return
   }
   try {

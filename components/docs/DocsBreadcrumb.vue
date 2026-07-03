@@ -9,7 +9,7 @@
         >
           {{ crumb.name }}
         </NuxtLink>
-        <span v-else class="font-medium text-primary">{{ crumb.name }}</span>
+        <span v-else class="font-medium text-primary" aria-current="page">{{ crumb.name }}</span>
         <PlatformIcon v-if="index !== crumbs.length - 1" name="chevron-right" class="size-3.5 shrink-0 text-dimmed" />
       </li>
     </ol>

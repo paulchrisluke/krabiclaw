@@ -325,7 +325,7 @@ async function signInWithGoogle() {
   const { authClient } = await import('~/lib/auth-client')
   await authClient.signIn.social({
     provider: 'google',
-    callbackURL: `/transfer/${token}`,
+    callbackURL: `/transfer/${encodeURIComponent(token)}`,
   })
 }
 

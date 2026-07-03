@@ -10,196 +10,7 @@
       changing production speed code.
     </p>
 
-    <section v-if="mode === 'ui'" class="dev-perf-section" aria-label="Nuxt UI render test">
-      <h2>Nuxt UI render test</h2>
-      <p>
-        This mode adds Nuxt UI components without icon props.
-      </p>
-      <UCard class="dev-perf-card">
-        <template #header>
-          <strong>Plain Nuxt UI card</strong>
-        </template>
-        <p>
-          Static text inside a card, plus two buttons rendered without icons.
-        </p>
-        <div class="dev-perf-actions">
-          <UButton label="Primary action" color="primary" />
-          <UButton label="Neutral action" color="neutral" variant="soft" />
-        </div>
-      </UCard>
-    </section>
-
-    <section v-else-if="mode === 'icons'" class="dev-perf-section" aria-label="Icon render test">
-      <h2>Icon render test</h2>
-      <p>
-        This mode adds the same Nuxt UI icon component used across public pages.
-      </p>
-      <ul>
-        <li v-for="icon in icons" :key="icon">
-          <UIcon :name="icon" class="dev-perf-icon" />
-          <span>{{ icon }}</span>
-        </li>
-      </ul>
-    </section>
-
-    <section v-else-if="mode === 'icons-client-only'" class="dev-perf-section" aria-label="Client-only icon render test">
-      <h2>Client-only icon render test</h2>
-      <p>
-        This mode keeps UIcon in the page but removes it from SSR.
-      </p>
-      <ul>
-        <li v-for="icon in icons" :key="icon">
-          <ClientOnly>
-            <UIcon :name="icon" class="dev-perf-icon" />
-            <template #fallback>
-              <span class="dev-perf-icon dev-perf-icon-placeholder" aria-hidden="true" />
-            </template>
-          </ClientOnly>
-          <span>{{ icon }}</span>
-        </li>
-      </ul>
-    </section>
-
-    <section v-else-if="mode === 'icon-placeholders'" class="dev-perf-section" aria-label="Icon placeholder render test">
-      <h2>Icon placeholder render test</h2>
-      <p>
-        This mode keeps the icon-sized layout slots but does not render UIcon.
-      </p>
-      <ul>
-        <li v-for="icon in icons" :key="icon">
-          <span class="dev-perf-icon dev-perf-icon-placeholder" aria-hidden="true" />
-          <span>{{ icon }}</span>
-        </li>
-      </ul>
-    </section>
-
-    <section v-else-if="mode === 'platform-shell'" class="dev-perf-section dev-perf-platform-shell" aria-label="Platform shell render test">
-      <h2>Platform shell render test</h2>
-      <p>
-        This mode renders the real platform header and footer around static text.
-      </p>
-      <div class="dev-perf-shell-frame">
-        <UTheme :ui="{}">
-          <LazyPlatformHeader />
-          <main class="dev-perf-shell-body">
-            <h3>Static body</h3>
-            <p>
-              No production page content is rendered here. The shell is the variable.
-            </p>
-          </main>
-          <LazyPlatformFooter />
-        </UTheme>
-      </div>
-    </section>
-
-    <section v-else-if="mode === 'saya-header'" class="dev-perf-section dev-perf-platform-shell" aria-label="Saya header render test">
-      <h2>Saya header render test</h2>
-      <p>
-        This mode renders the real Saya header around static text.
-      </p>
-      <div class="dev-perf-shell-frame saya-theme">
-        <UTheme :ui="{}">
-          <LazySayaHeader :site="null" :locations="[]" :menu="null" :has-experiences="false" />
-          <main class="dev-perf-shell-body">
-            <h3>Static body</h3>
-            <p>The Saya header is the variable.</p>
-          </main>
-        </UTheme>
-      </div>
-    </section>
-
-    <section v-else-if="mode === 'saya-footer'" class="dev-perf-section dev-perf-platform-shell" aria-label="Saya footer render test">
-      <h2>Saya footer render test</h2>
-      <p>
-        This mode renders the real Saya footer around static text.
-      </p>
-      <div class="dev-perf-shell-frame saya-theme">
-        <UTheme :ui="{}">
-          <main class="dev-perf-shell-body">
-            <h3>Static body</h3>
-            <p>The Saya footer is the variable.</p>
-          </main>
-          <LazySayaFooter
-            :site="null"
-            :is-platform="false"
-            :locations="[]"
-            :locales="[]"
-            :error="null"
-            :config="{}"
-            :menu="null"
-            :has-experiences="false"
-          />
-        </UTheme>
-      </div>
-    </section>
-
-    <section v-else-if="mode === 'saya-shell'" class="dev-perf-section dev-perf-platform-shell" aria-label="Saya shell render test">
-      <h2>Saya shell render test</h2>
-      <p>
-        This mode renders the real Saya header and footer around static text.
-      </p>
-      <div class="dev-perf-shell-frame saya-theme">
-        <UTheme :ui="{}">
-          <LazySayaHeader :site="null" :locations="[]" :menu="null" :has-experiences="false" />
-          <main class="dev-perf-shell-body">
-            <h3>Static body</h3>
-            <p>No production tenant page content is rendered here.</p>
-          </main>
-          <LazySayaFooter
-            :site="null"
-            :is-platform="false"
-            :locations="[]"
-            :locales="[]"
-            :error="null"
-            :config="{}"
-            :menu="null"
-            :has-experiences="false"
-          />
-        </UTheme>
-      </div>
-    </section>
-
-    <section v-else-if="mode === 'saya-static-shell'" class="dev-perf-section dev-perf-platform-shell" aria-label="Static Saya shell render test">
-      <h2>Static Saya shell render test</h2>
-      <p>
-        This mode renders Saya-shaped header/footer markup without real Saya components.
-      </p>
-      <div class="dev-perf-shell-frame saya-theme">
-        <header class="dev-perf-static-header">
-          <NuxtLink to="/" class="dev-perf-static-brand">
-            <span class="dev-perf-static-mark">S</span>
-            <span>Saya tenant</span>
-          </NuxtLink>
-          <nav class="dev-perf-static-nav" aria-label="Static Saya test navigation">
-            <NuxtLink v-for="item in sayaStaticNavItems" :key="item.to" :to="item.to">
-              {{ item.label }}
-            </NuxtLink>
-          </nav>
-        </header>
-        <main class="dev-perf-shell-body">
-          <h3>Static body</h3>
-          <p>This is the tenant static shell control.</p>
-        </main>
-        <footer class="dev-perf-static-footer">
-          Static Saya footer text
-        </footer>
-      </div>
-    </section>
-
-    <section v-else-if="mode === 'simple-icons'" class="dev-perf-section" aria-label="Simple Icons render test">
-      <h2>Simple Icons render test</h2>
-      <p>
-        This mode renders the social icon collection used by Saya footer social links.
-      </p>
-      <ul>
-        <li v-for="icon in simpleIcons" :key="icon">
-          <UIcon :name="icon" class="dev-perf-icon" />
-          <span>{{ icon }}</span>
-        </li>
-      </ul>
-    </section>
-
-    <section v-else-if="mode === 'text-no-icons'" class="dev-perf-section" aria-label="No-icons baseline test">
+    <section v-if="mode === 'text-no-icons'" class="dev-perf-section" aria-label="No-icons baseline test">
       <h2>No-icons baseline test</h2>
       <p>
         Explicit alias for the plain-text baseline — same as the default
@@ -209,117 +20,16 @@
       </p>
     </section>
 
-    <section v-else-if="mode === 'text-with-one-icon'" class="dev-perf-section" aria-label="Single icon render test">
-      <h2>Single icon render test</h2>
-      <p>
-        This mode renders exactly one UIcon, to isolate the fixed cost of
-        engaging the Icon module/server bundle at all from the marginal
-        per-icon cost measured by the full <code>icons</code> mode.
-      </p>
-      <UIcon name="i-heroicons-bolt" class="dev-perf-icon" />
-    </section>
-
-    <section v-else-if="mode === 'text-with-ui-button'" class="dev-perf-section" aria-label="Single UI button render test">
-      <h2>Single UI button render test</h2>
-      <p>
-        This mode renders a single UButton with no icon and no UCard wrapper,
-        to isolate baseline Nuxt UI component overhead from the heavier
-        <code>ui</code> mode (card + two buttons).
-      </p>
-      <UButton label="Primary action" color="primary" />
-    </section>
-
-    <section v-else-if="mode === 'text-with-i18n'" class="dev-perf-section" aria-label="i18n render test">
-      <h2>i18n render test</h2>
-      <p>
-        This mode calls <code>useI18n()</code> and renders one real
-        <code>$t()</code> lookup, to isolate the cost of engaging the i18n
-        runtime/locale message resolution during SSR.
-      </p>
-      <p>{{ t('saya.header.menu') }} (locale: {{ locale }})</p>
-    </section>
-
-    <section v-else-if="mode === 'text-with-analytics-plugin'" class="dev-perf-section" aria-label="Analytics composable render test">
-      <h2>Analytics composable render test</h2>
-      <p>
-        This mode calls <code>useAnalytics()</code> and <code>getGaClientId()</code>
-        on the page, to isolate whether wiring in the analytics composable adds
-        any SSR cost. Note: the GA4 `&lt;script&gt;` tag itself is injected
-        globally by <code>app.vue</code> on every page (including the
-        <code>text</code> baseline), so this mode only isolates the
-        composable call, not the script tag.
-      </p>
-      <p>GA client id (client-only, expect null during SSR): {{ gaClientId }}</p>
-    </section>
-
-    <section v-else-if="mode === 'text-with-layout'" class="dev-perf-section" aria-label="Layout mechanism render test">
-      <h2>Layout mechanism render test</h2>
-      <p>
-        This mode wraps static text in the real <code>default</code> layout
-        (an empty passthrough <code>&lt;div&gt;&lt;slot /&gt;&lt;/div&gt;</code>)
-        via <code>&lt;NuxtLayout&gt;</code>, to isolate the cost of Nuxt's
-        layout-resolution machinery itself from the header/footer component
-        cost already measured by the shell modes above.
-      </p>
-      <NuxtLayout name="default">
-        <p>Static body rendered inside the default layout.</p>
-      </NuxtLayout>
-    </section>
-
-    <section v-else-if="mode === 'text-with-saya-css'" class="dev-perf-section" aria-label="Saya theme CSS render test">
-      <h2>Saya theme CSS render test</h2>
-      <p>
-        This mode applies the <code>saya-theme</code> class and the same
-        brand-color CSS custom property computation the Saya layout runs
-        (<code>calculateThemeColors</code>), without rendering any Saya
-        component, to isolate theme-color computation/CSS scoping cost from
-        component-tree cost.
-      </p>
-      <div class="saya-theme dev-perf-saya-css-frame" :style="sayaThemeStyles">
-        <p>Static text under saya-theme styling.</p>
-      </div>
-    </section>
-
-    <section v-else-if="mode === 'static-shell'" class="dev-perf-section dev-perf-platform-shell" aria-label="Static shell render test">
-      <h2>Static shell render test</h2>
-      <p>
-        This mode renders a header/footer-shaped shell without UIcon, UColorModeButton, dropdowns, or nav data composables.
-      </p>
-      <div class="dev-perf-shell-frame">
-        <header class="dev-perf-static-header">
-          <NuxtLink to="/" class="dev-perf-static-brand">
-            <img src="/krabi-claw-logo.png" alt="KrabiClaw" width="34" height="34">
-            <span>krabiclaw.com</span>
-          </NuxtLink>
-          <nav class="dev-perf-static-nav" aria-label="Static test navigation">
-            <NuxtLink v-for="item in staticNavItems" :key="item.to" :to="item.to">
-              {{ item.label }}
-            </NuxtLink>
-          </nav>
-        </header>
-        <main class="dev-perf-shell-body">
-          <h3>Static body</h3>
-          <p>
-            This keeps shell-like markup and the logo image but removes the dynamic header pieces.
-          </p>
-        </main>
-        <footer class="dev-perf-static-footer">
-          Static footer text
-        </footer>
-      </div>
-    </section>
+    <component
+      :is="currentModeComponent"
+      v-else-if="currentModeComponent"
+      v-bind="currentModeProps"
+    />
   </main>
 </template>
 
 <script setup lang="ts">
-// Intentionally no static imports of PlatformHeader/PlatformFooter/SayaHeader/
-// SayaFooter here — the template uses the Lazy* auto-imported variants so
-// Vite code-splits them into their own async chunks. A static top-level
-// import of an SFC gets bundled into this page's own chunk graph regardless
-// of which v-else-if branch actually renders it, which was silently forcing
-// every mode (including text-no-icons) to preload the same ~35 chunks.
-import { getGaClientId, useAnalytics } from '~/composables/useAnalytics'
-import { calculateThemeColors } from '~/utils/color-utils'
+import { defineAsyncComponent, type Component } from 'vue'
 import { isDevPerfHostAllowed } from '~/shared/dev-perf'
 
 definePageMeta({
@@ -354,6 +64,30 @@ const mode = computed(() => {
   const requestedMode = Array.isArray(route.query.mode) ? route.query.mode[0] : route.query.mode
   return requestedMode && modes.has(requestedMode) ? requestedMode : 'text'
 })
+
+// Keep every non-baseline mode behind an async component so `text` and
+// `text-no-icons` don't carry the code for shell probes, Nuxt UI probes,
+// or composable-specific experiments in the same route chunk.
+const asyncModeComponents: Partial<Record<string, Component>> = {
+  ui: defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeUi.vue')),
+  icons: defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeIcons.vue')),
+  'icons-client-only': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeIcons.vue')),
+  'icon-placeholders': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeIcons.vue')),
+  'platform-shell': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModePlatformShell.vue')),
+  'static-shell': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeStaticShell.vue')),
+  'saya-header': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeSayaHeader.vue')),
+  'saya-footer': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeSayaFooter.vue')),
+  'saya-shell': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeSayaShell.vue')),
+  'saya-static-shell': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeSayaStaticShell.vue')),
+  'simple-icons': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeIcons.vue')),
+  'text-with-one-icon': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeSingleIcon.vue')),
+  'text-with-ui-button': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeUIButton.vue')),
+  'text-with-i18n': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeI18n.vue')),
+  'text-with-analytics-plugin': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeAnalytics.vue')),
+  'text-with-layout': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeLayout.vue')),
+  'text-with-saya-css': defineAsyncComponent(() => import('~/components/dev-perf/PerfTextModeSayaCss.vue')),
+}
+const currentModeComponent = computed(() => asyncModeComponents[mode.value] ?? null)
 const icons = [
   'i-heroicons-bolt',
   'i-heroicons-globe-alt',
@@ -373,6 +107,36 @@ const simpleIcons = [
   'i-simple-icons-instagram',
   'i-simple-icons-tiktok',
 ]
+const iconModeVariants = {
+  icons: {
+    heading: 'Icon render test',
+    description: 'This mode adds the same Nuxt UI icon component used across public pages.',
+    ariaLabel: 'Icon render test',
+    renderMode: 'icons',
+    icons,
+  },
+  'icons-client-only': {
+    heading: 'Client-only icon render test',
+    description: 'This mode keeps UIcon in the page but removes it from SSR.',
+    ariaLabel: 'Client-only icon render test',
+    renderMode: 'client-only',
+    icons,
+  },
+  'icon-placeholders': {
+    heading: 'Icon placeholder render test',
+    description: 'This mode keeps the icon-sized layout slots but does not render UIcon.',
+    ariaLabel: 'Icon placeholder render test',
+    renderMode: 'placeholders',
+    icons,
+  },
+  'simple-icons': {
+    heading: 'Simple Icons render test',
+    description: 'This mode renders the social icon collection used by Saya footer social links.',
+    ariaLabel: 'Simple Icons render test',
+    renderMode: 'icons',
+    icons: simpleIcons,
+  },
+} as const
 const staticNavItems = [
   { label: 'Plugin', to: '/plugin' },
   { label: 'Features', to: '/features' },
@@ -387,33 +151,19 @@ const sayaStaticNavItems = [
   { label: 'Experiences', to: '/experiences' },
   { label: 'Contact', to: '/contact' },
 ]
-
-// useI18n()/useAnalytics() are only invoked for their own mode — calling
-// them unconditionally would leak their setup cost into every other mode's
-// timing, defeating the point of isolating one variable at a time.
-const isI18nMode = mode.value === 'text-with-i18n'
-const i18n = isI18nMode ? useI18n() : null
-const t = i18n ? i18n.t : (key: string) => key
-const locale = i18n ? i18n.locale : ref('en')
-
-const isAnalyticsMode = mode.value === 'text-with-analytics-plugin'
-const analytics = isAnalyticsMode ? useAnalytics() : null
-const gaClientId = ref<string | null>(null)
-onMounted(() => {
-  if (!isAnalyticsMode || !analytics) return
-  gaClientId.value = getGaClientId()
-  analytics.trackEvent('dashboard_visited')
-})
-// Same brand-color test input the Saya layout would receive from a real
-// site's config.brand_color — kept static here since this page has no
-// tenant/bootstrap context.
-const sayaThemeStyles = computed(() => {
-  const colors = calculateThemeColors('#e11d48')
-  return {
-    '--brand-color': colors.brandColor,
-    '--ui-primary': colors.brandColor,
-    '--color-primary': colors.brandColor,
-    '--brand-color-foreground': colors.brandColorForeground,
+const currentModeProps = computed(() => {
+  switch (mode.value) {
+    case 'icons':
+    case 'icons-client-only':
+    case 'icon-placeholders':
+    case 'simple-icons':
+      return iconModeVariants[mode.value]
+    case 'static-shell':
+      return { staticNavItems }
+    case 'saya-static-shell':
+      return { sayaStaticNavItems }
+    default:
+      return {}
   }
 })
 
@@ -435,7 +185,7 @@ useHead({
 })
 </script>
 
-<style scoped>
+<style>
 .dev-perf-page {
   max-width: 68ch;
   margin: 0 auto;

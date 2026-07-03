@@ -206,7 +206,7 @@ watch(
 watch(
   () => [isOpen.value, form.locale, form.scope] as const,
   ([open, _locale, _scope]) => {
-    if (open) estimateTranslation()
+    if (open && statusLoaded.value) estimateTranslation()
   }
 )
 

@@ -174,13 +174,13 @@ watch([isExperienceSite, hasExperiences], ([isExp, hasExp]) => {
 // "YYYY-MM-DD" string shape reservationForm.date already expected, no bridging
 // needed. Server already rejects past dates; `min` is just a UX nicety.
 // Use local time instead of UTC to show visitor's actual today.
-const todayIso = (() => {
+const todayIso = computed(() => {
   const now = new Date()
   const year = now.getFullYear()
   const month = String(now.getMonth() + 1).padStart(2, '0')
   const date = String(now.getDate()).padStart(2, '0')
   return `${year}-${month}-${date}`
-})()
+})
 
 // Plain-Tailwind form styling — replaces UInput/UTextarea/USelect's default
 // look now that this page no longer depends on Nuxt UI (see SayaFormField.vue).

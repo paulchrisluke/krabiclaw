@@ -518,7 +518,10 @@ function updateSetupLastMessage(content: string, error: boolean) {
 
 // --- drag-drop ---
 
-const onDragEnter = () => { dragCounter.value++ }
+const onDragEnter = () => {
+  if (!siteId.value || setupMode.value || isDepleted.value) return
+  dragCounter.value++
+}
 const onDragLeave = () => { dragCounter.value = Math.max(0, dragCounter.value - 1) }
 const onDrop = (e: DragEvent) => {
   dragCounter.value = 0
@@ -698,16 +701,31 @@ function linkifyMarkdown(text: string): string {
 }
 
 function renderMarkdown(text: string): string {
-  const html = text
-    .replace(/```[\s\S]*?```/g, m => `<pre><code>${m.slice(3, -3).replace(/^[^\n]*\n/, '')}</code></pre>`)
+  // Shield fenced code blocks first to preserve them
+  const codeBlocks: string[] = []
+  let html = text.replace(/```[\s\S]*?```/g, (match) => {
+    codeBlocks.push(match)
+    return `__CODE_BLOCK_${codeBlocks.length - 1}__`
+  })
+
+  // Apply markdown transformations
+  html = html
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/`(.+?)`/g, '<code>$1</code>')
     .replace(/^[-*] (.+)/gm, '<li>$1</li>')
-    .replace(/(<li>.*?<\/li>)/s, '<ul>$1</ul>')
+    // Wrap consecutive list items in ul tags
+    .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
     .replace(/\n\n/g, '</p><p>')
     .replace(/\n/g, '<br>')
     .replace(/^(.+)$/, '<p>$1</p>')
+
+  // Restore code blocks
+  html = html.replace(/__CODE_BLOCK_(\d+)__/g, (_, index) => {
+    const code = codeBlocks[parseInt(index)]
+    return `<pre><code>${code.slice(3, -3).replace(/^[^\n]*\n/, '')}</code></pre>`
+  })
+
   return DOMPurify.sanitize(linkifyMarkdown(html))
 }
 </script>

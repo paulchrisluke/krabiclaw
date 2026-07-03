@@ -35,6 +35,7 @@
               <img
                 :src="resolveMedia(post.featured_image).url ?? undefined"
                 :alt="post.title"
+                loading="lazy"
                 class="h-full w-full object-cover"
               />
             </div>

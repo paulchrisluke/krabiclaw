@@ -6,7 +6,7 @@
 
       <div class="relative mb-12">
         <label for="help-search" class="sr-only">Search help questions</label>
-        <SayaIcon name="magnifying-glass" class="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted" aria-hidden="true" />
+        <PlatformIcon name="magnifying-glass" class="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted" aria-hidden="true" />
         <input id="help-search" v-model="searchQuery" placeholder="Search questions…" class="block w-full rounded-lg border border-default bg-default py-2.5 pl-11 pr-4 text-base text-default placeholder:text-muted focus:border-inverted focus:outline-none focus:ring-1 focus:ring-inverted" />
       </div>
 
@@ -25,7 +25,7 @@
               @click="toggle(faq.q)"
             >
               <span class="font-medium text-default">{{ faq.q }}</span>
-              <SayaIcon
+              <PlatformIcon
                 :name="open === faq.q ? 'chevron-up' : 'chevron-down'"
                 class="shrink-0 w-5 h-5 text-muted"
               />

@@ -47,7 +47,6 @@
         icon="i-heroicons-magnifying-glass"
         size="sm"
         class="flex-1"
-        @input="loadAssets"
       />
       <USelect
         v-if="accept === 'any'"
@@ -302,7 +301,7 @@ async function uploadImage(file: File) {
       throw new Error(`Confirmation failed for asset ${assetId}`)
     }
 
-    toast.add({ title: 'File uploaded', icon: 'i-heroicons-check-circle', color: 'success' })
+    toast.addToast('File uploaded', 'success')
     await loadAssets()
     emit('uploaded', asset)
   } catch (err) {
@@ -323,7 +322,7 @@ async function uploadVideo(file: File) {
     form.append('file', file)
     if (props.locationId) form.append('locationId', props.locationId)
     const asset = await $fetch<MediaAsset>(`/api/dashboard/editor/media/upload`, { method: 'POST', body: form })
-    toast.add({ title: 'File uploaded', icon: 'i-heroicons-check-circle', color: 'success' })
+    toast.addToast('File uploaded', 'success')
     await loadAssets()
     emit('uploaded', asset)
   } catch (err) {

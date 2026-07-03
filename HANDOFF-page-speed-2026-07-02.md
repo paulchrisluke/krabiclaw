@@ -1,5 +1,42 @@
 # Handoff: KrabiClaw page speed — stop adding, start removing
 
+## Latest update (2026-07-03, preview shell comparison): public shell cleanup materially helped
+
+Fresh preview Lighthouse runs against the perf harness now show that removing
+Nuxt UI from the public platform/Saya surfaces materially improved the public
+shell modes versus the July 2 production snapshot.
+
+| Mode | LCP | FCP | TTI | Transfer |
+| --- | ---: | ---: | ---: | ---: |
+| `text-no-icons` | 1.49s | 1.49s | 3.02s | 339.3KB |
+| `platform-shell` | 2.83s | 2.53s | 2.96s | 380.3KB |
+| `saya-header` | 1.60s | 1.60s | 2.40s | 347.6KB |
+| `saya-footer` | 1.44s | 1.44s | 2.40s | 354.1KB |
+| `saya-shell` | 2.24s | 2.24s | 2.78s | 356.6KB |
+
+Compared with the July 2 production snapshot:
+
+- `text-no-icons` transfer dropped from `518.6KB` to `339.3KB`, and TTI dropped
+  from `4.86s` to `3.02s`.
+- `platform-shell` transfer dropped from `543.3KB` to `380.3KB`, and TTI dropped
+  from `5.91s` to `2.96s`.
+- `saya-shell` improved the most visibly: transfer dropped from `597.3KB` to
+  `356.6KB`, LCP dropped from `3.00s` to `2.24s`, and TTI dropped from `5.97s`
+  to `2.78s`.
+
+Interpretation:
+
+- Yes, removing Nuxt UI from public platform/Saya materially helped.
+- The biggest remaining floor is now the shared Nuxt client entry chunk
+  (`~132KB` transferred on preview), which is present across all modes.
+- A follow-up split landed locally after this preview read: `pages/dev/perf-text.vue`
+  is now just a small shell that async-loads `PerfTextMode*` child chunks per
+  mode. In the local build, the base perf route server chunk is about `9.0KB`,
+  while mode-specific chunks like `PerfTextModePlatformShell` and
+  `PerfTextModeSayaShell` are separate `~2.8KB` and `~3.4KB` files. That means
+  the next trustworthy measurement should come from a fresh preview deploy of
+  the perf page, not from the old all-modes-in-one route structure.
+
 ## Latest update (2026-07-03, later): root `UApp` split landed locally, workspace ownership localized, preview is the next trustworthy perf read
 
 Use this section first — it supersedes everything below.
@@ -118,9 +155,15 @@ other things, the **full Nuxt UI locale message tree** (`calendar`,
 runtime — none of which this page renders. `@nuxt/ui`'s own `locale/en.js`
 source file is only 3.2KB, so the locale strings aren't the bulk of the
 513KB by themselves; the bigger contributors are Vue's runtime + `vue-i18n`
-+ Nuxt UI's component runtime, all loaded as one eager chunk via the
-`UApp`/`UOverlayProvider` wrapper in `app.vue` regardless of which page is
-being rendered.
++ Nuxt UI's component runtime.
+
+**Note:** The root `UApp`/`UOverlayProvider` wrapper in `app.vue` has been
+removed as part of the public-vs-workspace boundary refactor. `UApp` is now
+owned by `layouts/dashboard.vue` and `layouts/editor.vue` only. The remaining
+Nuxt UI holdouts on public/auth surfaces are:
+- `error.vue`
+- `pages/index.vue`
+- `pages/auth/invite/[token].vue`
 
 This matches, and confirms, the "not yet investigated" hypothesis flagged at
 the end of the previous handoff section (3.4MB JS / 262 chunks, component
@@ -131,7 +174,7 @@ but was already measured earlier in this doc at only ~160ms of LCP impact —
 don't re-chase it before the JS entry chunk.
 
 **Not yet done — next concrete step for whoever picks this up:** get a
-per-module breakdown of `D0ZO8y0T.js` (source-map-explorer or
+per-module breakdown of the current entry chunk (source-map-explorer or
 `rollup-plugin-visualizer` against a real build, not `strings` guessing) to
 confirm the actual byte split between Vue core / vue-i18n / Nuxt UI
 components / Reka UI primitives, then split or lazy-load whatever isn't

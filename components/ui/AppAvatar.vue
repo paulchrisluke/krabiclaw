@@ -1,10 +1,11 @@
 <template>
   <img
-    v-if="src"
+    v-if="src && !imageError"
     :src="src"
     :alt="avatarAlt"
     class="shrink-0 rounded-full object-cover"
     :class="sizeClass"
+    @error="imageError = true"
   >
   <div
     v-else
@@ -56,5 +57,10 @@ const initials = computed(() => {
     .slice(0, 2)
     .join('')
     .toUpperCase()
+})
+
+const imageError = ref(false)
+watch(() => props.src, () => {
+  imageError.value = false
 })
 </script>

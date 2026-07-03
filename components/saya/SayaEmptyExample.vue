@@ -26,6 +26,11 @@ const props = withDefaults(defineProps<{
   dashed: false
 })
 
+// Warn if an unsupported icon value is passed
+if (import.meta.client && props.icon !== 'sparkles' && props.icon !== 'map-pin') {
+  console.warn(`SayaEmptyExample: unsupported icon value "${props.icon}". Supported values are "sparkles" and "map-pin".`)
+}
+
 const cardClass = computed(() => props.dashed ? 'border border-dashed border-default' : '')
 const mediaClass = computed(() => ({
   square: 'aspect-square',

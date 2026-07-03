@@ -4,7 +4,7 @@
       <slot />
       <!-- Feature-flagged off — see composables/useUpgradeModal.ts for why and
            how to bring it back. -->
-      <SayaUpgradeModal v-if="UPGRADE_MODAL_ENABLED" />
+      <LazySayaUpgradeModal v-if="UPGRADE_MODAL_ENABLED" />
     </div>
   </UApp>
 </template>

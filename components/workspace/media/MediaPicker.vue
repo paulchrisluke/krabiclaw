@@ -1,13 +1,16 @@
 <template>
   <!-- Trigger -->
-  <button
-    type="button"
+  <div
     @click="open"
-    class="w-full text-left"
+    @keydown.enter.prevent="open"
+    @keydown.space.prevent="open"
+    class="w-full text-left cursor-pointer"
+    role="button"
+    tabindex="0"
   >
     <slot>
       <div
-        class="group flex cursor-pointer items-center gap-2 overflow-hidden rounded-lg border border-default transition-colors hover:border-accented"
+        class="group flex items-center gap-2 overflow-hidden rounded-lg border border-default transition-colors hover:border-accented"
         :class="modelValue ? 'p-1' : 'p-2'"
       >
         <UImage
@@ -48,7 +51,7 @@
         />
       </div>
     </slot>
-  </button>
+  </div>
 
   <!-- Modal -->
   <UModal

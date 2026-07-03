@@ -137,6 +137,9 @@ async function purchaseCredits(bundle: 500 | 2500 | 5000) {
   buyingCredits.value = bundle
   try {
     await purchaseCreditsFn(bundle, () => { outOfCredits.value = false })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to purchase credits. Please try again.'
+    error.value = msg
   } finally {
     buyingCredits.value = null
   }

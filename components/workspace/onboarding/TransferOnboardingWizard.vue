@@ -268,6 +268,7 @@ const inviteForm = reactive({ email: '', role: 'member' })
 const savingNotifs = ref(false)
 const inviting = ref(false)
 const inviteSuccess = ref(false)
+const inviteError = ref<string | null>(null)
 const notificationError = ref<string | null>(null)
 
 const showDomainStep = computed(() => ['growth', 'managed', 'seo_accelerator'].includes(props.plan))
@@ -383,18 +384,22 @@ async function sendInvite() {
   if (!activeOrgId.value || !inviteForm.email.trim()) return
   inviting.value = true
   inviteSuccess.value = false
+  inviteError.value = null
   try {
     const { error } = await authClient.organization.inviteMember({
       email: inviteForm.email.trim(),
       role: inviteForm.role as 'member' | 'admin',
       organizationId: activeOrgId.value,
     })
-    if (!error) {
+    if (error) {
+      inviteError.value = error.message || 'Failed to send invite. Please try again.'
+    } else {
       inviteForm.email = ''
       inviteSuccess.value = true
     }
   } catch (e) {
     console.error('invite_member_failed', e)
+    inviteError.value = 'Failed to send invite. Please try again.'
   } finally {
     inviting.value = false
   }

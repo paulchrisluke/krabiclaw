@@ -21,12 +21,14 @@
             placeholder="teammate@example.com"
             size="sm"
             class="flex-1"
+            aria-label="Email address"
           />
           <USelect
             v-model="form.role"
             :items="roleOptions"
             size="sm"
             class="w-28"
+            aria-label="Team member role"
           />
         </div>
         <div class="flex gap-2">

@@ -108,7 +108,7 @@ const calendarDays = computed(() => {
     } 
     // If availableDates array provided, disable if not in it
     else if (props.availableDates) {
-      const dateStr = d.toISOString().split('T')[0] ?? ''
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       if (!dateStr || !props.availableDates.includes(dateStr)) {
         disabled = true
       }

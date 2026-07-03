@@ -128,6 +128,6 @@ useHead(() => {
 <style>
 /* Saya theme CSS variables */
 .saya-theme {
-  --brand-color: var(--brand-color, #16a34a);
+  --brand-color: #16a34a;
 }
 </style>

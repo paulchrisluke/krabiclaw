@@ -243,8 +243,8 @@
 
       <!-- Modal: full post (Teleported) -->
       <Teleport to="body">
-        <div v-if="selectedPost" class="fixed inset-0 z-[100] flex flex-col bg-black">
-          <button @click="selectedPostId = null" class="absolute top-4 right-4 z-[110] p-2 text-white bg-black/50 rounded-full hover:bg-black/70 transition">
+        <div v-if="selectedPost" class="fixed inset-0 z-[100] flex flex-col bg-black" role="dialog" aria-modal="true" aria-label="Post details">
+          <button aria-label="Close" @click="selectedPostId = null" class="absolute top-4 right-4 z-[110] p-2 text-white bg-black/50 rounded-full hover:bg-black/70 transition">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
               <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
             </svg>
@@ -303,9 +303,7 @@
           <p class="saya-kicker mb-6">{{ homeCopy.reviewsKicker }}</p>
           <template v-if="hasGoogleBusiness && googleReviewSummary && Number(googleReviewSummary.average) > 0">
             <h2 class="saya-display-md flex flex-wrap items-center gap-4 text-default">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-8 text-primary">
-                <path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.006 5.404.434c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.434 2.082-5.005Z" clip-rule="evenodd" />
-              </svg>
+              <SayaIcon name="star" solid class="size-8 text-primary" aria-hidden="true" />
               {{ googleReviewSummary.average }}
               <span v-if="googleReviewSummary.count" class="text-muted">· {{ googleReviewSummary.count?.toLocaleString() }} reviews</span>
             </h2>
@@ -357,15 +355,14 @@
             class="bg-elevated p-8"
           >
             <div class="mb-3 flex gap-1">
-              <svg
+              <SayaIcon
                 v-for="s in 5"
                 :key="s"
-                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"
+                name="star"
+                solid
                 class="size-3.5"
                 :class="s <= googleReviewRating(review) ? 'text-primary' : 'text-muted'"
-              >
-                <path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.006 5.404.434c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.434 2.082-5.005Z" clip-rule="evenodd" />
-              </svg>
+              />
             </div>
             <p class="text-sm leading-relaxed text-default">"{{ review.comment?.text || review.content }}"</p>
             <div class="mt-6 border-t border-default pt-4">
@@ -403,6 +400,7 @@
 import { useAuth } from '~/composables/useAuth'
 import { formatMoneyAmount } from '~/shared/money'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
+import { useScrollLock } from '~/composables/useScrollLock'
 
 definePageMeta({ layout: false })
 
@@ -610,6 +608,28 @@ const recentPosts = computed(() => {
 
 const selectedPostId = ref(null)
 const selectedPost = computed(() => selectedPostId.value ? recentPosts.value.find(p => p.id === selectedPostId.value) : null)
+
+const { acquire: acquireScrollLock, release: releaseScrollLock } = useScrollLock()
+
+watch(selectedPostId, (id) => {
+  if (id) acquireScrollLock()
+  else releaseScrollLock()
+})
+
+function onKeydown(e) {
+  if (e.key === 'Escape' && selectedPostId.value) {
+    selectedPostId.value = null
+  }
+}
+
+onMounted(() => {
+  if (import.meta.client) document.addEventListener('keydown', onKeydown)
+})
+
+onUnmounted(() => {
+  if (import.meta.client) document.removeEventListener('keydown', onKeydown)
+  releaseScrollLock()
+})
 
 // Featured content — dishes or experiences, shown right below the hero
 const featuredContent = computed(() => {

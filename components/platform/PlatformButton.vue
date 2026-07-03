@@ -5,6 +5,7 @@
     :type="to ? undefined : type"
     :disabled="!to && (disabled || loading)"
     :aria-disabled="disabled || loading ? 'true' : undefined"
+    :tabindex="to && (disabled || loading) ? -1 : undefined"
     :class="[
       'inline-flex items-center justify-center gap-1.5 rounded-[9px] font-semibold no-underline transition-colors disabled:pointer-events-none disabled:opacity-60',
       { 'pointer-events-none opacity-60': disabled || loading },
@@ -12,6 +13,7 @@
       variantClass,
       block ? 'w-full' : ''
     ]"
+    @click="handleClick"
   >
     <svg v-if="loading" viewBox="0 0 24 24" fill="none" class="size-4 animate-spin">
       <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" stroke-opacity="0.25" />
@@ -40,7 +42,14 @@ const props = withDefaults(defineProps<{
   type: 'button',
 })
 
-const component = computed(() => props.to ? resolveComponent('NuxtLink') : 'button')
+const NuxtLink = resolveComponent('NuxtLink')
+const component = computed(() => props.to ? NuxtLink : 'button')
+
+const handleClick = (e: Event) => {
+  if (props.to && (props.disabled || props.loading)) {
+    e.preventDefault()
+  }
+}
 
 const sizeClass = computed(() => ({
   sm: 'text-[13px] px-3 py-1.5',

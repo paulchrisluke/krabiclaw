@@ -116,7 +116,7 @@
           <p class="text-white/90">{{ selectedPost.offer.title }} <span v-if="selectedPost.offer.couponCode">• {{ t('saya.posts.code_label') }} {{ selectedPost.offer.couponCode }}</span></p>
         </div>
         <NuxtLink
-          v-if="selectedPost.callToAction"
+          v-if="selectedPost.callToAction && selectedPost.callToAction.url"
           :to="selectedPost.callToAction.url"
           class="mt-4 inline-flex items-center justify-center rounded-full bg-white px-5 py-2.5 text-base font-medium text-black no-underline transition hover:bg-zinc-200"
         >

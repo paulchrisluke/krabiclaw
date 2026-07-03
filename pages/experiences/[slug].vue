@@ -54,93 +54,100 @@
           <!-- ── LEFT: Gallery + Content ───────────────────── -->
           <div class="min-w-0">
 
-            <!-- Gallery -->
-            <div class="rounded-xl bg-muted overflow-hidden">
-              <div v-if="mediaItems.length > 1" class="relative lg:h-120">
-                <div
-                  ref="carouselTrack"
-                  class="saya-carousel-track flex h-full snap-x snap-mandatory overflow-x-auto scroll-smooth"
-                  @scroll="onCarouselScroll"
-                >
-                  <div
-                    v-for="(item, index) in mediaItems"
-                    :key="item.url"
-                    class="relative aspect-4/3 lg:aspect-auto lg:h-120 w-full shrink-0 snap-center overflow-hidden cursor-zoom-in"
-                    @click="item.kind === 'image' && openLightbox(index)"
-                  >
-                    <video
-                      v-if="item.kind === 'video'"
-                      :src="item.url"
-                      autoplay
-                      muted
-                      loop
-                      playsinline
-                      class="h-full w-full object-contain"
-                    />
-                    <img
-                      v-else
-                      :src="item.url"
-                      :alt="experience.title"
-                      class="h-full w-full object-contain"
-                    />
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  class="absolute left-2 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-default/80 text-default shadow backdrop-blur-sm transition hover:bg-default disabled:opacity-40"
-                  aria-label="Previous slide"
-                  :disabled="carouselIndex === 0"
-                  @click="scrollCarousel(-1)"
-                >
-                  <SayaIcon name="chevron-left" class="size-5" />
-                </button>
-                <button
-                  type="button"
-                  class="absolute right-2 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-default/80 text-default shadow backdrop-blur-sm transition hover:bg-default disabled:opacity-40"
-                  aria-label="Next slide"
-                  :disabled="carouselIndex === mediaItems.length - 1"
-                  @click="scrollCarousel(1)"
-                >
-                  <SayaIcon name="chevron-right" class="size-5" />
-                </button>
-                <div class="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
-                  <button
-                    v-for="(item, index) in mediaItems"
-                    :key="`dot-${item.url}`"
-                    type="button"
-                    class="size-1.5 rounded-full transition"
-                    :class="carouselIndex === index ? 'bg-default' : 'bg-default/40'"
-                    :aria-label="`Go to slide ${index + 1}`"
-                    @click="scrollToSlide(index)"
-                  />
-                </div>
+            <!-- Gallery: desktop grid (up to 4 items) / mobile hero + "show all" -->
+            <div class="rounded-xl overflow-hidden">
+
+              <!-- No media placeholder -->
+              <div v-if="mediaItems.length === 0" class="flex aspect-4/3 items-center justify-center bg-muted">
+                <SayaIcon name="sparkles" class="size-16 text-dimmed" />
               </div>
+
+              <!-- Single image / video -->
               <div
                 v-else-if="mediaItems.length === 1"
-                class="relative aspect-4/3 lg:aspect-auto lg:h-120 overflow-hidden"
+                class="relative aspect-4/3 lg:h-[520px] overflow-hidden"
                 :class="mediaItems[0]?.kind === 'image' ? 'cursor-zoom-in' : ''"
                 @click="mediaItems[0]?.kind === 'image' && openLightbox(0)"
               >
                 <video
                   v-if="mediaItems[0]?.kind === 'video'"
                   :src="mediaItems[0]?.url"
-                  autoplay
-                  muted
-                  loop
-                  playsinline
-                  class="h-full w-full object-contain"
+                  autoplay muted loop playsinline
+                  class="h-full w-full object-cover"
                 />
                 <img
                   v-else
                   :src="mediaItems[0]?.url"
                   :alt="experience.title"
-                  class="h-full w-full object-contain"
+                  class="h-full w-full object-cover"
                 />
               </div>
-              <div v-else class="flex aspect-4/3 lg:h-120 items-center justify-center">
-                <SayaIcon name="sparkles" class="size-16 text-dimmed" />
+
+              <!-- 2+ items — grid on all screen sizes -->
+              <div v-else>
+                <div
+                  class="grid gap-1 h-[360px] sm:h-[440px] lg:h-[520px]"
+                  :class="mediaItems.length === 2 ? 'grid-cols-2' : 'grid-cols-2 grid-rows-2'"
+                >
+                  <!-- Hero — spans 2 rows when 3+ items -->
+                  <div
+                    class="relative overflow-hidden"
+                    :class="[
+                      mediaItems.length >= 3 ? 'row-span-2' : '',
+                      mediaItems[0]?.kind === 'image' ? 'cursor-zoom-in' : ''
+                    ]"
+                    @click="mediaItems[0]?.kind === 'image' && openLightbox(0)"
+                  >
+                    <video
+                      v-if="mediaItems[0]?.kind === 'video'"
+                      :src="mediaItems[0]?.url"
+                      autoplay muted loop playsinline
+                      class="h-full w-full object-cover"
+                    />
+                    <img
+                      v-else
+                      :src="mediaItems[0]?.url"
+                      :alt="experience.title"
+                      class="h-full w-full object-cover transition-transform duration-300 hover:scale-[1.02]"
+                    />
+                  </div>
+
+                  <!-- Thumbnails 2–4 -->
+                  <div
+                    v-for="(item, i) in mediaItems.slice(1, 4)"
+                    :key="item.url"
+                    class="relative overflow-hidden"
+                    :class="item.kind === 'image' ? 'cursor-zoom-in' : ''"
+                    @click="item.kind === 'image' && openLightbox(i + 1)"
+                  >
+                    <video
+                      v-if="item.kind === 'video'"
+                      :src="item.url"
+                      autoplay muted loop playsinline
+                      class="h-full w-full object-cover"
+                    />
+                    <img
+                      v-else
+                      :src="item.url"
+                      :alt="experience.title"
+                      class="h-full w-full object-cover transition-transform duration-300 hover:scale-[1.02]"
+                    />
+                    <!-- "Show all" overlay only on last thumbnail when extras exist -->
+                    <button
+                      v-if="i === 2 && mediaItems.length > 4"
+                      type="button"
+                      class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 text-white text-sm font-semibold backdrop-blur-[2px] hover:bg-black/60 transition-colors"
+                      @click.stop="openLightbox(0)"
+                    >
+                      <SayaIcon name="squares-2x2" class="size-5" />
+                      Show all {{ mediaItems.length }} photos
+                    </button>
+                  </div>
+                </div>
               </div>
+
             </div>
+
 
             <!-- Lightbox -->
             <SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIdx" :items="imageItems" :title="experience.title">
@@ -539,28 +546,6 @@ function handleContactSubmit(contactData: ContactFormState) {
 // look now that this page no longer depends on Nuxt UI (see SayaFormField.vue).
 const inputClass = 'block w-full rounded-lg border border-default bg-default px-3.5 py-2 text-sm text-default placeholder:text-muted focus:border-inverted focus:outline-none focus:ring-1 focus:ring-inverted disabled:opacity-60'
 
-// ── Gallery carousel ────────────────────────────────────────────────────────
-// Native scroll-snap replaces UCarousel/embla — mobile swipe works for free,
-// arrows/dots just scroll the track programmatically.
-const carouselTrack = ref<HTMLElement | null>(null)
-const carouselIndex = ref(0)
-
-function scrollToSlide(index: number) {
-  const track = carouselTrack.value
-  if (!track) return
-  track.scrollTo({ left: track.clientWidth * index, behavior: 'smooth' })
-}
-
-function scrollCarousel(delta: number) {
-  const next = Math.min(Math.max(carouselIndex.value + delta, 0), mediaItems.value.length - 1)
-  scrollToSlide(next)
-}
-
-function onCarouselScroll() {
-  const track = carouselTrack.value
-  if (!track || !track.clientWidth) return
-  carouselIndex.value = Math.round(track.scrollLeft / track.clientWidth)
-}
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
 

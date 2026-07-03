@@ -1,6 +1,5 @@
 export const PLATFORM_ROUTE_PREFIXES = [
   "/docs",
-  "/blog",
   "/login",
   "/signup",
   "/pricing",
@@ -14,6 +13,16 @@ export const PLATFORM_ROUTE_PREFIXES = [
   "/privacy",
   "/terms",
   "/.well-known",
+  "/accept-invitation",
+  "/blog",
+  "/contact",
+  "/dev",
+  "/experiences",
+  "/locations",
+  "/menu",
+  "/preview",
+  "/reservations",
+  "/transfer",
 ];
 
 export function isPlatformPath(pathname: string): boolean {

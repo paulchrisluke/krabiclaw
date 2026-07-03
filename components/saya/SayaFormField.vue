@@ -18,7 +18,8 @@ const props = defineProps<{
   description?: string | null
 }>()
 
-const id = computed(() => `field-${props.name}`)
-const errorId = computed(() => `field-${props.name}-error`)
+const instanceId = useId()
+const id = computed(() => `field-${instanceId}-${props.name}`)
+const errorId = computed(() => `field-${instanceId}-${props.name}-error`)
 const describedBy = computed(() => (props.error ? errorId.value : undefined))
 </script>

@@ -2,6 +2,7 @@
   <div
     class="rounded-2xl border px-4 py-3"
     :class="toneClass"
+    role="alert"
   >
     <div class="flex items-start gap-3">
       <PlatformIcon v-if="iconName" :name="iconName" class="mt-0.5 size-5 shrink-0" />

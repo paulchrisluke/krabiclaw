@@ -6,6 +6,7 @@
       </Transition>
       <Transition name="platform-drawer-slide" appear>
         <div
+          ref="drawerPanel"
           class="relative z-10 flex h-full w-full max-w-xs flex-col bg-default shadow-xl"
           role="dialog"
           aria-modal="true"
@@ -41,6 +42,7 @@ const props = defineProps<{
 const emit = defineEmits<{ 'update:modelValue': [boolean] }>()
 
 const closeButton = ref<HTMLButtonElement | null>(null)
+const drawerPanel = ref<HTMLDivElement | null>(null)
 const previousFocus = ref<HTMLElement | null>(null)
 
 const { acquire: acquireScrollLock, release: releaseScrollLock } = useScrollLock()
@@ -52,12 +54,23 @@ function close() {
 function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && props.modelValue) close()
   
-  // Simple focus trap: Tab/Shift+Tab on close button cycles focus
-  if (event.key === 'Tab' && props.modelValue && closeButton.value) {
-    if (!event.shiftKey && document.activeElement === closeButton.value) {
-      event.preventDefault()
-      closeButton.value.focus()
-    } else if (event.shiftKey && document.activeElement === closeButton.value) {
+  // Focus trap: cycle focus within the drawer panel
+  if (event.key === 'Tab' && props.modelValue && drawerPanel.value) {
+    const focusableElements = drawerPanel.value.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input[type="text"]:not([disabled]), input[type="radio"]:not([disabled]), input[type="checkbox"]:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )
+    if (focusableElements.length > 0) {
+      const firstElement = focusableElements[0]
+      const lastElement = focusableElements[focusableElements.length - 1]
+      
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault()
+        lastElement.focus()
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault()
+        firstElement.focus()
+      }
+    } else if (closeButton.value) {
       event.preventDefault()
       closeButton.value.focus()
     }
