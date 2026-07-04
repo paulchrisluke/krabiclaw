@@ -158,7 +158,7 @@
 
 <script setup lang="ts">
 import { DEFAULT_BUSINESS_NAME } from '~/config/constants'
-import { getTodayGoogleHours } from '~/utils/formatters'
+import { getTodayGoogleHours, getActiveSpecialClosure } from '~/utils/formatters'
 import { getVerticalCopy } from '~/utils/vertical-copy'
 
 interface Site {
@@ -189,6 +189,8 @@ interface PublicLocation {
   phone?: string | null
   email?: string | null
   googleBusinessHours?: ApiValue
+  special_hours?: ApiValue
+  timezone?: string | null
   is_primary?: boolean
   grab_url?: string | null
   uber_eats_url?: string | null
@@ -296,10 +298,11 @@ const locations = computed(() =>
     if (!phone || phone.includes('example.com')) {
       phone = props.site?.config?.phone || null
     }
+    const closure = getActiveSpecialClosure(loc.special_hours, loc.timezone)
     return {
       ...loc,
       phone,
-      hoursToday: loc.googleBusinessHours ? getTodayGoogleHours(loc.googleBusinessHours) : null
+      hoursToday: closure ? 'Temporarily closed' : (loc.googleBusinessHours ? getTodayGoogleHours(loc.googleBusinessHours) : null)
     }
   })
 )

@@ -51,6 +51,14 @@
                 {{ expCopy.soldOutLabel }}
               </span>
             </div>
+            <div
+              v-else-if="isClosed(exp)"
+              class="absolute inset-0 flex items-center justify-center bg-black/50"
+            >
+              <span class="rounded-full bg-white px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-default">
+                Temporarily unavailable
+              </span>
+            </div>
           </div>
 
           <div class="mt-5">
@@ -87,6 +95,7 @@
 
 <script setup lang="ts">
 import type { Experience } from '~/server/utils/experiences'
+import { getActiveSpecialClosure } from '~/utils/formatters'
 
 const { isPlatform, site } = useTenantSite()
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
@@ -95,10 +104,19 @@ const expCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, loc
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 
-const { experiencesList, pending: bootstrapPending, getField } = useBootstrap()
+const { experiencesList, locations, pending: bootstrapPending, getField } = useBootstrap()
 
 const pending = computed(() => !isPlatform && bootstrapPending.value)
 const experiences = computed<Experience[]>(() => experiencesList.value)
+
+// Location ids currently under an active special_hours closure — their
+// experiences still show, badged as unavailable, instead of being hidden.
+const closedLocationIds = computed(() => new Set(
+  (locations.value as ApiRecord[])
+    .filter(loc => getActiveSpecialClosure(loc.special_hours, loc.timezone))
+    .map(loc => loc.id)
+))
+const isClosed = (exp: Experience) => !!exp.location_id && closedLocationIds.value.has(exp.location_id)
 const heroKicker = computed(() => getField('hero.kicker', 'Experiences') || 'Experiences')
 const heroTitle = computed(() => getField('hero.title', expCopy.value.experiencesPageTitle) || expCopy.value.experiencesPageTitle)
 const heroSubtitle = computed(() => getField('hero.subtitle', expCopy.value.experiencesPageSubtitle) || expCopy.value.experiencesPageSubtitle)

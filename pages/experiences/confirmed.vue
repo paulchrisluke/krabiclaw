@@ -1,66 +1,56 @@
 <template>
   <div class="min-h-screen bg-default text-default">
-    <div class="mx-auto max-w-xl px-4 pt-16 pb-24 sm:px-6 lg:px-8">
-      <template v-if="confirmation">
-        <div class="rounded-3xl border border-default bg-elevated p-10 text-center shadow-sm sm:p-12">
-          <div class="mb-8 flex justify-center">
-            <div class="flex size-20 items-center justify-center rounded-full bg-primary/10">
-              <SayaIcon name="check-circle" class="size-12 text-primary" />
-            </div>
-          </div>
-
-          <h1 class="saya-display saya-italic text-4xl text-default">You're booked, {{ confirmation.guestName }}!</h1>
-          <p class="mt-4 text-muted">{{ confirmation.message }}</p>
-
-          <div class="mt-8 space-y-2 rounded-2xl border border-default bg-default px-6 py-5 text-left text-sm">
-            <p v-if="confirmation.title"><strong class="text-default">Experience:</strong> {{ confirmation.title }}</p>
-            <p><strong class="text-default">Date:</strong> {{ readableDate }}</p>
-            <p><strong class="text-default">Time:</strong> {{ confirmation.time }}</p>
-            <p><strong class="text-default">Guests:</strong> {{ confirmation.guests }}</p>
-          </div>
-
-          <div v-if="confirmation.requests" class="mt-6 rounded-2xl border border-default bg-default px-6 py-5 text-left">
-            <p class="saya-eyebrow mb-1 text-muted">Special requests</p>
-            <p class="text-sm text-default">{{ confirmation.requests }}</p>
-          </div>
-
-          <div class="mt-8 flex flex-col gap-3">
-            <SayaButton variant="soft" @click="share">
-              <SayaIcon name="share" class="mr-1.5 size-4" />
-              {{ justCopied ? 'Copied!' : 'Share' }}
-            </SayaButton>
-            <SayaButton
-              v-if="confirmation.contactPhone"
-              :href="`tel:${confirmation.contactPhone.replace(/\s/g, '')}`"
-              variant="soft"
-            >
-              Call us: {{ confirmation.contactPhone }}
-            </SayaButton>
-            <SayaButton to="/experiences" variant="ghost" size="md">Browse more experiences</SayaButton>
-          </div>
-        </div>
+    <BookingConfirmation
+      v-if="confirmation"
+      kicker="Request received"
+      receipt-kicker="Your booking"
+      :receipt-rows="receiptRows"
+      :next-steps-kicker="resolvedPolicySummary?.heading ?? 'Experience policies'"
+      :next-steps="policyLines"
+      :next-steps-notes-html="resolvedPolicySummary?.additional_notes_html ?? ''"
+      :cta-label="confirmation.locationSlug ? 'Browse the menu' : 'Browse more experiences'"
+      :cta-to="confirmation.locationSlug ? `/locations/${confirmation.locationSlug}/menu` : '/experiences'"
+    >
+      <template #title>
+        You're booked, {{ confirmation.guestName }}!
       </template>
+      <template #subtitle>
+        {{ confirmation.message }}
+      </template>
+      <template #actions>
+        <SayaButton variant="soft" @click="share">
+          <SayaIcon name="share" class="mr-1.5 size-4" />
+          {{ justCopied ? 'Copied!' : 'Share' }}
+        </SayaButton>
+        <SayaButton v-if="confirmation.contactPhone" :href="`tel:${confirmation.contactPhone.replace(/\s/g, '')}`" variant="outline">
+          Call us: {{ confirmation.contactPhone }}
+        </SayaButton>
+      </template>
+    </BookingConfirmation>
 
-      <div v-else class="rounded-3xl border border-default bg-muted/20 p-12 text-center">
-        <SayaIcon name="exclamation-triangle" class="mx-auto size-12 text-error" />
-        <h2 class="mt-6 text-xl font-bold">No booking found</h2>
-        <p class="mt-2 text-muted">We couldn't find a confirmation to show. Check your email for the details.</p>
-        <SayaButton to="/experiences" variant="soft" class="mt-10">Browse experiences</SayaButton>
-      </div>
+    <div v-else class="mx-auto max-w-xl px-4 pt-24 pb-24 text-center sm:px-6 lg:px-8">
+      <SayaIcon name="exclamation-triangle" class="mx-auto size-12 text-error" />
+      <h2 class="mt-6 text-xl font-bold">No booking found</h2>
+      <p class="mt-2 text-muted">We couldn't find a confirmation to show. Check your email for the details.</p>
+      <SayaButton to="/experiences" variant="soft" class="mt-10">Browse experiences</SayaButton>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { getBookingConfirmation, type BookingConfirmation } from '~/composables/useBookingHandoff'
+import { getBookingConfirmation, type BookingConfirmation as BookingConfirmationData } from '~/composables/useBookingHandoff'
+import BookingConfirmation from '~/components/booking/BookingConfirmation.vue'
+import { fmt12Hour } from '~/shared/reservation-hours'
+import type { RenderedBookingPolicySummaryItem } from '~/server/utils/booking-policies'
 
 definePageMeta({ layout: 'saya' })
 
 const { formatDate } = useLocaleDate()
 const justCopied = ref(false)
 const { siteId } = useTenantSite()
+const { experiencePolicyById, experiencePolicySiteDefault } = useBootstrap()
 
-const confirmation = ref<BookingConfirmation | null>(null)
+const confirmation = ref<BookingConfirmationData | null>(null)
 
 onMounted(() => {
   if (!siteId) return
@@ -73,9 +63,35 @@ const readableDate = computed(() => {
   return formatDate(`${confirmation.value.date}T12:00:00`)
 })
 
+const receiptRows = computed(() => {
+  if (!confirmation.value) return []
+  const rows: Array<{ label: string; value: string }> = []
+  if (confirmation.value.title) rows.push({ label: 'Experience', value: confirmation.value.title })
+  if (confirmation.value.locationName) rows.push({ label: 'Location', value: confirmation.value.locationName })
+  rows.push({ label: 'Date', value: readableDate.value })
+  rows.push({ label: 'Time', value: fmt12Hour(confirmation.value.time) })
+  rows.push({ label: 'Guests', value: String(confirmation.value.guests) })
+  if (confirmation.value.requests) rows.push({ label: 'Requests', value: confirmation.value.requests })
+  return rows
+})
+
+// Fallback used only when the /experiences/confirmed bootstrap call has no
+// experience-scoped data to resolve a policy for (this route has no slug param,
+// so experiencePolicyById is typically empty) — experiencePolicySiteDefault is
+// the server-rendered site-level default policy (server/utils/booking-policies.ts),
+// so this never duplicates policy copy on the client.
+const resolvedPolicySummary = computed(() => {
+  if (confirmation.value?.sitePolicySummary) return confirmation.value.sitePolicySummary as ApiRecord
+  const experienceId = confirmation.value?.experienceId
+  if (experienceId && experiencePolicyById.value[experienceId]) return experiencePolicyById.value[experienceId]
+  return experiencePolicySiteDefault.value as ApiRecord | null
+})
+
+const policyLines = computed(() => (resolvedPolicySummary.value?.items ?? []).map((item: RenderedBookingPolicySummaryItem) => String(item.text ?? '')))
+
 async function share() {
   if (!confirmation.value) return
-  const text = `I'm booked for ${confirmation.value.title ?? confirmation.value.siteName} on ${readableDate.value} at ${confirmation.value.time}.`
+  const text = `I'm booked for ${confirmation.value.title ?? confirmation.value.siteName} on ${readableDate.value} at ${fmt12Hour(confirmation.value.time)}.`
   if (import.meta.client && navigator.share) {
     try {
       await navigator.share({ title: 'Booking confirmed', text, url: window.location.origin })

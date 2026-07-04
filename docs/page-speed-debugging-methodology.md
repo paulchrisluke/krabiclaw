@@ -205,6 +205,51 @@ Follow-up harness cleanup on July 3, 2026:
   into separate `~2.8KB` to `~4.3KB` files.
 - Re-measure `text-no-icons` on preview after this deploy before drawing new
   conclusions about the remaining shared-entry floor.
+- A follow-up production check found the first deploy after that split was still
+  invalid for shell modes: `components/dev-perf` was not registered in
+  `nuxt.config.ts`, so `platform-shell`, `saya-header`, `saya-footer`, and
+  `saya-shell` SSR'd to `<!---->` comments on production even though
+  `text-no-icons` rendered correctly.
+- After registering `components/dev-perf` and redeploying production on July 3,
+  2026, the shell probes rendered real SSR HTML again and the prod matrix became
+  trustworthy.
+
+Production rerun on July 3, 2026 after fixing the SSR-invalid shell harness
+and averaging 3 Lighthouse runs per mode:
+
+| Route / mode | Avg perf | Avg LCP | Avg FCP | Avg TBT | Avg Transfer |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `/dev/perf-text?mode=text-no-icons` | 0.963 | 1.58s | 1.58s | 5.7ms | 307.2KB |
+| `/dev/perf-text?mode=platform-shell` | 0.947 | 1.85s | 1.65s | 11.0ms | 353.0KB |
+| `/dev/perf-text?mode=saya-header` | 0.950 | 1.36s | 1.36s | 18.8ms | 318.3KB |
+| `/dev/perf-text?mode=saya-footer` | 0.967 | 1.42s | 1.42s | 19.5ms | 325.1KB |
+| `/dev/perf-text?mode=saya-shell` | 0.940 | 1.88s | 1.88s | 28.5ms | 327.7KB |
+
+Interpretation:
+
+- The public-surface cleanup was load-bearing. Relative to the old July 2
+  production snapshot, `platform-shell` dropped from `543.3KB` to `353.0KB`
+  transfer and `saya-shell` dropped from `597.3KB` to `327.7KB`.
+- With the harness fixed, current public-shell overhead is much smaller than the
+  old Nuxt-UI-heavy baseline implied.
+- Current average transfer deltas versus `text-no-icons` are:
+  `platform-shell +45.8KB`, `saya-header +11.1KB`, `saya-footer +17.9KB`,
+  `saya-shell +20.5KB`.
+
+Platform-shell attribution on the July 3 production build:
+
+- `text-no-icons` preloaded 2 JS files on production.
+- `platform-shell` preloaded those same 2 files plus 9 extra JS files.
+- The main remaining platform-shell-specific cost was the real public shell, not
+  a mysterious extra shared chunk:
+  `PlatformHeader` chunk about `41.4KB`,
+  `PlatformIcon` chunk about `7.1KB`,
+  `PlatformFooter` chunk about `2.7KB`,
+  `PerfTextModePlatformShell` wrapper about `1.3KB`,
+  `UTheme` support chunks about `2.3KB` combined,
+  plus a few tiny glue chunks under `0.5KB` each.
+- In other words, the dominant remaining `platform-shell` delta is still the
+  header tree, with footer and theme/runtime support as secondary costs.
 
 ## Evidence Needed Before A Change Request
 

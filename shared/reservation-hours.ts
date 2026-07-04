@@ -60,3 +60,53 @@ export function generateReservationTimes(
   }
   return [...new Set(slots)].sort()
 }
+
+/** "HH:MM" (24h) → "3:00 PM" / "3:30 PM" (12h, no leading hour zero, always show minutes). */
+export const fmt12Hour = (timeStr: string): string => {
+  const [hStr, mStr] = timeStr.split(':')
+  const h = Number(hStr)
+  const m = Number(mStr)
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  const h12 = h % 12 || 12
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+}
+
+/**
+ * Today's opening hours as a display label (e.g. "11:30 AM – 10:30 PM"), or the provided
+ * closedLabel when the location has structured hours but isn't open today. Returns null when
+ * the location has no structured opening_hours to read (e.g. Google Places free-text hours).
+ */
+export function getTodayHoursLabel(openingHours: unknown, closedLabel: string, now = new Date()): string | null {
+  if (!isStructuredOpeningHours(openingHours)) return null
+  const weekdayName = WEEKDAY_BY_INDEX[now.getDay()]!
+  const todaysEntry = openingHours.find(entry => entry.openDay.toUpperCase() === weekdayName)
+  if (!todaysEntry) return closedLabel
+  return `${fmt12Hour(todaysEntry.openTime)} – ${fmt12Hour(todaysEntry.closeTime)}`
+}
+
+/**
+ * Whether the location is open right now, based on structured opening_hours. Returns false
+ * (rather than throwing) when hours aren't structured — callers should treat that as "unknown"
+ * and avoid rendering an open/closed badge at all rather than trusting a false negative.
+ * Handles overnight hours by treating ranges where closeTime <= openTime as spanning midnight.
+ */
+export function isOpenNow(openingHours: unknown, now = new Date()): boolean {
+  if (!isStructuredOpeningHours(openingHours)) return false
+  const weekdayName = WEEKDAY_BY_INDEX[now.getDay()]!
+  const previousWeekdayName = WEEKDAY_BY_INDEX[(now.getDay() + 6) % 7]!
+  const nowMinutes = now.getHours() * 60 + now.getMinutes()
+  return openingHours.some(entry => {
+    const open = toMinutes(entry.openTime)
+    const close = toMinutes(entry.closeTime)
+    const entryDay = entry.openDay.toUpperCase()
+    // Overnight hours: close time is earlier than or equal to open time. An entry opening
+    // yesterday (e.g. Monday 22:00-02:00) is still active after midnight into today.
+    if (close <= open) {
+      if (entryDay === weekdayName && nowMinutes >= open) return true
+      if (entryDay === previousWeekdayName && nowMinutes < close) return true
+      return false
+    }
+    if (entryDay !== weekdayName) return false
+    return nowMinutes >= open && nowMinutes < close
+  })
+}

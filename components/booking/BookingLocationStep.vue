@@ -2,7 +2,7 @@
   <div class="booking-location-step">
     <div
       class="grid gap-3"
-      :class="locations.length === 1 ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'"
+      :class="locations.length === 1 ? 'grid-cols-1' : 'grid-cols-2'"
     >
       <button
         v-for="loc in locations"
@@ -11,18 +11,35 @@
         class="group relative flex flex-col text-left rounded-xl border transition-all overflow-hidden"
         :class="[
           modelValue === loc.id
-            ? 'border-black dark:border-white ring-1 ring-black dark:ring-white'
-            : 'border-default hover:border-black/40 dark:hover:border-white/40'
+            ? 'border-primary ring-1 ring-primary'
+            : 'border-default hover:border-primary/40'
         ]"
         @click="$emit('update:modelValue', loc.id)"
       >
         <!-- Location image if available -->
-        <div v-if="loc.image_url" class="aspect-[16/7] w-full overflow-hidden bg-muted shrink-0">
+        <div v-if="loc.public_url" class="aspect-16/7 w-full overflow-hidden bg-muted shrink-0">
           <img
-            :src="loc.image_url ?? ''"
+            v-if="loc.kind === 'image'"
+            :src="loc.public_url ?? ''"
             :alt="loc.title ?? ''"
             class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
           />
+          <div
+            v-else-if="loc.kind === 'video'"
+            class="relative h-full w-full bg-muted"
+          >
+            <img
+              v-if="loc.thumbnail_url"
+              :src="loc.thumbnail_url"
+              :alt="loc.title ?? ''"
+              class="h-full w-full object-cover"
+            />
+            <div class="absolute inset-0 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" class="w-12 h-12" :class="loc.thumbnail_url ? 'text-white drop-shadow' : 'text-muted'" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+            </div>
+          </div>
         </div>
 
         <div class="p-4 flex flex-col gap-1.5">
@@ -32,12 +49,12 @@
             <div
               class="shrink-0 mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors"
               :class="modelValue === loc.id
-                ? 'border-black dark:border-white bg-black dark:bg-white'
+                ? 'border-primary bg-primary'
                 : 'border-default'"
             >
               <svg
                 v-if="modelValue === loc.id"
-                class="w-2.5 h-2.5 text-white dark:text-black"
+                class="w-2.5 h-2.5 text-(--brand-color-foreground)"
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 12 12"
                 fill="none"
@@ -57,8 +74,8 @@
           </p>
 
           <!-- Today's hours -->
-          <p v-if="todayHours(loc)" class="text-sm text-muted">
-            <span class="text-default font-medium">Today: </span>{{ todayHours(loc) }}
+          <p v-if="getTodayHoursLabel(loc.opening_hours, 'Closed')" class="text-sm text-muted">
+            <span class="text-default font-medium">Today: </span>{{ getTodayHoursLabel(loc.opening_hours, 'Closed') }}
           </p>
 
           <!-- Phone -->
@@ -69,27 +86,24 @@
 
     <!-- Continue button -->
     <div class="pt-6">
-      <button
-        type="button"
-        class="w-full py-3 px-4 rounded-xl text-white bg-black dark:bg-white dark:text-black font-semibold text-[15px] shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-        :disabled="!modelValue"
-        @click="$emit('next')"
-      >
+      <SayaButton size="lg" block :disabled="!modelValue" @click="$emit('next')">
         Continue
-      </button>
+      </SayaButton>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { isStructuredOpeningHours } from '@/shared/reservation-hours'
+import { getTodayHoursLabel } from '@/shared/reservation-hours'
 
 export interface BookingLocation {
   id: string
   title?: string | null
   address?: unknown
   phone?: string | null
-  image_url?: string | null
+  public_url?: string | null
+  kind?: 'image' | 'video' | null
+  thumbnail_url?: string | null
   opening_hours?: unknown
 }
 
@@ -113,23 +127,4 @@ function formatAddress(address: unknown): string {
     .join(', ')
 }
 
-const WEEKDAYS = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
-
-function todayHours(loc: BookingLocation): string | null {
-  const hours = loc.opening_hours
-  if (!isStructuredOpeningHours(hours)) return null
-  const today = WEEKDAYS[new Date().getDay()]
-  const todaysEntry = hours.find(e => e.openDay.toUpperCase() === today)
-  if (!todaysEntry) return 'Closed today'
-  return `${fmt12(todaysEntry.openTime)} – ${fmt12(todaysEntry.closeTime)}`
-}
-
-function fmt12(timeStr: string): string {
-  const parts = timeStr.split(':')
-  const h = parseInt(parts[0] ?? '0', 10)
-  const m = parseInt(parts[1] ?? '0', 10)
-  const ampm = h >= 12 ? 'PM' : 'AM'
-  const h12 = h % 12 || 12
-  return m === 0 ? `${h12} ${ampm}` : `${h12}:${String(m).padStart(2, '0')} ${ampm}`
-}
 </script>

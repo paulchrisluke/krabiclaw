@@ -45,13 +45,93 @@ interface GoogleDate {
 
 interface GoogleSpecialPeriod {
   startDate: GoogleDate
+  endDate?: GoogleDate
   isClosed?: boolean
   openTime?: GoogleTime
   closeTime?: GoogleTime
+  note?: string
 }
 
 interface GoogleSpecialHours {
   specialHourPeriods?: GoogleSpecialPeriod[]
+}
+
+function compareGoogleDates(a: GoogleDate, b: GoogleDate): number {
+  if (a.year !== b.year) return a.year - b.year
+  if (a.month !== b.month) return a.month - b.month
+  return a.day - b.day
+}
+
+// Resolves "today" as a calendar date in the location's own timezone, since a
+// closure spanning e.g. "July 4 - July 18" must compare against the
+// location's local date, not the server's or visitor's.
+function todayInTimezone(timezone?: string | null): GoogleDate {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone || undefined,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date())
+    const get = (type: string) => Number(parts.find(p => p.type === type)?.value)
+    return { year: get('year'), month: get('month'), day: get('day') }
+  } catch {
+    const now = new Date()
+    return { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() }
+  }
+}
+
+export const formatGoogleDate = (date: GoogleDate): string => {
+  const d = new Date(Date.UTC(date.year, date.month - 1, date.day))
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+}
+
+// Finds an active date-specific closure/special-hours period for "today" in the
+// location's timezone. special_hours is stored as { specialHourPeriods: [...] },
+// possibly JSON-stringified. Returns undefined when no closure is currently active.
+export const getActiveSpecialClosure = (
+  specialHours: string | GoogleSpecialHours | null | undefined,
+  timezone?: string | null,
+  todayOverride?: GoogleDate,
+): GoogleSpecialPeriod | undefined => {
+  if (!specialHours) return undefined
+  let parsed: GoogleSpecialHours | null = null
+  if (typeof specialHours === 'string') {
+    try {
+      parsed = JSON.parse(specialHours)
+    } catch {
+      return undefined
+    }
+  } else {
+    parsed = specialHours
+  }
+
+  const periods = parsed?.specialHourPeriods ?? []
+  if (!periods.length) return undefined
+
+  const today = todayOverride ?? todayInTimezone(timezone)
+
+  return periods.find((period) => {
+    if (!period.isClosed || !period.startDate) return false
+    const end = period.endDate ?? period.startDate
+    return compareGoogleDates(today, period.startDate) >= 0 && compareGoogleDates(today, end) <= 0
+  })
+}
+
+// Guest-facing message for an active closure, e.g. "Temporarily closed —
+// reopening July 18, 2026". Shared by the location page banner and by
+// anything (experience cards/detail) that needs to explain why booking is
+// unavailable for a location currently under a special_hours closure.
+export const formatClosureMessage = (closure: GoogleSpecialPeriod | null | undefined): string | null => {
+  if (!closure) return null
+  if (closure.note) return closure.note
+  if (!closure.endDate) return 'Temporarily closed until further notice'
+  // endDate is the last closed day (getActiveSpecialClosure treats the range as
+  // inclusive), so the location reopens the day after it, not on it.
+  const e = closure.endDate
+  const next = new Date(Date.UTC(e.year, e.month - 1, e.day + 1))
+  const reopenDate = { year: next.getUTCFullYear(), month: next.getUTCMonth() + 1, day: next.getUTCDate() }
+  return `Temporarily closed — reopening ${formatGoogleDate(reopenDate)}`
 }
 
 export const formatGoogleHours = (regularHours: GoogleRegularHours | GoogleRegularPeriod[] | null | undefined) => {

@@ -67,6 +67,16 @@ import {
   type WeekdayName,
 } from "~/server/utils/experiences";
 import {
+  applyBookingPolicyPatch,
+  getDirectBookingPolicy,
+  renderBookingPolicySummary,
+  resolveBookingPolicy,
+  upsertBookingPolicy,
+  validateBookingPolicyPatch,
+  type BookingPolicyScopeType,
+  type BookingPolicyType,
+} from "~/server/utils/booking-policies";
+import {
   buildTranslationInventory,
   createTranslationJob,
   publishTranslationDrafts,
@@ -2679,6 +2689,79 @@ export async function executeMcpToolCall(
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
+    case "get_booking_policy": {
+      const policyType = requiredString(args, "policy_type") as BookingPolicyType;
+      const scopeType = (optionalString(args, "scope_type") ?? "site") as BookingPolicyScopeType;
+      const locationId = optionalString(args, "location_id");
+      const experienceId = optionalString(args, "experience_id");
+      const locale = optionalString(args, "locale") ?? "en";
+      const policy = await getDirectBookingPolicy(site.db, {
+        siteId: site.siteId,
+        policyType,
+        scopeType,
+        locationId,
+        experienceId,
+      });
+      const resolvedPolicy = await resolveBookingPolicy(site.db, {
+        siteId: site.siteId,
+        policyType,
+        locationId,
+        experienceId,
+      });
+      return {
+        policy,
+        resolved_policy: resolvedPolicy,
+        summary: renderBookingPolicySummary(resolvedPolicy, locale),
+      };
+    }
+    case "preview_booking_policy": {
+      const policyType = requiredString(args, "policy_type") as BookingPolicyType;
+      const locationId = optionalString(args, "location_id");
+      const experienceId = optionalString(args, "experience_id");
+      const locale = optionalString(args, "locale") ?? "en";
+      const resolvedPolicy = await resolveBookingPolicy(site.db, {
+        siteId: site.siteId,
+        policyType,
+        locationId,
+        experienceId,
+      });
+      const preview = applyBookingPolicyPatch(
+        resolvedPolicy,
+        await validateBookingPolicyPatch(args as Record<string, unknown>, policyType),
+      );
+      return {
+        resolved_policy: preview,
+        summary: renderBookingPolicySummary(preview, locale),
+      };
+    }
+    case "update_booking_policy": {
+      const policyType = requiredString(args, "policy_type") as BookingPolicyType;
+      const scopeType = (optionalString(args, "scope_type") ?? "site") as BookingPolicyScopeType;
+      const locationId = optionalString(args, "location_id");
+      const experienceId = optionalString(args, "experience_id");
+      const locale = optionalString(args, "locale") ?? "en";
+      const policy = await upsertBookingPolicy(site.db, {
+        organizationId: site.organizationId,
+        siteId: site.siteId,
+        policyType,
+        scopeType,
+        locationId,
+        experienceId,
+        patch: await validateBookingPolicyPatch(args as Record<string, unknown>, policyType),
+      });
+      const resolvedPolicy = await resolveBookingPolicy(site.db, {
+        siteId: site.siteId,
+        policyType,
+        locationId,
+        experienceId,
+      });
+      return {
+        policy,
+        resolved_policy: resolvedPolicy,
+        summary: renderBookingPolicySummary(resolvedPolicy, locale),
+        context: await mutationContextPayload(site, { locationId }),
+      };
+    }
     case "update_home_hero":
       try {
         const locationId = optionalString(args, "location_id");

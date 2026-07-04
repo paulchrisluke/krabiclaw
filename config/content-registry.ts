@@ -1,6 +1,6 @@
 export type FieldSource = 'manual' | 'google' | 'static' | 'computed'
 
-export type FieldDefinition = TextField | TextareaField | RichTextField | ImageField | MediaField | MenuItemsField | BusinessHoursField | LocationField | ProductsField;
+export type FieldDefinition = TextField | TextareaField | RichTextField | ImageField | MediaField | MenuItemsField | BusinessHoursField | LocationField | ProductsField | BookingPolicyField;
 export type FieldType = FieldDefinition;
 
 interface BaseField {
@@ -43,6 +43,10 @@ export interface LocationField extends BaseField {
 }
 export interface ProductsField extends BaseField {
   type: 'products';
+}
+export interface BookingPolicyField extends BaseField {
+  type: 'booking_policy';
+  policyType: 'reservation' | 'experience';
 }
 
 export interface ManualInputConfig {
@@ -521,11 +525,11 @@ export const contentRegistry: Record<string, PageDefinition> = {
     fields: {
       'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Reservations' },
       'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Plan your visit with us.' },
-      'policies.body': {
+      'policies.structured': {
         label: 'Reservation Policies',
-        type: 'richtext',
+        type: 'booking_policy',
+        policyType: 'reservation',
         sources: ['manual'],
-        defaultValue: '<ul><li>Reservations are held for 15 minutes</li><li>Cancellations required 2 hours in advance</li><li>Large parties (6+ guests) may require deposit</li><li>Special dietary requests accommodated with advance notice</li></ul>'
       },
       'contact.phone': {
         label: 'Contact Phone',

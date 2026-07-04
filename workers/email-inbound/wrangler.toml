@@ -1,0 +1,12 @@
+name = "krabiclaw-email-inbound"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# INBOUND_API_URL (e.g. https://krabiclaw.com/api/email/inbound) and EMAIL_INBOUND_SECRET
+# (shared with the main app's EMAIL_INBOUND_SECRET) are set via `wrangler secret put`, not here.
+#
+# This Worker is only reachable by a Cloudflare Email Routing catch-all rule on the
+# reply.<platform-domain> subdomain (e.g. reply.krabiclaw.com, derived from
+# NUXT_PUBLIC_PLATFORM_DOMAIN — no separate domain env var) — configured in the Cloudflare
+# dashboard (Email > Email Routing), not in this file. There is no `[[routes]]` entry because
+# this Worker is never invoked over HTTP directly.

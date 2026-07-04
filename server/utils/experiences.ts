@@ -35,7 +35,6 @@ export interface Experience {
   included_items: string[]
   what_to_bring: string[]
   meeting_point: string | null
-  cancellation_policy: string | null
   status: 'active' | 'inactive' | 'sold_out'
   sort_order: number
   featured: boolean
@@ -74,7 +73,6 @@ interface ExperienceRow {
   included_items: string | null
   what_to_bring: string | null
   meeting_point: string | null
-  cancellation_policy: string | null
   status: string
   sort_order: number
   featured: number
@@ -122,7 +120,6 @@ function parseRow(row: ExperienceRow): Experience {
     included_items: parseStringArray(row.included_items),
     what_to_bring: parseStringArray(row.what_to_bring),
     meeting_point: row.meeting_point ?? null,
-    cancellation_policy: row.cancellation_policy ?? null,
     time_slots,
     recurring_slots,
     images,
@@ -135,7 +132,7 @@ const SELECT = `
          e.title, e.slug, e.tagline, e.body, e.image_asset_id,
          e.video_asset_id, e.images,
          e.price, e.price_amount, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
-         e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point, e.cancellation_policy, e.status, e.sort_order,
+         e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point, e.status, e.sort_order,
          e.featured, e.featured_sort_order,
          e.seo_title, e.seo_description, e.created_at, e.updated_at,
          img.public_url AS image_url,
@@ -233,7 +230,6 @@ export interface CreateExperienceInput {
   included_items?: string[] | null
   what_to_bring?: string[] | null
   meeting_point?: string | null
-  cancellation_policy?: string | null
   status?: ExperienceStatus
   sort_order?: number
   featured?: boolean
@@ -378,9 +374,9 @@ export async function createExperience(
     `INSERT INTO experiences
        (id, organization_id, site_id, location_id, title, slug, tagline, body,
         image_asset_id, video_asset_id, images, price, price_amount, duration_minutes, max_capacity, time_slots, recurring_slots,
-        available_note, highlights, included_items, what_to_bring, meeting_point, cancellation_policy, status, sort_order, featured, featured_sort_order,
+        available_note, highlights, included_items, what_to_bring, meeting_point, status, sort_order, featured, featured_sort_order,
         seo_title, seo_description, created_at, updated_at, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id, organizationId, siteId,
       input.location_id,
@@ -402,7 +398,6 @@ export async function createExperience(
       includedItemsJson,
       whatToBringJson,
       input.meeting_point ?? null,
-      input.cancellation_policy ?? null,
       status,
       input.sort_order ?? 0,
       input.featured ? 1 : 0,
@@ -474,7 +469,6 @@ export async function updateExperience(
   if (input.included_items !== undefined) { sets.push('included_items = ?'); params.push(input.included_items?.length ? JSON.stringify(input.included_items) : null) }
   if (input.what_to_bring !== undefined) { sets.push('what_to_bring = ?'); params.push(input.what_to_bring?.length ? JSON.stringify(input.what_to_bring) : null) }
   if (input.meeting_point !== undefined) { sets.push('meeting_point = ?'); params.push(input.meeting_point ?? null) }
-  if (input.cancellation_policy !== undefined) { sets.push('cancellation_policy = ?'); params.push(input.cancellation_policy ?? null) }
   if (input.status !== undefined) {
     sets.push('status = ?')
     params.push(assertExperienceStatus(input.status, 'status'))
@@ -527,7 +521,7 @@ export interface ExperienceBooking {
   experience_id: string
   organization_id: string
   site_id: string
-  location_id: string | null
+  location_id: string
   location_title?: string | null
   guest_name: string
   guest_email: string
@@ -555,7 +549,7 @@ export async function createExperienceBooking(
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id, input.experience_id, input.organization_id, input.site_id,
-      input.location_id ?? null,
+      input.location_id,
       input.guest_name, input.guest_email, input.guest_phone ?? null,
       input.party_size, input.booking_date, input.time_slot,
       input.status ?? 'pending', input.notes ?? null, input.ip_hash ?? null,
@@ -588,22 +582,51 @@ export async function listExperienceBookings(
   const params = [siteId, experienceId]
   let where = `eb.site_id = ? AND eb.experience_id = ?`
   if (opts.locationId) {
-    where += ` AND COALESCE(eb.location_id, e.location_id) = ?`
+    where += ` AND eb.location_id = ?`
     params.push(opts.locationId)
   }
   const results = await queryAll<ExperienceBooking>(
     db,
     `SELECT eb.id, eb.experience_id, eb.organization_id, eb.site_id,
-              COALESCE(eb.location_id, e.location_id) AS location_id,
+              eb.location_id,
               bl.title AS location_title,
               eb.guest_name, eb.guest_email,
               eb.guest_phone, eb.party_size, eb.booking_date, eb.time_slot,
               eb.status, eb.notes, eb.created_at, eb.updated_at
 	       FROM experience_bookings eb
-	       LEFT JOIN experiences e ON e.id = eb.experience_id AND e.site_id = eb.site_id
-	       LEFT JOIN business_locations bl ON bl.id = COALESCE(eb.location_id, e.location_id)
+	       LEFT JOIN business_locations bl ON bl.id = eb.location_id
 	       WHERE ${where}
 	       ORDER BY eb.booking_date ASC, eb.time_slot ASC, eb.created_at ASC`,
+    params,
+  )
+  return results ?? []
+}
+
+export async function listExperienceBookingsForSite(
+  db: DbClient,
+  siteId: string,
+  opts: { locationId?: string | null } = {},
+): Promise<ExperienceBooking[]> {
+  const params: string[] = [siteId]
+  let where = `eb.site_id = ?`
+  if (opts.locationId) {
+    where += ` AND eb.location_id = ?`
+    params.push(opts.locationId)
+  }
+  const results = await queryAll<ExperienceBooking & { experience_title?: string | null }>(
+    db,
+    `SELECT eb.id, eb.experience_id, eb.organization_id, eb.site_id,
+              eb.location_id,
+              bl.title AS location_title,
+              e.title AS experience_title,
+              eb.guest_name, eb.guest_email,
+              eb.guest_phone, eb.party_size, eb.booking_date, eb.time_slot,
+              eb.status, eb.notes, eb.created_at, eb.updated_at
+	       FROM experience_bookings eb
+	       LEFT JOIN business_locations bl ON bl.id = eb.location_id
+	       LEFT JOIN experiences e ON e.id = eb.experience_id
+	       WHERE ${where}
+	       ORDER BY eb.created_at DESC`,
     params,
   )
   return results ?? []
@@ -622,6 +645,21 @@ export async function updateBookingStatus(
     `UPDATE experience_bookings SET status = ?, updated_at = ?
        WHERE site_id = ? AND experience_id = ? AND id = ?`,
     [status, new Date().toISOString(), siteId, experienceId, bookingId],
+  )
+  return Boolean(result.meta.changes)
+}
+
+export async function updateBookingStatusForSite(
+  db: DbClient,
+  siteId: string,
+  bookingId: string,
+  status: 'pending' | 'confirmed' | 'cancelled',
+): Promise<boolean> {
+  const result = await execute(
+    db,
+    `UPDATE experience_bookings SET status = ?, updated_at = ?
+       WHERE site_id = ? AND id = ?`,
+    [status, new Date().toISOString(), siteId, bookingId],
   )
   return Boolean(result.meta.changes)
 }

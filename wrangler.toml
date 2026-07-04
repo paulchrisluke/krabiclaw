@@ -31,6 +31,11 @@ NUXT_PUBLIC_PLATFORM_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "KrabiClaw"
 GA4_MEASUREMENT_ID = "G-NJ1BSP9BYG"
+# Production is the only environment that should send real email/WhatsApp — made explicit
+# here rather than relying on getEmailDeliveryMode/getWhatsAppDeliveryMode's default, since
+# that default now fails closed (log_only) precisely so a missing var elsewhere never sends real messages.
+EMAIL_DELIVERY_MODE = "provider"
+WHATSAPP_DELIVERY_MODE = "provider"
 # Internal cron/API endpoints use CRON_SECRET:
 #   yarn wrangler secret put CRON_SECRET
 # GA4_API_SECRET (Measurement Protocol) is a secret, not a var:
@@ -43,6 +48,17 @@ GA4_MEASUREMENT_ID = "G-NJ1BSP9BYG"
 # PREVIEW_SECRET_STAGING repo secrets on every run (see .github/workflows/ci.yml);
 # production is set once manually and not touched by CI:
 #   yarn wrangler secret put PREVIEW_SECRET
+# EMAIL_REPLY_SECRET signs reply+<type>-<id>-<token>@reply.<platform-domain> addresses
+# (server/utils/submission-messages.ts) so a customer's inbound reply can be matched back to the
+# right reservation/contact/experience-booking thread without a DB lookup by address alone.
+# EMAIL_INBOUND_SECRET authenticates the separate krabiclaw-email-inbound Worker
+# (workers/email-inbound/) calling POST /api/email/inbound. Both must stay stable across
+# deploys — rotating them invalidates reply-to addresses already sent out in guest emails.
+# staging syncs from the fixed EMAIL_REPLY_SECRET_STAGING / EMAIL_INBOUND_SECRET_STAGING repo
+# secrets on every run (see .github/workflows/ci.yml); production is set once manually and not
+# touched by CI:
+#   yarn wrangler secret put EMAIL_REPLY_SECRET
+#   yarn wrangler secret put EMAIL_INBOUND_SECRET
 
 [[d1_databases]]
 binding = "DB"
@@ -63,6 +79,7 @@ remote = false
 
 [ai]
 binding = "AI"
+remote = false
 
 [observability]
 enabled = true
@@ -114,6 +131,7 @@ remote = false
 
 [env.preview.ai]
 binding = "AI"
+remote = false
 
 [env.preview.observability]
 enabled = false
@@ -158,6 +176,7 @@ remote = false
 
 [env.staging.ai]
 binding = "AI"
+remote = false
 
 [env.staging.observability]
 enabled = true

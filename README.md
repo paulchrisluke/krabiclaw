@@ -10,7 +10,7 @@ Multi-tenant restaurant SaaS. Nuxt 4 + Cloudflare Pages + D1.
 
 | Command | What it does |
 |---|---|
-| `yarn dev` | Dev server (localhost:3000). Full D1 + Cloudflare emulation via `nitro-cloudflare-dev`. |
+| `yarn dev` | Dev server (localhost:3000) with local Cloudflare bindings for D1/R2/KV and tenant subdomain routing on `*.localhost`. |
 | `yarn build` | Production build → `.output/` |
 | `yarn deploy` | Build, patch Nitro shim, apply D1 migrations, deploy the Worker |
 | `yarn db:generate` | Generate a new `migrations/*.sql` file from `server/db/schema.ts` |
@@ -59,6 +59,21 @@ yarn dev
 ```
 
 App at `http://localhost:3000`. Dev login (bypasses OAuth): `http://localhost:3000/api/dev/login`
+
+Tenant sites resolve locally on `*.localhost`, for example:
+
+```text
+http://pottery-house.localhost:3000/experiences
+http://kikuzuki-krabi-thailand.localhost:3000/reservations
+```
+
+`yarn dev` now disables Wrangler remote bindings by default so tenant dev does not depend on a remote Workers AI proxy session. This matters because Wrangler otherwise tries to open a remote preview session for the `AI` binding before attaching local `DB`/R2/KV bindings; if that handshake times out, tenant hosts fall through to `Site Not Found` even when local D1 is seeded correctly.
+
+If you specifically need the old remote-binding behavior for AI debugging, opt back in per shell:
+
+```bash
+NUXT_CF_REMOTE_BINDINGS=true yarn dev
+```
 
 ### macOS file limit fix
 
