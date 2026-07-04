@@ -57,7 +57,11 @@
             <p v-else-if="!heroTitle" class="saya-display mt-5 text-2xl text-white/70">
               <em class="saya-italic">{{ siteName }}</em>
             </p>
-            <div v-if="isOpenNow === true" class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
+            <div v-if="activeClosureMessage" class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
+              <span class="size-1.5 rounded-full bg-red-400" />
+              {{ activeClosureMessage }}
+            </div>
+            <div v-else-if="isOpenNow === true" class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
               <span class="size-1.5 rounded-full bg-green-400" />
               Open now · {{ todayHours }}
             </div>
@@ -284,7 +288,7 @@
 </template>
 
 <script setup lang="ts">
-import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow } from '~/utils/formatters'
+import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow, getActiveSpecialClosure, formatGoogleDate } from '~/utils/formatters'
 import { formatMoneyAmount } from '~/shared/money'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 
@@ -470,6 +474,16 @@ const weekHours = computed(() => {
 
 const todayHours = computed(() => getTodayGoogleHours(location.value?.opening_hours))
 const isOpenNow = computed(() => getIsOpenNow(location.value?.opening_hours))
+
+const activeClosure = computed(() => getActiveSpecialClosure(location.value?.special_hours, location.value?.timezone))
+const activeClosureMessage = computed(() => {
+  const closure = activeClosure.value
+  if (!closure) return null
+  if (closure.note) return closure.note
+  return closure.endDate
+    ? `Temporarily closed — reopening ${formatGoogleDate(closure.endDate)}`
+    : 'Temporarily closed until further notice'
+})
 
 
 

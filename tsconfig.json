@@ -12,5 +12,5 @@
     "types": ["node", "@cloudflare/workers-types"],
     "skipLibCheck": true
   },
-  "exclude": ["widgets"]
+  "exclude": ["widgets", "workers"]
 }

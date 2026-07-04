@@ -61,7 +61,8 @@ export function generateReservationTimes(
   return [...new Set(slots)].sort()
 }
 
-const fmt12Hour = (timeStr: string): string => {
+/** "HH:MM" (24h) → "3 PM" / "3:30 PM" (12h, no leading zero, no minutes when :00). */
+export const fmt12Hour = (timeStr: string): string => {
   const [hStr, mStr] = timeStr.split(':')
   const h = Number(hStr)
   const m = Number(mStr)
@@ -71,15 +72,15 @@ const fmt12Hour = (timeStr: string): string => {
 }
 
 /**
- * Today's opening hours as a display label (e.g. "11:30 AM – 10:30 PM"), or "Closed today"
- * when the location has structured hours but isn't open today. Returns null when the location
- * has no structured opening_hours to read (e.g. Google Places free-text hours).
+ * Today's opening hours as a display label (e.g. "11:30 AM – 10:30 PM"), or the provided
+ * closedLabel when the location has structured hours but isn't open today. Returns null when
+ * the location has no structured opening_hours to read (e.g. Google Places free-text hours).
  */
-export function getTodayHoursLabel(openingHours: unknown, now = new Date()): string | null {
+export function getTodayHoursLabel(openingHours: unknown, closedLabel: string, now = new Date()): string | null {
   if (!isStructuredOpeningHours(openingHours)) return null
   const weekdayName = WEEKDAY_BY_INDEX[now.getDay()]!
   const todaysEntry = openingHours.find(entry => entry.openDay.toUpperCase() === weekdayName)
-  if (!todaysEntry) return 'Closed today'
+  if (!todaysEntry) return closedLabel
   return `${fmt12Hour(todaysEntry.openTime)} – ${fmt12Hour(todaysEntry.closeTime)}`
 }
 
@@ -87,14 +88,20 @@ export function getTodayHoursLabel(openingHours: unknown, now = new Date()): str
  * Whether the location is open right now, based on structured opening_hours. Returns false
  * (rather than throwing) when hours aren't structured — callers should treat that as "unknown"
  * and avoid rendering an open/closed badge at all rather than trusting a false negative.
+ * Handles overnight hours by treating ranges where closeTime <= openTime as spanning midnight.
  */
 export function isOpenNow(openingHours: unknown, now = new Date()): boolean {
   if (!isStructuredOpeningHours(openingHours)) return false
   const weekdayName = WEEKDAY_BY_INDEX[now.getDay()]!
   const nowMinutes = now.getHours() * 60 + now.getMinutes()
-  return openingHours.some(entry =>
-    entry.openDay.toUpperCase() === weekdayName
-    && nowMinutes >= toMinutes(entry.openTime)
-    && nowMinutes < toMinutes(entry.closeTime)
-  )
+  return openingHours.some(entry => {
+    if (entry.openDay.toUpperCase() !== weekdayName) return false
+    const open = toMinutes(entry.openTime)
+    const close = toMinutes(entry.closeTime)
+    // Overnight hours: close time is earlier than or equal to open time
+    if (close <= open) {
+      return nowMinutes >= open || nowMinutes < close
+    }
+    return nowMinutes >= open && nowMinutes < close
+  })
 }

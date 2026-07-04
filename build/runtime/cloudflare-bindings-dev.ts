@@ -1,4 +1,5 @@
-import { getRequestURL, useRuntimeConfig } from '#imports'
+import { getRequestURL } from 'h3'
+import { useRuntimeConfig } from '#imports'
 
 const proxyPromise = createPlatformProxy()
   .catch((error) => {
@@ -10,7 +11,9 @@ const proxyPromise = createPlatformProxy()
     return proxy
   })
 
-globalThis.__env__ = proxyPromise.then((proxy) => proxy.env)
+declare global {
+  var __env__: Record<string, unknown>
+}
 
 export default defineNitroPlugin((nitroApp) => {
   nitroApp.hooks.hook('request', async (event) => {
@@ -28,13 +31,12 @@ export default defineNitroPlugin((nitroApp) => {
       context: proxy.ctx,
     }
 
-    event.node.req.__unenv__ = {
-      ...event.node.req.__unenv__,
+    ;(event.node.req as typeof event.node.req & { __unenv__?: { waitUntil?: unknown } }).__unenv__ = {
+      ...(event.node.req as typeof event.node.req & { __unenv__?: { waitUntil?: unknown } }).__unenv__,
       waitUntil: event.context.waitUntil,
     }
   })
 
-  nitroApp.hooks._hooks.request.unshift(nitroApp.hooks._hooks.request.pop())
   nitroApp.hooks.hook('close', async () => {
     const proxy = await proxyPromise
     await proxy.dispose()

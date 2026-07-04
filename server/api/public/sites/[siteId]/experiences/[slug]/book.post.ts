@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse, cleanString } from '~/server/utils/api-response'
 import { getExperienceBySlug, createExperienceBooking, resolveEffectiveTimeSlots, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
 import { isDateBeforeTimezoneToday } from '~/server/utils/site-config'
+import { fmt12Hour } from '~/shared/reservation-hours'
 import { notifyExperienceBookingCreated } from '~/server/utils/notifications'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { execute, queryFirst, type DbClient } from '~/server/db'
@@ -165,6 +166,6 @@ export default defineEventHandler(async (event) => {
   return jsonResponse({
     success: true,
     booking_id: booking.id,
-    message: `Your booking request for ${experience.title} on ${bookingDate} at ${timeSlot} has been received. We'll confirm shortly.`,
+    message: `Your booking request for ${experience.title} on ${bookingDate} at ${fmt12Hour(timeSlot)} has been received. We'll confirm shortly.`,
   }, { status: 201 })
 })

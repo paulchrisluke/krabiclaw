@@ -43,6 +43,17 @@ GA4_MEASUREMENT_ID = "G-NJ1BSP9BYG"
 # PREVIEW_SECRET_STAGING repo secrets on every run (see .github/workflows/ci.yml);
 # production is set once manually and not touched by CI:
 #   yarn wrangler secret put PREVIEW_SECRET
+# EMAIL_REPLY_SECRET signs reply+<type>-<id>-<token>@reply.<platform-domain> addresses
+# (server/utils/submission-messages.ts) so a customer's inbound reply can be matched back to the
+# right reservation/contact/experience-booking thread without a DB lookup by address alone.
+# EMAIL_INBOUND_SECRET authenticates the separate krabiclaw-email-inbound Worker
+# (workers/email-inbound/) calling POST /api/email/inbound. Both must stay stable across
+# deploys — rotating them invalidates reply-to addresses already sent out in guest emails.
+# staging syncs from the fixed EMAIL_REPLY_SECRET_STAGING / EMAIL_INBOUND_SECRET_STAGING repo
+# secrets on every run (see .github/workflows/ci.yml); production is set once manually and not
+# touched by CI:
+#   yarn wrangler secret put EMAIL_REPLY_SECRET
+#   yarn wrangler secret put EMAIL_INBOUND_SECRET
 
 [[d1_databases]]
 binding = "DB"

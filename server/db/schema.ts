@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm"
-import { sqliteTable, integer, text, numeric, real, unique, primaryKey, uniqueIndex, check } from "drizzle-orm/sqlite-core"
+import { sqliteTable, integer, text, numeric, real, unique, primaryKey, uniqueIndex, index, check } from "drizzle-orm/sqlite-core"
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core"
 
 export const account = sqliteTable("account", {
@@ -106,6 +106,7 @@ export const business_locations = sqliteTable("business_locations", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	notification_phone: text(),
 	timezone: text(),
+	max_capacity: integer(),
 }, (table) => [
 	unique("business_locations_organization_id_site_id_slug_unique").on(table.organization_id, table.site_id, table.slug),
 ]);
@@ -175,6 +176,22 @@ export const contact_submissions = sqliteTable("contact_submissions", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
+export const submission_messages = sqliteTable("submission_messages", {
+	id: text().primaryKey(),
+	submission_type: text().notNull(), // 'contact' | 'reservation' | 'experience_booking'
+	submission_id: text().notNull(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	direction: text().notNull(), // 'out' | 'in'
+	channel: text().notNull(), // 'email' | 'whatsapp'
+	body: text().notNull(),
+	sender_user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	meta_message_id: text().unique(),
+	status: text().default("sent").notNull(),
+	error: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+});
+
 export const dashboard_preferences = sqliteTable("dashboard_preferences", {
 	id: text().primaryKey(),
 	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
@@ -202,7 +219,7 @@ export const experience_bookings = sqliteTable("experience_bookings", {
 	experience_id: text().notNull().references(() => experiences.id, { onDelete: "cascade" } ),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" } ),
 	guest_name: text().notNull(),
 	guest_email: text().notNull(),
 	guest_phone: text(),
@@ -772,6 +789,25 @@ export const rate_limits = sqliteTable("rate_limits", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	expires_at: text(),
 });
+
+export const reservation_slot_overrides = sqliteTable("reservation_slot_overrides", {
+	id: text().primaryKey(),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" } ),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	override_date: text().notNull(),
+	time_slot: text().notNull(),
+	status: text().default("closed").notNull(),
+	capacity_override: integer(),
+	note: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text(),
+}, (table) => [
+	uniqueIndex("idx_reservation_slot_overrides_unique").on(table.location_id, table.override_date, table.time_slot),
+	index("idx_reservation_slot_overrides_date").on(table.location_id, table.override_date),
+	check("reservation_slot_overrides_status_check", sql`status IN ('closed', 'open')`),
+]);
 
 export const reservation_submissions = sqliteTable("reservation_submissions", {
 	id: text().primaryKey(),

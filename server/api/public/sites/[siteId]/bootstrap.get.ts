@@ -395,7 +395,7 @@ export default defineEventHandler(async (event) => {
   idxLoc = push(
     needsLocationHeroMedia
       ? `SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
-                 bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
+                 bl.latitude, bl.longitude, bl.opening_hours, bl.special_hours, bl.timezone, bl.rating, bl.review_count,
                  bl.is_primary, bl.status, bl.city, bl.neighborhood,
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
                  bl.description, bl.short_description, bl.last_synced_at,
@@ -408,7 +408,7 @@ export default defineEventHandler(async (event) => {
           WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
           ORDER BY bl.is_primary DESC, bl.title ASC`
       : `SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
-                 bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
+                 bl.latitude, bl.longitude, bl.opening_hours, bl.special_hours, bl.timezone, bl.rating, bl.review_count,
                  bl.is_primary, bl.status, bl.city, bl.neighborhood,
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
                  bl.description, bl.short_description, bl.last_synced_at,
@@ -932,6 +932,8 @@ export default defineEventHandler(async (event) => {
       latitude: loc.latitude,
       longitude: loc.longitude,
       opening_hours: parseJson(loc.opening_hours as string | null),
+      special_hours: parseJson(loc.special_hours as string | null),
+      timezone: loc.timezone || null,
       rating: loc.rating,
       review_count: loc.review_count,
       is_primary: Boolean(loc.is_primary),

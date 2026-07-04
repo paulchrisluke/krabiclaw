@@ -527,7 +527,7 @@ export interface ExperienceBooking {
   experience_id: string
   organization_id: string
   site_id: string
-  location_id: string | null
+  location_id: string
   location_title?: string | null
   guest_name: string
   guest_email: string
@@ -555,7 +555,7 @@ export async function createExperienceBooking(
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id, input.experience_id, input.organization_id, input.site_id,
-      input.location_id ?? null,
+      input.location_id,
       input.guest_name, input.guest_email, input.guest_phone ?? null,
       input.party_size, input.booking_date, input.time_slot,
       input.status ?? 'pending', input.notes ?? null, input.ip_hash ?? null,
@@ -588,22 +588,51 @@ export async function listExperienceBookings(
   const params = [siteId, experienceId]
   let where = `eb.site_id = ? AND eb.experience_id = ?`
   if (opts.locationId) {
-    where += ` AND COALESCE(eb.location_id, e.location_id) = ?`
+    where += ` AND eb.location_id = ?`
     params.push(opts.locationId)
   }
   const results = await queryAll<ExperienceBooking>(
     db,
     `SELECT eb.id, eb.experience_id, eb.organization_id, eb.site_id,
-              COALESCE(eb.location_id, e.location_id) AS location_id,
+              eb.location_id,
               bl.title AS location_title,
               eb.guest_name, eb.guest_email,
               eb.guest_phone, eb.party_size, eb.booking_date, eb.time_slot,
               eb.status, eb.notes, eb.created_at, eb.updated_at
 	       FROM experience_bookings eb
-	       LEFT JOIN experiences e ON e.id = eb.experience_id AND e.site_id = eb.site_id
-	       LEFT JOIN business_locations bl ON bl.id = COALESCE(eb.location_id, e.location_id)
+	       LEFT JOIN business_locations bl ON bl.id = eb.location_id
 	       WHERE ${where}
 	       ORDER BY eb.booking_date ASC, eb.time_slot ASC, eb.created_at ASC`,
+    params,
+  )
+  return results ?? []
+}
+
+export async function listExperienceBookingsForSite(
+  db: DbClient,
+  siteId: string,
+  opts: { locationId?: string | null } = {},
+): Promise<ExperienceBooking[]> {
+  const params: string[] = [siteId]
+  let where = `eb.site_id = ?`
+  if (opts.locationId) {
+    where += ` AND eb.location_id = ?`
+    params.push(opts.locationId)
+  }
+  const results = await queryAll<ExperienceBooking & { experience_title?: string | null }>(
+    db,
+    `SELECT eb.id, eb.experience_id, eb.organization_id, eb.site_id,
+              eb.location_id,
+              bl.title AS location_title,
+              e.title AS experience_title,
+              eb.guest_name, eb.guest_email,
+              eb.guest_phone, eb.party_size, eb.booking_date, eb.time_slot,
+              eb.status, eb.notes, eb.created_at, eb.updated_at
+	       FROM experience_bookings eb
+	       LEFT JOIN business_locations bl ON bl.id = eb.location_id
+	       LEFT JOIN experiences e ON e.id = eb.experience_id
+	       WHERE ${where}
+	       ORDER BY eb.created_at DESC`,
     params,
   )
   return results ?? []
@@ -622,6 +651,21 @@ export async function updateBookingStatus(
     `UPDATE experience_bookings SET status = ?, updated_at = ?
        WHERE site_id = ? AND experience_id = ? AND id = ?`,
     [status, new Date().toISOString(), siteId, experienceId, bookingId],
+  )
+  return Boolean(result.meta.changes)
+}
+
+export async function updateBookingStatusForSite(
+  db: DbClient,
+  siteId: string,
+  bookingId: string,
+  status: 'pending' | 'confirmed' | 'cancelled',
+): Promise<boolean> {
+  const result = await execute(
+    db,
+    `UPDATE experience_bookings SET status = ?, updated_at = ?
+       WHERE site_id = ? AND id = ?`,
+    [status, new Date().toISOString(), siteId, bookingId],
   )
   return Boolean(result.meta.changes)
 }

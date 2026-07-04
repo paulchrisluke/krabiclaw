@@ -5,6 +5,7 @@ import { createReservationCancelToken, hashReservationCancelToken } from '~/serv
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { resolveLocationTimezone, isDateBeforeTimezoneToday } from '~/server/utils/site-config'
 import { generateReservationTimes, isStructuredOpeningHours } from '~/shared/reservation-hours'
+import { getReservationSlotAvailability } from '~/server/utils/reservations'
 
 const IP_HOURLY_LIMIT = 5
 const EMAIL_DAILY_LIMIT = 3
@@ -24,9 +25,7 @@ async function hashValue(value: string): Promise<string> {
 
 function getClientIp(event: ApiValue): string {
   const cfIp = getHeader(event, 'CF-Connecting-IP')
-  if (cfIp) return cfIp
-  const fwd = getHeader(event, 'x-forwarded-for') ?? ''
-  return fwd.split(',').map(part => part.trim()).find(Boolean) || 'unknown'
+  return cfIp || 'unknown'
 }
 
 async function incrementRateLimit(db: DbClient, key: string, limit: number, expireMs: number): Promise<boolean> {
@@ -35,10 +34,10 @@ async function incrementRateLimit(db: DbClient, key: string, limit: number, expi
   const result = await execute(db,
     `INSERT INTO rate_limits (key, count, updated_at, expires_at) VALUES (?, 1, ?, ?)
        ON CONFLICT(key) DO UPDATE SET
-         count = CASE WHEN rate_limits.expires_at <= ? THEN 1 ELSE rate_limits.count + 1 END,
-         expires_at = CASE WHEN rate_limits.expires_at <= ? THEN ? ELSE rate_limits.expires_at END,
+         count = CASE WHEN rate_limits.expires_at IS NULL OR rate_limits.expires_at <= ? THEN 1 ELSE rate_limits.count + 1 END,
+         expires_at = CASE WHEN rate_limits.expires_at IS NULL OR rate_limits.expires_at <= ? THEN ? ELSE rate_limits.expires_at END,
          updated_at = ?
-       WHERE (CASE WHEN rate_limits.expires_at <= ? THEN 1 ELSE rate_limits.count + 1 END) <= ?`,
+       WHERE (CASE WHEN rate_limits.expires_at IS NULL OR rate_limits.expires_at <= ? THEN 1 ELSE rate_limits.count + 1 END) <= ?`,
     [key, now, expiresAt, now, now, expiresAt, now, now, limit],
   )
   return Boolean(result?.success && result?.meta?.changes)
@@ -83,44 +82,32 @@ export default defineEventHandler(async (event) => {
   if (!VALID_GUESTS.includes(guests))
     return jsonResponse({ error: 'Please choose a valid party size.' }, { status: 400 })
 
-  const site = await queryFirst<{ id: string; organization_id: string; brand_name?: string | null; public_url?: string | null; subdomain?: string | null; primary_location_id: string | null }>(
+  const site = await queryFirst<{ id: string; organization_id: string; brand_name?: string | null; public_url?: string | null; subdomain?: string | null }>(
     db,
-    'SELECT id, organization_id, brand_name, public_url, subdomain, primary_location_id FROM sites WHERE id = ? AND status = ? LIMIT 1',
+    'SELECT id, organization_id, brand_name, public_url, subdomain FROM sites WHERE id = ? AND status = ? LIMIT 1',
     [siteId, 'active'],
   )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
-  let resolvedLocationId = locationId
-  if (resolvedLocationId) {
-    const location = await queryFirst<{ id: string }>(
-      db,
-      'SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1',
-      [resolvedLocationId, siteId],
-    )
-    if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
-  } else {
-    resolvedLocationId = site.primary_location_id
-      ?? (await queryFirst<{ id: string }>(
-        db,
-        'SELECT id FROM business_locations WHERE site_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1',
-        [siteId],
-      ))?.id
-      ?? null
-  }
-  if (!resolvedLocationId) return jsonResponse({ error: 'This site has no location to reserve at.' }, { status: 400 })
+  // Location is always required — there is no site shape where a reservation isn't tied to a
+  // specific room/location, so this never silently falls back to a "primary" or first location.
+  if (!locationId) return jsonResponse({ error: 'Please choose a location.' }, { status: 400 })
+  const resolvedLocationId = locationId
+
+  const location = await queryFirst<{ title: string | null; opening_hours: string | null; max_capacity: number | null }>(
+    db,
+    'SELECT title, opening_hours, max_capacity FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1',
+    [resolvedLocationId, siteId],
+  )
+  if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
 
   const reservationTimezone = await resolveLocationTimezone(db, site.organization_id, siteId, resolvedLocationId)
   if (isDateBeforeTimezoneToday(date, reservationTimezone))
     return jsonResponse({ error: 'Please choose a valid future date.' }, { status: 400 })
 
-  const location = await queryFirst<{ title: string | null; opening_hours: string | null }>(
-    db,
-    'SELECT title, opening_hours FROM business_locations WHERE id = ? LIMIT 1',
-    [resolvedLocationId],
-  )
   let parsedHours: unknown = null
   let parseFailed = false
-  if (location?.opening_hours) {
+  if (location.opening_hours) {
     try {
       parsedHours = JSON.parse(location.opening_hours)
     } catch {
@@ -133,6 +120,18 @@ export default defineEventHandler(async (event) => {
   const validTimes = isStructuredOpeningHours(parsedHours) ? generateReservationTimes(parsedHours, date) : FALLBACK_TIMES
   if (!validTimes.includes(time))
     return jsonResponse({ error: 'Please choose a valid time — this location is closed at that time.' }, { status: 400 })
+
+  if (isStructuredOpeningHours(parsedHours)) {
+    const availability = await getReservationSlotAvailability(db, siteId, { id: resolvedLocationId, max_capacity: location.max_capacity, opening_hours: parsedHours }, date)
+    const slotAvailability = availability.find((s) => s.time_slot === time)
+    if (slotAvailability?.is_closed) {
+      return jsonResponse({ error: 'This time is closed for booking.' }, { status: 409 })
+    }
+    const partySize = guests === '8+' ? 8 : Number.parseInt(guests, 10)
+    if (slotAvailability && slotAvailability.remaining !== null && partySize > slotAvailability.remaining) {
+      return jsonResponse({ error: `Only ${Math.max(slotAvailability.remaining, 0)} spot(s) left at this time.` }, { status: 409 })
+    }
+  }
 
   const id = crypto.randomUUID()
   const clientIp = getClientIp(event)
@@ -190,7 +189,7 @@ export default defineEventHandler(async (event) => {
       siteId,
       siteName: site.brand_name,
       locationId: resolvedLocationId,
-      locationName: location?.title ?? null,
+      locationName: location.title,
       reservationId: id,
       guestName: name,
       email,

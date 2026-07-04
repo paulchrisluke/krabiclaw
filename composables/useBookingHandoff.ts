@@ -17,6 +17,8 @@ export interface BookingConfirmation {
   contactPhone?: string | null
   contactEmail?: string | null
   message?: string
+  locationName?: string | null
+  locationAddress?: string | null
 }
 
 const STORAGE_KEY = 'kc:booking-confirmation'

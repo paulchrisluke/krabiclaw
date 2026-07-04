@@ -29,7 +29,8 @@ export default defineNuxtModule({
         startingFrom: nitroConfig.rootDir,
       }).catch(() => undefined)
 
-      if (gitIgnorePath && persistDir === '.wrangler/state/v3') {
+      const isDefaultPersistDir = !nitroConfig.cloudflareDev?.persistDir || nitroConfig.cloudflareDev.persistDir === '.wrangler/state/v3'
+      if (gitIgnorePath && isDefaultPersistDir) {
         const gitIgnore = await fs.readFile(gitIgnorePath, 'utf8')
         if (!gitIgnore.includes('.wrangler/state/v3')) {
           await fs.writeFile(gitIgnorePath, `${gitIgnore}\n.wrangler/state/v3\n`).catch(() => {})

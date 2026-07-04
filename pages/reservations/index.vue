@@ -38,22 +38,33 @@
         >
           <div class="relative aspect-video bg-muted">
             <img
-              v-if="loc.public_url"
+              v-if="loc.public_url && loc.kind === 'image'"
               :src="loc.public_url"
               :alt="loc.title"
               loading="lazy"
               class="h-full w-full object-cover"
             />
+            <div
+              v-else-if="loc.kind === 'video'"
+              class="flex h-full w-full items-center justify-center"
+              aria-hidden="true"
+            >
+              <svg viewBox="0 0 24 24" class="size-10 text-muted" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+            </div>
             <div v-else class="flex h-full w-full items-center justify-center" aria-hidden="true">
               <svg viewBox="0 0 24 24" class="size-10 text-muted" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><g><path d="M15 10.5a3 3 0 1 1-6 0a3 3 0 0 1 6 0"/><path d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0"/></g></svg>
             </div>
-            <div
-              v-if="getTodayHoursLabel(loc.opening_hours)"
-              class="absolute bottom-4 left-4 inline-flex items-center gap-2 rounded-full bg-default/95 px-4 py-2 text-xs font-medium uppercase tracking-wide text-default"
-            >
-              <span class="size-1.5 rounded-full" :class="isOpenNow(loc.opening_hours) ? 'bg-green-500' : 'bg-zinc-400'" />
-              {{ isOpenNow(loc.opening_hours) ? resCopy.openNowLabel : resCopy.closedLabel }} · {{ getTodayHoursLabel(loc.opening_hours) }}
-            </div>
+            <ClientOnly>
+              <div
+                v-if="getTodayHoursLabel(loc.opening_hours, resCopy.closedLabel)"
+                class="absolute bottom-4 left-4 inline-flex items-center gap-2 rounded-full bg-default/95 px-4 py-2 text-xs font-medium uppercase tracking-wide text-default"
+              >
+                <span class="size-1.5 rounded-full" :class="isOpenNow(loc.opening_hours) ? 'bg-green-500' : 'bg-zinc-400'" />
+                {{ isOpenNow(loc.opening_hours) ? resCopy.openNowLabel : resCopy.closedLabel }} · {{ getTodayHoursLabel(loc.opening_hours, resCopy.closedLabel) }}
+              </div>
+            </ClientOnly>
           </div>
 
           <div class="p-6 sm:p-8">
@@ -120,66 +131,50 @@
     <!-- Booking Modal Flow -->
     <BookingModal
       v-model="isBookingModalOpen"
-      :title="resCopy.reservationFormTitle"
+      :title="modalTitle"
+      :kicker="selectedLocation?.title ?? undefined"
       :can-go-back="bookingStep > startStep && !submitting"
       @back="prevStep"
     >
-      <!-- STEP 1: LOCATION (Only if multiple locations) -->
-      <div v-if="bookingStep === 1">
+      <!-- STEP: LOCATION (only if multiple locations and not pre-selected from a card) -->
+      <div v-if="bookingStep === 1" class="flex-1 overflow-y-auto">
         <BookingLocationStep
           v-model="reservationForm.location_id"
           :locations="locations"
           @next="nextStep"
         />
-        
+
         <div v-if="submitError" role="alert" class="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
           {{ submitError }}
         </div>
       </div>
 
-      <!-- STEP 2: DATE -->
-      <div v-if="bookingStep === 2">
-        <BookingDateSelector
-          v-model="bookingDateObj"
+      <!-- STEP: TIME (party size + day-grouped availability, single scrollable surface) -->
+      <div v-if="bookingStep === 2" class="flex flex-1 flex-col min-h-0">
+        <BookingTimeStep
+          v-model="timeSelection"
+          :dates="availabilityDates"
+          :loading="availabilityLoading"
+          :guests="guests"
+          :guests-label="resCopy.guestsLabel"
+          :guest-singular="resCopy.guestLabel"
+          :guest-plural="resCopy.guestsLabelPlural"
+          @update:guests="guests = $event"
+          @next="nextStep"
         />
-        <div class="mt-6">
-          <SayaButton block size="lg" :disabled="!reservationForm.date" @click="nextStep">
-            Continue
-          </SayaButton>
-        </div>
         <div v-if="submitError" role="alert" class="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
           {{ submitError }}
         </div>
       </div>
 
-      <!-- STEP 3: TIME & GUESTS -->
-      <div v-if="bookingStep === 3">
-        <div class="space-y-8">
-          <div>
-            <h3 class="text-sm font-semibold text-default mb-4">{{ resCopy.guestsLabel }}</h3>
-            <BookingGuestCounter v-model="formGuestsNumber" />
-          </div>
-
-          <div>
-            <h3 class="text-sm font-semibold text-default mb-4">{{ resCopy.timeLabel }}</h3>
-            <BookingTimeList
-              v-model="reservationForm.time"
-              :slots="timeSlots"
-            />
-          </div>
-        </div>
-        <div class="mt-6">
-          <SayaButton block size="lg" :disabled="!reservationForm.time || !reservationForm.guests" @click="nextStep">
-            Continue
-          </SayaButton>
-        </div>
-        <div v-if="submitError" role="alert" class="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
-          {{ submitError }}
-        </div>
-      </div>
-
-      <!-- STEP 4: CONTACT -->
-      <div v-if="bookingStep === 4">
+      <!-- STEP: CONTACT -->
+      <div v-if="bookingStep === 3" class="flex-1 overflow-y-auto">
+        <BookingRecap
+          v-if="timeSelection"
+          :main-line="`${timeSelection.label.split(',')[0]} · ${fmt12Hour(timeSelection.time)}`"
+          :meta-line="`${guests >= 8 ? '8+' : guests} ${guests === 1 ? resCopy.guestLabel : resCopy.guestsLabelPlural}`"
+          @edit="bookingStep = 2"
+        />
         <BookingContactForm
           :initial-state="{ name: reservationForm.name, email: reservationForm.email, phone: reservationForm.phone, notes: reservationForm.requests }"
           :loading="submitting"
@@ -197,15 +192,14 @@
 
 <script setup lang="ts">
 import BookingContactForm from '@/components/booking/BookingContactForm.vue'
-import BookingDateSelector from '@/components/booking/BookingDateSelector.vue'
-import BookingGuestCounter from '@/components/booking/BookingGuestCounter.vue'
 import BookingLocationStep from '@/components/booking/BookingLocationStep.vue'
 import BookingModal from '@/components/booking/BookingModal.vue'
-import BookingTimeList from '@/components/booking/BookingTimeList.vue'
+import BookingRecap from '@/components/booking/BookingRecap.vue'
+import BookingTimeStep, { type RawDateAvailability, type TimeSlotSelection } from '@/components/booking/BookingTimeStep.vue'
 import { getFieldDef } from '~/config/content-registry'
 import { usePageContent } from '~/composables/usePageContent'
 import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
-import { generateReservationTimes, getTodayHoursLabel, isOpenNow, isStructuredOpeningHours } from '~/shared/reservation-hours'
+import { fmt12Hour, getTodayHoursLabel, isOpenNow } from '~/shared/reservation-hours'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 
 definePageMeta({ layout: 'saya' })
@@ -250,7 +244,7 @@ if (!process.client) policiesBody.value = rawPoliciesHtml
 // strip — substrings of already-sanitized HTML, so no separate sanitize pass needed.
 // Falls back to rendering policiesBody as-is when the tenant wrote freeform text
 // instead of a list (no <li> to split on).
-const policyItems = computed(() => [...policiesBody.value.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)].map(m => m[1].trim()))
+const policyItems = computed(() => [...policiesBody.value.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)].map(m => (m[1] ?? '').trim()))
 
 // ── Form state ────────────────────────────────────────────────────────────
 const reservationForm = ref({ name: '', email: '', phone: '', location_id: '', date: '', time: '', guests: '', requests: '' })
@@ -263,6 +257,14 @@ const selectedLocation = computed(() =>
   ?? locations.value[0]
   ?? null,
 )
+
+function formatLocationAddress(address: unknown): string | null {
+  if (!address) return null
+  if (typeof address === 'string') return address
+  const addr = address as { addressLines?: string[]; locality?: string; administrativeArea?: string }
+  const parts = [...(addr.addressLines ?? []), addr.locality, addr.administrativeArea].filter(Boolean)
+  return parts.length ? parts.join(', ') : null
+}
 
 watch(
   locations,
@@ -296,6 +298,7 @@ const isBookingModalOpen = ref(false)
 const skipLocationStep = ref(false)
 const startStep = computed(() => (hasMultipleLocations.value && !skipLocationStep.value) ? 1 : 2)
 const bookingStep = ref(startStep.value)
+const modalTitle = computed(() => resCopy.value.reservationFormTitle)
 
 function openBookingModal(loc?: ApiRecord) {
   skipLocationStep.value = Boolean(loc)
@@ -318,54 +321,40 @@ function prevStep() {
   }
 }
 
-// ── Date ──────────────────────────────────────────────────────────────────
-const bookingDateObj = ref<Date | null>(null)
-watch(bookingDateObj, (newDate) => {
-  if (newDate) {
-    const y = newDate.getFullYear()
-    const m = String(newDate.getMonth() + 1).padStart(2, '0')
-    const d = String(newDate.getDate()).padStart(2, '0')
-    reservationForm.value.date = `${y}-${m}-${d}`
-  } else {
-    reservationForm.value.date = ''
-  }
-})
+// ── Guests & time slot ────────────────────────────────────────────────────
+const guests = ref(2)
+const timeSelection = ref<TimeSlotSelection | null>(null)
 
-// ── Guests ────────────────────────────────────────────────────────────────
-const formGuestsNumber = ref<number>(
-  reservationForm.value.guests === '8+' 
-    ? 8 
-    : (parseInt(reservationForm.value.guests) || 2)
-)
-watch(formGuestsNumber, (val) => {
-  if (val > 7) {
-    reservationForm.value.guests = '8+'
-  } else {
-    reservationForm.value.guests = String(val)
+// ── Availability (day-grouped, capacity-aware — server/utils/reservations.ts) ──
+const availabilityDates = ref<RawDateAvailability[]>([])
+const availabilityLoading = ref(false)
+
+async function loadAvailability() {
+  if (!siteId || !reservationForm.value.location_id) {
+    availabilityDates.value = []
+    return
+  }
+  availabilityLoading.value = true
+  try {
+    const today = new Date()
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    const res = await $fetch<{ dates: RawDateAvailability[] }>(`/api/public/sites/${siteId}/reservations/availability`, {
+      query: { location_id: reservationForm.value.location_id, date: dateStr, days: 14 },
+    })
+    availabilityDates.value = res.dates ?? []
+  } catch {
+    availabilityDates.value = []
+  } finally {
+    availabilityLoading.value = false
+  }
+}
+
+watch(() => reservationForm.value.location_id, (id) => {
+  if (id) {
+    timeSelection.value = null
+    loadAvailability()
   }
 }, { immediate: true })
-
-// ── Time ──────────────────────────────────────────────────────────────────
-const FALLBACK_TIMES = ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00']
-const availableTimes = computed(() => {
-  const hours = selectedLocation.value?.opening_hours
-  if (!reservationForm.value.date || !isStructuredOpeningHours(hours)) return FALLBACK_TIMES
-  return generateReservationTimes(hours, reservationForm.value.date)
-})
-
-const timeSlots = computed(() => {
-  return availableTimes.value.map(t => ({
-    id: t,
-    startTime: t,
-    durationMinutes: null
-  }))
-})
-
-watch(availableTimes, (times) => {
-  if (reservationForm.value.time && !times.includes(reservationForm.value.time)) {
-    reservationForm.value.time = ''
-  }
-})
 
 // ── Submission ────────────────────────────────────────────────────────────
 const submitting = ref(false)
@@ -376,12 +365,16 @@ async function handleContactSubmit(contactState: { name: string, email: string, 
   reservationForm.value.email = contactState.email
   reservationForm.value.phone = contactState.phone ?? ''
   reservationForm.value.requests = contactState.notes ?? ''
-  
+
   await handleReservation()
 }
 
 async function handleReservation() {
-  if (submitting.value || !siteId) return
+  if (submitting.value || !siteId || !timeSelection.value) return
+  reservationForm.value.date = timeSelection.value.day
+  reservationForm.value.time = timeSelection.value.time
+  reservationForm.value.guests = guests.value >= 8 ? '8+' : String(guests.value)
+
   submitting.value = true
   submitError.value = null
   try {
@@ -401,6 +394,8 @@ async function handleReservation() {
       cancelUrl: res?.id && res?.cancellationToken ? `/reservations/cancel?id=${res.id}#${res.cancellationToken}` : null,
       contactPhone: contactPhone.value || null,
       contactEmail: contactEmail.value || null,
+      locationName: selectedLocation.value?.title ?? null,
+      locationAddress: formatLocationAddress(selectedLocation.value?.address),
     })
     await navigateTo('/reservations/confirmed')
   } catch (err) {

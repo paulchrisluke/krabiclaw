@@ -2,6 +2,7 @@ import { useRender } from 'vue-email'
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification, type WhatsAppTemplate } from '~/server/utils/whatsapp'
+import { buildReplyToAddress } from '~/server/utils/submission-messages'
 import ReservationOwnerNew from '~/server/emails/templates/ReservationOwnerNew'
 import ReservationOwnerCancelled from '~/server/emails/templates/ReservationOwnerCancelled'
 import ReservationGuestReceived from '~/server/emails/templates/ReservationGuestReceived'
@@ -29,6 +30,7 @@ interface NotificationEnv {
   EMAIL_FROM?: string
   EMAIL_DELIVERY_MODE?: string
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
+  EMAIL_REPLY_SECRET?: string
 }
 
 function getPlatformDomain(env: NotificationEnv): string {
@@ -189,7 +191,7 @@ async function getOwnerNotificationChannels(
   return uniqueChannels.length > 0 ? uniqueChannels : (hasWhatsAppPhone ? ['whatsapp'] : ['email'])
 }
 
-async function insertDashboardNotification(
+export async function insertDashboardNotification(
   db: DbClient,
   opts: SiteContext & {
     locationId?: string | null
@@ -233,6 +235,7 @@ async function sendEmailNotification(
   opts: SiteContext & {
     locationId?: string | null
     to: string
+    replyTo?: string | null
     template: string
     title: string
     payload: Record<string, string>
@@ -305,6 +308,7 @@ async function sendEmailNotification(
       body: JSON.stringify({
         from: fromValue,
         to: [opts.to],
+        ...(opts.replyTo ? { reply_to: opts.replyTo } : {}),
         subject: opts.email.subject,
         html: opts.email.html,
         text: opts.email.text
@@ -407,6 +411,7 @@ export async function notifyReservationCreated(
   const prettyDate = formatDateHuman(opts.date)
   const prettyTime = formatTimeHuman(opts.time)
   const platformDomain = getPlatformDomain(env)
+  const replyTo = await buildReplyToAddress(env, 'reservation', opts.reservationId)
 
   const payload = {
     reservation_id: opts.reservationId,
@@ -441,6 +446,7 @@ export async function notifyReservationCreated(
     sendEmailNotification(env, db, {
       ...opts,
       to: opts.email,
+      replyTo,
       template: 'reservation_customer_received',
       title: 'Your reservation request was sent',
       payload,
@@ -532,6 +538,7 @@ export async function notifyContactSubmitted(
 ) {
   const restaurant = siteName(opts)
   const platformDomain = getPlatformDomain(env)
+  const replyTo = await buildReplyToAddress(env, 'contact', opts.contactId)
   const payload = {
     contact_id: opts.contactId,
     guest_name: opts.guestName,
@@ -561,6 +568,7 @@ export async function notifyContactSubmitted(
     sendEmailNotification(env, db, {
       ...opts,
       to: opts.email,
+      replyTo,
       template: 'contact_customer_received',
       title: 'Your message was sent',
       payload,
@@ -632,6 +640,7 @@ export async function notifyExperienceBookingCreated(
   const prettyDate = formatDateHuman(opts.bookingDate)
   const prettyTime = formatTimeHuman(opts.timeSlot)
   const platformDomain = getPlatformDomain(env)
+  const replyTo = await buildReplyToAddress(env, 'experience_booking', opts.bookingId)
 
   const payload = {
     booking_id: opts.bookingId,
@@ -672,6 +681,7 @@ export async function notifyExperienceBookingCreated(
     sendEmailNotification(env, db, {
       ...opts,
       to: opts.email,
+      replyTo,
       template: 'experience_booking_customer_received',
       title: `Your booking request was sent — ${opts.experienceTitle}`,
       payload,

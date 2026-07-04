@@ -342,71 +342,35 @@
               <BookingModal
                 v-model="isBookingModalOpen"
                 :title="modalTitle"
+                :kicker="experience.title"
                 :can-go-back="bookingStep > 1 && !submitting"
                 @back="prevStep"
               >
-                <!-- STEP 1: DATE -->
-                <div v-if="bookingStep === 1">
-                  <BookingDateSelector
-                    v-model="form.booking_date_obj"
+                <!-- STEP 1: TIME (party size + day-grouped availability, single scrollable surface) -->
+                <div v-if="bookingStep === 1" class="flex flex-1 flex-col min-h-0">
+                  <BookingTimeStep
+                    v-model="timeSelection"
+                    :dates="availabilityDates"
+                    :loading="availabilityLoading"
+                    :guests="form.party_size_num"
+                    :guests-max="experience.max_capacity ?? 8"
+                    guests-label="Guests"
+                    @update:guests="form.party_size_num = $event"
+                    @next="nextStep"
                   />
-                  
                   <div v-if="bookingError" role="alert" class="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
                     {{ bookingError }}
                   </div>
-                  
-                  <div class="pt-6">
-                    <button 
-                      class="w-full py-3 px-4 rounded-xl text-white bg-black dark:bg-white dark:text-black font-semibold text-[15px] shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-                      :disabled="!form.booking_date_obj"
-                      @click="nextStep"
-                    >
-                      Next
-                    </button>
-                  </div>
                 </div>
 
-                <!-- STEP 2: TIME & GUESTS -->
-                <div v-else-if="bookingStep === 2">
-                  <BookingGuestCounter
-                    v-model="form.party_size_num"
-                    :max="experience.max_capacity ?? 20"
-                    label="How many guests?"
-                    class="mb-4"
+                <!-- STEP 2: CONTACT DETAILS -->
+                <div v-else-if="bookingStep === 2" class="flex-1 overflow-y-auto">
+                  <BookingRecap
+                    v-if="timeSelection"
+                    :main-line="`${timeSelection.label.split(',')[0]} · ${fmt12Hour(timeSelection.time)}`"
+                    :meta-line="`${form.party_size_num} ${form.party_size_num === 1 ? 'guest' : 'guests'}`"
+                    @edit="bookingStep = 1"
                   />
-                  
-                  <div class="mb-4">
-                    <h3 class="font-semibold text-default text-lg mb-2">Choose a time</h3>
-                    
-                    <div v-if="availabilityLoading" class="flex flex-col gap-2">
-                      <div class="h-16 w-full animate-pulse rounded-xl bg-elevated" />
-                      <div class="h-16 w-full animate-pulse rounded-xl bg-elevated" />
-                    </div>
-                    
-                    <p v-else-if="slotAvailability.length === 0" class="text-sm text-muted">
-                      No availability on this day — try another date.
-                    </p>
-                    
-                    <BookingTimeList
-                      v-else
-                      v-model="form.time_slot"
-                      :slots="formattedSlots"
-                    />
-                  </div>
-
-                  <div class="pt-4">
-                    <button 
-                      class="w-full py-3 px-4 rounded-xl text-white bg-black dark:bg-white dark:text-black font-semibold text-[15px] shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-                      :disabled="!form.time_slot || slotAvailability.length === 0"
-                      @click="nextStep"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-
-                <!-- STEP 3: CONTACT DETAILS -->
-                <div v-else-if="bookingStep === 3">
                   <div v-if="bookingError" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
                     {{ bookingError }}
                   </div>
@@ -506,13 +470,14 @@ function formatDuration(minutes: number): string {
 }
 
 import BookingModal from '@/components/booking/BookingModal.vue'
-import BookingDateSelector from '@/components/booking/BookingDateSelector.vue'
-import BookingGuestCounter from '@/components/booking/BookingGuestCounter.vue'
-import BookingTimeList from '@/components/booking/BookingTimeList.vue'
+import BookingRecap from '@/components/booking/BookingRecap.vue'
+import BookingTimeStep, { type RawDateAvailability, type TimeSlotSelection } from '@/components/booking/BookingTimeStep.vue'
+import { fmt12Hour } from '~/shared/reservation-hours'
 import BookingContactForm, { type ContactFormState } from '@/components/booking/BookingContactForm.vue'
 
 const isBookingModalOpen = ref(false)
 const bookingStep = ref(1)
+const timeSelection = ref<TimeSlotSelection | null>(null)
 
 function openBookingModal() {
   bookingStep.value = 1
@@ -521,18 +486,14 @@ function openBookingModal() {
 }
 
 function nextStep() {
-  if (bookingStep.value < 3) bookingStep.value++
+  if (bookingStep.value < 2) bookingStep.value++
 }
 
 function prevStep() {
   if (bookingStep.value > 1) bookingStep.value--
 }
 
-const modalTitle = computed(() => {
-  if (bookingStep.value === 1) return 'Select a date'
-  if (bookingStep.value === 2) return 'Select a time'
-  return 'Your details'
-})
+const modalTitle = computed(() => bookingStep.value === 1 ? 'Select a time' : 'Your details')
 
 function handleContactSubmit(contactData: ContactFormState) {
   form.guest_name = contactData.name
@@ -558,160 +519,41 @@ function openLightbox(mediaIdx: number) {
 
 // ── Booking form ──────────────────────────────────────────────────────────────
 
-const clockNow = useState<number>(`experience-clock:${slug}`, () => Date.now())
-let clockTimer: ReturnType<typeof setInterval> | null = null
-
-function formatDateInTimeZone(date: Date, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(date)
-
-  const year = parts.find((part) => part.type === 'year')?.value
-  const month = parts.find((part) => part.type === 'month')?.value
-  const day = parts.find((part) => part.type === 'day')?.value
-
-  if (!year || !month || !day) return date.toISOString().slice(0, 10)
-  return `${year}-${month}-${day}`
-}
-
-interface SlotAvailabilityItem {
-  time_slot: string
-  capacity: number | null
-  booked: number
-  remaining: number | null
-  is_closed: boolean
-  is_full: boolean
-}
-
 const hasAnySlots = computed(() => Boolean(experience.value?.recurring_slots || experience.value?.time_slots?.length))
-const availabilityInitialized = ref(false)
-const slotAvailability = ref<SlotAvailabilityItem[]>([])
-const availabilityTimezone = ref<string | null>(null)
+const availabilityDates = ref<RawDateAvailability[]>([])
 const availabilityLoading = ref(false)
-
-const bookingTimezone = computed(() =>
-  availabilityTimezone.value ||
-  siteConfig.value?.default_timezone ||
-  'UTC',
-)
-
-const minDate = computed(() => {
-  // Keep a reactive dependency so this recomputes while the page stays open.
-  const now = new Date(clockNow.value)
-  return formatDateInTimeZone(now, bookingTimezone.value)
-})
 
 const form = reactive({
   guest_name: '',
   guest_email: '',
   guest_phone: '',
   party_size_num: 1, // Using number for the counter
-  booking_date_obj: null as Date | null,
-  time_slot: '',
   notes: '',
 })
 
-const formattedBookingDate = computed(() => {
-  if (!form.booking_date_obj) return ''
-  // Format as YYYY-MM-DD for the API
-  const d = form.booking_date_obj
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const dStr = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${dStr}`
-})
-
-// Initialize booking_date_obj from minDate on first load and keep it from going stale across midnight
-watch(minDate, (newDate) => {
-  if (!form.booking_date_obj && newDate) {
-    const p = newDate.split('-')
-    if (p.length === 3) {
-      form.booking_date_obj = new Date(parseInt(p[0] ?? '2000', 10), parseInt(p[1] ?? '1', 10) - 1, parseInt(p[2] ?? '1', 10))
-    }
-  }
-}, { immediate: true })
-onMounted(() => {
-  clockTimer = setInterval(() => {
-    clockNow.value = Date.now()
-  }, 30_000)
-
-  // booking_date_obj is initialized via the minDate watcher below — no extra init needed here
-})
-onUnmounted(() => {
-  if (clockTimer) {
-    clearInterval(clockTimer)
-    clockTimer = null
-  }
-})
-
-function slotCanAccommodateParty(slot: SlotAvailabilityItem): boolean {
-  return !(slot.remaining !== null && slot.remaining < form.party_size_num)
-}
-
-function slotCanBeSelected(slot: SlotAvailabilityItem): boolean {
-  return !slot.is_closed && !slot.is_full && slotCanAccommodateParty(slot)
-}
-
-const formattedSlots = computed(() => {
-  return slotAvailability.value.map(s => {
-    // Determine spots left string or number
-    let spotsLeft = undefined
-    if (s.is_closed || s.is_full) {
-      spotsLeft = 0
-    } else if (s.remaining !== null) {
-      spotsLeft = s.remaining
-    }
-    
-    // Check if it can accommodate the selected party size
-    if (spotsLeft !== undefined && spotsLeft < form.party_size_num) {
-      spotsLeft = 0 // Treat as sold out for this party size
-    }
-
-    return {
-      id: s.time_slot,
-      startTime: s.time_slot,
-      durationMinutes: experience.value?.duration_minutes ?? null,
-      priceStr: experience.value?.price ? `${experience.value.price} / guest` : undefined,
-      spotsLeft
-    }
-  })
-})
-
-async function loadSlotAvailability() {
-  const queryDate = formattedBookingDate.value
-  if (!siteId || !experience.value || !queryDate || !hasAnySlots.value) {
-    slotAvailability.value = []
-    availabilityInitialized.value = true
+async function loadAvailability() {
+  if (!siteId || !experience.value || !hasAnySlots.value) {
+    availabilityDates.value = []
     return
   }
   availabilityLoading.value = true
   try {
-    const res = await $fetch<{ timezone: string; dates: Array<{ date: string; slots: SlotAvailabilityItem[] }> }>(
+    const today = new Date()
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    const res = await $fetch<{ timezone: string; dates: RawDateAvailability[] }>(
       `/api/public/sites/${siteId}/experiences/${slug}/availability`,
-      { query: { date: queryDate } },
+      { query: { date: dateStr, days: 14 } },
     )
-    availabilityTimezone.value = res.timezone
-    slotAvailability.value = res.dates[0]?.slots ?? []
-    
-    // Auto-select first available if current selection is invalid
-    const currentValid = slotAvailability.value.find((s) => s.time_slot === form.time_slot && slotCanBeSelected(s))
-    if (!currentValid) {
-      form.time_slot = '' // Reset slot, forcing user to pick a new one
-    }
+    availabilityDates.value = res.dates ?? []
   } catch {
-    slotAvailability.value = []
+    availabilityDates.value = []
   } finally {
     availabilityLoading.value = false
-    availabilityInitialized.value = true
   }
 }
 
-watch(formattedBookingDate, loadSlotAvailability)
-watch(experience, () => loadSlotAvailability())
-onMounted(loadSlotAvailability)
+watch(experience, () => loadAvailability())
+onMounted(loadAvailability)
 
 const submitting = ref(false)
 const bookingError = ref<string | null>(null)
@@ -719,21 +561,11 @@ const bookingError = ref<string | null>(null)
 const canSubmit = computed(() =>
   form.guest_name.trim() &&
   form.guest_email.trim() &&
-  formattedBookingDate.value &&
-  form.time_slot,
+  Boolean(timeSelection.value),
 )
 
 async function submitBooking() {
-  if (!canSubmit.value || !siteId) return
-
-  if (hasAnySlots.value) {
-    const selectedSlot = slotAvailability.value.find((slot) => slot.time_slot === form.time_slot)
-    if (!selectedSlot || !slotCanBeSelected(selectedSlot)) {
-      bookingError.value = 'Selected time slot is no longer available for this party size. Please choose another slot.'
-      bookingStep.value = 2 // Go back to time slot selection
-      return
-    }
-  }
+  if (!canSubmit.value || !siteId || !timeSelection.value) return
 
   submitting.value = true
   bookingError.value = null
@@ -747,32 +579,40 @@ async function submitBooking() {
           guest_email: form.guest_email.trim(),
           guest_phone: form.guest_phone.trim() || undefined,
           party_size: form.party_size_num,
-          booking_date: formattedBookingDate.value,
-          time_slot: form.time_slot,
+          booking_date: timeSelection.value.day,
+          time_slot: timeSelection.value.time,
           notes: form.notes.trim() || undefined,
         },
       },
     )
     isBookingModalOpen.value = false // Close modal
-    
+
     setBookingConfirmation({
       type: 'experience',
       siteId,
       siteName: siteName.value,
       guestName: form.guest_name.trim(),
       title: experience.value?.title,
-      date: formattedBookingDate.value,
-      time: form.time_slot,
+      date: timeSelection.value.day,
+      time: timeSelection.value.time,
       guests: String(form.party_size_num),
       requests: form.notes.trim() || null,
       contactPhone: (experienceLocation.value as ApiRecord | null)?.phone ?? null,
       contactEmail: (experienceLocation.value as ApiRecord | null)?.email ?? null,
+      locationName: (experienceLocation.value as ApiRecord | null)?.title ?? null,
       message: res.message,
     })
     await navigateTo('/experiences/confirmed')
   } catch (err: unknown) {
     const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
     bookingError.value = typeof errorData?.error === 'string' ? errorData.error : 'Something went wrong. Please try again.'
+    // Availability can go stale between load and submit (another guest books the
+    // last spot) — send the guest back to the time step rather than leaving them
+    // stuck on the contact form with no way to see the now-invalid slot.
+    if (err && typeof err === 'object' && 'statusCode' in err && (err as { statusCode?: number }).statusCode === 409) {
+      bookingStep.value = 1
+      loadAvailability()
+    }
   } finally {
     submitting.value = false
   }

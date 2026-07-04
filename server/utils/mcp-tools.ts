@@ -40,6 +40,18 @@ const openingHoursInputSchema = {
   description: 'Opening hours for this location. Accepted shapes: (1) an object { weekdayDescriptions: string[] } with one entry per day, e.g. { weekdayDescriptions: ["Monday: 9:00 AM – 5:00 PM", "Tuesday: 9:00 AM – 5:00 PM", ...] } — this is also the shape returned by get_location; (2) a plain string with one day per line, e.g. "Monday: 9:00 AM – 5:00 PM\\nTuesday: 9:00 AM – 5:00 PM". A bare array of per-day structured objects (e.g. { openDay, openTime, closeTime }) is NOT supported — convert to weekdayDescriptions strings first. Pass null to clear.',
 }
 
+const specialHoursInputSchema = {
+  type: ['object', 'null'],
+  description: 'A temporary closure or special-hours override for this specific location, e.g. "closed for renovations for two weeks" or "closed until July 17". Shape: { closed: boolean, starts_on?: "YYYY-MM-DD" (defaults to today if omitted), ends_on?: "YYYY-MM-DD" (omit for an indefinite closure), note?: string — a short guest-facing message, e.g. "Closed for renovations — back July 18th!" }. Convert relative durations like "2 weeks" into a concrete ends_on date yourself before calling. This only affects this location\'s own page, never the site-wide homepage. Pass null for the whole field to clear it and reopen the location.',
+  properties: {
+    closed: { type: 'boolean' },
+    starts_on: { type: ['string', 'null'] },
+    ends_on: { type: ['string', 'null'] },
+    note: { type: ['string', 'null'] },
+  },
+  required: ['closed'],
+}
+
 const locationObject = {
   type: 'object',
   properties: {
@@ -54,6 +66,7 @@ const locationObject = {
     maps_url: { type: ['string', 'null'] },
     address: { type: ['string', 'null'] },
     opening_hours: { type: ['object', 'null'] },
+    special_hours: { type: ['object', 'null'] },
     rating: { type: ['number', 'null'] },
     review_count: { type: ['number', 'null'] },
     description: { type: ['string', 'null'] },
@@ -1314,6 +1327,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       uber_eats_url: { type: 'string', description: 'Uber Eats URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
       foodpanda_url: { type: 'string', description: 'Foodpanda URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
       opening_hours: openingHoursInputSchema,
+      special_hours: specialHoursInputSchema,
     },
     required: ['title'],
     outputSchema: {
@@ -1327,7 +1341,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'update_location',
-    description: 'Update a location\'s details or assign a hero image/video. To assign a hero image: call get_site_media_assets first to find the asset id, then pass it as hero_image_asset_id here. Only provided fields are changed — omitting hero_image_asset_id leaves the existing one intact.',
+    description: 'Update a location\'s own details: hero image/video, regular opening hours, temporary closures/special hours, contact info, and social/delivery links. This is the tool for anything scoped to one specific location — including "close this location for renovations" or "swap this location\'s announcement image" — never update_home_hero or set_home_hero_image, which only affect the shared site-wide homepage. To assign a hero image: call get_site_media_assets first to find the asset id, then pass it as hero_image_asset_id here. Only provided fields are changed — omitting hero_image_asset_id leaves the existing one intact.',
     domain: 'locations',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1345,6 +1359,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       uber_eats_url: { type: 'string', description: 'Uber Eats URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
       foodpanda_url: { type: 'string', description: 'Foodpanda URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
       opening_hours: openingHoursInputSchema,
+      special_hours: specialHoursInputSchema,
     },
     required: ['location_id'],
     outputSchema: {
@@ -2271,7 +2286,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'update_home_hero',
-    description: 'Update the homepage hero (title, subtitle, hero image, or hero video). To assign an existing media asset as the hero image: call get_site_media_assets first to get its id, then pass it as image_asset_id here. Only provided fields are changed — omitting image_asset_id leaves the existing hero image intact.',
+    description: 'Update the shared, site-wide homepage hero (title, subtitle, hero image, or hero video) — this always affects the main homepage, never a specific location\'s own page. If the user is talking about one particular location (e.g. a closure, an announcement image for one location, that location\'s own hero), use update_location instead. To assign an existing media asset as the hero image: call get_site_media_assets first to get its id, then pass it as image_asset_id here. Only provided fields are changed — omitting image_asset_id leaves the existing hero image intact.',
     domain: 'content',
     minimumRole: 'editor',
     confirmRequired: false,

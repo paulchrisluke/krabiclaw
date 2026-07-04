@@ -52,3 +52,5 @@ archive/
 client-imports/
 seeds/*.sql
 .lighthouseci/*
+
+.wrangler/state/v3

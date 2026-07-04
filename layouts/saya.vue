@@ -3,6 +3,16 @@
     class="tenant-layout saya-theme min-h-screen flex flex-col font-sans bg-default text-default"
     :style="themeStyles"
   >
+    <!-- Teleport target for Saya components (e.g. BookingModal) that need to escape
+         page overflow/stacking contexts but still must render inside this div to
+         inherit the --ui-*/--brand-color tokens .saya-theme and themeStyles set here.
+         Teleporting straight to <body> puts them outside this scope entirely, which
+         reads as the modal falling back to the platform's default (non-Saya) theme.
+         Placed before the page content (rather than after) so it precedes any
+         Teleport source in document order during SSR — Teleport targets that only
+         appear later in the same render caused a hydration child-count mismatch. -->
+    <div id="saya-portal-root" />
+
     <SayaHeader :site="site" :locations="locations" :menu="menu" :has-experiences="hasExperiences" />
     <main class="grow">
       <slot />
@@ -17,13 +27,6 @@
       :menu="menu"
       :has-experiences="hasExperiences"
     />
-
-    <!-- Teleport target for Saya components (e.g. BookingModal) that need to escape
-         page overflow/stacking contexts but still must render inside this div to
-         inherit the --ui-*/--brand-color tokens .saya-theme and themeStyles set here.
-         Teleporting straight to <body> puts them outside this scope entirely, which
-         reads as the modal falling back to the platform's default (non-Saya) theme. -->
-    <div id="saya-portal-root" />
   </div>
 </template>
 

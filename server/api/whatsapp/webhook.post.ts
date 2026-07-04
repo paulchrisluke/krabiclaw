@@ -16,6 +16,8 @@ import {
   type ChowBotConversation,
 } from '~/server/utils/chowbot-conversations'
 import { queryFirst } from '~/server/db'
+import { findSubmissionByPhone, insertSubmissionMessage } from '~/server/utils/submission-messages'
+import { insertDashboardNotification } from '~/server/utils/notifications'
 
 interface WhatsAppMessage {
   id: string
@@ -182,6 +184,32 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
   const toPhone = normalizePhone(message.from)
   const user = await resolveUser(db, message.from)
   if (!user) {
+    // Not a verified owner/staff account — check whether this is a customer replying to an
+    // open reservation/experience-booking thread rather than trying to talk to ChowBot.
+    const match = await findSubmissionByPhone(db, toPhone)
+    if (match) {
+      const text = messageText(message)
+      if (text) {
+        await insertSubmissionMessage(db, {
+          submissionType: match.submissionType,
+          submissionId: match.submissionId,
+          organizationId: match.organizationId,
+          siteId: match.siteId,
+          direction: 'in',
+          channel: 'whatsapp',
+          body: text,
+          metaMessageId: message.id,
+        })
+        await insertDashboardNotification(db, {
+          organizationId: match.organizationId,
+          siteId: match.siteId,
+          template: 'submission_reply_whatsapp',
+          title: 'New WhatsApp reply from a guest',
+          payload: { submission_type: match.submissionType, submission_id: match.submissionId, message: text },
+        })
+      }
+      return
+    }
     await reply(null, env, toPhone, 'This WhatsApp number is not linked to a verified KrabiClaw account. Sign in once with WhatsApp OTP, then message ChowBot again.')
     return
   }

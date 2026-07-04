@@ -6,6 +6,13 @@ type SetupEnv = Record<string, string | undefined>;
 
 const MAX_SLUG_ATTEMPTS = 10;
 
+export interface SpecialHoursInput {
+  closed: boolean;
+  starts_on?: string | null;
+  ends_on?: string | null;
+  note?: string | null;
+}
+
 export interface CreateLocationInput {
   title: string;
   slug?: string | null;
@@ -20,6 +27,7 @@ export interface CreateLocationInput {
   short_description?: string | null;
   address?: string | Record<string, unknown> | null;
   opening_hours?: string | unknown[] | Record<string, unknown> | null;
+  special_hours?: SpecialHoursInput | null;
   price_level?: string | null;
   rating?: number | null;
   review_count?: number | null;
@@ -59,6 +67,7 @@ export interface LocationRecord {
   is_primary: number | boolean;
   address?: string | null;
   opening_hours?: string | null;
+  special_hours?: string | null;
   hero_image_asset_id?: string | null;
   hero_video_asset_id?: string | null;
   price_level?: string | null;
@@ -175,6 +184,59 @@ function serializeOpeningHours(value: unknown) {
     : null;
 }
 
+function parseYmd(value: string, field: string): { year: number; month: number; day: number } {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) {
+    throw new Error(`${field} must be a date in YYYY-MM-DD format.`);
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const asDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    asDate.getUTCFullYear() !== year ||
+    asDate.getUTCMonth() !== month - 1 ||
+    asDate.getUTCDate() !== day
+  ) {
+    throw new Error(`${field} is not a valid calendar date.`);
+  }
+  return { year, month, day };
+}
+
+function serializeSpecialHours(value: SpecialHoursInput | null | undefined) {
+  if (value === undefined || value === null) return null;
+
+  const startsOn = value.starts_on ? parseYmd(value.starts_on, "special_hours.starts_on") : null;
+  const endsOn = value.ends_on ? parseYmd(value.ends_on, "special_hours.ends_on") : null;
+  const today = new Date();
+  const startDate = startsOn ?? {
+    year: today.getFullYear(),
+    month: today.getMonth() + 1,
+    day: today.getDate(),
+  };
+
+  if (endsOn) {
+    const startMs = Date.UTC(startDate.year, startDate.month - 1, startDate.day);
+    const endMs = Date.UTC(endsOn.year, endsOn.month - 1, endsOn.day);
+    if (endMs < startMs) {
+      throw new Error("special_hours.ends_on must not be before starts_on.");
+    }
+  }
+
+  const note = typeof value.note === "string" ? value.note.trim() || undefined : undefined;
+
+  return JSON.stringify({
+    specialHourPeriods: [
+      {
+        startDate,
+        ...(endsOn ? { endDate: endsOn } : {}),
+        isClosed: value.closed,
+        ...(note ? { note } : {}),
+      },
+    ],
+  });
+}
+
 async function validateMediaAsset(
   db: D1Database,
   organizationId: string,
@@ -208,7 +270,7 @@ async function loadLocation(
 ) {
   const columns = `id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
            rating, review_count, description, short_description, status, is_primary,
-           address, opening_hours, hero_image_asset_id, hero_video_asset_id, price_level,
+           address, opening_hours, special_hours, hero_image_asset_id, hero_video_asset_id, price_level,
            facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
            notification_phone, timezone, created_at, updated_at`;
   // Check id first so a slug that happens to collide with another row's id can
@@ -339,11 +401,11 @@ export async function createLocation(
         query: `
           INSERT INTO business_locations (
             id, organization_id, site_id, title, slug, city, neighborhood, phone, email, website_url, maps_url,
-            google_place_id, description, short_description, address, opening_hours, rating, review_count,
+            google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
             price_level, facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
             hero_image_asset_id, hero_video_asset_id, notification_phone, timezone, is_primary, status, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
         `,
         params: [
           id,
@@ -362,6 +424,7 @@ export async function createLocation(
           input.short_description ?? null,
           serializeAddress(input.address),
           serializeOpeningHours(input.opening_hours),
+          serializeSpecialHours(input.special_hours),
           input.rating ?? null,
           input.review_count ?? null,
           input.price_level ?? null,
@@ -561,6 +624,20 @@ export async function updateLocation(
         data: {
           error:
             error instanceof Error ? error.message : "Invalid opening_hours.",
+        },
+      };
+    }
+  }
+  if (input.special_hours !== undefined) {
+    try {
+      sets.push("special_hours = ?");
+      params.push(serializeSpecialHours(input.special_hours));
+    } catch (error) {
+      return {
+        status: 400,
+        data: {
+          error:
+            error instanceof Error ? error.message : "Invalid special_hours.",
         },
       };
     }
