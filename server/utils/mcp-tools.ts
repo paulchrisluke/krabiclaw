@@ -40,6 +40,18 @@ const openingHoursInputSchema = {
   description: 'Opening hours for this location. Accepted shapes: (1) an object { weekdayDescriptions: string[] } with one entry per day, e.g. { weekdayDescriptions: ["Monday: 9:00 AM – 5:00 PM", "Tuesday: 9:00 AM – 5:00 PM", ...] } — this is also the shape returned by get_location; (2) a plain string with one day per line, e.g. "Monday: 9:00 AM – 5:00 PM\\nTuesday: 9:00 AM – 5:00 PM". A bare array of per-day structured objects (e.g. { openDay, openTime, closeTime }) is NOT supported — convert to weekdayDescriptions strings first. Pass null to clear.',
 }
 
+const specialHoursInputSchema = {
+  type: ['object', 'null'],
+  description: 'A temporary closure or special-hours override for this specific location, e.g. "closed for renovations for two weeks" or "closed until July 17". Shape: { closed: boolean, starts_on?: "YYYY-MM-DD" (defaults to today if omitted), ends_on?: "YYYY-MM-DD" (omit for an indefinite closure), note?: string — a short guest-facing message, e.g. "Closed for renovations — back July 18th!" }. Convert relative durations like "2 weeks" into a concrete ends_on date yourself before calling. This only affects this location\'s own page, never the site-wide homepage. Pass null for the whole field to clear it and reopen the location.',
+  properties: {
+    closed: { type: 'boolean' },
+    starts_on: { type: ['string', 'null'] },
+    ends_on: { type: ['string', 'null'] },
+    note: { type: ['string', 'null'] },
+  },
+  required: ['closed'],
+}
+
 const locationObject = {
   type: 'object',
   properties: {
@@ -54,6 +66,7 @@ const locationObject = {
     maps_url: { type: ['string', 'null'] },
     address: { type: ['string', 'null'] },
     opening_hours: { type: ['object', 'null'] },
+    special_hours: { type: ['object', 'null'] },
     rating: { type: ['number', 'null'] },
     review_count: { type: ['number', 'null'] },
     description: { type: ['string', 'null'] },
@@ -283,7 +296,6 @@ const experienceObject = {
     included_items: { type: 'array', items: { type: 'string' } },
     what_to_bring: { type: 'array', items: { type: 'string' } },
     meeting_point: { type: ['string', 'null'] },
-    cancellation_policy: { type: ['string', 'null'] },
     sort_order: { type: 'number' },
     featured: { type: 'boolean' },
     featured_sort_order: { type: 'number' },
@@ -332,7 +344,6 @@ const experienceWriteSchema = {
   included_items: { type: ['array', 'null'], items: { type: 'string' }, description: 'Explicit list of what is included. Use one concise string per included item.' },
   what_to_bring: { type: ['array', 'null'], items: { type: 'string' }, description: 'Explicit list of what guests should bring or prepare. Use one concise string per item.' },
   meeting_point: { type: ['string', 'null'], description: 'Specific arrival or check-in instruction for guests.' },
-  cancellation_policy: { type: ['string', 'null'], description: 'Explicit cancellation or refund policy text for this experience.' },
   status: experienceStatusSchema,
   sort_order: { type: 'number', description: 'Lower numbers sort earlier in lists.' },
   featured: { type: 'boolean', description: 'Whether this experience should be highlighted in featured placements.' },
@@ -340,6 +351,78 @@ const experienceWriteSchema = {
   location_id: { type: 'string', description: 'Optional location id. If omitted, the site primary location is used when available. If the site has no primary location yet, create a location first or pass a valid location_id.' },
   seo_title: { type: ['string', 'null'], description: 'Optional SEO title override.' },
   seo_description: { type: ['string', 'null'], description: 'Optional SEO description override.' },
+} as const
+
+const renderedBookingPolicySummaryObject = {
+  type: 'object',
+  properties: {
+    heading: { type: 'string' },
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          text: { type: 'string' },
+        },
+        required: ['id', 'text'],
+      },
+    },
+    additional_notes_html: { type: ['string', 'null'] },
+  },
+  required: ['heading', 'items', 'additional_notes_html'],
+}
+
+const bookingPolicyObject = {
+  type: 'object',
+  properties: {
+    id: { type: ['string', 'null'] },
+    organization_id: { type: ['string', 'null'] },
+    site_id: { type: 'string' },
+    policy_type: { type: 'string', enum: ['reservation', 'experience'] },
+    scope_type: { type: 'string', enum: ['site', 'location', 'experience'] },
+    location_id: { type: ['string', 'null'] },
+    experience_id: { type: ['string', 'null'] },
+    booking_window_days: { type: ['number', 'null'] },
+    advance_notice_minutes: { type: ['number', 'null'] },
+    free_cancellation_until_minutes: { type: ['number', 'null'] },
+    late_arrival_grace_minutes: { type: ['number', 'null'] },
+    host_confirmation_sla_minutes: { type: ['number', 'null'] },
+    reschedule_allowed: { type: 'boolean' },
+    reschedule_cutoff_minutes: { type: ['number', 'null'] },
+    deposit_required: { type: 'boolean' },
+    deposit_trigger_party_size: { type: ['number', 'null'] },
+    special_requests_allowed: { type: 'boolean' },
+    weather_policy: { type: ['string', 'null'] },
+    minimum_guest_age: { type: ['number', 'null'] },
+    accessibility_contact_required: { type: 'boolean' },
+    additional_notes_html: { type: ['string', 'null'] },
+    source_scope: { type: ['string', 'null'] },
+    created_at: { type: ['string', 'null'] },
+    updated_at: { type: ['string', 'null'] },
+  },
+}
+
+const bookingPolicyWriteSchema = {
+  policy_type: { type: 'string', enum: ['reservation', 'experience'] },
+  scope_type: { type: 'string', enum: ['site', 'location', 'experience'] },
+  location_id: { type: 'string', description: 'Optional location id when editing a location-scoped reservation or experience default policy.' },
+  experience_id: { type: 'string', description: 'Optional experience id when editing an experience-specific policy override.' },
+  booking_window_days: { type: ['number', 'null'] },
+  advance_notice_minutes: { type: ['number', 'null'] },
+  free_cancellation_until_minutes: { type: ['number', 'null'] },
+  late_arrival_grace_minutes: { type: ['number', 'null'] },
+  host_confirmation_sla_minutes: { type: ['number', 'null'] },
+  reschedule_allowed: { type: 'boolean' },
+  reschedule_cutoff_minutes: { type: ['number', 'null'] },
+  deposit_required: { type: 'boolean' },
+  deposit_trigger_party_size: { type: ['number', 'null'] },
+  special_requests_allowed: { type: 'boolean' },
+  weather_policy: { type: ['string', 'null'] },
+  minimum_guest_age: { type: ['number', 'null'] },
+  accessibility_contact_required: { type: 'boolean' },
+  additional_notes_html: { type: ['string', 'null'] },
+  locale: { type: 'string', description: 'Optional locale code for the rendered preview copy. Defaults to en.' },
 } as const
 
 const bookingObject = {
@@ -632,6 +715,8 @@ const READ_ONLY_TOOL_NAMES = [
   'get_facebook_connection',
   'get_dashboard_link',
   'get_page_fields',
+  'get_booking_policy',
+  'preview_booking_policy',
   'list_location_qa',
   'list_location_reviews',
   'list_experiences',
@@ -709,6 +794,7 @@ const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'publish_to_facebook',
   'sync_facebook_page',
   'update_page_content',
+  'update_booking_policy',
   'update_home_hero',
   'create_location_qa',
   'update_location_qa',
@@ -1314,6 +1400,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       uber_eats_url: { type: 'string', description: 'Uber Eats URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
       foodpanda_url: { type: 'string', description: 'Foodpanda URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
       opening_hours: openingHoursInputSchema,
+      special_hours: specialHoursInputSchema,
     },
     required: ['title'],
     outputSchema: {
@@ -1327,7 +1414,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'update_location',
-    description: 'Update a location\'s details or assign a hero image/video. To assign a hero image: call get_site_media_assets first to find the asset id, then pass it as hero_image_asset_id here. Only provided fields are changed — omitting hero_image_asset_id leaves the existing one intact.',
+    description: 'Update a location\'s own details: hero image/video, regular opening hours, temporary closures/special hours, contact info, and social/delivery links. This is the tool for anything scoped to one specific location — including "close this location for renovations" or "swap this location\'s announcement image" — never update_home_hero or set_home_hero_image, which only affect the shared site-wide homepage. To assign a hero image: call get_site_media_assets first to find the asset id, then pass it as hero_image_asset_id here. Only provided fields are changed — omitting hero_image_asset_id leaves the existing one intact.',
     domain: 'locations',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1345,6 +1432,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       uber_eats_url: { type: 'string', description: 'Uber Eats URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
       foodpanda_url: { type: 'string', description: 'Foodpanda URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
       opening_hours: openingHoursInputSchema,
+      special_hours: specialHoursInputSchema,
     },
     required: ['location_id'],
     outputSchema: {
@@ -2270,8 +2358,67 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   siteTool({
+    name: 'get_booking_policy',
+    description: 'Get the canonical structured booking policy for reservations or experiences. Use scope_type=site for the site default, scope_type=location for a location override, or scope_type=experience for an experience-specific override.',
+    domain: 'content',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      policy_type: bookingPolicyWriteSchema.policy_type,
+      scope_type: bookingPolicyWriteSchema.scope_type,
+      location_id: bookingPolicyWriteSchema.location_id,
+      experience_id: bookingPolicyWriteSchema.experience_id,
+      locale: bookingPolicyWriteSchema.locale,
+    },
+    required: ['policy_type'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        policy: bookingPolicyObject,
+        resolved_policy: bookingPolicyObject,
+        summary: renderedBookingPolicySummaryObject,
+      },
+      required: ['resolved_policy', 'summary'],
+    },
+  }),
+  siteTool({
+    name: 'preview_booking_policy',
+    description: 'Preview how structured booking policy changes will render without saving them.',
+    domain: 'content',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: bookingPolicyWriteSchema,
+    required: ['policy_type'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        resolved_policy: bookingPolicyObject,
+        summary: renderedBookingPolicySummaryObject,
+      },
+      required: ['resolved_policy', 'summary'],
+    },
+  }),
+  siteTool({
+    name: 'update_booking_policy',
+    description: 'Create or update the canonical structured booking policy for reservations or experiences. Use this instead of editing reservation policy prose or experience cancellation text directly.',
+    domain: 'content',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: bookingPolicyWriteSchema,
+    required: ['policy_type'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        policy: bookingPolicyObject,
+        resolved_policy: bookingPolicyObject,
+        summary: renderedBookingPolicySummaryObject,
+      },
+      required: ['policy', 'resolved_policy', 'summary'],
+    },
+  }),
+  siteTool({
     name: 'update_home_hero',
-    description: 'Update the homepage hero (title, subtitle, hero image, or hero video). To assign an existing media asset as the hero image: call get_site_media_assets first to get its id, then pass it as image_asset_id here. Only provided fields are changed — omitting image_asset_id leaves the existing hero image intact.',
+    description: 'Update the shared, site-wide homepage hero (title, subtitle, hero image, or hero video) — this always affects the main homepage, never a specific location\'s own page. If the user is talking about one particular location (e.g. a closure, an announcement image for one location, that location\'s own hero), use update_location instead. To assign an existing media asset as the hero image: call get_site_media_assets first to get its id, then pass it as image_asset_id here. Only provided fields are changed — omitting image_asset_id leaves the existing hero image intact.',
     domain: 'content',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -2584,7 +2731,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'create_experience',
-    description: `Create an experience. Gather and store the details in the dedicated fields instead of collapsing everything into body: title for the public name, tagline for the short hook, body for the main narrative, highlights for short selling points, included_items for what is included, what_to_bring for guest prep, meeting_point for arrival instructions, cancellation_policy for refund/cancellation rules, price_amount/price for pricing, duration_minutes for length, max_capacity for guest count, time_slots or recurring_slots for schedule, available_note for urgency text, and image/video fields for primary media. status must be one of: ${EXPERIENCE_STATUSES.join(', ')}. Every experience must belong to a location. Pass location_id directly, or omit it only when the site already has a primary location. If no location exists yet, call list_locations or create_location first.`,
+    description: `Create an experience. Gather and store the details in the dedicated fields instead of collapsing everything into body: title for the public name, tagline for the short hook, body for the main narrative, highlights for short selling points, included_items for what is included, what_to_bring for guest prep, meeting_point for arrival instructions, price_amount/price for pricing, duration_minutes for length, max_capacity for guest count, time_slots or recurring_slots for schedule, available_note for urgency text, and image/video fields for primary media. Use update_booking_policy after creation for cancellation, refund, or other guest policy rules. status must be one of: ${EXPERIENCE_STATUSES.join(', ')}. Every experience must belong to a location. Pass location_id directly, or omit it only when the site already has a primary location. If no location exists yet, call list_locations or create_location first.`,
     domain: 'experiences',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -2598,7 +2745,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'update_experience',
-    description: `Update an experience using the dedicated fields instead of stuffing all details into body. Keep tagline as the short hook, body as the full description, highlights as short selling points, included_items as what is included, what_to_bring as guest prep notes, meeting_point as arrival instructions, cancellation_policy as refund/cancellation rules, duration_minutes for length, max_capacity for guest count, price_amount/price for pricing, and time_slots or recurring_slots for scheduling. status must be one of: ${EXPERIENCE_STATUSES.join(', ')}.`,
+    description: `Update an experience using the dedicated fields instead of stuffing all details into body. Keep tagline as the short hook, body as the full description, highlights as short selling points, included_items as what is included, what_to_bring as guest prep notes, meeting_point as arrival instructions, duration_minutes for length, max_capacity for guest count, price_amount/price for pricing, and time_slots or recurring_slots for scheduling. Use update_booking_policy for cancellation, refund, or other guest policy rules. status must be one of: ${EXPERIENCE_STATUSES.join(', ')}. Do NOT set status to 'inactive' to reflect a whole location being temporarily closed (e.g. "closed for renovations for two weeks") — that hides the experience entirely behind a generic placeholder instead of showing it as unavailable. For a location-wide temporary closure, call update_location with special_hours on that location instead; every experience at that location automatically shows as unavailable for booking while the closure is active, and reopens automatically without any further action.`,
     domain: 'experiences',
     minimumRole: 'editor',
     confirmRequired: false,

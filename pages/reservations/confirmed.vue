@@ -1,94 +1,109 @@
 <template>
   <div class="min-h-screen bg-default text-default">
-    <div class="mx-auto max-w-xl px-4 pt-16 pb-24 sm:px-6 lg:px-8">
-      <template v-if="pending">
-        <SayaIcon name="arrow-path" class="mx-auto size-12 animate-spin text-muted" />
-      </template>
-
-      <template v-else-if="confirmation">
-        <div class="rounded-3xl border border-default bg-elevated p-10 text-center shadow-sm sm:p-12">
-          <div class="mb-8 flex justify-center">
-            <div class="flex size-20 items-center justify-center rounded-full bg-primary/10">
-              <SayaIcon name="check-circle" class="size-12 text-primary" />
-            </div>
-          </div>
-
-          <h1 class="saya-display saya-italic text-4xl text-default">
-            {{ resCopy.thankYouLabel(confirmation.guestName) }}
-          </h1>
-          <p class="mt-4 text-muted">
-            {{ resCopy.confirmationMessage(
-              confirmation.guests,
-              Number(confirmation.guests) === 1 ? resCopy.guestLabel : resCopy.guestsLabelPlural,
-              readableDate,
-              confirmation.time
-            ) }}
-          </p>
-          <p class="mt-2 text-sm text-muted">
-            {{ resCopy.confirmSoonLabel(resCopy.reservationWord) }}
-          </p>
-
-          <div v-if="confirmation.requests" class="mt-8 rounded-2xl border border-default bg-default px-6 py-5 text-left">
-            <p class="saya-eyebrow mb-1 text-muted">Special requests</p>
-            <p class="text-sm text-default">{{ confirmation.requests }}</p>
-          </div>
-
-          <div v-if="confirmation.cancelUrl" class="mt-8 rounded-2xl border border-default bg-default px-6 py-5">
-            <p class="saya-eyebrow mb-1 text-muted">{{ resCopy.manageLabel(resCopy.reservationWord) }}</p>
-            <p class="text-sm text-muted">{{ resCopy.cancelAnytimeLabel }}</p>
-            <SayaButton :to="confirmation.cancelUrl" color="error" variant="ghost" size="md" class="mt-4">
-              <SayaIcon name="x-circle" class="mr-1.5 size-4" />
-              {{ resCopy.cancelLabel(resCopy.reservationWord) }}
-            </SayaButton>
-          </div>
-
-          <div class="mt-8 flex flex-col gap-3">
-            <SayaButton variant="soft" @click="share">
-              <SayaIcon name="share" class="mr-1.5 size-4" />
-              {{ justCopied ? 'Copied!' : 'Share' }}
-            </SayaButton>
-            <SayaButton
-              v-if="confirmation.contactPhone"
-              :href="`tel:${confirmation.contactPhone.replace(/\s/g, '')}`"
-              variant="soft"
-            >
-              {{ resCopy.callUsLabel(confirmation.contactPhone) }}
-            </SayaButton>
-            <SayaButton to="/reservations" variant="ghost" size="md">
-              {{ resCopy.makeAnotherLabel(resCopy.reservationWord) }}
-            </SayaButton>
-          </div>
-        </div>
-      </template>
-
-      <div v-else class="rounded-3xl border border-default bg-muted/20 p-12 text-center">
-        <SayaIcon name="exclamation-triangle" class="mx-auto size-12 text-error" />
-        <h2 class="mt-6 text-xl font-bold">No reservation found</h2>
-        <p class="mt-2 text-muted">We couldn't find a confirmation to show. Check your email for the details.</p>
-        <SayaButton to="/reservations" variant="soft" class="mt-10">Make a reservation</SayaButton>
+    <template v-if="pending">
+      <div class="flex min-h-screen items-center justify-center">
+        <SayaIcon name="arrow-path" class="size-12 animate-spin text-muted" />
       </div>
+    </template>
+
+    <BookingConfirmation
+      v-else-if="confirmation"
+      kicker="Request received"
+      :receipt-kicker="resCopy.reservationWord"
+      :receipt-rows="receiptRows"
+      :next-steps-kicker="resolvedPolicySummary?.heading ?? resCopy.reservationPoliciesHeading"
+      :next-steps="policyLines"
+      :next-steps-notes-html="resolvedPolicySummary?.additional_notes_html ?? ''"
+      :cta-label="resCopy.reservationExploreLabel"
+      :cta-to="menuCtaTo"
+    >
+      <template #title>
+        {{ resCopy.thankYouLabel(confirmation.guestName) }}
+      </template>
+      <template #subtitle>
+        {{ resCopy.confirmationMessage(
+          confirmation.guests,
+          Number(confirmation.guests) === 1 ? resCopy.guestLabel : resCopy.guestsLabelPlural,
+          readableDate,
+          fmt12Hour(confirmation.time)
+        ) }}
+        {{ resCopy.confirmSoonLabel(resCopy.reservationWord) }}
+      </template>
+      <template #actions>
+        <SayaButton variant="soft" @click="share">
+          <SayaIcon name="share" class="mr-1.5 size-4" />
+          {{ justCopied ? 'Copied!' : 'Share' }}
+        </SayaButton>
+        <SayaButton v-if="confirmation.contactPhone" :href="`tel:${confirmation.contactPhone.replace(/\s/g, '')}`" variant="outline">
+          {{ resCopy.callUsLabel(confirmation.contactPhone) }}
+        </SayaButton>
+        <SayaButton v-if="confirmation.cancelUrl" :to="confirmation.cancelUrl" color="error" variant="ghost">
+          {{ resCopy.cancelLabel(resCopy.reservationWord) }}
+        </SayaButton>
+      </template>
+    </BookingConfirmation>
+
+    <div v-else class="mx-auto max-w-xl px-4 pt-24 pb-24 text-center sm:px-6 lg:px-8">
+      <SayaIcon name="exclamation-triangle" class="mx-auto size-12 text-error" />
+      <h2 class="mt-6 text-xl font-bold">No reservation found</h2>
+      <p class="mt-2 text-muted">We couldn't find a confirmation to show. Check your email for the details.</p>
+      <SayaButton to="/reservations" variant="soft" class="mt-10">Select a time</SayaButton>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { getBookingConfirmation, type BookingConfirmation } from '~/composables/useBookingHandoff'
+import { getBookingConfirmation, type BookingConfirmation as BookingConfirmationData } from '~/composables/useBookingHandoff'
+import BookingConfirmation from '~/components/booking/BookingConfirmation.vue'
+import { fmt12Hour } from '~/shared/reservation-hours'
+import type { RenderedBookingPolicySummaryItem } from '~/server/utils/booking-policies'
 
 definePageMeta({ layout: 'saya' })
 
 const { site, siteId } = useTenantSite()
+const { reservationPolicySiteDefault, reservationPolicyByLocation } = useBootstrap()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 const { formatDate } = useLocaleDate()
 const route = useRoute()
 const justCopied = ref(false)
 
-const confirmation = ref<BookingConfirmation | null>(null)
+const confirmation = ref<BookingConfirmationData | null>(null)
 const pending = ref(true)
 
 const readableDate = computed(() => {
   if (!confirmation.value?.date) return ''
   return formatDate(`${confirmation.value.date}T12:00:00`)
+})
+
+const receiptRows = computed(() => {
+  if (!confirmation.value) return []
+  const rows: Array<{ label: string; value: string }> = []
+  if (confirmation.value.locationName) rows.push({ label: 'Location', value: confirmation.value.locationName })
+  rows.push({ label: 'Date', value: readableDate.value })
+  rows.push({ label: 'Time', value: fmt12Hour(confirmation.value.time) })
+  rows.push({
+    label: 'Party',
+    value: `${confirmation.value.guests} ${Number(confirmation.value.guests) === 1 ? resCopy.value.guestLabel : resCopy.value.guestsLabelPlural}`,
+  })
+  rows.push({ label: 'Booked by', value: confirmation.value.guestName })
+  if (confirmation.value.requests) rows.push({ label: 'Requests', value: confirmation.value.requests })
+  return rows
+})
+
+const resolvedPolicySummary = computed(() => {
+  if (confirmation.value?.sitePolicySummary) return confirmation.value.sitePolicySummary as ApiRecord
+  const locationId = confirmation.value?.locationId
+  if (locationId && reservationPolicyByLocation.value[locationId]) return reservationPolicyByLocation.value[locationId]
+  return reservationPolicySiteDefault.value
+})
+
+const policyLines = computed(() => (resolvedPolicySummary.value?.items ?? []).map((item: RenderedBookingPolicySummaryItem) => String(item.text ?? '')))
+
+const menuCtaTo = computed(() => {
+  const slug = confirmation.value?.locationSlug
+  if (slug) return `/locations/${slug}/menu`
+  return resCopy.value.reservationExploreRoute
 })
 
 onMounted(async () => {
@@ -110,7 +125,7 @@ onMounted(async () => {
   const token = route.hash ? route.hash.substring(1) : ''
   if (resId && token) {
     try {
-      const res = await $fetch<{ reservation: { name: string; date: string; time: string; guests: string } }>(
+      const res = await $fetch<{ reservation: { name: string; date: string; time: string; guests: string; location_id?: string | null } }>(
         `/api/public/sites/${siteId}/reservations/${resId}`,
         { headers: { Authorization: `Bearer ${token}` } },
       )
@@ -122,6 +137,7 @@ onMounted(async () => {
         date: res.reservation.date,
         time: res.reservation.time,
         guests: res.reservation.guests,
+        locationId: typeof res.reservation.location_id === 'string' ? res.reservation.location_id : null,
         cancelUrl: `/reservations/cancel?id=${resId}#${token}`,
       }
     } catch {
@@ -133,7 +149,7 @@ onMounted(async () => {
 
 async function share() {
   if (!confirmation.value) return
-  const text = `My reservation at ${confirmation.value.siteName} is confirmed for ${readableDate.value} at ${confirmation.value.time}.`
+  const text = `My reservation at ${confirmation.value.siteName} is confirmed for ${readableDate.value} at ${fmt12Hour(confirmation.value.time)}.`
   if (import.meta.client && navigator.share) {
     try {
       await navigator.share({ title: 'Reservation confirmed', text, url: window.location.origin })

@@ -58,7 +58,8 @@ test.describe('public tenant site', () => {
         date: '2030-05-17',
         time: '19:00',
         guests: '2',
-        requests: 'Playwright cancellation token coverage'
+        requests: 'Playwright cancellation token coverage',
+        location_id: 'loc-demo',
       }
     })
 

@@ -198,10 +198,17 @@ export default defineEventHandler(async (event) => {
   }
 
   const isPlatform = isPlatformHost(host, env);
-  const isPlatformPathCheck = isPlatformPath(url.pathname);
 
-  // Platform routes (KrabiClaw SaaS)
-  if (isPlatform || isPlatformPathCheck) {
+  // Normal requests resolve platform-vs-tenant by host, not by pathname.
+  // Tenant sites legitimately own routes like /experiences, /reservations,
+  // /locations, /menu, and /contact on their custom domains. Treating those
+  // path prefixes as platform globally causes SSR on tenant hosts to
+  // serialize a platform context (siteId=null), which is exactly how
+  // www.potteryhousekrabi.com/experiences ended up rendering the KrabiClaw
+  // empty-state page while the tenant bootstrap API still returned real
+  // experience data. isPlatformPath() stays in use above for preview-route
+  // guards on true platform hosts.
+  if (isPlatform) {
     setTenantType(event, TENANT_TYPES.PLATFORM);
     event.context.siteId = null;
     return;

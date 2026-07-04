@@ -401,6 +401,7 @@ import { useAuth } from '~/composables/useAuth'
 import { formatMoneyAmount } from '~/shared/money'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 import { useScrollLock } from '~/composables/useScrollLock'
+import { getActiveSpecialClosure } from '~/utils/formatters'
 
 definePageMeta({ layout: false })
 
@@ -456,6 +457,15 @@ const locations = computed(() => bootstrapLocations.value)
 const hasOrderLinks = computed(() =>
   locations.value.some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )
+
+// Location ids currently under an active special_hours closure (e.g. "closed
+// for renovations") — used to mark their experiences unavailable without
+// touching the experience's own status.
+const closedLocationIds = computed(() => new Set(
+  locations.value
+    .filter(loc => getActiveSpecialClosure(loc.special_hours, loc.timezone))
+    .map(loc => loc.id)
+))
 
 // Check if there's a menu
 const hasMenu = computed(() => {
@@ -656,6 +666,7 @@ const featuredContent = computed(() => {
         imageKind: 'image',
         alt: item.title ? `${item.title} experience` : 'Featured experience image',
         href: item.slug ? `/experiences/${item.slug}` : '/experiences',
+        unavailable: item.location_id ? closedLocationIds.value.has(item.location_id) : false,
       }
     }
   })

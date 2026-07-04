@@ -308,6 +308,7 @@ test.describe('stateless MCP server', () => {
         date: '2030-01-15',
         time: '19:00',
         guests: '2',
+        location_id: 'loc-mcp-growth',
       },
     })
     expect(publicReservation.status()).toBe(201)

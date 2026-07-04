@@ -41,6 +41,8 @@ export interface CloudflareEnv {
   RESEND_API_KEY?: string
   EMAIL_FROM?: string
   EMAIL_DELIVERY_MODE?: string
+  EMAIL_REPLY_SECRET?: string
+  EMAIL_INBOUND_SECRET?: string
   MEDIA_BUCKET?: R2Bucket
   db?: ReturnType<typeof createDb>
   [key: string]: ApiValue

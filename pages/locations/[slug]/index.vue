@@ -57,7 +57,11 @@
             <p v-else-if="!heroTitle" class="saya-display mt-5 text-2xl text-white/70">
               <em class="saya-italic">{{ siteName }}</em>
             </p>
-            <div v-if="isOpenNow === true" class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
+            <div v-if="activeClosureMessage" class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
+              <span class="size-1.5 rounded-full bg-red-400" />
+              {{ activeClosureMessage }}
+            </div>
+            <div v-else-if="isOpenNow === true" class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
               <span class="size-1.5 rounded-full bg-green-400" />
               Open now · {{ todayHours }}
             </div>
@@ -284,7 +288,7 @@
 </template>
 
 <script setup lang="ts">
-import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow } from '~/utils/formatters'
+import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
 import { formatMoneyAmount } from '~/shared/money'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 
@@ -420,6 +424,10 @@ const featuredItems = computed(() => {
         return String(a.title ?? '').localeCompare(String(b.title ?? ''));
       })
     const toUse = featured.length > 0 ? featured : experiences.filter(exp => exp.status === 'active')
+    // A location-wide closure (special_hours) makes every experience at this
+    // location unavailable for booking without touching the experience's own
+    // status — the closure is time-boxed and reopens automatically.
+    const closureMessage = activeClosureMessage.value
     return toUse.slice(0, 4).map(exp => ({
       name: exp.title,
       price: exp.price && isFinite(parseFloat(String(exp.price))) ? formatMoneyAmount(Number(parseFloat(String(exp.price))), defaultCurrency, '') : (exp.price || ''),
@@ -427,6 +435,7 @@ const featuredItems = computed(() => {
       imageKind: 'image',
       alt: exp.title ? `${exp.title} experience` : 'Featured experience image',
       href: exp.slug ? `/experiences/${exp.slug}` : '/experiences',
+      unavailable: !!closureMessage,
     }))
   }
 })
@@ -470,6 +479,9 @@ const weekHours = computed(() => {
 
 const todayHours = computed(() => getTodayGoogleHours(location.value?.opening_hours))
 const isOpenNow = computed(() => getIsOpenNow(location.value?.opening_hours))
+
+const activeClosure = computed(() => getActiveSpecialClosure(location.value?.special_hours, location.value?.timezone))
+const activeClosureMessage = computed(() => formatClosureMessage(activeClosure.value))
 
 
 

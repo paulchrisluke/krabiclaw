@@ -141,6 +141,7 @@ Cloudflare D1 rejects `BEGIN`/`COMMIT`/`ROLLBACK` sent as raw SQL, full stop —
 
 - Tenant resolution lives in `server/middleware/tenant-resolution.ts`:
   - `localhost` / `krabiclaw.com` = platform routes
+  - `*.localhost` = local tenant sites during `yarn dev` (for example `pottery-house.localhost:3000`, `kikuzuki-krabi-thailand.localhost:3000`)
   - `*.krabiclaw.com` or custom domains = tenant sites
   - On `*.workers.dev` preview Workers, `x-preview-tenant: <slug>` header carries tenant identity because the browser cannot spoof subdomains against a single-level wildcard cert.
 
@@ -221,6 +222,11 @@ Production is never reseeded (only migrated), so this only affects local dev, pr
 ---
 
 ## Local Testing
+
+- `yarn dev` intentionally disables Wrangler remote bindings by default via the local Cloudflare dev bridge in `build/cloudflare-dev-module.ts` + `build/runtime/cloudflare-bindings-dev.ts`.
+  This is required so tenant/local D1 development does not depend on a remote Workers AI proxy session succeeding before `DB`/R2/KV bindings attach.
+  Historical failure mode: Wrangler times out while opening the remote `AI` binding session, `event.context.cloudflare.env` falls back to `{}`, and every tenant `*.localhost` request incorrectly 404s as `Site Not Found` even though the seed data is present.
+  If you need remote binding behavior for AI-specific debugging, opt in explicitly with `NUXT_CF_REMOTE_BINDINGS=true yarn dev`.
 
 - Dev login bypasses OAuth:
 

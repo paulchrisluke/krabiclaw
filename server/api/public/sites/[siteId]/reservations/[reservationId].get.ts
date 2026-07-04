@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   const reservation = await queryFirst(
     db,
     `
-    SELECT name, date, time, guests, status
+    SELECT name, date, time, guests, status, location_id
     FROM reservation_submissions
     WHERE id = ?
       AND site_id = ?

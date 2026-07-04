@@ -29,6 +29,10 @@ import {
   getBootstrapCache,
   putBootstrapCache,
 } from "~/server/utils/bootstrap-cache";
+import {
+  renderBookingPolicySummary,
+  resolveBookingPolicy,
+} from "~/server/utils/booking-policies";
 import { getCloudflareWaitUntil } from "~/server/utils/mcp-route-helpers";
 import { isPreviewContext } from "~/server/utils/tenant-hosts";
 
@@ -203,7 +207,6 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
     included_items: parseStringArr(row.included_items),
     what_to_bring: parseStringArr(row.what_to_bring),
     meeting_point: row.meeting_point ?? null,
-    cancellation_policy: row.cancellation_policy ?? null,
     time_slots,
     recurring_slots,
     images,
@@ -357,6 +360,7 @@ export default defineEventHandler(async (event) => {
   const needsLocationHeroMedia =
     !page ||
     page === "home" ||
+    page === "reservations" ||
     page === "locations" ||
     page === "photos" ||
     !!locationSlug;
@@ -395,7 +399,7 @@ export default defineEventHandler(async (event) => {
   idxLoc = push(
     needsLocationHeroMedia
       ? `SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
-                 bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
+                 bl.latitude, bl.longitude, bl.opening_hours, bl.special_hours, bl.timezone, bl.rating, bl.review_count,
                  bl.is_primary, bl.status, bl.city, bl.neighborhood,
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
                  bl.description, bl.short_description, bl.last_synced_at,
@@ -408,7 +412,7 @@ export default defineEventHandler(async (event) => {
           WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
           ORDER BY bl.is_primary DESC, bl.title ASC`
       : `SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
-                 bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
+                 bl.latitude, bl.longitude, bl.opening_hours, bl.special_hours, bl.timezone, bl.rating, bl.review_count,
                  bl.is_primary, bl.status, bl.city, bl.neighborhood,
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
                  bl.description, bl.short_description, bl.last_synced_at,
@@ -545,7 +549,7 @@ export default defineEventHandler(async (event) => {
                          e.title, e.slug, e.tagline, e.body, e.image_asset_id,
                          e.video_asset_id, e.images,
                          e.price, e.price_amount, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
-                         e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point, e.cancellation_policy,
+                         e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
                          e.status, e.sort_order, e.featured, e.featured_sort_order,
                          e.seo_title, e.seo_description, e.created_at, e.updated_at,
                          img.public_url AS image_url, vid.public_url AS video_url
@@ -567,7 +571,7 @@ export default defineEventHandler(async (event) => {
               e.title, e.slug, e.tagline, e.body, e.image_asset_id,
               e.video_asset_id, e.images,
               e.price, e.price_amount, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
-              e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point, e.cancellation_policy,
+              e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
               e.status, e.sort_order, e.featured, e.featured_sort_order,
               e.seo_title, e.seo_description, e.created_at, e.updated_at,
               img.public_url AS image_url, vid.public_url AS video_url
@@ -932,6 +936,8 @@ export default defineEventHandler(async (event) => {
       latitude: loc.latitude,
       longitude: loc.longitude,
       opening_hours: parseJson(loc.opening_hours as string | null),
+      special_hours: parseJson(loc.special_hours as string | null),
+      timezone: loc.timezone || null,
       rating: loc.rating,
       review_count: loc.review_count,
       is_primary: Boolean(loc.is_primary),
@@ -943,6 +949,8 @@ export default defineEventHandler(async (event) => {
       thumbnail_url: thumbnailUrl,
       city: loc.city,
       neighborhood: loc.neighborhood || null,
+      short_description: loc.short_description || null,
+      description: loc.description || null,
       grab_url: loc.grab_url || null,
       uber_eats_url: loc.uber_eats_url || null,
       foodpanda_url: loc.foodpanda_url || null,
@@ -996,6 +1004,67 @@ export default defineEventHandler(async (event) => {
     })),
     syncedAt: primary?.last_synced_at ?? null,
   };
+
+  const reservationPolicySiteDefault = renderBookingPolicySummary(
+    await resolveBookingPolicy(db, {
+      siteId,
+      policyType: "reservation",
+    }),
+    locale ?? "en",
+  );
+
+  const reservationPolicyByLocation = Object.fromEntries(
+    await Promise.all(
+      locations.map(async (location) => [
+        String(location.id),
+        renderBookingPolicySummary(
+          await resolveBookingPolicy(db, {
+            siteId,
+            policyType: "reservation",
+            locationId: String(location.id),
+          }),
+          locale ?? "en",
+        ),
+      ]),
+    ),
+  );
+
+  const experiencePolicySiteDefault = renderBookingPolicySummary(
+    await resolveBookingPolicy(db, {
+      siteId,
+      policyType: "experience",
+    }),
+    locale ?? "en",
+  );
+
+  const experiencePolicyTargets = new Map<string, { locationId: string | null }>();
+  for (const experience of experiencesList) {
+    experiencePolicyTargets.set(experience.id, {
+      locationId: typeof experience.location_id === "string" ? experience.location_id : null,
+    });
+  }
+  if (experienceDetail?.id) {
+    experiencePolicyTargets.set(experienceDetail.id, {
+      locationId: typeof experienceDetail.location_id === "string" ? experienceDetail.location_id : null,
+    });
+  }
+
+  const experiencePolicyById = Object.fromEntries(
+    await Promise.all(
+      Array.from(experiencePolicyTargets.entries()).map(async ([experienceId, target]) => [
+        experienceId,
+        renderBookingPolicySummary(
+          await resolveBookingPolicy(db, {
+            siteId,
+            policyType: "experience",
+            locationId: target.locationId,
+            experienceId,
+          }),
+          locale ?? "en",
+        ),
+      ]),
+    ),
+  );
 
   // Shape full reviews (type A)
   const locationForAggregate = locationId
@@ -1105,6 +1174,10 @@ export default defineEventHandler(async (event) => {
       label: l.label ?? l.locale,
       is_source: Boolean(l.is_source),
     })),
+    reservationPolicySiteDefault,
+    reservationPolicyByLocation,
+    experiencePolicySiteDefault,
+    experiencePolicyById,
     hasExperiences: experienceCountVal > 0,
     experiencesList,
     experienceDetail,

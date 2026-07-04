@@ -1,5 +1,10 @@
 <template>
-  <Teleport to="body">
+  <!-- This modal is only ever rendered client-side (modelValue starts false, only flips true
+       from user interaction) — ClientOnly avoids SSR attempting to render/teleport content that
+       will immediately be torn down and re-mounted on hydration, which was producing a Vue
+       hydration-mismatch warning on every Saya page load. -->
+  <ClientOnly>
+  <Teleport to="#saya-portal-root">
     <Transition
       enter-active-class="transition duration-200 ease-out"
       enter-from-class="opacity-0 scale-95"
@@ -13,37 +18,40 @@
         <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
         
         <!-- Modal content -->
-        <div class="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col">
+        <div class="relative bg-default border border-default rounded-xl shadow-xl w-full max-w-md h-[min(720px,90vh)] overflow-hidden flex flex-col">
           <!-- Header -->
-          <div class="flex items-center justify-between p-4 border-b border-default shrink-0">
-            <button 
-              v-if="canGoBack" 
-              type="button" 
-              class="p-2 -ml-2 rounded-full hover:bg-muted/10 text-default transition-colors"
+          <div class="flex items-center justify-between gap-2 p-4 pb-3 shrink-0">
+            <button
+              v-if="canGoBack"
+              type="button"
+              class="flex size-9 items-center justify-center rounded-full border border-default hover:bg-muted text-default transition-colors shrink-0"
               @click="goBack"
             >
-              <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+              <svg class="w-4.5 h-4.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
             </button>
-            <div v-else class="w-9 h-9"></div> <!-- Spacer for alignment -->
-            
-            <h2 :id="titleId" class="text-base font-semibold text-default flex-1 text-center truncate px-2">
-              {{ title }}
-            </h2>
-            
-            <button 
-              type="button" 
-              class="p-2 -mr-2 rounded-full hover:bg-muted/10 text-default transition-colors"
+            <div v-else class="size-9 shrink-0"></div> <!-- Spacer for alignment -->
+
+            <div class="flex-1 min-w-0 text-center">
+              <p v-if="kicker" class="saya-eyebrow mb-1 truncate text-primary">{{ kicker }}</p>
+              <h2 :id="titleId" class="saya-display text-lg text-default truncate px-2">
+                {{ title }}
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              class="flex size-9 items-center justify-center rounded-full border border-default hover:bg-muted text-default transition-colors shrink-0"
               @click="close"
             >
-              <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              <svg class="w-4.5 h-4.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
-          
+
           <!-- Body -->
-          <div class="p-4 sm:p-6 overflow-y-auto">
+          <div class="px-4 sm:px-6 pb-4 sm:pb-6 overflow-y-auto flex-1 flex flex-col min-h-0">
             <slot />
           </div>
-          
+
           <!-- Footer (optional) -->
           <div v-if="$slots.footer" class="p-4 sm:px-6 border-t border-default shrink-0">
             <slot name="footer" />
@@ -52,6 +60,7 @@
       </div>
     </Transition>
   </Teleport>
+  </ClientOnly>
 </template>
 
 <script setup lang="ts">
@@ -61,6 +70,7 @@ import { useScrollLock } from '~/composables/useScrollLock'
 const props = defineProps<{
   modelValue: boolean
   title: string
+  kicker?: string
   canGoBack?: boolean
 }>()
 

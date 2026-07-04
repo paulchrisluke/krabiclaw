@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm"
-import { sqliteTable, integer, text, numeric, real, unique, primaryKey, uniqueIndex, check } from "drizzle-orm/sqlite-core"
+import { sqliteTable, integer, text, numeric, real, unique, primaryKey, uniqueIndex, index, check } from "drizzle-orm/sqlite-core"
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core"
 
 export const account = sqliteTable("account", {
@@ -106,6 +106,7 @@ export const business_locations = sqliteTable("business_locations", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	notification_phone: text(),
 	timezone: text(),
+	max_capacity: integer(),
 }, (table) => [
 	unique("business_locations_organization_id_site_id_slug_unique").on(table.organization_id, table.site_id, table.slug),
 ]);
@@ -175,6 +176,27 @@ export const contact_submissions = sqliteTable("contact_submissions", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
+export const submission_messages = sqliteTable("submission_messages", {
+	id: text().primaryKey(),
+	submission_type: text().notNull(), // 'contact' | 'reservation' | 'experience_booking'
+	submission_id: text().notNull(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	direction: text().notNull(), // 'out' | 'in'
+	channel: text().notNull(), // 'email' | 'whatsapp'
+	body: text().notNull(),
+	sender_user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	meta_message_id: text().unique(),
+	status: text().default("sent").notNull(),
+	error: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	check("submission_type_check", sql`submission_type IN ('contact', 'reservation', 'experience_booking')`),
+	check("direction_check", sql`direction IN ('in', 'out')`),
+	check("channel_check", sql`channel IN ('email', 'whatsapp')`),
+	index("submission_type_id_idx").on(table.submission_type, table.submission_id),
+]);
+
 export const dashboard_preferences = sqliteTable("dashboard_preferences", {
 	id: text().primaryKey(),
 	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
@@ -202,7 +224,7 @@ export const experience_bookings = sqliteTable("experience_bookings", {
 	experience_id: text().notNull().references(() => experiences.id, { onDelete: "cascade" } ),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" } ),
 	guest_name: text().notNull(),
 	guest_email: text().notNull(),
 	guest_phone: text(),
@@ -773,6 +795,25 @@ export const rate_limits = sqliteTable("rate_limits", {
 	expires_at: text(),
 });
 
+export const reservation_slot_overrides = sqliteTable("reservation_slot_overrides", {
+	id: text().primaryKey(),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" } ),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	override_date: text().notNull(),
+	time_slot: text().notNull(),
+	status: text().default("closed").notNull(),
+	capacity_override: integer(),
+	note: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text(),
+}, (table) => [
+	uniqueIndex("idx_reservation_slot_overrides_unique").on(table.location_id, table.override_date, table.time_slot),
+	index("idx_reservation_slot_overrides_date").on(table.location_id, table.override_date),
+	check("reservation_slot_overrides_status_check", sql`status IN ('closed', 'open')`),
+]);
+
 export const reservation_submissions = sqliteTable("reservation_submissions", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
@@ -792,6 +833,41 @@ export const reservation_submissions = sqliteTable("reservation_submissions", {
 	cancellation_token_used_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
+
+export const booking_policies = sqliteTable("booking_policies", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	policy_type: text({ enum: ["reservation", "experience"] }).notNull(),
+	scope_type: text({ enum: ["site", "location", "experience"] }).notNull(),
+	location_id: text().references(() => business_locations.id, { onDelete: "cascade" } ),
+	experience_id: text().references(() => experiences.id, { onDelete: "cascade" } ),
+	booking_window_days: integer(),
+	advance_notice_minutes: integer(),
+	free_cancellation_until_minutes: integer(),
+	late_arrival_grace_minutes: integer(),
+	host_confirmation_sla_minutes: integer(),
+	reschedule_allowed: numeric(),
+	reschedule_cutoff_minutes: integer(),
+	deposit_required: numeric(),
+	deposit_trigger_party_size: integer(),
+	special_requests_allowed: numeric(),
+	weather_policy: text(),
+	minimum_guest_age: integer(),
+	accessibility_contact_required: numeric(),
+	additional_notes_html: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("booking_policies_site_type_idx").on(table.site_id, table.policy_type),
+	uniqueIndex("booking_policies_reservation_site_unique").on(table.site_id).where(sql`policy_type = 'reservation' AND scope_type = 'site'`),
+	uniqueIndex("booking_policies_reservation_location_unique").on(table.location_id).where(sql`policy_type = 'reservation' AND scope_type = 'location' AND location_id IS NOT NULL`),
+	uniqueIndex("booking_policies_experience_site_unique").on(table.site_id).where(sql`policy_type = 'experience' AND scope_type = 'site'`),
+	uniqueIndex("booking_policies_experience_location_unique").on(table.location_id).where(sql`policy_type = 'experience' AND scope_type = 'location' AND location_id IS NOT NULL`),
+	uniqueIndex("booking_policies_experience_scope_unique").on(table.experience_id).where(sql`policy_type = 'experience' AND scope_type = 'experience' AND experience_id IS NOT NULL`),
+	check("booking_policies_policy_type_check", sql`policy_type IN ('reservation', 'experience')`),
+	check("booking_policies_scope_type_check", sql`scope_type IN ('site', 'location', 'experience')`),
+]);
 
 export const reviews = sqliteTable("reviews", {
 	id: text().primaryKey(),

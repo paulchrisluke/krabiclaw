@@ -26,14 +26,14 @@
             </div>
             <div class="flex shrink-0 flex-wrap gap-2">
               <UButton size="sm" color="neutral" variant="ghost" @click="updateContactStatus(submission, 'read')">Mark read</UButton>
-              <UButton :to="`mailto:${submission.email}`" icon="i-heroicons-envelope" color="neutral" variant="soft" size="sm">Reply</UButton>
+              <UButton icon="i-heroicons-chat-bubble-left-right" color="neutral" variant="soft" size="sm" @click="startReply('contact', submission)">Reply</UButton>
               <UButton size="sm" color="neutral" variant="ghost" @click="updateContactStatus(submission, 'replied')">Mark replied</UButton>
             </div>
           </div>
         </UCard>
       </div>
 
-      <div v-else class="space-y-3">
+      <div v-else-if="activeTab === 'reservations'" class="space-y-3">
         <UCard v-if="reservations.length === 0" :ui="{ root: 'border-dashed', body: 'px-6 py-12 sm:px-6 sm:py-12 text-center' }">
           <UIcon name="i-heroicons-calendar-days" class="mx-auto size-9 text-muted" />
           <p class="mt-3 text-sm font-medium text-highlighted">No reservation requests yet</p>
@@ -56,11 +56,61 @@
               <UButton size="sm" color="success" variant="ghost" @click="updateReservationStatus(reservation, 'confirmed')">Confirm</UButton>
               <UButton size="sm" color="neutral" variant="ghost" @click="updateReservationStatus(reservation, 'completed')">Complete</UButton>
               <UButton size="sm" color="error" variant="ghost" @click="updateReservationStatus(reservation, 'cancelled')">Cancel</UButton>
-              <UButton :to="`mailto:${reservation.email}`" icon="i-heroicons-envelope" color="neutral" variant="soft" size="sm">Reply</UButton>
+              <UButton icon="i-heroicons-chat-bubble-left-right" color="neutral" variant="soft" size="sm" @click="startReply('reservation', reservation)">Reply</UButton>
             </div>
           </div>
         </UCard>
       </div>
+
+      <div v-else class="space-y-3">
+        <UCard v-if="bookings.length === 0" :ui="{ root: 'border-dashed', body: 'px-6 py-12 sm:px-6 sm:py-12 text-center' }">
+          <UIcon name="i-heroicons-ticket" class="mx-auto size-9 text-muted" />
+          <p class="mt-3 text-sm font-medium text-highlighted">No experience bookings yet</p>
+        </UCard>
+        <UCard v-for="booking in bookings" :key="booking.id" :ui="{ body: 'p-4 sm:p-4' }">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div class="flex flex-wrap items-center gap-2">
+                <p class="font-medium text-highlighted">{{ booking.guest_name }}</p>
+                <UBadge :color="booking.status === 'confirmed' ? 'success' : booking.status === 'cancelled' ? 'error' : 'warning'" variant="soft">
+                  {{ booking.status }}
+                </UBadge>
+                <span class="text-xs text-muted">{{ formatDate(booking.created_at) }}</span>
+              </div>
+              <p class="mt-1 text-sm text-muted">{{ booking.experience_title }} · {{ booking.booking_date }} at {{ booking.time_slot }} · {{ booking.party_size }} guests</p>
+              <p class="mt-1 text-sm text-muted">{{ booking.guest_email }}<span v-if="booking.guest_phone"> · {{ booking.guest_phone }}</span></p>
+              <p v-if="booking.notes" class="mt-3 text-sm text-default">{{ booking.notes }}</p>
+            </div>
+            <div class="flex shrink-0 flex-wrap gap-2">
+              <UButton size="sm" color="success" variant="ghost" @click="updateBookingStatus(booking, 'confirmed')">Confirm</UButton>
+              <UButton size="sm" color="error" variant="ghost" @click="updateBookingStatus(booking, 'cancelled')">Cancel</UButton>
+              <UButton icon="i-heroicons-chat-bubble-left-right" color="neutral" variant="soft" size="sm" @click="startReply('experience_booking', { id: booking.id, email: booking.guest_email, phone: booking.guest_phone })">Reply</UButton>
+            </div>
+          </div>
+        </UCard>
+      </div>
+
+      <UModal v-model:open="replyOpen" :ui="{ content: 'max-w-xl' }">
+        <template #content>
+          <div class="p-6">
+            <h2 class="text-lg font-semibold text-highlighted">Reply to guest</h2>
+            <UTabs
+              v-if="replyTarget?.phone"
+              v-model="replyChannel"
+              class="mt-4"
+              :items="[
+                { label: 'Email', value: 'email', icon: 'i-heroicons-envelope' },
+                { label: 'WhatsApp', value: 'whatsapp', icon: 'i-simple-icons-whatsapp' },
+              ]"
+            />
+            <UTextarea v-model="replyText" class="mt-5" :rows="5" placeholder="Write your reply..." />
+            <div class="mt-5 flex justify-end gap-2">
+              <UButton color="neutral" variant="ghost" @click="replyOpen = false">Cancel</UButton>
+              <UButton :loading="replySaving" @click="saveReply">Send reply</UButton>
+            </div>
+          </div>
+        </template>
+      </UModal>
     </UPageBody>
   </UPage>
 </template>
@@ -93,19 +143,43 @@ interface ReservationSubmission {
   created_at: string
 }
 
+interface ExperienceBooking {
+  id: string
+  experience_title: string | null
+  guest_name: string
+  guest_email: string
+  guest_phone: string | null
+  party_size: number
+  booking_date: string
+  time_slot: string
+  status: string
+  notes: string | null
+  created_at: string
+}
+
+type SubmissionKind = 'contact' | 'reservation' | 'experience_booking'
+
+const REPLY_ENDPOINT_SEGMENT: Record<SubmissionKind, string> = {
+  contact: 'contact-submissions',
+  reservation: 'reservation-submissions',
+  experience_booking: 'experience-bookings',
+}
+
 const siteId = await useDashboardSiteId()
 const toast = useToast()
 const route = useRoute()
 const sitePublicUrl = ref<string | null>(null)
 const contacts = ref<ContactSubmission[]>([])
 const reservations = ref<ReservationSubmission[]>([])
+const bookings = ref<ExperienceBooking[]>([])
 const loading = ref(true)
 const activeTab = ref('contact')
 const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 
 const tabs = computed(() => [
   { label: `Site contact (${contacts.value.length})`, value: 'contact', icon: 'i-heroicons-envelope' },
-  { label: `Reservations (${reservations.value.length})`, value: 'reservations', icon: 'i-heroicons-calendar-days' }
+  { label: `Reservations (${reservations.value.length})`, value: 'reservations', icon: 'i-heroicons-calendar-days' },
+  { label: `Experience bookings (${bookings.value.length})`, value: 'bookings', icon: 'i-heroicons-ticket' },
 ])
 
 const _headerLinks = computed(() => buildHeaderLinks([
@@ -128,10 +202,16 @@ async function loadInbox() {
     contacts.value = contactRes.submissions ?? []
     const current = locationsRes.locations.find(location => location.slug === route.params.locationSlug || location.id === route.params.locationSlug)
     if (!current?.id) throw new Error('Location not found')
-    const reservationRes = await $fetch<{ submissions: ReservationSubmission[] }>(`/api/dashboard/editor/reservation-submissions`, {
-      query: { location_id: current.id }
-    })
+    const [reservationRes, bookingRes] = await Promise.all([
+      $fetch<{ submissions: ReservationSubmission[] }>(`/api/dashboard/editor/reservation-submissions`, {
+        query: { location_id: current.id }
+      }),
+      $fetch<{ bookings: ExperienceBooking[] }>(`/api/dashboard/editor/experience-bookings`, {
+        query: { location_id: current.id }
+      })
+    ])
     reservations.value = reservationRes.submissions ?? []
+    bookings.value = bookingRes.bookings ?? []
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load inbox', color: 'error' })
   } finally {
@@ -163,6 +243,55 @@ async function updateReservationStatus(submission: ReservationSubmission, status
     toast.add({ description: 'Reservation status updated', color: 'success' })
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to update reservation status', color: 'error' })
+  }
+}
+
+async function updateBookingStatus(booking: ExperienceBooking, status: 'pending' | 'confirmed' | 'cancelled') {
+  try {
+    await $fetch(`/api/dashboard/editor/experience-bookings/${booking.id}`, {
+      method: 'PATCH',
+      body: { status }
+    })
+    booking.status = status
+    toast.add({ description: 'Booking status updated', color: 'success' })
+  } catch (error) {
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to update booking status', color: 'error' })
+  }
+}
+
+const replyOpen = ref(false)
+const replyText = ref('')
+const replyChannel = ref<'email' | 'whatsapp'>('email')
+const replySaving = ref(false)
+const replyTarget = ref<{ kind: SubmissionKind; id: string; email: string; phone: string | null; locationId?: string } | null>(null)
+
+function startReply(kind: SubmissionKind, item: { id: string; email: string; phone?: string | null; location_id?: string }) {
+  replyTarget.value = { kind, id: item.id, email: item.email, phone: item.phone ?? null, locationId: item.location_id }
+  replyChannel.value = 'email'
+  replyText.value = ''
+  replyOpen.value = true
+}
+
+async function saveReply() {
+  if (!replyTarget.value || !replyText.value.trim()) return
+  replySaving.value = true
+  try {
+    const segment = REPLY_ENDPOINT_SEGMENT[replyTarget.value.kind]
+    const url: string = `/api/dashboard/editor/${segment}/${replyTarget.value.id}/reply`
+    const body: { channel: string; body: string; location_id?: string } = { channel: replyChannel.value, body: replyText.value }
+    if (replyTarget.value.kind === 'reservation' && replyTarget.value.locationId) {
+      body.location_id = replyTarget.value.locationId
+    }
+    await $fetch(url, {
+      method: 'POST',
+      body
+    })
+    toast.add({ description: 'Reply sent', color: 'success' })
+    replyOpen.value = false
+  } catch (error) {
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to send reply', color: 'error' })
+  } finally {
+    replySaving.value = false
   }
 }
 

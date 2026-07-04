@@ -216,8 +216,12 @@
           <UFormField label="Meeting point" help="Short arrival or check-in instruction.">
             <UTextarea v-model="form.meeting_point" :rows="3" placeholder="Meet at the main studio reception 10 minutes before your start time." class="w-full" />
           </UFormField>
-          <UFormField label="Cancellation policy">
-            <UTextarea v-model="form.cancellation_policy" :rows="4" placeholder="Free cancellation up to 24 hours before the experience starts." class="w-full" />
+          <UFormField label="Booking policy" help="Structured guest-facing policy shared with the public experience and confirmation pages.">
+            <BookingPolicyForm
+              v-model="bookingPolicyDraft"
+              policy-type="experience"
+              :summary="bookingPolicySummary"
+            />
           </UFormField>
         </div>
       </template>
@@ -311,6 +315,7 @@
 <script setup lang="ts">
 // -nocheck
 import type { Experience, SlotAvailability, SlotOverride, WeekdayName } from '~/server/utils/experiences'
+import type { BookingPolicyPatch, RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
 
 const weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const satisfies WeekdayName[]
 
@@ -459,13 +464,14 @@ const emptyForm = () => ({
   included_items_input: '',
   what_to_bring_input: '',
   meeting_point: '',
-  cancellation_policy: '',
   status: 'active' as 'active' | 'inactive' | 'sold_out',
   featured: false,
   featured_sort_order: 0,
 })
 
 const form = reactive(emptyForm())
+const bookingPolicyDraft = ref<BookingPolicyPatch>({})
+const bookingPolicySummary = ref<RenderedBookingPolicySummary | null>(null)
 
 function openCreate() {
   editing.value = null
@@ -474,6 +480,8 @@ function openCreate() {
   timeSlotsInput.value = ''
   slotsMode.value = 'flat'
   for (const day of weekdayNames) recurringInputs[day] = ''
+  bookingPolicyDraft.value = {}
+  bookingPolicySummary.value = null
   sliderOpen.value = true
 }
 
@@ -529,7 +537,6 @@ function openEdit(exp: ApiRecord) {
     included_items_input: arrayToLines(exp.included_items),
     what_to_bring_input: arrayToLines(exp.what_to_bring),
     meeting_point: exp.meeting_point ?? '',
-    cancellation_policy: exp.cancellation_policy ?? '',
     status: exp.status ?? 'active',
     featured: exp.featured ?? false,
     featured_sort_order: exp.featured_sort_order != null ? String(exp.featured_sort_order) : '0',
@@ -537,7 +544,26 @@ function openEdit(exp: ApiRecord) {
   timeSlotsInput.value = Array.isArray(exp.time_slots) ? exp.time_slots.join(', ') : (exp.time_slots ?? '')
   for (const day of weekdayNames) recurringInputs[day] = exp.recurring_slots?.[day]?.join(', ') ?? ''
   slotsMode.value = exp.recurring_slots ? 'recurring' : 'flat'
+  void loadExperiencePolicy(exp.id, exp.location_id)
   sliderOpen.value = true
+}
+
+async function loadExperiencePolicy(experienceId: string, locationId: string | null | undefined) {
+  try {
+    const res = await $fetch<{ policy: BookingPolicyPatch | null; summary: RenderedBookingPolicySummary | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
+      query: {
+        policy_type: 'experience',
+        scope_type: 'experience',
+        experience_id: experienceId,
+        location_id: locationId ?? undefined,
+      },
+    })
+    bookingPolicyDraft.value = res.policy ?? {}
+    bookingPolicySummary.value = res.summary ?? null
+  } catch {
+    bookingPolicyDraft.value = {}
+    bookingPolicySummary.value = null
+  }
 }
 
 async function save() {
@@ -581,12 +607,35 @@ async function save() {
         kind: img.kind,
       })),
     }
+    let experienceResult: ApiRecord | null = null
     if (editing.value) {
-      await $fetch(`/api/dashboard/editor/experiences/${editing.value.id}`, { method: 'PATCH', body: payload })
+      const response = await $fetch<{ experience: ApiRecord }>(`/api/dashboard/editor/experiences/${editing.value.id}`, { method: 'PATCH', body: payload })
+      experienceResult = response.experience ?? null
       toast.add({ description: 'Experience updated.', color: 'success' })
     } else {
-      await $fetch(`/api/dashboard/editor/experiences`, { method: 'POST', body: payload })
+      const response = await $fetch<{ experience: ApiRecord }>(`/api/dashboard/editor/experiences`, { method: 'POST', body: payload })
+      experienceResult = response.experience ?? null
       toast.add({ description: 'Experience created.', color: 'success' })
+    }
+
+    // Booking policy is saved separately from the experience itself — a policy failure here
+    // shouldn't be reported as an experience save failure, since the experience already saved.
+    if (experienceResult?.id) {
+      try {
+        const policyResponse = await $fetch<{ summary: RenderedBookingPolicySummary | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
+          method: 'PATCH',
+          body: {
+            ...bookingPolicyDraft.value,
+            policy_type: 'experience',
+            scope_type: 'experience',
+            experience_id: experienceResult.id,
+            location_id: experienceResult.location_id ?? form.location_id,
+          },
+        })
+        bookingPolicySummary.value = policyResponse.summary ?? null
+      } catch {
+        toast.add({ description: 'Experience saved, but the booking policy failed to save.', color: 'warning' })
+      }
     }
     sliderOpen.value = false
     await loadExperiences()

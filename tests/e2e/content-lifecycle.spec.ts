@@ -70,7 +70,7 @@ test.describe('content write lifecycle', () => {
     expect(afterBody.fields.some((row) => row.field === field)).toBe(false)
   })
 
-  test('reservation policies are readable and writable through canonical content', async ({ request, baseURL }) => {
+  test('reservation policies are readable and writable through canonical booking policy api', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
 
     await loginAs(request, baseURL!)
@@ -79,24 +79,51 @@ test.describe('content write lifecycle', () => {
     const context = await contextRes.json() as { site?: { id?: string | null } }
     const siteId = await ensureSite(request, baseURL!, context.site?.id ?? null)
 
-    const policyValue = `E2E reservation policy ${Date.now()}`
-    const saveRes = await request.post(`${baseURL}/api/editor/sites/${siteId}/content/save`, {
-      data: {
-        page: 'reservations',
-        changes: { 'policies.body': policyValue },
-      },
-    })
-    expect(saveRes.status()).toBe(200)
-
-    const getRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/content/reservations`)
-    expect(getRes.status()).toBe(200)
-    const getBody = await getRes.json() as {
-      success: boolean
-      fields: Array<{ field: string; content?: string; value?: string }>
+    type ReservationPolicy = {
+      free_cancellation_until_minutes: number | null
+      late_arrival_grace_minutes: number | null
+      deposit_required: boolean
+      deposit_trigger_party_size: number | null
     }
-    expect(getBody.success).toBe(true)
-    const policyRow = getBody.fields.find((row) => row.field === 'policies.body')
-    expect(policyRow).toBeDefined()
-    expect(policyRow?.content ?? policyRow?.value).toBe(policyValue)
+
+    const beforeRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/booking-policy?policy_type=reservation&scope_type=site`)
+    expect(beforeRes.status()).toBe(200)
+    const originalPolicy = ((await beforeRes.json()) as { resolved_policy: ReservationPolicy }).resolved_policy
+
+    try {
+      const saveRes = await request.patch(`${baseURL}/api/editor/sites/${siteId}/booking-policy`, {
+        data: {
+          policy_type: 'reservation',
+          scope_type: 'site',
+          free_cancellation_until_minutes: 180,
+          late_arrival_grace_minutes: 20,
+          deposit_required: true,
+          deposit_trigger_party_size: 7,
+        },
+      })
+      expect(saveRes.status()).toBe(200)
+
+      const getRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/booking-policy?policy_type=reservation&scope_type=site`)
+      expect(getRes.status()).toBe(200)
+      const getBody = await getRes.json() as { success: boolean; resolved_policy: ReservationPolicy }
+      expect(getBody.success).toBe(true)
+      expect(getBody.resolved_policy.free_cancellation_until_minutes).toBe(180)
+      expect(getBody.resolved_policy.late_arrival_grace_minutes).toBe(20)
+      expect(getBody.resolved_policy.deposit_required).toBe(true)
+      expect(getBody.resolved_policy.deposit_trigger_party_size).toBe(7)
+    } finally {
+      // Restore the site's original reservation policy so this test doesn't leave shared
+      // site state mutated for other suites running against the same seeded site.
+      await request.patch(`${baseURL}/api/editor/sites/${siteId}/booking-policy`, {
+        data: {
+          policy_type: 'reservation',
+          scope_type: 'site',
+          free_cancellation_until_minutes: originalPolicy.free_cancellation_until_minutes,
+          late_arrival_grace_minutes: originalPolicy.late_arrival_grace_minutes,
+          deposit_required: originalPolicy.deposit_required,
+          deposit_trigger_party_size: originalPolicy.deposit_trigger_party_size,
+        },
+      })
+    }
   })
 })

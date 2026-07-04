@@ -409,6 +409,48 @@ async function copySiteContent(
 
     manifest.entities.site_content.copied++
   }
+
+  const locationPolicies = await queryAll<{ policy_type: 'reservation' | 'experience' }>(
+    db,
+    `
+    SELECT policy_type
+    FROM booking_policies
+    WHERE organization_id = ? AND site_id = ? AND scope_type = 'location' AND location_id = ?
+    `,
+    [organizationId, siteId, sourceLocationId],
+  )
+
+  for (const policy of locationPolicies) {
+    statements.push({
+      query: `
+        INSERT INTO booking_policies (
+          id, organization_id, site_id, policy_type, scope_type, location_id, experience_id,
+          booking_window_days, advance_notice_minutes, free_cancellation_until_minutes,
+          late_arrival_grace_minutes, host_confirmation_sla_minutes, reschedule_allowed,
+          reschedule_cutoff_minutes, deposit_required, deposit_trigger_party_size,
+          special_requests_allowed, weather_policy, minimum_guest_age,
+          accessibility_contact_required, additional_notes_html, created_at, updated_at
+        )
+        SELECT lower(hex(randomblob(16))), organization_id, site_id, policy_type, scope_type, ?, NULL,
+               booking_window_days, advance_notice_minutes, free_cancellation_until_minutes,
+               late_arrival_grace_minutes, host_confirmation_sla_minutes, reschedule_allowed,
+               reschedule_cutoff_minutes, deposit_required, deposit_trigger_party_size,
+               special_requests_allowed, weather_policy, minimum_guest_age,
+               accessibility_contact_required, additional_notes_html, ?, ?
+        FROM booking_policies
+        WHERE organization_id = ? AND site_id = ? AND scope_type = 'location' AND location_id = ? AND policy_type = ?
+          AND NOT EXISTS (
+            SELECT 1
+            FROM booking_policies existing
+            WHERE existing.site_id = booking_policies.site_id
+              AND existing.scope_type = 'location'
+              AND existing.location_id = ?
+              AND existing.policy_type = booking_policies.policy_type
+          )
+      `,
+      params: [targetLocationId, now, now, organizationId, siteId, sourceLocationId, policy.policy_type, targetLocationId],
+    })
+  }
 }
 
 async function copyReviews(
@@ -510,11 +552,33 @@ async function copyExperiences(
 
     statements.push({
       query: `
-        INSERT INTO experiences (id, organization_id, site_id, location_id, title, slug, tagline, body, image_asset_id, video_asset_id, images, price, price_amount, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, status, sort_order, featured, featured_sort_order, seo_title, seo_description, created_at, updated_at, created_by, highlights, included_items, what_to_bring, meeting_point, cancellation_policy)
-        SELECT ?, organization_id, site_id, ?, title, ?, tagline, body, ?, ?, images, price, price_amount, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, status, sort_order, featured, featured_sort_order, seo_title, seo_description, ?, updated_at, created_by, highlights, included_items, what_to_bring, meeting_point, cancellation_policy
+        INSERT INTO experiences (id, organization_id, site_id, location_id, title, slug, tagline, body, image_asset_id, video_asset_id, images, price, price_amount, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, status, sort_order, featured, featured_sort_order, seo_title, seo_description, created_at, updated_at, created_by, highlights, included_items, what_to_bring, meeting_point)
+        SELECT ?, organization_id, site_id, ?, title, ?, tagline, body, ?, ?, images, price, price_amount, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, status, sort_order, featured, featured_sort_order, seo_title, seo_description, ?, updated_at, created_by, highlights, included_items, what_to_bring, meeting_point
         FROM experiences WHERE id = ?
       `,
       params: [newId, targetLocationId, newSlug, newImageId, newVideoId, now, exp.id],
+    })
+
+    statements.push({
+      query: `
+        INSERT INTO booking_policies (
+          id, organization_id, site_id, policy_type, scope_type, location_id, experience_id,
+          booking_window_days, advance_notice_minutes, free_cancellation_until_minutes,
+          late_arrival_grace_minutes, host_confirmation_sla_minutes, reschedule_allowed,
+          reschedule_cutoff_minutes, deposit_required, deposit_trigger_party_size,
+          special_requests_allowed, weather_policy, minimum_guest_age,
+          accessibility_contact_required, additional_notes_html, created_at, updated_at
+        )
+        SELECT lower(hex(randomblob(16))), organization_id, site_id, policy_type, scope_type, ?, ?,
+               booking_window_days, advance_notice_minutes, free_cancellation_until_minutes,
+               late_arrival_grace_minutes, host_confirmation_sla_minutes, reschedule_allowed,
+               reschedule_cutoff_minutes, deposit_required, deposit_trigger_party_size,
+               special_requests_allowed, weather_policy, minimum_guest_age,
+               accessibility_contact_required, additional_notes_html, ?, ?
+        FROM booking_policies
+        WHERE organization_id = ? AND site_id = ? AND scope_type = 'experience' AND experience_id = ?
+      `,
+      params: [targetLocationId, newId, now, now, organizationId, siteId, exp.id],
     })
 
     manifest.entities.experiences.copied++

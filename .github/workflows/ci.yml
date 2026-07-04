@@ -155,7 +155,7 @@ jobs:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://staging.krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
+      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://staging.krabiclaw.com
       NUXT_PUBLIC_APP_NAME: KrabiClaw
 
       BETTER_AUTH_SECRET: test-secret-for-ci
@@ -199,6 +199,18 @@ jobs:
         run: |
           echo "$STRIPE_SECRET_KEY_TEST" | npx wrangler secret put STRIPE_SECRET_KEY --env staging
           echo "$STRIPE_WEBHOOK_SECRET_STAGING" | npx wrangler secret put STRIPE_WEBHOOK_SECRET --env staging
+      - name: Sync staging email reply secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EMAIL_REPLY_SECRET_STAGING: ${{ secrets.EMAIL_REPLY_SECRET_STAGING }}
+          EMAIL_INBOUND_SECRET_STAGING: ${{ secrets.EMAIL_INBOUND_SECRET_STAGING }}
+        # Signs/verifies reply+<type>-<id>-<token>@reply.staging.krabiclaw.com addresses (see
+        # server/utils/submission-messages.ts). Must stay stable across runs — rotating it would
+        # invalidate reply-to addresses already sent out in guest emails from a prior run.
+        run: |
+          printf '%s' "$EMAIL_REPLY_SECRET_STAGING" | npx wrangler secret put EMAIL_REPLY_SECRET --env staging
+          printf '%s' "$EMAIL_INBOUND_SECRET_STAGING" | npx wrangler secret put EMAIL_INBOUND_SECRET --env staging
       - name: Sync staging preview secret
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

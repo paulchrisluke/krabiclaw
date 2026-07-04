@@ -28,10 +28,32 @@
 </template>
 
 <script setup>
+import { buildTenantHeadLinks } from '~/utils/tenant-head'
+
 const props = defineProps({
   error: Object
 })
 
 const isDev = import.meta.dev
 const isNotFound = computed(() => props.error?.statusCode === 404)
+
+// Tenant-resolution middleware still runs before app.vue throws, so `site` is
+// populated whenever the host resolved to a real tenant (e.g. a 500 on a known
+// site, or an unauthorized draft preview). It's only ever null for a genuine
+// TENANT_404 (host never matched any site_domains row). Reusing the same
+// buildTenantHeadLinks() as app.vue means a resolved tenant's error page keeps
+// showing its own favicon, and an unresolved custom domain gets the generic
+// branded-letter fallback instead of silently inheriting KrabiClaw's own
+// favicon.ico via the browser's implicit lookup.
+const { isPlatform, site } = useTenantSite()
+const route = useRoute()
+
+useHead(() => ({
+  link: buildTenantHeadLinks({
+    isPlatform,
+    tenantLogoUrl: site?.logo_url || null,
+    tenantBrandName: site?.brand_name || '',
+    isDraftPreview: route.path.startsWith('/preview/draft/'),
+  })
+}))
 </script>
