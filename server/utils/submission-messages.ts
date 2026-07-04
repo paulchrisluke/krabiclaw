@@ -1,7 +1,14 @@
-import { execute, queryFirst, type DbClient } from '~/server/db'
+import { execute, executeBatch, queryFirst, type DbClient } from '~/server/db'
 import { logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
+import {
+  buildReplyLocalPart,
+  buildReplyToken,
+  parseReplyLocalPart,
+  verifyReplyTokenValue,
+  type ReplySubmissionType,
+} from '~/server/utils/reply-address'
 
-export type SubmissionType = 'contact' | 'reservation' | 'experience_booking'
+export type SubmissionType = ReplySubmissionType
 
 interface ReplyAddressEnv {
   EMAIL_REPLY_SECRET?: string
@@ -20,34 +27,19 @@ interface ReplyEmailEnv extends ReplyAddressEnv {
   EMAIL_FROM?: string
   EMAIL_DELIVERY_MODE?: string
 }
-
-const TOKEN_BYTES = 16
-
-async function hmacHex(secret: string, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  )
-  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message))
-  return Array.from(new Uint8Array(signature))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-    .slice(0, TOKEN_BYTES * 2)
-}
-
-// Builds a plus-addressed reply-to like reply+reservation-<id>-<hmac>@reply.krabiclaw.com so an
-// inbound reply can be verified and matched back to the exact submission without a DB lookup by address.
+ 
+// Builds a compact reply-to like r<type><uuid><hmac>@reply.krabiclaw.com so inbound replies stay
+// under the 64-character local-part limit while still encoding the submission identity.
 export async function buildReplyToAddress(
   env: ReplyAddressEnv,
   submissionType: SubmissionType,
   submissionId: string,
 ): Promise<string | null> {
   if (!env.EMAIL_REPLY_SECRET) return null
-  const token = await hmacHex(env.EMAIL_REPLY_SECRET, `${submissionType}:${submissionId}`)
-  return `reply+${submissionType}-${submissionId}-${token}@${getReplyDomain(env)}`
+  const token = await buildReplyToken(env.EMAIL_REPLY_SECRET, submissionType, submissionId)
+  const localPart = buildReplyLocalPart(submissionType, submissionId, token)
+  if (!localPart) return null
+  return `${localPart}@${getReplyDomain(env)}`
 }
 
 export async function verifyReplyToken(
@@ -57,26 +49,12 @@ export async function verifyReplyToken(
   token: string,
 ): Promise<boolean> {
   if (!env.EMAIL_REPLY_SECRET) return false
-  const expected = await hmacHex(env.EMAIL_REPLY_SECRET, `${submissionType}:${submissionId}`)
-  // Constant-time comparison to prevent timing attacks
-  const textEncoder = new TextEncoder()
-  const left = textEncoder.encode(expected)
-  const right = textEncoder.encode(token)
-  if (left.length !== right.length) {
-    return false
-  }
-  let diff = 0
-  for (let i = 0; i < left.length; i++) {
-    diff |= (left[i] ?? 0) ^ (right[i] ?? 0)
-  }
-  return diff === 0
+  return verifyReplyTokenValue(env.EMAIL_REPLY_SECRET, submissionType, submissionId, token)
 }
 
 export function parseReplyToAddress(address: string): { submissionType: string; submissionId: string; token: string } | null {
   const local = address.split('@')[0] ?? ''
-  const match = /^reply\+([a-z_]+)-(.+)-([0-9a-f]{32})$/.exec(local)
-  if (!match) return null
-  return { submissionType: match[1]!, submissionId: match[2]!, token: match[3]! }
+  return parseReplyLocalPart(local)
 }
 
 const SUBMISSION_TABLES: Record<SubmissionType, string> = {
@@ -283,4 +261,71 @@ export async function insertSubmissionMessage(db: DbClient, opts: {
     new Date().toISOString(),
   ])
   return id
+}
+
+export async function insertInboundSubmissionReply(db: DbClient, opts: {
+  submissionType: SubmissionType
+  submissionId: string
+  organizationId: string
+  siteId: string
+  channel: 'email' | 'whatsapp'
+  body: string
+  metaMessageId?: string | null
+  from?: string | null
+}): Promise<string> {
+  const messageId = crypto.randomUUID()
+  const notificationId = crypto.randomUUID()
+  const now = new Date().toISOString()
+  const template = opts.channel === 'email' ? 'submission_reply_email' : 'submission_reply_whatsapp'
+  const title = opts.channel === 'email' ? 'New email reply from a guest' : 'New WhatsApp reply from a guest'
+
+  await executeBatch(db, [
+    {
+      query: `
+        INSERT INTO submission_messages
+        (id, submission_type, submission_id, organization_id, site_id, direction, channel, body, sender_user_id, meta_message_id, status, error, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      params: [
+        messageId,
+        opts.submissionType,
+        opts.submissionId,
+        opts.organizationId,
+        opts.siteId,
+        'in',
+        opts.channel,
+        opts.body,
+        null,
+        opts.metaMessageId ?? null,
+        'sent',
+        null,
+        now,
+      ],
+    },
+    {
+      query: `
+        INSERT INTO notifications
+        (id, organization_id, site_id, location_id, channel, template, title, payload, status, sent_at, created_at)
+        VALUES (?, ?, ?, ?, 'dashboard', ?, ?, ?, 'sent', ?, ?)
+      `,
+      params: [
+        notificationId,
+        opts.organizationId,
+        opts.siteId,
+        null,
+        template,
+        title,
+        JSON.stringify({
+          submission_type: opts.submissionType,
+          submission_id: opts.submissionId,
+          from: opts.from ?? null,
+          message: opts.body,
+        }),
+        now,
+        now,
+      ],
+    },
+  ])
+
+  return messageId
 }

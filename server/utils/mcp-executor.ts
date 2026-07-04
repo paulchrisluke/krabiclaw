@@ -59,6 +59,7 @@ import {
   listExperienceBookings,
   listExperiences,
   listSlotOverrides,
+  resolveExperienceTimezone,
   updateBookingStatus,
   updateExperience,
   upsertSlotOverride,
@@ -3227,11 +3228,12 @@ export async function executeMcpToolCall(
         throw mcpProtocolError(MCP_ERROR.invalidParams, "days must be an integer");
       }
       const days = Math.min(Math.max(typeof daysRaw === "number" ? daysRaw : 1, 1), 31);
+      const timezone = await resolveExperienceTimezone(site.db, site.organizationId, site.siteId, experience);
       const cursor = new Date(`${startDate}T00:00:00Z`);
       const dates: Array<{ date: string; slots: Awaited<ReturnType<typeof getSlotAvailability>> }> = [];
       for (let i = 0; i < days; i++) {
         const dateStr = cursor.toISOString().slice(0, 10);
-        dates.push({ date: dateStr, slots: await getSlotAvailability(site.db, site.siteId, experience, dateStr) });
+        dates.push({ date: dateStr, slots: await getSlotAvailability(site.db, site.siteId, experience, dateStr, timezone) });
         cursor.setUTCDate(cursor.getUTCDate() + 1);
       }
       return { dates };

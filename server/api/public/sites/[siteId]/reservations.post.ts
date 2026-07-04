@@ -3,7 +3,7 @@ import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-res
 import { notifyReservationCreated } from '~/server/utils/notifications'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
-import { resolveLocationTimezone, isDateBeforeTimezoneToday } from '~/server/utils/site-config'
+import { resolveLocationTimezone, isDateBeforeTimezoneToday, isTimeSlotInPast } from '~/server/utils/site-config'
 import { generateReservationTimes, isStructuredOpeningHours } from '~/shared/reservation-hours'
 import { getReservationSlotAvailability } from '~/server/utils/reservations'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
@@ -125,7 +125,8 @@ export default defineEventHandler(async (event) => {
   if (parseFailed) {
     return jsonResponse({ error: 'Location hours configuration is invalid. Please contact support.' }, { status: 500 })
   }
-  const validTimes = isStructuredOpeningHours(parsedHours) ? generateReservationTimes(parsedHours, date) : FALLBACK_TIMES
+  const validTimes = (isStructuredOpeningHours(parsedHours) ? generateReservationTimes(parsedHours, date) : FALLBACK_TIMES)
+    .filter((slot) => !isTimeSlotInPast(date, slot, reservationTimezone))
   if (!validTimes.includes(time))
     return jsonResponse({ error: 'Please choose a valid time — this location is closed at that time.' }, { status: 400 })
 
@@ -134,7 +135,7 @@ export default defineEventHandler(async (event) => {
   // getReservationSlotAvailability's unlimited-capacity behavior (remaining === null).
   let partySizeForCapacityCheck: number | null = null
   if (isStructuredOpeningHours(parsedHours)) {
-    const availability = await getReservationSlotAvailability(db, siteId, { id: resolvedLocationId, max_capacity: location.max_capacity, opening_hours: parsedHours }, date)
+    const availability = await getReservationSlotAvailability(db, siteId, { id: resolvedLocationId, max_capacity: location.max_capacity, opening_hours: parsedHours }, date, reservationTimezone)
     const slotAvailability = availability.find((s) => s.time_slot === time)
     if (slotAvailability?.is_closed) {
       return jsonResponse({ error: 'This time is closed for booking.' }, { status: 409 })

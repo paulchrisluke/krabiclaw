@@ -20,7 +20,9 @@ const tenantRoutes = [
   ...demoFixture.publicRoutes,
   // Demo site is a restaurant with experiences attached, not a pure experience vertical,
   // so /reservations stays the generic table-reservation form alongside /experiences.
-  { path: '/reservations', title: /Ember & Slice \| Reserve a table/, text: 'Make a Reservation' },
+  // The mobile sticky reservation bar was removed (each location card already has its own
+  // reserve CTA), so the guaranteed on-page text is the per-location button, not that bar's copy.
+  { path: '/reservations', title: /Ember & Slice \| Reserve a table/, text: 'Request Reservation' },
   { path: '/contact', title: /Contact/, text: 'Send a message' }
 ]
 

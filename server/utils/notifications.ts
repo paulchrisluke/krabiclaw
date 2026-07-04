@@ -12,6 +12,8 @@ import ContactGuestReceived from '~/server/emails/templates/ContactGuestReceived
 import ReviewOwnerNew from '~/server/emails/templates/ReviewOwnerNew'
 import BookingOwnerNew from '~/server/emails/templates/BookingOwnerNew'
 import BookingGuestReceived from '~/server/emails/templates/BookingGuestReceived'
+import BookingOwnerCancelled from '~/server/emails/templates/BookingOwnerCancelled'
+import BookingGuestCancelled from '~/server/emails/templates/BookingGuestCancelled'
 
 const SUBJECT_LABELS: Record<string, string> = {
   general: 'General',
@@ -80,6 +82,7 @@ interface ExperienceBookingNotificationInput extends SiteContext {
   timeSlot: string
   partySize: number
   notes?: string | null
+  wasConfirmed?: boolean
   contactPhone?: string | null
   contactEmail?: string | null
 }
@@ -526,7 +529,14 @@ export async function notifyReservationCancelled(
       email: { subject: ownerCancelTitle, html: ownerEmail.html, text: ownerEmail.text },
       whatsapp: {
         template: 'reservation_cancelled',
-        vars: { guest_name: opts.guestName, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone },
+        vars: {
+          guest_name: opts.guestName,
+          date: prettyDate,
+          time: prettyTime,
+          guests: opts.guests,
+          phone: opts.phone,
+          context: buildReservationWhatsAppContext(opts.locationName),
+        },
       },
     }),
     sendEmailNotification(env, db, {
@@ -721,6 +731,78 @@ export async function notifyExperienceBookingCreated(
   })
 }
 
+export async function notifyExperienceBookingCancelled(
+  env: NotificationEnv,
+  db: DbClient,
+  opts: ExperienceBookingNotificationInput
+) {
+  const confirmed = Boolean(opts.wasConfirmed)
+  const studio = siteName(opts, 'the business')
+  const prettyDate = formatDateHuman(opts.bookingDate)
+  const prettyTime = formatTimeHuman(opts.timeSlot)
+  const platformDomain = getPlatformDomain(env)
+  const ownerCancelTitle = confirmed
+    ? `Booking cancelled for ${opts.guestName}`
+    : `Booking request cancelled by ${opts.guestName}`
+  const guestCancelTitle = confirmed ? 'Your booking was cancelled' : 'Your booking request was cancelled'
+
+  const payload = {
+    booking_id: opts.bookingId,
+    guest_name: opts.guestName,
+    email: opts.email,
+    experience: opts.experienceTitle,
+    date: opts.bookingDate,
+    time: opts.timeSlot,
+    party_size: String(opts.partySize),
+    booking_was_confirmed: confirmed ? 'true' : 'false',
+    site_name: studio,
+  }
+
+  const [ownerEmail, guestEmail] = await Promise.all([
+    useRender(BookingOwnerCancelled, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, wasConfirmed: confirmed, platformDomain } }),
+    useRender(BookingGuestCancelled, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, wasConfirmed: confirmed, platformDomain } }),
+  ])
+
+  const results = await Promise.allSettled([
+    notifyOwner(env, db, {
+      ...opts,
+      template: 'experience_booking_cancelled',
+      title: ownerCancelTitle,
+      payload,
+      email: { subject: ownerCancelTitle, html: ownerEmail.html, text: ownerEmail.text },
+      whatsapp: {
+        template: 'reservation_cancelled',
+        vars: {
+          guest_name: opts.guestName,
+          date: prettyDate,
+          time: prettyTime,
+          guests: String(opts.partySize),
+          phone: opts.guestPhone ?? '',
+          context: buildExperienceWhatsAppContext(opts.experienceTitle, opts.siteName),
+        },
+      },
+    }),
+    sendEmailNotification(env, db, {
+      ...opts,
+      to: opts.email,
+      template: 'experience_booking_customer_cancelled',
+      title: guestCancelTitle,
+      payload,
+      email: { subject: guestCancelTitle, html: guestEmail.html, text: guestEmail.text },
+    }),
+  ])
+
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      console.error('notifyExperienceBookingCancelled_failed', {
+        task: index === 0 ? 'notifyOwner' : 'sendEmailNotification',
+        bookingId: opts.bookingId,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      })
+    }
+  })
+}
+
 export async function getNotificationCopyPreviews(): Promise<NotificationCopyPreview[]> {
   const restaurant = 'Ember & Slice'
   const studio = 'Pottery House Krabi'
@@ -844,12 +926,28 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
       text: 'New reservation request: Alex Carter, Mon, Jul 14, 2026 at 7:00 PM, 2 guests. Phone: +1 555 123 4567. Email: alex@example.com. Location: Main Dining Room. Special requests: Window seat.',
     },
     {
+      id: 'owner-reservation-cancelled-whatsapp',
+      audience: 'owner',
+      channel: 'whatsapp',
+      template: 'reservation_cancelled',
+      title: 'Owner WhatsApp — reservation cancelled',
+      text: 'Reservation cancelled: Alex Carter, Mon, Jul 14, 2026 at 7:00 PM, 2 guests. Phone: +1 555 123 4567. Location: Main Dining Room.',
+    },
+    {
       id: 'owner-new-experience-booking-whatsapp',
       audience: 'owner',
       channel: 'whatsapp',
       template: 'new_reservation',
       title: 'Owner WhatsApp — new experience booking',
       text: 'New booking request: Mina Park, Mon, Jul 20, 2026 at 10:00 AM, 2 guests. Phone: +66 76 000 0002. Email: mina@example.com. Business: Pottery House Krabi · Experience: Pottery Wheel Class. Special requests: None.',
+    },
+    {
+      id: 'owner-experience-booking-cancelled-whatsapp',
+      audience: 'owner',
+      channel: 'whatsapp',
+      template: 'reservation_cancelled',
+      title: 'Owner WhatsApp — experience booking cancelled',
+      text: 'Booking cancelled: Mina Park, Mon, Jul 20, 2026 at 10:00 AM, 2 guests. Phone: +66 76 000 0002. Business: Pottery House Krabi · Experience: Pottery Wheel Class.',
     },
   ]
 }
