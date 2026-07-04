@@ -1,6 +1,9 @@
 import { queryFirst, type DbClient } from '~/server/db'
 
 export function getClientIp(event: ApiValue): string {
+  const cfIp = getHeader(event, 'CF-Connecting-IP')
+  if (cfIp) return cfIp
+
   const fwd = event.node?.req?.headers?.['x-forwarded-for']
   const forwardedFor = Array.isArray(fwd) ? fwd.join(',') : String(fwd || '')
   return forwardedFor.split(',').map((p: string) => p.trim()).find(Boolean)
