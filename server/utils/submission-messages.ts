@@ -37,7 +37,9 @@ export async function buildReplyToAddress(
 ): Promise<string | null> {
   if (!env.EMAIL_REPLY_SECRET) return null
   const token = await buildReplyToken(env.EMAIL_REPLY_SECRET, submissionType, submissionId)
-  return `${buildReplyLocalPart(submissionType, submissionId, token)}@${getReplyDomain(env)}`
+  const localPart = buildReplyLocalPart(submissionType, submissionId, token)
+  if (!localPart) return null
+  return `${localPart}@${getReplyDomain(env)}`
 }
 
 export async function verifyReplyToken(

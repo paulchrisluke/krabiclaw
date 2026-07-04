@@ -16,6 +16,9 @@ test('compact reply local part stays under 64 characters and round-trips', async
   const token = await buildReplyToken(secret, 'reservation', submissionId)
   const local = buildReplyLocalPart('reservation', submissionId, token)
 
+  if (local === null) {
+    throw new Error('Expected compact local part')
+  }
   assert(local.length < 64)
 
   const parsed = parseReplyLocalPart(local)

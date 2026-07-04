@@ -529,7 +529,14 @@ export async function notifyReservationCancelled(
       email: { subject: ownerCancelTitle, html: ownerEmail.html, text: ownerEmail.text },
       whatsapp: {
         template: 'reservation_cancelled',
-        vars: { guest_name: opts.guestName, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone },
+        vars: {
+          guest_name: opts.guestName,
+          date: prettyDate,
+          time: prettyTime,
+          guests: opts.guests,
+          phone: opts.phone,
+          context: buildReservationWhatsAppContext(opts.locationName),
+        },
       },
     }),
     sendEmailNotification(env, db, {
@@ -765,7 +772,14 @@ export async function notifyExperienceBookingCancelled(
       email: { subject: ownerCancelTitle, html: ownerEmail.html, text: ownerEmail.text },
       whatsapp: {
         template: 'reservation_cancelled',
-        vars: { guest_name: opts.guestName, date: prettyDate, time: prettyTime, guests: String(opts.partySize), phone: opts.guestPhone ?? '' },
+        vars: {
+          guest_name: opts.guestName,
+          date: prettyDate,
+          time: prettyTime,
+          guests: String(opts.partySize),
+          phone: opts.guestPhone ?? '',
+          context: buildExperienceWhatsAppContext(opts.experienceTitle, opts.siteName),
+        },
       },
     }),
     sendEmailNotification(env, db, {
@@ -912,12 +926,28 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
       text: 'New reservation request: Alex Carter, Mon, Jul 14, 2026 at 7:00 PM, 2 guests. Phone: +1 555 123 4567. Email: alex@example.com. Location: Main Dining Room. Special requests: Window seat.',
     },
     {
+      id: 'owner-reservation-cancelled-whatsapp',
+      audience: 'owner',
+      channel: 'whatsapp',
+      template: 'reservation_cancelled',
+      title: 'Owner WhatsApp — reservation cancelled',
+      text: 'Reservation cancelled: Alex Carter, Mon, Jul 14, 2026 at 7:00 PM, 2 guests. Phone: +1 555 123 4567. Location: Main Dining Room.',
+    },
+    {
       id: 'owner-new-experience-booking-whatsapp',
       audience: 'owner',
       channel: 'whatsapp',
       template: 'new_reservation',
       title: 'Owner WhatsApp — new experience booking',
       text: 'New booking request: Mina Park, Mon, Jul 20, 2026 at 10:00 AM, 2 guests. Phone: +66 76 000 0002. Email: mina@example.com. Business: Pottery House Krabi · Experience: Pottery Wheel Class. Special requests: None.',
+    },
+    {
+      id: 'owner-experience-booking-cancelled-whatsapp',
+      audience: 'owner',
+      channel: 'whatsapp',
+      template: 'reservation_cancelled',
+      title: 'Owner WhatsApp — experience booking cancelled',
+      text: 'Booking cancelled: Mina Park, Mon, Jul 20, 2026 at 10:00 AM, 2 guests. Phone: +66 76 000 0002. Business: Pottery House Krabi · Experience: Pottery Wheel Class.',
     },
   ]
 }

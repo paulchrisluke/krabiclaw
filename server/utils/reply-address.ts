@@ -50,11 +50,11 @@ function timingSafeEqual(leftValue: string, rightValue: string): boolean {
 }
 
 export async function buildReplyToken(secret: string, submissionType: ReplySubmissionType, submissionId: string): Promise<string> {
-  return hmacHex(secret, `${submissionType}:${submissionId}`, CURRENT_TOKEN_BYTES)
+  return hmacHex(secret, `${submissionType}:${submissionId.toLowerCase()}`, CURRENT_TOKEN_BYTES)
 }
 
 export async function verifyReplyTokenValue(secret: string, submissionType: string, submissionId: string, token: string): Promise<boolean> {
-  const message = `${submissionType}:${submissionId}`
+  const message = `${submissionType}:${submissionId.toLowerCase()}`
   const expectedCurrent = await hmacHex(secret, message, CURRENT_TOKEN_BYTES)
   if (timingSafeEqual(expectedCurrent, token)) return true
 
@@ -65,12 +65,10 @@ export async function verifyReplyTokenValue(secret: string, submissionType: stri
 
 // Compact format keeps the local part under the 64-character SMTP limit:
 // r<type><uuid-without-hyphens><24-char-hmac>@reply.<domain>
-export function buildReplyLocalPart(submissionType: ReplySubmissionType, submissionId: string, token: string): string {
+export function buildReplyLocalPart(submissionType: ReplySubmissionType, submissionId: string, token: string): string | null {
   const typeCode = TYPE_TO_CODE[submissionType]
   const compactId = compactUuid(submissionId)
-  if (!compactId) {
-    throw new Error(`Submission id "${submissionId}" is not a UUID; cannot build reply mailbox safely`)
-  }
+  if (!compactId) return null
   return `r${typeCode}${compactId}${token}`
 }
 

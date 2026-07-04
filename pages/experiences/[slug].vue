@@ -631,7 +631,7 @@ async function submitBooking() {
       time: timeSelection.value.time,
       guests: String(form.party_size_num),
       requests: form.notes.trim() || null,
-      cancelUrl: res?.booking_id && res?.cancellation_token ? `/experiences/cancel?id=${res.booking_id}#${res.cancellation_token}` : null,
+      cancelUrl: `/experiences/cancel?id=${res.booking_id}#${res.cancellation_token}`,
       contactPhone: (experienceLocation.value as ApiRecord | null)?.phone ?? null,
       contactEmail: (experienceLocation.value as ApiRecord | null)?.email ?? null,
       locationId: (experienceLocation.value as ApiRecord | null)?.id ? String((experienceLocation.value as ApiRecord | null)?.id) : null,

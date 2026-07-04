@@ -1,6 +1,10 @@
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { hashReservationCancelToken, readBearerToken } from '~/server/utils/reservation-cancel-token'
+import { getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
+
+const IP_HOURLY_LIMIT = 20
+const BOOKING_HOURLY_LIMIT = 5
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -14,6 +18,18 @@ export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
+
+  const clientIp = await hashClientIp(getClientIp(event))
+  const hourWindow = Math.floor(Date.now() / 3_600_000)
+  const ipOk = await incrementHourlyRateLimit(db, `experience-booking-cancel:ip:${clientIp}:${hourWindow}`, import.meta.dev ? 1000 : IP_HOURLY_LIMIT, 3_600_000)
+  if (!ipOk) {
+    return jsonResponse({ error: 'Too many cancellation attempts. Please try again later.' }, { status: 429 })
+  }
+
+  const bookingOk = await incrementHourlyRateLimit(db, `experience-booking-cancel:booking:${siteId}:${bookingId}:${hourWindow}`, import.meta.dev ? 1000 : BOOKING_HOURLY_LIMIT, 3_600_000)
+  if (!bookingOk) {
+    return jsonResponse({ error: 'Too many cancellation attempts. Please try again later.' }, { status: 429 })
+  }
 
   const tokenHash = await hashReservationCancelToken(token)
   const booking = await queryFirst(
