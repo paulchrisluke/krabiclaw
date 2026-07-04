@@ -150,6 +150,8 @@ const TEMPLATES: Record<
         { type: 'text', text: cleanTemplateText(v.time, 'Time pending', 40) },
         { type: 'text', text: cleanTemplateText(v.guests, 'Unknown', 24) },
         { type: 'text', text: cleanTemplateText(v.phone, 'No phone provided', 40) },
+        { type: 'text', text: cleanTemplateText(v.email, 'No email provided', 100) },
+        { type: 'text', text: cleanTemplateText(v.context, 'Context not provided', 100) },
         { type: 'text', text: cleanTemplateText(v.requests, 'None', 100) },
       ],
     }],

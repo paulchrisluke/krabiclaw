@@ -1,18 +1,16 @@
 <template>
   <div class="min-h-screen bg-default text-default">
-    <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
-      <p class="saya-kicker mb-6">{{ resCopy.reservationPageKicker }}</p>
-      <h1 class="saya-display-md text-default">
+    <header class="mx-auto flex max-w-7xl flex-col items-center px-4 pt-16 pb-14 text-center sm:px-6 lg:px-8 lg:pt-20 lg:pb-18">
+      <p class="saya-kicker mb-6 inline-flex items-center justify-center rounded-full border border-default/10 bg-default/3 px-5 py-2 text-center">
+        {{ resCopy.reservationPageKicker }}
+      </p>
+      <h1 class="saya-display-md max-w-5xl text-default">
         <em class="saya-italic">{{ getField('hero.title', resCopy.reserveCta) }}</em>
       </h1>
-      <p v-if="getField('hero.subtitle')" class="mt-5 max-w-xl text-sm leading-relaxed text-muted">{{ getField('hero.subtitle') }}</p>
+      <p v-if="heroSubtitle" class="mt-5 max-w-3xl text-balance text-sm leading-relaxed text-muted sm:text-base">
+        {{ heroSubtitle }}
+      </p>
       
-      <!-- Desktop Make a Reservation Button -->
-      <div class="mt-8 hidden lg:block">
-        <SayaButton size="lg" @click="openBookingModal()">
-          {{ resCopy.reservationRequestButton }}
-        </SayaButton>
-      </div>
     </header>
 
     <!-- Mobile Make a Reservation sticky bottom bar -->
@@ -26,33 +24,35 @@
     </div>
 
     <!-- Location cards -->
-    <section v-if="locations.length > 0" class="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
+    <section v-if="locations.length > 0" class="mx-auto max-w-5xl px-4 pb-20 sm:px-6 lg:px-8">
       <div
-        class="grid gap-6"
-        :class="locations.length > 1 ? 'md:grid-cols-2' : 'grid-cols-1'"
+        class="grid gap-8"
+        :class="'grid-cols-1'"
       >
         <article
           v-for="loc in locations"
           :key="loc.id"
-          class="overflow-hidden border border-default"
+          class="overflow-hidden border border-default bg-default"
         >
           <div class="relative aspect-video bg-muted">
+            <video
+              v-if="getLocationMediaUrl(loc) && getLocationMediaKind(loc) === 'video'"
+              :src="getLocationMediaUrl(loc) ?? undefined"
+              :poster="getLocationPoster(loc) ?? undefined"
+              autoplay
+              muted
+              loop
+              playsinline
+              preload="metadata"
+              class="h-full w-full object-cover"
+            />
             <img
-              v-if="loc.public_url && loc.kind === 'image'"
-              :src="loc.public_url"
+              v-else-if="getLocationMediaUrl(loc)"
+              :src="getLocationMediaUrl(loc) ?? undefined"
               :alt="loc.title"
               loading="lazy"
               class="h-full w-full object-cover"
             />
-            <div
-              v-else-if="loc.kind === 'video'"
-              class="flex h-full w-full items-center justify-center"
-              aria-hidden="true"
-            >
-              <svg viewBox="0 0 24 24" class="size-10 text-muted" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
-                <polygon points="5 3 19 12 5 21 5 3"></polygon>
-              </svg>
-            </div>
             <div v-else class="flex h-full w-full items-center justify-center" aria-hidden="true">
               <svg viewBox="0 0 24 24" class="size-10 text-muted" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><g><path d="M15 10.5a3 3 0 1 1-6 0a3 3 0 0 1 6 0"/><path d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0"/></g></svg>
             </div>
@@ -67,10 +67,10 @@
             </ClientOnly>
           </div>
 
-          <div class="p-6 sm:p-8">
-            <p v-if="loc.neighborhood" class="saya-eyebrow mb-3 text-muted">{{ loc.neighborhood }}</p>
-            <h3 class="saya-display saya-italic text-3xl text-default leading-none">{{ loc.title }}</h3>
-            <p v-if="loc.short_description" class="mt-3 text-sm leading-relaxed text-muted">{{ loc.short_description }}</p>
+          <div class="flex flex-col items-start p-6 text-left sm:p-8">
+            <p v-if="getLocationLabel(loc)" class="saya-eyebrow mb-3 text-muted">{{ getLocationLabel(loc) }}</p>
+            <h3 class="saya-display saya-italic text-3xl text-default leading-none sm:text-4xl">{{ loc.title }}</h3>
+            <p v-if="loc.short_description" class="mt-3 max-w-md text-sm leading-relaxed text-muted">{{ loc.short_description }}</p>
 
             <div class="mt-6 flex flex-wrap items-center gap-3">
               <SayaButton @click="openBookingModal(loc)">{{ resCopy.reservationRequestButton }}</SayaButton>
@@ -83,56 +83,33 @@
       </div>
     </section>
 
-    <div class="mx-auto max-w-7xl px-4 pb-28 sm:px-6 lg:px-8 lg:pb-24">
-      <div class="max-w-xl">
-        <h2 class="mb-6 text-2xl font-bold text-default md:text-3xl">{{ resCopy.reservationFormTitle }} Details</h2>
-
-        <div class="mb-6 rounded-2xl bg-muted p-6">
-          <h3 class="mb-4 text-lg font-semibold text-default">{{ resCopy.contactInfoHeading }}</h3>
-          <p v-if="selectedLocation" class="mb-3 text-sm text-muted">{{ selectedLocation.title }}</p>
-          <div class="space-y-2">
-            <p v-if="contactPhone" class="text-muted"><strong class="text-default">{{ resCopy.phoneLabelShort }}:</strong> {{ contactPhone }}</p>
-            <p v-if="contactEmail" class="text-muted"><strong class="text-default">{{ resCopy.emailLabelShort }}:</strong> {{ contactEmail }}</p>
-          </div>
-        </div>
-
-        <div class="space-y-4">
-          <SayaButton v-if="contactPhone" :href="`tel:${contactPhone?.replace(/\s/g, '') ?? ''}`" variant="outline" block>
-            {{ resCopy.callButtonLabel }} {{ contactPhone }}
-          </SayaButton>
-          <SayaButton to="/contact" variant="outline" block>
-            {{ resCopy.contactFormButtonLabel }}
-          </SayaButton>
-        </div>
-      </div>
-    </div>
-
     <!-- Policies: "Before you book" strip. Reuses the tenant's existing policies.body
          CMS list (one card per <li>) rather than a separate structured field — falls
          back to the raw richtext block for tenants who wrote freeform text instead
          of a list. -->
-    <section v-if="policiesBody" class="bg-muted">
-      <div class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-        <div class="mb-10 max-w-xl">
-          <p class="saya-kicker mb-4">{{ resCopy.goodToKnowKicker }}</p>
-          <h2 class="saya-display-sm text-default">{{ resCopy.reservationPoliciesHeading }}</h2>
-        </div>
-        <div v-if="policyItems.length > 0" class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-          <div v-for="(item, i) in policyItems" :key="i" class="border-t border-default pt-5">
-            <!-- eslint-disable-next-line vue/no-v-html -->
-            <p class="text-sm leading-relaxed text-muted" v-html="item" />
+    <ClientOnly>
+      <section v-if="policiesBody" class="bg-muted">
+        <div class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+          <div class="mb-10 max-w-xl">
+            <p class="saya-kicker mb-4">{{ resCopy.goodToKnowKicker }}</p>
+            <h2 class="saya-display-sm text-default">{{ resCopy.reservationPoliciesHeading }}</h2>
           </div>
+          <div v-if="policyItems.length > 0" class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+            <div v-for="(item, i) in policyItems" :key="i" class="border-t border-default pt-5">
+              <!-- eslint-disable-next-line vue/no-v-html -->
+              <p class="text-sm leading-relaxed text-muted" v-html="item" />
+            </div>
+          </div>
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <div v-else class="max-w-2xl text-sm leading-relaxed text-muted" v-html="policiesBody" />
         </div>
-        <!-- eslint-disable-next-line vue/no-v-html -->
-        <div v-else class="max-w-2xl text-sm leading-relaxed text-muted" v-html="policiesBody" />
-      </div>
-    </section>
+      </section>
+    </ClientOnly>
 
     <!-- Booking Modal Flow -->
     <BookingModal
       v-model="isBookingModalOpen"
       :title="modalTitle"
-      :kicker="selectedLocation?.title ?? undefined"
       :can-go-back="bookingStep > startStep && !submitting"
       @back="prevStep"
     >
@@ -238,7 +215,6 @@ onMounted(async () => {
   const DOMPurify = await import('dompurify')
   policiesBody.value = DOMPurify.default.sanitize(rawPoliciesHtml)
 })
-if (!process.client) policiesBody.value = rawPoliciesHtml
 
 // One card per <li> in the tenant's policies.body list, for the "Before you book"
 // strip — substrings of already-sanitized HTML, so no separate sanitize pass needed.
@@ -265,6 +241,43 @@ function formatLocationAddress(address: unknown): string | null {
   const parts = [...(addr.addressLines ?? []), addr.locality, addr.administrativeArea].filter(Boolean)
   return parts.length ? parts.join(', ') : null
 }
+
+function getLocationLabel(location: ApiRecord): string | null {
+  return String(
+    location.neighborhood
+    ?? location.city
+    ?? '',
+  ) || null
+}
+
+function getLocationMediaKind(location: ApiRecord): 'image' | 'video' | null {
+  if (location.kind === 'video' || location.hero_video_public_url) return 'video'
+  if (location.kind === 'image' || location.hero_image_public_url || location.public_url || location.thumbnail_url) return 'image'
+  return null
+}
+
+function getLocationMediaUrl(location: ApiRecord): string | null {
+  const kind = getLocationMediaKind(location)
+  if (kind === 'video') return String(location.hero_video_public_url ?? location.public_url ?? '') || null
+  return String(location.hero_image_public_url ?? location.public_url ?? location.thumbnail_url ?? '') || null
+}
+
+function getLocationPoster(location: ApiRecord): string | null {
+  return String(location.thumbnail_url ?? location.hero_image_public_url ?? '') || null
+}
+
+const heroSubtitle = computed(() => {
+  const customSubtitle = String(getField('hero.subtitle', '') ?? '').trim()
+  if (customSubtitle) return customSubtitle
+
+  const count = locations.value.length
+  const brand = brandName.value
+
+  if (count <= 0) return `Plan your visit with ${brand}.`
+  if (count === 1) return `${brand} has one location ready for you.`
+  if (count === 2) return `${brand} has 2 locations. Pick yours below.`
+  return `${brand} has ${count} locations. Pick yours below.`
+})
 
 watch(
   locations,
@@ -298,7 +311,11 @@ const isBookingModalOpen = ref(false)
 const skipLocationStep = ref(false)
 const startStep = computed(() => (hasMultipleLocations.value && !skipLocationStep.value) ? 1 : 2)
 const bookingStep = ref(startStep.value)
-const modalTitle = computed(() => resCopy.value.reservationFormTitle)
+const modalTitle = computed(() => {
+  if (bookingStep.value === 1) return resCopy.value.selectLocationLabel
+  if (bookingStep.value === 2) return resCopy.value.selectTimeLabel
+  return 'Your details'
+})
 
 function openBookingModal(loc?: ApiRecord) {
   skipLocationStep.value = Boolean(loc)
@@ -396,10 +413,19 @@ async function handleReservation() {
       contactEmail: contactEmail.value || null,
       locationName: selectedLocation.value?.title ?? null,
       locationAddress: formatLocationAddress(selectedLocation.value?.address),
+      locationSlug: typeof selectedLocation.value?.slug === 'string' ? selectedLocation.value.slug : null,
     })
     await navigateTo('/reservations/confirmed')
   } catch (err) {
-    submitError.value = (err as ApiValue)?.data?.error ?? 'Failed to submit. Please try again.'
+    const error = err as { data?: { error?: string }; status?: number }
+    if (error.status === 409) {
+      // Conflict (slot filled or capacity exceeded) — revert to time selection and reload availability
+      bookingStep.value = 2
+      submitError.value = error.data?.error || 'This time is no longer available. Please select another.'
+      await loadAvailability()
+    } else {
+      submitError.value = error.data?.error ?? 'Failed to submit. Please try again.'
+    }
   } finally {
     submitting.value = false
   }

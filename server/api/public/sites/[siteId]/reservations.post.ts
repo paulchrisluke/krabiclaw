@@ -131,6 +131,19 @@ export default defineEventHandler(async (event) => {
     if (slotAvailability && slotAvailability.remaining !== null && partySize > slotAvailability.remaining) {
       return jsonResponse({ error: `Only ${Math.max(slotAvailability.remaining, 0)} spot(s) left at this time.` }, { status: 409 })
     }
+
+    // Atomic capacity check: re-check remaining capacity immediately before insert to prevent TOCTOU race
+    const currentBooked = await queryFirst<{ total: string }>(db, `
+      SELECT COALESCE(SUM(CASE WHEN guests = '8+' THEN 8 ELSE CAST(guests AS INTEGER) END), 0) as total
+      FROM reservation_submissions
+      WHERE location_id = ? AND date = ? AND time = ? AND status != 'cancelled'
+    `, [resolvedLocationId, date, time])
+    const currentTotal = Number(currentBooked?.total ?? 0)
+    const maxCap = location.max_capacity ?? 999
+    if (currentTotal + partySize > maxCap) {
+      const remaining = Math.max(maxCap - currentTotal, 0)
+      return jsonResponse({ error: `Only ${remaining} spot(s) left at this time.` }, { status: 409 })
+    }
   }
 
   const id = crypto.randomUUID()

@@ -2,7 +2,7 @@
   <div class="booking-location-step">
     <div
       class="grid gap-3"
-      :class="locations.length === 1 ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'"
+      :class="locations.length === 1 ? 'grid-cols-1' : 'grid-cols-2'"
     >
       <button
         v-for="loc in locations"

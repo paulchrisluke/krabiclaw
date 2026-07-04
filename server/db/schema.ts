@@ -190,7 +190,12 @@ export const submission_messages = sqliteTable("submission_messages", {
 	status: text().default("sent").notNull(),
 	error: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	check("submission_type_check", sql`submission_type IN ('contact', 'reservation', 'experience_booking')`),
+	check("direction_check", sql`direction IN ('in', 'out')`),
+	check("channel_check", sql`channel IN ('email', 'whatsapp')`),
+	index("submission_type_id_idx").on(table.submission_type, table.submission_id),
+]);
 
 export const dashboard_preferences = sqliteTable("dashboard_preferences", {
 	id: text().primaryKey(),

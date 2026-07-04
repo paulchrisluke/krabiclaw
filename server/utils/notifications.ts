@@ -144,6 +144,15 @@ function formatTimeHuman(timeValue: string): string {
   }).format(dt)
 }
 
+function buildReservationWhatsAppContext(locationName?: string | null): string {
+  return locationName?.trim() ? `Location: ${locationName.trim()}` : 'Location not provided'
+}
+
+function buildExperienceWhatsAppContext(experienceTitle: string, siteName?: string | null): string {
+  const business = siteName?.trim() || 'the business'
+  return `Business: ${business} · Experience: ${experienceTitle}`
+}
+
 function ownerEmailQuery() {
   return `
     SELECT u.email
@@ -440,7 +449,16 @@ export async function notifyReservationCreated(
       email: { subject: `New reservation request from ${opts.guestName}`, html: ownerEmail.html, text: ownerEmail.text },
       whatsapp: {
         template: 'new_reservation',
-        vars: { guest_name: opts.guestName, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, requests: opts.requests ?? '' },
+        vars: {
+          guest_name: opts.guestName,
+          date: prettyDate,
+          time: prettyTime,
+          guests: opts.guests,
+          phone: opts.phone,
+          email: opts.email,
+          context: buildReservationWhatsAppContext(opts.locationName),
+          requests: opts.requests ?? '',
+        },
       },
     }),
     sendEmailNotification(env, db, {
@@ -673,8 +691,10 @@ export async function notifyExperienceBookingCreated(
           date: prettyDate,
           time: prettyTime,
           guests: String(opts.partySize),
+          phone: opts.guestPhone ?? '',
+          email: opts.email,
+          context: buildExperienceWhatsAppContext(opts.experienceTitle, opts.siteName),
           requests: opts.notes ?? '',
-          ...(opts.guestPhone ? { phone: opts.guestPhone } : {}),
         },
       },
     }),
@@ -820,7 +840,15 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
       channel: 'whatsapp',
       template: 'new_reservation',
       title: 'Owner WhatsApp — new reservation',
-      text: 'New reservation request: Alex Carter, Mon, Jul 14, 2026 at 7:00 PM, 2 guests. Phone: +1 555 123 4567.',
+      text: 'New reservation request: Alex Carter, Mon, Jul 14, 2026 at 7:00 PM, 2 guests. Phone: +1 555 123 4567. Email: alex@example.com. Location: Main Dining Room. Special requests: Window seat.',
+    },
+    {
+      id: 'owner-new-experience-booking-whatsapp',
+      audience: 'owner',
+      channel: 'whatsapp',
+      template: 'new_reservation',
+      title: 'Owner WhatsApp — new experience booking',
+      text: 'New booking request: Mina Park, Mon, Jul 20, 2026 at 10:00 AM, 2 guests. Phone: +66 76 000 0002. Email: mina@example.com. Business: Pottery House Krabi · Experience: Pottery Wheel Class. Special requests: None.',
     },
   ]
 }

@@ -58,7 +58,22 @@ export async function verifyReplyToken(
 ): Promise<boolean> {
   if (!env.EMAIL_REPLY_SECRET) return false
   const expected = await hmacHex(env.EMAIL_REPLY_SECRET, `${submissionType}:${submissionId}`)
-  return expected === token
+  // Constant-time comparison to prevent timing attacks
+  const textEncoder = new TextEncoder()
+  const left = textEncoder.encode(expected)
+  const right = textEncoder.encode(token)
+  if (left.length !== right.length) {
+    // Perform dummy comparison to prevent early exit timing differences
+    for (let i = 0; i < left.length; i++) {
+      if (left[i] !== left[i]) return false
+    }
+    return false
+  }
+  let diff = 0
+  for (let i = 0; i < left.length; i++) {
+    diff |= (left[i] ?? 0) ^ (right[i] ?? 0)
+  }
+  return diff === 0
 }
 
 export function parseReplyToAddress(address: string): { submissionType: string; submissionId: string; token: string } | null {
@@ -136,21 +151,34 @@ export interface SubmissionMatch {
 
 // Used by the WhatsApp inbound webhook to find which open thread a customer's message belongs to,
 // since customers aren't KrabiClaw accounts and can't be matched by verified user phone number.
-export async function findSubmissionByPhone(db: DbClient, phone: string): Promise<SubmissionMatch | null> {
-  const reservation = await queryFirst<{ id: string; organization_id: string; site_id: string }>(db, `
+// Accepts optional organizationId/siteId for tenant scoping when context is known (e.g., email inbound).
+export async function findSubmissionByPhone(db: DbClient, phone: string, organizationId?: string, siteId?: string): Promise<SubmissionMatch | null> {
+  const reservationQuery = `
     SELECT id, organization_id, site_id FROM reservation_submissions
     WHERE phone = ? AND status != 'cancelled'
+    ${organizationId ? 'AND organization_id = ?' : ''}
+    ${siteId ? 'AND site_id = ?' : ''}
     ORDER BY created_at DESC LIMIT 1
-  `, [phone])
+  `
+  const reservationParams: (string | number)[] = [phone]
+  if (organizationId) reservationParams.push(organizationId)
+  if (siteId) reservationParams.push(siteId)
+  const reservation = await queryFirst<{ id: string; organization_id: string; site_id: string }>(db, reservationQuery, reservationParams)
   if (reservation) {
     return { submissionType: 'reservation', submissionId: reservation.id, organizationId: reservation.organization_id, siteId: reservation.site_id }
   }
 
-  const booking = await queryFirst<{ id: string; organization_id: string; site_id: string }>(db, `
+  const bookingQuery = `
     SELECT id, organization_id, site_id FROM experience_bookings
     WHERE guest_phone = ? AND status != 'cancelled'
+    ${organizationId ? 'AND organization_id = ?' : ''}
+    ${siteId ? 'AND site_id = ?' : ''}
     ORDER BY created_at DESC LIMIT 1
-  `, [phone])
+  `
+  const bookingParams: (string | number)[] = [phone]
+  if (organizationId) bookingParams.push(organizationId)
+  if (siteId) bookingParams.push(siteId)
+  const booking = await queryFirst<{ id: string; organization_id: string; site_id: string }>(db, bookingQuery, bookingParams)
   if (booking) {
     return { submissionType: 'experience_booking', submissionId: booking.id, organizationId: booking.organization_id, siteId: booking.site_id }
   }
@@ -186,7 +214,9 @@ export async function sendReplyEmail(env: ReplyEmailEnv, opts: {
   }
 
   const fromValue = env.EMAIL_FROM
-    ? env.EMAIL_FROM.replace(/^[^<]*(?=<)/, `${opts.fromName} `)
+    ? env.EMAIL_FROM.includes('<')
+      ? env.EMAIL_FROM.replace(/^[^<]*(?=<)/, `${opts.fromName} `)
+      : `${opts.fromName} <${env.EMAIL_FROM}>`
     : `${opts.fromName} <hello@krabiclaw.com>`
 
   const controller = new AbortController()

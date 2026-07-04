@@ -357,6 +357,7 @@ export default defineEventHandler(async (event) => {
   const needsLocationHeroMedia =
     !page ||
     page === "home" ||
+    page === "reservations" ||
     page === "locations" ||
     page === "photos" ||
     !!locationSlug;

@@ -11,10 +11,10 @@
       kicker="Request received"
       :receipt-kicker="resCopy.reservationWord"
       :receipt-rows="receiptRows"
-      next-steps-kicker="What happens next"
-      :next-steps="nextSteps"
-      cta-label="Browse the menu"
-      cta-to="/menu"
+      :next-steps-kicker="resCopy.reservationPoliciesHeading"
+      :next-steps="policyLines"
+      :cta-label="resCopy.reservationExploreLabel"
+      :cta-to="menuCtaTo"
     >
       <template #title>
         {{ resCopy.thankYouLabel(confirmation.guestName) }}
@@ -46,7 +46,7 @@
       <SayaIcon name="exclamation-triangle" class="mx-auto size-12 text-error" />
       <h2 class="mt-6 text-xl font-bold">No reservation found</h2>
       <p class="mt-2 text-muted">We couldn't find a confirmation to show. Check your email for the details.</p>
-      <SayaButton to="/reservations" variant="soft" class="mt-10">Make a reservation</SayaButton>
+      <SayaButton to="/reservations" variant="soft" class="mt-10">Select a time</SayaButton>
     </div>
   </div>
 </template>
@@ -55,6 +55,7 @@
 import { getBookingConfirmation, type BookingConfirmation as BookingConfirmationData } from '~/composables/useBookingHandoff'
 import BookingConfirmation from '~/components/booking/BookingConfirmation.vue'
 import { fmt12Hour } from '~/shared/reservation-hours'
+import { getFieldDef } from '~/config/content-registry'
 
 definePageMeta({ layout: 'saya' })
 
@@ -64,9 +65,12 @@ const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, loc
 const { formatDate } = useLocaleDate()
 const route = useRoute()
 const justCopied = ref(false)
+const { getField } = usePageContent('reservations')
 
 const confirmation = ref<BookingConfirmationData | null>(null)
 const pending = ref(true)
+const reservationPoliciesDefault = getFieldDef('reservations', 'policies.body')?.defaultValue ?? ''
+const reservationPoliciesHtml = computed(() => getField('policies.body', reservationPoliciesDefault) ?? reservationPoliciesDefault)
 
 const readableDate = computed(() => {
   if (!confirmation.value?.date) return ''
@@ -76,7 +80,7 @@ const readableDate = computed(() => {
 const receiptRows = computed(() => {
   if (!confirmation.value) return []
   const rows: Array<{ label: string; value: string }> = []
-  if (confirmation.value.locationName) rows.push({ label: 'Room', value: confirmation.value.locationName })
+  if (confirmation.value.locationName) rows.push({ label: 'Location', value: confirmation.value.locationName })
   rows.push({ label: 'Date', value: readableDate.value })
   rows.push({ label: 'Time', value: fmt12Hour(confirmation.value.time) })
   rows.push({
@@ -88,11 +92,41 @@ const receiptRows = computed(() => {
   return rows
 })
 
-const nextSteps = computed(() => [
-  `The room checks the book and confirms by email — usually within the hour, always same day.`,
-  `No account needed. Your confirmation email carries a one-click link to change or cancel${confirmation.value?.cancelUrl ? ', free up to 2 hours before' : ''}.`,
-  `We hold the table for 15 minutes past the booked time. Running late? Just call.`,
-])
+function stripHtml(value: string): string {
+  return value
+    .replace(/<li[^>]*>/gi, '')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+\n/g, '\n')
+    .replace(/\n\s+/g, '\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+}
+
+const policyLines = computed(() => {
+  const html = reservationPoliciesHtml.value
+  const listItems = [...html.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)]
+    .map(match => stripHtml(match[1] ?? ''))
+    .filter(Boolean)
+
+  if (listItems.length > 0) return listItems
+
+  const plain = stripHtml(html)
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+
+  return plain
+})
+
+const menuCtaTo = computed(() => {
+  const slug = confirmation.value?.locationSlug
+  if (slug) return `/locations/${slug}/menu`
+  return resCopy.value.reservationExploreRoute
+})
 
 onMounted(async () => {
   if (!siteId) {

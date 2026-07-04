@@ -230,7 +230,7 @@ function serializeSpecialHours(value: SpecialHoursInput | null | undefined) {
       {
         startDate,
         ...(endsOn ? { endDate: endsOn } : {}),
-        isClosed: value.closed,
+        isClosed: Boolean(value.closed),
         ...(note ? { note } : {}),
       },
     ],

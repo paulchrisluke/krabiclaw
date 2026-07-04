@@ -121,6 +121,7 @@ test.describe('notification records — restaurant reservation (demo site)', () 
           time: '19:00',
           guests: '2',
           requests: 'Playwright E2E notification test',
+          location_id: 'loc-demo',
         },
       },
     )
@@ -188,6 +189,7 @@ test.describe('notification records — restaurant reservation (demo site)', () 
           date: futureDate,
           time: '18:00',
           guests: '1',
+          location_id: 'loc-demo',
         },
       },
     )

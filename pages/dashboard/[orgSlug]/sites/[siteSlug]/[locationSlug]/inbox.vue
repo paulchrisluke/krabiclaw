@@ -263,10 +263,10 @@ const replyOpen = ref(false)
 const replyText = ref('')
 const replyChannel = ref<'email' | 'whatsapp'>('email')
 const replySaving = ref(false)
-const replyTarget = ref<{ kind: SubmissionKind; id: string; email: string; phone: string | null } | null>(null)
+const replyTarget = ref<{ kind: SubmissionKind; id: string; email: string; phone: string | null; locationId?: string } | null>(null)
 
-function startReply(kind: SubmissionKind, item: { id: string; email: string; phone?: string | null }) {
-  replyTarget.value = { kind, id: item.id, email: item.email, phone: item.phone ?? null }
+function startReply(kind: SubmissionKind, item: { id: string; email: string; phone?: string | null; location_id?: string }) {
+  replyTarget.value = { kind, id: item.id, email: item.email, phone: item.phone ?? null, locationId: item.location_id }
   replyChannel.value = 'email'
   replyText.value = ''
   replyOpen.value = true
@@ -278,9 +278,13 @@ async function saveReply() {
   try {
     const segment = REPLY_ENDPOINT_SEGMENT[replyTarget.value.kind]
     const url: string = `/api/dashboard/editor/${segment}/${replyTarget.value.id}/reply`
+    const body: { channel: string; body: string; location_id?: string } = { channel: replyChannel.value, body: replyText.value }
+    if (replyTarget.value.kind === 'reservation' && replyTarget.value.locationId) {
+      body.location_id = replyTarget.value.locationId
+    }
     await $fetch(url, {
       method: 'POST',
-      body: { channel: replyChannel.value, body: replyText.value }
+      body
     })
     toast.add({ description: 'Reply sent', color: 'success' })
     replyOpen.value = false

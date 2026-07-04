@@ -209,8 +209,8 @@ jobs:
         # server/utils/submission-messages.ts). Must stay stable across runs — rotating it would
         # invalidate reply-to addresses already sent out in guest emails from a prior run.
         run: |
-          echo "$EMAIL_REPLY_SECRET_STAGING" | npx wrangler secret put EMAIL_REPLY_SECRET --env staging
-          echo "$EMAIL_INBOUND_SECRET_STAGING" | npx wrangler secret put EMAIL_INBOUND_SECRET --env staging
+          printf '%s' "$EMAIL_REPLY_SECRET_STAGING" | npx wrangler secret put EMAIL_REPLY_SECRET --env staging
+          printf '%s' "$EMAIL_INBOUND_SECRET_STAGING" | npx wrangler secret put EMAIL_INBOUND_SECRET --env staging
       - name: Sync staging preview secret
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

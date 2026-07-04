@@ -3,6 +3,7 @@
 // after it parses a reply sent to reply+<type>-<id>-<token>@reply.<platform-domain>. Authenticated by
 // a shared secret header, not a dashboard session — the caller is a Worker, not a browser.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { execute, executeBatch } from '~/server/db'
 import { insertDashboardNotification } from '~/server/utils/notifications'
 import {
   getSubmissionOrgSite,
@@ -39,23 +40,56 @@ export default defineEventHandler(async (event) => {
   const orgSite = await getSubmissionOrgSite(db, parsed.submissionType, parsed.submissionId)
   if (!orgSite) return jsonResponse({ error: 'Submission not found' }, { status: 404 })
 
-  await insertSubmissionMessage(db, {
-    submissionType: parsed.submissionType,
-    submissionId: parsed.submissionId,
-    organizationId: orgSite.organizationId,
-    siteId: orgSite.siteId,
-    direction: 'in',
-    channel: 'email',
-    body: text,
-  })
+  // Idempotency check: use the reply-to address (which includes the token) as a unique key
+  // to prevent duplicate processing on retries
+  const existing = await execute(db, `SELECT id FROM submission_messages WHERE meta_message_id = ? LIMIT 1`, [to])
+  if (existing) return jsonResponse({ received: true })
 
-  await insertDashboardNotification(db, {
-    organizationId: orgSite.organizationId,
-    siteId: orgSite.siteId,
-    template: 'submission_reply_email',
-    title: 'New email reply from a guest',
-    payload: { submission_type: parsed.submissionType, submission_id: parsed.submissionId, from, message: text },
-  })
+  const messageId = crypto.randomUUID()
+  const notificationId = crypto.randomUUID()
+  const now = new Date().toISOString()
+  await executeBatch(db, [
+    {
+      query: `
+        INSERT INTO submission_messages
+        (id, submission_type, submission_id, organization_id, site_id, direction, channel, body, sender_user_id, meta_message_id, status, error, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      params: [
+        messageId,
+        parsed.submissionType,
+        parsed.submissionId,
+        orgSite.organizationId,
+        orgSite.siteId,
+        'in',
+        'email',
+        text,
+        null,
+        to,
+        'sent',
+        null,
+        now
+      ]
+    },
+    {
+      query: `
+        INSERT INTO notifications
+        (id, organization_id, site_id, location_id, channel, template, title, payload, status, sent_at, created_at)
+        VALUES (?, ?, ?, ?, 'dashboard', ?, ?, ?, 'sent', ?, ?)
+      `,
+      params: [
+        notificationId,
+        orgSite.organizationId,
+        orgSite.siteId,
+        null,
+        'submission_reply_email',
+        'New email reply from a guest',
+        JSON.stringify({ submission_type: parsed.submissionType, submission_id: parsed.submissionId, from, message: text }),
+        now,
+        now
+      ]
+    }
+  ])
 
   return jsonResponse({ received: true })
 })

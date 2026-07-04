@@ -13,7 +13,7 @@
       </p>
     </header>
 
-    <div class="mx-auto grid max-w-3xl gap-6 px-4 pt-8 pb-24 sm:px-6 sm:grid-cols-[1.2fr_1fr] lg:px-8">
+    <div class="mx-auto grid max-w-2xl gap-6 px-4 pt-8 pb-24 sm:px-6 lg:px-8">
       <!-- Receipt -->
       <section class="border border-default bg-default p-7 sm:p-8">
         <p class="saya-eyebrow mb-5 text-muted">{{ receiptKicker }}</p>
@@ -35,12 +35,15 @@
       <!-- What happens next -->
       <aside class="border border-default bg-muted p-7 sm:p-8">
         <p class="saya-eyebrow mb-5 text-muted">{{ nextStepsKicker }}</p>
-        <ol class="m-0 flex list-none flex-col gap-5 p-0">
+        <ol v-if="nextStepsStyle === 'numbered'" class="m-0 flex list-none flex-col gap-5 p-0">
           <li v-for="(step, i) in nextSteps" :key="i" class="flex gap-4 text-sm leading-relaxed text-muted">
             <span class="saya-display flex size-7 shrink-0 items-center justify-center rounded-full border border-default bg-default text-sm text-default">{{ i + 1 }}</span>
             <span>{{ step }}</span>
           </li>
         </ol>
+        <div v-else class="flex flex-col gap-4 text-sm leading-relaxed text-muted">
+          <p v-for="(step, i) in nextSteps" :key="i" class="m-0">{{ step }}</p>
+        </div>
         <SayaButton v-if="ctaLabel && ctaTo" :to="ctaTo" block class="mt-7">{{ ctaLabel }}</SayaButton>
       </aside>
     </div>
@@ -54,9 +57,11 @@ withDefaults(defineProps<{
   receiptRows: Array<{ label: string; value: string }>
   nextStepsKicker: string
   nextSteps: string[]
+  nextStepsStyle?: 'numbered' | 'plain'
   ctaLabel?: string
   ctaTo?: string
 }>(), {
+  nextStepsStyle: 'numbered',
   ctaLabel: '',
   ctaTo: '',
 })

@@ -19,6 +19,8 @@ export interface BookingConfirmation {
   message?: string
   locationName?: string | null
   locationAddress?: string | null
+  locationSlug?: string | null
+  policyText?: string | null
 }
 
 const STORAGE_KEY = 'kc:booking-confirmation'

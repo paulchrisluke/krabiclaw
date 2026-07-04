@@ -21,7 +21,7 @@ export default defineNitroPlugin((nitroApp) => {
     event.context.cf = proxy.cf
     event.context.waitUntil = proxy.ctx.waitUntil.bind(proxy.ctx)
 
-    const request = new Request(getRequestURL(event))
+    const request = (event.context.cloudflare?.request as Request) || new Request(getRequestURL(event))
     ;(request as Request & { cf?: unknown }).cf = proxy.cf
 
     event.context.cloudflare = {
@@ -49,19 +49,25 @@ async function createPlatformProxy() {
     throw new Error('Package `wrangler` not found; local Cloudflare dev bindings require it.')
   })
   const runtimeConfig = useRuntimeConfig()
+  const wrangler = runtimeConfig.wrangler as {
+    configPath?: string
+    persistDir?: string
+    environment?: string
+    remoteBindings?: boolean
+  } | undefined
   const proxyOptions: {
     configPath?: string
     persist?: { path: string }
     environment?: string
     remoteBindings?: boolean
   } = {
-    configPath: runtimeConfig.wrangler.configPath,
-    persist: { path: runtimeConfig.wrangler.persistDir },
-    remoteBindings: runtimeConfig.wrangler.remoteBindings,
+    configPath: wrangler?.configPath,
+    persist: { path: wrangler?.persistDir || '.wrangler/state/v3' },
+    remoteBindings: wrangler?.remoteBindings,
   }
 
-  if (runtimeConfig.wrangler.environment) {
-    proxyOptions.environment = runtimeConfig.wrangler.environment
+  if (wrangler?.environment) {
+    proxyOptions.environment = wrangler.environment
   }
 
   return getPlatformProxy(proxyOptions)

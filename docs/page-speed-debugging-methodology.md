@@ -234,7 +234,7 @@ Interpretation:
   old Nuxt-UI-heavy baseline implied.
 - Current average transfer deltas versus `text-no-icons` are:
   `platform-shell +45.8KB`, `saya-header +11.1KB`, `saya-footer +17.9KB`,
-  `saya-shell +20.6KB`.
+  `saya-shell +20.5KB`.
 
 Platform-shell attribution on the July 3 production build:
 

@@ -61,14 +61,14 @@ export function generateReservationTimes(
   return [...new Set(slots)].sort()
 }
 
-/** "HH:MM" (24h) → "3 PM" / "3:30 PM" (12h, no leading zero, no minutes when :00). */
+/** "HH:MM" (24h) → "3:00 PM" / "3:30 PM" (12h, no leading hour zero, always show minutes). */
 export const fmt12Hour = (timeStr: string): string => {
   const [hStr, mStr] = timeStr.split(':')
   const h = Number(hStr)
   const m = Number(mStr)
   const ampm = h >= 12 ? 'PM' : 'AM'
   const h12 = h % 12 || 12
-  return m === 0 ? `${h12} ${ampm}` : `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
 }
 
 /**

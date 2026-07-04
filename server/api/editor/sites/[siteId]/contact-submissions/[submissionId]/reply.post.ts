@@ -40,19 +40,24 @@ export default defineEventHandler(async (event) => {
     submissionId,
   })
 
-  await insertSubmissionMessage(db, {
-    submissionType: 'contact',
-    submissionId,
-    organizationId: site.organization_id,
-    siteId,
-    direction: 'out',
-    channel: 'email',
-    body: replyBody,
-    senderUserId: session.user.id,
-    metaMessageId: result.messageId ?? null,
-    status: result.success ? 'sent' : 'failed',
-    error: result.error ?? null,
-  })
+  try {
+    await insertSubmissionMessage(db, {
+      submissionType: 'contact',
+      submissionId,
+      organizationId: site.organization_id,
+      siteId,
+      direction: 'out',
+      channel: 'email',
+      body: replyBody,
+      senderUserId: session.user.id,
+      metaMessageId: result.messageId ?? null,
+      status: result.success ? 'sent' : 'failed',
+      error: result.error ?? null,
+    })
+  } catch (error) {
+    console.error('Failed to save reply message to database', error)
+    // Don't override successful email send with DB insert failure
+  }
 
   if (!result.success) {
     return jsonResponse({ error: result.error || 'Failed to send reply' }, { status: 502 })

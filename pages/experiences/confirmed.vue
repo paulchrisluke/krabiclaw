@@ -5,8 +5,8 @@
       kicker="Request received"
       receipt-kicker="Your booking"
       :receipt-rows="receiptRows"
-      next-steps-kicker="What happens next"
-      :next-steps="nextSteps"
+      :next-steps-kicker="policyHeading"
+      :next-steps="policyLines"
       cta-label="Browse more experiences"
       cta-to="/experiences"
     >
@@ -40,12 +40,14 @@
 import { getBookingConfirmation, type BookingConfirmation as BookingConfirmationData } from '~/composables/useBookingHandoff'
 import BookingConfirmation from '~/components/booking/BookingConfirmation.vue'
 import { fmt12Hour } from '~/shared/reservation-hours'
+import { usePageContent } from '~/composables/usePageContent'
 
 definePageMeta({ layout: 'saya' })
 
 const { formatDate } = useLocaleDate()
 const justCopied = ref(false)
 const { siteId } = useTenantSite()
+const { getField } = usePageContent('reservations')
 
 const confirmation = ref<BookingConfirmationData | null>(null)
 
@@ -72,11 +74,42 @@ const receiptRows = computed(() => {
   return rows
 })
 
-const nextSteps = computed(() => [
-  `We check the book and confirm your spot by email — usually within the hour, always same day.`,
-  `No account needed. Your confirmation email has everything you need for the day.`,
-  `Questions before then? Call the number below and we'll sort it out.`,
-])
+function stripHtml(value: string): string {
+  return value
+    .replace(/<li[^>]*>/gi, '')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+\n/g, '\n')
+    .replace(/\n\s+/g, '\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+}
+
+const reservationPolicyFallback = computed(() => getField('policies.body', '') ?? '')
+
+const policyHeading = computed(() =>
+  confirmation.value?.policyText ? 'Cancellation policy' : 'Reservation Policies',
+)
+
+const policyLines = computed(() => {
+  const source = confirmation.value?.policyText?.trim() || reservationPolicyFallback.value.trim()
+  if (!source) return []
+
+  if (source.includes('<')) {
+    const listItems = [...source.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)]
+      .map(match => stripHtml(match[1] ?? ''))
+      .filter(Boolean)
+    if (listItems.length > 0) return listItems
+  }
+
+  return stripHtml(source)
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+})
 
 async function share() {
   if (!confirmation.value) return

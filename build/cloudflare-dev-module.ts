@@ -21,7 +21,7 @@ export default defineNuxtModule({
       }
 
       const persistDir = resolve(
-        nitroConfig.rootDir,
+        nitroConfig.rootDir || '.',
         nitroConfig.cloudflareDev?.persistDir || '.wrangler/state/v3',
       )
 
@@ -63,7 +63,7 @@ export default defineNuxtModule({
       ]
 
       nitroConfig.plugins = nitroConfig.plugins || []
-      nitroConfig.plugins.push(resolve(nitroConfig.rootDir, 'build/runtime/cloudflare-bindings-dev.ts'))
+      nitroConfig.plugins.push(resolve(nitroConfig.rootDir || '.', 'build/runtime/cloudflare-bindings-dev.ts'))
     })
   },
 })

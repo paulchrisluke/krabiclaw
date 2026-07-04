@@ -342,7 +342,6 @@
               <BookingModal
                 v-model="isBookingModalOpen"
                 :title="modalTitle"
-                :kicker="experience.title"
                 :can-go-back="bookingStep > 1 && !submitting"
                 @back="prevStep"
               >
@@ -600,6 +599,8 @@ async function submitBooking() {
       contactPhone: (experienceLocation.value as ApiRecord | null)?.phone ?? null,
       contactEmail: (experienceLocation.value as ApiRecord | null)?.email ?? null,
       locationName: (experienceLocation.value as ApiRecord | null)?.title ?? null,
+      locationSlug: typeof (experienceLocation.value as ApiRecord | null)?.slug === 'string' ? String((experienceLocation.value as ApiRecord | null)?.slug) : null,
+      policyText: experience.value?.cancellation_policy ?? null,
       message: res.message,
     })
     await navigateTo('/experiences/confirmed')

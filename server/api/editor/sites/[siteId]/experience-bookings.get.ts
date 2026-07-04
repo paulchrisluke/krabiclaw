@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   const site = await queryFirst(
     db,
     `SELECT s.organization_id FROM sites s JOIN member m ON s.organization_id = m.organizationId
-     WHERE s.id = ? AND m.userId = ? LIMIT 1`,
+     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin', 'editor') LIMIT 1`,
     [siteId, session.user.id],
   )
   if (!site) return jsonResponse({ error: 'Access denied' }, { status: 403 })

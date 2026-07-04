@@ -67,7 +67,7 @@ const variantClasses = {
 }
 
 const classes = computed(() => [
-  'inline-flex items-center justify-center gap-2 rounded-full font-medium no-underline transition disabled:opacity-60 disabled:pointer-events-none',
+  'inline-flex items-center justify-center gap-2 rounded-full font-medium no-underline transition disabled:opacity-60 disabled:pointer-events-none cursor-pointer',
   sizeClasses[props.size],
   variantClasses[props.color][props.variant],
   props.block && 'w-full',

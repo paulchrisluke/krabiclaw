@@ -120,6 +120,13 @@
       "when": 1783125320352,
       "tag": "0023_worthless_starfox",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1783134523429,
+      "tag": "0024_numerous_wendell_vaughn",
+      "breakpoints": true
     }
   ]
 }

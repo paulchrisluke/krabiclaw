@@ -69,7 +69,6 @@
           {{ day.dayNum }}
         </button>
       </div>
-      <p class="mt-3 text-xs leading-relaxed text-muted">Days with nothing left for your party size are dimmed.</p>
     </div>
 
     <!-- Day-grouped scrollable slot list -->
@@ -186,7 +185,7 @@ function formatTime(time: string): string {
   const m = Number(mStr)
   const ampm = h >= 12 ? 'PM' : 'AM'
   const h12 = h % 12 || 12
-  return m === 0 ? `${h12} ${ampm}` : `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
 }
 
 function dayLabelFor(dateStr: string, index: number): string {
@@ -265,7 +264,10 @@ const calendarDays = computed(() => {
   const cursor = new Date(first.getFullYear(), first.getMonth(), first.getDate())
   while (cursor <= last) {
     const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`
-    out.push({ key, dayNum: cursor.getDate(), hasSeats: Boolean(byKey[key]), isToday: key === todayKey })
+    const day = byKey[key]
+    // hasSeats should reflect actual bookable availability (any non-disabled slot), not just presence
+    const hasSeats = day ? day.slots?.some((slot: { disabled?: boolean }) => !slot.disabled) : false
+    out.push({ key, dayNum: cursor.getDate(), hasSeats, isToday: key === todayKey })
     cursor.setDate(cursor.getDate() + 1)
   }
   return out
