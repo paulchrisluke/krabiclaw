@@ -14,16 +14,6 @@
       
     </header>
 
-    <!-- Mobile Make a Reservation sticky bottom bar -->
-    <div class="lg:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-between gap-4 border-t border-default bg-default/95 backdrop-blur-sm px-5 py-4 shadow-lg">
-      <div class="min-w-0">
-        <p class="font-semibold text-default leading-tight">{{ resCopy.reservationFormTitle }}</p>
-      </div>
-      <SayaButton class="shrink-0" @click="openBookingModal()">
-        {{ resCopy.reservationRequestButton }}
-      </SayaButton>
-    </div>
-
     <!-- Location cards -->
     <section v-if="locations.length > 0" class="mx-auto max-w-5xl px-4 pb-20 sm:px-6 lg:px-8">
       <div class="grid gap-8 grid-cols-1 sm:grid-cols-2">

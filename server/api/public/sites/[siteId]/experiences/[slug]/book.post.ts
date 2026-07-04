@@ -1,6 +1,6 @@
 import { cloudflareEnv, jsonResponse, cleanString } from '~/server/utils/api-response'
 import { getExperienceBySlug, createExperienceBooking, resolveEffectiveTimeSlots, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
-import { isDateBeforeTimezoneToday } from '~/server/utils/site-config'
+import { isDateBeforeTimezoneToday, isTimeSlotInPast } from '~/server/utils/site-config'
 import { fmt12Hour } from '~/shared/reservation-hours'
 import { notifyExperienceBookingCreated } from '~/server/utils/notifications'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
@@ -9,6 +9,7 @@ import { execute, queryFirst, type DbClient } from '~/server/db'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
 import { getActiveSpecialClosure } from '~/utils/formatters'
+import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 
 const IP_HOURLY_LIMIT = 5
 const EMAIL_DAILY_LIMIT = 3
@@ -109,6 +110,7 @@ export default defineEventHandler(async (event) => {
 
   if (!timeSlot) return jsonResponse({ error: 'A time slot is required' }, { status: 400 })
   const effectiveSlots = resolveEffectiveTimeSlots(experience, bookingDate)
+    .filter((slot) => !isTimeSlotInPast(bookingDate, slot, experienceTimezone))
   if (effectiveSlots.length === 0) {
     return jsonResponse({ error: 'No available time slots for this date' }, { status: 400 })
   }
@@ -119,7 +121,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: `Maximum party size for this experience is ${experience.max_capacity}` }, { status: 400 })
   }
   if (effectiveSlots.length) {
-    const availability = await getSlotAvailability(db, siteId, experience, bookingDate)
+    const availability = await getSlotAvailability(db, siteId, experience, bookingDate, experienceTimezone)
     const slotAvailability = availability.find((s) => s.time_slot === timeSlot)
     if (slotAvailability?.is_closed) {
       return jsonResponse({ error: 'This time slot is closed for booking.' }, { status: 409 })
@@ -146,6 +148,9 @@ export default defineEventHandler(async (event) => {
     if (!emailOk) return jsonResponse({ error: 'Too many booking requests from this email. Please try again tomorrow.' }, { status: 429 })
   }
 
+  const cancellation = createReservationCancelToken()
+  const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
+
   const booking = await createExperienceBooking(db, {
     experience_id: experience.id,
     organization_id: site.organization_id,
@@ -160,6 +165,8 @@ export default defineEventHandler(async (event) => {
     status: 'pending',
     notes: notes || null,
     ip_hash: ipHash,
+    cancellation_token_hash: cancellationTokenHash,
+    cancellation_token_expires_at: cancellation.expiresAt,
   })
 
   try {
@@ -205,6 +212,7 @@ export default defineEventHandler(async (event) => {
   return jsonResponse({
     success: true,
     booking_id: booking.id,
+    cancellation_token: cancellation.token,
     message: `Your booking request for ${experience.title} on ${bookingDate} at ${fmt12Hour(timeSlot)} has been received. We'll confirm shortly.`,
     policy_summary: renderBookingPolicySummary(policy, locale),
   }, { status: 201 })

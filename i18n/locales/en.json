@@ -278,6 +278,26 @@
       "toast_cancelled": "Reservation cancelled",
       "toast_error": "Error",
       "toast_cancel_failed": "Failed to cancel reservation"
+    },
+    "experience_cancel": {
+      "title": "Cancel booking",
+      "checking": "Checking booking details...",
+      "cancel_visit": "Cancel your booking?",
+      "booking_for": "Booking for:",
+      "date": "Date:",
+      "time": "Time:",
+      "guests": "Guests:",
+      "confirm": "Confirm Cancellation",
+      "keep": "Keep Booking",
+      "cancelled_title": "Booking Cancelled",
+      "cancelled_desc": "Your booking for {date} has been cancelled. We hope to see you another time!",
+      "back_home": "Back to Home",
+      "invalid_link": "Invalid Link",
+      "invalid_link_desc": "We couldn't find a booking matching this link. It may have already been cancelled or expired.",
+      "make_new": "Browse Experiences",
+      "toast_cancelled": "Booking cancelled",
+      "toast_error": "Error",
+      "toast_cancel_failed": "Failed to cancel booking"
     }
   }
 }

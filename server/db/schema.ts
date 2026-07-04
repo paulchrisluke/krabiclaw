@@ -234,6 +234,9 @@ export const experience_bookings = sqliteTable("experience_bookings", {
 	status: text().default("pending").notNull(),
 	notes: text(),
 	ip_hash: text(),
+	cancellation_token_hash: text(),
+	cancellation_token_expires_at: text(),
+	cancellation_token_used_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });

@@ -51,7 +51,7 @@ export default defineEventHandler(async (event) => {
   }
   for (let i = 0; i < days; i++) {
     const dateStr = cursor.toISOString().slice(0, 10)
-    const slots = await getReservationSlotAvailability(db, siteId, { id: location.id, max_capacity: location.max_capacity, opening_hours: parsedHours }, dateStr)
+    const slots = await getReservationSlotAvailability(db, siteId, { id: location.id, max_capacity: location.max_capacity, opening_hours: parsedHours }, dateStr, timezone)
     dates.push({ date: dateStr, slots })
     cursor.setUTCDate(cursor.getUTCDate() + 1)
   }

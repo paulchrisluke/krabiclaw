@@ -602,7 +602,7 @@ async function submitBooking() {
   submitting.value = true
   bookingError.value = null
   try {
-    const res = await $fetch<{ success: boolean; message: string; booking_id: string; policy_summary?: ApiRecord | null }>(
+    const res = await $fetch<{ success: boolean; message: string; booking_id: string; cancellation_token: string; policy_summary?: ApiRecord | null }>(
       `/api/public/sites/${siteId}/experiences/${slug}/book`,
       {
         method: 'POST',
@@ -631,6 +631,7 @@ async function submitBooking() {
       time: timeSelection.value.time,
       guests: String(form.party_size_num),
       requests: form.notes.trim() || null,
+      cancelUrl: `/experiences/cancel?id=${res.booking_id}#${res.cancellation_token}`,
       contactPhone: (experienceLocation.value as ApiRecord | null)?.phone ?? null,
       contactEmail: (experienceLocation.value as ApiRecord | null)?.email ?? null,
       locationId: (experienceLocation.value as ApiRecord | null)?.id ? String((experienceLocation.value as ApiRecord | null)?.id) : null,
