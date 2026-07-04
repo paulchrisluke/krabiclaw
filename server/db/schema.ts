@@ -847,14 +847,14 @@ export const booking_policies = sqliteTable("booking_policies", {
 	free_cancellation_until_minutes: integer(),
 	late_arrival_grace_minutes: integer(),
 	host_confirmation_sla_minutes: integer(),
-	reschedule_allowed: numeric().default(sql`false`).notNull(),
+	reschedule_allowed: numeric(),
 	reschedule_cutoff_minutes: integer(),
-	deposit_required: numeric().default(sql`false`).notNull(),
+	deposit_required: numeric(),
 	deposit_trigger_party_size: integer(),
-	special_requests_allowed: numeric().default(sql`true`).notNull(),
+	special_requests_allowed: numeric(),
 	weather_policy: text(),
 	minimum_guest_age: integer(),
-	accessibility_contact_required: numeric().default(sql`false`).notNull(),
+	accessibility_contact_required: numeric(),
 	additional_notes_html: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -865,6 +865,8 @@ export const booking_policies = sqliteTable("booking_policies", {
 	uniqueIndex("booking_policies_experience_site_unique").on(table.site_id).where(sql`policy_type = 'experience' AND scope_type = 'site'`),
 	uniqueIndex("booking_policies_experience_location_unique").on(table.location_id).where(sql`policy_type = 'experience' AND scope_type = 'location' AND location_id IS NOT NULL`),
 	uniqueIndex("booking_policies_experience_scope_unique").on(table.experience_id).where(sql`policy_type = 'experience' AND scope_type = 'experience' AND experience_id IS NOT NULL`),
+	check("booking_policies_policy_type_check", sql`policy_type IN ('reservation', 'experience')`),
+	check("booking_policies_scope_type_check", sql`scope_type IN ('site', 'location', 'experience')`),
 ]);
 
 export const reviews = sqliteTable("reviews", {

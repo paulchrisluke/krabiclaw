@@ -1029,6 +1029,14 @@ export default defineEventHandler(async (event) => {
     ),
   );
 
+  const experiencePolicySiteDefault = renderBookingPolicySummary(
+    await resolveBookingPolicy(db, {
+      siteId,
+      policyType: "experience",
+    }),
+    locale ?? "en",
+  );
+
   const experiencePolicyTargets = new Map<string, { locationId: string | null }>();
   for (const experience of experiencesList) {
     experiencePolicyTargets.set(experience.id, {
@@ -1168,6 +1176,7 @@ export default defineEventHandler(async (event) => {
     })),
     reservationPolicySiteDefault,
     reservationPolicyByLocation,
+    experiencePolicySiteDefault,
     experiencePolicyById,
     hasExperiences: experienceCountVal > 0,
     experiencesList,

@@ -25,7 +25,7 @@
 
       <!-- ── Mobile sticky bottom CTA ───────────────────────── -->
       <div
-        v-if="experience.status !== 'sold_out'"
+        v-if="experience.status !== 'sold_out' && !experienceLocationClosureMessage"
         class="lg:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-between gap-4 border-t border-default bg-default/95 backdrop-blur-sm px-5 py-4 shadow-lg"
       >
         <div class="min-w-0">
@@ -340,6 +340,14 @@
                 This experience is currently sold out.
               </div>
 
+              <!-- Location closed (e.g. renovations) -->
+              <div
+                v-else-if="experienceLocationClosureMessage"
+                class="rounded-lg bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm font-medium text-amber-700 dark:text-amber-400 text-center"
+              >
+                {{ experienceLocationClosureMessage }}
+              </div>
+
               <!-- Booking Button (Desktop) -->
               <div v-else class="pt-2">
                 <SayaButton block @click="openBookingModal">
@@ -404,6 +412,7 @@
 
 <script setup lang="ts">
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
+import { getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
 
 definePageMeta({ key: (route) => route.fullPath })
 
@@ -422,6 +431,15 @@ const experienceLocation = computed(() => {
   const locId = (experience.value as ApiValue)?.location_id
   if (!locId) return null
   return (locations.value as ApiRecord[]).find((l: ApiRecord) => l.id === locId) ?? null
+})
+
+// A location-wide closure (special_hours, e.g. "closed for renovations")
+// blocks booking for every experience at that location without touching the
+// experience's own status — the closure is time-boxed and reopens automatically.
+const experienceLocationClosureMessage = computed(() => {
+  const loc = experienceLocation.value as ApiRecord | null
+  if (!loc) return null
+  return formatClosureMessage(getActiveSpecialClosure(loc.special_hours, loc.timezone))
 })
 
 const experiencePolicySummary = computed(() => {

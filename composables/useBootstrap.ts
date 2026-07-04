@@ -50,6 +50,7 @@ interface BootstrapPayload {
   locales: { code: string; label: string; is_source: boolean }[];
   reservationPolicySiteDefault: RenderedBookingPolicySummary | null;
   reservationPolicyByLocation: Record<string, RenderedBookingPolicySummary>;
+  experiencePolicySiteDefault: RenderedBookingPolicySummary | null;
   experiencePolicyById: Record<string, RenderedBookingPolicySummary>;
   hasExperiences: boolean;
   experiencesList: Experience[];
@@ -79,6 +80,7 @@ const emptyBootstrap = (): BootstrapPayload => ({
   locales: [],
   reservationPolicySiteDefault: null,
   reservationPolicyByLocation: {},
+  experiencePolicySiteDefault: null,
   experiencePolicyById: {},
   hasExperiences: false,
   experiencesList: [],
@@ -209,6 +211,9 @@ export const useBootstrap = () => {
   );
   const reservationPolicyByLocation = computed(
     () => data.value?.reservationPolicyByLocation ?? {},
+  );
+  const experiencePolicySiteDefault = computed(
+    () => data.value?.experiencePolicySiteDefault ?? null,
   );
   const experiencePolicyById = computed(
     () => data.value?.experiencePolicyById ?? {},
@@ -363,6 +368,7 @@ export const useBootstrap = () => {
     locales,
     reservationPolicySiteDefault,
     reservationPolicyByLocation,
+    experiencePolicySiteDefault,
     experiencePolicyById,
     hasExperiences,
     experiencesList,

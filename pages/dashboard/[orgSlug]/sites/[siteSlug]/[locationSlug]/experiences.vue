@@ -625,11 +625,11 @@ async function save() {
         const policyResponse = await $fetch<{ summary: RenderedBookingPolicySummary | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
           method: 'PATCH',
           body: {
+            ...bookingPolicyDraft.value,
             policy_type: 'experience',
             scope_type: 'experience',
             experience_id: experienceResult.id,
             location_id: experienceResult.location_id ?? form.location_id,
-            ...bookingPolicyDraft.value,
           },
         })
         bookingPolicySummary.value = policyResponse.summary ?? null

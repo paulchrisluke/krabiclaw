@@ -7,6 +7,7 @@ import { resolveLocationTimezone, isDateBeforeTimezoneToday } from '~/server/uti
 import { generateReservationTimes, isStructuredOpeningHours } from '~/shared/reservation-hours'
 import { getReservationSlotAvailability } from '~/server/utils/reservations'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
+import { getSourceLocale } from '~/server/utils/site-locales'
 
 const IP_HOURLY_LIMIT = 5
 const EMAIL_DAILY_LIMIT = 3
@@ -251,11 +252,16 @@ export default defineEventHandler(async (event) => {
     locationId: resolvedLocationId,
   })
 
+  const requestedLocale = cleanString(body.locale, 10)
+  const locale = requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale)
+    ? requestedLocale
+    : await getSourceLocale(db, site.organization_id, siteId)
+
   return jsonResponse({
     success: true,
     id,
     cancellationToken: cancellation.token,
     message: 'Your reservation request has been received. We will confirm shortly.',
-    policy_summary: renderBookingPolicySummary(policy, 'en'),
+    policy_summary: renderBookingPolicySummary(policy, locale),
   }, { status: 201 })
 })

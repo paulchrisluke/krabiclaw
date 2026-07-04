@@ -11,21 +11,23 @@ CREATE TABLE `booking_policies` (
 	`free_cancellation_until_minutes` integer,
 	`late_arrival_grace_minutes` integer,
 	`host_confirmation_sla_minutes` integer,
-	`reschedule_allowed` numeric DEFAULT false NOT NULL,
+	`reschedule_allowed` numeric,
 	`reschedule_cutoff_minutes` integer,
-	`deposit_required` numeric DEFAULT false NOT NULL,
+	`deposit_required` numeric,
 	`deposit_trigger_party_size` integer,
-	`special_requests_allowed` numeric DEFAULT true NOT NULL,
+	`special_requests_allowed` numeric,
 	`weather_policy` text,
 	`minimum_guest_age` integer,
-	`accessibility_contact_required` numeric DEFAULT false NOT NULL,
+	`accessibility_contact_required` numeric,
 	`additional_notes_html` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`experience_id`) REFERENCES `experiences`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`experience_id`) REFERENCES `experiences`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT `booking_policies_policy_type_check` CHECK(policy_type IN ('reservation', 'experience')),
+	CONSTRAINT `booking_policies_scope_type_check` CHECK(scope_type IN ('site', 'location', 'experience'))
 );
 --> statement-breakpoint
 CREATE INDEX `booking_policies_site_type_idx` ON `booking_policies` (`site_id`,`policy_type`);--> statement-breakpoint
@@ -65,7 +67,12 @@ SELECT
 		ELSE 15
 	END,
 	60,
-	1,
+	CASE
+		WHEN lower(coalesce(sc.content, '')) LIKE '%not reschedul%' THEN 0
+		WHEN lower(coalesce(sc.content, '')) LIKE '%cannot be reschedul%' THEN 0
+		WHEN lower(coalesce(sc.content, '')) LIKE '%non-reschedul%' THEN 0
+		ELSE 1
+	END,
 	CASE
 		WHEN lower(coalesce(sc.content, '')) LIKE '%48 hour%' THEN 2880
 		WHEN lower(coalesce(sc.content, '')) LIKE '%24 hour%' THEN 1440
@@ -126,7 +133,12 @@ SELECT
 	END,
 	15,
 	60,
-	1,
+	CASE
+		WHEN lower(e.cancellation_policy) LIKE '%not reschedul%' THEN 0
+		WHEN lower(e.cancellation_policy) LIKE '%cannot be reschedul%' THEN 0
+		WHEN lower(e.cancellation_policy) LIKE '%non-reschedul%' THEN 0
+		ELSE 1
+	END,
 	CASE
 		WHEN lower(e.cancellation_policy) LIKE '%48 hour%' THEN 2880
 		WHEN lower(e.cancellation_policy) LIKE '%24 hour%' THEN 1440

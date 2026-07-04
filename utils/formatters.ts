@@ -118,6 +118,22 @@ export const getActiveSpecialClosure = (
   })
 }
 
+// Guest-facing message for an active closure, e.g. "Temporarily closed —
+// reopening July 18, 2026". Shared by the location page banner and by
+// anything (experience cards/detail) that needs to explain why booking is
+// unavailable for a location currently under a special_hours closure.
+export const formatClosureMessage = (closure: GoogleSpecialPeriod | null | undefined): string | null => {
+  if (!closure) return null
+  if (closure.note) return closure.note
+  if (!closure.endDate) return 'Temporarily closed until further notice'
+  // endDate is the last closed day (getActiveSpecialClosure treats the range as
+  // inclusive), so the location reopens the day after it, not on it.
+  const e = closure.endDate
+  const next = new Date(Date.UTC(e.year, e.month - 1, e.day + 1))
+  const reopenDate = { year: next.getUTCFullYear(), month: next.getUTCMonth() + 1, day: next.getUTCDate() }
+  return `Temporarily closed — reopening ${formatGoogleDate(reopenDate)}`
+}
+
 export const formatGoogleHours = (regularHours: GoogleRegularHours | GoogleRegularPeriod[] | null | undefined) => {
   const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
 

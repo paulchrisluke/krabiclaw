@@ -46,13 +46,14 @@ const isNotFound = computed(() => props.error?.statusCode === 404)
 // branded-letter fallback instead of silently inheriting KrabiClaw's own
 // favicon.ico via the browser's implicit lookup.
 const { isPlatform, site } = useTenantSite()
+const route = useRoute()
 
 useHead(() => ({
   link: buildTenantHeadLinks({
     isPlatform,
     tenantLogoUrl: site?.logo_url || null,
     tenantBrandName: site?.brand_name || '',
-    isDraftPreview: false,
+    isDraftPreview: route.path.startsWith('/preview/draft/'),
   })
 }))
 </script>

@@ -4,8 +4,11 @@ import { isDateBeforeTimezoneToday } from '~/server/utils/site-config'
 import { fmt12Hour } from '~/shared/reservation-hours'
 import { notifyExperienceBookingCreated } from '~/server/utils/notifications'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
+import { normalizePhone } from '~/server/utils/whatsapp'
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
+import { getSourceLocale } from '~/server/utils/site-locales'
+import { getActiveSpecialClosure } from '~/utils/formatters'
 
 const IP_HOURLY_LIMIT = 5
 const EMAIL_DAILY_LIMIT = 3
@@ -67,9 +70,10 @@ export default defineEventHandler(async (event) => {
   let guestPhone = cleanString(body.guest_phone, 30)
   if (guestPhone) {
     try {
-      const { normalizePhone } = await import('~/server/utils/whatsapp')
       guestPhone = normalizePhone(guestPhone)
-    } catch { /* fallback to raw */ }
+    } catch {
+      return jsonResponse({ error: 'A valid phone number is required' }, { status: 400 })
+    }
   }
   const bookingDate = cleanString(body.booking_date, 10)
   const timeSlot = cleanString(body.time_slot, 5)
@@ -87,6 +91,22 @@ export default defineEventHandler(async (event) => {
   if (isDateBeforeTimezoneToday(bookingDate, experienceTimezone)) {
     return jsonResponse({ error: 'Booking date must be today or in the future' }, { status: 400 })
   }
+
+  if (experience.location_id) {
+    const location = await queryFirst<{ special_hours: string | null; timezone: string | null }>(
+      db,
+      `SELECT special_hours, timezone FROM business_locations WHERE id = ? LIMIT 1`,
+      [experience.location_id],
+    )
+    if (location?.special_hours) {
+      const [year, month, day] = bookingDate.split('-').map(Number) as [number, number, number]
+      const closure = getActiveSpecialClosure(location.special_hours, location.timezone, { year, month, day })
+      if (closure) {
+        return jsonResponse({ error: 'This location is temporarily closed and not accepting bookings for the selected date.' }, { status: 409 })
+      }
+    }
+  }
+
   if (!timeSlot) return jsonResponse({ error: 'A time slot is required' }, { status: 400 })
   const effectiveSlots = resolveEffectiveTimeSlots(experience, bookingDate)
   if (effectiveSlots.length === 0) {
@@ -177,10 +197,15 @@ export default defineEventHandler(async (event) => {
     experienceId: experience.id,
   })
 
+  const requestedLocale = cleanString(body.locale, 10)
+  const locale = requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale)
+    ? requestedLocale
+    : await getSourceLocale(db, site.organization_id, siteId)
+
   return jsonResponse({
     success: true,
     booking_id: booking.id,
     message: `Your booking request for ${experience.title} on ${bookingDate} at ${fmt12Hour(timeSlot)} has been received. We'll confirm shortly.`,
-    policy_summary: renderBookingPolicySummary(policy, 'en'),
+    policy_summary: renderBookingPolicySummary(policy, locale),
   }, { status: 201 })
 })

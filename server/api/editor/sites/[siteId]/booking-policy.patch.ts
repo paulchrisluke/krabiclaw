@@ -58,7 +58,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const patch = validateBookingPolicyPatch(body, policyType as BookingPolicyType)
+    const patch = await validateBookingPolicyPatch(body, policyType as BookingPolicyType)
     const policy = await upsertBookingPolicy(db, {
       organizationId: site.organization_id,
       siteId,

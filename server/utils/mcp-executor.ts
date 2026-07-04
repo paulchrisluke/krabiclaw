@@ -2727,7 +2727,7 @@ export async function executeMcpToolCall(
       });
       const preview = applyBookingPolicyPatch(
         resolvedPolicy,
-        validateBookingPolicyPatch(args as Record<string, unknown>, policyType),
+        await validateBookingPolicyPatch(args as Record<string, unknown>, policyType),
       );
       return {
         resolved_policy: preview,
@@ -2747,7 +2747,7 @@ export async function executeMcpToolCall(
         scopeType,
         locationId,
         experienceId,
-        patch: validateBookingPolicyPatch(args as Record<string, unknown>, policyType),
+        patch: await validateBookingPolicyPatch(args as Record<string, unknown>, policyType),
       });
       const resolvedPolicy = await resolveBookingPolicy(site.db, {
         siteId: site.siteId,

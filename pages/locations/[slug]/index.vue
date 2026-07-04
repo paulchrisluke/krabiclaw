@@ -288,7 +288,7 @@
 </template>
 
 <script setup lang="ts">
-import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow, getActiveSpecialClosure, formatGoogleDate } from '~/utils/formatters'
+import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
 import { formatMoneyAmount } from '~/shared/money'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 
@@ -424,6 +424,10 @@ const featuredItems = computed(() => {
         return String(a.title ?? '').localeCompare(String(b.title ?? ''));
       })
     const toUse = featured.length > 0 ? featured : experiences.filter(exp => exp.status === 'active')
+    // A location-wide closure (special_hours) makes every experience at this
+    // location unavailable for booking without touching the experience's own
+    // status — the closure is time-boxed and reopens automatically.
+    const closureMessage = activeClosureMessage.value
     return toUse.slice(0, 4).map(exp => ({
       name: exp.title,
       price: exp.price && isFinite(parseFloat(String(exp.price))) ? formatMoneyAmount(Number(parseFloat(String(exp.price))), defaultCurrency, '') : (exp.price || ''),
@@ -431,6 +435,7 @@ const featuredItems = computed(() => {
       imageKind: 'image',
       alt: exp.title ? `${exp.title} experience` : 'Featured experience image',
       href: exp.slug ? `/experiences/${exp.slug}` : '/experiences',
+      unavailable: !!closureMessage,
     }))
   }
 })
@@ -476,18 +481,7 @@ const todayHours = computed(() => getTodayGoogleHours(location.value?.opening_ho
 const isOpenNow = computed(() => getIsOpenNow(location.value?.opening_hours))
 
 const activeClosure = computed(() => getActiveSpecialClosure(location.value?.special_hours, location.value?.timezone))
-const activeClosureMessage = computed(() => {
-  const closure = activeClosure.value
-  if (!closure) return null
-  if (closure.note) return closure.note
-  if (!closure.endDate) return 'Temporarily closed until further notice'
-  // endDate is the last closed day (getActiveSpecialClosure treats the range as
-  // inclusive), so the location reopens the day after it, not on it.
-  const e = closure.endDate
-  const next = new Date(Date.UTC(e.year, e.month - 1, e.day + 1))
-  const reopenDate = { year: next.getUTCFullYear(), month: next.getUTCMonth() + 1, day: next.getUTCDate() }
-  return `Temporarily closed — reopening ${formatGoogleDate(reopenDate)}`
-})
+const activeClosureMessage = computed(() => formatClosureMessage(activeClosure.value))
 
 
 

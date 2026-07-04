@@ -47,7 +47,7 @@ export default defineEventHandler(async (event) => {
     })
     const preview = applyBookingPolicyPatch(
       resolved,
-      validateBookingPolicyPatch(body, policyType as BookingPolicyType),
+      await validateBookingPolicyPatch(body, policyType as BookingPolicyType),
     )
     return jsonResponse({
       success: true,

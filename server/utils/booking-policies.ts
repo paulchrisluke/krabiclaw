@@ -1,6 +1,6 @@
 import { createError } from 'h3'
-import DOMPurify from 'isomorphic-dompurify'
 import { execute, queryFirst, type DbClient } from '../db/index.ts'
+import { sanitizeUrl } from '~/utils/sanitize'
 export { formatBookingPolicySummary as renderBookingPolicySummary } from './booking-policy-summary.ts'
 export type {
   FormattedBookingPolicySummary as RenderedBookingPolicySummary,
@@ -23,14 +23,14 @@ export interface BookingPolicy {
   free_cancellation_until_minutes: number | null
   late_arrival_grace_minutes: number | null
   host_confirmation_sla_minutes: number | null
-  reschedule_allowed: boolean
+  reschedule_allowed: boolean | null
   reschedule_cutoff_minutes: number | null
-  deposit_required: boolean
+  deposit_required: boolean | null
   deposit_trigger_party_size: number | null
-  special_requests_allowed: boolean
+  special_requests_allowed: boolean | null
   weather_policy: string | null
   minimum_guest_age: number | null
-  accessibility_contact_required: boolean
+  accessibility_contact_required: boolean | null
   additional_notes_html: string | null
   created_at: string
   updated_at: string
@@ -60,11 +60,21 @@ export interface ResolveBookingPolicyInput {
   experienceId?: string | null
 }
 
-export interface ResolvedBookingPolicy extends Omit<BookingPolicy, 'id' | 'organization_id' | 'created_at' | 'updated_at'> {
+export interface ResolvedBookingPolicy extends Omit<BookingPolicy,
+  'id' | 'organization_id' | 'created_at' | 'updated_at' |
+  'reschedule_allowed' | 'deposit_required' | 'special_requests_allowed' | 'accessibility_contact_required'
+> {
   id: string | null
   organization_id: string | null
   created_at: string | null
   updated_at: string | null
+  // Unlike BookingPolicy (a raw stored row, which may leave these unset at
+  // location/experience scope to inherit from its parent — see seedDefaultsForScope),
+  // a resolved policy has always had baseDefaults applied, so these are never null here.
+  reschedule_allowed: boolean
+  deposit_required: boolean
+  special_requests_allowed: boolean
+  accessibility_contact_required: boolean
   source_scope: BookingPolicyScopeType | 'default'
 }
 
@@ -86,6 +96,7 @@ type BooleanBookingPolicyField =
 
 type OverlayBookingPolicyField =
   | NumericBookingPolicyField
+  | BooleanBookingPolicyField
   | 'weather_policy'
   | 'additional_notes_html'
 
@@ -102,14 +113,14 @@ interface BookingPolicyRow {
   free_cancellation_until_minutes: number | null
   late_arrival_grace_minutes: number | null
   host_confirmation_sla_minutes: number | null
-  reschedule_allowed: number
+  reschedule_allowed: number | null
   reschedule_cutoff_minutes: number | null
-  deposit_required: number
+  deposit_required: number | null
   deposit_trigger_party_size: number | null
-  special_requests_allowed: number
+  special_requests_allowed: number | null
   weather_policy: string | null
   minimum_guest_age: number | null
-  accessibility_contact_required: number
+  accessibility_contact_required: number | null
   additional_notes_html: string | null
   created_at: string
   updated_at: string
@@ -185,10 +196,10 @@ const EXPERIENCE_DEFAULTS: Omit<ResolvedBookingPolicy, 'id' | 'organization_id' 
 function rowToPolicy(row: BookingPolicyRow): BookingPolicy {
   return {
     ...row,
-    reschedule_allowed: Boolean(row.reschedule_allowed),
-    deposit_required: Boolean(row.deposit_required),
-    special_requests_allowed: Boolean(row.special_requests_allowed),
-    accessibility_contact_required: Boolean(row.accessibility_contact_required),
+    reschedule_allowed: row.reschedule_allowed === null ? null : Boolean(row.reschedule_allowed),
+    deposit_required: row.deposit_required === null ? null : Boolean(row.deposit_required),
+    special_requests_allowed: row.special_requests_allowed === null ? null : Boolean(row.special_requests_allowed),
+    accessibility_contact_required: row.accessibility_contact_required === null ? null : Boolean(row.accessibility_contact_required),
   }
 }
 
@@ -211,6 +222,9 @@ function baseDefaults(siteId: string, policyType: BookingPolicyType): ResolvedBo
 // must start with every overlay field null — seeding them with baseDefaults would persist a
 // concrete value for every unset field, which applyPolicy's overlay then treats as an explicit
 // override and applies to every guest, silently breaking inheritance from the site-level policy.
+// The four boolean fields can't be nulled here because ResolvedBookingPolicy always holds a
+// concrete boolean (see its definition) — upsertBookingPolicy's insertableBoolean() nulls them
+// out at the SQL layer instead, based on whether the caller's patch explicitly set each one.
 function seedDefaultsForScope(
   siteId: string,
   policyType: BookingPolicyType,
@@ -254,10 +268,14 @@ function applyPolicy(base: ResolvedBookingPolicy, next: BookingPolicy): Resolved
     'free_cancellation_until_minutes',
     'late_arrival_grace_minutes',
     'host_confirmation_sla_minutes',
+    'reschedule_allowed',
     'reschedule_cutoff_minutes',
+    'deposit_required',
     'deposit_trigger_party_size',
+    'special_requests_allowed',
     'weather_policy',
     'minimum_guest_age',
+    'accessibility_contact_required',
     'additional_notes_html',
   ]
 
@@ -280,11 +298,20 @@ function applyPolicy(base: ResolvedBookingPolicy, next: BookingPolicy): Resolved
         case 'host_confirmation_sla_minutes':
           merged.host_confirmation_sla_minutes = value as number
           break
+        case 'reschedule_allowed':
+          merged.reschedule_allowed = value as boolean
+          break
         case 'reschedule_cutoff_minutes':
           merged.reschedule_cutoff_minutes = value as number
           break
+        case 'deposit_required':
+          merged.deposit_required = value as boolean
+          break
         case 'deposit_trigger_party_size':
           merged.deposit_trigger_party_size = value as number
+          break
+        case 'special_requests_allowed':
+          merged.special_requests_allowed = value as boolean
           break
         case 'weather_policy':
           merged.weather_policy = value as string
@@ -292,20 +319,14 @@ function applyPolicy(base: ResolvedBookingPolicy, next: BookingPolicy): Resolved
         case 'minimum_guest_age':
           merged.minimum_guest_age = value as number
           break
+        case 'accessibility_contact_required':
+          merged.accessibility_contact_required = value as boolean
+          break
         case 'additional_notes_html':
           merged.additional_notes_html = value as string
           break
       }
     }
-  }
-
-  merged.reschedule_allowed = next.reschedule_allowed
-  merged.deposit_required = next.deposit_required
-  merged.special_requests_allowed = next.special_requests_allowed
-  merged.accessibility_contact_required = next.accessibility_contact_required
-
-  if (next.additional_notes_html !== null) {
-    merged.additional_notes_html = next.additional_notes_html
   }
 
   return merged
@@ -362,16 +383,46 @@ function normalizeString(value: unknown, field: string) {
   return trimmed || null
 }
 
-function sanitizeAdditionalNotesHtml(value: string | null) {
+const ALLOWED_NOTES_TAGS = new Set(['p', 'br', 'ul', 'ol', 'li', 'strong', 'b', 'em', 'i', 'a'])
+const ALLOWED_NOTES_ATTRS: Record<string, Set<string>> = { a: new Set(['href', 'target', 'rel']) }
+
+// Uses the Workers runtime's native HTMLRewriter rather than a DOM-based sanitizer
+// (e.g. DOMPurify/jsdom) — those depend on Node's `vm`/native bindings and crash the
+// whole Worker at module load if imported anywhere in the server bundle, since jsdom
+// has no Workers-compatible build. See utils/sanitize.ts's server-side fallback for
+// the same constraint on the client/shared sanitize path.
+async function sanitizeAdditionalNotesHtml(value: string | null): Promise<string | null> {
   if (!value) return null
-  const sanitized = DOMPurify.sanitize(value, {
-    ALLOWED_TAGS: ['p', 'br', 'ul', 'ol', 'li', 'strong', 'b', 'em', 'i', 'a'],
-    ALLOWED_ATTR: ['href', 'target', 'rel'],
-  }).trim()
+  const rewriter = new HTMLRewriter().on('*', {
+    element(el) {
+      const tag = el.tagName.toLowerCase()
+      if (!ALLOWED_NOTES_TAGS.has(tag)) {
+        el.removeAndKeepContent()
+        return
+      }
+      const allowedAttrs = ALLOWED_NOTES_ATTRS[tag] ?? new Set<string>()
+      // Workers' HTMLRewriter Element.attributes is IterableIterator<string[]> (name/value
+      // pairs), but @cloudflare/workers-types' global `Element` collides with lib.dom's
+      // `Element` in this project's tsconfig (both declare a same-named global interface),
+      // so TS resolves .attributes to the DOM NamedNodeMap shape here. Cast back to the
+      // actual runtime shape rather than touching the shared tsconfig lib/types config.
+      const attrPairs = el.attributes as unknown as IterableIterator<[string, string]>
+      for (const [name] of [...attrPairs]) {
+        if (!allowedAttrs.has(name)) el.removeAttribute(name)
+      }
+      if (tag === 'a') {
+        el.setAttribute('href', sanitizeUrl(el.getAttribute('href')))
+        el.setAttribute('rel', 'noopener noreferrer')
+      }
+    },
+  })
+  const response = rewriter.transform(new Response(`<div>${value}</div>`, { headers: { 'content-type': 'text/html' } }))
+  const rewritten = await response.text()
+  const sanitized = rewritten.replace(/^<div>/, '').replace(/<\/div>$/, '').trim()
   return sanitized || null
 }
 
-export function validateBookingPolicyPatch(input: Record<string, unknown>, policyType: BookingPolicyType): BookingPolicyPatch {
+export async function validateBookingPolicyPatch(input: Record<string, unknown>, policyType: BookingPolicyType): Promise<BookingPolicyPatch> {
   const patch: BookingPolicyPatch = {}
   const numericFields: NumericBookingPolicyField[] = [
     'booking_window_days',
@@ -400,7 +451,7 @@ export function validateBookingPolicyPatch(input: Record<string, unknown>, polic
   }
 
   const notes = normalizeString(input.additional_notes_html, 'additional_notes_html')
-  if (notes !== undefined) patch.additional_notes_html = sanitizeAdditionalNotesHtml(notes)
+  if (notes !== undefined) patch.additional_notes_html = await sanitizeAdditionalNotesHtml(notes)
 
   if (policyType === 'experience') {
     const weatherPolicy = normalizeString(input.weather_policy, 'weather_policy')
@@ -567,6 +618,19 @@ export async function upsertBookingPolicy(
 
   const id = crypto.randomUUID()
   const seeded = applyBookingPolicyPatch(seedDefaultsForScope(input.siteId, input.policyType, input.scopeType), patch)
+  // Site-scope rows are the ultimate fallback and must always store a concrete value.
+  // Location/experience-scope rows only store a concrete value for a boolean field when
+  // the caller's patch explicitly set it — otherwise it's persisted as NULL so applyPolicy's
+  // overlay leaves it inherited from the parent scope instead of silently resetting it to
+  // seedDefaultsForScope's placeholder default (see seedDefaultsForScope's own comment).
+  function insertableBoolean(field: BooleanBookingPolicyField): number | null {
+    if (input.scopeType === 'site') {
+      return seeded[field] ? 1 : 0
+    }
+    const value = patch[field]
+    if (value === undefined || value === null) return null
+    return seeded[field] ? 1 : 0
+  }
   await execute(
     db,
     `INSERT INTO booking_policies (
@@ -590,14 +654,14 @@ export async function upsertBookingPolicy(
       seeded.free_cancellation_until_minutes,
       seeded.late_arrival_grace_minutes,
       seeded.host_confirmation_sla_minutes,
-      seeded.reschedule_allowed ? 1 : 0,
+      insertableBoolean('reschedule_allowed'),
       seeded.reschedule_cutoff_minutes,
-      seeded.deposit_required ? 1 : 0,
+      insertableBoolean('deposit_required'),
       seeded.deposit_trigger_party_size,
-      seeded.special_requests_allowed ? 1 : 0,
+      insertableBoolean('special_requests_allowed'),
       seeded.weather_policy,
       seeded.minimum_guest_age,
-      seeded.accessibility_contact_required ? 1 : 0,
+      insertableBoolean('accessibility_contact_required'),
       seeded.additional_notes_html,
       now,
       now,

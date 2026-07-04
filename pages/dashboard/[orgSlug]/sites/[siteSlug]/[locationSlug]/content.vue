@@ -783,9 +783,9 @@ const applyField = async () => {
       const res = await $fetch<{ summary: ApiRecord | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
         method: 'PATCH',
         body: {
+          ...bookingPolicyDraft.value,
           policy_type: activeFieldDef.value.policyType,
           scope_type: 'site',
-          ...bookingPolicyDraft.value,
         },
       })
       bookingPolicySummary.value = res.summary ?? null

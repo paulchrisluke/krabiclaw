@@ -18,9 +18,17 @@
         v-for="(item, i) in items"
         :key="i"
         :to="item.href || linkTarget"
-        class="group block overflow-hidden bg-elevated no-underline text-default transition hover:opacity-90"
+        class="group relative block overflow-hidden bg-elevated no-underline text-default transition hover:opacity-90"
       >
         <div class="aspect-square overflow-hidden bg-muted">
+          <div
+            v-if="item.unavailable"
+            class="absolute inset-0 z-10 flex items-center justify-center bg-black/50"
+          >
+            <span class="rounded-full bg-white px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-default">
+              Temporarily unavailable
+            </span>
+          </div>
           <video
             v-if="item.imageKind === 'video' && item.image && clientReady"
             :src="item.image"
@@ -74,6 +82,7 @@ interface Props {
       alt?: string
       price?: string
       href?: string
+      unavailable?: boolean
     }>
     hasMenu?: boolean
     vertical?: string

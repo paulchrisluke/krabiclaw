@@ -26,7 +26,7 @@
 
     <!-- Location cards -->
     <section v-if="locations.length > 0" class="mx-auto max-w-5xl px-4 pb-20 sm:px-6 lg:px-8">
-      <div class="grid gap-8 grid-cols-2">
+      <div class="grid gap-8 grid-cols-1 sm:grid-cols-2">
         <article
           v-for="loc in locations"
           :key="loc.id"
