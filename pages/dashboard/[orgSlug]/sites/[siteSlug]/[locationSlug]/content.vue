@@ -326,6 +326,14 @@
             />
           </div>
 
+          <div v-else-if="activeFieldDef?.type === 'booking_policy'" class="space-y-3">
+            <BookingPolicyForm
+              v-model="bookingPolicyDraft"
+              :policy-type="activeFieldDef.policyType"
+              :summary="bookingPolicySummary"
+            />
+          </div>
+
           <div
             v-if="activeFieldDef?.googleLocked && hasGoogleBusinessEntitlement"
             class="flex items-center gap-2 rounded-lg border border-default bg-muted px-3 py-2 text-sm text-default"
@@ -620,7 +628,7 @@ const groupConfig: Record<string, Array<{ id: string; label: string; icon: strin
   reservations: [
     { id: 'hero',     label: 'Hero Section',    icon: 'i-heroicons-photo',                   fields: ['hero.title', 'hero.subtitle'] },
     { id: 'contact',  label: 'Contact Details', icon: 'i-heroicons-phone',                   fields: ['contact.phone', 'contact.email'] },
-    { id: 'policies', label: 'Policies',        icon: 'i-heroicons-clipboard-document-list', fields: ['policies.body'] },
+    { id: 'policies', label: 'Policies',        icon: 'i-heroicons-clipboard-document-list', fields: ['policies.structured'] },
   ]
 }
 
@@ -659,6 +667,11 @@ const selectField = (key: string) => {
   activeField.value = key
   editingValue.value = currentValues.value[key] || ''
   pendingMediaAssetId.value = null
+  bookingPolicySummary.value = null
+  bookingPolicyDraft.value = {}
+  if (getFieldDef(selectedPageId.value, key)?.type === 'booking_policy') {
+    void loadBookingPolicyEditor()
+  }
   
   // Find which group this field belongs to
   const group = currentPageGroups.value.find(g => g.fields.includes(key))
@@ -742,8 +755,50 @@ const richtextCommands = [
 ]
 const execCmd = (cmd: string) => document.execCommand(cmd, false)
 
+const bookingPolicyDraft = ref<Record<string, unknown>>({})
+const bookingPolicySummary = ref<ApiRecord | null>(null)
+
+async function loadBookingPolicyEditor() {
+  if (!activeFieldDef.value || activeFieldDef.value.type !== 'booking_policy') return
+  try {
+    const res = await $fetch<{ policy: ApiRecord | null; summary: ApiRecord | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
+      query: {
+        policy_type: activeFieldDef.value.policyType,
+        scope_type: 'site',
+      },
+    })
+    bookingPolicyDraft.value = res.policy ?? {}
+    bookingPolicySummary.value = res.summary ?? null
+  } catch (error) {
+    toast.add({ description: getErrorMessage(error, 'Failed to load booking policy'), color: 'error' })
+  }
+}
+
 const applyField = async () => {
   if (!activeField.value || !activeFieldDef.value) return
+
+  if (activeFieldDef.value.type === 'booking_policy') {
+    saving.value = true
+    try {
+      const res = await $fetch<{ summary: ApiRecord | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
+        method: 'PATCH',
+        body: {
+          policy_type: activeFieldDef.value.policyType,
+          scope_type: 'site',
+          ...bookingPolicyDraft.value,
+        },
+      })
+      bookingPolicySummary.value = res.summary ?? null
+      toast.add({ description: `"${activeFieldDef.value.label}" updated`, color: 'success' })
+      iframeLoading.value = true
+      previewReloadToken.value = Date.now()
+    } catch (error) {
+      toast.add({ description: getErrorMessage(error, 'Failed to save booking policy'), color: 'error' })
+    } finally {
+      saving.value = false
+    }
+    return
+  }
   
   // Validation check
   if (activeFieldDef.value.validate) {
@@ -881,6 +936,10 @@ const handleDiscard = async () => {
 const stripHtml = (html: string) => html.replace(/<[^>]*>/g, '').trim()
 
 const fieldPreview = (fieldKey: string): string => {
+  const fieldDef = getFieldDef(selectedPageId.value, fieldKey)
+  if (fieldDef?.type === 'booking_policy') {
+    return 'Structured policy'
+  }
   const raw = currentValues.value[fieldKey] || getFieldDef(selectedPageId.value, fieldKey)?.defaultValue
   if (!raw) return fieldHasActiveGoogleSync(fieldKey) ? 'Synced from Google Business' : 'Add content'
   const text = stripHtml(raw)

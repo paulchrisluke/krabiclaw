@@ -480,9 +480,13 @@ const activeClosureMessage = computed(() => {
   const closure = activeClosure.value
   if (!closure) return null
   if (closure.note) return closure.note
-  return closure.endDate
-    ? `Temporarily closed — reopening ${formatGoogleDate(closure.endDate)}`
-    : 'Temporarily closed until further notice'
+  if (!closure.endDate) return 'Temporarily closed until further notice'
+  // endDate is the last closed day (getActiveSpecialClosure treats the range as
+  // inclusive), so the location reopens the day after it, not on it.
+  const e = closure.endDate
+  const next = new Date(Date.UTC(e.year, e.month - 1, e.day + 1))
+  const reopenDate = { year: next.getUTCFullYear(), month: next.getUTCMonth() + 1, day: next.getUTCDate() }
+  return `Temporarily closed — reopening ${formatGoogleDate(reopenDate)}`
 })
 
 

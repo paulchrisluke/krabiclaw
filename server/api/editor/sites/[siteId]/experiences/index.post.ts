@@ -77,7 +77,6 @@ export default defineEventHandler(async (event) => {
     included_items: includedItems,
     what_to_bring: whatToBring,
     meeting_point: body.meeting_point ? String(body.meeting_point).trim() : null,
-    cancellation_policy: body.cancellation_policy ? String(body.cancellation_policy).trim() : null,
     price: body.price ? String(body.price).trim() : null,
     price_amount: body.price_amount === null || body.price_amount === undefined || body.price_amount === '' ? null : Number(body.price_amount),
     duration_minutes: optionalInteger(body.duration_minutes),

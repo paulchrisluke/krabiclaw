@@ -55,7 +55,6 @@ export default defineEventHandler(async (event) => {
     throw err
   }
   if ('meeting_point' in body) updates.meeting_point = body.meeting_point ? String(body.meeting_point).trim() : null
-  if ('cancellation_policy' in body) updates.cancellation_policy = body.cancellation_policy ? String(body.cancellation_policy).trim() : null
   if ('price' in body) updates.price = body.price ? String(body.price).trim() : null
   if ('price_amount' in body) updates.price_amount = optionalNumber(body.price_amount)
   if ('duration_minutes' in body) updates.duration_minutes = optionalInteger(body.duration_minutes)

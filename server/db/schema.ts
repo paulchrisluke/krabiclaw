@@ -834,6 +834,39 @@ export const reservation_submissions = sqliteTable("reservation_submissions", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
+export const booking_policies = sqliteTable("booking_policies", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	policy_type: text({ enum: ["reservation", "experience"] }).notNull(),
+	scope_type: text({ enum: ["site", "location", "experience"] }).notNull(),
+	location_id: text().references(() => business_locations.id, { onDelete: "cascade" } ),
+	experience_id: text().references(() => experiences.id, { onDelete: "cascade" } ),
+	booking_window_days: integer(),
+	advance_notice_minutes: integer(),
+	free_cancellation_until_minutes: integer(),
+	late_arrival_grace_minutes: integer(),
+	host_confirmation_sla_minutes: integer(),
+	reschedule_allowed: numeric().default(sql`false`).notNull(),
+	reschedule_cutoff_minutes: integer(),
+	deposit_required: numeric().default(sql`false`).notNull(),
+	deposit_trigger_party_size: integer(),
+	special_requests_allowed: numeric().default(sql`true`).notNull(),
+	weather_policy: text(),
+	minimum_guest_age: integer(),
+	accessibility_contact_required: numeric().default(sql`false`).notNull(),
+	additional_notes_html: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("booking_policies_site_type_idx").on(table.site_id, table.policy_type),
+	uniqueIndex("booking_policies_reservation_site_unique").on(table.site_id).where(sql`policy_type = 'reservation' AND scope_type = 'site'`),
+	uniqueIndex("booking_policies_reservation_location_unique").on(table.location_id).where(sql`policy_type = 'reservation' AND scope_type = 'location' AND location_id IS NOT NULL`),
+	uniqueIndex("booking_policies_experience_site_unique").on(table.site_id).where(sql`policy_type = 'experience' AND scope_type = 'site'`),
+	uniqueIndex("booking_policies_experience_location_unique").on(table.location_id).where(sql`policy_type = 'experience' AND scope_type = 'location' AND location_id IS NOT NULL`),
+	uniqueIndex("booking_policies_experience_scope_unique").on(table.experience_id).where(sql`policy_type = 'experience' AND scope_type = 'experience' AND experience_id IS NOT NULL`),
+]);
+
 export const reviews = sqliteTable("reviews", {
 	id: text().primaryKey(),
 	organization_id: text().references(() => organization.id, { onDelete: "cascade" } ),

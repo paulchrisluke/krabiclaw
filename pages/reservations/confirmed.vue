@@ -11,8 +11,9 @@
       kicker="Request received"
       :receipt-kicker="resCopy.reservationWord"
       :receipt-rows="receiptRows"
-      :next-steps-kicker="resCopy.reservationPoliciesHeading"
+      :next-steps-kicker="resolvedPolicySummary?.heading ?? resCopy.reservationPoliciesHeading"
       :next-steps="policyLines"
+      :next-steps-notes-html="resolvedPolicySummary?.additional_notes_html ?? ''"
       :cta-label="resCopy.reservationExploreLabel"
       :cta-to="menuCtaTo"
     >
@@ -55,22 +56,20 @@
 import { getBookingConfirmation, type BookingConfirmation as BookingConfirmationData } from '~/composables/useBookingHandoff'
 import BookingConfirmation from '~/components/booking/BookingConfirmation.vue'
 import { fmt12Hour } from '~/shared/reservation-hours'
-import { getFieldDef } from '~/config/content-registry'
+import type { RenderedBookingPolicySummaryItem } from '~/server/utils/booking-policies'
 
 definePageMeta({ layout: 'saya' })
 
 const { site, siteId } = useTenantSite()
+const { reservationPolicySiteDefault, reservationPolicyByLocation } = useBootstrap()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 const { formatDate } = useLocaleDate()
 const route = useRoute()
 const justCopied = ref(false)
-const { getField } = usePageContent('reservations')
 
 const confirmation = ref<BookingConfirmationData | null>(null)
 const pending = ref(true)
-const reservationPoliciesDefault = getFieldDef('reservations', 'policies.body')?.defaultValue ?? ''
-const reservationPoliciesHtml = computed(() => getField('policies.body', reservationPoliciesDefault) ?? reservationPoliciesDefault)
 
 const readableDate = computed(() => {
   if (!confirmation.value?.date) return ''
@@ -92,35 +91,14 @@ const receiptRows = computed(() => {
   return rows
 })
 
-function stripHtml(value: string): string {
-  return value
-    .replace(/<li[^>]*>/gi, '')
-    .replace(/<\/li>/gi, '\n')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/\s+\n/g, '\n')
-    .replace(/\n\s+/g, '\n')
-    .replace(/[ \t]{2,}/g, ' ')
-    .trim()
-}
-
-const policyLines = computed(() => {
-  const html = reservationPoliciesHtml.value
-  const listItems = [...html.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)]
-    .map(match => stripHtml(match[1] ?? ''))
-    .filter(Boolean)
-
-  if (listItems.length > 0) return listItems
-
-  const plain = stripHtml(html)
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean)
-
-  return plain
+const resolvedPolicySummary = computed(() => {
+  if (confirmation.value?.sitePolicySummary) return confirmation.value.sitePolicySummary as ApiRecord
+  const locationId = confirmation.value?.locationId
+  if (locationId && reservationPolicyByLocation.value[locationId]) return reservationPolicyByLocation.value[locationId]
+  return reservationPolicySiteDefault.value
 })
+
+const policyLines = computed(() => (resolvedPolicySummary.value?.items ?? []).map((item: RenderedBookingPolicySummaryItem) => String(item.text ?? '')))
 
 const menuCtaTo = computed(() => {
   const slug = confirmation.value?.locationSlug
@@ -147,7 +125,7 @@ onMounted(async () => {
   const token = route.hash ? route.hash.substring(1) : ''
   if (resId && token) {
     try {
-      const res = await $fetch<{ reservation: { name: string; date: string; time: string; guests: string } }>(
+      const res = await $fetch<{ reservation: { name: string; date: string; time: string; guests: string; location_id?: string | null } }>(
         `/api/public/sites/${siteId}/reservations/${resId}`,
         { headers: { Authorization: `Bearer ${token}` } },
       )
@@ -159,6 +137,7 @@ onMounted(async () => {
         date: res.reservation.date,
         time: res.reservation.time,
         guests: res.reservation.guests,
+        locationId: typeof res.reservation.location_id === 'string' ? res.reservation.location_id : null,
         cancelUrl: `/reservations/cancel?id=${resId}#${token}`,
       }
     } catch {

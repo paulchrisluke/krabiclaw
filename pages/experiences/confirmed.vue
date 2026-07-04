@@ -5,10 +5,11 @@
       kicker="Request received"
       receipt-kicker="Your booking"
       :receipt-rows="receiptRows"
-      :next-steps-kicker="policyHeading"
+      :next-steps-kicker="resolvedPolicySummary?.heading ?? 'Experience policies'"
       :next-steps="policyLines"
-      cta-label="Browse more experiences"
-      cta-to="/experiences"
+      :next-steps-notes-html="resolvedPolicySummary?.additional_notes_html ?? ''"
+      :cta-label="confirmation.locationSlug ? 'Browse the menu' : 'Browse more experiences'"
+      :cta-to="confirmation.locationSlug ? `/locations/${confirmation.locationSlug}/menu` : '/experiences'"
     >
       <template #title>
         You're booked, {{ confirmation.guestName }}!
@@ -40,14 +41,14 @@
 import { getBookingConfirmation, type BookingConfirmation as BookingConfirmationData } from '~/composables/useBookingHandoff'
 import BookingConfirmation from '~/components/booking/BookingConfirmation.vue'
 import { fmt12Hour } from '~/shared/reservation-hours'
-import { usePageContent } from '~/composables/usePageContent'
+import type { RenderedBookingPolicySummaryItem } from '~/server/utils/booking-policies'
 
 definePageMeta({ layout: 'saya' })
 
 const { formatDate } = useLocaleDate()
 const justCopied = ref(false)
 const { siteId } = useTenantSite()
-const { getField } = usePageContent('reservations')
+const { experiencePolicyById } = useBootstrap()
 
 const confirmation = ref<BookingConfirmationData | null>(null)
 
@@ -74,42 +75,30 @@ const receiptRows = computed(() => {
   return rows
 })
 
-function stripHtml(value: string): string {
-  return value
-    .replace(/<li[^>]*>/gi, '')
-    .replace(/<\/li>/gi, '\n')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/\s+\n/g, '\n')
-    .replace(/\n\s+/g, '\n')
-    .replace(/[ \t]{2,}/g, ' ')
-    .trim()
+// Fallback used only when the /experiences/confirmed bootstrap call has no
+// experience-scoped data to resolve a policy for (this route has no slug param,
+// so experiencePolicyById is typically empty) — mirrors EXPERIENCE_DEFAULTS in
+// server/utils/booking-policies.ts rendered through formatBookingPolicySummary.
+const GENERIC_EXPERIENCE_POLICY: ApiRecord = {
+  heading: 'Experience policies',
+  items: [
+    { id: 'host_confirmation_sla', text: 'Our team confirms by email, usually within 1 hour, always the same day.' },
+    { id: 'cancellation', text: 'Free cancellation is available up to 1 day before the experience starts.' },
+    { id: 'reschedule', text: 'You can reschedule up to 1 day before the start time.' },
+    { id: 'late_arrival', text: 'We hold your spot for 15 minutes after the scheduled start. Running late? Just call.' },
+    { id: 'special_requests', text: 'Special requests can be shared in advance and are confirmed subject to availability.' },
+  ],
+  additional_notes_html: null,
 }
 
-const reservationPolicyFallback = computed(() => getField('policies.body', '') ?? '')
-
-const policyHeading = computed(() =>
-  confirmation.value?.policyText ? 'Cancellation policy' : 'Reservation Policies',
-)
-
-const policyLines = computed(() => {
-  const source = confirmation.value?.policyText?.trim() || reservationPolicyFallback.value.trim()
-  if (!source) return []
-
-  if (source.includes('<')) {
-    const listItems = [...source.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)]
-      .map(match => stripHtml(match[1] ?? ''))
-      .filter(Boolean)
-    if (listItems.length > 0) return listItems
-  }
-
-  return stripHtml(source)
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean)
+const resolvedPolicySummary = computed(() => {
+  if (confirmation.value?.sitePolicySummary) return confirmation.value.sitePolicySummary as ApiRecord
+  const experienceId = confirmation.value?.experienceId
+  if (experienceId && experiencePolicyById.value[experienceId]) return experiencePolicyById.value[experienceId]
+  return GENERIC_EXPERIENCE_POLICY
 })
+
+const policyLines = computed(() => (resolvedPolicySummary.value?.items ?? []).map((item: RenderedBookingPolicySummaryItem) => String(item.text ?? '')))
 
 async function share() {
   if (!confirmation.value) return

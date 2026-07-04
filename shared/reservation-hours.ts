@@ -93,15 +93,20 @@ export function getTodayHoursLabel(openingHours: unknown, closedLabel: string, n
 export function isOpenNow(openingHours: unknown, now = new Date()): boolean {
   if (!isStructuredOpeningHours(openingHours)) return false
   const weekdayName = WEEKDAY_BY_INDEX[now.getDay()]!
+  const previousWeekdayName = WEEKDAY_BY_INDEX[(now.getDay() + 6) % 7]!
   const nowMinutes = now.getHours() * 60 + now.getMinutes()
   return openingHours.some(entry => {
-    if (entry.openDay.toUpperCase() !== weekdayName) return false
     const open = toMinutes(entry.openTime)
     const close = toMinutes(entry.closeTime)
-    // Overnight hours: close time is earlier than or equal to open time
+    const entryDay = entry.openDay.toUpperCase()
+    // Overnight hours: close time is earlier than or equal to open time. An entry opening
+    // yesterday (e.g. Monday 22:00-02:00) is still active after midnight into today.
     if (close <= open) {
-      return nowMinutes >= open || nowMinutes < close
+      if (entryDay === weekdayName && nowMinutes >= open) return true
+      if (entryDay === previousWeekdayName && nowMinutes < close) return true
+      return false
     }
+    if (entryDay !== weekdayName) return false
     return nowMinutes >= open && nowMinutes < close
   })
 }

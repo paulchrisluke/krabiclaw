@@ -26,11 +26,19 @@
           />
           <div
             v-else-if="loc.kind === 'video'"
-            class="h-full w-full flex items-center justify-center bg-muted"
+            class="relative h-full w-full bg-muted"
           >
-            <svg viewBox="0 0 24 24" class="w-12 h-12 text-muted" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
-              <polygon points="5 3 19 12 5 21 5 3"></polygon>
-            </svg>
+            <img
+              v-if="loc.thumbnail_url"
+              :src="loc.thumbnail_url"
+              :alt="loc.title ?? ''"
+              class="h-full w-full object-cover"
+            />
+            <div class="absolute inset-0 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" class="w-12 h-12" :class="loc.thumbnail_url ? 'text-white drop-shadow' : 'text-muted'" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+            </div>
           </div>
         </div>
 

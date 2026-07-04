@@ -231,9 +231,18 @@
               <p class="whitespace-pre-line text-default leading-7">{{ experience.meeting_point }}</p>
             </div>
 
-            <div v-if="experience.cancellation_policy" class="mt-10 border-t border-default pt-10">
-              <h2 class="text-xl font-semibold text-default mb-5">Cancellation policy</h2>
-              <p class="whitespace-pre-line text-default leading-7">{{ experience.cancellation_policy }}</p>
+            <div v-if="experiencePolicySummary" class="mt-10 border-t border-default pt-10">
+              <h2 class="text-xl font-semibold text-default mb-5">{{ experiencePolicySummary.heading }}</h2>
+              <ol class="space-y-4">
+                <li v-for="(item, index) in experiencePolicySummary.items" :key="item.id" class="flex gap-4 text-default">
+                  <span class="flex size-7 shrink-0 items-center justify-center rounded-full border border-default bg-elevated text-sm">{{ index + 1 }}</span>
+                  <span class="leading-7">{{ item.text }}</span>
+                </li>
+              </ol>
+              <div v-if="experiencePolicySummary.additional_notes_html" class="mt-5 text-sm leading-7 text-muted">
+                <!-- eslint-disable-next-line vue/no-v-html -->
+                <div v-html="experiencePolicySummary.additional_notes_html" />
+              </div>
             </div>
 
             <!-- Where you'll meet -->
@@ -407,12 +416,18 @@ const siteName = computed(() => (site as ApiValue)?.brand_name || (site as ApiVa
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 
-const { experienceDetail: experience, config: siteConfig, pending, locations } = useBootstrap()
+const { experienceDetail: experience, config: siteConfig, pending, locations, experiencePolicyById } = useBootstrap()
 
 const experienceLocation = computed(() => {
   const locId = (experience.value as ApiValue)?.location_id
   if (!locId) return null
   return (locations.value as ApiRecord[]).find((l: ApiRecord) => l.id === locId) ?? null
+})
+
+const experiencePolicySummary = computed(() => {
+  const experienceId = experience.value?.id
+  if (!experienceId) return null
+  return experiencePolicyById.value[experienceId] ?? null
 })
 
 const locationAddress = computed(() => {
@@ -569,7 +584,7 @@ async function submitBooking() {
   submitting.value = true
   bookingError.value = null
   try {
-    const res = await $fetch<{ success: boolean; message: string }>(
+    const res = await $fetch<{ success: boolean; message: string; booking_id: string; policy_summary?: ApiRecord | null }>(
       `/api/public/sites/${siteId}/experiences/${slug}/book`,
       {
         method: 'POST',
@@ -591,6 +606,8 @@ async function submitBooking() {
       siteId,
       siteName: siteName.value,
       guestName: form.guest_name.trim(),
+      sitePolicySummary: res.policy_summary ?? null,
+      experienceId: experience.value?.id ?? null,
       title: experience.value?.title,
       date: timeSelection.value.day,
       time: timeSelection.value.time,
@@ -598,9 +615,9 @@ async function submitBooking() {
       requests: form.notes.trim() || null,
       contactPhone: (experienceLocation.value as ApiRecord | null)?.phone ?? null,
       contactEmail: (experienceLocation.value as ApiRecord | null)?.email ?? null,
+      locationId: (experienceLocation.value as ApiRecord | null)?.id ? String((experienceLocation.value as ApiRecord | null)?.id) : null,
       locationName: (experienceLocation.value as ApiRecord | null)?.title ?? null,
       locationSlug: typeof (experienceLocation.value as ApiRecord | null)?.slug === 'string' ? String((experienceLocation.value as ApiRecord | null)?.slug) : null,
-      policyText: experience.value?.cancellation_policy ?? null,
       message: res.message,
     })
     await navigateTo('/experiences/confirmed')
@@ -612,6 +629,7 @@ async function submitBooking() {
     // stuck on the contact form with no way to see the now-invalid slot.
     if (err && typeof err === 'object' && 'statusCode' in err && (err as { statusCode?: number }).statusCode === 409) {
       bookingStep.value = 1
+      timeSelection.value = null
       loadAvailability()
     }
   } finally {

@@ -2999,8 +2999,8 @@ Guidelines:
 - Use add_menu_items_batch only when the user is clearly adding brand-new items that are not already on the menu
 - Never use add_menu_items_batch to replace, revise, rename, or update existing menu items
 - When creating menus, omit location_id — the server links it to the current location automatically
-- Use get_page_fields, update_page_content, and delete_content_field with page: 'reservations' when the user asks about reservation rules, hold times, cancellation windows, or deposits
-${translationWorkflowGuidance}- Use get_page_fields, update_page_content, and delete_content_field for tenant page content such as home, about, contact, location notes, and reservations
+- Use get_booking_policy, preview_booking_policy, and update_booking_policy when the user asks about reservation rules, hold times, cancellation windows, deposits, or experience cancellation terms
+${translationWorkflowGuidance}- Use get_page_fields, update_page_content, and delete_content_field for tenant page content such as home, about, contact, and location notes; use the booking policy tools for reservation and experience booking rules
 ${translationConfirmationGuidance}- Before publish_post, delete_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_media_asset, delete_location_qa, or delete_content_field — confirm first
 - Menus are live immediately when created — use publish_menu only to republish a menu that was set to unpublished
 - Keep responses short — this is a chat panel`;

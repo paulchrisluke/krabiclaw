@@ -3,7 +3,7 @@
 // after it parses a reply sent to reply+<type>-<id>-<token>@reply.<platform-domain>. Authenticated by
 // a shared secret header, not a dashboard session — the caller is a Worker, not a browser.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { execute, executeBatch } from '~/server/db'
+import { executeBatch, queryFirst } from '~/server/db'
 import { insertDashboardNotification } from '~/server/utils/notifications'
 import {
   getSubmissionOrgSite,
@@ -23,10 +23,11 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const body = await readBody(event) as { to?: unknown; from?: unknown; body?: unknown }
+  const body = await readBody(event) as { to?: unknown; from?: unknown; body?: unknown; messageId?: unknown }
   const to = typeof body.to === 'string' ? body.to : ''
   const from = typeof body.from === 'string' ? body.from : ''
   const text = typeof body.body === 'string' ? body.body.trim() : ''
+  const messageIdHeader = typeof body.messageId === 'string' ? body.messageId : crypto.randomUUID()
   if (!to || !text) return jsonResponse({ error: 'Missing to/body' }, { status: 400 })
 
   const parsed = parseReplyToAddress(to)
@@ -40,9 +41,9 @@ export default defineEventHandler(async (event) => {
   const orgSite = await getSubmissionOrgSite(db, parsed.submissionType, parsed.submissionId)
   if (!orgSite) return jsonResponse({ error: 'Submission not found' }, { status: 404 })
 
-  // Idempotency check: use the reply-to address (which includes the token) as a unique key
+  // Idempotency check: use the message-id from headers as a unique key
   // to prevent duplicate processing on retries
-  const existing = await execute(db, `SELECT id FROM submission_messages WHERE meta_message_id = ? LIMIT 1`, [to])
+  const existing = await queryFirst<{ id: string }>(db, `SELECT id FROM submission_messages WHERE meta_message_id = ? LIMIT 1`, [messageIdHeader])
   if (existing) return jsonResponse({ received: true })
 
   const messageId = crypto.randomUUID()
@@ -65,7 +66,7 @@ export default defineEventHandler(async (event) => {
         'email',
         text,
         null,
-        to,
+        messageIdHeader,
         'sent',
         null,
         now

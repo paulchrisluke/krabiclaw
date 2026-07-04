@@ -6,6 +6,7 @@ import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { resolveLocationTimezone, isDateBeforeTimezoneToday } from '~/server/utils/site-config'
 import { generateReservationTimes, isStructuredOpeningHours } from '~/shared/reservation-hours'
 import { getReservationSlotAvailability } from '~/server/utils/reservations'
+import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 
 const IP_HOURLY_LIMIT = 5
 const EMAIL_DAILY_LIMIT = 3
@@ -64,7 +65,13 @@ export default defineEventHandler(async (event) => {
 
   const name       = cleanString(body.name, 100)
   const email      = cleanString(body.email, 200)
-  const phone      = cleanString(body.phone, 30)
+  let phone = cleanString(body.phone, 30)
+  if (phone) {
+    try {
+      const { normalizePhone } = await import('~/server/utils/whatsapp')
+      phone = normalizePhone(phone)
+    } catch { /* fallback to raw if unparseable */ }
+  }
   const date       = cleanString(body.date, 10)
   const time       = cleanString(body.time, 5)
   const guests     = cleanString(body.guests, 3)
@@ -121,6 +128,10 @@ export default defineEventHandler(async (event) => {
   if (!validTimes.includes(time))
     return jsonResponse({ error: 'Please choose a valid time — this location is closed at that time.' }, { status: 400 })
 
+  // Party size + capacity used by the atomic insert guard below — capacity enforcement is
+  // skipped entirely (party size stays null) when the location has no max_capacity, matching
+  // getReservationSlotAvailability's unlimited-capacity behavior (remaining === null).
+  let partySizeForCapacityCheck: number | null = null
   if (isStructuredOpeningHours(parsedHours)) {
     const availability = await getReservationSlotAvailability(db, siteId, { id: resolvedLocationId, max_capacity: location.max_capacity, opening_hours: parsedHours }, date)
     const slotAvailability = availability.find((s) => s.time_slot === time)
@@ -131,19 +142,7 @@ export default defineEventHandler(async (event) => {
     if (slotAvailability && slotAvailability.remaining !== null && partySize > slotAvailability.remaining) {
       return jsonResponse({ error: `Only ${Math.max(slotAvailability.remaining, 0)} spot(s) left at this time.` }, { status: 409 })
     }
-
-    // Atomic capacity check: re-check remaining capacity immediately before insert to prevent TOCTOU race
-    const currentBooked = await queryFirst<{ total: string }>(db, `
-      SELECT COALESCE(SUM(CASE WHEN guests = '8+' THEN 8 ELSE CAST(guests AS INTEGER) END), 0) as total
-      FROM reservation_submissions
-      WHERE location_id = ? AND date = ? AND time = ? AND status != 'cancelled'
-    `, [resolvedLocationId, date, time])
-    const currentTotal = Number(currentBooked?.total ?? 0)
-    const maxCap = location.max_capacity ?? 999
-    if (currentTotal + partySize > maxCap) {
-      const remaining = Math.max(maxCap - currentTotal, 0)
-      return jsonResponse({ error: `Only ${remaining} spot(s) left at this time.` }, { status: 409 })
-    }
+    if (location.max_capacity != null) partySizeForCapacityCheck = partySize
   }
 
   const id = crypto.randomUUID()
@@ -166,12 +165,24 @@ export default defineEventHandler(async (event) => {
     if (!emailOk) return jsonResponse({ error: 'Too many reservation requests from this email. Please try again tomorrow.' }, { status: 429 })
   }
 
-  await execute(db, `
+  // Single atomic statement: the capacity re-check and the insert happen in one SQL statement
+  // (D1/SQLite guarantees single-statement atomicity even without BEGIN/COMMIT support — see
+  // CLAUDE.md "D1 does not support raw transactions") so a concurrent request can't slip in
+  // between a separate read and write. When partySizeForCapacityCheck is null (no max_capacity,
+  // or unstructured hours), the WHERE clause is unconditionally true and the insert always runs.
+  const insertResult = await execute(db, `
     INSERT INTO reservation_submissions (
       id, organization_id, site_id, name, email, phone, date, time, guests, requests, ip_hash,
       cancellation_token_hash, cancellation_token_expires_at, location_id
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    WHERE ? IS NULL OR (
+      COALESCE((
+        SELECT SUM(CASE WHEN guests = '8+' THEN 8 ELSE CAST(guests AS INTEGER) END)
+        FROM reservation_submissions
+        WHERE location_id = ? AND date = ? AND time = ? AND status != 'cancelled'
+      ), 0) + ? <= ?
+    )
   `, [
     id,
     site.organization_id,
@@ -187,7 +198,17 @@ export default defineEventHandler(async (event) => {
     cancellationTokenHash,
     cancellation.expiresAt,
     resolvedLocationId,
+    partySizeForCapacityCheck,
+    resolvedLocationId,
+    date,
+    time,
+    partySizeForCapacityCheck,
+    location.max_capacity,
   ])
+
+  if (!insertResult?.meta?.changes) {
+    return jsonResponse({ error: 'This time is no longer available. Please choose another time.' }, { status: 409 })
+  }
 
   // Build absolute cancel URL for the confirmation email
   const siteBaseUrl = site.public_url?.replace(/\/$/, '') || (site.subdomain ? `https://${site.subdomain}.krabiclaw.com` : null)
@@ -224,10 +245,17 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  const policy = await resolveBookingPolicy(db, {
+    siteId,
+    policyType: 'reservation',
+    locationId: resolvedLocationId,
+  })
+
   return jsonResponse({
     success: true,
     id,
     cancellationToken: cancellation.token,
     message: 'Your reservation request has been received. We will confirm shortly.',
+    policy_summary: renderBookingPolicySummary(policy, 'en'),
   }, { status: 201 })
 })

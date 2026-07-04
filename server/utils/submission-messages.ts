@@ -63,10 +63,6 @@ export async function verifyReplyToken(
   const left = textEncoder.encode(expected)
   const right = textEncoder.encode(token)
   if (left.length !== right.length) {
-    // Perform dummy comparison to prevent early exit timing differences
-    for (let i = 0; i < left.length; i++) {
-      if (left[i] !== left[i]) return false
-    }
     return false
   }
   let diff = 0

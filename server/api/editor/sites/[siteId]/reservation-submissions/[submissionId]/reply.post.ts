@@ -39,19 +39,24 @@ export default defineEventHandler(async (event) => {
 
     const result = await sendWhatsAppText(env, contact.phone, replyBody)
 
-    await insertSubmissionMessage(db, {
-      submissionType: 'reservation',
-      submissionId,
-      organizationId: site.organization_id,
-      siteId,
-      direction: 'out',
-      channel: 'whatsapp',
-      body: replyBody,
-      senderUserId: session.user.id,
-      metaMessageId: result.messageId ?? null,
-      status: result.success ? 'sent' : 'failed',
-      error: result.error ?? null,
-    })
+    try {
+      await insertSubmissionMessage(db, {
+        submissionType: 'reservation',
+        submissionId,
+        organizationId: site.organization_id,
+        siteId,
+        direction: 'out',
+        channel: 'whatsapp',
+        body: replyBody,
+        senderUserId: session.user.id,
+        metaMessageId: result.messageId ?? null,
+        status: result.success ? 'sent' : 'failed',
+        error: result.error ?? null,
+      })
+    } catch (error) {
+      console.error('Failed to save reply message to database', error)
+      // Don't override a successful send with a DB insert failure
+    }
 
     if (!result.success) {
       return jsonResponse({ error: result.error || 'Failed to send WhatsApp reply' }, { status: 502 })
@@ -75,19 +80,24 @@ export default defineEventHandler(async (event) => {
     submissionId,
   })
 
-  await insertSubmissionMessage(db, {
-    submissionType: 'reservation',
-    submissionId,
-    organizationId: site.organization_id,
-    siteId,
-    direction: 'out',
-    channel: 'email',
-    body: replyBody,
-    senderUserId: session.user.id,
-    metaMessageId: result.messageId ?? null,
-    status: result.success ? 'sent' : 'failed',
-    error: result.error ?? null,
-  })
+  try {
+    await insertSubmissionMessage(db, {
+      submissionType: 'reservation',
+      submissionId,
+      organizationId: site.organization_id,
+      siteId,
+      direction: 'out',
+      channel: 'email',
+      body: replyBody,
+      senderUserId: session.user.id,
+      metaMessageId: result.messageId ?? null,
+      status: result.success ? 'sent' : 'failed',
+      error: result.error ?? null,
+    })
+  } catch (error) {
+    console.error('Failed to save reply message to database', error)
+    // Don't override a successful send with a DB insert failure
+  }
 
   if (!result.success) {
     return jsonResponse({ error: result.error || 'Failed to send reply' }, { status: 502 })

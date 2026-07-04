@@ -39,6 +39,7 @@ const SITE_SCOPED_TABLES = [
   'chowbot_conversations',
   'chowbot_messages',
   'location_qa',
+  'booking_policies',
   'experiences',
   'experience_bookings',
   'site_billing',

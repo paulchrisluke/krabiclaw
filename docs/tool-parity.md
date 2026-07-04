@@ -57,6 +57,7 @@ These groups are hidden by default on both conversational surfaces where present
 | `get_current_user`, `get_workspace_context`, `set_workspace_context` | ChatGPT connector workspace/session context |
 | `list_sites`, `create_site`, `show_site_preview` | ChatGPT connector onboarding and site selection |
 | `show_generated_images`, `save_generated_image`, `save_generated_image_file`, `upload_user_photo` | ChatGPT native image/file flow |
+| `get_booking_policy`, `preview_booking_policy`, `update_booking_policy` | Structured booking-policy editing is currently exposed in Client MCP first; ChowBot should use the same backend resolver/formatter when a chat-safe editing flow is added |
 | `get_site`, `update_site_settings`, `set_brand_color`, `clear_home_hero_image`, `clear_home_hero_video`, `clear_location_hero_image`, `clear_location_hero_video`, `copy_location_batch`, `reorder_experience_gallery`, `get_site_analytics` | Client MCP-specific granularity or dashboard-backed utility not currently present in ChowBot |
 
 ## Verification

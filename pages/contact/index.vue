@@ -158,13 +158,14 @@
                 <!-- Mini map -->
                 <div class="aspect-4/3 bg-muted lg:aspect-auto lg:min-h-64">
                   <iframe
-                    v-if="loc.map_embed_url"
-                    :src="loc.map_embed_url"
+                    v-if="safeUrl(loc.map_embed_url)"
+                    :src="safeUrl(loc.map_embed_url)"
                     :title="`${loc.title} on Google Maps`"
                     class="h-full w-full border-0"
                     style="filter:grayscale(0.12)"
                     loading="lazy"
                     referrerpolicy="no-referrer-when-downgrade"
+                    sandbox="allow-scripts allow-same-origin"
                   />
                   <div v-else class="flex h-full w-full items-center justify-center">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="size-8 text-muted">
@@ -366,7 +367,10 @@ const validateTenantContact = (state) => {
 }
 
 const handleTenantContact = async () => {
-  if (!siteId) return
+  if (!siteId) {
+    tenantSubmitError.value = t('saya.contact_page.message_failed')
+    return
+  }
   tenantSubmitError.value = null
   tenantErrors.value = validateTenantContact(tenantForm.value)
   if (tenantErrors.value.length > 0) return

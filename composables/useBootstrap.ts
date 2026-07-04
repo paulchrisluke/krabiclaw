@@ -17,6 +17,7 @@ import {
   useBootstrapUrl,
 } from "~/composables/useBootstrapParams";
 import type { Experience } from "~/server/utils/experiences";
+import type { RenderedBookingPolicySummary } from "~/server/utils/booking-policies";
 
 interface ContentRow {
   field: string;
@@ -47,6 +48,9 @@ interface BootstrapPayload {
   blogList: ApiRecord[];
   blogPost: ApiRecord | null;
   locales: { code: string; label: string; is_source: boolean }[];
+  reservationPolicySiteDefault: RenderedBookingPolicySummary | null;
+  reservationPolicyByLocation: Record<string, RenderedBookingPolicySummary>;
+  experiencePolicyById: Record<string, RenderedBookingPolicySummary>;
   hasExperiences: boolean;
   experiencesList: Experience[];
   experienceDetail: Experience | null;
@@ -73,6 +77,9 @@ const emptyBootstrap = (): BootstrapPayload => ({
   blogList: [],
   blogPost: null,
   locales: [],
+  reservationPolicySiteDefault: null,
+  reservationPolicyByLocation: {},
+  experiencePolicyById: {},
   hasExperiences: false,
   experiencesList: [],
   experienceDetail: null,
@@ -197,6 +204,15 @@ export const useBootstrap = () => {
   // ── Site locales + experiences flag ──────────────────────
   const locales = computed(() => data.value?.locales ?? []);
   const hasExperiences = computed(() => data.value?.hasExperiences ?? false);
+  const reservationPolicySiteDefault = computed(
+    () => data.value?.reservationPolicySiteDefault ?? null,
+  );
+  const reservationPolicyByLocation = computed(
+    () => data.value?.reservationPolicyByLocation ?? {},
+  );
+  const experiencePolicyById = computed(
+    () => data.value?.experiencePolicyById ?? {},
+  );
   const experiencesList = computed(
     () => (data.value?.experiencesList ?? []) as Experience[],
   );
@@ -345,6 +361,9 @@ export const useBootstrap = () => {
     blogList,
     blogPost,
     locales,
+    reservationPolicySiteDefault,
+    reservationPolicyByLocation,
+    experiencePolicyById,
     hasExperiences,
     experiencesList,
     experienceDetail,

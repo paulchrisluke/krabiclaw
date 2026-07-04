@@ -190,51 +190,55 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
     if (match) {
       const text = messageText(message)
       if (text) {
-        const messageId = crypto.randomUUID()
-        const notificationId = crypto.randomUUID()
-        const now = new Date().toISOString()
-        await executeBatch(db, [
-          {
-            query: `
-              INSERT INTO submission_messages
-              (id, submission_type, submission_id, organization_id, site_id, direction, channel, body, sender_user_id, meta_message_id, status, error, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `,
-            params: [
-              messageId,
-              match.submissionType,
-              match.submissionId,
-              match.organizationId,
-              match.siteId,
-              'in',
-              'whatsapp',
-              text,
-              null,
-              message.id,
-              'sent',
-              null,
-              now
-            ]
-          },
-          {
-            query: `
-              INSERT INTO notifications
-              (id, organization_id, site_id, location_id, channel, template, title, payload, status, sent_at, created_at)
-              VALUES (?, ?, ?, ?, 'dashboard', ?, ?, ?, 'sent', ?, ?)
-            `,
-            params: [
-              notificationId,
-              match.organizationId,
-              match.siteId,
-              null,
-              'submission_reply_whatsapp',
-              'New WhatsApp reply from a guest',
-              JSON.stringify({ submission_type: match.submissionType, submission_id: match.submissionId, message: text }),
-              now,
-              now
-            ]
-          }
-        ])
+        try {
+          const messageId = crypto.randomUUID()
+          const notificationId = crypto.randomUUID()
+          const now = new Date().toISOString()
+          await executeBatch(db, [
+            {
+              query: `
+                INSERT INTO submission_messages
+                (id, submission_type, submission_id, organization_id, site_id, direction, channel, body, sender_user_id, meta_message_id, status, error, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `,
+              params: [
+                messageId,
+                match.submissionType,
+                match.submissionId,
+                match.organizationId,
+                match.siteId,
+                'in',
+                'whatsapp',
+                text,
+                null,
+                message.id,
+                'sent',
+                null,
+                now
+              ]
+            },
+            {
+              query: `
+                INSERT INTO notifications
+                (id, organization_id, site_id, location_id, channel, template, title, payload, status, sent_at, created_at)
+                VALUES (?, ?, ?, ?, 'dashboard', ?, ?, ?, 'sent', ?, ?)
+              `,
+              params: [
+                notificationId,
+                match.organizationId,
+                match.siteId,
+                null,
+                'submission_reply_whatsapp',
+                'New WhatsApp reply from a guest',
+                JSON.stringify({ submission_type: match.submissionType, submission_id: match.submissionId, message: text }),
+                now,
+                now
+              ]
+            }
+          ])
+        } catch (err) {
+          console.error('[whatsapp] Failed to insert guest reply for submission:', err)
+        }
       }
       return
     }

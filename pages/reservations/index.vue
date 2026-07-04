@@ -5,7 +5,8 @@
         {{ resCopy.reservationPageKicker }}
       </p>
       <h1 class="saya-display-md max-w-5xl text-default">
-        <em class="saya-italic">{{ getField('hero.title', resCopy.reserveCta) }}</em>
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <span v-html="formatTitleItalics(getField('hero.title', 'Save yourself *a seat.*'))" />
       </h1>
       <p v-if="heroSubtitle" class="mt-5 max-w-3xl text-balance text-sm leading-relaxed text-muted sm:text-base">
         {{ heroSubtitle }}
@@ -25,10 +26,7 @@
 
     <!-- Location cards -->
     <section v-if="locations.length > 0" class="mx-auto max-w-5xl px-4 pb-20 sm:px-6 lg:px-8">
-      <div
-        class="grid gap-8"
-        :class="'grid-cols-1'"
-      >
+      <div class="grid gap-8 grid-cols-2">
         <article
           v-for="loc in locations"
           :key="loc.id"
@@ -83,28 +81,26 @@
       </div>
     </section>
 
-    <!-- Policies: "Before you book" strip. Reuses the tenant's existing policies.body
-         CMS list (one card per <li>) rather than a separate structured field — falls
-         back to the raw richtext block for tenants who wrote freeform text instead
-         of a list. -->
-    <ClientOnly>
-      <section v-if="policiesBody" class="bg-muted">
+    <section v-if="activeReservationPolicySummary" class="bg-muted">
         <div class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
           <div class="mb-10 max-w-xl">
             <p class="saya-kicker mb-4">{{ resCopy.goodToKnowKicker }}</p>
-            <h2 class="saya-display-sm text-default">{{ resCopy.reservationPoliciesHeading }}</h2>
+            <h2 class="saya-display-sm text-default">{{ activeReservationPolicySummary.heading }}</h2>
           </div>
-          <div v-if="policyItems.length > 0" class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            <div v-for="(item, i) in policyItems" :key="i" class="border-t border-default pt-5">
-              <!-- eslint-disable-next-line vue/no-v-html -->
-              <p class="text-sm leading-relaxed text-muted" v-html="item" />
+          <div v-if="activeReservationPolicySummary.items.length > 0" class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+            <div v-for="item in activeReservationPolicySummary.items" :key="item.id" class="border-t border-default pt-5">
+              <p class="text-sm leading-relaxed text-muted">{{ item.text }}</p>
             </div>
           </div>
-          <!-- eslint-disable-next-line vue/no-v-html -->
-          <div v-else class="max-w-2xl text-sm leading-relaxed text-muted" v-html="policiesBody" />
+          <div
+            v-if="activeReservationPolicySummary.additional_notes_html"
+            class="mt-8 max-w-2xl text-sm leading-relaxed text-muted"
+          >
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <div v-html="activeReservationPolicySummary.additional_notes_html" />
+          </div>
         </div>
       </section>
-    </ClientOnly>
 
     <!-- Booking Modal Flow -->
     <BookingModal
@@ -173,11 +169,17 @@ import BookingLocationStep from '@/components/booking/BookingLocationStep.vue'
 import BookingModal from '@/components/booking/BookingModal.vue'
 import BookingRecap from '@/components/booking/BookingRecap.vue'
 import BookingTimeStep, { type RawDateAvailability, type TimeSlotSelection } from '@/components/booking/BookingTimeStep.vue'
-import { getFieldDef } from '~/config/content-registry'
 import { usePageContent } from '~/composables/usePageContent'
 import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 import { fmt12Hour, getTodayHoursLabel, isOpenNow } from '~/shared/reservation-hours'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
+
+function formatTitleItalics(text: string | null | undefined): string {
+  if (!text) return ''
+  // If there are no asterisks, fallback to italicizing the whole thing
+  if (!text.includes('*')) return `<em class="saya-italic">${text}</em>`
+  return text.replace(/\*(.*?)\*/g, '<em class="saya-italic">$1</em>')
+}
 
 definePageMeta({ layout: 'saya' })
 
@@ -185,7 +187,7 @@ const { getField } = usePageContent('reservations')
 const { site, siteId } = useTenantSite()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
-const { locations, config } = useBootstrap()
+const { locations, config, reservationPolicySiteDefault, reservationPolicyByLocation } = useBootstrap()
 const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
 // Pure experience-vertical sites book per-experience on /experiences/[slug].
@@ -206,21 +208,13 @@ useSeoMeta({
   robots: computed(() => isExperienceSite.value ? 'noindex,follow' : 'index,follow')
 })
 
-// ── Policies ──────────────────────────────────────────────────────────────
-const policiesBody = ref('')
-const reservationPoliciesDefault = getFieldDef('reservations', 'policies.body')?.defaultValue ?? ''
-const rawPoliciesHtml = getField('policies.body', reservationPoliciesDefault) ?? reservationPoliciesDefault
-
-onMounted(async () => {
-  const DOMPurify = await import('dompurify')
-  policiesBody.value = DOMPurify.default.sanitize(rawPoliciesHtml)
+const activeReservationPolicySummary = computed(() => {
+  const locationId = selectedLocation.value?.id ? String(selectedLocation.value.id) : null
+  if (locationId && reservationPolicyByLocation.value[locationId]) {
+    return reservationPolicyByLocation.value[locationId]
+  }
+  return reservationPolicySiteDefault.value
 })
-
-// One card per <li> in the tenant's policies.body list, for the "Before you book"
-// strip — substrings of already-sanitized HTML, so no separate sanitize pass needed.
-// Falls back to rendering policiesBody as-is when the tenant wrote freeform text
-// instead of a list (no <li> to split on).
-const policyItems = computed(() => [...policiesBody.value.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)].map(m => (m[1] ?? '').trim()))
 
 // ── Form state ────────────────────────────────────────────────────────────
 const reservationForm = ref({ name: '', email: '', phone: '', location_id: '', date: '', time: '', guests: '', requests: '' })
@@ -346,23 +340,30 @@ const timeSelection = ref<TimeSlotSelection | null>(null)
 const availabilityDates = ref<RawDateAvailability[]>([])
 const availabilityLoading = ref(false)
 
+let availabilityRequestId = 0
+
 async function loadAvailability() {
   if (!siteId || !reservationForm.value.location_id) {
     availabilityDates.value = []
     return
   }
+  const requestId = ++availabilityRequestId
+  const locationId = reservationForm.value.location_id
   availabilityLoading.value = true
   try {
     const today = new Date()
     const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
     const res = await $fetch<{ dates: RawDateAvailability[] }>(`/api/public/sites/${siteId}/reservations/availability`, {
-      query: { location_id: reservationForm.value.location_id, date: dateStr, days: 14 },
+      query: { location_id: locationId, date: dateStr, days: 14 },
     })
+    // Ignore stale responses from a location that was changed away from before this resolved
+    if (requestId !== availabilityRequestId || locationId !== reservationForm.value.location_id) return
     availabilityDates.value = res.dates ?? []
   } catch {
+    if (requestId !== availabilityRequestId || locationId !== reservationForm.value.location_id) return
     availabilityDates.value = []
   } finally {
-    availabilityLoading.value = false
+    if (requestId === availabilityRequestId) availabilityLoading.value = false
   }
 }
 
@@ -395,7 +396,7 @@ async function handleReservation() {
   submitting.value = true
   submitError.value = null
   try {
-    const res = await $fetch<{ id: string; cancellationToken: string }>(`/api/public/sites/${siteId}/reservations`, {
+    const res = await $fetch<{ id: string; cancellationToken: string; policy_summary?: ApiRecord | null }>(`/api/public/sites/${siteId}/reservations`, {
       method: 'POST',
       body: reservationForm.value,
     })
@@ -411,6 +412,8 @@ async function handleReservation() {
       cancelUrl: res?.id && res?.cancellationToken ? `/reservations/cancel?id=${res.id}#${res.cancellationToken}` : null,
       contactPhone: contactPhone.value || null,
       contactEmail: contactEmail.value || null,
+      sitePolicySummary: res.policy_summary ?? null,
+      locationId: selectedLocation.value?.id ? String(selectedLocation.value.id) : null,
       locationName: selectedLocation.value?.title ?? null,
       locationAddress: formatLocationAddress(selectedLocation.value?.address),
       locationSlug: typeof selectedLocation.value?.slug === 'string' ? selectedLocation.value.slug : null,
@@ -421,6 +424,7 @@ async function handleReservation() {
     if (error.status === 409) {
       // Conflict (slot filled or capacity exceeded) — revert to time selection and reload availability
       bookingStep.value = 2
+      timeSelection.value = null
       submitError.value = error.data?.error || 'This time is no longer available. Please select another.'
       await loadAvailability()
     } else {

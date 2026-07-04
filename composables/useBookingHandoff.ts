@@ -7,20 +7,22 @@ export interface BookingConfirmation {
   type: 'reservation' | 'experience'
   siteId: string
   siteName: string
+  sitePolicySummary?: ApiRecord | null
   guestName: string
   date: string
   time: string
   guests: string | number
+  experienceId?: string | null
   title?: string
   requests?: string | null
   cancelUrl?: string | null
   contactPhone?: string | null
   contactEmail?: string | null
   message?: string
+  locationId?: string | null
   locationName?: string | null
   locationAddress?: string | null
   locationSlug?: string | null
-  policyText?: string | null
 }
 
 const STORAGE_KEY = 'kc:booking-confirmation'

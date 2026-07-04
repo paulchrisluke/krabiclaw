@@ -127,6 +127,13 @@
       "when": 1783134523429,
       "tag": "0024_numerous_wendell_vaughn",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1783139697058,
+      "tag": "0025_opposite_katie_power",
+      "breakpoints": true
     }
   ]
 }

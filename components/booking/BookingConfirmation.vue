@@ -44,6 +44,10 @@
         <div v-else class="flex flex-col gap-4 text-sm leading-relaxed text-muted">
           <p v-for="(step, i) in nextSteps" :key="i" class="m-0">{{ step }}</p>
         </div>
+        <div v-if="nextStepsNotesHtml" class="mt-5 border-t border-default pt-5 text-sm leading-relaxed text-muted">
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <div v-html="nextStepsNotesHtml" />
+        </div>
         <SayaButton v-if="ctaLabel && ctaTo" :to="ctaTo" block class="mt-7">{{ ctaLabel }}</SayaButton>
       </aside>
     </div>
@@ -58,10 +62,12 @@ withDefaults(defineProps<{
   nextStepsKicker: string
   nextSteps: string[]
   nextStepsStyle?: 'numbered' | 'plain'
+  nextStepsNotesHtml?: string
   ctaLabel?: string
   ctaTo?: string
 }>(), {
   nextStepsStyle: 'numbered',
+  nextStepsNotesHtml: '',
   ctaLabel: '',
   ctaTo: '',
 })

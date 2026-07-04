@@ -10,7 +10,7 @@ export interface Env {
 // forwards the plain-text body to the main app's /api/email/inbound, which verifies the
 // reply-to token and threads the message onto the right submission.
 export default {
-  async email(message: ForwardableEmailMessage, env: Env, ctx: ExecutionContext): Promise<void> {
+  async email(message: ForwardableEmailMessage, env: Env, _ctx: ExecutionContext): Promise<void> {
     const rawEmail = await new Response(message.raw).arrayBuffer()
     const parsed = await PostalMime.parse(rawEmail)
     // Prefer plain text; if only HTML is available, strip tags to avoid raw HTML exposure
@@ -32,6 +32,7 @@ export default {
           to: message.to,
           from: message.from,
           body,
+          messageId: message.headers.get('Message-ID') || crypto.randomUUID(),
         }),
         signal: controller.signal,
       })
