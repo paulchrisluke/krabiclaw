@@ -31,6 +31,11 @@ NUXT_PUBLIC_PLATFORM_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "KrabiClaw"
 GA4_MEASUREMENT_ID = "G-NJ1BSP9BYG"
+# Production is the only environment that should send real email/WhatsApp — made explicit
+# here rather than relying on getEmailDeliveryMode/getWhatsAppDeliveryMode's default, since
+# that default now fails closed (log_only) precisely so a missing var elsewhere never sends real messages.
+EMAIL_DELIVERY_MODE = "provider"
+WHATSAPP_DELIVERY_MODE = "provider"
 # Internal cron/API endpoints use CRON_SECRET:
 #   yarn wrangler secret put CRON_SECRET
 # GA4_API_SECRET (Measurement Protocol) is a secret, not a var:

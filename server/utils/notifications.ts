@@ -1,6 +1,6 @@
 import { useRender } from 'vue-email'
 import { execute, queryFirst, type DbClient } from '~/server/db'
-import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
+import { hashEmail, isReservedTestDomain, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 import { buildReplyToAddress } from '~/server/utils/submission-messages'
 import ReservationOwnerNew from '~/server/emails/templates/ReservationOwnerNew'
@@ -275,7 +275,7 @@ async function sendEmailNotification(
     now
   ])
 
-  if (!shouldSendRealEmail(env)) {
+  if (!shouldSendRealEmail(env) || isReservedTestDomain(opts.to)) {
     await execute(
       db,
       `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ?, error = NULL WHERE id = ?`,
@@ -288,6 +288,7 @@ async function sendEmailNotification(
       template: opts.template,
       recipient: hashEmail(opts.to),
       title: opts.title,
+      reservedTestDomain: isReservedTestDomain(opts.to),
     })
     return
   }

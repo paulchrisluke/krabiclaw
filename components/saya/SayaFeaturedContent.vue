@@ -20,7 +20,7 @@
         :to="item.href || linkTarget"
         class="group relative block overflow-hidden bg-elevated no-underline text-default transition hover:opacity-90"
       >
-        <div class="aspect-square overflow-hidden bg-muted">
+        <div class="relative aspect-square overflow-hidden bg-muted">
           <div
             v-if="item.unavailable"
             class="absolute inset-0 z-10 flex items-center justify-center bg-black/50"
