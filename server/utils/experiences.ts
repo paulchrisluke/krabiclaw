@@ -1,4 +1,4 @@
-import { resolveLocationTimezone } from '~/server/utils/site-config'
+import { resolveLocationTimezone, isTimeSlotInPast } from '~/server/utils/site-config'
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 
 export const WEEKDAY_NAMES = [
@@ -531,6 +531,8 @@ export interface ExperienceBooking {
   time_slot: string
   status: 'pending' | 'confirmed' | 'cancelled'
   notes: string | null
+  cancellation_token_hash?: string | null
+  cancellation_token_expires_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -545,14 +547,16 @@ export async function createExperienceBooking(
     db,
     `INSERT INTO experience_bookings
        (id, experience_id, organization_id, site_id, location_id, guest_name, guest_email, guest_phone,
-        party_size, booking_date, time_slot, status, notes, ip_hash, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        party_size, booking_date, time_slot, status, notes, ip_hash,
+        cancellation_token_hash, cancellation_token_expires_at, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id, input.experience_id, input.organization_id, input.site_id,
       input.location_id,
       input.guest_name, input.guest_email, input.guest_phone ?? null,
       input.party_size, input.booking_date, input.time_slot,
       input.status ?? 'pending', input.notes ?? null, input.ip_hash ?? null,
+      input.cancellation_token_hash ?? null, input.cancellation_token_expires_at ?? null,
       now, now,
     ],
   )
@@ -836,9 +840,11 @@ export async function getSlotAvailability(
   siteId: string,
   experience: Experience,
   dateStr: string,
+  timezone: string,
 ): Promise<SlotAvailability[]> {
   assertDateStr(dateStr, 'date')
   const effectiveSlots = resolveEffectiveTimeSlots(experience, dateStr)
+    .filter((slot) => !isTimeSlotInPast(dateStr, slot, timezone))
   if (effectiveSlots.length === 0) return []
 
   const bookingRows = await queryAll<{ time_slot: string; booked: number }>(

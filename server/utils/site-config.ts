@@ -75,6 +75,30 @@ export const isDateBeforeTimezoneToday = (dateStr: string, timezone: string): bo
   return dateStr < todayInZone
 }
 
+/**
+ * Returns true if `dateStr` + `timeStr` ("HH:MM") is at or before the current moment as observed
+ * in `timezone`. Used to strip/reject same-day slots whose start time has already passed — a slot
+ * list built only from opening_hours (see shared/reservation-hours.ts generateReservationTimes)
+ * still includes every slot for today regardless of the current wall-clock time, so this is the
+ * second, orthogonal check needed to keep "today" from showing/accepting already-passed times.
+ */
+export const isTimeSlotInPast = (dateStr: string, timeStr: string, timezone: string, now: Date = new Date()): boolean => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now)
+  const get = (type: string) => parts.find(p => p.type === type)?.value ?? '00'
+  const nowDateStr = `${get('year')}-${get('month')}-${get('day')}`
+  const nowTimeStr = `${get('hour')}:${get('minute')}`
+  if (dateStr !== nowDateStr) return dateStr < nowDateStr
+  return timeStr <= nowTimeStr
+}
+
 export const setConfig = async (
   db: DbClient,
   organizationId: string,

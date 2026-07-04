@@ -4,6 +4,7 @@
 // capacity concept: a per-location default (max_capacity), overridable per date+time_slot.
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { generateReservationTimes, isStructuredOpeningHours } from '~/shared/reservation-hours'
+import { isTimeSlotInPast } from '~/server/utils/site-config'
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const TIME_SLOT_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -169,11 +170,13 @@ export async function getReservationSlotAvailability(
   siteId: string,
   location: { id: string; max_capacity: number | null; opening_hours: unknown },
   dateStr: string,
+  timezone: string,
 ): Promise<ReservationSlotAvailability[]> {
   assertDateStr(dateStr, 'date')
-  const effectiveSlots = isStructuredOpeningHours(location.opening_hours)
+  const effectiveSlots = (isStructuredOpeningHours(location.opening_hours)
     ? generateReservationTimes(location.opening_hours, dateStr)
     : []
+  ).filter((slot) => !isTimeSlotInPast(dateStr, slot, timezone))
   if (effectiveSlots.length === 0) return []
 
   const bookingRows = await queryAll<{ time: string; booked: number }>(

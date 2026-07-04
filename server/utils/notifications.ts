@@ -12,6 +12,8 @@ import ContactGuestReceived from '~/server/emails/templates/ContactGuestReceived
 import ReviewOwnerNew from '~/server/emails/templates/ReviewOwnerNew'
 import BookingOwnerNew from '~/server/emails/templates/BookingOwnerNew'
 import BookingGuestReceived from '~/server/emails/templates/BookingGuestReceived'
+import BookingOwnerCancelled from '~/server/emails/templates/BookingOwnerCancelled'
+import BookingGuestCancelled from '~/server/emails/templates/BookingGuestCancelled'
 
 const SUBJECT_LABELS: Record<string, string> = {
   general: 'General',
@@ -80,6 +82,7 @@ interface ExperienceBookingNotificationInput extends SiteContext {
   timeSlot: string
   partySize: number
   notes?: string | null
+  wasConfirmed?: boolean
   contactPhone?: string | null
   contactEmail?: string | null
 }
@@ -713,6 +716,71 @@ export async function notifyExperienceBookingCreated(
   results.forEach((result, index) => {
     if (result.status === 'rejected') {
       console.error('notifyExperienceBookingCreated_failed', {
+        task: index === 0 ? 'notifyOwner' : 'sendEmailNotification',
+        bookingId: opts.bookingId,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      })
+    }
+  })
+}
+
+export async function notifyExperienceBookingCancelled(
+  env: NotificationEnv,
+  db: DbClient,
+  opts: ExperienceBookingNotificationInput
+) {
+  const confirmed = Boolean(opts.wasConfirmed)
+  const studio = siteName(opts, 'the business')
+  const prettyDate = formatDateHuman(opts.bookingDate)
+  const prettyTime = formatTimeHuman(opts.timeSlot)
+  const platformDomain = getPlatformDomain(env)
+  const ownerCancelTitle = confirmed
+    ? `Booking cancelled for ${opts.guestName}`
+    : `Booking request cancelled by ${opts.guestName}`
+  const guestCancelTitle = confirmed ? 'Your booking was cancelled' : 'Your booking request was cancelled'
+
+  const payload = {
+    booking_id: opts.bookingId,
+    guest_name: opts.guestName,
+    email: opts.email,
+    experience: opts.experienceTitle,
+    date: opts.bookingDate,
+    time: opts.timeSlot,
+    party_size: String(opts.partySize),
+    booking_was_confirmed: confirmed ? 'true' : 'false',
+    site_name: studio,
+  }
+
+  const [ownerEmail, guestEmail] = await Promise.all([
+    useRender(BookingOwnerCancelled, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, wasConfirmed: confirmed, platformDomain } }),
+    useRender(BookingGuestCancelled, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, wasConfirmed: confirmed, platformDomain } }),
+  ])
+
+  const results = await Promise.allSettled([
+    notifyOwner(env, db, {
+      ...opts,
+      template: 'experience_booking_cancelled',
+      title: ownerCancelTitle,
+      payload,
+      email: { subject: ownerCancelTitle, html: ownerEmail.html, text: ownerEmail.text },
+      whatsapp: {
+        template: 'reservation_cancelled',
+        vars: { guest_name: opts.guestName, date: prettyDate, time: prettyTime, guests: String(opts.partySize), phone: opts.guestPhone ?? '' },
+      },
+    }),
+    sendEmailNotification(env, db, {
+      ...opts,
+      to: opts.email,
+      template: 'experience_booking_customer_cancelled',
+      title: guestCancelTitle,
+      payload,
+      email: { subject: guestCancelTitle, html: guestEmail.html, text: guestEmail.text },
+    }),
+  ])
+
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      console.error('notifyExperienceBookingCancelled_failed', {
         task: index === 0 ? 'notifyOwner' : 'sendEmailNotification',
         bookingId: opts.bookingId,
         error: result.reason instanceof Error ? result.reason.message : String(result.reason),

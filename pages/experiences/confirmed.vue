@@ -25,6 +25,9 @@
         <SayaButton v-if="confirmation.contactPhone" :href="`tel:${confirmation.contactPhone.replace(/\s/g, '')}`" variant="outline">
           Call us: {{ confirmation.contactPhone }}
         </SayaButton>
+        <SayaButton v-if="confirmation.cancelUrl" :to="confirmation.cancelUrl" color="error" variant="ghost">
+          Cancel booking
+        </SayaButton>
       </template>
     </BookingConfirmation>
 

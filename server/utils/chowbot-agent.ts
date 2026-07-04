@@ -2395,7 +2395,7 @@ async function executeTool(
     }
 
     case "get_experience_availability": {
-      const { getExperienceById, getSlotAvailability } = await import("~/server/utils/experiences");
+      const { getExperienceById, getSlotAvailability, resolveExperienceTimezone } = await import("~/server/utils/experiences");
       const experienceId = toSqlText(input.experience_id);
       const date = toSqlText(input.date);
       const requestedDays = Number(input.days);
@@ -2406,6 +2406,7 @@ async function executeTool(
         return { error: "experience_id and date are required" };
       const experience = await getExperienceById(db, siteId, experienceId);
       if (!experience) return { error: "Experience not found" };
+      const timezone = await resolveExperienceTimezone(db, orgId, siteId, experience);
 
       const dates: Array<{ date: string; slots: Awaited<ReturnType<typeof getSlotAvailability>> }> = [];
       const cursor = new Date(`${date}T00:00:00Z`);
@@ -2414,7 +2415,7 @@ async function executeTool(
       }
       for (let i = 0; i < days; i++) {
         const dateStr = cursor.toISOString().slice(0, 10);
-        const slots = await getSlotAvailability(db, siteId, experience, dateStr);
+        const slots = await getSlotAvailability(db, siteId, experience, dateStr, timezone);
         dates.push({ date: dateStr, slots });
         cursor.setUTCDate(cursor.getUTCDate() + 1);
       }
