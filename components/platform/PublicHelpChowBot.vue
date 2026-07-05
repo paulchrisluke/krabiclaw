@@ -20,18 +20,18 @@
         <span>ChowBot is thinking…</span>
       </div>
 
-      <div v-if="message.citations?.length" class="space-y-2 pt-1">
+      <div v-if="message.suggestedLinks?.length" class="space-y-2 pt-1">
         <p class="text-xs font-medium uppercase tracking-[0.18em] text-muted">
           Related resources
         </p>
         <div class="flex flex-wrap gap-2">
           <NuxtLink
-            v-for="citation in message.citations"
-            :key="`${citation.path}-${citation.title}`"
-            :to="citation.path"
+            v-for="link in message.suggestedLinks"
+            :key="`${link.path}-${link.title}`"
+            :to="link.path"
             class="inline-flex items-center gap-2 rounded-full border border-default px-3 py-1.5 text-xs font-medium text-default no-underline transition hover:border-muted hover:bg-elevated"
           >
-            <span>{{ citation.title }}</span>
+            <span>{{ link.title }}</span>
             <UIcon name="i-lucide-move-up-right" class="size-3.5 text-muted" />
           </NuxtLink>
         </div>
@@ -83,6 +83,14 @@ import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
 import DOMPurify from 'isomorphic-dompurify'
 import { marked } from 'marked'
 
+const renderer = new marked.Renderer()
+renderer.link = function ({ href, title, tokens }) {
+  const titleAttr = title ? ` title="${title}"` : ''
+  const text = this.parser.parseInline(tokens)
+  return `<a href="${href}" target="_blank" rel="noopener noreferrer"${titleAttr}>${text}</a>`
+}
+marked.setOptions({ renderer, breaks: true, gfm: true })
+
 type HelpCitation = {
   title: string
   path: string
@@ -100,6 +108,7 @@ type HelpMessage = {
   role: 'user' | 'assistant'
   content: string
   citations?: HelpCitation[]
+  suggestedLinks?: HelpCitation[]
   followUpPrompts?: string[]
   escalation?: HelpEscalation | null
   escalationSubmitted?: boolean
@@ -117,16 +126,9 @@ const messages = ref<HelpMessage[]>([
 const isLoading = ref(false)
 const activeRequest = ref<AbortController | null>(null)
 
-function linkifyMarkdown(text: string): string {
-  return text.replace(
-    /\[([^\]]+)\]\(([^)\s]+)\)/g,
-    '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
-  )
-}
-
 function renderMarkdown(text: string): string {
-  const html = marked.parse(text, { breaks: true, gfm: true }) as string
-  return DOMPurify.sanitize(linkifyMarkdown(html))
+  const html = marked.parse(text) as string
+  return DOMPurify.sanitize(html)
 }
 
 async function submitMessage(message: string) {
@@ -152,6 +154,7 @@ async function submitMessage(message: string) {
     const response = await $fetch<{
       reply: string
       citations?: HelpCitation[]
+      suggestedLinks?: HelpCitation[]
       followUpPrompts?: string[]
       escalation?: HelpEscalation | null
     }>('/api/public/help/agent', {
@@ -169,6 +172,7 @@ async function submitMessage(message: string) {
         role: 'assistant',
         content: response.reply,
         citations: response.citations ?? [],
+        suggestedLinks: response.suggestedLinks ?? [],
         followUpPrompts: response.followUpPrompts ?? [],
         escalation: response.escalation ?? null,
         escalationSubmitted: false,

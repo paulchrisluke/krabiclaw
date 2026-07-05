@@ -642,6 +642,57 @@ export async function listExperienceBookingsForSite(
   return results ?? []
 }
 
+export async function getExperienceBookingsSummary(
+  db: DbClient,
+  siteId: string,
+  opts: { locationId?: string | null; sinceDays?: number | null } = {},
+): Promise<BookingsSummary> {
+  const params: (string | number)[] = [siteId]
+  let where = `eb.site_id = ?`
+  if (opts.locationId) {
+    where += ` AND eb.location_id = ?`
+    params.push(opts.locationId)
+  }
+  if (opts.sinceDays) {
+    where += ` AND eb.created_at >= datetime('now', ?)`
+    params.push(`-${opts.sinceDays} days`)
+  }
+
+  const [totalResult, statusResults, experienceResults] = await Promise.all([
+    queryFirst<{ count: number }>(
+      db,
+      `SELECT COUNT(*) as count FROM experience_bookings eb WHERE ${where}`,
+      params,
+    ),
+    queryAll<{ status: string; count: number }>(
+      db,
+      `SELECT status, COUNT(*) as count FROM experience_bookings eb WHERE ${where} GROUP BY status`,
+      params,
+    ),
+    queryAll<{ experience_id: string; experience_title: string | null; count: number }>(
+      db,
+      `SELECT eb.experience_id, e.title AS experience_title, COUNT(*) as count
+       FROM experience_bookings eb
+       LEFT JOIN experiences e ON e.id = eb.experience_id
+       WHERE ${where}
+       GROUP BY eb.experience_id, e.title
+       ORDER BY count DESC`,
+      params,
+    ),
+  ])
+
+  const byStatus: Record<string, number> = {}
+  for (const row of statusResults ?? []) {
+    byStatus[row.status] = row.count
+  }
+
+  return {
+    total: totalResult?.count ?? 0,
+    by_status: byStatus,
+    by_experience: experienceResults ?? [],
+  }
+}
+
 export interface BookingsSummary {
   total: number
   by_status: Record<string, number>

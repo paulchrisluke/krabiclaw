@@ -1,44 +1,11 @@
-import { execute, queryFirst, type DbClient } from '~/server/db'
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { notifyReservationCancelled } from '~/server/utils/notifications'
 import { hashReservationCancelToken, readBearerToken } from '~/server/utils/reservation-cancel-token'
+import { getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
 const IP_HOURLY_LIMIT = 20
 const RESERVATION_HOURLY_LIMIT = 5
-
-async function getClientIp(event: ApiValue): Promise<string> {
-  const ip = getHeader(event, 'CF-Connecting-IP')
-    || String(getHeader(event, 'x-forwarded-for') || '').split(',').map(part => part.trim()).find(Boolean)
-    || event.node.req.socket.remoteAddress
-    || 'unknown'
-    
-  if (ip === 'unknown') return ip
-  const bytes = new TextEncoder().encode(ip)
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
-}
-
-async function incrementRateLimit(db: DbClient, key: string, limit: number): Promise<boolean> {
-  const now = new Date().toISOString()
-  const expiresAt = new Date(Date.now() + 3600000).toISOString()
-  const result = await execute(db, `
-    INSERT INTO rate_limits (key, count, updated_at, expires_at)
-    VALUES (?, 1, ?, ?)
-    ON CONFLICT(key) DO UPDATE SET
-      count = CASE
-        WHEN expires_at <= ? THEN 1
-        WHEN count < ? THEN count + 1
-        ELSE count
-      END,
-      updated_at = excluded.updated_at,
-      expires_at = CASE
-        WHEN expires_at <= ? THEN ?
-        ELSE expires_at
-      END
-  `, [key, now, expiresAt, now, limit, now, expiresAt])
-
-  return Boolean(result?.success && result?.meta?.changes)
-}
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -53,15 +20,15 @@ export default defineEventHandler(async (event) => {
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const clientIp = await getClientIp(event)
-  const hourKey = `reservation-cancel:ip:${clientIp}:${Math.floor(Date.now() / 3600000)}`
-  const rateLimitOk = await incrementRateLimit(db, hourKey, import.meta.dev ? 1000 : IP_HOURLY_LIMIT)
+  const clientIpHash = await hashClientIp(getClientIp(event))
+  const hourKey = `reservation-cancel:ip:${clientIpHash}:${Math.floor(Date.now() / 3600000)}`
+  const rateLimitOk = await incrementHourlyRateLimit(db, hourKey, import.meta.dev ? 1000 : IP_HOURLY_LIMIT, 3_600_000)
   if (!rateLimitOk) {
     return jsonResponse({ error: 'Too many cancellation attempts. Please try again later.' }, { status: 429 })
   }
 
   const reservationHourKey = `reservation-cancel:reservation:${siteId}:${reservationId}:${Math.floor(Date.now() / 3600000)}`
-  const reservationRateLimitOk = await incrementRateLimit(db, reservationHourKey, import.meta.dev ? 1000 : RESERVATION_HOURLY_LIMIT)
+  const reservationRateLimitOk = await incrementHourlyRateLimit(db, reservationHourKey, import.meta.dev ? 1000 : RESERVATION_HOURLY_LIMIT, 3_600_000)
   if (!reservationRateLimitOk) {
     return jsonResponse({ error: 'Too many cancellation attempts. Please try again later.' }, { status: 429 })
   }

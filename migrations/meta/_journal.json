@@ -162,6 +162,13 @@
       "when": 1783212023759,
       "tag": "0029_square_nitro",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1783236784824,
+      "tag": "0030_yielding_havok",
+      "breakpoints": true
     }
   ]
 }

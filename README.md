@@ -107,7 +107,7 @@ ulimit -n 65536
 yarn deploy
 ```
 
-Builds, patches the Nitro/Cloudflare process shim, applies pending D1 migrations (`wrangler d1 migrations apply DB --remote`), then deploys the Cloudflare Worker (`wrangler deploy`). **Never run `wrangler deploy` directly** — the shim patch and migration step will be skipped. In CI, this same sequence runs automatically on every push to `main` (`prod-deploy` job in `.github/workflows/ci.yml`).
+Builds, patches the Nitro/Cloudflare process shim, applies pending D1 migrations (`yarn migrate:prod`, wraps `wrangler d1 migrations apply DB --remote`), then deploys the Cloudflare Worker (`yarn deploy:prod:worker`, wraps `wrangler deploy` with a retry-once on failure). **Never run `wrangler deploy` or `wrangler d1 migrations apply` directly** — the shim patch, migration step, and retry logic will be skipped. Equivalent per-environment scripts exist for preview (`yarn deploy:preview`, `yarn migrate:preview`, `yarn deploy:preview:worker`) and staging (`yarn deploy:staging`, `yarn migrate:staging`, `yarn deploy:staging:worker`). In CI, the `e2e-smoke`, `e2e-staging`, and `prod-deploy` jobs in `.github/workflows/ci.yml` all call these same named scripts for deploy/migrate — never raw `wrangler deploy`/`wrangler d1 migrations apply` — so that behavior is identical locally and in CI. Raw `wrangler`/`npx wrangler` invocations for other purposes (e.g. `wrangler pages secret put`, `wrangler d1 execute` for read-only inspection) are fine.
 
 Production secrets live in the Cloudflare dashboard → Workers & Pages → krabiclaw → Settings → Variables.
 

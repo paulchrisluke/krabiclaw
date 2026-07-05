@@ -1407,7 +1407,10 @@ export const experiences = sqliteTable("experiences", {
 	what_to_bring: text(),
 	meeting_point: text(),
 	cancellation_policy: text(),
-});
+	source: text().default("manual").notNull(),
+}, (_table) => [
+	check("experiences_source_check", sql`source IN ('manual', 'template')`),
+]);
 
 export const mcp_workspace_preferences = sqliteTable("mcp_workspace_preferences", {
 	user_id: text().primaryKey().references(() => user.id, { onDelete: "cascade" } ),

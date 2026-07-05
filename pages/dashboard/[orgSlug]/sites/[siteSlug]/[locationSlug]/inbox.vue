@@ -168,6 +168,7 @@ const REPLY_ENDPOINT_SEGMENT: Record<SubmissionKind, string> = {
 const siteId = await useDashboardSiteId()
 const toast = useToast()
 const route = useRoute()
+const router = useRouter()
 const sitePublicUrl = ref<string | null>(null)
 const contacts = ref<ContactSubmission[]>([])
 const reservations = ref<ReservationSubmission[]>([])
@@ -229,15 +230,29 @@ function applyDeepLink() {
   }
   const replyId = route.query.reply
   if (typeof replyId !== 'string' || !replyId) return
+  let opened = false
   if (activeTab.value === 'contact') {
     const submission = contacts.value.find(item => item.id === replyId)
-    if (submission) startReply('contact', submission)
+    if (submission) {
+      startReply('contact', submission)
+      opened = true
+    }
   } else if (activeTab.value === 'reservations') {
     const reservation = reservations.value.find(item => item.id === replyId)
-    if (reservation) startReply('reservation', reservation)
+    if (reservation) {
+      startReply('reservation', reservation)
+      opened = true
+    }
   } else {
     const booking = bookings.value.find(item => item.id === replyId)
-    if (booking) startReply('experience_booking', { id: booking.id, email: booking.guest_email, phone: booking.guest_phone })
+    if (booking) {
+      startReply('experience_booking', { id: booking.id, email: booking.guest_email, phone: booking.guest_phone })
+      opened = true
+    }
+  }
+  if (opened) {
+    const { reply: _reply, ...rest } = route.query
+    void router.replace({ query: rest })
   }
 }
 

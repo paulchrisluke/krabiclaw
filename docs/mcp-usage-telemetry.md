@@ -33,7 +33,7 @@ there is no per-tool allowlist to maintain. It:
 - Replaces any field whose **key** matches a sensitive pattern (token,
   secret, password, credential, cookie, base64/file/image data, download
   URLs) with `[redacted]`.
-- Replaces PII-shaped keys (email, phone, address, name, guest_name, full_name,
+- Replaces PII-shaped keys (email, phone, address, guest_name, full_name,
   first_name, last_name) with a length marker, e.g. `[redacted:len=23]`,
   instead of the value.
 - Detects base64-shaped strings by content (not just key name) and stores

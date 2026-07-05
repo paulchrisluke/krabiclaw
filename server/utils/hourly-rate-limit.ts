@@ -18,6 +18,16 @@ export async function hashClientIp(ip: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+// Case/whitespace-insensitive hash for identifiers like email addresses, unlike hashClientIp
+// which hashes the raw value verbatim (IP addresses don't need case normalization).
+export async function hashIdentifier(value: string): Promise<string> {
+  const normalized = (value ?? '').toLowerCase().trim()
+  if (!normalized) return 'unknown'
+  const bytes = new TextEncoder().encode(normalized)
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 export async function incrementHourlyRateLimit(
   db: DbClient,
   key: string,

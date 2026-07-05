@@ -1,13 +1,10 @@
 import { execute, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { notifyContactSubmitted } from '~/server/utils/notifications'
+import { getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
-const hashIp = async (ip: string) => {
-  if (!ip) return null
-  const bytes = new TextEncoder().encode(ip)
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
-}
+const IP_HOURLY_LIMIT = 5
+const EMAIL_DAILY_LIMIT = 3
 
 const VALID_SUBJECTS = ['general', 'press', 'partnerships', 'catering', 'careers']
 
@@ -45,7 +42,22 @@ export default defineEventHandler(async (event) => {
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const id = crypto.randomUUID()
-  const ipHash = await hashIp(getHeader(event, 'CF-Connecting-IP') ?? getHeader(event, 'x-forwarded-for') ?? '')
+  const clientIp = getClientIp(event)
+  const ipHash = await hashClientIp(clientIp)
+
+  // Rate limiting (skipped in dev so local work and E2E can submit repeatedly)
+  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  if (!import.meta.dev && !e2eOverride) {
+    const hourWindow = Math.floor(Date.now() / 3_600_000)
+    const today = new Date().toISOString().split('T')[0]
+
+    const ipOk = await incrementHourlyRateLimit(db, `rate:contact:ip:${ipHash}:${hourWindow}`, IP_HOURLY_LIMIT, 3_600_000)
+    if (!ipOk) return jsonResponse({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+
+    const emailHash = await hashIdentifier(email)
+    const emailOk = await incrementHourlyRateLimit(db, `rate:contact:email:${emailHash}:${today}`, EMAIL_DAILY_LIMIT, 86_400_000)
+    if (!emailOk) return jsonResponse({ error: 'Too many messages from this email. Please try again tomorrow.' }, { status: 429 })
+  }
 
   await execute(db, `
     INSERT INTO contact_submissions (id, organization_id, site_id, name, email, subject, message, ip_hash)

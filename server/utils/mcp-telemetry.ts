@@ -5,7 +5,18 @@ const SENSITIVE_KEY_PATTERN =
   /token|secret|password|authoriz|api[_-]?key|access[_-]?key|credential|cookie|base64|image_data|file_data|attachment_id|download_url|external_url/i;
 
 // Field names that may contain user PII — logged as a length marker, not the value.
-const PII_KEY_PATTERN = /email|phone|address|name|guest_name|full_name|first_name|last_name/i;
+const PII_KEY_PATTERN = /email|phone|address/i;
+
+// Business/entity name fields — not personal data, safe to log verbatim even
+// though they end in "_name" like the person-name keys below.
+const NON_PERSONAL_NAME_KEYS = new Set([
+  "site_name", "business_name", "brand_name", "location_name",
+  "organization_name", "menu_name", "experience_name",
+]);
+
+function isPersonNameKey(key: string): boolean {
+  return /(^|_)name$/i.test(key) && !NON_PERSONAL_NAME_KEYS.has(key.toLowerCase());
+}
 
 const MAX_STRING_LENGTH = 200;
 const MAX_SUMMARY_LENGTH = 4000;
@@ -20,7 +31,7 @@ function redactValue(key: string, value: unknown, depth: number): unknown {
   if (value == null) return value;
 
   if (SENSITIVE_KEY_PATTERN.test(key)) return "[redacted]";
-  if (PII_KEY_PATTERN.test(key)) {
+  if (PII_KEY_PATTERN.test(key) || isPersonNameKey(key)) {
     return typeof value === "string" ? `[redacted:len=${value.length}]` : "[redacted]";
   }
 

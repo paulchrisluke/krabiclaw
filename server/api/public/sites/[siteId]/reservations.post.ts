@@ -1,4 +1,4 @@
-import { execute, queryFirst, type DbClient } from '~/server/db'
+import { execute, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { notifyReservationCreated } from '~/server/utils/notifications'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
@@ -8,42 +8,10 @@ import { generateReservationTimes, isStructuredOpeningHours } from '~/shared/res
 import { getReservationSlotAvailability } from '~/server/utils/reservations'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
+import { getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
 const IP_HOURLY_LIMIT = 5
 const EMAIL_DAILY_LIMIT = 3
-
-const hashIp = async (ip: string) => {
-  if (!ip) return null
-  const bytes = new TextEncoder().encode(ip)
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
-}
-
-async function hashValue(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value.toLowerCase().trim())
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-function getClientIp(event: ApiValue): string {
-  const cfIp = getHeader(event, 'CF-Connecting-IP')
-  return cfIp || 'unknown'
-}
-
-async function incrementRateLimit(db: DbClient, key: string, limit: number, expireMs: number): Promise<boolean> {
-  const now = new Date().toISOString()
-  const expiresAt = new Date(Date.now() + expireMs).toISOString()
-  const result = await execute(db,
-    `INSERT INTO rate_limits (key, count, updated_at, expires_at) VALUES (?, 1, ?, ?)
-       ON CONFLICT(key) DO UPDATE SET
-         count = CASE WHEN rate_limits.expires_at IS NULL OR rate_limits.expires_at <= ? THEN 1 ELSE rate_limits.count + 1 END,
-         expires_at = CASE WHEN rate_limits.expires_at IS NULL OR rate_limits.expires_at <= ? THEN ? ELSE rate_limits.expires_at END,
-         updated_at = ?
-       WHERE (CASE WHEN rate_limits.expires_at IS NULL OR rate_limits.expires_at <= ? THEN 1 ELSE rate_limits.count + 1 END) <= ?`,
-    [key, now, expiresAt, now, now, expiresAt, now, now, limit],
-  )
-  return Boolean(result?.success && result?.meta?.changes)
-}
 
 // Fallback used only when a location has no structured opening_hours (e.g. Google Places imports,
 // which store hours as free-text weekday descriptions that can't be parsed into slots).
@@ -149,8 +117,8 @@ export default defineEventHandler(async (event) => {
 
   const id = crypto.randomUUID()
   const clientIp = getClientIp(event)
-  const ipHash = await hashIp(clientIp)
-  const emailHash = await hashValue(email)
+  const ipHash = await hashClientIp(clientIp)
+  const emailHash = await hashIdentifier(email)
   const cancellation = createReservationCancelToken()
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
 
@@ -160,10 +128,10 @@ export default defineEventHandler(async (event) => {
     const hourWindow = Math.floor(Date.now() / 3_600_000)
     const today = new Date().toISOString().split('T')[0]
 
-    const ipOk = await incrementRateLimit(db, `rate:reservation:ip:${await hashValue(clientIp)}:${hourWindow}`, IP_HOURLY_LIMIT, 3_600_000)
+    const ipOk = await incrementHourlyRateLimit(db, `rate:reservation:ip:${ipHash}:${hourWindow}`, IP_HOURLY_LIMIT, 3_600_000)
     if (!ipOk) return jsonResponse({ error: 'Too many requests. Please try again later.' }, { status: 429 })
 
-    const emailOk = await incrementRateLimit(db, `rate:reservation:email:${emailHash}:${today}`, EMAIL_DAILY_LIMIT, 86_400_000)
+    const emailOk = await incrementHourlyRateLimit(db, `rate:reservation:email:${emailHash}:${today}`, EMAIL_DAILY_LIMIT, 86_400_000)
     if (!emailOk) return jsonResponse({ error: 'Too many reservation requests from this email. Please try again tomorrow.' }, { status: 429 })
   }
 

@@ -6,12 +6,7 @@
       <div class="overflow-hidden rounded-[32px] border border-default bg-default shadow-sm">
         <section class="border-b border-default px-6 py-10 sm:px-10 sm:py-12">
           <div class="max-w-4xl">
-            <span class="inline-flex items-center gap-2 rounded-full bg-emerald-500/12 px-4 py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400">
-              <span class="size-2 rounded-full bg-emerald-500" />
-              All systems normal.
-            </span>
-
-            <h1 class="mt-8 text-4xl font-bold tracking-tight text-default sm:text-5xl">KrabiClaw Support</h1>
+            <h1 class="text-4xl font-bold tracking-tight text-default sm:text-5xl">KrabiClaw Support</h1>
             <p class="mt-3 text-3xl font-semibold tracking-tight text-muted sm:text-4xl">How can we help you today?</p>
 
             <div class="mt-8 grid gap-4 md:grid-cols-2">

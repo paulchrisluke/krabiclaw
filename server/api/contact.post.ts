@@ -84,20 +84,23 @@ export default defineEventHandler(async (event) => {
     : null
   let agentMetadataJson: string | null = null
   if (body.agent_metadata_json != null) {
-    try {
-      if (typeof body.agent_metadata_json === 'string') {
+    if (typeof body.agent_metadata_json === 'string') {
+      if (body.agent_metadata_json.length > AGENT_METADATA_MAX_LENGTH) {
+        return jsonResponse({ error: `agent_metadata_json exceeds maximum length (${AGENT_METADATA_MAX_LENGTH})` }, { status: 400 })
+      }
+      try {
         const parsed = JSON.parse(body.agent_metadata_json)
         agentMetadataJson = JSON.stringify(parsed)
-      } else {
-        agentMetadataJson = JSON.stringify(body.agent_metadata_json)
+      } catch {
+        agentMetadataJson = null
       }
-    } catch {
-      agentMetadataJson = null
+    } else {
+      const stringified = JSON.stringify(body.agent_metadata_json)
+      if (stringified.length > AGENT_METADATA_MAX_LENGTH) {
+        return jsonResponse({ error: `agent_metadata_json exceeds maximum length (${AGENT_METADATA_MAX_LENGTH})` }, { status: 400 })
+      }
+      agentMetadataJson = stringified
     }
-  }
-
-  if (agentMetadataJson && agentMetadataJson.length > AGENT_METADATA_MAX_LENGTH) {
-    return jsonResponse({ error: `agent_metadata_json exceeds maximum length (${AGENT_METADATA_MAX_LENGTH})` }, { status: 400 })
   }
 
   if (!name || !email || !message) {

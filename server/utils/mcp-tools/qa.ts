@@ -1,0 +1,85 @@
+import type { McpToolDefinition } from './shared'
+import { qaItemObject, siteTool } from './shared'
+
+export const QA_TOOLS: McpToolDefinition[] = [
+  siteTool({
+      name: 'list_location_qa',
+      description: 'List Q&A for a location.',
+      domain: 'qa',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: { location_id: { type: 'string' } },
+      required: ['location_id'],
+      outputSchema: {
+        type: 'object',
+        properties: { items: { type: 'array', items: qaItemObject } },
+        required: ['items'],
+      },
+    }),
+  siteTool({
+      name: 'create_location_qa',
+      description: 'Create a Q&A pair for a location.',
+      domain: 'qa',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: { location_id: { type: 'string' }, question: { type: 'string' }, answer: { type: 'string', description: 'Optional answer text.' } },
+      required: ['location_id', 'question'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          question: { type: 'string' },
+          answer: { type: ['string', 'null'] },
+          sort_order: { type: 'number' },
+          location_id: { type: 'string' },
+        },
+        required: ['id', 'question'],
+      },
+    }),
+  siteTool({
+      name: 'update_location_qa',
+      description: 'Update a Q&A entry.',
+      domain: 'qa',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: { location_id: { type: 'string' }, qa_id: { type: 'string' }, question: { type: 'string' }, answer: { type: ['string', 'null'], description: 'Answer text. Pass null to clear it.' } },
+      required: ['location_id', 'qa_id'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          question: { type: 'string' },
+          answer: { type: ['string', 'null'] },
+        },
+        required: ['id'],
+      },
+    }),
+  siteTool({
+      name: 'delete_location_qa',
+      description: 'Delete a Q&A entry.',
+      domain: 'qa',
+      minimumRole: 'editor',
+      confirmRequired: true,
+      inputSchema: { location_id: { type: 'string' }, qa_id: { type: 'string' } },
+      required: ['location_id', 'qa_id'],
+      outputSchema: {
+        type: 'object',
+        properties: { deleted: { type: 'boolean' } },
+        required: ['deleted'],
+      },
+    }),
+  siteTool({
+      name: 'reorder_location_qa',
+      description: 'Swap two Q&A sort orders.',
+      domain: 'qa',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: { location_id: { type: 'string' }, updates: { type: 'array' } },
+      required: ['location_id', 'updates'],
+      outputSchema: {
+        type: 'object',
+        properties: { updated: { type: 'number' } },
+        required: ['updated'],
+      },
+    }),
+]

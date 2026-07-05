@@ -99,7 +99,7 @@ export default defineEventHandler(async (event) => {
     `, [siteId])
 
     const experiences = await queryFirst<{ c: number }>(db, `
-      SELECT COUNT(*) as c FROM experiences WHERE site_id = ?
+      SELECT COUNT(*) as c FROM experiences WHERE site_id = ? AND source != 'template'
     `, [siteId])
 
     const story = await queryFirst<{ c: number }>(db, `

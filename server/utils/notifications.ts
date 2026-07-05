@@ -3,6 +3,7 @@ import { execute, queryFirst, type DbClient } from '~/server/db'
 import { hashEmail, isReservedTestDomain, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 import { buildReplyToAddress } from '~/server/utils/submission-messages'
+import { getPlatformSupportEmails } from '~/server/utils/platform-support'
 import ReservationOwnerNew from '~/server/emails/templates/ReservationOwnerNew'
 import ReservationOwnerCancelled from '~/server/emails/templates/ReservationOwnerCancelled'
 import ReservationGuestReceived from '~/server/emails/templates/ReservationGuestReceived'
@@ -36,17 +37,10 @@ interface NotificationEnv {
   PLATFORM_OWNER_EMAILS?: string
 }
 
-function getPlatformDomain(env: NotificationEnv): string {
+export function getPlatformDomain(env: NotificationEnv): string {
   return (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com').replace(/^https?:\/\//, '').replace(/\/$/, '')
 }
 
-function getPlatformSupportEmails(env: NotificationEnv): string[] {
-  const recipients = String(env.PLATFORM_OWNER_EMAILS || '')
-    .split(',')
-    .map(email => email.trim())
-    .filter(Boolean)
-  return recipients.length > 0 ? recipients : ['hello@krabiclaw.com']
-}
 
 interface SiteContext {
   organizationId: string
@@ -510,12 +504,28 @@ async function sendPlatformEmailNotification(
   const storedRecipient = shouldSendRealEmail(env) ? opts.to : hashEmail(opts.to)
 
   if (!shouldSendRealEmail(env)) {
+    const redactedPayload: Record<string, string> = {}
+    for (const [key, value] of Object.entries(opts.payload)) {
+      const isIdKey = /_id$/i.test(key) || key === 'id'
+      if (!isIdKey && /email/i.test(key) && typeof value === 'string' && value) {
+        redactedPayload[key] = hashEmail(value)
+      } else if (
+        !isIdKey && (
+          key === 'message' || key === 'subject' || key === 'message_preview' ||
+          /phone|name|address|contact/i.test(key)
+        )
+      ) {
+        redactedPayload[key] = `[redacted:len=${String(value).length}]`
+      } else {
+        redactedPayload[key] = value
+      }
+    }
     console.info('email_delivery_log_only', {
       channel: 'platform',
       recipient: storedRecipient,
       title: opts.title,
       template: opts.template,
-      payload: opts.payload,
+      payload: redactedPayload,
     })
     return
   }
