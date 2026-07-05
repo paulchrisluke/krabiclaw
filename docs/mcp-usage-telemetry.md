@@ -64,7 +64,7 @@ intent text as a consented argument.
 No admin UI yet. Query via `wrangler d1 execute` locally, or the read-only
 admin JSON endpoint:
 
-```
+```text
 GET /api/admin/mcp-usage?days=7&site_id=<optional>
 ```
 
