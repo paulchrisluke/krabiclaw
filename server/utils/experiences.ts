@@ -609,10 +609,11 @@ export async function listExperienceBookings(
 export async function listExperienceBookingsForSite(
   db: DbClient,
   siteId: string,
-  opts: { locationId?: string | null; sinceDays?: number | null } = {},
+  opts: { locationId?: string | null; sinceDays?: number | null; limit?: number | null } = {},
 ): Promise<Array<ExperienceBooking & { experience_title?: string | null }>> {
   const params: (string | number)[] = [siteId]
   let where = `eb.site_id = ?`
+  const limit = Math.max(1, Math.min(opts.limit ?? 200, 500))
   if (opts.locationId) {
     where += ` AND eb.location_id = ?`
     params.push(opts.locationId)
@@ -634,8 +635,9 @@ export async function listExperienceBookingsForSite(
 	       LEFT JOIN business_locations bl ON bl.id = eb.location_id
 	       LEFT JOIN experiences e ON e.id = eb.experience_id
 	       WHERE ${where}
-	       ORDER BY eb.created_at DESC`,
-    params,
+	       ORDER BY eb.created_at DESC
+	       LIMIT ?`,
+    [...params, limit],
   )
   return results ?? []
 }
