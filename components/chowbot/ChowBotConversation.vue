@@ -1,7 +1,7 @@
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
     <div class="flex-1 min-h-0 overflow-y-auto">
-      <UChatMessages :status="messagesStatus" class="py-4">
+      <UChatMessages :status="messagesStatus" should-auto-scroll class="py-4">
         <div
           v-if="showEmptyState && messages.length === 0"
           class="flex h-full flex-col items-center justify-center gap-3 px-6 py-16 text-center"
@@ -170,6 +170,6 @@ defineEmits<{
 }>()
 
 function messageKey(message: TMessage, index: number) {
-  return `${message.role}-${index}-${message.content?.slice(0, 24) ?? ''}`
+  return `${message.role}-${index}`
 }
 </script>
