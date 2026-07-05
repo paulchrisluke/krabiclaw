@@ -86,7 +86,7 @@
         :placeholder="promptPlaceholder"
         :disabled="isLoading || isUploading || creatingRestaurant || (!siteId && !setupMode) || isDepleted"
         :loading="isLoading || isUploading || creatingRestaurant"
-        :messages-status="isUploading ? 'submitted' : undefined"
+        :messages-status="isLoading ? 'streaming' : isUploading ? 'submitted' : undefined"
         :empty-title="emptyTitle"
         :empty-description="emptyDescription"
         :starter-prompts="starterPrompts"
