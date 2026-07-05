@@ -197,6 +197,27 @@ export const submission_messages = sqliteTable("submission_messages", {
 	index("submission_type_id_idx").on(table.submission_type, table.submission_id),
 ]);
 
+export const notification_events = sqliteTable("notification_events", {
+	id: text().primaryKey(),
+	scope_type: text().notNull(),
+	organization_id: text().references(() => organization.id, { onDelete: "set null" } ),
+	site_id: text().references(() => sites.id, { onDelete: "set null" } ),
+	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
+	submission_type: text().notNull(),
+	submission_id: text().notNull(),
+	event_type: text().notNull(),
+	channels: text(),
+	recipients: text(),
+	payload: text(),
+	status: text().default("pending").notNull(),
+	error: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("notification_events_scope_created_idx").on(table.scope_type, table.created_at),
+	index("notification_events_submission_idx").on(table.submission_type, table.submission_id),
+	index("notification_events_event_created_idx").on(table.event_type, table.created_at),
+]);
+
 export const dashboard_preferences = sqliteTable("dashboard_preferences", {
 	id: text().primaryKey(),
 	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
@@ -1168,7 +1189,12 @@ export const mcp_tool_call_events = sqliteTable("mcp_tool_call_events", {
 	error_message: text(),
 	duration_ms: integer(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	index("idx_mcp_tool_call_events_created_at").on(table.created_at),
+	index("idx_mcp_tool_call_events_tool_status").on(table.tool_name, table.status),
+	index("idx_mcp_tool_call_events_site").on(table.site_id, table.created_at),
+	index("idx_mcp_tool_call_events_org").on(table.organization_id, table.created_at),
+]);
 
 export const site_transfer_requests = sqliteTable("site_transfer_requests", {
 	id: text().primaryKey(),

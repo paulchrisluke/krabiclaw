@@ -91,6 +91,21 @@ interface PlatformContactNotificationInput {
   suggestedSummary?: string | null
 }
 
+interface NotificationEventInput {
+  scopeType: 'platform' | 'site'
+  organizationId?: string | null
+  siteId?: string | null
+  locationId?: string | null
+  submissionType: 'platform_contact' | 'contact' | 'reservation' | 'experience_booking'
+  submissionId: string
+  eventType: string
+  channels?: string[]
+  recipients?: string[]
+  payload?: Record<string, string>
+  status: 'pending' | 'sent' | 'partial' | 'failed' | 'logged'
+  error?: string | null
+}
+
 interface ExperienceBookingNotificationInput extends SiteContext {
   locationId?: string | null
   bookingId: string
@@ -497,6 +512,47 @@ async function sendPlatformEmailNotification(
   }
 }
 
+async function logNotificationEvent(
+  db: DbClient,
+  opts: NotificationEventInput,
+) {
+  await execute(db, `
+    INSERT INTO notification_events
+    (id, scope_type, organization_id, site_id, location_id, submission_type, submission_id, event_type, channels, recipients, payload, status, error, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    crypto.randomUUID(),
+    opts.scopeType,
+    opts.organizationId ?? null,
+    opts.siteId ?? null,
+    opts.locationId ?? null,
+    opts.submissionType,
+    opts.submissionId,
+    opts.eventType,
+    opts.channels?.length ? JSON.stringify(opts.channels) : null,
+    opts.recipients?.length ? JSON.stringify(opts.recipients) : null,
+    opts.payload ? JSON.stringify(opts.payload) : null,
+    opts.status,
+    opts.error ?? null,
+    new Date().toISOString(),
+  ])
+}
+
+function summarizeNotificationResults(results: PromiseSettledResult<unknown>[]) {
+  const rejected = results.filter((result) => result.status === 'rejected')
+  if (rejected.length === 0) return { status: 'sent' as const, error: null }
+  if (rejected.length === results.length) {
+    const joined = rejected
+      .map((result) => result.reason instanceof Error ? result.reason.message : String(result.reason))
+      .join(' | ')
+    return { status: 'failed' as const, error: joined }
+  }
+  const joined = rejected
+    .map((result) => result.reason instanceof Error ? result.reason.message : String(result.reason))
+    .join(' | ')
+  return { status: 'partial' as const, error: joined }
+}
+
 export async function notifyReservationCreated(
   env: NotificationEnv,
   db: DbClient,
@@ -701,10 +757,37 @@ export async function notifyContactSubmitted(
       })
     }
   })
+
+  const ownerWhatsAppPhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
+  const ownerChannels = await getOwnerNotificationChannels(db, opts, Boolean(ownerWhatsAppPhone))
+  const eventSummary = summarizeNotificationResults(results)
+  try {
+    await logNotificationEvent(db, {
+      scopeType: 'site',
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      locationId: opts.locationId ?? null,
+      submissionType: 'contact',
+      submissionId: opts.contactId,
+      eventType: 'contact_submitted',
+      channels: [...new Set([...ownerChannels, 'email'])],
+      recipients: [opts.email],
+      payload,
+      status: eventSummary.status,
+      error: eventSummary.error,
+    })
+  } catch (error) {
+    console.error('notification_event_log_failed', {
+      submissionType: 'contact',
+      submissionId: opts.contactId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 }
 
 export async function notifyPlatformContactSubmitted(
   env: NotificationEnv,
+  db: DbClient,
   opts: PlatformContactNotificationInput
 ) {
   const siteLabel = 'KrabiClaw Support'
@@ -783,6 +866,27 @@ export async function notifyPlatformContactSubmitted(
       })
     }
   })
+
+  const eventSummary = summarizeNotificationResults(results)
+  try {
+    await logNotificationEvent(db, {
+      scopeType: 'platform',
+      submissionType: 'platform_contact',
+      submissionId: opts.contactId,
+      eventType: 'contact_submitted',
+      channels: ['email'],
+      recipients: [...supportEmails, opts.email],
+      payload,
+      status: eventSummary.status,
+      error: eventSummary.error,
+    })
+  } catch (error) {
+    console.error('notification_event_log_failed', {
+      submissionType: 'platform_contact',
+      submissionId: opts.contactId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 }
 
 export async function notifyReviewReceived(

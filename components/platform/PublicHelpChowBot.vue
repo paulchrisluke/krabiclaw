@@ -29,36 +29,27 @@
               </NuxtLink>
             </div>
 
-            <div class="mt-10 rounded-3xl border border-default bg-elevated/30 p-6">
-              <div class="flex items-center gap-3">
-                <div class="flex size-10 items-center justify-center rounded-full bg-default text-default">
-                  <UIcon name="i-custom-bot" class="size-5 text-primary" />
-                </div>
-                <p class="text-xl font-semibold text-default">ChowBot Support</p>
-              </div>
-              <p class="mt-4 max-w-3xl text-base leading-relaxed text-muted">
-                Hello, I'm an AI assistant from KrabiClaw. If we find something I can't solve, I'll help you open a support request with the right context.
-              </p>
-
-              <div class="mt-6">
-                <p class="mb-3 text-sm font-medium text-default">What’s the problem?</p>
-                <div class="flex flex-wrap gap-3">
-                  <button
-                    v-for="topic in topics"
-                    :key="topic.value"
-                    type="button"
-                    :class="[
-                      'rounded-full border px-5 py-3 text-sm transition',
-                      selectedTopic === topic.value
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-default bg-default text-default hover:border-muted'
-                    ]"
-                    @click="selectedTopic = topic.value"
-                  >
-                    {{ topic.label }}
-                  </button>
-                </div>
-              </div>
+            <div class="mt-10">
+              <UChatMessage
+                id="support-intro"
+                role="assistant"
+                :parts="[{ type: 'text', text: supportIntro }]"
+                side="left"
+              >
+                <template #content>
+                  <div class="space-y-3">
+                    <div class="flex items-center gap-3">
+                      <div class="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <UIcon name="i-custom-bot" class="size-4" />
+                      </div>
+                      <p class="text-sm font-semibold text-default">ChowBot</p>
+                    </div>
+                    <p class="max-w-3xl text-sm leading-relaxed text-default">
+                      {{ supportIntro }}
+                    </p>
+                  </div>
+                </template>
+              </UChatMessage>
             </div>
           </div>
         </div>
@@ -116,11 +107,6 @@
     </div>
 
     <div class="border-t border-default p-3">
-      <div v-if="selectedTopic && messages.length === 0" class="mb-3 flex flex-wrap gap-2">
-        <span class="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-          {{ selectedTopicLabel }}
-        </span>
-      </div>
       <UChatPrompt
         v-model="input"
         placeholder="Send a message..."
@@ -135,7 +121,7 @@
 
 <script setup lang="ts">
 import { sanitizeHtmlForSsr } from '~/utils/markdown'
-import { PUBLIC_SUPPORT_ROUTE_CARDS, PUBLIC_SUPPORT_TOPICS } from '~/utils/public-support'
+import { PUBLIC_SUPPORT_ROUTE_CARDS } from '~/utils/public-support'
 
 type HelpCitation = {
   title: string
@@ -159,15 +145,10 @@ type HelpMessage = {
 }
 
 const routeCards = PUBLIC_SUPPORT_ROUTE_CARDS
-const topics = PUBLIC_SUPPORT_TOPICS
 const input = ref('')
-const selectedTopic = ref<string | null>(topics[0]?.value ?? null)
 const messages = ref<HelpMessage[]>([])
 const isLoading = ref(false)
-
-const selectedTopicLabel = computed(() =>
-  topics.find(topic => topic.value === selectedTopic.value)?.label ?? 'Selected topic',
-)
+const supportIntro = 'Hello, I\'m ChowBot an AI assistant from KrabiClaw. If we find something I can\'t solve, I\'ll help create a support case for you.'
 
 const DOMPurify = import.meta.client
   ? (await import('isomorphic-dompurify')).default
@@ -223,7 +204,6 @@ async function handleSubmit() {
       body: {
         message,
         history,
-        topic: selectedTopic.value,
       },
     })
 

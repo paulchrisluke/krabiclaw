@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { hashEmail, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { execute } from '~/server/db'
+import { notifyPlatformContactSubmitted } from '~/server/utils/notifications'
 
 const NAME_MAX_LENGTH = 100
 const EMAIL_MAX_LENGTH = 254
@@ -19,17 +20,6 @@ const hashIp = async (ip: string) => {
   const bytes = new TextEncoder().encode(ip)
   const digest = await crypto.subtle.digest('SHA-256', bytes)
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
-}
-
-function escapeHtml(text: string): string {
-  const map: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;'
-  }
-  return text.replace(/[&<>"']/g, (m) => map[m] || m)
 }
 
 function getClientIp(event: ApiValue): string {
@@ -161,9 +151,8 @@ export default defineEventHandler(async (event) => {
 
   try {
     const env = cloudflareEnv(event)
-    const resendApiKey = env.RESEND_API_KEY
 
-    if (shouldSendRealEmail(env) && !resendApiKey) {
+    if (shouldSendRealEmail(env) && !env.RESEND_API_KEY) {
       return jsonResponse({ error: 'Email service not configured' }, { status: 500 })
     }
 
@@ -185,67 +174,19 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    if (!shouldSendRealEmail(env)) {
-      console.info('email_delivery_log_only', {
-        channel: 'platform_contact',
-        recipient: 'hello@krabiclaw.com',
-        name,
-        email: emailHash,
-        topic: normalizedTopic,
-        source,
-        submissionId: id,
-      })
-      return jsonResponse({ success: true, message: 'Message sent successfully' })
-    }
-
-    // Send email with sanitized content
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 5000)
-    
-    let response
-    try {
-      response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          from: 'KrabiClaw <hello@krabiclaw.com>',
-          to: ['hello@krabiclaw.com'],
-          subject: normalizedTopic
-            ? `Contact Form: ${escapeHtml(normalizedTopic)}`
-            : `Contact Form: ${escapeHtml(name)}`,
-          html: `
-            <h2>New Contact Form Submission</h2>
-            <p><strong>Name:</strong> ${escapeHtml(name)}</p>
-            <p><strong>Email:</strong> ${escapeHtml(email)}</p>
-            ${normalizedTopic ? `<p><strong>Topic:</strong> ${escapeHtml(normalizedTopic)}</p>` : ''}
-            <p><strong>Source:</strong> ${escapeHtml(source)}</p>
-            ${routeContext ? `<p><strong>Route:</strong> ${escapeHtml(routeContext)}</p>` : ''}
-            ${suggestedSummary ? `<p><strong>Suggested summary:</strong> ${escapeHtml(suggestedSummary)}</p>` : ''}
-            <p><strong>Message:</strong></p>
-            <p>${escapeHtml(message).replace(/\n/g, '<br/>')}</p>
-          `
-        })
-      })
-    } finally {
-      clearTimeout(timeout)
-    }
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('Resend API error:', errorText)
-      return jsonResponse({ error: 'Failed to send email' }, { status: 500 })
-    }
+    await notifyPlatformContactSubmitted(env, db, {
+      contactId: id,
+      guestName: name,
+      email,
+      subject: normalizedTopic,
+      message,
+      source,
+      routeContext,
+      suggestedSummary,
+    })
 
     return jsonResponse({ success: true, message: 'Message sent successfully' })
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.error('Email send timeout')
-      return jsonResponse({ error: 'Email service timeout' }, { status: 504 })
-    }
     console.error('Contact form error:', error)
     return jsonResponse({ error: 'Failed to send message' }, { status: 500 })
   }

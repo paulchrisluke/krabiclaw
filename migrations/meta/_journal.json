@@ -148,6 +148,20 @@
       "when": 1783210732707,
       "tag": "0027_freezing_butterfly",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1783211844731,
+      "tag": "0028_overrated_mystique",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1783212023759,
+      "tag": "0029_square_nitro",
+      "breakpoints": true
     }
   ]
 }
