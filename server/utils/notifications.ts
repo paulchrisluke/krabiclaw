@@ -194,6 +194,49 @@ function buildExperienceWhatsAppContext(experienceTitle: string, siteName?: stri
   return requests?.trim() ? `${base} · Special requests: ${requests.trim()}` : base
 }
 
+// Deep-links an owner notification email straight to the dashboard inbox thread for that
+// submission. The inbox route always requires a locationSlug segment even for contact
+// submissions (which aren't location-scoped), so we fall back to the site's primary location.
+async function buildOwnerInboxUrl(
+  env: NotificationEnv,
+  db: DbClient,
+  opts: {
+    organizationId: string
+    siteId: string
+    locationId?: string | null
+    tab: 'contact' | 'reservations' | 'bookings'
+    submissionId: string
+  }
+): Promise<string | null> {
+  const site = await queryFirst<{ org_slug: string | null; site_slug: string | null }>(db, `
+    SELECT o.slug AS org_slug, s.subdomain AS site_slug
+    FROM organization o
+    JOIN sites s ON s.organization_id = o.id
+    WHERE o.id = ? AND s.id = ?
+    LIMIT 1
+  `, [opts.organizationId, opts.siteId])
+  if (!site?.org_slug || !site?.site_slug) return null
+
+  let locationSlug: string | null = null
+  if (opts.locationId) {
+    const location = await queryFirst<{ slug: string }>(db, `
+      SELECT slug FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1
+    `, [opts.locationId, opts.siteId])
+    locationSlug = location?.slug ?? null
+  }
+  if (!locationSlug) {
+    const fallback = await queryFirst<{ slug: string }>(db, `
+      SELECT slug FROM business_locations WHERE site_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1
+    `, [opts.siteId])
+    locationSlug = fallback?.slug ?? null
+  }
+  if (!locationSlug) return null
+
+  const platformDomain = getPlatformDomain(env)
+  const query = new URLSearchParams({ tab: opts.tab, reply: opts.submissionId })
+  return `https://${platformDomain}/dashboard/${site.org_slug}/sites/${site.site_slug}/${locationSlug}/inbox?${query.toString()}`
+}
+
 function ownerEmailQuery() {
   return `
     SELECT u.email
@@ -512,10 +555,32 @@ async function sendPlatformEmailNotification(
   }
 }
 
+// notification_events is a retained audit table, not a delivery log — guest
+// emails and free-text message content must not be stored raw here.
+const AUDIT_MESSAGE_KEYS = new Set(['message', 'message_preview', 'requests', 'suggested_summary', 'subject', 'route_context'])
+const AUDIT_MESSAGE_PREVIEW_LENGTH = 40
+
+function redactAuditPayload(payload?: Record<string, string>): Record<string, string> | undefined {
+  if (!payload) return payload
+  const redacted: Record<string, string> = {}
+  for (const [key, value] of Object.entries(payload)) {
+    if (key === 'email' && typeof value === 'string' && value) {
+      redacted[key] = hashEmail(value)
+    } else if (AUDIT_MESSAGE_KEYS.has(key) && typeof value === 'string' && value.length > AUDIT_MESSAGE_PREVIEW_LENGTH) {
+      redacted[key] = `${value.slice(0, AUDIT_MESSAGE_PREVIEW_LENGTH)}… [truncated]`
+    } else {
+      redacted[key] = value
+    }
+  }
+  return redacted
+}
+
 async function logNotificationEvent(
   db: DbClient,
   opts: NotificationEventInput,
 ) {
+  const redactedRecipients = opts.recipients?.map(hashEmail)
+  const redactedPayload = redactAuditPayload(opts.payload)
   await execute(db, `
     INSERT INTO notification_events
     (id, scope_type, organization_id, site_id, location_id, submission_type, submission_id, event_type, channels, recipients, payload, status, error, created_at)
@@ -530,8 +595,8 @@ async function logNotificationEvent(
     opts.submissionId,
     opts.eventType,
     opts.channels?.length ? JSON.stringify(opts.channels) : null,
-    opts.recipients?.length ? JSON.stringify(opts.recipients) : null,
-    opts.payload ? JSON.stringify(opts.payload) : null,
+    redactedRecipients?.length ? JSON.stringify(redactedRecipients) : null,
+    redactedPayload ? JSON.stringify(redactedPayload) : null,
     opts.status,
     opts.error ?? null,
     new Date().toISOString(),
@@ -563,6 +628,13 @@ export async function notifyReservationCreated(
   const prettyTime = formatTimeHuman(opts.time)
   const platformDomain = getPlatformDomain(env)
   const replyTo = await buildReplyToAddress(env, 'reservation', opts.reservationId)
+  const inboxUrl = await buildOwnerInboxUrl(env, db, {
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    locationId: opts.locationId,
+    tab: 'reservations',
+    submissionId: opts.reservationId,
+  })
 
   const payload = {
     reservation_id: opts.reservationId,
@@ -578,7 +650,7 @@ export async function notifyReservationCreated(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(ReservationOwnerNew, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, email: opts.email, locationName: opts.locationName, specialRequests: opts.requests, platformDomain } }),
+    useRender(ReservationOwnerNew, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, email: opts.email, locationName: opts.locationName, specialRequests: opts.requests, platformDomain, replyUrl: inboxUrl } }),
     useRender(ReservationGuestReceived, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, specialRequests: opts.requests, locationName: opts.locationName, contactPhone: opts.contactPhone, contactEmail: opts.contactEmail, cancelUrl: opts.cancelUrl, platformDomain } }),
   ])
 
@@ -706,6 +778,13 @@ export async function notifyContactSubmitted(
   const restaurant = siteName(opts)
   const platformDomain = getPlatformDomain(env)
   const replyTo = await buildReplyToAddress(env, 'contact', opts.contactId)
+  const inboxUrl = await buildOwnerInboxUrl(env, db, {
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    locationId: opts.locationId,
+    tab: 'contact',
+    submissionId: opts.contactId,
+  })
   const payload = {
     contact_id: opts.contactId,
     guest_name: opts.guestName,
@@ -716,7 +795,7 @@ export async function notifyContactSubmitted(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(ContactOwnerNew, { props: { guestName: opts.guestName, email: opts.email, subject: opts.subject, message: opts.message, siteName: restaurant, platformDomain } }),
+    useRender(ContactOwnerNew, { props: { guestName: opts.guestName, email: opts.email, subject: opts.subject, message: opts.message, siteName: restaurant, platformDomain, replyUrl: inboxUrl } }),
     useRender(ContactGuestReceived, { props: { guestName: opts.guestName, siteName: restaurant, subject: opts.subject, message: opts.message, platformDomain } }),
   ])
 
@@ -943,6 +1022,13 @@ export async function notifyExperienceBookingCreated(
   const prettyTime = formatTimeHuman(opts.timeSlot)
   const platformDomain = getPlatformDomain(env)
   const replyTo = await buildReplyToAddress(env, 'experience_booking', opts.bookingId)
+  const inboxUrl = await buildOwnerInboxUrl(env, db, {
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    locationId: opts.locationId,
+    tab: 'bookings',
+    submissionId: opts.bookingId,
+  })
 
   const payload = {
     booking_id: opts.bookingId,
@@ -957,7 +1043,7 @@ export async function notifyExperienceBookingCreated(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(BookingOwnerNew, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone ?? null, specialRequests: opts.notes, platformDomain } }),
+    useRender(BookingOwnerNew, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone ?? null, specialRequests: opts.notes, platformDomain, replyUrl: inboxUrl } }),
     useRender(BookingGuestReceived, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, specialRequests: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, cancelUrl: opts.cancelUrl ?? null, platformDomain } }),
   ])
 
@@ -1091,13 +1177,13 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
     ownerBooking,
     guestBooking,
   ] = await Promise.all([
-    useRender(ReservationOwnerNew, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', platformDomain } }),
+    useRender(ReservationOwnerNew, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/main/inbox?tab=reservations&reply=res-preview-1' } }),
     useRender(ReservationGuestReceived, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', contactPhone: '+1 555 000 0000', contactEmail: 'hello@emberslice.example', cancelUrl: 'https://demo.krabiclaw.com/reservations/cancel?id=res-preview-1', platformDomain } }),
     useRender(ReservationGuestCancelled, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain } }),
     useRender(ReservationOwnerCancelled, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain } }),
-    useRender(ContactOwnerNew, { props: { guestName: 'Jordan Lee', email: 'jordan@example.com', message: 'Hi, do you have vegan options and parking nearby?', siteName: restaurant, platformDomain } }),
+    useRender(ContactOwnerNew, { props: { guestName: 'Jordan Lee', email: 'jordan@example.com', message: 'Hi, do you have vegan options and parking nearby?', siteName: restaurant, platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/main/inbox?tab=contact&reply=contact-preview-1' } }),
     useRender(ContactGuestReceived, { props: { guestName: 'Jordan Lee', siteName: restaurant, subject: 'general', message: 'Hi, do you have vegan options and parking nearby?', platformDomain } }),
-    useRender(BookingOwnerNew, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, email: 'mina@example.com', phone: '+66 76 000 0002', platformDomain } }),
+    useRender(BookingOwnerNew, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, email: 'mina@example.com', phone: '+66 76 000 0002', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/pottery-house-krabi/sites/pottery-house/main/inbox?tab=bookings&reply=booking-preview-1' } }),
     useRender(BookingGuestReceived, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, contactPhone: '+66 76 000 0001', contactEmail: 'hello@example.com', cancelUrl: 'https://demo.krabiclaw.com/experiences/cancel?id=booking-preview-1', platformDomain } }),
   ])
 

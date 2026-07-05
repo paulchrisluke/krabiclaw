@@ -365,6 +365,29 @@ export async function listReservationSubmissions(
   `, params);
 }
 
+export async function countReservationSubmissions(
+  db: D1Database,
+  siteId: string,
+  opts: { locationId?: string | null; sinceDays?: number | null } = {},
+) {
+  const params: (string | number)[] = [siteId]
+  let where = `rs.site_id = ?`
+  if (opts.locationId) {
+    where += ` AND rs.location_id = ?`
+    params.push(opts.locationId)
+  }
+  if (opts.sinceDays) {
+    where += ` AND rs.created_at >= datetime('now', ?)`
+    params.push(`-${opts.sinceDays} days`)
+  }
+  const row = await queryFirst<{ total: number }>(db, `
+    SELECT COUNT(*) AS total
+    FROM reservation_submissions rs
+    WHERE ${where}
+  `, params);
+  return row?.total ?? 0;
+}
+
 export async function updateReservationSubmissionStatus(
   db: D1Database,
   siteId: string,

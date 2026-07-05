@@ -212,10 +212,32 @@ async function loadInbox() {
     ])
     reservations.value = reservationRes.submissions ?? []
     bookings.value = bookingRes.bookings ?? []
+    applyDeepLink()
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load inbox', color: 'error' })
   } finally {
     loading.value = false
+  }
+}
+
+// Lets owner notification emails/WhatsApp deep-link straight to a specific thread via
+// ?tab=<tab>&reply=<submissionId> instead of dropping the owner on a generic inbox view.
+function applyDeepLink() {
+  const tab = route.query.tab
+  if (tab === 'contact' || tab === 'reservations' || tab === 'bookings') {
+    activeTab.value = tab
+  }
+  const replyId = route.query.reply
+  if (typeof replyId !== 'string' || !replyId) return
+  if (activeTab.value === 'contact') {
+    const submission = contacts.value.find(item => item.id === replyId)
+    if (submission) startReply('contact', submission)
+  } else if (activeTab.value === 'reservations') {
+    const reservation = reservations.value.find(item => item.id === replyId)
+    if (reservation) startReply('reservation', reservation)
+  } else {
+    const booking = bookings.value.find(item => item.id === replyId)
+    if (booking) startReply('experience_booking', { id: booking.id, email: booking.guest_email, phone: booking.guest_phone })
   }
 }
 

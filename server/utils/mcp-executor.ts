@@ -149,6 +149,7 @@ import { chargeFlatCredits, type FlatCreditAction } from "~/server/utils/ai-cred
 import type { McpUserContext } from "~/server/utils/mcp-auth";
 import type { SiteVertical } from "~/utils/vertical-copy";
 import {
+  countReservationSubmissions,
   deleteContentField,
   getEditorContent,
   getGoogleBusinessLocationAuthUrlForMcp,
@@ -3439,10 +3440,14 @@ export async function executeMcpToolCall(
         submissions: await listContactSubmissions(site.db, site.siteId),
       };
     case "get_reservation_inquiries": {
-      const submissions = await listReservationSubmissions(site.db, site.siteId, {
+      const reservationFilter = {
         locationId: optionalString(args, "location_id") ?? null,
         sinceDays: optionalDaysWindow(args, "days"),
-      });
+      };
+      const [submissions, total] = await Promise.all([
+        listReservationSubmissions(site.db, site.siteId, reservationFilter),
+        countReservationSubmissions(site.db, site.siteId, reservationFilter),
+      ]);
       const byStatus: Record<string, number> = {};
       for (const submission of submissions) {
         const status = String((submission as Record<string, unknown>).status ?? "unknown");
@@ -3450,7 +3455,7 @@ export async function executeMcpToolCall(
       }
       return {
         submissions,
-        summary: { total: submissions.length, by_status: byStatus },
+        summary: { total, by_status: byStatus },
       };
     }
     case "get_notification_settings":
@@ -3992,7 +3997,7 @@ function optionalDaysWindow(source: Record<string, unknown>, key: string, max = 
   if (!Number.isFinite(num) || num <= 0) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be a positive number of days`);
   }
-  return Math.min(Math.floor(num), max);
+  return Math.max(1, Math.min(Math.floor(num), max));
 }
 
 function requiredStringArray(value: unknown, key: string) {
