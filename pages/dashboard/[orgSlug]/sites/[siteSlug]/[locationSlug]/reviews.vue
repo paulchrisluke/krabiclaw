@@ -151,7 +151,7 @@ const reviewForm = reactive({
 const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 
 const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'Location details', icon: 'i-lucide-plus', to: paths.value.locations, color: 'neutral' as const, variant: 'soft' as const }
+  { label: 'Location details', icon: 'i-lucide-map-pin', to: paths.value.locations, color: 'neutral' as const, variant: 'soft' as const }
 ]))
 
 const locationItems = computed(() => [
