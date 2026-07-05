@@ -242,7 +242,7 @@ function ownerEmailQuery() {
   `
 }
 
-async function getOwnerEmail(db: DbClient, organizationId: string): Promise<string | null> {
+export async function getOwnerEmail(db: DbClient, organizationId: string): Promise<string | null> {
   const row = await queryFirst<{ email?: string }>(db, ownerEmailQuery(), [organizationId])
   return row?.email ?? null
 }
