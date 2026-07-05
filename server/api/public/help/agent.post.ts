@@ -1,4 +1,5 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { formatPublicSearchResultsForPrompt, searchPublicResources } from '~/server/utils/public-search'
 import { runWorkersAiText } from '~/server/utils/workers-ai'
 
@@ -12,6 +13,7 @@ const DEFAULT_DISCOVERY_PROMPTS = [
   'How do I add or update menu items?',
   'Do I need technical skills to use KrabiClaw?',
 ]
+const IP_HOURLY_LIMIT = 30
 
 function parseAgentEnvelope(raw: string) {
   const escalateMatch = raw.match(/ESCALATE:\s*(yes|no)/i)
@@ -23,7 +25,7 @@ function parseAgentEnvelope(raw: string) {
     escalate: escalateMatch?.[1]?.toLowerCase() === 'yes',
     topic: topicMatch?.[1]?.trim() || null,
     summary: summaryMatch?.[1]?.trim() || null,
-    answer: answerMatch?.[1]?.trim() || raw.trim(),
+    answer: answerMatch?.[1]?.trim() || null,
   }
 }
 
@@ -91,6 +93,20 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    if (!import.meta.dev) {
+      const clientIp = getClientIp(event)
+      const hourWindow = Math.floor(Date.now() / 3_600_000)
+      const rateLimitOk = await incrementHourlyRateLimit(
+        db,
+        `rate:public-help-agent:ip:${await hashClientIp(clientIp)}:${hourWindow}`,
+        IP_HOURLY_LIMIT,
+        3_600_000,
+      )
+      if (!rateLimitOk) {
+        return jsonResponse({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+      }
+    }
+
     const lowIntentOpening = isLowIntentOpening(message)
     const results = await searchPublicResources(db, `${topic ? `${topic} ` : ''}${message}`, { limit: 6 })
     const promptResults = formatPublicSearchResultsForPrompt(results)
@@ -103,34 +119,38 @@ export default defineEventHandler(async (event) => {
 
     if (!lowIntentOpening) {
       try {
-      const aiOutput = await runWorkersAiText(env, [
-        {
-          role: 'system',
-          content: [
-            'You are KrabiClaw Support, a concise public support assistant.',
-            'Only answer using the provided search results.',
-            'If the search results are insufficient, the question needs account-specific help, or the user appears blocked, escalate to a support form.',
-            'Do not escalate for greetings, vague openers, or questions that should first get a clarifying follow-up.',
-            'Return exactly this format:',
-            'ESCALATE: yes|no',
-            'TOPIC: <short topic>',
-            'SUMMARY: <one sentence support summary or none>',
-            'ANSWER:',
-            '<markdown answer>',
-          ].join('\n'),
-        },
-        {
-          role: 'user',
-          content: [
-            topic ? `Selected topic: ${topic}` : 'Selected topic: none',
-            history.length ? `Recent conversation:\n${history.map(item => `${item.role}: ${item.content}`).join('\n')}` : 'Recent conversation: none',
-            `User question: ${message}`,
-            `Search results:\n${promptResults || 'No relevant results found.'}`,
-          ].join('\n\n'),
-        },
-      ], { maxTokens: 700, temperature: 0.2 })
+        const aiOutput = await runWorkersAiText(env, [
+          {
+            role: 'system',
+            content: [
+              'You are KrabiClaw Support, a concise public support assistant.',
+              'Only answer using the provided search results.',
+              'If the search results are insufficient, the question needs account-specific help, or the user appears blocked, escalate to a support form.',
+              'Do not escalate for greetings, vague openers, or questions that should first get a clarifying follow-up.',
+              'Return exactly this format:',
+              'ESCALATE: yes|no',
+              'TOPIC: <short topic>',
+              'SUMMARY: <one sentence support summary or none>',
+              'ANSWER:',
+              '<markdown answer>',
+            ].join('\n'),
+          },
+          {
+            role: 'user',
+            content: [
+              topic ? `Selected topic: ${topic}` : 'Selected topic: none',
+              history.length ? `Recent conversation:\n${history.map(item => `${item.role}: ${item.content}`).join('\n')}` : 'Recent conversation: none',
+              `User question: ${message}`,
+              `Search results:\n${promptResults || 'No relevant results found.'}`,
+            ].join('\n\n'),
+          },
+        ], { maxTokens: 700, temperature: 0.2 })
 
-      parsed = parseAgentEnvelope(aiOutput)
+        const parsedOutput = parseAgentEnvelope(aiOutput)
+        parsed = {
+          ...parsedOutput,
+          answer: parsedOutput.answer ?? buildFallbackReply(message, results),
+        }
       } catch (error) {
         console.warn('Public help agent falling back to deterministic search response:', error)
       }
