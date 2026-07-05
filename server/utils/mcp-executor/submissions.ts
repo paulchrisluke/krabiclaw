@@ -3,7 +3,7 @@ import { countReservationSubmissions, getReservationSubmissionsByStatus, listCon
 import { NOT_HANDLED, optionalDaysWindow, optionalString } from './shared'
 
 export async function handleSubmissionsTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site, event, normalizedArguments, rawArguments, siteId, tool } = ctx
+  const { toolName, args, site } = ctx
   switch (toolName) {
     case "get_contact_inquiries":
       return {

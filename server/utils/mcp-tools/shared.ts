@@ -3,7 +3,6 @@
 import type { McpToolRole } from '~/server/utils/mcp-auth'
 import { EXPERIENCE_STATUSES } from '~/server/utils/experiences'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
-import { DASHBOARD_DESTINATIONS } from '~/server/utils/dashboard-links'
 
 export interface McpToolDefinition {
   name: string

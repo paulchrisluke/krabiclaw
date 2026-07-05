@@ -9,7 +9,7 @@ import { isConversationalToolGroupEnabled } from '~/server/utils/conversational-
 import { NOT_HANDLED, mutationContextPayload, normalizeChannelsInput, omit, optionalString, requireActiveImageAsset, requiredString } from './shared'
 
 export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site, event, normalizedArguments, rawArguments, siteId, tool } = ctx
+  const { toolName, args, site } = ctx
   switch (toolName) {
     case "list_posts":
       return {

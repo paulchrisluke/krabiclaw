@@ -11,10 +11,7 @@ import { getSourceLocale } from '~/server/utils/site-locales'
 import { getPlatformDomain } from '~/server/utils/notifications'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
-import { getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
-
-const IP_HOURLY_LIMIT = 5
-const EMAIL_DAILY_LIMIT = 3
+import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')

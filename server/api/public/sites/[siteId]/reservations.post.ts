@@ -8,10 +8,7 @@ import { generateReservationTimes, isStructuredOpeningHours } from '~/shared/res
 import { getReservationSlotAvailability } from '~/server/utils/reservations'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
-import { getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
-
-const IP_HOURLY_LIMIT = 5
-const EMAIL_DAILY_LIMIT = 3
+import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
 // Fallback used only when a location has no structured opening_hours (e.g. Google Places imports,
 // which store hours as free-text weekday descriptions that can't be parsed into slots).

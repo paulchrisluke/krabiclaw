@@ -3,7 +3,7 @@ import { getGoogleBusinessLocationAuthUrlForMcp, getGoogleBusinessLocationConnec
 import { NOT_HANDLED, requiredString, requiredStringArray } from './shared'
 
 export async function handleGoogleBusinessTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site, event, normalizedArguments, rawArguments, siteId, tool } = ctx
+  const { toolName, args, site } = ctx
   switch (toolName) {
     case "get_google_business_connection":
       return {

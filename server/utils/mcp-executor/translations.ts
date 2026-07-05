@@ -7,8 +7,27 @@ import { processTranslationJobBatch } from '~/server/utils/translation-processor
 import { queryAll, queryFirst } from '~/server/db'
 import { NOT_HANDLED, mutationContextPayload, objectRecord, optionalString, requiredString } from './shared'
 
+const VALID_ENTITY_TYPES = ['site_content', 'menu', 'menu_item', 'business_location', 'post'] as const
+const VALID_REVIEW_STATUSES = ['all', 'missing', 'draft', 'published', 'stale'] as const
+
+function validEntityType(args: Record<string, unknown>, key: string) {
+  const value = requiredString(args, key)
+  if (!(VALID_ENTITY_TYPES as readonly string[]).includes(value)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid ${key}: must be one of ${VALID_ENTITY_TYPES.join(', ')}`)
+  }
+  return value as (typeof VALID_ENTITY_TYPES)[number]
+}
+
+function validReviewStatus(args: Record<string, unknown>, key: string) {
+  const value = optionalString(args, key) ?? 'all'
+  if (!(VALID_REVIEW_STATUSES as readonly string[]).includes(value)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid ${key}: must be one of ${VALID_REVIEW_STATUSES.join(', ')}`)
+  }
+  return value as (typeof VALID_REVIEW_STATUSES)[number]
+}
+
 export async function handleTranslationsTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site, event, normalizedArguments, rawArguments, siteId, tool } = ctx
+  const { toolName, args, site } = ctx
   switch (toolName) {
     case "get_translation_inventory":
       return await buildTranslationInventory(
@@ -109,7 +128,7 @@ export async function handleTranslationsTools(ctx: McpExecutorContext): Promise<
         {
           targetLocale: requiredString(args, "locale"),
           scope: parseScope(optionalString(args, "scope") ?? undefined),
-          status: (optionalString(args, "status") as never) ?? "all",
+          status: validReviewStatus(args, "status"),
         },
       );
     case "save_translation_review_item":
@@ -121,7 +140,7 @@ export async function handleTranslationsTools(ctx: McpExecutorContext): Promise<
         {
           targetLocale: requiredString(args, "locale"),
           scope: parseScope(optionalString(args, "scope") ?? undefined),
-          entityType: requiredString(args, "entity_type") as never,
+          entityType: validEntityType(args, "entity_type"),
           entityId: requiredString(args, "entity_id"),
           field: requiredString(args, "field"),
           fields: objectRecord(args.fields, "fields"),

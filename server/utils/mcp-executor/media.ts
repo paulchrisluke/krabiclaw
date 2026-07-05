@@ -3,7 +3,7 @@ import { deleteMediaAsset, listMediaAssets, updateMediaAssetMetadata } from '~/s
 import { NOT_HANDLED, mutationContextPayload, optionalString, requiredString } from './shared'
 
 export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site, event, normalizedArguments, rawArguments, siteId, tool } = ctx
+  const { toolName, args, site } = ctx
   switch (toolName) {
     case "get_site_media_assets":
       return {

@@ -4,7 +4,7 @@ import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { NOT_HANDLED, expandSlotGeneratorArgs, loadSiteSettings, mutationContextPayload, objectArray, omit, optionalDaysWindow, optionalString, requireActiveImageAsset, requireActiveVideoAsset, requiredString } from './shared'
 
 export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site, event, normalizedArguments, rawArguments, siteId, tool } = ctx
+  const { toolName, args, site } = ctx
   switch (toolName) {
     case "list_experiences":
       return {
@@ -220,12 +220,17 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
       const days = Math.min(Math.max(typeof daysRaw === "number" ? daysRaw : 1, 1), 31);
       const timezone = await resolveExperienceTimezone(site.db, site.organizationId, site.siteId, experience);
       const cursor = new Date(`${startDate}T00:00:00Z`);
-      const dates: Array<{ date: string; slots: Awaited<ReturnType<typeof getSlotAvailability>> }> = [];
+      const dateStrs: string[] = [];
       for (let i = 0; i < days; i++) {
-        const dateStr = cursor.toISOString().slice(0, 10);
-        dates.push({ date: dateStr, slots: await getSlotAvailability(site.db, site.siteId, experience, dateStr, timezone) });
+        dateStrs.push(cursor.toISOString().slice(0, 10));
         cursor.setUTCDate(cursor.getUTCDate() + 1);
       }
+      const dates = await Promise.all(
+        dateStrs.map(async (dateStr) => ({
+          date: dateStr,
+          slots: await getSlotAvailability(site.db, site.siteId, experience, dateStr, timezone),
+        })),
+      );
       return { dates };
     }
     case "set_experience_slot_override":

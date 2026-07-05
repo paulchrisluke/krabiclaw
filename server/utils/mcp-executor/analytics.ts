@@ -5,7 +5,7 @@ import { queryAll } from '~/server/db'
 import { NOT_HANDLED, getDateString, optionalString } from './shared'
 
 export async function handleAnalyticsTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site, event, normalizedArguments, rawArguments, siteId, tool } = ctx
+  const { toolName, args, site } = ctx
   switch (toolName) {
     case "get_site_analytics": {
       const startDate =
@@ -27,6 +27,12 @@ export async function handleAnalyticsTools(ctx: McpExecutorContext): Promise<unk
         (new Date(`${endDate}T00:00:00.000Z`).getTime() - new Date(`${startDate}T00:00:00.000Z`).getTime())
           / (1000 * 60 * 60 * 24),
       );
+      if (daySpan < 0) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: "start_date must not be after end_date",
+        });
+      }
       if (daySpan > MAX_ANALYTICS_DAYS) {
         throw createError({
           statusCode: 400,

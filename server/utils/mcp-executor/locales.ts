@@ -3,7 +3,7 @@ import { deleteSiteLocale, listSiteLocales, upsertSiteLocale } from '~/server/ut
 import { NOT_HANDLED, mutationContextPayload, requiredString } from './shared'
 
 export async function handleLocalesTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site, event, normalizedArguments, rawArguments, siteId, tool } = ctx
+  const { toolName, args, site } = ctx
   switch (toolName) {
     case "list_locales":
       return await listSiteLocales(site.db, site.organizationId, site.siteId);

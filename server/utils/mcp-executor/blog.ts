@@ -3,7 +3,7 @@ import { createPlatformBlogPost, deletePlatformBlogPost, getPlatformBlogPost, li
 import { NOT_HANDLED, mutationContextPayload, omit, optionalString, requireActiveImageAsset, requiredString } from './shared'
 
 export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site, event, normalizedArguments, rawArguments, siteId, tool } = ctx
+  const { toolName, args, site } = ctx
   switch (toolName) {
     case "list_blog_posts":
       return {

@@ -7,7 +7,7 @@ import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, omit, optionalString, requireActiveImageAsset, requireActiveVideoAsset, requiredString, requiredStringArray, workspaceContextPayload, workspaceLocationsPayload } from './shared'
 
 export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site, event, normalizedArguments, rawArguments, siteId, tool } = ctx
+  const { toolName, args, site } = ctx
   switch (toolName) {
     case "list_locations": {
       const workspace = await resolveMcpWorkspace(

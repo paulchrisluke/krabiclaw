@@ -27,6 +27,7 @@ import {
   updateMenuItem,
   deleteMenuItem,
   deleteMenu,
+  MenuNotFoundError,
   renameMenuSection,
   deleteMenuSection,
   reorderMenuItems,
@@ -767,13 +768,21 @@ async function executeTool(
         return { error: "Section already exists." };
       }
 
-      const updated = await renameMenuSection(
-        db,
-        menuId,
-        oldSection,
-        newSection,
-        userId,
-      );
+      let updated: number;
+      try {
+        updated = await renameMenuSection(
+          db,
+          orgId,
+          siteId,
+          menuId,
+          oldSection,
+          newSection,
+          userId,
+        );
+      } catch (error) {
+        if (error instanceof MenuNotFoundError) return { error: error.message };
+        throw error;
+      }
       return {
         menu_id: menuId,
         old_section: oldSection,
@@ -794,7 +803,11 @@ async function executeTool(
         return { error: "Section not found." };
       }
 
-      const deleted = await deleteMenuSection(db, menuId, section);
+      const deleted = await deleteMenuSection(db, orgId, siteId, menuId, section).catch((error) => {
+        if (error instanceof MenuNotFoundError) return null;
+        throw error;
+      });
+      if (deleted === null) return { error: "Menu not found." };
       return { menu_id: menuId, section, deleted };
     }
 
@@ -2621,7 +2634,12 @@ async function executeTool(
         id: String(u.id ?? ""),
         sort_order: Number(u.sort_order ?? 0),
       }));
-      await reorderMenuItems(db, menuId, updates);
+      try {
+        await reorderMenuItems(db, orgId, siteId, menuId, updates);
+      } catch (error) {
+        if (error instanceof MenuNotFoundError) return { error: error.message };
+        throw error;
+      }
       return { reordered: true, menu_id: menuId };
     }
 

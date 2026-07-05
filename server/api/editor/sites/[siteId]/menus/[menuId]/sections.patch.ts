@@ -2,7 +2,7 @@
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { MenuSectionConflictError, MenuSectionNotFoundError, renameMenuSection } from '~/server/utils/menu-management'
+import { MenuNotFoundError, MenuSectionConflictError, MenuSectionNotFoundError, renameMenuSection } from '~/server/utils/menu-management'
 
 interface RenameSectionBody {
   old_section?: string
@@ -62,7 +62,7 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Menu not found' }, { status: 404 })
     }
 
-    const updated = await renameMenuSection(db, menuId, oldSection, newSection, session.user.id)
+    const updated = await renameMenuSection(db, site.organization_id, siteId, menuId, oldSection, newSection, session.user.id)
 
     return jsonResponse({
       success: true,
@@ -74,6 +74,9 @@ export default defineEventHandler(async (event) => {
   } catch (error) {
     if (error instanceof SyntaxError || error instanceof TypeError) {
       return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
+    }
+    if (error instanceof MenuNotFoundError) {
+      return jsonResponse({ error: 'Menu not found' }, { status: 404 })
     }
     if (error instanceof MenuSectionNotFoundError) {
       return jsonResponse({ error: 'Section not found' }, { status: 404 })

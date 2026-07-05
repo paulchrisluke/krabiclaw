@@ -1,181 +1,22 @@
-// AUTO-SPLIT from the former monolithic mcp-executor.ts. Shared helpers,
-// re-exported original imports, and the per-tool-call context type used
-// across domain-scoped tool-call handlers.
+// AUTO-SPLIT from the former monolithic mcp-executor.ts. Shared helpers and
+// the per-tool-call context type used across domain-scoped tool-call
+// handlers. Each domain file imports its own domain-specific dependencies
+// directly rather than through this module.
 import { createError, type H3Event } from "h3";
-import { execute, executeBatch, queryAll, queryFirst, type BatchQuery } from "~/server/db";
+import { queryFirst } from "~/server/db";
 import { assertSafeDownloadUrl } from "~/server/utils/platform-mcp-executor";
-import { createPreviewToken } from "~/server/utils/preview-token";
-import { getFreeSiteDomain } from "~/server/utils/tenant-hosts";
-import { hasSiteEntitlement } from "~/server/utils/billing";
 import { getPageContent } from "~/server/utils/content-management";
-import {
-  uploadImageBuffer,
-  hasCloudflareImagesConfig,
-} from "~/server/utils/cloudflare-images";
-import {
-  createMediaAsset,
-  deleteMediaAsset,
-  getMediaAsset,
-  listMediaAssets,
-  updateMediaAssetMetadata,
-} from "~/server/utils/media-asset-manager";
-import { aggregateAnalyticsForRange } from "~/server/utils/analytics";
-import {
-  createLocation,
-  deleteLocation,
-  updateLocation,
-} from "~/server/utils/location-management";
-import { copyLocationBatch, type CopyEntityType } from "~/server/utils/copy-paste";
-import {
-  createMenu,
-  createMenuItem,
-  deleteMenu,
-  deleteMenuItem,
-  deleteMenuSection,
-  getMenuWithItems,
-  getMenus,
-  renameMenuSection,
-  reorderMenuItems,
-  updateMenu,
-  updateMenuItem,
-} from "~/server/utils/menu-management";
-import {
-  createPost,
-  deletePost,
-  getPost,
-  listPosts,
-  publishPost,
-  updatePost,
-} from "~/server/utils/post-management";
-import {
-  createPlatformBlogPost,
-  deletePlatformBlogPost,
-  getPlatformBlogPost,
-  listPlatformBlogPosts,
-  updatePlatformBlogPost,
-} from "~/server/utils/platform-content";
-import {
-  createExperience,
-  deleteExperience,
-  generateSlots,
-  getExperienceById,
-  getSlotAvailability,
-  listExperienceBookings,
-  listExperienceBookingsForSite,
-  listExperiences,
-  listSlotOverrides,
-  resolveExperienceTimezone,
-  getExperienceBookingsSummary,
-  updateBookingStatus,
-  updateExperience,
-  upsertSlotOverride,
-  type CreateExperienceInput,
-  type UpdateExperienceInput,
-  type WeekdayName,
-} from "~/server/utils/experiences";
-import {
-  applyBookingPolicyPatch,
-  getDirectBookingPolicy,
-  renderBookingPolicySummary,
-  resolveBookingPolicy,
-  upsertBookingPolicy,
-  validateBookingPolicyPatch,
-  type BookingPolicyScopeType,
-  type BookingPolicyType,
-} from "~/server/utils/booking-policies";
-import {
-  buildTranslationInventory,
-  createTranslationJob,
-  publishTranslationDrafts,
-} from "~/server/utils/translation-inventory";
-import {
-  listTranslationReviewItems,
-  saveTranslationReviewItem,
-} from "~/server/utils/translation-review";
-import { processTranslationJobBatch } from "~/server/utils/translation-processor";
-import { parseScope } from "~/server/utils/translation-helpers";
-import {
-  createLocationQa,
-  deleteLocationQa,
-  listLocationQa,
-} from "~/server/utils/location-qa";
-import {
-  listSiteLocales,
-  upsertSiteLocale,
-  deleteSiteLocale,
-} from "~/server/utils/site-locales";
-import { replyToReview } from "~/server/utils/review-management";
-import { createWorkRequest } from "~/server/utils/work-request-management";
-import { runSiteCreation } from "~/server/utils/site-creation";
-import {
-  createCustomDomainPair,
-  deleteCustomDomain,
-  domainInstructions,
-  getSiteDomains,
-  hasCustomDomainsEntitlement,
-  setCanonicalDomain,
-  syncDomainWithCloudflare,
-  validateCustomDomain,
-} from "~/server/utils/domains";
-import { updateSiteSettingsFields } from "~/server/utils/site-settings";
-import {
-  getFacebookPagesConnection,
-  getFacebookPages,
-  getPageInfo,
-  getLinkedInstagramAccount,
-  publishToPage,
-  publishToInstagram,
-  storeFacebookPagesConnection,
-  syncPageInfoToLocation,
-} from "~/server/utils/facebook-pages";
-import { getMcpTool } from "~/server/utils/mcp-tools";
-import { requireMcpSite, requireMcpUser } from "~/server/utils/mcp-auth";
-import {
-  buildDashboardUrl,
-  DASHBOARD_DESTINATIONS,
-  type DashboardDestination,
-} from "~/server/utils/dashboard-links";
+import { getMediaAsset } from "~/server/utils/media-asset-manager";
+import { generateSlots, type WeekdayName } from "~/server/utils/experiences";
+import type { getMcpTool } from "~/server/utils/mcp-tools";
+import { requireMcpUser, type requireMcpSite, type McpUserContext } from "~/server/utils/mcp-auth";
 import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
-import { renderStructuredResponse } from "~/server/utils/mcp-render";
-import { isConversationalToolGroupEnabled } from "~/server/utils/conversational-tool-surface";
 import {
   resolveMcpWorkspace,
-  upsertMcpWorkspacePreference,
   type McpLocationSummary,
   type McpSiteSummary,
 } from "~/server/utils/mcp-context";
-import {
-  getPlaceDetails,
-  PlaceDetailsError,
-  searchPlaces,
-} from "~/server/utils/google-places";
 import { chargeFlatCredits, type FlatCreditAction } from "~/server/utils/ai-credits";
-import type { McpUserContext } from "~/server/utils/mcp-auth";
-import type { SiteVertical } from "~/utils/vertical-copy";
-import {
-  countReservationSubmissions,
-  getReservationSubmissionsByStatus,
-  deleteContentField,
-  getEditorContent,
-  getGoogleBusinessLocationAuthUrlForMcp,
-  getGoogleBusinessLocationConnectionForMcp,
-  getLocationForMcp,
-  getNotificationsSettings,
-  getSiteForMcp,
-  listContactSubmissions,
-  listGoogleBusinessAccountsForMcp,
-  listLocationReviews,
-  listReservationSubmissions,
-  listSitesForUser,
-  listWorkRequestsForOrganization,
-  reorderLocationQa,
-  syncGoogleBusinessLocationsForMcp,
-  hydrateSeededLocationForOnboarding,
-  updatePageContent,
-  updateHomeHero,
-  updateLocationQa,
-  updateNotificationsSettings,
-} from "~/server/utils/mcp-workflows";
 
 // Prefers the user's active organization (session-based auth only — see
 // McpUserContext.activeOrganizationId) and falls back to the oldest
@@ -191,7 +32,10 @@ export async function chargeFlatCreditsForUser(
     JOIN member m ON o.id = m.organizationId
     WHERE m.userId = ?
     ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC LIMIT 1
-  `, [user.userId, activeOrgId]).catch(() => null);
+  `, [user.userId, activeOrgId]).catch((error) => {
+    console.error(`chargeFlatCreditsForUser org lookup failed for ${action}:`, error, { userId: user.userId });
+    return null;
+  });
   if (!orgRow) return;
 
   const result = await chargeFlatCredits(user.db, orgRow.organizationId, { action }).catch((error) => {

@@ -11,7 +11,7 @@ import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { NOT_HANDLED, mutationContextPayload, optionalString, requiredString, resolveGeneratedImageFile, resolveGeneratedImageUpload, resolveUserUploadedImageFile, toolFileReference } from './shared'
 
 export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site, event, normalizedArguments, rawArguments, siteId, tool } = ctx
+  const { toolName, args, site } = ctx
   switch (toolName) {
     case "show_site_preview": {
       const siteRow = await getSiteForMcp(

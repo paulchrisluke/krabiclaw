@@ -1,11 +1,18 @@
 import type { McpExecutorContext } from './shared'
 import { queryFirst } from '~/server/db'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
-import { createMenu, createMenuItem, deleteMenu, deleteMenuItem, deleteMenuSection, getMenuWithItems, getMenus, renameMenuSection, reorderMenuItems, updateMenu, updateMenuItem } from '~/server/utils/menu-management'
+import { createMenu, createMenuItem, deleteMenu, deleteMenuItem, deleteMenuSection, getMenuWithItems, getMenus, MenuNotFoundError, renameMenuSection, reorderMenuItems, updateMenu, updateMenuItem } from '~/server/utils/menu-management'
 import { NOT_HANDLED, isUniqueConstraintError, menuItemLookupKey, mutationContextPayload, normalizeMenuItemArgs, objectArray, omit, optionalString, requireActiveImageAsset, requiredString, resolveMenuLocationId, toolString } from './shared'
 
+function rethrowMenuOwnershipAsInvalidParams(error: unknown): never {
+  if (error instanceof MenuNotFoundError) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, error.message);
+  }
+  throw error;
+}
+
 export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site, event, normalizedArguments, rawArguments, siteId, tool } = ctx
+  const { toolName, args, site } = ctx
   switch (toolName) {
     case "list_menus":
       return {
@@ -274,11 +281,13 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
       const menuId = requiredString(args, "menu_id");
       const updated = await renameMenuSection(
         site.db,
+        site.organizationId,
+        site.siteId,
         menuId,
         requiredString(args, "old_name"),
         requiredString(args, "new_name"),
         site.userId,
-      );
+      ).catch(rethrowMenuOwnershipAsInvalidParams);
       return {
         updated,
         context: await mutationContextPayload(site, {
@@ -290,9 +299,11 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
       const menuId = requiredString(args, "menu_id");
       const deleted = await deleteMenuSection(
         site.db,
+        site.organizationId,
+        site.siteId,
         menuId,
         requiredString(args, "section_name"),
-      );
+      ).catch(rethrowMenuOwnershipAsInvalidParams);
       return {
         deleted,
         context: await mutationContextPayload(site, {
@@ -304,6 +315,8 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
       const menuId = requiredString(args, "menu_id");
       await reorderMenuItems(
         site.db,
+        site.organizationId,
+        site.siteId,
         menuId,
         objectArray(args.updates, "updates").map((item) => {
           const sortOrder = item.sort_order;
@@ -319,7 +332,7 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
           }
           return { id: requiredString(item, "id"), sort_order: sortOrder };
         }),
-      );
+      ).catch(rethrowMenuOwnershipAsInvalidParams);
       return {
         updated: true,
         context: await mutationContextPayload(site, {

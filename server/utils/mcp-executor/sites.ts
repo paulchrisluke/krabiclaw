@@ -6,7 +6,7 @@ import { updateSiteSettingsFields } from '~/server/utils/site-settings'
 import { NOT_HANDLED, assertDomainSuccess, loadSiteSettings, mutationContextPayload, requireActiveImageAsset, requiredString, workspaceContextPayload } from './shared'
 
 export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site, event, normalizedArguments, rawArguments, siteId, tool } = ctx
+  const { toolName, args, site } = ctx
   switch (toolName) {
     case "get_site":
       {

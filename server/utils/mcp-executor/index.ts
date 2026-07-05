@@ -23,7 +23,7 @@ import { handleTranslationsTools } from './translations'
 import { NOT_HANDLED } from './shared'
 import type { McpExecutorContext } from './shared'
 
-const DOMAIN_HANDLERS: Record<string, (ctx: McpExecutorContext) => Promise<unknown>> = {
+const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promise<unknown>> = {
   analytics: handleAnalyticsTools,
   blog: handleBlogTools,
   content: handleContentTools,

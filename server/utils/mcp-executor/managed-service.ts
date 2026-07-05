@@ -4,7 +4,7 @@ import { listWorkRequestsForOrganization } from '~/server/utils/mcp-workflows'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, optionalString, requiredString } from './shared'
 
 export async function handleManagedServiceTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site, event, normalizedArguments, rawArguments, siteId, tool } = ctx
+  const { toolName, args, site } = ctx
   switch (toolName) {
     case "list_work_requests":
       return {

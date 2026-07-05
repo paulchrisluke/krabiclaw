@@ -2,7 +2,7 @@
 import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { reorderMenuItems } from '~/server/utils/menu-management'
+import { MenuNotFoundError, reorderMenuItems } from '~/server/utils/menu-management'
 import type { ReorderMenuItemsRequest } from '~/server/types/menu'
 
 export default defineEventHandler(async (event) => {
@@ -83,7 +83,7 @@ export default defineEventHandler(async (event) => {
       }, { status: 404 })
     }
 
-    await reorderMenuItems(db, menuId, body.items)
+    await reorderMenuItems(db, site.organization_id, siteId, menuId, body.items)
     
     return jsonResponse({
       success: true,
@@ -93,9 +93,12 @@ export default defineEventHandler(async (event) => {
     })
     
   } catch (error) {
+    if (error instanceof MenuNotFoundError) {
+      return jsonResponse({ error: 'Menu not found' }, { status: 404 })
+    }
     console.error('Failed to reorder menu items:', error)
-    return jsonResponse({ 
-      error: 'Failed to reorder menu items' 
+    return jsonResponse({
+      error: 'Failed to reorder menu items'
     }, { status: 500 })
   }
 })

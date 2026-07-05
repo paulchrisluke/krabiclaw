@@ -6,7 +6,7 @@ import { createError } from 'h3'
 import { NOT_HANDLED, mutationContextPayload, requiredString } from './shared'
 
 export async function handleSettingsTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site, event, normalizedArguments, rawArguments, siteId, tool } = ctx
+  const { toolName, args, site } = ctx
   switch (toolName) {
     case "get_dashboard_link": {
       const destination = requiredString(args, "destination") as DashboardDestination;

@@ -4,7 +4,7 @@ import { replyToReview } from '~/server/utils/review-management'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, requiredString } from './shared'
 
 export async function handleReviewsTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site, event, normalizedArguments, rawArguments, siteId, tool } = ctx
+  const { toolName, args, site } = ctx
   switch (toolName) {
     case "list_location_reviews":
       return {
