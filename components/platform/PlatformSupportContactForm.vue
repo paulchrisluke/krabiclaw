@@ -40,7 +40,7 @@
 
       <div class="flex items-center justify-between gap-3">
         <p class="text-xs text-muted">You can edit everything before sending.</p>
-        <PlatformButton type="submit" size="lg" :loading="submitting" :disabled="submitted">
+        <PlatformButton type="submit" size="lg" :loading="submitting" :disabled="submitting || submitted">
           {{ submitted ? 'Message sent' : submitLabel }}
         </PlatformButton>
       </div>
@@ -118,6 +118,7 @@ async function handleSubmit() {
   submitError.value = null
   errors.value = validate()
   if (errors.value.length > 0) return
+  if (submitting.value) return
 
   submitting.value = true
   try {

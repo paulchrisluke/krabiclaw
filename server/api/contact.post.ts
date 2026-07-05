@@ -75,6 +75,10 @@ export default defineEventHandler(async (event) => {
   const suggestedSummary = typeof body.suggested_summary === 'string' && body.suggested_summary.trim()
     ? body.suggested_summary.trim().slice(0, SUMMARY_MAX_LENGTH)
     : null
+
+  if (topic && typeof topic === 'string' && topic.length > TOPIC_MAX_LENGTH) {
+    return jsonResponse({ error: `topic exceeds maximum length (${TOPIC_MAX_LENGTH})` }, { status: 400 })
+  }
   const normalizedTopic = typeof topic === 'string' && topic.trim()
     ? topic.trim().slice(0, TOPIC_MAX_LENGTH)
     : null
@@ -103,9 +107,6 @@ export default defineEventHandler(async (event) => {
   }
   if (email.length > EMAIL_MAX_LENGTH) {
     return jsonResponse({ error: `email exceeds maximum length (${EMAIL_MAX_LENGTH})` }, { status: 400 })
-  }
-  if (normalizedTopic && normalizedTopic.length > TOPIC_MAX_LENGTH) {
-    return jsonResponse({ error: `topic exceeds maximum length (${TOPIC_MAX_LENGTH})` }, { status: 400 })
   }
   if (message.length > MESSAGE_MAX_LENGTH) {
     return jsonResponse({ error: `message exceeds maximum length (${MESSAGE_MAX_LENGTH})` }, { status: 400 })

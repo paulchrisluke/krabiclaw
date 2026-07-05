@@ -67,11 +67,11 @@ export default defineEventHandler(async (event) => {
       FROM mcp_tool_call_events e
       LEFT JOIN sites s ON s.id = e.site_id
       LEFT JOIN organization o ON o.id = s.organization_id
-      WHERE e.method = 'tools/call' AND e.created_at >= datetime('now', ?) AND e.site_id IS NOT NULL
+      WHERE e.method = 'tools/call' AND e.created_at >= datetime('now', ?) AND e.site_id IS NOT NULL ${siteFilter}
       GROUP BY e.site_id
       ORDER BY calls DESC
       LIMIT 50
-    `, [since]),
+    `, [since, ...siteParam]),
 
     queryAll(db, `
       SELECT id, tool_name, tool_domain, status, error_code, error_message,

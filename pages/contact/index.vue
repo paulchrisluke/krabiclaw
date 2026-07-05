@@ -1,8 +1,8 @@
 <template>
-  <NuxtLayout :name="isPlatform ? 'platform' : 'saya'">
+  <NuxtLayout name="saya">
 
-    <!-- ── TENANT: Brand contact page ────────────────────────── -->
-    <div v-if="!isPlatform">
+    <!-- Brand contact page (tenant sites only — the platform marketing contact page was retired in favor of /help) -->
+    <div>
 
       <!-- Brand contact layout — shows for all tenant shapes -->
       <div>
@@ -235,44 +235,6 @@
       </div>
     </div>
 
-
-    <!-- ── PLATFORM: KrabiClaw contact page ──────────────── -->
-    <div v-else class="container mx-auto px-4 py-16">
-      <div class="max-w-3xl mx-auto">
-        <h1 class="text-4xl font-bold text-default mb-6">{{ t('saya.contact_page.contact_us') }}</h1>
-        <p class="text-lg text-muted mb-12">Get in touch with the KrabiClaw team</p>
-        <div class="grid md:grid-cols-2 gap-12 mb-12">
-          <div>
-            <h2 class="text-2xl font-bold text-default mb-6">{{ t('saya.contact_page.contact_us') }}</h2>
-            <div class="space-y-4">
-              <div>
-                <h3 class="font-semibold text-default mb-1">{{ t('saya.contact_page.email') }}</h3>
-                <p class="text-muted">hello@krabiclaw.com</p>
-              </div>
-              <div>
-                <h3 class="font-semibold text-default mb-1">Operating Model</h3>
-                <p class="text-muted">Fully Distributed & Remote 🌐</p>
-              </div>
-              <div>
-                <h3 class="font-semibold text-default mb-1">Support</h3>
-                <p class="text-muted">support@krabiclaw.com</p>
-              </div>
-            </div>
-          </div>
-          <div>
-            <h2 class="text-2xl font-bold text-default mb-6">{{ t('saya.contact_page.send_message') }}</h2>
-            <PlatformSupportContactForm
-              title="Send us the details"
-              description="Share your question or issue and the KrabiClaw team will reply by email."
-              submit-label="Send message"
-              source="contact_page"
-              route-context="/contact"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-
   </NuxtLayout>
 </template>
 
@@ -282,6 +244,8 @@ import { setContactConfirmation } from '~/composables/useContactHandoff'
 definePageMeta({ layout: false })
 
 const { isPlatform, siteId, site } = useTenantSite()
+if (isPlatform) throw createError({ statusCode: 404 })
+
 const { locale } = useI18n()
 const vertCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 const { t } = useI18n()
@@ -388,28 +352,15 @@ const handleTenantContact = async () => {
 }
 
 // ── SEO ──────────────────────────────────────────────────
-if (isPlatform) {
-  usePlatformPageSeo({
-    path: '/contact',
-    title: 'Contact',
-    description: 'Contact the KrabiClaw team for support, questions, or partnership inquiries.',
-    pageType: 'ContactPage',
-    breadcrumbs: [
-      { name: 'Home', url: '/' },
-      { name: 'Contact', url: '/contact' },
-    ],
-  })
-} else {
-  useSeoMeta({
-    title: computed(() => `Contact | ${businessName.value}`),
-    description: 'Get in touch with our business.',
-    ogTitle: computed(() => `Contact | ${businessName.value}`),
-    ogDescription: 'Get in touch with our business.',
-    ogSiteName: computed(() => businessName.value),
-    twitterTitle: computed(() => `Contact | ${businessName.value}`),
-    twitterDescription: 'Get in touch with our business.',
-    ogImage: tenantOgImage,
-    ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
-  })
-}
+useSeoMeta({
+  title: computed(() => `Contact | ${businessName.value}`),
+  description: 'Get in touch with our business.',
+  ogTitle: computed(() => `Contact | ${businessName.value}`),
+  ogDescription: 'Get in touch with our business.',
+  ogSiteName: computed(() => businessName.value),
+  twitterTitle: computed(() => `Contact | ${businessName.value}`),
+  twitterDescription: 'Get in touch with our business.',
+  ogImage: tenantOgImage,
+  ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
+})
 </script>

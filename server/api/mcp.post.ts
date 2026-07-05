@@ -357,13 +357,20 @@ Common workflows: update menus and items, create and publish site posts, triage 
         },
       }));
 
+      const domains = (() => {
+        try {
+          return [...new Set(tools.map((t) => t._meta["krabiclaw/toolInfo"].domain))]
+        } catch {
+          return []
+        }
+      })()
       logMcpEventDetached(event, cfEnv.DB, {
         organizationId: siteCtx?.organizationId ?? null,
         siteId: siteCtx?.siteId ?? null,
         userId: user.userId,
         requestId: request.id,
         method: request.method,
-        result: { count: tools.length, domains: [...new Set(tools.map((t) => t._meta["krabiclaw/toolInfo"].domain))] },
+        result: { count: tools.length, domains },
         status: "success",
       });
 

@@ -5,7 +5,7 @@ const SENSITIVE_KEY_PATTERN =
   /token|secret|password|authoriz|api[_-]?key|access[_-]?key|credential|cookie|base64|image_data|file_data|attachment_id|download_url|external_url/i;
 
 // Field names that may contain user PII — logged as a length marker, not the value.
-const PII_KEY_PATTERN = /email|phone|address|full_name|first_name|last_name/i;
+const PII_KEY_PATTERN = /email|phone|address|name|guest_name|full_name|first_name|last_name/i;
 
 const MAX_STRING_LENGTH = 200;
 const MAX_SUMMARY_LENGTH = 4000;

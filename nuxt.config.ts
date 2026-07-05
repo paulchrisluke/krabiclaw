@@ -144,6 +144,15 @@ export default defineNuxtConfig({
   css: skipGlobalCss ? [] : ['~/assets/css/main.css'],
   icon: {
     fallbackToApi: false,
+    // Nuxt UI's own internal default icons (UChatPromptSubmit's arrowUp, etc.)
+    // are resolved from appConfig.ui.icons dynamically, not as static name=""
+    // literals, so Nuxt Icon can't inline them at build time — they're
+    // resolved at request time via a self-fetch to /api/_nuxt_icon/lucide.json
+    // (same internal-self-fetch category as isInternalSelfFetch() in
+    // server/utils/api-response.ts). The default 1500ms fetchTimeout is too
+    // tight for that round-trip in local dev; bump it so it resolves instead
+    // of silently failing to render.
+    fetchTimeout: 5000,
     serverBundle: {
       collections: [
         'lucide',

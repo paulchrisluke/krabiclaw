@@ -7,6 +7,12 @@ interface HelpMessage {
   content?: string
 }
 
+const DEFAULT_DISCOVERY_PROMPTS = [
+  'How do I connect my own domain?',
+  'How do I add or update menu items?',
+  'Do I need technical skills to use KrabiClaw?',
+]
+
 function parseAgentEnvelope(raw: string) {
   const escalateMatch = raw.match(/ESCALATE:\s*(yes|no)/i)
   const topicMatch = raw.match(/TOPIC:\s*(.+)/i)
@@ -23,6 +29,19 @@ function parseAgentEnvelope(raw: string) {
 
 function shouldForceEscalation(message: string) {
   return /\b(human|contact|support case|refund|billing issue|bug|broken|can't access|cannot access|login problem|urgent)\b/i.test(message)
+}
+
+function isLowIntentOpening(message: string) {
+  const normalized = message.trim().toLowerCase()
+  return /^(hi|hello|hey|yo|sup|good morning|good afternoon|good evening|help|\?)$/.test(normalized)
+}
+
+function buildClarifyingReply() {
+  return [
+    'Hi, I can help with docs, setup, billing, domains, ChowBot, or account access.',
+    '',
+    'Tell me what you need help with and I’ll try to answer first before suggesting a support case.',
+  ].join('\n')
 }
 
 function buildFallbackReply(message: string, results: Array<{ title: string; path: string; snippet: string }>) {
@@ -54,8 +73,12 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const message = typeof body.message === 'string' ? body.message.trim() : ''
-  const topic = typeof body.topic === 'string' ? body.topic.trim() : ''
+  if (!body) {
+    return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
+  }
+
+  const message = typeof body.message === 'string' ? body.message.trim().slice(0, 2000) : ''
+  const topic = typeof body.topic === 'string' ? body.topic.trim().slice(0, 200) : ''
   const history = Array.isArray(body.history)
     ? body.history
         .filter(item => item && typeof item.content === 'string' && (item.role === 'user' || item.role === 'assistant'))
@@ -68,16 +91,18 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    const lowIntentOpening = isLowIntentOpening(message)
     const results = await searchPublicResources(db, `${topic ? `${topic} ` : ''}${message}`, { limit: 6 })
     const promptResults = formatPublicSearchResultsForPrompt(results)
     let parsed = {
-      escalate: results.length === 0,
+      escalate: false,
       topic: topic || null,
       summary: null as string | null,
-      answer: buildFallbackReply(message, results),
+      answer: lowIntentOpening ? buildClarifyingReply() : buildFallbackReply(message, results),
     }
 
-    try {
+    if (!lowIntentOpening) {
+      try {
       const aiOutput = await runWorkersAiText(env, [
         {
           role: 'system',
@@ -85,6 +110,7 @@ export default defineEventHandler(async (event) => {
             'You are KrabiClaw Support, a concise public support assistant.',
             'Only answer using the provided search results.',
             'If the search results are insufficient, the question needs account-specific help, or the user appears blocked, escalate to a support form.',
+            'Do not escalate for greetings, vague openers, or questions that should first get a clarifying follow-up.',
             'Return exactly this format:',
             'ESCALATE: yes|no',
             'TOPIC: <short topic>',
@@ -105,20 +131,25 @@ export default defineEventHandler(async (event) => {
       ], { maxTokens: 700, temperature: 0.2 })
 
       parsed = parseAgentEnvelope(aiOutput)
-    } catch (error) {
-      console.warn('Public help agent falling back to deterministic search response:', error)
+      } catch (error) {
+        console.warn('Public help agent falling back to deterministic search response:', error)
+      }
     }
 
-    const shouldEscalate = parsed.escalate || results.length === 0 || shouldForceEscalation(message)
+    const shouldEscalate = !lowIntentOpening && (parsed.escalate || shouldForceEscalation(message))
     const suggestedLinks = results
       .filter(result => result.path !== '/help')
       .slice(0, 3)
       .map(result => ({ title: result.title, path: result.path, type: result.type }))
+    const followUpPrompts = lowIntentOpening
+      ? DEFAULT_DISCOVERY_PROMPTS
+      : []
 
     return jsonResponse({
       reply: parsed.answer,
       citations: results.slice(0, 3),
       suggestedLinks,
+      followUpPrompts,
       escalation: shouldEscalate
         ? {
             topic: parsed.topic || topic || 'Support request',

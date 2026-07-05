@@ -430,6 +430,7 @@ const bookingObject = {
   properties: {
     id: { type: 'string' },
     experience_id: { type: 'string' },
+    experience_title: { type: ['string', 'null'] },
     location_id: { type: ['string', 'null'] },
     location_title: { type: ['string', 'null'] },
     guest_name: { type: 'string' },
@@ -442,6 +443,26 @@ const bookingObject = {
     notes: { type: ['string', 'null'] },
     created_at: { type: 'string' },
   },
+}
+
+const bookingsSummaryObject = {
+  type: 'object',
+  properties: {
+    total: { type: 'number' },
+    by_status: { type: 'object', description: 'Count of bookings per status, e.g. { pending: 2, confirmed: 5 }.' },
+    by_experience: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          experience_id: { type: 'string' },
+          experience_title: { type: ['string', 'null'] },
+          count: { type: 'number' },
+        },
+      },
+    },
+  },
+  required: ['total', 'by_status'],
 }
 
 const qaItemObject = {
@@ -722,6 +743,7 @@ const READ_ONLY_TOOL_NAMES = [
   'list_experiences',
   'get_experience',
   'list_experience_bookings',
+  'list_all_experience_bookings',
   'list_locales',
   'get_translation_inventory',
   'list_translation_jobs',
@@ -2704,7 +2726,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'list_experiences',
-    description: 'List experiences. Optionally filter by location_id. If no experiences exist yet and the site has no primary location, create a location first before calling create_experience.',
+    description: 'Use this when the user asks what experiences/activities the site offers, or as the first step before looking at bookings for a specific one. Optionally filter by location_id. If no experiences exist yet and the site has no primary location, create a location first before calling create_experience.',
     domain: 'experiences',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -2827,7 +2849,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'list_experience_bookings',
-    description: 'List experience bookings.',
+    description: 'List bookings for one specific experience. Use list_all_experience_bookings instead when the user asks about bookings across the whole site, not just one experience.',
     domain: 'experiences',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -2837,6 +2859,25 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       type: 'object',
       properties: { bookings: { type: 'array', items: bookingObject } },
       required: ['bookings'],
+    },
+  }),
+  siteTool({
+    name: 'list_all_experience_bookings',
+    description: 'Use this when the user asks about bookings site-wide — "how many bookings do we have", "bookings from the past two days", "site-wide bookings" — without naming a specific experience. Returns bookings across every experience on the site plus a summary (total, counts by status, counts by experience). Optionally filter by location_id and/or days (e.g. days=2 for "the past two days", based on when the booking was made).',
+    domain: 'experiences',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      location_id: { type: 'string', description: 'Optional location id to limit to one location.' },
+      days: { type: 'number', description: 'Optional: only include bookings made in the last N days (max 90).' },
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        bookings: { type: 'array', items: bookingObject },
+        summary: bookingsSummaryObject,
+      },
+      required: ['bookings', 'summary'],
     },
   }),
   siteTool({
@@ -3117,17 +3158,28 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'get_reservation_inquiries',
-    description: 'List reservation submissions.',
+    description: 'Use this when the user asks about table reservations — this is site-wide across all locations by default, and also answers "bookings from the past N days" for reservations. Filter to one location with location_id, or to a recent window with days (e.g. days=2 for "the past two days"). Returns a status-count summary alongside the raw list. For bookings on a bookable experience/activity instead of a table reservation, use list_all_experience_bookings.',
     domain: 'submissions',
     minimumRole: 'editor',
     confirmRequired: false,
     inputSchema: {
       location_id: { type: 'string', description: 'Optional location id to list only that location\'s reservations.' },
+      days: { type: 'number', description: 'Optional: only include reservations made in the last N days (max 90).' },
     },
     outputSchema: {
       type: 'object',
-      properties: { submissions: { type: 'array', items: reservationSubmissionObject } },
-      required: ['submissions'],
+      properties: {
+        submissions: { type: 'array', items: reservationSubmissionObject },
+        summary: {
+          type: 'object',
+          properties: {
+            total: { type: 'number' },
+            by_status: { type: 'object', description: 'Count of reservations per status.' },
+          },
+          required: ['total', 'by_status'],
+        },
+      },
+      required: ['submissions', 'summary'],
     },
   }),
   siteTool({

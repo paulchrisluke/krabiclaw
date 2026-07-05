@@ -609,13 +609,17 @@ export async function listExperienceBookings(
 export async function listExperienceBookingsForSite(
   db: DbClient,
   siteId: string,
-  opts: { locationId?: string | null } = {},
-): Promise<ExperienceBooking[]> {
-  const params: string[] = [siteId]
+  opts: { locationId?: string | null; sinceDays?: number | null } = {},
+): Promise<Array<ExperienceBooking & { experience_title?: string | null }>> {
+  const params: (string | number)[] = [siteId]
   let where = `eb.site_id = ?`
   if (opts.locationId) {
     where += ` AND eb.location_id = ?`
     params.push(opts.locationId)
+  }
+  if (opts.sinceDays) {
+    where += ` AND eb.created_at >= datetime('now', ?)`
+    params.push(`-${opts.sinceDays} days`)
   }
   const results = await queryAll<ExperienceBooking & { experience_title?: string | null }>(
     db,
@@ -634,6 +638,30 @@ export async function listExperienceBookingsForSite(
     params,
   )
   return results ?? []
+}
+
+export interface BookingsSummary {
+  total: number
+  by_status: Record<string, number>
+  by_experience: Array<{ experience_id: string; experience_title: string | null; count: number }>
+}
+
+export function summarizeExperienceBookings(
+  bookings: Array<Pick<ExperienceBooking, 'experience_id' | 'status'> & { experience_title?: string | null }>,
+): BookingsSummary {
+  const byStatus: Record<string, number> = {}
+  const byExperience = new Map<string, { experience_id: string; experience_title: string | null; count: number }>()
+  for (const booking of bookings) {
+    byStatus[booking.status] = (byStatus[booking.status] ?? 0) + 1
+    const existing = byExperience.get(booking.experience_id)
+    if (existing) existing.count += 1
+    else byExperience.set(booking.experience_id, { experience_id: booking.experience_id, experience_title: booking.experience_title ?? null, count: 1 })
+  }
+  return {
+    total: bookings.length,
+    by_status: byStatus,
+    by_experience: [...byExperience.values()].sort((a, b) => b.count - a.count),
+  }
 }
 
 export async function updateBookingStatus(

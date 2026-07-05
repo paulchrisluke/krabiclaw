@@ -158,7 +158,7 @@
               </p>
               <div class="mt-2 flex flex-wrap justify-center gap-4">
                 <PlatformButton
-                  to="/contact"
+                  to="/help"
                   size="xl"
                   class="font-bold transition-all duration-300 hover:scale-[1.02]"
                 >

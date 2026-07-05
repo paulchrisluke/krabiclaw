@@ -139,13 +139,6 @@ export const PUBLIC_SUPPORT_ROUTE_METADATA: PublicSupportRouteMetadata[] = [
     snippet: 'Manage sites, billing, members, analytics, settings, and support workflows.',
     keywords: ['dashboard', 'workspace', 'manage site', 'admin'],
   },
-  {
-    id: 'contact',
-    title: 'Contact',
-    path: '/contact',
-    snippet: 'Reach the KrabiClaw team directly for support, sales, or partnership questions.',
-    keywords: ['contact', 'support', 'sales', 'partnerships', 'email'],
-  },
 ]
 
 export function getDocPath(category: string | null | undefined, slug: string | null | undefined): string | null {

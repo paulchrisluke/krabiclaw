@@ -57,9 +57,11 @@ import {
   getExperienceById,
   getSlotAvailability,
   listExperienceBookings,
+  listExperienceBookingsForSite,
   listExperiences,
   listSlotOverrides,
   resolveExperienceTimezone,
+  summarizeExperienceBookings,
   updateBookingStatus,
   updateExperience,
   upsertSlotOverride,
@@ -3195,6 +3197,16 @@ export async function executeMcpToolCall(
           { locationId: optionalString(args, "location_id") ?? null },
         ),
       };
+    case "list_all_experience_bookings": {
+      const bookings = await listExperienceBookingsForSite(site.db, site.siteId, {
+        locationId: optionalString(args, "location_id") ?? null,
+        sinceDays: optionalDaysWindow(args, "days"),
+      });
+      return {
+        bookings,
+        summary: summarizeExperienceBookings(bookings),
+      };
+    }
     case "update_experience_booking":
       return {
         booking: await updateBookingStatus(
@@ -3426,12 +3438,21 @@ export async function executeMcpToolCall(
       return {
         submissions: await listContactSubmissions(site.db, site.siteId),
       };
-    case "get_reservation_inquiries":
+    case "get_reservation_inquiries": {
+      const submissions = await listReservationSubmissions(site.db, site.siteId, {
+        locationId: optionalString(args, "location_id") ?? null,
+        sinceDays: optionalDaysWindow(args, "days"),
+      });
+      const byStatus: Record<string, number> = {};
+      for (const submission of submissions) {
+        const status = String((submission as Record<string, unknown>).status ?? "unknown");
+        byStatus[status] = (byStatus[status] ?? 0) + 1;
+      }
       return {
-        submissions: await listReservationSubmissions(site.db, site.siteId, {
-          locationId: optionalString(args, "location_id") ?? null,
-        }),
+        submissions,
+        summary: { total: submissions.length, by_status: byStatus },
       };
+    }
     case "get_notification_settings":
       return {
         notifications: await getNotificationsSettings(
@@ -3962,6 +3983,16 @@ function requiredString(source: Record<string, unknown>, key: string) {
 function optionalString(source: Record<string, unknown>, key: string) {
   const value = source[key];
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function optionalDaysWindow(source: Record<string, unknown>, key: string, max = 90) {
+  const value = source[key];
+  if (value === undefined || value === null) return null;
+  const num = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(num) || num <= 0) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be a positive number of days`);
+  }
+  return Math.min(Math.floor(num), max);
 }
 
 function requiredStringArray(value: unknown, key: string) {

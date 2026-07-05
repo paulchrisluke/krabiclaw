@@ -343,13 +343,17 @@ export async function updateContactSubmissionStatus(
 export async function listReservationSubmissions(
   db: D1Database,
   siteId: string,
-  opts: { locationId?: string | null } = {},
+  opts: { locationId?: string | null; sinceDays?: number | null } = {},
 ) {
-  const params: string[] = [siteId]
+  const params: (string | number)[] = [siteId]
   let where = `rs.site_id = ?`
   if (opts.locationId) {
     where += ` AND rs.location_id = ?`
     params.push(opts.locationId)
+  }
+  if (opts.sinceDays) {
+    where += ` AND rs.created_at >= datetime('now', ?)`
+    params.push(`-${opts.sinceDays} days`)
   }
   return await queryAll<Record<string, unknown>>(db, `
     SELECT rs.*, bl.title AS location_title

@@ -80,67 +80,22 @@
         Low credits ({{ balance }} remaining). <NuxtLink :to="orgSettings.billing.value" class="underline" @click="close">Top up →</NuxtLink>
       </div>
 
-      <div class="flex-1 min-h-0 overflow-y-auto">
-        <UChatMessages :status="isUploading ? 'submitted' : undefined">
-          <div
-            v-if="messages.length === 0"
-            class="flex h-full flex-col items-center justify-center gap-3 px-6 py-16 text-center"
-          >
-            <UIcon name="i-lucide-bot" class="size-8 text-primary opacity-60" />
-            <p class="text-sm font-medium">{{ emptyTitle }}</p>
-            <p class="text-xs text-muted">{{ emptyDescription }}</p>
-            <div class="mt-4 flex w-full flex-col gap-2">
-              <UButton
-                v-for="prompt in starterPrompts"
-                :key="prompt"
-                color="neutral"
-                variant="outline"
-                size="xs"
-                class="justify-start text-left"
-                @click="handleStarter(prompt)"
-              >
-                {{ prompt }}
-              </UButton>
-            </div>
-          </div>
-
-          <UChatMessage
-            v-for="(msg, i) in messages"
-            :key="i"
-            :id="String(i)"
-            :role="msg.role"
-            :parts="[{ type: 'text', text: msg.content }]"
-            :side="msg.role === 'user' ? 'right' : 'left'"
-          >
-            <template #content>
-              <div v-if="msg.role === 'assistant'" class="space-y-2">
-                <!-- Running tools appear first while streaming -->
-                <div v-if="msg.toolCalls?.length" class="flex flex-col gap-1">
-                  <UChatTool
-                    v-for="(tool, ti) in msg.toolCalls"
-                    :key="tool.name + i + ti"
-                    :text="toolLabel(tool.name)"
-                    :loading="tool.status === 'running'"
-                  />
-                </div>
-                <!-- Message text (empty while tools are still running) -->
-                <!-- eslint-disable vue/no-v-html -->
-                <div
-                  v-if="msg.content"
-                  class="prose prose-sm dark:prose-invert max-w-none"
-                  v-html="renderMarkdown(msg.content)"
-                />
-                <!-- eslint-enable vue/no-v-html -->
-              </div>
-              <div v-else class="prose prose-sm dark:prose-invert max-w-none">
-                {{ msg.content }}
-              </div>
-            </template>
-          </UChatMessage>
-        </UChatMessages>
-      </div>
-
-      <div class="shrink-0 border-t border-default p-3">
+      <ChowBotConversation
+        v-model:input="input"
+        :messages="messages"
+        :placeholder="promptPlaceholder"
+        :disabled="isLoading || isUploading || creatingRestaurant || (!siteId && !setupMode) || isDepleted"
+        :loading="isLoading || isUploading || creatingRestaurant"
+        :messages-status="isUploading ? 'submitted' : undefined"
+        :empty-title="emptyTitle"
+        :empty-description="emptyDescription"
+        :starter-prompts="starterPrompts"
+        :render-markdown="renderMarkdown"
+        :tool-label="toolLabel"
+        @submit="handleSubmit"
+        @starter="handleStarter"
+      >
+        <template #prompt-before>
         <!-- pending text chip -->
         <div v-if="pendingText" class="mb-2 flex items-center gap-2 rounded-lg border border-default bg-elevated px-3 py-1.5">
           <UIcon name="i-lucide-file-text" class="size-3.5 shrink-0 text-muted" />
@@ -168,15 +123,8 @@
             @click="pendingFile = null"
           />
         </div>
-
-        <UChatPrompt
-          v-model="input"
-          :placeholder="promptPlaceholder"
-          :disabled="isLoading || isUploading || creatingRestaurant || (!siteId && !setupMode) || isDepleted"
-          :loading="isLoading || isUploading || creatingRestaurant"
-          :maxrows="8"
-          @submit="handleSubmit"
-        />
+        </template>
+        <template #prompt-after>
         <div class="mt-1 flex items-center justify-end gap-2">
           <p v-if="input.length > 1000" class="text-right text-xs" :class="input.length > 20000 ? 'text-warning' : 'text-muted'">
             {{ input.length.toLocaleString() }} chars{{ input.length > 20000 ? ' — will be truncated' : '' }}
@@ -209,7 +157,8 @@
         <p v-if="!siteId && !setupMode" class="mt-2 text-center text-xs text-muted">
           Create your workspace to use ChowBot.
         </p>
-      </div>
+        </template>
+      </ChowBotConversation>
 
       <input
         ref="fileInputRef"
@@ -223,6 +172,7 @@
 </template>
 
 <script setup lang="ts">
+import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
 import { useChowBot } from '~/composables/useChowBot'
 import { useAiCredits } from '~/composables/useAiCredits'
 import { getQuickActionPrompts } from '~/composables/useOnboardingPrompts'

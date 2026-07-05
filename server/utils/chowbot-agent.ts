@@ -2511,10 +2511,14 @@ async function executeTool(
 
     case "search_public_resources": {
       const query = toSqlText(input.q)?.trim();
-      const type = toSqlText(input.type) as "all" | "doc" | "blog" | "faq" | "route" | null;
+      const type = toSqlText(input.type);
+      const allowedTypes = ["all", "doc", "blog", "faq", "route"];
       if (!query) return { error: "q is required." };
+      if (type && !allowedTypes.includes(type)) {
+        return { error: `type must be one of: ${allowedTypes.join(", ")}` };
+      }
       const results = await searchPublicResources(db, query, {
-        type: type ?? "all",
+        type: (type as "all" | "doc" | "blog" | "faq" | "route") ?? "all",
         limit: 8,
       });
       return { results };

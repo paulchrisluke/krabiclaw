@@ -139,9 +139,9 @@ export async function searchPublicResources(
       WHERE status = 'published'
         AND site_id IS NULL
         AND (
-          lower(title) LIKE ?
-          OR lower(coalesce(excerpt, '')) LIKE ?
-          OR lower(body) LIKE ?
+          lower(title) LIKE ? ESCAPE '\\'
+          OR lower(coalesce(excerpt, '')) LIKE ? ESCAPE '\\'
+          OR lower(body) LIKE ? ESCAPE '\\'
         )
       ORDER BY published_at DESC, updated_at DESC
       LIMIT 20

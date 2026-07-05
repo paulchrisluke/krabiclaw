@@ -1,131 +1,86 @@
 <template>
-  <div class="flex min-h-[32rem] flex-col">
-    <div class="flex-1 min-h-0 overflow-y-auto">
-      <UChatMessages>
-        <UChatMessage
-          v-for="(msg, index) in messages"
-          :key="`${msg.role}-${index}`"
-          :id="String(index)"
-          :role="msg.role"
-          :parts="[{ type: 'text', text: msg.content }]"
-          :side="msg.role === 'user' ? 'right' : 'left'"
-        >
-          <template #content>
-            <div v-if="msg.role === 'assistant'" class="space-y-3">
-              <div v-if="msg.loading" class="flex items-center gap-3 text-sm text-muted">
-                <span class="flex items-center gap-1.5">
-                  <span class="size-2 rounded-full bg-primary animate-pulse" />
-                  <span class="size-2 rounded-full bg-primary/70 animate-pulse [animation-delay:120ms]" />
-                  <span class="size-2 rounded-full bg-primary/40 animate-pulse [animation-delay:240ms]" />
-                </span>
-                <span>ChowBot is thinking…</span>
-              </div>
+  <ChowBotConversation
+    v-model:input="input"
+    :messages="messages"
+    placeholder="Ask ChowBot anything..."
+    :disabled="isLoading"
+    :loading="isLoading"
+    :show-empty-state="false"
+    :render-markdown="renderMarkdown"
+    @submit="handleSubmit"
+    @stop="handleStop"
+  >
+    <template #assistant-after="{ message, index }">
+      <div v-if="message.loading" class="flex items-center gap-3 text-sm text-muted">
+        <span class="flex items-center gap-1.5">
+          <span class="size-2 rounded-full bg-primary animate-pulse" />
+          <span class="size-2 rounded-full bg-primary/70 animate-pulse [animation-delay:120ms]" />
+          <span class="size-2 rounded-full bg-primary/40 animate-pulse [animation-delay:240ms]" />
+        </span>
+        <span>ChowBot is thinking…</span>
+      </div>
 
-              <!-- eslint-disable vue/no-v-html -->
-              <div
-                v-if="msg.content"
-                class="prose prose-sm max-w-none text-default dark:prose-invert"
-                v-html="renderMarkdown(msg.content)"
-              />
-              <!-- eslint-enable vue/no-v-html -->
+      <div v-if="message.citations?.length" class="space-y-2 pt-1">
+        <p class="text-xs font-medium uppercase tracking-[0.18em] text-muted">
+          Related resources
+        </p>
+        <div class="flex flex-wrap gap-2">
+          <NuxtLink
+            v-for="citation in message.citations"
+            :key="`${citation.path}-${citation.title}`"
+            :to="citation.path"
+            class="inline-flex items-center gap-2 rounded-full border border-default px-3 py-1.5 text-xs font-medium text-default no-underline transition hover:border-muted hover:bg-elevated"
+          >
+            <span>{{ citation.title }}</span>
+            <UIcon name="i-lucide-move-up-right" class="size-3.5 text-muted" />
+          </NuxtLink>
+        </div>
+      </div>
 
-              <div v-if="msg.citations?.length" class="space-y-2">
-                <p class="text-xs font-medium uppercase tracking-[0.18em] text-muted">
-                  Related resources
-                </p>
-                <div class="flex flex-wrap gap-2">
-                  <NuxtLink
-                    v-for="citation in msg.citations"
-                    :key="`${citation.path}-${citation.title}`"
-                    :to="citation.path"
-                    class="inline-flex items-center gap-2 rounded-full border border-default px-3 py-1.5 text-xs font-medium text-default no-underline transition hover:border-muted hover:bg-elevated"
-                  >
-                    <span>{{ citation.title }}</span>
-                    <UIcon name="i-lucide-move-up-right" class="size-3.5 text-muted" />
-                  </NuxtLink>
-                </div>
-              </div>
+      <div v-if="message.followUpPrompts?.length" class="space-y-2 pt-1">
+        <p class="text-xs font-medium uppercase tracking-[0.18em] text-muted">
+          Ask next
+        </p>
+        <div class="flex flex-wrap gap-2">
+          <button
+            v-for="prompt in message.followUpPrompts"
+            :key="prompt"
+            type="button"
+            class="rounded-full border border-default px-3 py-1.5 text-xs font-medium text-default transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="isLoading"
+            @click="handleSuggestedPrompt(prompt)"
+          >
+            {{ prompt }}
+          </button>
+        </div>
+      </div>
 
-              <div v-if="msg.followUpPrompts?.length" class="space-y-2">
-                <p class="text-xs font-medium uppercase tracking-[0.18em] text-muted">
-                  Ask next
-                </p>
-                <div class="flex flex-wrap gap-2">
-                  <button
-                    v-for="prompt in msg.followUpPrompts"
-                    :key="prompt"
-                    type="button"
-                    class="rounded-full border border-default px-3 py-1.5 text-xs font-medium text-default transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
-                    :disabled="isLoading"
-                    @click="handleSuggestedPrompt(prompt)"
-                  >
-                    {{ prompt }}
-                  </button>
-                </div>
-              </div>
-
-              <div v-if="msg.escalation && !msg.escalationSubmitted" class="pt-2">
-                <PlatformSupportContactForm
-                  title="Send this to support"
-                  description="If you’re still blocked, send the details here and the team will follow up."
-                  submit-label="Send support request"
-                  source="help_agent"
-                  route-context="/help"
-                  :initial-topic="msg.escalation.topic"
-                  :initial-message="msg.escalation.message"
-                  :suggested-summary="msg.escalation.suggested_summary"
-                  :agent-metadata="msg.escalation.agent_metadata_json"
-                  @submitted="markEscalationSubmitted(index)"
-                />
-              </div>
-            </div>
-            <div v-else class="prose prose-sm max-w-none text-default dark:prose-invert">
-              {{ msg.content }}
-            </div>
-          </template>
-        </UChatMessage>
-      </UChatMessages>
-    </div>
-
-    <div class="border-t border-default p-3">
-      <UChatPrompt
-        v-model="input"
-        variant="subtle"
-        placeholder="Send a message..."
-        :disabled="isLoading"
-        :loading="isLoading"
-        :rows="3"
-        :maxrows="8"
-        class="min-h-[132px] rounded-[24px] bg-elevated/60 ring-1 ring-inset ring-default/80"
-        :ui="{
-          root: 'min-h-[132px] px-4 py-3',
-          body: 'text-sm leading-6 text-default',
-          footer: 'mt-auto pt-2',
-        }"
-        @submit="handleSubmit"
-      >
-        <template #footer>
-          <div class="flex w-full items-center justify-between gap-3">
-            <p class="text-xs text-muted">
-              Ask about docs, billing, setup, domains, or send it to support.
-            </p>
-            <UChatPromptSubmit
-              :status="isLoading ? 'streaming' : 'ready'"
-              color="primary"
-              variant="solid"
-              size="sm"
-              :disabled="!isLoading && !input.trim()"
-              @stop="handleStop"
-            />
-          </div>
-        </template>
-      </UChatPrompt>
-    </div>
-  </div>
+      <div v-if="message.escalation && !message.escalationSubmitted" class="pt-2">
+        <PlatformSupportContactForm
+          title="Send this to support"
+          description="If you’re still blocked, send the details here and the team will follow up."
+          submit-label="Send support request"
+          source="help_agent"
+          route-context="/help"
+          :initial-topic="message.escalation.topic"
+          :initial-message="message.escalation.message"
+          :suggested-summary="message.escalation.suggested_summary"
+          :agent-metadata="message.escalation.agent_metadata_json"
+          @submitted="markEscalationSubmitted(index)"
+        />
+      </div>
+    </template>
+    <template #prompt-after>
+      <p class="mt-2 text-xs text-muted">
+        Ask about docs, billing, setup, domains, or send it to support.
+      </p>
+    </template>
+  </ChowBotConversation>
 </template>
 
 <script setup lang="ts">
-import { sanitizeHtmlForSsr } from '~/utils/markdown'
+import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
+import DOMPurify from 'isomorphic-dompurify'
 
 type HelpCitation = {
   title: string
@@ -161,17 +116,10 @@ const messages = ref<HelpMessage[]>([
 const isLoading = ref(false)
 const activeRequest = ref<AbortController | null>(null)
 
-const DOMPurify = import.meta.client
-  ? (await import('isomorphic-dompurify')).default
-  : { sanitize: sanitizeHtmlForSsr }
-
 function linkifyMarkdown(text: string): string {
   return text.replace(
-    /\[([^\]]+)\]\((\/[^)\s]+)\)/g,
-    '<a href="$2">$1</a>',
-  ).replace(
-    /(https?:\/\/[^\s<]+)/g,
-    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>',
+    /\[([^\]]+)\]\(([^)\s]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
   )
 }
 
