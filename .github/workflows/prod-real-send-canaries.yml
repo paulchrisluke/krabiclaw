@@ -21,6 +21,7 @@ jobs:
   prod-smoke:
     name: Production smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Check Pottery House + platform public routes
         shell: bash
@@ -33,7 +34,7 @@ jobs:
             echo "== ${host} =="
             for route in "${pottery_routes[@]}"; do
               url="${host}${route}"
-              code=$(curl -L -s -o /tmp/page.html -w "%{http_code}" "${url}")
+              code=$(curl -L --connect-timeout 10 --max-time 30 -s -o /tmp/page.html -w "%{http_code}" "${url}")
               title=$(grep -o '<title>.*</title>' /tmp/page.html | head -n1 | sed -E 's#</?title>##g' || true)
               echo "${route} -> ${code} | ${title:-<no-title>}"
               [[ "${code}" -lt 400 ]] || (echo "Route failed: ${url}" && exit 1)
@@ -41,7 +42,7 @@ jobs:
           done
 
           for url in "https://krabiclaw.com/" "https://krabiclaw.com/blog"; do
-            code=$(curl -L -s -o /tmp/page.html -w "%{http_code}" "${url}")
+            code=$(curl -L --connect-timeout 10 --max-time 30 -s -o /tmp/page.html -w "%{http_code}" "${url}")
             title=$(grep -o '<title>.*</title>' /tmp/page.html | head -n1 | sed -E 's#</?title>##g' || true)
             echo "${url} -> ${code} | ${title:-<no-title>}"
             [[ "${code}" -lt 400 ]] || (echo "Route failed: ${url}" && exit 1)
