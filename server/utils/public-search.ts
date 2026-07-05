@@ -40,6 +40,10 @@ function normalizeQuery(query: string) {
   return query.trim().toLowerCase()
 }
 
+function escapeLikePattern(value: string) {
+  return value.replace(/[\\%_]/g, '\\$&')
+}
+
 function queryTerms(query: string) {
   return normalizeQuery(query).split(/\s+/).filter(term => term.length >= 2)
 }
@@ -101,7 +105,7 @@ export async function searchPublicResources(
 
   const type = options.type ?? 'all'
   const limit = Math.max(1, Math.min(options.limit ?? 8, 20))
-  const like = `%${normalized}%`
+  const like = `%${escapeLikePattern(normalized)}%`
   const results: PublicSearchResult[] = []
 
   if (type === 'all' || type === 'doc') {
@@ -110,9 +114,9 @@ export async function searchPublicResources(
       FROM platform_docs
       WHERE status = 'published'
         AND (
-          lower(title) LIKE ?
-          OR lower(coalesce(excerpt, '')) LIKE ?
-          OR lower(body) LIKE ?
+          lower(title) LIKE ? ESCAPE '\\'
+          OR lower(coalesce(excerpt, '')) LIKE ? ESCAPE '\\'
+          OR lower(body) LIKE ? ESCAPE '\\'
         )
       ORDER BY published_at DESC, updated_at DESC
       LIMIT 20
