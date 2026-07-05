@@ -5,9 +5,9 @@
       <div class="mb-4 flex flex-wrap items-center gap-2">
         <USelect v-model="selectedLocationId" :items="locationItems" value-key="id" label-key="label" class="w-64" @update:model-value="loadPhotos" />
         <USelect v-model="categoryFilter" :items="categoryItems" value-key="id" label-key="label" class="w-44" />
-        <UButton icon="i-heroicons-arrow-up-tray" color="primary" variant="soft" :loading="uploading" :disabled="!selectedLocationId" @click="openUploadPicker">Upload</UButton>
-        <UButton icon="i-heroicons-paper-clip" color="neutral" variant="soft" :disabled="!selectedLocationId" @click="openAttachModal">Attach existing</UButton>
-        <UButton icon="i-heroicons-arrow-path" color="neutral" variant="ghost" :loading="loading" @click="loadPhotos">Refresh</UButton>
+        <UButton icon="i-lucide-upload" color="primary" variant="soft" :loading="uploading" :disabled="!selectedLocationId" @click="openUploadPicker">Upload</UButton>
+        <UButton icon="i-lucide-paperclip" color="neutral" variant="soft" :disabled="!selectedLocationId" @click="openAttachModal">Attach existing</UButton>
+        <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadPhotos">Refresh</UButton>
         <input ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploading" @change="onFileSelect" />
       </div>
 
@@ -22,12 +22,12 @@
       </div>
 
       <div v-else-if="filteredAssets.length === 0" class="rounded-lg border border-dashed border-default px-6 py-12 text-center">
-        <UIcon name="i-heroicons-photo" class="mx-auto size-9 text-muted" />
+        <UIcon name="i-lucide-image" class="mx-auto size-9 text-muted" />
         <p class="mt-3 text-sm font-medium text-highlighted">No location media yet</p>
         <p class="mt-1 text-sm text-muted">Upload images or videos here, or attach existing media to this location.</p>
         <div class="mt-5 flex justify-center gap-2">
-          <UButton icon="i-heroicons-arrow-up-tray" :loading="uploading" @click="openUploadPicker">Upload file</UButton>
-          <UButton color="neutral" variant="soft" icon="i-heroicons-paper-clip" @click="openAttachModal">Attach existing</UButton>
+          <UButton icon="i-lucide-upload" :loading="uploading" @click="openUploadPicker">Upload file</UButton>
+          <UButton color="neutral" variant="soft" icon="i-lucide-paperclip" @click="openAttachModal">Attach existing</UButton>
         </div>
       </div>
 
@@ -41,7 +41,7 @@
             loading="lazy"
           />
           <div v-else class="flex h-full w-full items-center justify-center">
-            <UIcon name="i-heroicons-film" class="size-6 text-muted" />
+            <UIcon name="i-lucide-film" class="size-6 text-muted" />
           </div>
           <div class="absolute inset-x-0 bottom-0 bg-black/65 px-2 py-1 opacity-0 transition group-hover:opacity-100">
             <p class="truncate text-xs text-white">{{ asset.file_name || asset.kind }}</p>
@@ -49,9 +49,9 @@
           </div>
           <div class="absolute right-1.5 top-1.5 flex gap-1 opacity-0 transition group-hover:opacity-100">
             <UDropdownMenu :items="categoryMenu(asset)" :content="{ align: 'end' }">
-              <UButton size="xs" color="neutral" variant="solid" icon="i-heroicons-tag" />
+              <UButton size="xs" color="neutral" variant="solid" icon="i-lucide-tag" />
             </UDropdownMenu>
-            <UButton size="xs" color="error" variant="solid" icon="i-heroicons-x-mark" @click="detachPhoto(asset)" />
+            <UButton size="xs" color="error" variant="solid" icon="i-lucide-x" @click="detachPhoto(asset)" />
           </div>
         </div>
       </div>
@@ -64,7 +64,7 @@
                 <h2 class="text-lg font-semibold text-highlighted">Attach existing media</h2>
                 <p class="mt-1 text-sm text-muted">Choose images or videos from the site media library for this location gallery.</p>
               </div>
-              <UButton icon="i-heroicons-arrow-path" color="neutral" variant="ghost" :loading="attachLoading" @click="loadAttachableMedia" />
+              <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="attachLoading" @click="loadAttachableMedia" />
             </div>
             <div v-if="attachLoading" class="mt-5 grid grid-cols-3 gap-3 md:grid-cols-5">
               <USkeleton v-for="i in 10" :key="i" class="aspect-square rounded-lg" />
@@ -143,8 +143,8 @@ const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 const { uploading, error: uploadError, pendingRetryFile, upload } = useMediaUpload()
 
 const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'Media library', icon: 'i-heroicons-squares-2x2', to: paths.value.media, color: 'neutral' as const, variant: 'soft' as const },
-  { label: 'Edit photo page', icon: 'i-heroicons-document-text', to: `${paths.value.content}?page=location`, color: 'neutral' as const, variant: 'ghost' as const }
+  { label: 'Media library', icon: 'i-lucide-layout-dashboard', to: paths.value.media, color: 'neutral' as const, variant: 'soft' as const },
+  { label: 'Edit photo page', icon: 'i-lucide-file-text', to: `${paths.value.content}?page=location`, color: 'neutral' as const, variant: 'ghost' as const }
 ]))
 
 const locationItems = computed(() => locations.value.map(location => ({ id: location.id, label: location.title })))
@@ -311,7 +311,7 @@ async function detachPhoto(asset: MediaAsset) {
 function categoryMenu(asset: MediaAsset) {
   return [categoryItems.filter(item => item.id !== 'all').map(item => ({
     label: item.label,
-    icon: asset.category === item.id ? 'i-heroicons-check' : 'i-heroicons-tag',
+    icon: asset.category === item.id ? 'i-lucide-check' : 'i-lucide-tag',
     onSelect: () => patchAsset(asset, { category: item.id }, 'Photo category updated')
   }))]
 }

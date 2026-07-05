@@ -39,9 +39,9 @@
             class="flex items-start gap-3"
           >
             <!-- Dynamic SVG Icons based on group.icon -->
-            <svg v-if="group.icon === 'i-heroicons-finger-print'" class="w-5 h-5 text-default shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg>
-            <svg v-else-if="group.icon === 'i-heroicons-squares-2x2'" class="w-5 h-5 text-default shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
-            <svg v-else-if="group.icon === 'i-heroicons-shield-check'" class="w-5 h-5 text-default shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2-1 4-3 5.33-4.33a2 2 0 0 1 2.82 0C14.49 2 16.28 3 18.28 4a1 1 0 0 1 1 1v6z"/><path d="m9 12 2 2 4-4"/></svg>
+            <svg v-if="group.icon === 'i-lucide-fingerprint'" class="w-5 h-5 text-default shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg>
+            <svg v-else-if="group.icon === 'i-lucide-layout-dashboard'" class="w-5 h-5 text-default shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+            <svg v-else-if="group.icon === 'i-lucide-shield-check'" class="w-5 h-5 text-default shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2-1 4-3 5.33-4.33a2 2 0 0 1 2.82 0C14.49 2 16.28 3 18.28 4a1 1 0 0 1 1 1v6z"/><path d="m9 12 2 2 4-4"/></svg>
             <svg v-else class="w-5 h-5 text-default shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
             
             <div>
@@ -163,7 +163,7 @@ const permissionGroups = computed(() => {
 
   if (scopes.has('openid')) {
     groups.push({
-      icon: 'i-heroicons-finger-print',
+      icon: 'i-lucide-fingerprint',
       title: 'Verify your identity',
       items: ['Confirm you are who you say you are'],
     })
@@ -171,7 +171,7 @@ const permissionGroups = computed(() => {
 
   if (scopes.has('tenant')) {
     groups.push({
-      icon: 'i-heroicons-squares-2x2',
+      icon: 'i-lucide-layout-dashboard',
       title: 'Access your KrabiClaw workspace',
       items: [
         'Read and update your site content, menus, and media',
@@ -183,7 +183,7 @@ const permissionGroups = computed(() => {
 
   if (scopes.has('platform_admin')) {
     groups.push({
-      icon: 'i-heroicons-shield-check',
+      icon: 'i-lucide-shield-check',
       title: 'Access internal platform operations',
       items: [
         'Manage KrabiClaw platform blog and docs content',
@@ -198,7 +198,7 @@ const permissionGroups = computed(() => {
   const unknown = [...scopes].filter(s => !known.has(s))
   if (unknown.length) {
     groups.push({
-      icon: 'i-heroicons-key',
+      icon: 'i-lucide-key',
       title: 'Additional permissions',
       items: unknown,
     })

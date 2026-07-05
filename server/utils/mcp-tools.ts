@@ -1014,7 +1014,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   })),
   globalTool(withToolAnnotations({
     name: 'show_generated_images',
-    description: 'Show a carousel of AI-generated images for the user to pick from. First persist each image with save_generated_image or save_generated_image_file, then pass the resulting assetId and publicUrl here. Include target metadata when the selected image should be applied directly.',
+    description: 'Use this after generating AI photos for the user to pick from — the picker for AI-generated images. First persist each image with save_generated_image or save_generated_image_file, then pass the resulting assetId and publicUrl here. Include target metadata when the selected image should be applied directly.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1069,7 +1069,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'save_generated_image_file',
-    description: 'Primary path for saving a ChatGPT natively-generated image. After calling image_generation, pass the resulting image as attachment_id (a file reference). This avoids safety blocks that occur when raw base64 is passed to save_generated_image.',
+    description: 'Use this right after generating an AI photo for the user — "make me a photo", "create an image". Primary path for saving a ChatGPT natively-generated image. After calling image_generation, pass the resulting image as attachment_id (a file reference). This avoids safety blocks that occur when raw base64 is passed to save_generated_image.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1091,7 +1091,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'upload_user_photo',
-    description: 'Primary and only supported Client MCP path for a user-provided photo. Ask the user to attach the image directly in ChatGPT, inspect it visually, confirm the target site/placement, then pass the authorized ChatGPT file argument here. This tool uploads the image into the site media library but does not place it on a page by itself. Do not send users to a KrabiClaw photo uploader or dashboard media-library upload from this MCP app. Do not pass raw local paths. Prefer the file argument over file_id when available. After upload succeeds, immediately call the appropriate assignment tool such as set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, or set_experience_image. Do NOT use save_generated_image_file for user uploads; that tool is only for ChatGPT native image_generation output.',
+    description: 'Use this when the user wants to add their own photos or pictures to the site — "add photos", "upload my pictures", "use this image on my site". Primary and only supported Client MCP path for a user-provided photo. Ask the user to attach the image directly in ChatGPT, inspect it visually, confirm the target site/placement, then pass the authorized ChatGPT file argument here. This tool uploads the image into the site media library but does not place it on a page by itself. Do not send users to a KrabiClaw photo uploader or dashboard media-library upload from this MCP app. Do not pass raw local paths. Prefer the file argument over file_id when available. After upload succeeds, immediately call the appropriate assignment tool such as set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, or set_experience_image. Do NOT use save_generated_image_file for user uploads; that tool is only for ChatGPT native image_generation output.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1339,7 +1339,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'set_logo',
-    description: 'Assign a saved media asset as the site logo. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id.',
+    description: 'Use this when the user wants to change their logo or business mark. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id.',
     domain: 'sites',
     minimumRole: 'admin',
     confirmRequired: false,
@@ -1475,7 +1475,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'set_location_hero_image',
-    description: 'Assign a saved media asset as a location hero image. Call get_site_media_assets first to find an active image asset id, then pass it here with the target location_id. If this location already has a hero video, that video keeps display priority until you call clear_location_hero_video.',
+    description: 'Use this when the user wants to change the main photo, cover photo, or big photo for a specific location. Call get_site_media_assets first to find an active image asset id, then pass it here with the target location_id. If this location already has a hero video, that video keeps display priority until you call clear_location_hero_video.',
     domain: 'locations',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1790,7 +1790,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'set_menu_item_image',
-    description: 'Assign a saved media asset as a menu item image. Call get_site_media_assets first to find an active image asset id, then pass it here with the target menu_item_id.',
+    description: 'Use this when the user wants to add or change the photo of a specific dish or menu item — "add a picture of this dish". Call get_site_media_assets first to find an active image asset id, then pass it here with the target menu_item_id.',
     domain: 'menus',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1952,7 +1952,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'set_post_image',
-    description: 'Assign a saved media asset as a post image. Call get_site_media_assets first to find an active image asset id, then pass it here with the target post_id.',
+    description: 'Use this when the user wants to add or change the photo on a post or update. Call get_site_media_assets first to find an active image asset id, then pass it here with the target post_id.',
     domain: 'posts',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -2140,7 +2140,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'get_site_media_assets',
-    description: 'List media assets (images and videos) for a site. Use this first to find asset IDs before assigning images through business-level tools like set_logo, set_home_hero_image, set_about_story_image, set_home_story_image, set_location_hero_image, set_menu_item_image, set_post_image, or set_experience_image. Filter by kind="image" to narrow results. For video uploads, direct the user to the dashboard media library: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/{locationSlug}/media — orgSlug and subdomain come from list_sites, locationSlug from list_locations. After the user uploads, call get_site_media_assets to get the public_url and place it on the page.',
+    description: 'Use this to see the photos and videos already uploaded for a site — "what pictures do I have", "show me my photos". Use it first to find asset IDs before assigning images through business-level tools like set_logo, set_home_hero_image, set_about_story_image, set_home_story_image, set_location_hero_image, set_menu_item_image, set_post_image, or set_experience_image. Filter by kind="image" to narrow results. For video uploads, direct the user to the dashboard media library: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/{locationSlug}/media — orgSlug and subdomain come from list_sites, locationSlug from list_locations. After the user uploads, call get_site_media_assets to get the public_url and place it on the page.',
     domain: 'media',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -2442,7 +2442,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'set_home_hero_image',
-    description: 'Assign a saved media asset as the homepage hero image. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id. Use this immediately after upload_user_photo when the user wants their uploaded image on the homepage hero. If this page already has a hero video, that video keeps display priority until you call clear_home_hero_video.',
+    description: 'Use this when the user wants to change the main photo at the top of the homepage — also called the cover photo, banner, big photo, first image people see, or hero image. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id. Use this immediately after upload_user_photo when the user wants their uploaded image on the homepage. If this page already has a hero video, that video keeps display priority until you call clear_home_hero_video.',
     domain: 'content',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -2530,7 +2530,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'set_about_story_image',
-    description: 'Assign a saved media asset as the About page (/about) story image. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id. Use set_home_story_image instead if the user means the story section on the homepage — the two pages have separate story.image fields and this tool only ever writes to /about. It is common to reuse the same asset_id for both.',
+    description: 'Use this when the user wants to change the photo beside the story or about-us text on the About page (/about). Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id. Use set_home_story_image instead if the user means the story section on the homepage — the two pages have separate story.image fields and this tool only ever writes to /about. It is common to reuse the same asset_id for both.',
     domain: 'content',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -2551,7 +2551,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'set_home_story_image',
-    description: 'Assign a saved media asset as the homepage (/) story image. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id. Use set_about_story_image instead if the user means the story section on the About page — the two pages have separate story.image fields and this tool only ever writes to home. It is common to reuse the same asset_id for both.',
+    description: 'Use this when the user wants to change the photo beside the story or about-us text on the homepage (/). Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id. Use set_about_story_image instead if the user means the story section on the About page — the two pages have separate story.image fields and this tool only ever writes to home. It is common to reuse the same asset_id for both.',
     domain: 'content',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -2759,7 +2759,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'set_experience_image',
-    description: 'Assign a saved media asset as an experience image. Call get_site_media_assets first to find an active image asset id, then pass it here with the target experience_id.',
+    description: 'Use this when the user wants to add or change the photo for a bookable experience or activity. Call get_site_media_assets first to find an active image asset id, then pass it here with the target experience_id.',
     domain: 'experiences',
     minimumRole: 'editor',
     confirmRequired: false,

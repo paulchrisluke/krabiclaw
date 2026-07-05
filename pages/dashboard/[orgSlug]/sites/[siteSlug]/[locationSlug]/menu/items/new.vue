@@ -6,7 +6,7 @@
         v-if="pageError"
         color="error"
         variant="soft"
-        icon="i-heroicons-exclamation-triangle"
+        icon="i-lucide-triangle-alert"
         :description="pageError"
       />
       <MenuItemDetailEditor

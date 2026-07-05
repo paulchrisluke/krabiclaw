@@ -11,7 +11,7 @@
           <UCard :ui="{ body: 'p-4 sm:p-6', footer: 'px-4 py-3 sm:px-6 bg-elevated/30' }">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-3">
-                <UIcon name="i-heroicons-user" class="size-6 text-muted" />
+                <UIcon name="i-lucide-user" class="size-6 text-muted" />
                 <span class="font-medium text-highlighted">{{ sessionData?.user?.name }} Account</span>
                 <UBadge color="neutral" variant="soft" size="sm" class="rounded-full px-2">Free</UBadge>
               </div>

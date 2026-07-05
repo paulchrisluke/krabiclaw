@@ -8,11 +8,11 @@ import cloudflareDevModule from './build/cloudflare-dev-module'
 const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
 
 // nuxt/icon's serverBundle bundles a named collection in full — no usage-based
-// tree-shaking. heroicons is used broadly enough that this is fine, but
-// simple-icons/logos brand marks and a handful of icons with no heroicons
-// equivalent are owned locally in build/icon-data/custom-icons.json instead of
-// depending on @iconify-json packages at build time (see that file for how to
-// regenerate it).
+// tree-shaking. lucide is the app's sole icon pack (it's also what Nuxt UI's
+// own internal defaults are hardcoded to), so only one collection ships.
+// simple-icons/logos brand marks are owned locally in
+// build/icon-data/custom-icons.json instead of depending on @iconify-json
+// packages at build time (see that file for how to regenerate it).
 const requireFromConfig = createRequire(import.meta.url)
 const customIconData = requireFromConfig('./build/icon-data/custom-icons.json')
 function pickIcons(collection: string, names: string[]) {
@@ -146,13 +146,12 @@ export default defineNuxtConfig({
     fallbackToApi: false,
     serverBundle: {
       collections: [
-        'heroicons',
+        'lucide',
       ],
     },
     customCollections: [
       pickIcons('simple-icons', ['facebook', 'google', 'googlemaps', 'openai', 'whatsapp']),
       pickIcons('logos', ['google-icon', 'whatsapp-icon']),
-      pickIcons('custom', ['bot', 'utensils', 'circle', 'receipt', 'user-cog', 'shield']),
     ],
   },
   runtimeConfig: {

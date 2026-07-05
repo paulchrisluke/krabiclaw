@@ -10,7 +10,7 @@
 
       <div v-else-if="activeTab === 'contact'" class="space-y-3">
         <UCard v-if="contacts.length === 0" :ui="{ root: 'border-dashed', body: 'px-6 py-12 sm:px-6 sm:py-12 text-center' }">
-          <UIcon name="i-heroicons-inbox" class="mx-auto size-9 text-muted" />
+          <UIcon name="i-lucide-inbox" class="mx-auto size-9 text-muted" />
           <p class="mt-3 text-sm font-medium text-highlighted">No contact messages yet</p>
         </UCard>
         <UCard v-for="submission in contacts" :key="submission.id" :ui="{ body: 'p-4 sm:p-4' }">
@@ -26,7 +26,7 @@
             </div>
             <div class="flex shrink-0 flex-wrap gap-2">
               <UButton size="sm" color="neutral" variant="ghost" @click="updateContactStatus(submission, 'read')">Mark read</UButton>
-              <UButton icon="i-heroicons-chat-bubble-left-right" color="neutral" variant="soft" size="sm" @click="startReply('contact', submission)">Reply</UButton>
+              <UButton icon="i-lucide-messages-square" color="neutral" variant="soft" size="sm" @click="startReply('contact', submission)">Reply</UButton>
               <UButton size="sm" color="neutral" variant="ghost" @click="updateContactStatus(submission, 'replied')">Mark replied</UButton>
             </div>
           </div>
@@ -35,7 +35,7 @@
 
       <div v-else-if="activeTab === 'reservations'" class="space-y-3">
         <UCard v-if="reservations.length === 0" :ui="{ root: 'border-dashed', body: 'px-6 py-12 sm:px-6 sm:py-12 text-center' }">
-          <UIcon name="i-heroicons-calendar-days" class="mx-auto size-9 text-muted" />
+          <UIcon name="i-lucide-calendar-days" class="mx-auto size-9 text-muted" />
           <p class="mt-3 text-sm font-medium text-highlighted">No reservation requests yet</p>
         </UCard>
         <UCard v-for="reservation in reservations" :key="reservation.id" :ui="{ body: 'p-4 sm:p-4' }">
@@ -56,7 +56,7 @@
               <UButton size="sm" color="success" variant="ghost" @click="updateReservationStatus(reservation, 'confirmed')">Confirm</UButton>
               <UButton size="sm" color="neutral" variant="ghost" @click="updateReservationStatus(reservation, 'completed')">Complete</UButton>
               <UButton size="sm" color="error" variant="ghost" @click="updateReservationStatus(reservation, 'cancelled')">Cancel</UButton>
-              <UButton icon="i-heroicons-chat-bubble-left-right" color="neutral" variant="soft" size="sm" @click="startReply('reservation', reservation)">Reply</UButton>
+              <UButton icon="i-lucide-messages-square" color="neutral" variant="soft" size="sm" @click="startReply('reservation', reservation)">Reply</UButton>
             </div>
           </div>
         </UCard>
@@ -64,7 +64,7 @@
 
       <div v-else class="space-y-3">
         <UCard v-if="bookings.length === 0" :ui="{ root: 'border-dashed', body: 'px-6 py-12 sm:px-6 sm:py-12 text-center' }">
-          <UIcon name="i-heroicons-ticket" class="mx-auto size-9 text-muted" />
+          <UIcon name="i-lucide-ticket" class="mx-auto size-9 text-muted" />
           <p class="mt-3 text-sm font-medium text-highlighted">No experience bookings yet</p>
         </UCard>
         <UCard v-for="booking in bookings" :key="booking.id" :ui="{ body: 'p-4 sm:p-4' }">
@@ -84,7 +84,7 @@
             <div class="flex shrink-0 flex-wrap gap-2">
               <UButton size="sm" color="success" variant="ghost" @click="updateBookingStatus(booking, 'confirmed')">Confirm</UButton>
               <UButton size="sm" color="error" variant="ghost" @click="updateBookingStatus(booking, 'cancelled')">Cancel</UButton>
-              <UButton icon="i-heroicons-chat-bubble-left-right" color="neutral" variant="soft" size="sm" @click="startReply('experience_booking', { id: booking.id, email: booking.guest_email, phone: booking.guest_phone })">Reply</UButton>
+              <UButton icon="i-lucide-messages-square" color="neutral" variant="soft" size="sm" @click="startReply('experience_booking', { id: booking.id, email: booking.guest_email, phone: booking.guest_phone })">Reply</UButton>
             </div>
           </div>
         </UCard>
@@ -99,7 +99,7 @@
               v-model="replyChannel"
               class="mt-4"
               :items="[
-                { label: 'Email', value: 'email', icon: 'i-heroicons-envelope' },
+                { label: 'Email', value: 'email', icon: 'i-lucide-mail' },
                 { label: 'WhatsApp', value: 'whatsapp', icon: 'i-simple-icons-whatsapp' },
               ]"
             />
@@ -177,13 +177,13 @@ const activeTab = ref('contact')
 const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 
 const tabs = computed(() => [
-  { label: `Site contact (${contacts.value.length})`, value: 'contact', icon: 'i-heroicons-envelope' },
-  { label: `Reservations (${reservations.value.length})`, value: 'reservations', icon: 'i-heroicons-calendar-days' },
-  { label: `Experience bookings (${bookings.value.length})`, value: 'bookings', icon: 'i-heroicons-ticket' },
+  { label: `Site contact (${contacts.value.length})`, value: 'contact', icon: 'i-lucide-mail' },
+  { label: `Reservations (${reservations.value.length})`, value: 'reservations', icon: 'i-lucide-calendar-days' },
+  { label: `Experience bookings (${bookings.value.length})`, value: 'bookings', icon: 'i-lucide-ticket' },
 ])
 
 const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'Reservations', icon: 'i-heroicons-calendar-days', to: paths.value.reservations, color: 'neutral' as const, variant: 'soft' as const }
+  { label: 'Reservations', icon: 'i-lucide-calendar-days', to: paths.value.reservations, color: 'neutral' as const, variant: 'soft' as const }
 ]))
 
 function formatDate(value: string) {

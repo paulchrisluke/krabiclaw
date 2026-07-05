@@ -21,7 +21,7 @@
         v-if="!loading && notificationPhoneMissing"
         color="warning"
         variant="subtle"
-        icon="i-heroicons-exclamation-triangle"
+        icon="i-lucide-triangle-alert"
         title="Booking alerts are email-only right now"
         description="No manager alert number is set for this location, so new reservations are only emailed to the account owner — easy to miss. Add a number to also get them by WhatsApp."
         class="mb-4"
@@ -36,7 +36,7 @@
       </div>
 
       <UCard v-else-if="reservations.length === 0" class="border-dashed" :ui="{ body: 'px-6 py-12 text-center' }">
-        <UIcon name="i-heroicons-calendar-days" class="mx-auto size-9 text-muted" />
+        <UIcon name="i-lucide-calendar-days" class="mx-auto size-9 text-muted" />
         <p class="mt-3 text-sm font-medium text-highlighted">No reservation requests yet</p>
       </UCard>
 
@@ -57,7 +57,7 @@
             <UButton size="sm" color="success" variant="ghost" @click="updateReservationStatus(reservation, 'confirmed')">Confirm</UButton>
             <UButton size="sm" color="neutral" variant="ghost" @click="updateReservationStatus(reservation, 'completed')">Complete</UButton>
             <UButton size="sm" color="error" variant="ghost" @click="updateReservationStatus(reservation, 'cancelled')">Cancel</UButton>
-            <UButton :to="`mailto:${reservation.email}`" icon="i-heroicons-envelope" color="neutral" variant="soft" size="sm">Reply</UButton>
+            <UButton :to="`mailto:${reservation.email}`" icon="i-lucide-mail" color="neutral" variant="soft" size="sm">Reply</UButton>
           </div>
         </div>
       </UCard>
@@ -94,8 +94,8 @@ const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 const locationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/${route.params.locationSlug}`)
 
 const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'Edit reservation page', icon: 'i-heroicons-document-text', to: `${paths.value.content}?page=reservations`, color: 'primary' as const, variant: 'soft' as const },
-  { label: 'Inbox', icon: 'i-heroicons-inbox', to: paths.value.inbox, color: 'neutral' as const, variant: 'ghost' as const }
+  { label: 'Edit reservation page', icon: 'i-lucide-file-text', to: `${paths.value.content}?page=reservations`, color: 'primary' as const, variant: 'soft' as const },
+  { label: 'Inbox', icon: 'i-lucide-inbox', to: paths.value.inbox, color: 'neutral' as const, variant: 'ghost' as const }
 ]))
 
 const newCount = computed(() => reservations.value.filter(item => item.status === 'new').length)

@@ -6,6 +6,6 @@
       engaging the Icon module/server bundle at all from the marginal
       per-icon cost measured by the full <code>icons</code> mode.
     </p>
-    <UIcon name="i-heroicons-bolt" class="dev-perf-icon" />
+    <UIcon name="i-lucide-zap" class="dev-perf-icon" />
   </section>
 </template>

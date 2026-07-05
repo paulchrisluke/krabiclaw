@@ -6,7 +6,7 @@
         <h3 class="text-base font-semibold text-highlighted">Quick prompts to try</h3>
       </div>
       <UButton
-        :icon="copied === starterPrompt ? 'i-heroicons-check' : 'i-heroicons-clipboard'"
+        :icon="copied === starterPrompt ? 'i-lucide-check' : 'i-lucide-clipboard'"
         color="neutral"
         variant="ghost"
         size="xs"
@@ -26,7 +26,7 @@
           {{ prompt }}
         </code>
         <UButton
-          :icon="copied === prompt ? 'i-heroicons-check' : 'i-heroicons-clipboard'"
+          :icon="copied === prompt ? 'i-lucide-check' : 'i-lucide-clipboard'"
           color="neutral"
           variant="ghost"
           size="xs"

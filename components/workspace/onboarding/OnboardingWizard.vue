@@ -14,7 +14,7 @@
       >
         <UCard class="mx-8 border-2 border-dashed border-primary" :ui="{ body: 'px-8 py-10 sm:px-8 sm:py-10' }">
           <div class="flex flex-col items-center gap-3 text-center">
-            <UIcon name="i-heroicons-arrow-up-tray" class="size-10 text-primary" />
+            <UIcon name="i-lucide-upload" class="size-10 text-primary" />
             <p class="font-medium text-highlighted">Drop to attach</p>
             <p class="text-xs text-muted">JPEG, PNG, WEBP, PDF — max 10 MB</p>
           </div>
@@ -28,7 +28,7 @@
       <!-- Welcome screen -->
       <div v-if="step === 'welcome'" class="flex flex-col gap-[18px] p-6 pb-4">
         <div class="flex size-16 items-center justify-center rounded-[18px] bg-primary/10 text-primary">
-          <UIcon name="i-heroicons-sparkles" class="size-8" />
+          <UIcon name="i-lucide-sparkles" class="size-8" />
         </div>
         <div>
           <p class="mb-1 text-[11px] font-bold uppercase tracking-[0.28em] text-primary">{{ props.isAddingLocation ? "Let's add a location" : "Let's build your site" }}</p>
@@ -56,7 +56,7 @@
         <UButton
           color="primary"
           size="md"
-          icon="i-heroicons-sparkles"
+          icon="i-lucide-sparkles"
           class="self-start"
           @click="advance(props.skipVertical ? 'source' : 'vertical')"
         >
@@ -119,7 +119,7 @@
                   class="mt-2 flex items-start gap-3 rounded-xl border border-default bg-elevated px-4 py-3"
                 >
                   <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <UIcon name="i-heroicons-map-pin" class="size-4" />
+                    <UIcon name="i-lucide-map-pin" class="size-4" />
                   </div>
                   <div class="min-w-0 flex-1">
                     <p class="truncate text-[13px] font-semibold text-highlighted">{{ msg.placePreview.name }}</p>
@@ -132,7 +132,7 @@
                       rel="noopener"
                       class="mt-1 inline-flex items-center gap-1 text-[11.5px] text-primary hover:underline"
                     >
-                      <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-3" />
+                      <UIcon name="i-lucide-external-link" class="size-3" />
                       View on Google Maps
                     </a>
                   </div>
@@ -159,7 +159,7 @@
                   class="mt-2 flex items-start gap-3 rounded-xl border border-default bg-elevated px-4 py-3"
                 >
                   <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <UIcon name="i-heroicons-chat-bubble-left-right" class="size-4" />
+                    <UIcon name="i-lucide-messages-square" class="size-4" />
                   </div>
                   <div>
                     <p class="text-[13px] font-semibold text-highlighted">Three ways to keep building</p>
@@ -203,7 +203,7 @@
                       size="sm"
                       color="primary"
                       variant="outline"
-                      icon="i-heroicons-arrow-up-circle"
+                      icon="i-lucide-circle-arrow-up"
                       :to="`/dashboard/${importedOrgSlug}/~/settings/billing`"
                     >
                       Upgrade to Growth
@@ -257,7 +257,7 @@
         data-testid="wizard-error-banner"
         class="mb-3 flex items-center gap-2 rounded-lg border border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-950 px-3 py-2 text-xs text-error-600 dark:text-error-400"
       >
-        <UIcon name="i-heroicons-exclamation-triangle" class="size-3.5 shrink-0" />
+        <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
         <span>{{ importError }}</span>
         <button class="ml-auto shrink-0 underline underline-offset-2" @click="retryImport">Try again</button>
       </div>
@@ -299,7 +299,7 @@
       >
         <template #trailing>
           <UButton
-            icon="i-heroicons-paper-airplane"
+            icon="i-lucide-send"
             color="primary"
             variant="solid"
             size="xs"
@@ -386,14 +386,14 @@ const hasFacebookAccess = ref(false)
 
 const WELCOME_POINTS: [string, string][] = props.isAddingLocation
   ? [
-      ['i-heroicons-globe-alt', 'Pulls the address, hours, photos & reviews from Google'],
-      ['i-heroicons-sparkles', 'Adds the location to your existing site as you watch'],
-      ['i-heroicons-map-pin', 'Goes live on your site as soon as you save it'],
+      ['i-lucide-globe', 'Pulls the address, hours, photos & reviews from Google'],
+      ['i-lucide-sparkles', 'Adds the location to your existing site as you watch'],
+      ['i-lucide-map-pin', 'Goes live on your site as soon as you save it'],
     ]
   : [
-      ['i-heroicons-globe-alt', 'Pulls your address, hours, photos & reviews from Google'],
-      ['i-heroicons-sparkles', 'Builds your homepage and story as you watch'],
-      ['i-heroicons-rocket-launch', 'Launches free on a krabiclaw.com address when you are ready'],
+      ['i-lucide-globe', 'Pulls your address, hours, photos & reviews from Google'],
+      ['i-lucide-sparkles', 'Builds your homepage and story as you watch'],
+      ['i-lucide-rocket', 'Launches free on a krabiclaw.com address when you are ready'],
     ]
 
 // ─── State ───────────────────────────────────────────────────────────────────
@@ -481,7 +481,7 @@ onMounted(async () => {
       text: "Welcome back. Your workspace is live — the preview is on the right.",
     })
     replies.value = [
-      { label: 'Open my dashboard', icon: 'i-heroicons-arrow-right', primary: true, action: 'dashboard' },
+      { label: 'Open my dashboard', icon: 'i-lucide-arrow-right', primary: true, action: 'dashboard' },
     ]
   }
 })
@@ -632,16 +632,16 @@ async function advance(target: WizardStep) {
   if (target === 'vertical') {
     await pushBot("First — what kind of business is this?")
     replies.value = [
-      { label: 'Restaurant, café or bar', icon: 'i-heroicons-fire', primary: true, action: 'set_vertical_restaurant' },
-      { label: 'Experience, class or activity', icon: 'i-heroicons-academic-cap', action: 'set_vertical_experience' },
+      { label: 'Restaurant, café or bar', icon: 'i-lucide-flame', primary: true, action: 'set_vertical_restaurant' },
+      { label: 'Experience, class or activity', icon: 'i-lucide-graduation-cap', action: 'set_vertical_experience' },
     ]
   }
 
   if (target === 'source') {
     await pushBot("Got it. How would you like to add your business details?")
     replies.value = [
-      { label: 'Google Maps', sub: 'Paste your Maps link', icon: 'i-heroicons-globe-alt', primary: true, action: 'ask_url' },
-      { label: 'Start manually', sub: 'Type your business name', icon: 'i-heroicons-pencil', action: 'ask_manual' },
+      { label: 'Google Maps', sub: 'Paste your Maps link', icon: 'i-lucide-globe', primary: true, action: 'ask_url' },
+      { label: 'Start manually', sub: 'Type your business name', icon: 'i-lucide-pencil', action: 'ask_manual' },
     ]
   }
 
@@ -782,8 +782,8 @@ function showConfirm(preview: NonNullable<typeof pendingPreview.value>, returnSt
   pendingPreview.value = preview
   step.value = 'confirm'
   replies.value = [
-    { label: "Yes, that's my place", icon: 'i-heroicons-check', primary: true, action: 'confirm_yes' },
-    { label: "That's not my place", icon: 'i-heroicons-x-mark', action: 'confirm_no' },
+    { label: "Yes, that's my place", icon: 'i-lucide-check', primary: true, action: 'confirm_yes' },
+    { label: "That's not my place", icon: 'i-lucide-x', action: 'confirm_no' },
   ]
 }
 
@@ -881,8 +881,8 @@ async function submitDetails() {
         'Draft ready. The preview on the right now shows a private working copy, so you can review the site before reserving a live subdomain.'
       )
       replies.value = [
-        { label: 'Create site', icon: 'i-heroicons-check-badge', primary: true, action: 'commit_draft' },
-        { label: 'Edit details', icon: 'i-heroicons-pencil-square', action: 'edit_draft' },
+        { label: 'Create site', icon: 'i-lucide-badge-check', primary: true, action: 'commit_draft' },
+        { label: 'Edit details', icon: 'i-lucide-square-pen', action: 'edit_draft' },
       ]
       step.value = 'details'
       return
@@ -1068,8 +1068,8 @@ async function finishCreation(orgSlug: string | null | undefined, siteSlug: stri
   )
   step.value = 'imported'
   replies.value = [
-    { label: 'Open my dashboard', icon: 'i-heroicons-arrow-right', primary: true, action: 'dashboard' },
-    { label: 'Add another location', icon: 'i-heroicons-map-pin', action: 'add_location' },
+    { label: 'Open my dashboard', icon: 'i-lucide-arrow-right', primary: true, action: 'dashboard' },
+    { label: 'Add another location', icon: 'i-lucide-map-pin', action: 'add_location' },
   ]
 }
 

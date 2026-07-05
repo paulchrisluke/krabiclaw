@@ -7,9 +7,9 @@
       </div>
 
       <div v-else-if="locations.length === 0" class="rounded-lg border border-dashed border-default px-6 py-12 text-center">
-        <UIcon name="i-heroicons-map-pin" class="mx-auto size-9 text-muted" />
+        <UIcon name="i-lucide-map-pin" class="mx-auto size-9 text-muted" />
         <p class="mt-3 text-sm font-medium text-highlighted">Add a location before configuring orders</p>
-        <UButton class="mt-5" :to="paths.locations" icon="i-heroicons-plus">Add location</UButton>
+        <UButton class="mt-5" :to="paths.locations" icon="i-lucide-plus">Add location</UButton>
       </div>
 
       <div v-else class="space-y-4">
@@ -20,7 +20,7 @@
                 <h2 class="font-semibold text-highlighted">{{ location.title }}</h2>
                 <p class="text-sm text-muted">{{ location.city || location.addressText || 'Location ordering links' }}</p>
               </div>
-              <UButton size="sm" color="neutral" variant="soft" icon="i-heroicons-map-pin" :to="`${paths.locations}/${location.id}`">Location details</UButton>
+              <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-map-pin" :to="`${paths.locations}/${location.id}`">Location details</UButton>
             </div>
           </template>
 
@@ -47,13 +47,13 @@
                 size="sm"
                 color="neutral"
                 variant="soft"
-                icon="i-heroicons-arrow-top-right-on-square"
+                icon="i-lucide-external-link"
               >
                 {{ link.label }}
               </UButton>
               <p v-if="previewLinks(location).length === 0" class="text-sm text-muted">No public ordering links configured.</p>
             </div>
-            <UButton :loading="savingId === location.id" :disabled="!canSaveLocation(location)" icon="i-heroicons-check" @click="saveLocation(location)">Save links</UButton>
+            <UButton :loading="savingId === location.id" :disabled="!canSaveLocation(location)" icon="i-lucide-check" @click="saveLocation(location)">Save links</UButton>
           </div>
         </UCard>
       </div>
@@ -89,7 +89,7 @@ const savingId = ref<string | null>(null)
 const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 
 const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'Edit order page', icon: 'i-heroicons-document-text', to: `${paths.value.content}?page=order`, color: 'primary' as const, variant: 'soft' as const }
+  { label: 'Edit order page', icon: 'i-lucide-file-text', to: `${paths.value.content}?page=order`, color: 'primary' as const, variant: 'soft' as const }
 ]))
 
 function addressText(address: LocationRow['address']) {

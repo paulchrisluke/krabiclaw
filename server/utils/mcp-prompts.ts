@@ -49,6 +49,31 @@ export const MCP_PROMPTS: McpPromptDefinition[] = [
     description: "Summarize new contact messages, reservation requests, and experience bookings awaiting action.",
     arguments: [],
   },
+  {
+    name: "improve_my_homepage",
+    description: "Review the homepage and suggest the highest-impact changes to make it look better and more inviting.",
+    arguments: [],
+  },
+  {
+    name: "add_photos_to_site",
+    description: "Add the user's own photos to the right places on the site (homepage, location, menu items, experiences, or posts).",
+    arguments: [],
+  },
+  {
+    name: "finish_my_site_setup",
+    description: "Check what's still missing from the site and guide the user through finishing setup, one step at a time.",
+    arguments: [],
+  },
+  {
+    name: "make_site_more_bookable",
+    description: "Review calls-to-action, contact info, and reservation/experience setup, and suggest changes to get more bookings.",
+    arguments: [],
+  },
+  {
+    name: "make_my_site_look_better",
+    description: "General visual/content review of the site with concrete suggestions the user can approve one at a time.",
+    arguments: [],
+  },
 ];
 
 function requireArg(args: Record<string, string>, name: string): string {
@@ -128,6 +153,62 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           "Summarize what's new, grouped by type, oldest first.",
           "For pending experience bookings only, update_experience_booking exists to confirm or decline — offer to do that with the user's explicit approval for each one, don't act unilaterally.",
           "There is no tool on this connection to reply to or change the status of contact or reservation submissions — for those, tell the user what's waiting and point them to the dashboard inbox and reservations pages to respond. Do not attempt to call a tool that doesn't exist for this.",
+        ].join(" "),
+      };
+    }
+    case "improve_my_homepage": {
+      return {
+        description: "Review the homepage and suggest top improvements",
+        text: [
+          "Call get_workspace_context to confirm the active site, then call get_page_fields with page \"home\" to see the current homepage content, and get_site_media_assets to see what photos are already available.",
+          "Look at the main photo at the top of the page (the hero/cover photo), the headline and call-to-action button text, and the story section photo and text.",
+          "Suggest 2-3 concrete, highest-impact changes — for example a stronger call-to-action, a better main photo, or a punchier headline. Explain each suggestion in plain language, not in terms of field names.",
+          "Ask the user which suggestion to act on first rather than changing everything at once. Apply it with update_page_content, set_home_hero_image, or the relevant tool only after they confirm.",
+        ].join(" "),
+      };
+    }
+    case "add_photos_to_site": {
+      return {
+        description: "Add the user's own photos to the right places on the site",
+        text: [
+          "If the user hasn't already attached photos in this conversation, ask them to attach the photos they want to add directly in ChatGPT.",
+          "For each attached photo, inspect it visually first, then ask the user (or infer from context) where it should go: the homepage main photo, a specific location's main photo, the about/story section, a menu item, an experience, or a post.",
+          "Confirm the target site and placement with the user before uploading anything.",
+          "After confirmation, call upload_user_photo for each photo, then immediately call the matching assignment tool (set_home_hero_image, set_location_hero_image, set_menu_item_image, set_experience_image, set_post_image, set_about_story_image, set_home_story_image, or set_logo).",
+          "Reply confirming exactly where each photo was placed.",
+        ].join(" "),
+      };
+    }
+    case "finish_my_site_setup": {
+      return {
+        description: "Check what's missing and guide the user through finishing setup",
+        text: [
+          "Call get_workspace_context first. If there is no active site yet, call list_sites and help the user pick or create one before continuing.",
+          "Check what's in place: call get_site_media_assets (kind=\"image\") to see if a main homepage photo exists, get_page_fields with page \"home\" and page \"about\" for the headline/story text, and list_menus or list_experiences (whichever fits the business) to see if there's a menu or experiences listed yet.",
+          "Identify the single most important missing piece — a main photo, a menu or experiences list, the about/story text, or a first post — and ask the user if they want to work on that now.",
+          "Guide them through completing just that one thing at a time. Don't ask for everything up front.",
+        ].join(" "),
+      };
+    }
+    case "make_site_more_bookable": {
+      return {
+        description: "Review CTAs, contact info, and booking setup, and suggest changes to get more bookings",
+        text: [
+          "Call get_workspace_context, then get_page_fields for \"home\" to check the call-to-action button text and contact details, and list_locations to check whether contact info and hours are filled in.",
+          "If the business takes reservations or bookings, check list_menus/list_experiences to make sure there's something bookable listed with a clear price and description.",
+          "Suggest concrete changes that make it easier for a visitor to take action — a clearer call-to-action, visible contact info, or a more complete experience/menu listing. Explain suggestions in plain language.",
+          "Apply changes only after the user approves each one.",
+        ].join(" "),
+      };
+    }
+    case "make_my_site_look_better": {
+      return {
+        description: "General visual and content review with concrete suggestions",
+        text: [
+          "Call get_workspace_context, then get_page_fields for \"home\" and get_site_media_assets to see current photos and text.",
+          "Review the main photo, headline, story section, and overall completeness. Note anything that looks unfinished, generic, or low-quality (e.g. a missing or blurry main photo, thin story text, no menu or experiences).",
+          "Suggest specific, actionable improvements in plain language — avoid internal field names. Offer to act on one at a time, starting with whichever has the biggest visual impact (usually the main photo).",
+          "Only make changes the user has explicitly approved.",
         ].join(" "),
       };
     }

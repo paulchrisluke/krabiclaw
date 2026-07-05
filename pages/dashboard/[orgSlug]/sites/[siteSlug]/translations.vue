@@ -11,7 +11,7 @@
           v-if="!siteId"
           color="neutral"
           variant="soft"
-          icon="i-heroicons-language"
+          icon="i-lucide-languages"
           title="No site yet"
           description="Translations will be available after your site workspace is set up."
         />
@@ -21,7 +21,7 @@
           <UCard>
             <div class="flex flex-col items-center text-center gap-4 py-4">
               <div class="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-                <UIcon name="i-heroicons-language" class="size-7" />
+                <UIcon name="i-lucide-languages" class="size-7" />
               </div>
               <div>
                 <h2 class="text-lg font-bold text-highlighted">Translations are included in Growth</h2>
@@ -47,7 +47,7 @@
           <UCard v-if="!managedServiceEnabled">
             <div class="flex flex-col items-center text-center gap-4 py-4">
               <div class="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-                <UIcon name="i-heroicons-language" class="size-7" />
+                <UIcon name="i-lucide-languages" class="size-7" />
               </div>
               <div>
                 <h2 class="text-lg font-bold text-highlighted">Translations aren't available yet</h2>
@@ -65,7 +65,7 @@
             <UCard>
               <div class="flex items-start gap-4">
                 <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <UIcon name="i-heroicons-language" class="size-5" />
+                  <UIcon name="i-lucide-languages" class="size-5" />
                 </div>
                 <div class="flex-1 min-w-0">
                   <h2 class="font-bold text-highlighted">1 language translation included</h2>
@@ -81,7 +81,7 @@
                   class="flex items-center justify-between rounded-lg border border-default px-4 py-3"
                 >
                   <div class="flex items-center gap-2">
-                    <UIcon name="i-heroicons-check-circle" class="size-4 text-success" />
+                    <UIcon name="i-lucide-circle-check" class="size-4 text-success" />
                     <span class="font-medium text-default">{{ localeLabel(locale.locale) }}</span>
                     <UBadge :color="locale.status === 'published' ? 'success' : 'warning'" variant="soft" size="xs">
                       {{ locale.status }}
@@ -115,7 +115,7 @@
 
             <UCard v-if="activeLocales.length === 0 && managedPlan">
               <div class="flex items-start gap-3">
-                <UIcon name="i-heroicons-information-circle" class="size-5 text-primary shrink-0 mt-0.5" />
+                <UIcon name="i-lucide-info" class="size-5 text-primary shrink-0 mt-0.5" />
                 <p class="text-sm text-muted">
                   Want unlimited languages and full managed service?
                   <button class="text-primary hover:underline font-medium" @click="openUpsell('managed', 'translations-page')">Upgrade to Managed ({{ managedPriceLabel }})</button>
@@ -130,7 +130,7 @@
           <UCard>
             <div class="flex items-start gap-4">
               <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <UIcon name="i-heroicons-language" class="size-5" />
+                <UIcon name="i-lucide-languages" class="size-5" />
               </div>
               <div class="flex-1 min-w-0">
                 <h2 class="font-bold text-highlighted">Unlimited translations included</h2>
@@ -146,7 +146,7 @@
                 class="flex items-center justify-between rounded-lg border border-default px-4 py-3"
               >
                 <div class="flex items-center gap-2">
-                  <UIcon name="i-heroicons-check-circle" class="size-4 text-success" />
+                  <UIcon name="i-lucide-circle-check" class="size-4 text-success" />
                   <span class="font-medium text-default">{{ localeLabel(locale.locale) }}</span>
                   <UBadge :color="locale.status === 'published' ? 'success' : 'warning'" variant="soft" size="xs">
                     {{ locale.status }}
@@ -163,7 +163,7 @@
               <UButton
               color="primary"
               variant="soft"
-              icon="i-heroicons-plus"
+              icon="i-lucide-plus"
               :href="whatsappLink('I want to add another language translation to my site')"
               target="_blank"
               rel="noopener noreferrer"

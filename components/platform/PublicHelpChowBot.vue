@@ -1,59 +1,7 @@
 <template>
-  <div class="mx-auto flex max-w-5xl flex-col overflow-hidden rounded-[28px] border border-default bg-default shadow-sm">
+  <div class="flex min-h-[32rem] flex-col">
     <div class="flex-1 min-h-0 overflow-y-auto">
       <UChatMessages>
-        <div v-if="messages.length === 0" class="px-6 py-10 sm:px-10 sm:py-12">
-          <div class="max-w-4xl">
-            <span class="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-medium text-primary">
-              <span class="size-2 rounded-full bg-primary" />
-              All systems normal.
-            </span>
-
-            <h1 class="mt-8 text-4xl font-bold tracking-tight text-default sm:text-5xl">KrabiClaw Support</h1>
-            <p class="mt-3 text-3xl font-semibold tracking-tight text-muted sm:text-4xl">How can we help you today?</p>
-
-            <div class="mt-8 grid gap-4 md:grid-cols-2">
-              <NuxtLink
-                v-for="card in routeCards"
-                :key="card.to"
-                :to="card.to"
-                class="group rounded-3xl border border-default bg-elevated/40 p-6 no-underline transition hover:border-muted hover:bg-elevated"
-              >
-                <div class="flex items-start justify-between gap-4">
-                  <div>
-                    <p class="text-lg font-semibold text-default">{{ card.title }}</p>
-                    <p class="mt-3 text-sm leading-relaxed text-muted">{{ card.description }}</p>
-                  </div>
-                  <UIcon name="i-heroicons-arrow-up-right" class="mt-1 size-5 shrink-0 text-muted transition group-hover:text-default" />
-                </div>
-              </NuxtLink>
-            </div>
-
-            <div class="mt-10">
-              <UChatMessage
-                id="support-intro"
-                role="assistant"
-                :parts="[{ type: 'text', text: supportIntro }]"
-                side="left"
-              >
-                <template #content>
-                  <div class="space-y-3">
-                    <div class="flex items-center gap-3">
-                      <div class="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-                        <UIcon name="i-custom-bot" class="size-4" />
-                      </div>
-                      <p class="text-sm font-semibold text-default">ChowBot</p>
-                    </div>
-                    <p class="max-w-3xl text-sm leading-relaxed text-default">
-                      {{ supportIntro }}
-                    </p>
-                  </div>
-                </template>
-              </UChatMessage>
-            </div>
-          </div>
-        </div>
-
         <UChatMessage
           v-for="(msg, index) in messages"
           :key="`${msg.role}-${index}`"
@@ -64,6 +12,15 @@
         >
           <template #content>
             <div v-if="msg.role === 'assistant'" class="space-y-3">
+              <div v-if="msg.loading" class="flex items-center gap-3 text-sm text-muted">
+                <span class="flex items-center gap-1.5">
+                  <span class="size-2 rounded-full bg-primary animate-pulse" />
+                  <span class="size-2 rounded-full bg-primary/70 animate-pulse [animation-delay:120ms]" />
+                  <span class="size-2 rounded-full bg-primary/40 animate-pulse [animation-delay:240ms]" />
+                </span>
+                <span>ChowBot is thinking…</span>
+              </div>
+
               <!-- eslint-disable vue/no-v-html -->
               <div
                 v-if="msg.content"
@@ -72,15 +29,39 @@
               />
               <!-- eslint-enable vue/no-v-html -->
 
-              <div v-if="msg.citations?.length" class="flex flex-wrap gap-2">
-                <NuxtLink
-                  v-for="citation in msg.citations"
-                  :key="`${citation.path}-${citation.title}`"
-                  :to="citation.path"
-                  class="rounded-full border border-default px-3 py-1.5 text-xs text-default no-underline transition hover:border-muted hover:bg-elevated"
-                >
-                  {{ citation.title }}
-                </NuxtLink>
+              <div v-if="msg.citations?.length" class="space-y-2">
+                <p class="text-xs font-medium uppercase tracking-[0.18em] text-muted">
+                  Related resources
+                </p>
+                <div class="flex flex-wrap gap-2">
+                  <NuxtLink
+                    v-for="citation in msg.citations"
+                    :key="`${citation.path}-${citation.title}`"
+                    :to="citation.path"
+                    class="inline-flex items-center gap-2 rounded-full border border-default px-3 py-1.5 text-xs font-medium text-default no-underline transition hover:border-muted hover:bg-elevated"
+                  >
+                    <span>{{ citation.title }}</span>
+                    <UIcon name="i-lucide-move-up-right" class="size-3.5 text-muted" />
+                  </NuxtLink>
+                </div>
+              </div>
+
+              <div v-if="msg.followUpPrompts?.length" class="space-y-2">
+                <p class="text-xs font-medium uppercase tracking-[0.18em] text-muted">
+                  Ask next
+                </p>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    v-for="prompt in msg.followUpPrompts"
+                    :key="prompt"
+                    type="button"
+                    class="rounded-full border border-default px-3 py-1.5 text-xs font-medium text-default transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="isLoading"
+                    @click="handleSuggestedPrompt(prompt)"
+                  >
+                    {{ prompt }}
+                  </button>
+                </div>
               </div>
 
               <div v-if="msg.escalation && !msg.escalationSubmitted" class="pt-2">
@@ -109,19 +90,42 @@
     <div class="border-t border-default p-3">
       <UChatPrompt
         v-model="input"
+        variant="subtle"
         placeholder="Send a message..."
         :disabled="isLoading"
         :loading="isLoading"
+        :rows="3"
         :maxrows="8"
+        class="min-h-[132px] rounded-[24px] bg-elevated/60 ring-1 ring-inset ring-default/80"
+        :ui="{
+          root: 'min-h-[132px] px-4 py-3',
+          body: 'text-sm leading-6 text-default',
+          footer: 'mt-auto pt-2',
+        }"
         @submit="handleSubmit"
-      />
+      >
+        <template #footer>
+          <div class="flex w-full items-center justify-between gap-3">
+            <p class="text-xs text-muted">
+              Ask about docs, billing, setup, domains, or send it to support.
+            </p>
+            <UChatPromptSubmit
+              :status="isLoading ? 'streaming' : 'ready'"
+              color="primary"
+              variant="solid"
+              size="sm"
+              :disabled="!isLoading && !input.trim()"
+              @stop="handleStop"
+            />
+          </div>
+        </template>
+      </UChatPrompt>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { sanitizeHtmlForSsr } from '~/utils/markdown'
-import { PUBLIC_SUPPORT_ROUTE_CARDS } from '~/utils/public-support'
 
 type HelpCitation = {
   title: string
@@ -140,15 +144,22 @@ type HelpMessage = {
   role: 'user' | 'assistant'
   content: string
   citations?: HelpCitation[]
+  followUpPrompts?: string[]
   escalation?: HelpEscalation | null
   escalationSubmitted?: boolean
+  loading?: boolean
 }
 
-const routeCards = PUBLIC_SUPPORT_ROUTE_CARDS
-const input = ref('')
-const messages = ref<HelpMessage[]>([])
-const isLoading = ref(false)
 const supportIntro = 'Hello, I\'m ChowBot an AI assistant from KrabiClaw. If we find something I can\'t solve, I\'ll help create a support case for you.'
+const input = ref('')
+const messages = ref<HelpMessage[]>([
+  {
+    role: 'assistant',
+    content: supportIntro,
+  },
+])
+const isLoading = ref(false)
+const activeRequest = ref<AbortController | null>(null)
 
 const DOMPurify = import.meta.client
   ? (await import('isomorphic-dompurify')).default
@@ -178,17 +189,20 @@ function renderMarkdown(text: string): string {
   return DOMPurify.sanitize(linkifyMarkdown(html))
 }
 
-async function handleSubmit() {
-  const message = input.value.trim()
-  if (!message || isLoading.value) return
+async function submitMessage(message: string) {
+  const normalizedMessage = message.trim()
+  if (!normalizedMessage || isLoading.value) return
 
   input.value = ''
   messages.value = [
     ...messages.value,
-    { role: 'user', content: message },
-    { role: 'assistant', content: '' },
+    { role: 'user', content: normalizedMessage },
+    { role: 'assistant', content: '', loading: true },
   ]
   isLoading.value = true
+
+  const controller = new AbortController()
+  activeRequest.value = controller
 
   try {
     const history = messages.value
@@ -198,13 +212,15 @@ async function handleSubmit() {
     const response = await $fetch<{
       reply: string
       citations?: HelpCitation[]
+      followUpPrompts?: string[]
       escalation?: HelpEscalation | null
     }>('/api/public/help/agent', {
       method: 'POST',
       body: {
-        message,
+        message: normalizedMessage,
         history,
       },
+      signal: controller.signal,
     })
 
     messages.value = [
@@ -213,19 +229,41 @@ async function handleSubmit() {
         role: 'assistant',
         content: response.reply,
         citations: response.citations ?? [],
+        followUpPrompts: response.followUpPrompts ?? [],
         escalation: response.escalation ?? null,
         escalationSubmitted: false,
       },
     ]
   } catch (error) {
+    if (controller.signal.aborted) {
+      messages.value = [
+        ...messages.value.slice(0, -1),
+        { role: 'assistant', content: 'Stopped.' },
+      ]
+      return
+    }
+
     const content = error instanceof Error ? error.message : 'Something went wrong. Please try again.'
     messages.value = [
       ...messages.value.slice(0, -1),
       { role: 'assistant', content },
     ]
   } finally {
+    if (activeRequest.value === controller) activeRequest.value = null
     isLoading.value = false
   }
+}
+
+async function handleSubmit() {
+  await submitMessage(input.value)
+}
+
+async function handleSuggestedPrompt(prompt: string) {
+  await submitMessage(prompt)
+}
+
+function handleStop() {
+  activeRequest.value?.abort()
 }
 
 function markEscalationSubmitted(index: number) {

@@ -36,7 +36,7 @@
                   />
                   <UButton
                     v-if="domain.type === 'custom' && domain.status !== 'active'"
-                    icon="i-heroicons-arrow-path"
+                    icon="i-lucide-refresh-cw"
                     color="neutral"
                     variant="ghost"
                     size="xs"
@@ -45,7 +45,7 @@
                   />
                   <UButton
                     v-if="domain.type === 'custom'"
-                    icon="i-heroicons-trash"
+                    icon="i-lucide-trash-2"
                     color="error"
                     variant="ghost"
                     size="xs"
@@ -75,7 +75,7 @@
                         <td class="py-1.5 pl-4 font-mono text-highlighted">{{ domain.instructions.cname.name }}</td>
                         <td class="py-1.5 pl-4 font-mono text-muted max-w-48 truncate">{{ domain.instructions.cname.value }}</td>
                         <td class="py-1.5 pl-4">
-                          <UButton icon="i-heroicons-document-duplicate" color="neutral" variant="ghost" size="xs" @click="copy(domain.instructions.cname.value)" />
+                          <UButton icon="i-lucide-copy" color="neutral" variant="ghost" size="xs" @click="copy(domain.instructions.cname.value)" />
                         </td>
                       </tr>
                       <!-- SSL TXT rows (Cloudflare requires two values at the same name) -->
@@ -84,7 +84,7 @@
                         <td class="py-1.5 pl-4 font-mono text-highlighted">{{ rec.name }}</td>
                         <td class="py-1.5 pl-4 font-mono text-muted max-w-48 truncate">{{ rec.value }}</td>
                         <td class="py-1.5 pl-4">
-                          <UButton icon="i-heroicons-document-duplicate" color="neutral" variant="ghost" size="xs" @click="copy(rec.value)" />
+                          <UButton icon="i-lucide-copy" color="neutral" variant="ghost" size="xs" @click="copy(rec.value)" />
                         </td>
                       </tr>
                       <!-- Ownership TXT row -->
@@ -93,7 +93,7 @@
                         <td class="py-1.5 pl-4 font-mono text-highlighted">{{ domain.instructions.ownership.name }}</td>
                         <td class="py-1.5 pl-4 font-mono text-muted max-w-48 truncate">{{ domain.instructions.ownership.value }}</td>
                         <td class="py-1.5 pl-4">
-                          <UButton icon="i-heroicons-document-duplicate" color="neutral" variant="ghost" size="xs" @click="copy(domain.instructions.ownership.value)" />
+                          <UButton icon="i-lucide-copy" color="neutral" variant="ghost" size="xs" @click="copy(domain.instructions.ownership.value)" />
                         </td>
                       </tr>
                     </tbody>
@@ -245,7 +245,7 @@ function statusLabel(status: string) {
 }
 
 function statusIcon(status: string) {
-  return { active: 'i-heroicons-check-circle', pending: 'i-heroicons-clock', verifying: 'i-heroicons-arrow-path', failed: 'i-heroicons-x-circle', blocked: 'i-heroicons-no-symbol' }[status] ?? 'i-custom-circle'
+  return { active: 'i-lucide-circle-check', pending: 'i-lucide-clock', verifying: 'i-lucide-refresh-cw', failed: 'i-lucide-circle-x', blocked: 'i-lucide-ban' }[status] ?? 'i-lucide-circle'
 }
 
 function statusIconColor(status: string) {

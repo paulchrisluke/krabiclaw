@@ -3,7 +3,7 @@
     <template #header>
       <div class="flex items-start gap-3 px-4 pt-4">
         <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <UIcon name="i-heroicons-users" class="size-4" />
+          <UIcon name="i-lucide-users" class="size-4" />
         </div>
         <div class="min-w-0">
           <p class="text-[13px] font-semibold text-highlighted">{{ props.title }}</p>
@@ -32,7 +32,7 @@
           />
         </div>
         <div class="flex gap-2">
-          <UButton type="submit" size="sm" color="primary" :loading="loading" icon="i-heroicons-paper-airplane">
+          <UButton type="submit" size="sm" color="primary" :loading="loading" icon="i-lucide-send">
           {{ props.actionLabel }}
         </UButton>
           <UButton size="sm" color="neutral" variant="ghost" @click="$emit('skip')">
@@ -45,7 +45,7 @@
         v-if="props.inviteSuccess"
         color="success"
         variant="soft"
-        icon="i-heroicons-check-circle"
+        icon="i-lucide-circle-check"
         description="Invite sent. Add another or continue."
         :ui="{ root: 'py-2' }"
       />

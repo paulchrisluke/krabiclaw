@@ -4,7 +4,7 @@
     <UPageBody>
       <!-- Filters -->
       <div class="mb-4 flex flex-wrap items-center gap-2">
-        <UInput v-model="search" placeholder="Search files…" icon="i-heroicons-magnifying-glass" size="sm" class="w-56" />
+        <UInput v-model="search" placeholder="Search files…" icon="i-lucide-search" size="sm" class="w-56" />
         <div class="flex gap-1">
           <UButton
             v-for="k in kindTabs"
@@ -24,7 +24,7 @@
             size="sm"
             color="error"
             variant="soft"
-            icon="i-heroicons-trash"
+            icon="i-lucide-trash-2"
             :loading="deleting"
             @click="deleteSelected"
           >
@@ -43,7 +43,7 @@
         :class="[isDragging ? 'border-primary bg-primary/5' : 'border-default hover:border-accented', uploadLoading ? 'pointer-events-none opacity-60' : '']"
         @click="openUploadPicker"
       >
-        <UIcon name="i-heroicons-arrow-up-tray" class="size-7 text-muted" />
+        <UIcon name="i-lucide-upload" class="size-7 text-muted" />
         <p class="text-sm text-muted">Drag and drop images or videos here, or <span class="text-primary cursor-pointer">click to browse</span></p>
         <p class="text-xs text-muted">Images up to {{ formatSize(IMAGE_MAX_SIZE_BYTES) }} via Cloudflare Images · Videos up to {{ formatSize(VIDEO_MAX_SIZE_BYTES) }} via R2</p>
         <p class="text-xs text-muted">Keep hero videos short (15s or less) and a few MB for fast page loads.</p>
@@ -51,7 +51,7 @@
 
       <input ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploadLoading" @change="onFileSelect" />
 
-      <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-heroicons-exclamation-triangle" class="mb-4" />
+      <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-lucide-triangle-alert" class="mb-4" />
       <div v-if="pendingRetryFile" class="mb-4">
         <UButton size="sm" color="neutral" variant="soft" :loading="uploadLoading" :disabled="uploadLoading" @click="retryPendingUpload">
           Retry confirm
@@ -64,7 +64,7 @@
       </div>
 
       <div v-else-if="filtered.length === 0" class="py-16 text-center">
-        <UIcon name="i-heroicons-photo" class="mx-auto size-10 text-muted" />
+        <UIcon name="i-lucide-image" class="mx-auto size-10 text-muted" />
         <p class="mt-4 text-sm font-medium text-highlighted">No media yet</p>
         <p class="mt-1 text-xs text-muted">Upload images or videos to get started.</p>
       </div>
@@ -91,7 +91,7 @@
             @click="toggleSelect(asset.id)"
           >
             <UIcon
-              :name="asset.kind === 'video' ? 'i-heroicons-film' : 'i-heroicons-document'"
+              :name="asset.kind === 'video' ? 'i-lucide-film' : 'i-lucide-file'"
               class="size-6 text-muted"
             />
           </div>
@@ -106,7 +106,7 @@
               :class="selected.has(asset.id) ? 'bg-primary' : 'bg-black/40'"
               @click.stop="toggleSelect(asset.id)"
             >
-              <UIcon v-if="selected.has(asset.id)" name="i-heroicons-check" class="size-3 text-white" />
+              <UIcon v-if="selected.has(asset.id)" name="i-lucide-check" class="size-3 text-white" />
             </div>
           </div>
 
@@ -153,7 +153,7 @@ const { buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 const _headerLinks = computed(() => buildHeaderLinks([
   {
     label: 'Upload',
-    icon: 'i-heroicons-arrow-up-tray',
+    icon: 'i-lucide-upload',
     color: 'primary' as const,
     disabled: uploadLoading.value,
     onClick: openUploadPicker
@@ -302,7 +302,7 @@ async function deleteSelected() {
     if (successfullyDeleted.size > 0) {
       assets.value = assets.value.filter(a => !successfullyDeleted.has(a.id))
       successfullyDeleted.forEach(id => selected.value.delete(id))
-      toast.add({ title: `${successfullyDeleted.size} item(s) deleted`, icon: 'i-heroicons-check-circle', color: 'success' })
+      toast.add({ title: `${successfullyDeleted.size} item(s) deleted`, icon: 'i-lucide-circle-check', color: 'success' })
     }
 
     if (failedIds.length > 0) {
@@ -371,7 +371,7 @@ async function uploadFile(file: File, poster: File | null = null) {
   try {
     const result = await upload(file, { poster })
     if (!result) return
-    toast.add({ title: 'File uploaded', icon: 'i-heroicons-check-circle', color: 'success' })
+    toast.add({ title: 'File uploaded', icon: 'i-lucide-circle-check', color: 'success' })
     if (result.posterWarning) {
       toast.add({ title: 'Video uploaded without a poster image', description: result.posterWarning, color: 'warning' })
     } else if (result.kind === 'video' && !poster) {

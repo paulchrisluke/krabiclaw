@@ -10,7 +10,7 @@
             Ask ChatGPT to complete these — your site gets better with each one.
           </p>
         </div>
-        <UButton icon="i-heroicons-x-mark" color="neutral" variant="ghost" size="sm" square aria-label="Dismiss" @click="dismiss" />
+        <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" square aria-label="Dismiss" @click="dismiss" />
       </div>
 
       <!-- Progress bar -->
@@ -26,7 +26,7 @@
         <div class="flex items-center justify-between gap-3">
           <p class="text-xs font-semibold uppercase tracking-wider text-dimmed">Start here</p>
           <UButton
-            :icon="copiedStarter ? 'i-heroicons-check' : 'i-heroicons-clipboard'"
+            :icon="copiedStarter ? 'i-lucide-check' : 'i-lucide-clipboard'"
             color="neutral"
             variant="ghost"
             size="xs"
@@ -47,7 +47,7 @@
             'flex size-5 shrink-0 items-center justify-center rounded-full mt-0.5 transition-colors',
             item.complete ? 'bg-(--kc-teal)' : 'border-2 border-muted bg-transparent',
           ]">
-            <UIcon v-if="item.complete" name="i-heroicons-check" class="size-3 text-white" />
+            <UIcon v-if="item.complete" name="i-lucide-check" class="size-3 text-white" />
           </div>
           <div class="min-w-0 flex-1">
             <p :class="['text-sm font-medium', item.complete ? 'text-muted line-through' : 'text-highlighted']">
@@ -58,7 +58,7 @@
                 {{ item.prompt }}
               </code>
               <UButton
-                :icon="copied === item.key ? 'i-heroicons-check' : 'i-heroicons-clipboard'"
+                :icon="copied === item.key ? 'i-lucide-check' : 'i-lucide-clipboard'"
                 color="neutral"
                 variant="ghost"
                 size="xs"

@@ -95,18 +95,18 @@ const mode = computed(() => {
 })
 
 const icons = [
-  'i-heroicons-bolt',
-  'i-heroicons-globe-alt',
-  'i-heroicons-check-circle',
-  'i-heroicons-arrow-right',
-  'i-heroicons-calendar-days',
-  'i-heroicons-document-text',
-  'i-heroicons-shopping-bag',
-  'i-heroicons-chart-bar',
-  'i-heroicons-presentation-chart-line',
-  'i-heroicons-question-mark-circle',
-  'i-heroicons-moon',
-  'i-heroicons-sun',
+  'i-lucide-zap',
+  'i-lucide-globe',
+  'i-lucide-circle-check',
+  'i-lucide-arrow-right',
+  'i-lucide-calendar-days',
+  'i-lucide-file-text',
+  'i-lucide-shopping-bag',
+  'i-lucide-chart-bar',
+  'i-lucide-presentation',
+  'i-lucide-circle-help',
+  'i-lucide-moon',
+  'i-lucide-sun',
 ]
 const simpleIcons = [
   'i-simple-icons-facebook',

@@ -27,7 +27,7 @@
                 <UAvatar
                   :src="member.image || undefined"
                   :alt="member.name || member.email"
-                  icon="i-heroicons-user"
+                  icon="i-lucide-user"
                 />
                 <div class="min-w-0">
                   <p class="truncate font-medium text-highlighted">{{ member.name || member.email }}</p>
@@ -38,7 +38,7 @@
                 <UBadge :label="member.role" color="neutral" variant="soft" class="capitalize" />
                 <UButton
                   v-if="member.role !== 'owner'"
-                  icon="i-heroicons-x-mark"
+                  icon="i-lucide-x"
                   color="neutral"
                   variant="ghost"
                   size="xs"
@@ -54,7 +54,7 @@
             v-else
             color="neutral"
             variant="soft"
-            icon="i-heroicons-users"
+            icon="i-lucide-users"
             description="No members found for this organization."
           />
 
@@ -63,7 +63,7 @@
             class="mt-4"
             color="error"
             variant="soft"
-            icon="i-heroicons-exclamation-circle"
+            icon="i-lucide-circle-alert"
             :description="memberError"
           />
         </UCard>
@@ -98,7 +98,7 @@
               <div class="flex items-center gap-2">
                 <UBadge :label="invitation.role || 'member'" color="neutral" variant="soft" class="capitalize" />
                 <UButton
-                  icon="i-heroicons-x-mark"
+                  icon="i-lucide-x"
                   color="neutral"
                   variant="ghost"
                   size="xs"
@@ -114,7 +114,7 @@
             v-else
             color="neutral"
             variant="soft"
-            icon="i-heroicons-envelope"
+            icon="i-lucide-mail"
             description="No pending invitations."
           />
         </UCard>
@@ -143,7 +143,7 @@
             </UFormField>
             <UButton
               type="submit"
-              icon="i-heroicons-paper-airplane"
+              icon="i-lucide-send"
               :loading="inviting"
               label="Send invite"
             />
@@ -154,7 +154,7 @@
             class="mt-4"
             color="error"
             variant="soft"
-            icon="i-heroicons-exclamation-circle"
+            icon="i-lucide-circle-alert"
             :description="inviteError"
           />
           <UAlert
@@ -162,7 +162,7 @@
             class="mt-4"
             color="success"
             variant="soft"
-            icon="i-heroicons-check-circle"
+            icon="i-lucide-circle-check"
             description="Invitation sent."
           />
         </UCard>

@@ -36,8 +36,8 @@ export function buildOnboardingChecklistItems(
     },
     {
       key: 'hero_image',
-      label: 'Hero image added',
-      prompt: `Generate a hero image for ${name}'s homepage`,
+      label: 'Main homepage photo added',
+      prompt: `Generate a main photo for ${name}'s homepage`,
       complete: completed?.hero_image ?? false,
     },
     {
@@ -80,21 +80,23 @@ export function buildOnboardingStarterPrompt(
   return `Help me finish ${name}'s ${isExperience ? 'experience' : 'restaurant'} site. Start with "${firstMissing.label}" first. Ask me one question at a time and then help me complete this: ${firstMissing.prompt}`
 }
 
-/** Short, evergreen quick-action prompts — used wherever we need a starter chip outside the task checklist (ChowBot empty state, MCP edit card examples). */
+/** Short, evergreen quick-action prompts — used wherever we need a starter chip outside the task checklist (ChowBot empty state, MCP edit card examples). Outcome-based phrasing over internal terms, per the ChatGPT MCP fuzzy-intent guidance. */
 export function getQuickActionPrompts(vertical: string | null | undefined): string[] {
   if (vertical === 'experience') {
     return [
-      'Show me my latest posts',
-      "Write a post about today's featured experience",
+      'Make my homepage look more inviting',
+      'Help me add my best photos to the site',
+      'Tell me what my site still needs',
       'What experiences do we offer?',
-      'Give me a site overview',
+      'Help me get more bookings',
     ]
   }
 
   return [
-    'Show me my latest posts',
-    "Write a post about today's special",
+    'Make my homepage look more inviting',
+    'Help me add my best photos to the site',
+    'Tell me what my site still needs',
     "What's on our menu?",
-    'Give me a restaurant overview',
+    'Help me get more bookings',
   ]
 }

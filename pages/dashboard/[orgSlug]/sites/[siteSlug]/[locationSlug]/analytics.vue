@@ -22,7 +22,7 @@
             <h1 class="text-2xl font-semibold text-highlighted">Analytics</h1>
             <p class="mt-1 text-sm text-muted">{{ rangeLabel }}</p>
           </div>
-          <UButton icon="i-heroicons-arrow-path" color="neutral" variant="soft" :loading="loading" @click="loadAnalytics">
+          <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="loading" @click="loadAnalytics">
             Refresh
           </UButton>
         </div>
@@ -48,7 +48,7 @@
               <UFormField label="End date">
                 <UInput v-model="range.endDate" type="date" class="w-full" @change="markCustomAndLoad" />
               </UFormField>
-              <UButton icon="i-heroicons-check" :loading="loading" @click="markCustomAndLoad">
+              <UButton icon="i-lucide-check" :loading="loading" @click="markCustomAndLoad">
                 Apply
               </UButton>
             </div>
@@ -220,11 +220,11 @@ const locationId = computed(() => resolvedLocation.value?.id ?? routeLocation)
 const { locationPath, locationMenuPath, locationContentPath, paths } = useDashboardSiteLinks(siteId)
 
 const locationTabs = computed(() => [
-  { label: 'Overview', icon: 'i-heroicons-home', active: false, to: locationPath(locationId.value) },
-  { label: 'Analytics', icon: 'i-heroicons-chart-bar-square', active: true, to: `${locationPath(locationId.value)}/analytics` },
-  { label: 'Content', icon: 'i-heroicons-document-text', active: false, to: locationContentPath(locationId.value) },
-  { label: 'Menu', icon: 'i-heroicons-list-bullet', active: false, to: locationMenuPath(locationId.value) },
-  { label: 'Details', icon: 'i-heroicons-map-pin', active: false, to: `${paths.value.settings}?tab=locations&locationId=${locationId.value}` }
+  { label: 'Overview', icon: 'i-lucide-house', active: false, to: locationPath(locationId.value) },
+  { label: 'Analytics', icon: 'i-lucide-chart-bar', active: true, to: `${locationPath(locationId.value)}/analytics` },
+  { label: 'Content', icon: 'i-lucide-file-text', active: false, to: locationContentPath(locationId.value) },
+  { label: 'Menu', icon: 'i-lucide-list', active: false, to: locationMenuPath(locationId.value) },
+  { label: 'Details', icon: 'i-lucide-map-pin', active: false, to: `${paths.value.settings}?tab=locations&locationId=${locationId.value}` }
 ])
 
 const presets: Array<{ key: PresetKey; label: string }> = [
@@ -249,10 +249,10 @@ const rangeLabel = computed(() => `${formatDate(range.startDate)} to ${formatDat
 const metricCards = computed(() => {
   const metrics = analytics.value?.metrics
   return [
-    { label: 'Pageviews', value: formatCount(metrics?.pageViews || 0), detail: `${formatSigned(metrics?.changePercent || 0)} vs previous period`, icon: 'i-heroicons-chart-bar-square' },
-    { label: 'Unique visitors', value: formatCount(metrics?.uniqueVisitors || 0), detail: `${formatCount(metrics?.returningVisitors || 0)} returning`, icon: 'i-heroicons-users' },
-    { label: 'Sessions', value: formatCount(metrics?.uniqueSessions || 0), detail: `${formatNumber(metrics?.pagesPerSession || 0)} pages per session`, icon: 'i-heroicons-cursor-arrow-rays' },
-    { label: 'Avg. duration', value: formatDuration(metrics?.avgSessionDuration || 0), detail: 'Average session time', icon: 'i-heroicons-clock' }
+    { label: 'Pageviews', value: formatCount(metrics?.pageViews || 0), detail: `${formatSigned(metrics?.changePercent || 0)} vs previous period`, icon: 'i-lucide-chart-bar' },
+    { label: 'Unique visitors', value: formatCount(metrics?.uniqueVisitors || 0), detail: `${formatCount(metrics?.returningVisitors || 0)} returning`, icon: 'i-lucide-users' },
+    { label: 'Sessions', value: formatCount(metrics?.uniqueSessions || 0), detail: `${formatNumber(metrics?.pagesPerSession || 0)} pages per session`, icon: 'i-lucide-mouse-pointer-click' },
+    { label: 'Avg. duration', value: formatDuration(metrics?.avgSessionDuration || 0), detail: 'Average session time', icon: 'i-lucide-clock' }
   ]
 })
 

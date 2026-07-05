@@ -6,7 +6,7 @@
         color="neutral"
         variant="ghost"
         size="sm"
-        icon="i-heroicons-sparkles"
+        icon="i-lucide-sparkles"
         @click="isOpen = true"
       >
         Import from photo
@@ -29,7 +29,7 @@
           @drop.prevent="onDrop"
           @click="fileInput?.click()"
         >
-          <UIcon name="i-heroicons-photo" class="size-10 text-muted" />
+          <UIcon name="i-lucide-image" class="size-10 text-muted" />
           <div class="text-center">
             <p class="text-sm font-medium text-highlighted">
               {{ selectedFile ? selectedFile.name : 'Drop a menu photo here' }}
@@ -47,7 +47,7 @@
             <UButton size="sm" color="neutral" variant="outline" @click.stop="fileInput?.click()">
               Change
             </UButton>
-            <UButton size="sm" color="neutral" variant="ghost" icon="i-heroicons-x-mark" @click.stop="selectedFile = null" />
+            <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-x" @click.stop="selectedFile = null" />
           </div>
           <input
             ref="fileInput"
@@ -63,12 +63,12 @@
           color="error"
           variant="soft"
           :description="uploadError"
-          icon="i-heroicons-exclamation-triangle"
+          icon="i-lucide-triangle-alert"
         />
 
         <!-- Credit info -->
         <div class="flex items-center gap-2 rounded-lg border border-default bg-elevated px-3 py-2">
-          <UIcon name="i-heroicons-bolt" class="size-4 shrink-0 text-muted" />
+          <UIcon name="i-lucide-zap" class="size-4 shrink-0 text-muted" />
           <p class="text-xs text-muted">
             Each extraction uses ~10–50 credits depending on menu size.
             <span v-if="credits !== null"> You have <strong class="text-default">{{ credits.toLocaleString() }}</strong> credits remaining.</span>
@@ -95,7 +95,7 @@
           color="warning"
           variant="soft"
           :description="extractWarning"
-          icon="i-heroicons-exclamation-triangle"
+          icon="i-lucide-triangle-alert"
         />
 
         <p class="text-sm text-muted">
@@ -119,7 +119,7 @@
                 <span v-if="item.section" class="ml-2 text-xs text-muted">{{ item.section }}</span>
               </div>
               <span v-if="item.price_amount" class="shrink-0 text-sm text-default">{{ item.price_amount }}</span>
-              <UButton size="xs" color="neutral" variant="ghost" icon="i-heroicons-trash" @click.stop="editedItems.splice(idx, 1)" />
+              <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-trash-2" @click.stop="editedItems.splice(idx, 1)" />
             </div>
 
             <!-- Expanded inline edit -->
@@ -153,7 +153,7 @@
 
         <!-- Credits charged -->
         <div v-if="creditsCharged" class="flex items-center gap-2 rounded-lg border border-default bg-elevated px-3 py-2">
-          <UIcon name="i-heroicons-bolt" class="size-4 shrink-0 text-muted" />
+          <UIcon name="i-lucide-zap" class="size-4 shrink-0 text-muted" />
           <p class="text-xs text-muted">
             Used <strong class="text-default">{{ creditsCharged }}</strong> credits.
             <span v-if="creditsRemaining !== null"> {{ creditsRemaining.toLocaleString() }} remaining.</span>
@@ -163,7 +163,7 @@
 
       <!-- Step: done -->
       <div v-else-if="step === 'done'" class="py-6 text-center">
-        <UIcon name="i-heroicons-check-circle" class="mx-auto size-10 text-green-500" />
+        <UIcon name="i-lucide-circle-check" class="mx-auto size-10 text-green-500" />
         <p class="mt-3 text-sm font-medium text-highlighted">
           {{ savedCount }} item{{ savedCount === 1 ? '' : 's' }} added to menu
         </p>
@@ -176,7 +176,7 @@
       <div v-if="step === 'idle'" class="flex justify-end gap-2">
         <UButton color="neutral" variant="ghost" @click="isOpen = false">Cancel</UButton>
         <UButton
-          icon="i-heroicons-sparkles"
+          icon="i-lucide-sparkles"
           :disabled="!selectedFile"
           @click="runExtraction"
         >
@@ -186,7 +186,7 @@
 
       <!-- preview -->
       <div v-else-if="step === 'preview'" class="flex items-center justify-between gap-2">
-        <UButton color="neutral" variant="ghost" size="sm" icon="i-heroicons-arrow-left" @click="step = 'idle'">
+        <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-arrow-left" @click="step = 'idle'">
           Try another photo
         </UButton>
         <div class="flex gap-2">

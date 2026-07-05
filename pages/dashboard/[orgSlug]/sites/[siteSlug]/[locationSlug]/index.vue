@@ -4,7 +4,7 @@
     <UPageBody>
       <UCard v-if="loading">
         <div class="flex items-center gap-3 text-sm text-muted">
-          <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin" />
+          <UIcon name="i-lucide-refresh-cw" class="size-4 animate-spin" />
           Loading location...
         </div>
       </UCard>
@@ -13,7 +13,7 @@
         v-else-if="error"
         color="error"
         variant="soft"
-        icon="i-heroicons-exclamation-triangle"
+        icon="i-lucide-triangle-alert"
         :description="error"
       />
 
@@ -57,7 +57,7 @@
                   <p class="text-sm text-muted">Pageviews</p>
                   <p class="mt-2 text-xl font-semibold text-highlighted">{{ analyticsLoading ? '...' : formatCount(analyticsSummary.pageViews) }}</p>
                 </div>
-                <UIcon name="i-heroicons-chart-bar-square" class="size-5 text-muted" />
+                <UIcon name="i-lucide-chart-bar" class="size-5 text-muted" />
               </div>
               <p class="mt-2 text-xs text-muted">Last 30 days</p>
             </UCard>
@@ -69,7 +69,7 @@
                   <p class="text-sm text-muted">Unique visitors</p>
                   <p class="mt-2 text-xl font-semibold text-highlighted">{{ analyticsLoading ? '...' : formatCount(analyticsSummary.uniqueVisitors) }}</p>
                 </div>
-                <UIcon name="i-heroicons-users" class="size-5 text-muted" />
+                <UIcon name="i-lucide-users" class="size-5 text-muted" />
               </div>
               <p class="mt-2 text-xs text-muted">Last 30 days</p>
             </UCard>
@@ -167,7 +167,7 @@
                 target="_blank"
                 color="neutral"
                 variant="soft"
-                icon="i-heroicons-map"
+                icon="i-lucide-map"
                 block
               >
                 Open Maps
@@ -183,7 +183,7 @@
                 <h2 class="font-semibold text-highlighted">Location Details</h2>
                 <p class="mt-1 text-sm text-muted">Manage location-specific profile and operational fields.</p>
               </div>
-              <UButton v-if="detailsSaved" size="xs" color="primary" variant="soft" icon="i-heroicons-check">Saved</UButton>
+              <UButton v-if="detailsSaved" size="xs" color="primary" variant="soft" icon="i-lucide-check">Saved</UButton>
             </div>
           </template>
 
@@ -342,7 +342,7 @@
             </section>
 
             <div class="flex justify-end p-6">
-              <UButton :loading="detailsSaving" icon="i-heroicons-check" @click="saveLocationDetails">Save fields</UButton>
+              <UButton :loading="detailsSaving" icon="i-lucide-check" @click="saveLocationDetails">Save fields</UButton>
             </div>
           </UCard>
         </UCard>
@@ -351,7 +351,7 @@
           <template #header>
             <div class="flex items-center justify-between gap-3">
               <h2 class="font-semibold text-highlighted">Manual Reviews</h2>
-              <UButton size="sm" icon="i-heroicons-plus" @click="startNewReview">Add review</UButton>
+              <UButton size="sm" icon="i-lucide-plus" @click="startNewReview">Add review</UButton>
             </div>
           </template>
 
@@ -381,11 +381,11 @@
             </UCard>
 
             <div v-if="reviewsLoading" class="flex items-center gap-3 text-sm text-muted">
-              <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin" />
+              <UIcon name="i-lucide-refresh-cw" class="size-4 animate-spin" />
               Loading reviews...
             </div>
             <UCard v-else-if="manualReviews.length === 0" :ui="{ root: 'border-dashed', body: 'px-6 py-10 sm:px-6 sm:py-10 text-center' }">
-              <UIcon name="i-heroicons-star" class="mx-auto size-8 text-muted" />
+              <UIcon name="i-lucide-star" class="mx-auto size-8 text-muted" />
               <p class="mt-3 text-sm text-muted">No manual reviews yet.</p>
             </UCard>
             <UCard v-else :ui="{ body: 'p-0 sm:p-0' }">
@@ -400,8 +400,8 @@
                   <p class="mt-1 text-sm text-muted">{{ review.content }}</p>
                 </div>
                 <div class="flex shrink-0 gap-2">
-                  <UButton size="xs" color="neutral" variant="soft" icon="i-heroicons-pencil-square" @click="editReview(review)">Edit</UButton>
-                  <UButton size="xs" color="error" variant="ghost" icon="i-heroicons-trash" @click="deleteReview(review)">Delete</UButton>
+                  <UButton size="xs" color="neutral" variant="soft" icon="i-lucide-square-pen" @click="editReview(review)">Edit</UButton>
+                  <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" @click="deleteReview(review)">Delete</UButton>
                 </div>
               </div>
             </UCard>
@@ -512,25 +512,25 @@ const publicLocationUrl = computed(() => {
 })
 
 const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'All Locations', icon: 'i-heroicons-arrow-left', to: paths.value.locations, color: 'neutral' as const, variant: 'soft' as const },
-  { label: 'Preview', icon: 'i-heroicons-arrow-top-right-on-square', to: publicLocationUrl.value, target: '_blank', color: 'neutral' as const, variant: 'outline' as const, disabled: !publicLocationUrl.value }
+  { label: 'All Locations', icon: 'i-lucide-arrow-left', to: paths.value.locations, color: 'neutral' as const, variant: 'soft' as const },
+  { label: 'Preview', icon: 'i-lucide-external-link', to: publicLocationUrl.value, target: '_blank', color: 'neutral' as const, variant: 'outline' as const, disabled: !publicLocationUrl.value }
 ], { includePreview: false }))
 
 const locationTabs = computed(() => [
-  { label: 'Overview', icon: 'i-heroicons-home', active: true, to: locationPath(locationId.value) },
-  { label: 'Analytics', icon: 'i-heroicons-chart-bar-square', active: false, to: `${locationPath(locationId.value)}/analytics` },
-  { label: 'Content', icon: 'i-heroicons-document-text', active: false, to: locationContentPath(locationId.value) },
-  { label: 'Menu', icon: 'i-heroicons-list-bullet', active: false, to: locationMenuPath(locationId.value) },
-  { label: 'Details', icon: 'i-heroicons-map-pin', active: false, to: `${paths.value.settings}?tab=locations&locationId=${locationId.value}` }
+  { label: 'Overview', icon: 'i-lucide-house', active: true, to: locationPath(locationId.value) },
+  { label: 'Analytics', icon: 'i-lucide-chart-bar', active: false, to: `${locationPath(locationId.value)}/analytics` },
+  { label: 'Content', icon: 'i-lucide-file-text', active: false, to: locationContentPath(locationId.value) },
+  { label: 'Menu', icon: 'i-lucide-list', active: false, to: locationMenuPath(locationId.value) },
+  { label: 'Details', icon: 'i-lucide-map-pin', active: false, to: `${paths.value.settings}?tab=locations&locationId=${locationId.value}` }
 ])
 
 const analyticsPath = computed(() => `${locationPath(locationId.value)}/analytics`)
 
 const workspaceActions = computed(() => [
-  { label: 'Edit Local Content', icon: 'i-heroicons-document-text', to: locationContentPath(locationId.value) },
-  { label: 'Edit Local Menu', icon: 'i-heroicons-list-bullet', to: locationMenuPath(locationId.value) },
-  { label: 'Edit Location Details', icon: 'i-heroicons-cog-6-tooth', to: `${paths.value.settings}?tab=locations&locationId=${locationId.value}` },
-  { label: 'Edit Brand Content', icon: 'i-heroicons-building-storefront', to: paths.value.content }
+  { label: 'Edit Local Content', icon: 'i-lucide-file-text', to: locationContentPath(locationId.value) },
+  { label: 'Edit Local Menu', icon: 'i-lucide-list', to: locationMenuPath(locationId.value) },
+  { label: 'Edit Location Details', icon: 'i-lucide-settings', to: `${paths.value.settings}?tab=locations&locationId=${locationId.value}` },
+  { label: 'Edit Brand Content', icon: 'i-lucide-store', to: paths.value.content }
 ])
 
 const detailsSaving = ref(false)

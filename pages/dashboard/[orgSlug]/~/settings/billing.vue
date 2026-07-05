@@ -20,7 +20,7 @@
           v-if="errorMessage"
           color="error"
           variant="soft"
-          icon="i-heroicons-exclamation-triangle"
+          icon="i-lucide-triangle-alert"
           :description="errorMessage"
         />
 
@@ -29,7 +29,7 @@
           v-if="savedCard && !autoTopupEnabled"
           color="warning"
           variant="soft"
-          icon="i-heroicons-bolt"
+          icon="i-lucide-zap"
           title="Auto top-up is off"
           description="When your credits run out, AI features will stop working. Enable auto top-up to keep things running."
         >
@@ -95,7 +95,7 @@
           <template #header>
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <UIcon name="i-heroicons-credit-card" class="size-4 text-primary" />
+                <UIcon name="i-lucide-credit-card" class="size-4 text-primary" />
                 <h2 class="font-semibold">Payment method</h2>
               </div>
               <UButton
@@ -130,7 +130,7 @@
             <div class="space-y-3">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <UIcon name="i-custom-bot" class="size-4 text-primary" />
+                <UIcon name="i-lucide-bot" class="size-4 text-primary" />
                 <h2 class="font-semibold">AI Credits</h2>
               </div>
               <div class="flex items-center gap-2">
@@ -138,11 +138,11 @@
                   {{ credits.lifetime_used.toLocaleString() }} used · {{ credits.balance.toLocaleString() }} remaining
                 </span>
                 <UDropdownMenu v-if="savedCard" :items="creditBundles" :content="{ align: 'end' }">
-                  <UButton size="xs" color="primary" variant="soft" icon="i-heroicons-credit-card" trailing-icon="i-heroicons-chevron-down" :loading="buyingCredits !== null">
+                  <UButton size="xs" color="primary" variant="soft" icon="i-lucide-credit-card" trailing-icon="i-lucide-chevron-down" :loading="buyingCredits !== null">
                     Buy credits
                   </UButton>
                 </UDropdownMenu>
-                <UButton v-else size="xs" color="primary" variant="soft" icon="i-heroicons-bolt" @click="openServiceUpsell('growth', 'billing-credits')">
+                <UButton v-else size="xs" color="primary" variant="soft" icon="i-lucide-zap" @click="openServiceUpsell('growth', 'billing-credits')">
                   Upgrade for more
                 </UButton>
               </div>
@@ -228,7 +228,7 @@
           v-if="selectedSite"
           color="primary"
           variant="soft"
-          icon="i-heroicons-information-circle"
+          icon="i-lucide-info"
           :title="`Changing the plan for ${selectedSite.brandName ?? selectedSite.subdomain}`"
           description="Pick a plan below to apply it to this site only — other sites in your organization keep their own plan."
         />
@@ -258,7 +258,7 @@
 
               <ul class="mt-5 flex-1 space-y-2 text-sm text-default">
                 <li v-for="feature in plan.features" :key="feature" class="flex gap-2">
-                  <UIcon name="i-heroicons-check-circle" class="mt-0.5 size-4 shrink-0 text-primary" />
+                  <UIcon name="i-lucide-circle-check" class="mt-0.5 size-4 shrink-0 text-primary" />
                   <span>{{ feature }}</span>
                 </li>
               </ul>
@@ -398,9 +398,9 @@ async function purchaseCredits(bundle: 500 | 2500 | 5000) {
 
 const creditBundles = [
   [
-    { label: '500 credits — $9', icon: 'i-heroicons-bolt', onSelect: () => purchaseCredits(500) },
-    { label: '2,500 credits — $29', icon: 'i-heroicons-bolt', onSelect: () => purchaseCredits(2500) },
-    { label: '5,000 credits — $49', icon: 'i-heroicons-bolt', onSelect: () => purchaseCredits(5000) },
+    { label: '500 credits — $9', icon: 'i-lucide-zap', onSelect: () => purchaseCredits(500) },
+    { label: '2,500 credits — $29', icon: 'i-lucide-zap', onSelect: () => purchaseCredits(2500) },
+    { label: '5,000 credits — $49', icon: 'i-lucide-zap', onSelect: () => purchaseCredits(5000) },
   ]
 ]
 

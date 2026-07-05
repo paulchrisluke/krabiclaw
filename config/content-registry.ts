@@ -442,9 +442,9 @@ export const contentRegistry: Record<string, PageDefinition> = {
     path: '/menu',
     locationScoped: true,
     groups: [
-      { id: 'hero',   label: 'Hero Section',  icon: 'i-heroicons-photo',        fields: ['hero.title', 'hero.subtitle'] },
-      { id: 'items',  label: 'Menu Items',    icon: 'i-heroicons-list-bullet',   fields: ['menu_items'] },
-      { id: 'google', label: 'Google Products', icon: 'i-heroicons-circle-stack', fields: ['business.products'] }
+      { id: 'hero',   label: 'Hero Section',  icon: 'i-lucide-image',        fields: ['hero.title', 'hero.subtitle'] },
+      { id: 'items',  label: 'Menu Items',    icon: 'i-lucide-list',   fields: ['menu_items'] },
+      { id: 'google', label: 'Google Products', icon: 'i-lucide-layers', fields: ['business.products'] }
     ],
     fields: {
       'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Our Menu' },

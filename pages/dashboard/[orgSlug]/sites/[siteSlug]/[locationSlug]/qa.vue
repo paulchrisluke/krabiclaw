@@ -4,7 +4,7 @@
     <UPageBody>
       <div class="mb-4 flex flex-wrap items-center gap-2">
         <USelect v-model="selectedLocationId" :items="locationItems" value-key="id" label-key="label" class="w-64" @update:model-value="loadQa" />
-        <UButton icon="i-heroicons-arrow-path" color="neutral" variant="ghost" :loading="loading" @click="loadQa">Refresh</UButton>
+        <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadQa">Refresh</UButton>
       </div>
 
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
@@ -14,7 +14,7 @@
           </div>
 
           <div v-else-if="qaRows.length === 0" class="rounded-lg border border-dashed border-default px-6 py-12 text-center">
-            <UIcon name="i-heroicons-question-mark-circle" class="mx-auto size-9 text-muted" />
+            <UIcon name="i-lucide-circle-help" class="mx-auto size-9 text-muted" />
             <p class="mt-3 text-sm font-medium text-highlighted">No Q&A yet</p>
             <p class="mt-1 text-sm text-muted">Add common guest questions, then answer them once.</p>
           </div>
@@ -32,17 +32,17 @@
                 <p v-else class="mt-2 text-sm italic text-muted">No answer yet.</p>
               </div>
               <div class="flex shrink-0 gap-1">
-                <UButton icon="i-heroicons-arrow-up" size="sm" color="neutral" variant="ghost" @click="moveQa(item, -1)" />
-                <UButton icon="i-heroicons-arrow-down" size="sm" color="neutral" variant="ghost" @click="moveQa(item, 1)" />
-                <UButton icon="i-heroicons-pencil-square" size="sm" color="neutral" variant="ghost" @click="startEdit(item)" />
+                <UButton icon="i-lucide-arrow-up" size="sm" color="neutral" variant="ghost" @click="moveQa(item, -1)" />
+                <UButton icon="i-lucide-arrow-down" size="sm" color="neutral" variant="ghost" @click="moveQa(item, 1)" />
+                <UButton icon="i-lucide-square-pen" size="sm" color="neutral" variant="ghost" @click="startEdit(item)" />
                 <UButton
-                  :icon="item.status === 'published' ? 'i-heroicons-eye-slash' : 'i-heroicons-eye'"
+                  :icon="item.status === 'published' ? 'i-lucide-eye-off' : 'i-lucide-eye'"
                   size="sm"
                   color="neutral"
                   variant="ghost"
                   @click="toggleStatus(item)"
                 />
-                <UButton icon="i-heroicons-trash" size="sm" color="error" variant="ghost" :loading="deletingId === item.id" @click="deleteQa(item)" />
+                <UButton icon="i-lucide-trash-2" size="sm" color="error" variant="ghost" :loading="deletingId === item.id" @click="deleteQa(item)" />
               </div>
             </div>
           </div>
@@ -110,7 +110,7 @@ const form = reactive({ question: '', answer: '' })
 const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 
 const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'Edit page list', icon: 'i-heroicons-rectangle-stack', to: paths.value.pages, color: 'neutral' as const, variant: 'soft' as const }
+  { label: 'Edit page list', icon: 'i-lucide-layers', to: paths.value.pages, color: 'neutral' as const, variant: 'soft' as const }
 ]))
 
 const locationItemsWithoutAll = computed(() => locations.value.map(location => ({ id: location.id, label: location.title })))

@@ -5,8 +5,8 @@
       <div class="mb-4 flex flex-wrap items-center gap-2">
         <USelect v-model="selectedLocationId" :items="locationItems" value-key="id" label-key="label" class="w-64" />
         <USelect v-model="statusFilter" :items="statusItems" value-key="id" label-key="label" class="w-44" />
-        <UButton icon="i-heroicons-plus" color="primary" variant="soft" :disabled="locations.length === 0" @click="startCreate">Add review</UButton>
-        <UButton icon="i-heroicons-arrow-path" color="neutral" variant="ghost" :loading="loading" @click="loadReviews">Refresh</UButton>
+        <UButton icon="i-lucide-plus" color="primary" variant="soft" :disabled="locations.length === 0" @click="startCreate">Add review</UButton>
+        <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadReviews">Refresh</UButton>
       </div>
 
       <div v-if="loading" class="space-y-3">
@@ -14,7 +14,7 @@
       </div>
 
       <div v-else-if="filteredReviews.length === 0" class="rounded-lg border border-dashed border-default px-6 py-12 text-center">
-        <UIcon name="i-heroicons-star" class="mx-auto size-9 text-muted" />
+        <UIcon name="i-lucide-star" class="mx-auto size-9 text-muted" />
         <p class="mt-3 text-sm font-medium text-highlighted">No reviews match these filters</p>
         <p class="mt-1 text-sm text-muted">Manual and Google-synced reviews will appear here.</p>
       </div>
@@ -41,11 +41,11 @@
             </div>
 
             <div class="flex shrink-0 flex-wrap gap-2">
-              <UButton size="sm" color="neutral" variant="soft" icon="i-heroicons-chat-bubble-left-right" @click="startReply(review)">Reply</UButton>
-              <UButton size="sm" color="neutral" variant="ghost" icon="i-heroicons-pencil-square" @click="startEdit(review)">Edit</UButton>
-              <UButton size="sm" color="success" variant="ghost" icon="i-heroicons-check" @click="setStatus(review, 'approved')">Approve</UButton>
-              <UButton size="sm" color="error" variant="ghost" icon="i-heroicons-eye-slash" @click="setStatus(review, 'rejected')">Hide</UButton>
-              <UButton size="sm" color="error" variant="ghost" icon="i-heroicons-trash" @click="deleteReview(review)">Delete</UButton>
+              <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-messages-square" @click="startReply(review)">Reply</UButton>
+              <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-square-pen" @click="startEdit(review)">Edit</UButton>
+              <UButton size="sm" color="success" variant="ghost" icon="i-lucide-check" @click="setStatus(review, 'approved')">Approve</UButton>
+              <UButton size="sm" color="error" variant="ghost" icon="i-lucide-eye-off" @click="setStatus(review, 'rejected')">Hide</UButton>
+              <UButton size="sm" color="error" variant="ghost" icon="i-lucide-trash-2" @click="deleteReview(review)">Delete</UButton>
             </div>
           </div>
         </div>
@@ -151,7 +151,7 @@ const reviewForm = reactive({
 const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 
 const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'Location details', icon: 'i-heroicons-plus', to: paths.value.locations, color: 'neutral' as const, variant: 'soft' as const }
+  { label: 'Location details', icon: 'i-lucide-plus', to: paths.value.locations, color: 'neutral' as const, variant: 'soft' as const }
 ]))
 
 const locationItems = computed(() => [
