@@ -82,17 +82,23 @@ export default defineEventHandler(async (event) => {
   const normalizedTopic = typeof topic === 'string' && topic.trim()
     ? topic.trim().slice(0, TOPIC_MAX_LENGTH)
     : null
-  const agentMetadataJson = (() => {
-    if (body.agent_metadata_json == null) return null
-    if (typeof body.agent_metadata_json === 'string') {
-      return body.agent_metadata_json.slice(0, AGENT_METADATA_MAX_LENGTH)
-    }
+  let agentMetadataJson: string | null = null
+  if (body.agent_metadata_json != null) {
     try {
-      return JSON.stringify(body.agent_metadata_json).slice(0, AGENT_METADATA_MAX_LENGTH)
+      if (typeof body.agent_metadata_json === 'string') {
+        const parsed = JSON.parse(body.agent_metadata_json)
+        agentMetadataJson = JSON.stringify(parsed)
+      } else {
+        agentMetadataJson = JSON.stringify(body.agent_metadata_json)
+      }
     } catch {
-      return null
+      agentMetadataJson = null
     }
-  })()
+  }
+
+  if (agentMetadataJson && agentMetadataJson.length > AGENT_METADATA_MAX_LENGTH) {
+    return jsonResponse({ error: `agent_metadata_json exceeds maximum length (${AGENT_METADATA_MAX_LENGTH})` }, { status: 400 })
+  }
 
   if (!name || !email || !message) {
     return jsonResponse({ error: 'name, email, and message are required' }, { status: 400 })
@@ -175,16 +181,20 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    await notifyPlatformContactSubmitted(env, db, {
-      contactId: id,
-      guestName: name,
-      email,
-      subject: normalizedTopic,
-      message,
-      source,
-      routeContext,
-      suggestedSummary,
-    })
+    try {
+      await notifyPlatformContactSubmitted(env, db, {
+        contactId: id,
+        guestName: name,
+        email,
+        subject: normalizedTopic,
+        message,
+        source,
+        routeContext,
+        suggestedSummary,
+      })
+    } catch (err) {
+      console.error('Contact notification failed:', err)
+    }
 
     return jsonResponse({ success: true, message: 'Message sent successfully' })
   } catch (error) {
