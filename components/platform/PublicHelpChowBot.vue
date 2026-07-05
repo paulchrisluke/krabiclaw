@@ -81,6 +81,7 @@
 <script setup lang="ts">
 import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
 import DOMPurify from 'isomorphic-dompurify'
+import { marked } from 'marked'
 
 type HelpCitation = {
   title: string
@@ -124,16 +125,7 @@ function linkifyMarkdown(text: string): string {
 }
 
 function renderMarkdown(text: string): string {
-  const html = text
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code>$1</code>')
-    .replace(/^[-*] (.+)/gm, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/\n/g, '<br>')
-    .replace(/^(.+)$/, '<p>$1</p>')
-
+  const html = marked.parse(text, { breaks: true, gfm: true }) as string
   return DOMPurify.sanitize(linkifyMarkdown(html))
 }
 
@@ -154,7 +146,7 @@ async function submitMessage(message: string) {
 
   try {
     const history = messages.value
-      .slice(0, -1)
+      .slice(0, -2)
       .map(item => ({ role: item.role, content: item.content }))
 
     const response = await $fetch<{
