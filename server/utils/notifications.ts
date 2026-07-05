@@ -33,10 +33,19 @@ interface NotificationEnv {
   EMAIL_DELIVERY_MODE?: string
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
   EMAIL_REPLY_SECRET?: string
+  PLATFORM_OWNER_EMAILS?: string
 }
 
 function getPlatformDomain(env: NotificationEnv): string {
   return (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com').replace(/^https?:\/\//, '').replace(/\/$/, '')
+}
+
+function getPlatformSupportEmails(env: NotificationEnv): string[] {
+  const recipients = String(env.PLATFORM_OWNER_EMAILS || '')
+    .split(',')
+    .map(email => email.trim())
+    .filter(Boolean)
+  return recipients.length > 0 ? recipients : ['hello@krabiclaw.com']
 }
 
 interface SiteContext {
@@ -69,6 +78,17 @@ interface ContactNotificationInput extends SiteContext {
   email: string
   subject?: string | null
   message: string
+}
+
+interface PlatformContactNotificationInput {
+  contactId: string
+  guestName: string
+  email: string
+  subject?: string | null
+  message: string
+  source?: string | null
+  routeContext?: string | null
+  suggestedSummary?: string | null
 }
 
 interface ExperienceBookingNotificationInput extends SiteContext {
@@ -418,6 +438,65 @@ async function notifyOwner(
   }
 }
 
+async function sendPlatformEmailNotification(
+  env: NotificationEnv,
+  opts: {
+    to: string
+    replyTo?: string | null
+    template: string
+    title: string
+    payload: Record<string, string>
+    email: EmailTemplate
+  }
+) {
+  const storedRecipient = shouldSendRealEmail(env) ? opts.to : hashEmail(opts.to)
+
+  if (!shouldSendRealEmail(env)) {
+    console.info('email_delivery_log_only', {
+      channel: 'platform',
+      recipient: storedRecipient,
+      title: opts.title,
+      template: opts.template,
+      payload: opts.payload,
+    })
+    return
+  }
+
+  if (!env.RESEND_API_KEY) {
+    throw new Error('RESEND_API_KEY not configured')
+  }
+
+  const fromValue = env.EMAIL_FROM || 'KrabiClaw <hello@krabiclaw.com>'
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 10_000)
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        from: fromValue,
+        to: [opts.to],
+        subject: opts.email.subject,
+        html: opts.email.html,
+        text: opts.email.text,
+        ...(opts.replyTo ? { reply_to: opts.replyTo } : {}),
+      }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => `HTTP ${response.status}`)
+      throw new Error(`Resend send failed: ${errorText || `HTTP ${response.status}`}`)
+    }
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
 export async function notifyReservationCreated(
   env: NotificationEnv,
   db: DbClient,
@@ -619,6 +698,88 @@ export async function notifyContactSubmitted(
         task: index === 0 ? 'notifyOwner' : 'sendEmailNotification',
         contactId: opts.contactId,
         error: result.reason instanceof Error ? result.reason.message : String(result.reason)
+      })
+    }
+  })
+}
+
+export async function notifyPlatformContactSubmitted(
+  env: NotificationEnv,
+  opts: PlatformContactNotificationInput
+) {
+  const siteLabel = 'KrabiClaw Support'
+  const platformDomain = getPlatformDomain(env)
+  const supportEmails = getPlatformSupportEmails(env)
+  const payload = {
+    contact_id: opts.contactId,
+    guest_name: opts.guestName,
+    email: opts.email,
+    subject: opts.subject ?? '',
+    message_preview: opts.message.slice(0, 200),
+    source: opts.source ?? '',
+    route_context: opts.routeContext ?? '',
+    suggested_summary: opts.suggestedSummary ?? '',
+    site_name: siteLabel,
+  }
+
+  const [ownerEmail, guestEmail] = await Promise.all([
+    useRender(ContactOwnerNew, {
+      props: {
+        guestName: opts.guestName,
+        email: opts.email,
+        subject: opts.subject,
+        message: opts.message,
+        siteName: siteLabel,
+        platformDomain,
+      },
+    }),
+    useRender(ContactGuestReceived, {
+      props: {
+        guestName: opts.guestName,
+        siteName: siteLabel,
+        subject: opts.subject,
+        message: opts.message,
+        platformDomain,
+      },
+    }),
+  ])
+
+  const ownerTasks = supportEmails.map(to =>
+    sendPlatformEmailNotification(env, {
+      to,
+      replyTo: opts.email,
+      template: 'platform_contact_owner_new',
+      title: `New website message from ${opts.guestName}`,
+      payload,
+      email: {
+        subject: `New website message from ${opts.guestName}`,
+        html: ownerEmail.html,
+        text: ownerEmail.text,
+      },
+    }),
+  )
+
+  const results = await Promise.allSettled([
+    ...ownerTasks,
+    sendPlatformEmailNotification(env, {
+      to: opts.email,
+      template: 'platform_contact_customer_received',
+      title: 'Your message was sent',
+      payload,
+      email: {
+        subject: 'Your message was sent',
+        html: guestEmail.html,
+        text: guestEmail.text,
+      },
+    }),
+  ])
+
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      console.error('notifyPlatformContactSubmitted_failed', {
+        task: index < ownerTasks.length ? 'sendPlatformOwnerEmail' : 'sendPlatformGuestEmail',
+        contactId: opts.contactId,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
       })
     }
   })

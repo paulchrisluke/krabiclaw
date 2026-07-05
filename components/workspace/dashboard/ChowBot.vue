@@ -275,7 +275,10 @@ const setupRestaurantName = ref('')
 const setupSubdomain = ref('')
 const creatingRestaurant = ref(false)
 
-const regularStarterPrompts = computed(() => getQuickActionPrompts(dashboard.site.value?.vertical))
+const regularStarterPrompts = computed(() => [
+  'Find the right KrabiClaw doc for this task',
+  ...getQuickActionPrompts(dashboard.site.value?.vertical),
+])
 
 const setupStarterPrompts = [
   'Start from Google Business',
@@ -671,6 +674,7 @@ const toolLabel = (name: string): string => {
     delete_qa: 'Deleting Q&A…',
     get_contact_submissions: 'Fetching contacts…',
     get_reservation_submissions: 'Fetching reservations…',
+    search_public_resources: 'Searching docs and help…',
   }
   return labels[name] ?? name
 }

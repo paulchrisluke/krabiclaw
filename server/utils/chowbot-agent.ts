@@ -106,6 +106,7 @@ import {
   DASHBOARD_DESTINATIONS,
   type DashboardDestination,
 } from "~/server/utils/dashboard-links";
+import { searchPublicResources } from "~/server/utils/public-search";
 
 const MAX_ITERATIONS = 10;
 const HERO_FIELDS = new Set([
@@ -2508,6 +2509,17 @@ async function executeTool(
       return { work_requests: rows };
     }
 
+    case "search_public_resources": {
+      const query = toSqlText(input.q)?.trim();
+      const type = toSqlText(input.type) as "all" | "doc" | "blog" | "faq" | "route" | null;
+      if (!query) return { error: "q is required." };
+      const results = await searchPublicResources(db, query, {
+        type: type ?? "all",
+        limit: 8,
+      });
+      return { results };
+    }
+
     case "get_post": {
       const postId = toSqlText(input.post_id);
       if (!postId) return { error: "post_id is required." };
@@ -2987,6 +2999,7 @@ Capabilities (always use tools — never say you can't do something the tools su
 - Q&A: list, add, delete per location
 - Experiences: list, create (title, tagline, rich body, price, duration, capacity, time slots, image, SEO), update, delete, view/confirm/cancel guest bookings
 - Contact & reservation submissions: read
+- Public help: search platform docs, blog posts, FAQs, and route guidance for direct links
 ${managedServiceGuidance}- Site: rename (updates subdomain), set default menu currency, read/write site page content (including reservation policies via reservations page)
 ${translationCapabilityGuidance}- Stats: posts, menus, locations, reviews
 
@@ -3001,6 +3014,7 @@ Guidelines:
 - Never use add_menu_items_batch to replace, revise, rename, or update existing menu items
 - When creating menus, omit location_id — the server links it to the current location automatically
 - Use get_booking_policy, preview_booking_policy, and update_booking_policy when the user asks about reservation rules, hold times, cancellation windows, deposits, or experience cancellation terms
+- Use search_public_resources for docs/help/product questions, support routing, and when the user asks where something lives in public docs or on the platform site
 ${translationWorkflowGuidance}- Use get_page_fields, update_page_content, and delete_content_field for tenant page content such as home, about, contact, and location notes; use the booking policy tools for reservation and experience booking rules
 ${translationConfirmationGuidance}- Before publish_post, delete_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_media_asset, delete_location_qa, or delete_content_field — confirm first
 - Menus are live immediately when created — use publish_menu only to republish a menu that was set to unpublished

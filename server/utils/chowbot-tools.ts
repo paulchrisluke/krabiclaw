@@ -1814,6 +1814,25 @@ export const CHOWBOT_TOOLS: AiTool[] = [
     description: "List submitted work requests for this organisation, ordered by status and priority.",
     input_schema: { type: "object", properties: {} },
   },
+  {
+    name: "search_public_resources",
+    description: "Search KrabiClaw public docs, blog posts, FAQs, and route guidance for support answers or direct links.",
+    input_schema: {
+      type: "object",
+      properties: {
+        q: {
+          type: "string",
+          description: "The search query to run against public help resources.",
+        },
+        type: {
+          type: "string",
+          enum: ["all", "doc", "blog", "faq", "route"],
+          description: "Optional result type filter. Omit for all public support resources.",
+        },
+      },
+      required: ["q"],
+    },
+  },
 
   // ── Experiences (single fetch + image/video setters) ──────────────────────
   {

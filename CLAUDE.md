@@ -223,6 +223,39 @@ Production is never reseeded (only migrated), so this only affects local dev, pr
 
 ---
 
+## Email & WhatsApp Notifications
+
+`server/utils/notifications.ts` is the single dispatcher for every guest/owner notification (reservations, experience bookings, contact form). Email templates live in `server/emails/templates/*.ts`; WhatsApp bodies are built in `server/utils/whatsapp.ts`'s `TEMPLATES` map. `server/api/dev/notifications-preview.get.ts` (dev-only) renders `getNotificationCopyPreviews()` for eyeballing every template at once — keep its fixture props up to date when a template's props change.
+
+### Form parity rule
+
+Every field a public form collects (`reservation_submissions`, `experience_bookings`, `contact_submissions` — see `server/db/schema.ts`) must be surfaced in **all** of that flow's notification surfaces: owner email, guest email, and owner WhatsApp (there is intentionally no customer-facing WhatsApp — see below). When you add or rename a form field:
+
+1. Update the DB insert/select in the relevant `server/api/public/sites/[siteId]/...` route.
+2. Thread it through the matching `*NotificationInput` interface in `notifications.ts`.
+3. Add it to every template that flow touches — "new" **and** "cancelled" state, owner **and** guest. It's easy to fix only the "new" templates and leave "cancelled" behind (this happened with reservations/bookings — cancelled-state emails were missing location, phone, email, and special requests for months).
+4. Update `getNotificationCopyPreviews()` fixture props so the preview panel keeps demonstrating the new field.
+
+There is no automated check for this — drift is caught by manual review or by a customer complaint about a missing field. When touching any of these files, grep for the other templates in the same flow (`grep -rl notifyReservationCreated\|notifyReservationCancelled server/`) and check they all still show the same fields.
+
+**No customer-facing WhatsApp exists for any flow, by design.** `sendWhatsAppNotification` is only ever called from `notifyOwner`. Verifying a customer's WhatsApp number just to send a reservation confirmation isn't worth it at this stage — this may change once accounts exist to store verified contact info. Don't add a guest-facing WhatsApp send without revisiting that decision first.
+
+### `EmailDetails.ts` — Vue `h()` gotcha (regression risk)
+
+**Incident — 2026-07-05.** Every email using the shared `EmailDetails` component (`server/emails/components/EmailDetails.ts`) — reservations, experience bookings, contact — silently rendered a completely empty details table, in every environment, always. Root cause: the component passed a **function** as children to plain string tags (`h('table', props, () => ...)`, `h('tbody', null, () => ...)`, `h('tr', null, () => [...])`). Vue's `h()` only treats function children as a slot for **components** (`ESection`, `EText`, `ELink`, or any `defineComponent`); for a native/host string tag, a function isn't valid children and is dropped with no warning, no error, no type failure — `useRender()` just returns HTML with an empty `<table>`.
+
+- Fix: for host/string tags, always pass a direct array or string as the third `h()` argument — never a function. Function-as-slot is only valid when the tag is a component reference (e.g. `h(EText, props, () => 'text')` is fine; `h('div', props, () => 'text')` is not).
+- This class of bug produces no error anywhere in the stack — not in `yarn nuxi typecheck`, not in dev server logs, not in the Resend API response (the malformed HTML still sends successfully). The only way to catch it is to render the template and read the actual output. If you touch any file under `server/emails/`, do a real end-to-end send (or pull the stored `email_html` payload from the local `notifications` table after hitting the real API route) and visually confirm the content you expect actually appears — don't trust that "it typechecks" or "the preview endpoint returned 200" means the email is correct.
+
+### WhatsApp templates are Meta-approved, not just code
+
+The bodies in `server/utils/whatsapp.ts`'s `TEMPLATES` map must match an approved template in WhatsApp Business Manager (`WHATSAPP_BUSINESS_ACCOUNT_ID` / `WHATSAPP_ACCESS_TOKEN` in `.env`) — both the parameter **count** and **order**. You can inspect or edit them via the Graph API (`GET/POST https://graph.facebook.com/v21.0/{waba-id or template-id}/message_templates`), but:
+
+- Meta allows editing an approved template's components at most **once per 24 hours** per template (`error_subcode: 2388124`, "Message template can't be edited"). If you need to add/change a parameter and hit this, don't invent a code-only workaround that silently diverges from what's documented here — pack the extra data into an existing free-text parameter as a stopgap (see `buildReservationWhatsAppContext`/`buildExperienceWhatsAppContext` in `notifications.ts`), file a tracking issue for the real fix once the cooldown clears, and say so out loud.
+- Adding a parameter to the `TEMPLATES` map in code without the Meta template actually having that many placeholders will send a malformed request — always fetch the live template definition first (`fields=name,status,category,language,components`) before assuming what parameters exist.
+
+---
+
 ## Local Testing
 
 - `yarn dev` intentionally disables Wrangler remote bindings by default via the local Cloudflare dev bridge in `build/cloudflare-dev-module.ts` + `build/runtime/cloudflare-bindings-dev.ts`.

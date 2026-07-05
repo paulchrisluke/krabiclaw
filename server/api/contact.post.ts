@@ -5,7 +5,12 @@ import { execute } from '~/server/db'
 
 const NAME_MAX_LENGTH = 100
 const EMAIL_MAX_LENGTH = 254
+const TOPIC_MAX_LENGTH = 200
 const MESSAGE_MAX_LENGTH = 5000
+const SOURCE_MAX_LENGTH = 100
+const ROUTE_CONTEXT_MAX_LENGTH = 500
+const SUMMARY_MAX_LENGTH = 1000
+const AGENT_METADATA_MAX_LENGTH = 10000
 const IP_HOURLY_LIMIT = 5
 const EMAIL_DAILY_LIMIT = 3
 
@@ -55,12 +60,45 @@ async function incrementRateLimit(db: D1Database, key: string, limit: number, ex
 }
 
 export default defineEventHandler(async (event) => {
-  let body: { name?: string; email?: string; message?: string; consent?: boolean }
+  let body: {
+    name?: string
+    email?: string
+    topic?: string | null
+    message?: string
+    consent?: boolean
+    source?: string | null
+    route_context?: string | null
+    suggested_summary?: string | null
+    agent_metadata_json?: string | Record<string, unknown> | null
+  }
   try { body = await readBody(event) } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { name, email, message, consent } = body
+  const { name, email, topic, message, consent } = body
+  const source = typeof body.source === 'string' && body.source.trim()
+    ? body.source.trim().slice(0, SOURCE_MAX_LENGTH)
+    : 'contact_page'
+  const routeContext = typeof body.route_context === 'string' && body.route_context.trim()
+    ? body.route_context.trim().slice(0, ROUTE_CONTEXT_MAX_LENGTH)
+    : null
+  const suggestedSummary = typeof body.suggested_summary === 'string' && body.suggested_summary.trim()
+    ? body.suggested_summary.trim().slice(0, SUMMARY_MAX_LENGTH)
+    : null
+  const normalizedTopic = typeof topic === 'string' && topic.trim()
+    ? topic.trim().slice(0, TOPIC_MAX_LENGTH)
+    : null
+  const agentMetadataJson = (() => {
+    if (body.agent_metadata_json == null) return null
+    if (typeof body.agent_metadata_json === 'string') {
+      return body.agent_metadata_json.slice(0, AGENT_METADATA_MAX_LENGTH)
+    }
+    try {
+      return JSON.stringify(body.agent_metadata_json).slice(0, AGENT_METADATA_MAX_LENGTH)
+    } catch {
+      return null
+    }
+  })()
 
   if (!name || !email || !message) {
     return jsonResponse({ error: 'name, email, and message are required' }, { status: 400 })
@@ -75,6 +113,9 @@ export default defineEventHandler(async (event) => {
   }
   if (email.length > EMAIL_MAX_LENGTH) {
     return jsonResponse({ error: `email exceeds maximum length (${EMAIL_MAX_LENGTH})` }, { status: 400 })
+  }
+  if (normalizedTopic && normalizedTopic.length > TOPIC_MAX_LENGTH) {
+    return jsonResponse({ error: `topic exceeds maximum length (${TOPIC_MAX_LENGTH})` }, { status: 400 })
   }
   if (message.length > MESSAGE_MAX_LENGTH) {
     return jsonResponse({ error: `message exceeds maximum length (${MESSAGE_MAX_LENGTH})` }, { status: 400 })
@@ -135,8 +176,8 @@ export default defineEventHandler(async (event) => {
       try {
         await execute(
           db,
-          `INSERT INTO platform_contact_submissions (id, name, email, message, status, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [id, name, email, message, 'new', ipHash, now]
+          `INSERT INTO platform_contact_submissions (id, name, email, topic, message, source, route_context, suggested_summary, agent_metadata_json, status, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, name, email, normalizedTopic, message, source, routeContext, suggestedSummary, agentMetadataJson, 'new', ipHash, now]
         )
       } catch (err) {
         console.error('Failed to store contact submission:', err)
@@ -150,6 +191,8 @@ export default defineEventHandler(async (event) => {
         recipient: 'hello@krabiclaw.com',
         name,
         email: emailHash,
+        topic: normalizedTopic,
+        source,
         submissionId: id,
       })
       return jsonResponse({ success: true, message: 'Message sent successfully' })
@@ -171,11 +214,17 @@ export default defineEventHandler(async (event) => {
         body: JSON.stringify({
           from: 'KrabiClaw <hello@krabiclaw.com>',
           to: ['hello@krabiclaw.com'],
-          subject: `Contact Form: ${escapeHtml(name)}`,
+          subject: normalizedTopic
+            ? `Contact Form: ${escapeHtml(normalizedTopic)}`
+            : `Contact Form: ${escapeHtml(name)}`,
           html: `
             <h2>New Contact Form Submission</h2>
             <p><strong>Name:</strong> ${escapeHtml(name)}</p>
             <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+            ${normalizedTopic ? `<p><strong>Topic:</strong> ${escapeHtml(normalizedTopic)}</p>` : ''}
+            <p><strong>Source:</strong> ${escapeHtml(source)}</p>
+            ${routeContext ? `<p><strong>Route:</strong> ${escapeHtml(routeContext)}</p>` : ''}
+            ${suggestedSummary ? `<p><strong>Suggested summary:</strong> ${escapeHtml(suggestedSummary)}</p>` : ''}
             <p><strong>Message:</strong></p>
             <p>${escapeHtml(message).replace(/\n/g, '<br/>')}</p>
           `

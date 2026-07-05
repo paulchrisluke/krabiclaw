@@ -6,9 +6,9 @@
 // once a response is sent — see event.handled).
 import { defineEventHandler, getHeader, getRequestURL } from 'h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
+import { getClientIp } from '~/server/utils/hourly-rate-limit'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import {
-  getClientIp,
   getCloudflareGeo,
   getOrCreateSessionId,
   getOrCreateVisitorId,

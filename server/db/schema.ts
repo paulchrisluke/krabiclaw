@@ -695,7 +695,12 @@ export const platform_contact_submissions = sqliteTable("platform_contact_submis
 	id: text().primaryKey(),
 	name: text().notNull(),
 	email: text().notNull(),
+	topic: text(),
 	message: text().notNull(),
+	source: text().default("contact_page").notNull(),
+	route_context: text(),
+	suggested_summary: text(),
+	agent_metadata_json: text(),
 	status: text().default("new").notNull(),
 	ip_hash: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -1142,6 +1147,27 @@ export const site_pageview_events = sqliteTable("site_pageview_events", {
 	country: text(),
 	region: text(),
 	city: text(),
+});
+
+export const mcp_tool_call_events = sqliteTable("mcp_tool_call_events", {
+	id: text().primaryKey(),
+	organization_id: text().references(() => organization.id, { onDelete: "set null" } ),
+	site_id: text().references(() => sites.id, { onDelete: "set null" } ),
+	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
+	user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	mcp_surface: text().default("client").notNull(),
+	request_id: text(),
+	method: text().notNull(),
+	tool_name: text(),
+	tool_domain: text(),
+	is_mutating: integer(),
+	arguments_summary_json: text(),
+	result_summary_json: text(),
+	status: text().notNull(),
+	error_code: text(),
+	error_message: text(),
+	duration_ms: integer(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const site_transfer_requests = sqliteTable("site_transfer_requests", {

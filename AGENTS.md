@@ -328,6 +328,29 @@ Flow:
 - As of June 9, 2026, `www.potteryhousekrabi.com` is intentionally disabled and excluded from `prod-smoke`.
 - The free tenant host `pottery-house.krabiclaw.com` remains covered.
 
+### Notification testing and live sends
+
+- Email and WhatsApp delivery modes are explicit:
+  - `EMAIL_DELIVERY_MODE=log_only|provider`
+  - `WHATSAPP_DELIVERY_MODE=log_only|provider`
+- Both delivery helpers fail closed. Missing/blank/invalid mode must fall back to `log_only`.
+- Local dev, preview, and staging should stay `log_only` unless a task explicitly requires a
+  real provider send.
+- Do not use production public forms as casual smoke tests. In production, these are real
+  send paths when delivery mode is `provider`, including:
+  - `POST /api/contact`
+  - `/help` escalations submitted by `components/platform/PublicHelpChowBot.vue`
+  - tenant public contact / reservation / experience-booking endpoints
+- Prefer this testing order:
+  1. Read-only provider checks (`yarn canary:status`, `/api/canary/provider-status`)
+  2. Log-only tests in local/preview/staging
+  3. DB/log inspection (`notifications`, `submission_messages`, related submission tables)
+  4. Manual production real-send canaries with dedicated canary identities only
+- The manual GitHub Actions workflow `Production Real-Send Canaries` is the approved path for
+  temporary live email/WhatsApp verification. Do not trigger live production sends through
+  ad hoc form submissions unless the user explicitly asks for that.
+- See `docs/notification-testing.md` for the operational details.
+
 ---
 
 ## MCP

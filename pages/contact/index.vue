@@ -261,29 +261,13 @@
           </div>
           <div>
             <h2 class="text-2xl font-bold text-default mb-6">{{ t('saya.contact_page.send_message') }}</h2>
-            <div class="rounded-lg border border-default bg-default p-6 shadow-sm">
-              <form class="space-y-4" novalidate @submit.prevent="handlePlatformContact">
-                <div v-if="platformSubmitError" role="alert" class="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
-                  {{ platformSubmitError }}
-                </div>
-                <div v-if="platformSubmitted" role="status" class="rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3 text-sm text-green-600">
-                  {{ t('saya.contact_page.message_sent') }}
-                </div>
-
-                <SayaFormField v-slot="{ id, describedBy, invalid }" label="Name" name="name" required :error="platformFieldError('name')">
-                  <input :id="id" v-model="platformForm.name" type="text" placeholder="Your name" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid" />
-                </SayaFormField>
-                <SayaFormField v-slot="{ id, describedBy, invalid }" label="Email" name="email" required :error="platformFieldError('email')">
-                  <input :id="id" v-model="platformForm.email" type="email" placeholder="you@example.com" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid" />
-                </SayaFormField>
-                <SayaFormField v-slot="{ id, describedBy, invalid }" label="Message" name="message" required :error="platformFieldError('message')">
-                  <textarea :id="id" v-model="platformForm.message" rows="4" placeholder="How can we help?" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid" />
-                </SayaFormField>
-                <PlatformButton type="submit" size="xl" block :loading="platformSubmitting" :disabled="platformSubmitted">
-                  {{ platformSubmitted ? t('saya.contact_page.message_sent') : t('saya.contact_page.send_message') }}
-                </PlatformButton>
-              </form>
-            </div>
+            <PlatformSupportContactForm
+              title="Send us the details"
+              description="Share your question or issue and the KrabiClaw team will reply by email."
+              submit-label="Send message"
+              source="contact_page"
+              route-context="/contact"
+            />
           </div>
         </div>
       </div>
@@ -401,41 +385,6 @@ const handleTenantContact = async () => {
   }
   await navigateTo('/contact/confirmed')
   tenantSubmitting.value = false
-}
-
-// ── Platform form ────────────────────────────────────────
-const platformForm = ref({ name: '', email: '', message: '' })
-const platformSubmitting = ref(false)
-const platformSubmitted = ref(false)
-const platformErrors = ref([])
-const platformSubmitError = ref(null)
-const platformFieldError = (name) => platformErrors.value.find(e => e.name === name)?.message ?? null
-
-const validatePlatformContact = (state) => {
-  const errors = []
-  if (!state.name) errors.push({ name: 'name', message: t('saya.contact_page.enter_name') })
-  if (!state.email) errors.push({ name: 'email', message: t('saya.contact_page.enter_email') })
-  else if (!emailPattern.test(state.email)) errors.push({ name: 'email', message: t('saya.contact_page.invalid_email') })
-  if (!state.message) errors.push({ name: 'message', message: t('saya.contact_page.enter_message') })
-  return errors
-}
-
-const handlePlatformContact = async () => {
-  platformSubmitError.value = null
-  platformErrors.value = validatePlatformContact(platformForm.value)
-  if (platformErrors.value.length > 0) return
-
-  platformSubmitting.value = true
-  try {
-    await $fetch('/api/contact', { method: 'POST', body: platformForm.value })
-    platformSubmitted.value = true
-    platformForm.value = { name: '', email: '', message: '' }
-    setTimeout(() => { platformSubmitted.value = false }, 3000)
-  } catch {
-    platformSubmitError.value = t('saya.contact_page.message_failed')
-  } finally {
-    platformSubmitting.value = false
-  }
 }
 
 // ── SEO ──────────────────────────────────────────────────
