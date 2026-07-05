@@ -105,13 +105,13 @@ const icons = [
   'i-heroicons-chart-bar',
   'i-heroicons-presentation-chart-line',
   'i-heroicons-question-mark-circle',
-  'i-lucide-moon',
-  'i-lucide-sun',
+  'i-heroicons-moon',
+  'i-heroicons-sun',
 ]
 const simpleIcons = [
   'i-simple-icons-facebook',
-  'i-simple-icons-instagram',
-  'i-simple-icons-tiktok',
+  'i-simple-icons-google',
+  'i-simple-icons-googlemaps',
 ]
 const iconModeVariants = {
   icons: {

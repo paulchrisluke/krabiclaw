@@ -83,6 +83,7 @@ interface ExperienceBookingNotificationInput extends SiteContext {
   partySize: number
   notes?: string | null
   wasConfirmed?: boolean
+  cancelUrl?: string | null
   contactPhone?: string | null
   contactEmail?: string | null
 }
@@ -147,13 +148,15 @@ function formatTimeHuman(timeValue: string): string {
   }).format(dt)
 }
 
-function buildReservationWhatsAppContext(locationName?: string | null): string {
-  return locationName?.trim() ? `Location: ${locationName.trim()}` : 'Location not provided'
+function buildReservationWhatsAppContext(locationName?: string | null, requests?: string | null): string {
+  const location = locationName?.trim() ? `Location: ${locationName.trim()}` : 'Location not provided'
+  return requests?.trim() ? `${location} · Special requests: ${requests.trim()}` : location
 }
 
-function buildExperienceWhatsAppContext(experienceTitle: string, siteName?: string | null): string {
+function buildExperienceWhatsAppContext(experienceTitle: string, siteName?: string | null, requests?: string | null): string {
   const business = siteName?.trim() || 'the business'
-  return `Business: ${business} · Experience: ${experienceTitle}`
+  const base = `Business: ${business} · Experience: ${experienceTitle}`
+  return requests?.trim() ? `${base} · Special requests: ${requests.trim()}` : base
 }
 
 function ownerEmailQuery() {
@@ -516,8 +519,8 @@ export async function notifyReservationCancelled(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(ReservationOwnerCancelled, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, wasConfirmed: confirmed, platformDomain } }),
-    useRender(ReservationGuestCancelled, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, wasConfirmed: confirmed, platformDomain } }),
+    useRender(ReservationOwnerCancelled, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, email: opts.email, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain } }),
+    useRender(ReservationGuestCancelled, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain } }),
   ])
 
   const results = await Promise.allSettled([
@@ -535,7 +538,7 @@ export async function notifyReservationCancelled(
           time: prettyTime,
           guests: opts.guests,
           phone: opts.phone,
-          context: buildReservationWhatsAppContext(opts.locationName),
+          context: buildReservationWhatsAppContext(opts.locationName, opts.requests),
         },
       },
     }),
@@ -579,7 +582,7 @@ export async function notifyContactSubmitted(
 
   const [ownerEmail, guestEmail] = await Promise.all([
     useRender(ContactOwnerNew, { props: { guestName: opts.guestName, email: opts.email, subject: opts.subject, message: opts.message, siteName: restaurant, platformDomain } }),
-    useRender(ContactGuestReceived, { props: { guestName: opts.guestName, siteName: restaurant, platformDomain } }),
+    useRender(ContactGuestReceived, { props: { guestName: opts.guestName, siteName: restaurant, subject: opts.subject, message: opts.message, platformDomain } }),
   ])
 
   const results = await Promise.allSettled([
@@ -591,7 +594,12 @@ export async function notifyContactSubmitted(
       email: { subject: `New website message from ${opts.guestName}`, html: ownerEmail.html, text: ownerEmail.text },
       whatsapp: {
         template: 'new_contact_msg',
-        vars: { guest_name: opts.guestName, email: opts.email, subject: opts.subject ? SUBJECT_LABELS[opts.subject] ?? opts.subject : '', message_preview: opts.message },
+        vars: {
+          guest_name: opts.guestName,
+          email: opts.email,
+          subject: opts.subject ? SUBJECT_LABELS[opts.subject] ?? opts.subject : '',
+          message_preview: opts.message,
+        },
       },
     }),
     sendEmailNotification(env, db, {
@@ -685,7 +693,7 @@ export async function notifyExperienceBookingCreated(
 
   const [ownerEmail, guestEmail] = await Promise.all([
     useRender(BookingOwnerNew, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone ?? null, specialRequests: opts.notes, platformDomain } }),
-    useRender(BookingGuestReceived, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, specialRequests: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, platformDomain } }),
+    useRender(BookingGuestReceived, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, specialRequests: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, cancelUrl: opts.cancelUrl ?? null, platformDomain } }),
   ])
 
   const results = await Promise.allSettled([
@@ -759,8 +767,8 @@ export async function notifyExperienceBookingCancelled(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(BookingOwnerCancelled, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, wasConfirmed: confirmed, platformDomain } }),
-    useRender(BookingGuestCancelled, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, wasConfirmed: confirmed, platformDomain } }),
+    useRender(BookingOwnerCancelled, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone, notes: opts.notes, wasConfirmed: confirmed, platformDomain } }),
+    useRender(BookingGuestCancelled, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, notes: opts.notes, wasConfirmed: confirmed, platformDomain } }),
   ])
 
   const results = await Promise.allSettled([
@@ -778,7 +786,7 @@ export async function notifyExperienceBookingCancelled(
           time: prettyTime,
           guests: String(opts.partySize),
           phone: opts.guestPhone ?? '',
-          context: buildExperienceWhatsAppContext(opts.experienceTitle, opts.siteName),
+          context: buildExperienceWhatsAppContext(opts.experienceTitle, opts.siteName, opts.notes),
         },
       },
     }),
@@ -820,12 +828,12 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
   ] = await Promise.all([
     useRender(ReservationOwnerNew, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', platformDomain } }),
     useRender(ReservationGuestReceived, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', contactPhone: '+1 555 000 0000', contactEmail: 'hello@emberslice.example', cancelUrl: 'https://demo.krabiclaw.com/reservations/cancel?id=res-preview-1', platformDomain } }),
-    useRender(ReservationGuestCancelled, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', wasConfirmed: false, platformDomain } }),
-    useRender(ReservationOwnerCancelled, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', wasConfirmed: false, platformDomain } }),
+    useRender(ReservationGuestCancelled, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain } }),
+    useRender(ReservationOwnerCancelled, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain } }),
     useRender(ContactOwnerNew, { props: { guestName: 'Jordan Lee', email: 'jordan@example.com', message: 'Hi, do you have vegan options and parking nearby?', siteName: restaurant, platformDomain } }),
-    useRender(ContactGuestReceived, { props: { guestName: 'Jordan Lee', siteName: restaurant, platformDomain } }),
+    useRender(ContactGuestReceived, { props: { guestName: 'Jordan Lee', siteName: restaurant, subject: 'general', message: 'Hi, do you have vegan options and parking nearby?', platformDomain } }),
     useRender(BookingOwnerNew, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, email: 'mina@example.com', phone: '+66 76 000 0002', platformDomain } }),
-    useRender(BookingGuestReceived, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, contactPhone: '+66 76 000 0001', contactEmail: 'hello@example.com', platformDomain } }),
+    useRender(BookingGuestReceived, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, contactPhone: '+66 76 000 0001', contactEmail: 'hello@example.com', cancelUrl: 'https://demo.krabiclaw.com/experiences/cancel?id=booking-preview-1', platformDomain } }),
   ])
 
   return [

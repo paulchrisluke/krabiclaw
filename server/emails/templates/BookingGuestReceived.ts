@@ -1,5 +1,5 @@
 import { defineComponent, h, type PropType } from 'vue'
-import { EText } from 'vue-email'
+import { EText, ELink } from 'vue-email'
 import EmailShell from '../layouts/EmailShell'
 import EmailDetails from '../components/EmailDetails'
 
@@ -14,6 +14,7 @@ export default defineComponent({
     specialRequests: { type: String as PropType<string | null>, default: null },
     contactPhone: { type: String as PropType<string | null>, default: null },
     contactEmail: { type: String as PropType<string | null>, default: null },
+    cancelUrl: { type: String as PropType<string | null>, default: null },
     platformDomain: { type: String, required: true },
   },
   setup(props) {
@@ -41,7 +42,14 @@ export default defineComponent({
             props.contactEmail ?? '',
           ])
         : h(EText, { class: 'email-text', style: 'margin:0 0 20px;font-size:15px;color:#52525b;line-height:1.6' }, () => `${props.siteName} will contact you to confirm availability.`),
-      h(EText, { class: 'email-footer', style: 'margin:0;font-size:13px;color:#71717a;line-height:1.6' }, () => `The team at ${props.siteName}`),
+      h(EText, { class: 'email-footer', style: 'margin:0 0 16px;font-size:13px;color:#71717a;line-height:1.6' }, () => `The team at ${props.siteName}`),
+      props.cancelUrl
+        ? h(EText, { style: 'margin:0;font-size:12px;color:#71717a;line-height:1.6' }, () => [
+            'Need to cancel? ',
+            h(ELink, { href: props.cancelUrl!, style: 'color:#8F1D21' }, () => 'Cancel your booking here'),
+            ' (link valid for 30 days).',
+          ])
+        : null,
     ])
   },
 })

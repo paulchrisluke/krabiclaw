@@ -52,7 +52,7 @@ export default defineEventHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const site = await queryFirst<{ id: string; organization_id: string; brand_name: string | null }>(db, `SELECT id, organization_id, brand_name FROM sites WHERE id = ? AND status = 'active' LIMIT 1`, [siteId])
+  const site = await queryFirst<{ id: string; organization_id: string; brand_name: string | null; public_url: string | null; subdomain: string | null }>(db, `SELECT id, organization_id, brand_name, public_url, subdomain FROM sites WHERE id = ? AND status = 'active' LIMIT 1`, [siteId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const experience = await getExperienceBySlug(db, siteId, slug)
@@ -171,6 +171,8 @@ export default defineEventHandler(async (event) => {
 
   try {
     const { contactPhone, contactEmail } = await resolveLocationContact(db, siteId, experience.location_id)
+    const siteBaseUrl = site.public_url?.replace(/\/$/, '') || (site.subdomain ? `https://${site.subdomain}.krabiclaw.com` : null)
+    const cancelUrl = siteBaseUrl ? `${siteBaseUrl}/experiences/cancel?id=${booking.id}#${cancellation.token}` : null
     await notifyExperienceBookingCreated(env, db, {
       organizationId: site.organization_id,
       siteId,
@@ -185,6 +187,7 @@ export default defineEventHandler(async (event) => {
       timeSlot,
       partySize,
       notes: notes || null,
+      cancelUrl,
       contactPhone,
       contactEmail,
     })

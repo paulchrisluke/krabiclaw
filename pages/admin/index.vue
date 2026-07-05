@@ -9,7 +9,7 @@
             <UCheckbox v-model="workShowDone" label="Show completed" @update:model-value="loadWorkRequests" />
           </div>
           <UButton color="neutral" variant="ghost" size="xs" :loading="workLoading" @click="loadWorkRequests">
-            <UIcon name="i-lucide-refresh-cw" class="size-4" />
+            <UIcon name="i-heroicons-arrow-path" class="size-4" />
           </UButton>
         </div>
 
@@ -19,7 +19,7 @@
 
         <UCard v-else-if="workRequests.length === 0">
           <div class="text-center py-4">
-            <UIcon name="i-lucide-list-todo" class="mx-auto size-10 text-muted mb-3" />
+            <UIcon name="i-heroicons-queue-list" class="mx-auto size-10 text-muted mb-3" />
             <p class="font-semibold text-highlighted">No work requests</p>
             <p class="text-sm text-muted mt-1">Managed clients submit requests from their dashboard or via ChowBot.</p>
           </div>
@@ -67,7 +67,7 @@
                   size="xs"
                   color="neutral"
                   variant="ghost"
-                  icon="i-lucide-external-link"
+                  icon="i-heroicons-arrow-top-right-on-square"
                   :to="`/dashboard/${req.org_slug}`"
                   target="_blank"
                 />
@@ -166,7 +166,7 @@
           <div v-else-if="team.length" class="divide-y divide-default">
             <div v-for="member in team" :key="member.id" class="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0">
               <div class="flex items-center gap-3 min-w-0">
-                <UAvatar :src="member.image || undefined" :alt="member.name || member.email" icon="i-lucide-user" />
+                <UAvatar :src="member.image || undefined" :alt="member.name || member.email" icon="i-heroicons-user" />
                 <div class="min-w-0">
                   <p class="truncate font-medium text-highlighted">{{ member.name || member.email }}</p>
                   <p class="truncate text-sm text-muted">{{ member.email }}</p>
@@ -215,7 +215,7 @@
                 <UButton
                   color="neutral"
                   variant="soft"
-                  icon="i-lucide-copy"
+                  icon="i-heroicons-document-duplicate"
                   @click="copyInviteLink(clientInviteResult.inviteUrl)"
                 >
                   Copy
@@ -223,7 +223,7 @@
                 <UButton
                   color="success"
                   variant="soft"
-                  icon="i-lucide-message-circle"
+                  icon="i-heroicons-chat-bubble-oval-left"
                   :href="`https://wa.me/?text=${encodeURIComponent('Hi! Here is your link to set up your site on KrabiClaw: ' + clientInviteResult.inviteUrl)}`"
                   target="_blank"
                 >
@@ -328,7 +328,7 @@
                 size="xs"
                 color="neutral"
                 variant="soft"
-                icon="i-lucide-credit-card"
+                icon="i-heroicons-credit-card"
                 @click="openBilling(client)"
               >
                 Billing
@@ -546,11 +546,11 @@
             <p class="text-sm font-medium text-highlighted mb-2">Transfer link</p>
             <div class="flex gap-2">
               <UInput :model-value="handoffResult.transfer_url" readonly class="flex-1 font-mono text-xs" />
-              <UButton color="neutral" variant="soft" icon="i-lucide-copy" @click="copyHandoffLink">Copy</UButton>
+              <UButton color="neutral" variant="soft" icon="i-heroicons-document-duplicate" @click="copyHandoffLink">Copy</UButton>
               <UButton
                 color="success"
                 variant="soft"
-                icon="i-lucide-message-circle"
+                icon="i-heroicons-chat-bubble-oval-left"
                 :href="`https://wa.me/?text=${encodeURIComponent('Hi! Your website is ready — claim it here: ' + handoffResult.transfer_url)}`"
                 target="_blank"
               >
@@ -638,7 +638,7 @@
               </p>
               <UAlert v-if="markPaidError" color="error" variant="soft" :description="markPaidError" />
               <UAlert v-if="markPaidResult" color="success" variant="soft" :title="`Period advanced to ${markPaidResult.new_period_end ? new Date(markPaidResult.new_period_end).toLocaleDateString() : 'N/A'}`" description="Invoice marked paid. Next reminder will fire closer to the new due date." />
-              <UButton v-if="!markPaidResult" block color="success" :loading="markPaying" icon="i-lucide-check-circle" @click="markMonthPaid">
+              <UButton v-if="!markPaidResult" block color="success" :loading="markPaying" icon="i-heroicons-check-circle" @click="markMonthPaid">
                 Mark this month paid
               </UButton>
             </div>
@@ -666,7 +666,7 @@
               <p class="text-xs text-muted">Local rate + currency power the billing reminder emails.</p>
               <UAlert v-if="cashError" color="error" variant="soft" :description="cashError" />
               <UAlert v-if="cashResult" color="success" variant="soft" :title="`Payment recorded — ${cashResult.plan} ${cashResult.interval}ly`" :description="`$${(cashResult.amount_paid / 100).toFixed(2)} collected. Entitlements are now active.`" />
-              <UButton v-if="!cashResult" block color="primary" :loading="cashPaying" icon="i-lucide-banknote" @click="recordCashPayment">
+              <UButton v-if="!cashResult" block color="primary" :loading="cashPaying" icon="i-heroicons-banknotes" @click="recordCashPayment">
                 Record cash payment
               </UButton>
             </div>
@@ -694,7 +694,7 @@
                 block
                 color="success"
                 :loading="forceAccepting"
-                icon="i-lucide-send"
+                icon="i-heroicons-paper-airplane"
                 @click="forceAcceptTransfer"
               >
                 Force transfer site now
@@ -1367,11 +1367,11 @@ const workLoading = ref(false)
 const workShowDone = ref(false)
 
 const WORK_TYPE_ICONS: Record<string, string> = {
-  content_update: 'i-lucide-file-text', menu_update: 'i-lucide-utensils',
-  translation: 'i-lucide-languages', seo: 'i-lucide-trending-up',
-  google_business: 'i-lucide-map-pin', seasonal: 'i-lucide-sparkles',
-  photo_update: 'i-lucide-image', social_media: 'i-lucide-share-2',
-  technical: 'i-lucide-wrench', other: 'i-lucide-circle-help',
+  content_update: 'i-heroicons-document-text', menu_update: 'i-custom-utensils',
+  translation: 'i-heroicons-language', seo: 'i-heroicons-arrow-trending-up',
+  google_business: 'i-heroicons-map-pin', seasonal: 'i-heroicons-sparkles',
+  photo_update: 'i-heroicons-photo', social_media: 'i-heroicons-share',
+  technical: 'i-heroicons-wrench', other: 'i-heroicons-question-mark-circle',
 }
 const WORK_TYPE_COLORS: Record<string, string> = {
   content_update: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600',
@@ -1389,7 +1389,7 @@ const PRIORITY_COLORS: Record<string, 'error' | 'warning' | 'neutral' | 'success
   urgent: 'error', high: 'warning', normal: 'neutral', low: 'success',
 }
 
-function workTypeIcon(type: string) { return WORK_TYPE_ICONS[type] ?? 'i-lucide-circle-help' }
+function workTypeIcon(type: string) { return WORK_TYPE_ICONS[type] ?? 'i-heroicons-question-mark-circle' }
 function workTypeColor(type: string) { return WORK_TYPE_COLORS[type] ?? 'bg-muted text-muted' }
 function priorityColor(p: string) { return PRIORITY_COLORS[p] ?? 'neutral' }
 

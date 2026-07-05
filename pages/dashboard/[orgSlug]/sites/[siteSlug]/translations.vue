@@ -11,7 +11,7 @@
           v-if="!siteId"
           color="neutral"
           variant="soft"
-          icon="i-lucide-languages"
+          icon="i-heroicons-language"
           title="No site yet"
           description="Translations will be available after your site workspace is set up."
         />

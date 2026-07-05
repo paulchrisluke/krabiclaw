@@ -23,7 +23,7 @@
             <div v-if="collapsed" class="flex items-center justify-center w-full">
               <UButton
                 :to="siteBase ?? orgBase ?? '/dashboard'"
-                icon="i-lucide-arrow-left"
+                icon="i-heroicons-arrow-left"
                 color="neutral"
                 variant="ghost"
                 size="sm"
@@ -35,7 +35,7 @@
               :to="siteBase ?? orgBase ?? '/dashboard'"
               class="flex items-center gap-2 px-2.5 py-1.5 text-sm font-semibold text-muted hover:text-highlighted hover:bg-muted rounded-lg transition-colors w-full"
             >
-              <UIcon name="i-lucide-arrow-left" class="size-4 shrink-0" />
+              <UIcon name="i-heroicons-arrow-left" class="size-4 shrink-0" />
               <span class="truncate">{{ currentLocation?.title ?? 'Location' }}</span>
             </NuxtLink>
           </template>
@@ -44,7 +44,7 @@
             <div v-if="collapsed" class="flex items-center justify-center w-full">
               <UButton
                 :to="orgBase ?? '/dashboard'"
-                icon="i-lucide-arrow-left"
+                icon="i-heroicons-arrow-left"
                 color="neutral"
                 variant="ghost"
                 size="sm"
@@ -56,7 +56,7 @@
               :to="orgBase ?? '/dashboard'"
               class="flex items-center gap-2 px-2.5 py-1.5 text-sm font-semibold text-muted hover:text-highlighted hover:bg-muted rounded-lg transition-colors w-full"
             >
-              <UIcon name="i-lucide-arrow-left" class="size-4 shrink-0" />
+              <UIcon name="i-heroicons-arrow-left" class="size-4 shrink-0" />
               <span class="truncate">Back to Dashboard</span>
             </NuxtLink>
           </template>
@@ -65,7 +65,7 @@
             <div v-if="collapsed" class="flex items-center justify-center w-full">
               <UButton
                 :to="siteBase ?? orgBase ?? '/dashboard'"
-                icon="i-lucide-arrow-left"
+                icon="i-heroicons-arrow-left"
                 color="neutral"
                 variant="ghost"
                 size="sm"
@@ -77,7 +77,7 @@
               :to="siteBase ?? orgBase ?? '/dashboard'"
               class="flex items-center gap-2 px-2.5 py-1.5 text-sm font-semibold text-muted hover:text-highlighted hover:bg-muted rounded-lg transition-colors w-full"
             >
-              <UIcon name="i-lucide-arrow-left" class="size-4 shrink-0" />
+              <UIcon name="i-heroicons-arrow-left" class="size-4 shrink-0" />
               <span class="truncate">Back to Dashboard</span>
             </NuxtLink>
           </template>
@@ -91,7 +91,7 @@
             <UButton
               :avatar="organizationAvatar"
               :label="collapsed ? undefined : organizationLabel"
-              trailing-icon="i-lucide-chevrons-up-down"
+              trailing-icon="i-heroicons-chevron-up-down"
               color="neutral"
               variant="ghost"
               class="w-full data-[state=open]:bg-elevated"
@@ -122,7 +122,7 @@
                     v-for="conv in siteConversations"
                     :key="conv.id"
                     :label="conv.title"
-                    :icon="conv.active_channel === 'whatsapp' ? 'i-simple-icons-whatsapp' : 'i-lucide-message-square'"
+                    :icon="conv.active_channel === 'whatsapp' ? 'i-simple-icons-whatsapp' : 'i-heroicons-chat-bubble-left'"
                     :color="conv.id === activeConversationId ? 'primary' : 'neutral'"
                     :variant="conv.id === activeConversationId ? 'soft' : 'ghost'"
                     size="sm"
@@ -184,7 +184,7 @@
                     v-if="!collapsed"
                     class="size-7 hover:bg-muted rounded-full border border-default flex items-center justify-center text-dimmed shrink-0 transition-colors"
                   >
-                    <UIcon name="i-lucide-ellipsis" class="size-4" />
+                    <UIcon name="i-heroicons-ellipsis-horizontal" class="size-4" />
                   </div>
                 </UButton>
               </template>
@@ -205,7 +205,7 @@
                       to="/dashboard/account/settings"
                       variant="ghost"
                       color="neutral"
-                      icon="i-lucide-settings"
+                      icon="i-heroicons-cog-6-tooth"
                       size="sm"
                       class="text-muted hover:text-highlighted hover:bg-muted shrink-0"
                       @click="close"
@@ -237,7 +237,7 @@
                       @click="close"
                     >
                       <span>Changelog</span>
-                      <UIcon name="i-lucide-square-pen" class="size-4 text-muted" />
+                      <UIcon name="i-heroicons-pencil-square" class="size-4 text-muted" />
                     </NuxtLink>
 
                     <!-- Help -->
@@ -247,7 +247,7 @@
                       @click="close"
                     >
                       <span>Help</span>
-                      <UIcon name="i-lucide-circle-help" class="size-4 text-muted" />
+                      <UIcon name="i-heroicons-question-mark-circle" class="size-4 text-muted" />
                     </NuxtLink>
 
                     <!-- Docs -->
@@ -257,7 +257,7 @@
                       @click="close"
                     >
                       <span>Docs</span>
-                      <UIcon name="i-lucide-book-open" class="size-4 text-muted" />
+                      <UIcon name="i-heroicons-book-open" class="size-4 text-muted" />
                     </NuxtLink>
 
                     <!-- Log Out -->
@@ -266,7 +266,7 @@
                       @click="handleSignOut(); close();"
                     >
                       <span>Log Out</span>
-                      <UIcon name="i-lucide-log-out" class="size-4 text-error/80" />
+                      <UIcon name="i-heroicons-arrow-right-on-rectangle" class="size-4 text-error/80" />
                     </button>
                   </div>
 
@@ -320,8 +320,8 @@
               >
                 <UButton
                   :label="selectedLocation?.title ?? 'No locations'"
-                  :avatar="{ icon: 'i-lucide-map-pin' }"
-                  trailing-icon="i-lucide-chevrons-up-down"
+                  :avatar="{ icon: 'i-heroicons-map-pin' }"
+                  trailing-icon="i-heroicons-chevron-up-down"
                   color="neutral"
                   variant="ghost"
                   class="data-[state=open]:bg-elevated"
@@ -334,7 +334,7 @@
               <UColorModeButton variant="ghost" color="neutral" size="sm" />
               <UTooltip v-if="!inAdminWorkspace && !inConversationsWorkspace && site" text="ChowBot">
                 <UButton
-                  icon="i-lucide-bot"
+                  icon="i-custom-bot"
                   color="neutral"
                   variant="ghost"
                   size="sm"
@@ -386,9 +386,9 @@ const organizationsState = authClient.useListOrganizations()
 const colorMode = useColorMode()
 
 function getThemeIcon(pref: 'system' | 'light' | 'dark') {
-  if (pref === 'system') return 'i-lucide-monitor'
-  if (pref === 'light') return 'i-lucide-sun'
-  return 'i-lucide-moon'
+  if (pref === 'system') return 'i-heroicons-computer-desktop'
+  if (pref === 'light') return 'i-heroicons-sun'
+  return 'i-heroicons-moon'
 }
 
 const chowBot = useChowBot()
@@ -471,13 +471,13 @@ const organizationLabel = computed(() => organization.value?.name ?? 'Restaurant
 const organizationAvatar = computed(() => ({
   src: organization.value?.logo ?? undefined,
   alt: organizationLabel.value,
-  icon: organization.value?.logo ? undefined : 'i-lucide-building-2'
+  icon: organization.value?.logo ? undefined : 'i-heroicons-building-office-2'
 }))
 
 const organizationMenuItems = computed(() => [
   organizations.value.map((org) => ({
     label: org.name,
-    avatar: { src: org.logo ?? undefined, icon: org.logo ? undefined : 'i-lucide-building-2' },
+    avatar: { src: org.logo ?? undefined, icon: org.logo ? undefined : 'i-heroicons-building-office-2' },
     icon: org.id === organization.value?.id ? 'i-heroicons-check' : undefined,
     onSelect: () => switchOrganization(org.id)
   })),
@@ -490,7 +490,7 @@ const organizationMenuItems = computed(() => [
   ],
   sites.value.map((s) => ({
     label: s.brand_name ?? s.subdomain ?? 'Site',
-    icon: s.subdomain === activeSiteSlug.value ? 'i-heroicons-check' : 'i-lucide-globe',
+    icon: s.subdomain === activeSiteSlug.value ? 'i-heroicons-check' : 'i-heroicons-globe-alt',
     to: orgBase.value && s.subdomain ? `${orgBase.value}/sites/${s.subdomain}` : undefined
   })),
   [
@@ -505,13 +505,13 @@ const organizationMenuItems = computed(() => [
 const locationMenuItems = computed(() => [
   locations.value.map((location) => ({
     label: location.title,
-    icon: location.id === selectedLocation.value?.id ? 'i-heroicons-check' : 'i-lucide-map-pin',
+    icon: location.id === selectedLocation.value?.id ? 'i-heroicons-check' : 'i-heroicons-map-pin',
     onSelect: () => dashboard.selectLocation(location.id)
   })),
   [
     {
       label: 'All locations',
-      icon: 'i-lucide-layout-dashboard',
+      icon: 'i-heroicons-squares-2x2',
       to: siteBase.value ?? orgBase.value ?? '/dashboard'
     }
   ]
@@ -519,16 +519,16 @@ const locationMenuItems = computed(() => [
 
 const mainNavigation = computed(() => [
   [
-    { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: siteBase.value ?? orgBase.value ?? '/dashboard' },
-    { label: 'Conversations', icon: 'i-lucide-messages-square', to: siteBase.value ? `${siteBase.value}/conversations` : '/dashboard' },
+    { label: 'Dashboard', icon: 'i-heroicons-squares-2x2', to: siteBase.value ?? orgBase.value ?? '/dashboard' },
+    { label: 'Conversations', icon: 'i-heroicons-chat-bubble-left-right', to: siteBase.value ? `${siteBase.value}/conversations` : '/dashboard' },
   ],
   [
-    { label: 'Blog', icon: 'i-lucide-newspaper', to: siteBase.value ? `${siteBase.value}/blog` : '/dashboard' },
-    { label: 'Translations', icon: 'i-lucide-languages', to: siteBase.value ? `${siteBase.value}/translations` : '/dashboard' },
-    { label: 'Support', icon: 'i-lucide-headphones', to: orgBase.value ? `${orgBase.value}/support` : '/dashboard' },
+    { label: 'Blog', icon: 'i-heroicons-newspaper', to: siteBase.value ? `${siteBase.value}/blog` : '/dashboard' },
+    { label: 'Translations', icon: 'i-heroicons-language', to: siteBase.value ? `${siteBase.value}/translations` : '/dashboard' },
+    { label: 'Support', icon: 'i-heroicons-lifebuoy', to: orgBase.value ? `${orgBase.value}/support` : '/dashboard' },
   ],
   [
-    { label: 'Settings', icon: 'i-lucide-settings', to: orgSettingsBase.value ? `${orgSettingsBase.value}/general` : '/dashboard' },
+    { label: 'Settings', icon: 'i-heroicons-cog-6-tooth', to: orgSettingsBase.value ? `${orgSettingsBase.value}/general` : '/dashboard' },
   ],
 ])
 
@@ -537,23 +537,23 @@ const locationNavigation = computed(() => {
   if (!project) return [[]]
   return [
     [
-      { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: project },
+      { label: 'Overview', icon: 'i-heroicons-squares-2x2', to: project },
     ],
     [
-      { label: 'Menu', icon: 'i-lucide-utensils', to: `${project}/menu` },
-      { label: 'Content', icon: 'i-lucide-files', to: `${project}/content?page=location` },
-      { label: 'Posts', icon: 'i-lucide-newspaper', to: `${project}/posts` },
-      { label: 'Media', icon: 'i-lucide-images', to: `${project}/media` },
-      { label: 'Pages', icon: 'i-lucide-file-text', to: `${project}/pages` },
+      { label: 'Menu', icon: 'i-custom-utensils', to: `${project}/menu` },
+      { label: 'Content', icon: 'i-heroicons-document-duplicate', to: `${project}/content?page=location` },
+      { label: 'Posts', icon: 'i-heroicons-newspaper', to: `${project}/posts` },
+      { label: 'Media', icon: 'i-heroicons-photo', to: `${project}/media` },
+      { label: 'Pages', icon: 'i-heroicons-document-text', to: `${project}/pages` },
     ],
     [
-      { label: 'Reviews', icon: 'i-lucide-star', to: `${project}/reviews` },
-      { label: 'Inbox', icon: 'i-lucide-inbox', to: `${project}/inbox` },
-      { label: 'Reservations', icon: 'i-lucide-calendar-check', to: `${project}/reservations` },
-      { label: 'Orders', icon: 'i-lucide-shopping-bag', to: `${project}/order` },
+      { label: 'Reviews', icon: 'i-heroicons-star', to: `${project}/reviews` },
+      { label: 'Inbox', icon: 'i-heroicons-inbox', to: `${project}/inbox` },
+      { label: 'Reservations', icon: 'i-heroicons-calendar', to: `${project}/reservations` },
+      { label: 'Orders', icon: 'i-heroicons-shopping-bag', to: `${project}/order` },
     ],
     [
-      { label: 'Experiences', icon: 'i-lucide-ticket', to: `${project}/experiences` },
+      { label: 'Experiences', icon: 'i-heroicons-ticket', to: `${project}/experiences` },
     ],
   ]
 })
@@ -569,39 +569,39 @@ watch(inAdminWorkspace, (isAdmin) => {
 const adminTab = computed(() => String(route.query.tab || 'queue'))
 const adminNavigation = computed(() => [[
   ...(adminManagedServiceEnabled.value
-    ? [{ label: 'Work Queue', icon: 'i-lucide-list-todo', to: '/admin?tab=work', active: adminTab.value === 'work' }]
+    ? [{ label: 'Work Queue', icon: 'i-heroicons-queue-list', to: '/admin?tab=work', active: adminTab.value === 'work' }]
     : []),
-  { label: 'Add-ons',  icon: 'i-lucide-inbox',           to: '/admin?tab=queue',     active: adminTab.value === 'queue' },
-  { label: 'Clients',  icon: 'i-lucide-building-2',       to: '/admin?tab=clients',   active: adminTab.value === 'clients' },
-  { label: 'Members',  icon: 'i-lucide-user-plus',        to: '/admin?tab=members',   active: adminTab.value === 'members' },
-  { label: 'Analytics',icon: 'i-lucide-bar-chart-2',      to: '/admin?tab=analytics', active: adminTab.value === 'analytics' },
-  { label: 'Domains',  icon: 'i-lucide-globe',            to: '/admin?tab=domains',   active: adminTab.value === 'domains' },
-  { label: 'Users',    icon: 'i-lucide-users',            to: '/admin?tab=users',     active: adminTab.value === 'users' },
-  { label: 'Content',  icon: 'i-lucide-file-text',        to: '/admin?tab=content',   active: adminTab.value === 'content' },
-  { label: 'Blog',     icon: 'i-lucide-pencil',           to: '/admin?tab=blog',      active: adminTab.value === 'blog' },
+  { label: 'Add-ons',  icon: 'i-heroicons-inbox',           to: '/admin?tab=queue',     active: adminTab.value === 'queue' },
+  { label: 'Clients',  icon: 'i-heroicons-building-office-2',       to: '/admin?tab=clients',   active: adminTab.value === 'clients' },
+  { label: 'Members',  icon: 'i-heroicons-user-plus',        to: '/admin?tab=members',   active: adminTab.value === 'members' },
+  { label: 'Analytics',icon: 'i-heroicons-chart-bar',      to: '/admin?tab=analytics', active: adminTab.value === 'analytics' },
+  { label: 'Domains',  icon: 'i-heroicons-globe-alt',            to: '/admin?tab=domains',   active: adminTab.value === 'domains' },
+  { label: 'Users',    icon: 'i-heroicons-users',            to: '/admin?tab=users',     active: adminTab.value === 'users' },
+  { label: 'Content',  icon: 'i-heroicons-document-text',        to: '/admin?tab=content',   active: adminTab.value === 'content' },
+  { label: 'Blog',     icon: 'i-heroicons-pencil',           to: '/admin?tab=blog',      active: adminTab.value === 'blog' },
 ]])
 
 const _utilityNavigation = computed(() => [[
-  { label: 'Account', icon: 'i-lucide-user-cog', to: '/dashboard/account/settings' },
-  { label: 'Help', icon: 'i-lucide-circle-help', to: '/dashboard/help' }
+  { label: 'Account', icon: 'i-custom-user-cog', to: '/dashboard/account/settings' },
+  { label: 'Help', icon: 'i-heroicons-question-mark-circle', to: '/dashboard/help' }
 ]])
 
 const accountSettingsNavigation = computed(() => [[
-  { label: 'Account Profile', icon: 'i-lucide-user', to: '/dashboard/account/settings' },
-  { label: 'Authentication', icon: 'i-lucide-shield', to: '/dashboard/account/settings/authentication' },
-  { label: 'Billing Items', icon: 'i-lucide-receipt', to: '/dashboard/account/settings/billing-items' },
+  { label: 'Account Profile', icon: 'i-heroicons-user', to: '/dashboard/account/settings' },
+  { label: 'Authentication', icon: 'i-custom-shield', to: '/dashboard/account/settings/authentication' },
+  { label: 'Billing Items', icon: 'i-custom-receipt', to: '/dashboard/account/settings/billing-items' },
 ]])
 
 const orgSettingsNavigation = computed(() => {
   const org = orgSettingsBase.value
   if (!org) return [[]]
   return [[
-    { label: 'General', icon: 'i-lucide-sliders', to: `${org}/general` },
-    { label: 'ChatGPT', icon: 'i-lucide-bot', to: `${org}/chatgpt` },
-    { label: 'Domains', icon: 'i-lucide-globe', to: `${org}/domains` },
-    { label: 'Analytics', icon: 'i-lucide-bar-chart-3', to: `${org}/analytics` },
-    { label: 'Billing', icon: 'i-lucide-credit-card', to: `${org}/billing` },
-    { label: 'Members', icon: 'i-lucide-users', to: `${org}/members` },
+    { label: 'General', icon: 'i-heroicons-adjustments-horizontal', to: `${org}/general` },
+    { label: 'ChatGPT', icon: 'i-custom-bot', to: `${org}/chatgpt` },
+    { label: 'Domains', icon: 'i-heroicons-globe-alt', to: `${org}/domains` },
+    { label: 'Analytics', icon: 'i-heroicons-chart-bar', to: `${org}/analytics` },
+    { label: 'Billing', icon: 'i-heroicons-credit-card', to: `${org}/billing` },
+    { label: 'Members', icon: 'i-heroicons-users', to: `${org}/members` },
   ]]
 })
 

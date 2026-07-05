@@ -8,11 +8,11 @@
       <div v-else class="space-y-6">
         <div class="flex items-center justify-between">
           <h2 class="text-sm font-semibold text-highlighted">Sites</h2>
-          <UButton icon="i-lucide-plus" label="Add site" size="sm" color="primary" variant="soft" :to="`/dashboard/${orgSlug}/sites/new`" />
+          <UButton icon="i-heroicons-plus" label="Add site" size="sm" color="primary" variant="soft" :to="`/dashboard/${orgSlug}/sites/new`" />
         </div>
 
         <div v-if="sitesWithSubdomain.length === 0" class="py-16 text-center">
-          <UIcon name="i-lucide-globe" class="size-8 text-muted mx-auto mb-3" />
+          <UIcon name="i-heroicons-globe-alt" class="size-8 text-muted mx-auto mb-3" />
           <p class="text-sm text-muted">No sites available.</p>
           <UButton label="Add your first site" size="sm" color="primary" class="mt-4" :to="`/dashboard/${orgSlug}/sites/new`" />
         </div>

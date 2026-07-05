@@ -29,7 +29,7 @@
 
       <div class="flex shrink-0 items-center justify-between border-b border-default px-4 py-3">
         <div class="flex items-center gap-2">
-          <UIcon name="i-lucide-bot" class="size-4 text-primary" />
+          <UIcon name="i-custom-bot" class="size-4 text-primary" />
           <span class="text-sm font-semibold">ChowBot</span>
           <UTooltip v-if="balance !== null" :text="`${balance} credits remaining`">
             <UBadge
@@ -86,7 +86,7 @@
             v-if="messages.length === 0"
             class="flex h-full flex-col items-center justify-center gap-3 px-6 py-16 text-center"
           >
-            <UIcon name="i-lucide-bot" class="size-8 text-primary opacity-60" />
+            <UIcon name="i-custom-bot" class="size-8 text-primary opacity-60" />
             <p class="text-sm font-medium">{{ emptyTitle }}</p>
             <p class="text-xs text-muted">{{ emptyDescription }}</p>
             <div class="mt-4 flex w-full flex-col gap-2">

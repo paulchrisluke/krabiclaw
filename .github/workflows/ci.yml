@@ -326,8 +326,8 @@ jobs:
     name: Production auth canary
     # Disabled on every merge while dev velocity is high — sends a real WhatsApp/SMS OTP
     # per run, which adds up fast at merge frequency. Real-send coverage still runs daily
-    # via prod-daily-canary. Re-enable (if: github.event_name == 'push' && github.ref == 'refs/heads/main')
-    # once merge cadence slows.
+    # via prod-daily-canary. For on-demand real-send testing, use the separate
+    # "Production Real-Send Canaries" workflow_dispatch workflow.
     if: vars.ENABLE_REAL_SEND_TESTS == 'true'
     runs-on: ubuntu-latest
     needs: [prod-smoke]
@@ -364,8 +364,8 @@ jobs:
     name: Production notification canary
     # Disabled on every merge while dev velocity is high — sends a real email + real
     # WhatsApp message per run. Real-send coverage still runs daily via prod-daily-canary.
-    # Re-enable (if: github.event_name == 'push' && github.ref == 'refs/heads/main')
-    # once merge cadence slows.
+    # For on-demand real-send testing, use the separate "Production Real-Send
+    # Canaries" workflow_dispatch workflow.
     if: vars.ENABLE_REAL_SEND_TESTS == 'true'
     runs-on: ubuntu-latest
     needs: [prod-auth-canary]

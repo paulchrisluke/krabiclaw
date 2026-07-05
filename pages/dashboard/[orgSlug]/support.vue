@@ -16,7 +16,7 @@
           <UCard>
             <div class="flex flex-col items-center text-center gap-4 py-4">
               <div class="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-                <UIcon name="i-lucide-headphones" class="size-7" />
+                <UIcon name="i-heroicons-lifebuoy" class="size-7" />
               </div>
               <div>
                 <h2 class="text-lg font-bold text-highlighted">Managed support isn't available yet</h2>
@@ -36,7 +36,7 @@
           <UCard>
             <div class="flex flex-col items-center text-center gap-4 py-4">
               <div class="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-                <UIcon name="i-lucide-headphones" class="size-7" />
+                <UIcon name="i-heroicons-lifebuoy" class="size-7" />
               </div>
               <div>
                 <h2 class="text-lg font-bold text-highlighted">Managed support is included in Growth</h2>
@@ -64,7 +64,7 @@
             <template #header>
               <div class="flex items-center gap-3">
                 <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <UIcon name="i-lucide-plus-circle" class="size-5" />
+                  <UIcon name="i-heroicons-plus-circle" class="size-5" />
                 </div>
                 <div>
                   <h2 class="font-semibold text-highlighted">Submit a request</h2>
@@ -118,7 +118,7 @@
               </div>
 
               <UAlert v-if="submitError" color="error" variant="soft" :description="submitError" />
-              <UAlert v-if="submitSuccess" color="success" variant="soft" icon="i-lucide-check-circle" description="Request submitted — we'll get on it shortly." />
+              <UAlert v-if="submitSuccess" color="success" variant="soft" icon="i-heroicons-check-circle" description="Request submitted — we'll get on it shortly." />
             </div>
           </UCard>
 
@@ -171,11 +171,11 @@ const TYPE_LABELS: Record<string, string> = {
   technical: 'Technical', other: 'Other',
 }
 const TYPE_ICONS: Record<string, string> = {
-  content_update: 'i-lucide-file-text', menu_update: 'i-lucide-utensils',
-  translation: 'i-lucide-languages', seo: 'i-lucide-trending-up',
-  google_business: 'i-lucide-map-pin', seasonal: 'i-lucide-sparkles',
-  photo_update: 'i-lucide-image', social_media: 'i-lucide-share-2',
-  technical: 'i-lucide-wrench', other: 'i-lucide-circle-help',
+  content_update: 'i-heroicons-document-text', menu_update: 'i-custom-utensils',
+  translation: 'i-heroicons-language', seo: 'i-heroicons-arrow-trending-up',
+  google_business: 'i-heroicons-map-pin', seasonal: 'i-heroicons-sparkles',
+  photo_update: 'i-heroicons-photo', social_media: 'i-heroicons-share',
+  technical: 'i-heroicons-wrench', other: 'i-heroicons-question-mark-circle',
 }
 const TYPE_COLORS: Record<string, string> = {
   content_update: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600',
@@ -203,7 +203,7 @@ const submitError = ref('')
 const submitSuccess = ref(false)
 
 function typeLabel(type: string) { return TYPE_LABELS[type] ?? type }
-function typeIcon(type: string) { return TYPE_ICONS[type] ?? 'i-lucide-circle-help' }
+function typeIcon(type: string) { return TYPE_ICONS[type] ?? 'i-heroicons-question-mark-circle' }
 function typeColor(type: string) { return TYPE_COLORS[type] ?? 'bg-muted text-muted' }
 
 function statusLabel(status: string) {

@@ -45,7 +45,7 @@
         <div class="flex items-center justify-between">
           <h2 class="text-sm font-semibold text-highlighted">Locations</h2>
           <UButton
-            icon="i-lucide-plus"
+            icon="i-heroicons-plus"
             label="Add location"
             size="sm"
             color="primary"
@@ -55,7 +55,7 @@
         </div>
 
         <div v-if="locations.length === 0" class="py-16 text-center">
-          <UIcon name="i-lucide-map-pin" class="size-8 text-muted mx-auto mb-3" />
+          <UIcon name="i-heroicons-map-pin" class="size-8 text-muted mx-auto mb-3" />
           <p class="text-sm text-muted">No locations yet.</p>
           <UButton
             label="Add your first location"
@@ -83,7 +83,7 @@
                   loading="lazy"
                 />
                 <div v-else class="flex h-full items-center justify-center">
-                  <UIcon name="i-lucide-map-pin" class="size-8 text-muted" />
+                  <UIcon name="i-heroicons-map-pin" class="size-8 text-muted" />
                 </div>
               </div>
               <div class="p-4 space-y-2">
@@ -96,7 +96,7 @@
                 </div>
                 <div v-if="location.rating || location.review_count" class="flex items-center gap-3 text-xs text-muted">
                   <span v-if="location.rating" class="flex items-center gap-1">
-                    <UIcon name="i-lucide-star" class="size-3 text-warning-400 fill-warning-400" />
+                    <UIcon name="i-heroicons-star" class="size-3 text-warning-400 fill-warning-400" />
                     {{ location.rating.toFixed(1) }}
                   </span>
                   <span v-if="location.review_count">{{ location.review_count.toLocaleString() }} reviews</span>

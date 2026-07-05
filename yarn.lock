@@ -1706,27 +1706,6 @@
   dependencies:
     "@iconify/types" "*"
 
-"@iconify-json/logos@^1.2.11":
-  version "1.2.11"
-  resolved "https://registry.yarnpkg.com/@iconify-json/logos/-/logos-1.2.11.tgz#5bd0479d0bdc2e48adb664b0fab728d4e5013f1c"
-  integrity sha512-fOo4pGEatuyuCFNL+cwquYMa2Im0oJHRHV7lt/Qqs5Ode/lPImHCQcfTtPzZj7qYMPb/h8YHN3TG54uEowrjNQ==
-  dependencies:
-    "@iconify/types" "*"
-
-"@iconify-json/lucide@^1.2.115":
-  version "1.2.115"
-  resolved "https://registry.yarnpkg.com/@iconify-json/lucide/-/lucide-1.2.115.tgz#63fa3e886da230d3a42f4b68d4bee361ae09b59f"
-  integrity sha512-plc4npdX0I2RpsE5FFIdkCjGtL9vG09FU/a2nZ+pJ0fFQV6mTqRlbUgZgUgSPDFswq0kaaNT229nW6AQRj5o9w==
-  dependencies:
-    "@iconify/types" "*"
-
-"@iconify-json/simple-icons@^1.2.88":
-  version "1.2.88"
-  resolved "https://registry.yarnpkg.com/@iconify-json/simple-icons/-/simple-icons-1.2.88.tgz#0ef5279811844a2388460bbb7d220620988d4fce"
-  integrity sha512-+cvi1qCuvReL29ehi6t62L4fb7GDXe+UlGHFcsJcV7I2l9wtqn9XE2IBKcDr3CI5iGUGS5ISnXv699pSGpyx1Q==
-  dependencies:
-    "@iconify/types" "*"
-
 "@iconify/collections@^1.0.641":
   version "1.0.679"
   resolved "https://registry.npmjs.org/@iconify/collections/-/collections-1.0.679.tgz"

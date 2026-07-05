@@ -130,7 +130,7 @@
             <div class="space-y-3">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <UIcon name="i-lucide-bot" class="size-4 text-primary" />
+                <UIcon name="i-custom-bot" class="size-4 text-primary" />
                 <h2 class="font-semibold">AI Credits</h2>
               </div>
               <div class="flex items-center gap-2">
@@ -142,7 +142,7 @@
                     Buy credits
                   </UButton>
                 </UDropdownMenu>
-                <UButton v-else size="xs" color="primary" variant="soft" icon="i-lucide-zap" @click="openServiceUpsell('growth', 'billing-credits')">
+                <UButton v-else size="xs" color="primary" variant="soft" icon="i-heroicons-bolt" @click="openServiceUpsell('growth', 'billing-credits')">
                   Upgrade for more
                 </UButton>
               </div>

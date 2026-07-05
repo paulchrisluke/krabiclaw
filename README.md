@@ -25,6 +25,20 @@ Multi-tenant restaurant SaaS. Nuxt 4 + Cloudflare Pages + D1.
 
 ---
 
+## Production Canary Runs
+
+Real-send production canaries are intentionally off on normal `main` deploys to avoid
+accidental email/WhatsApp spend on every merge. To run them on demand, use the GitHub
+Actions workflow `Production Real-Send Canaries` and choose whether to send:
+
+- the auth OTP canary
+- the notification email/WhatsApp canary
+
+That workflow always runs production smoke first, then only sends the real canaries you
+explicitly selected for that run.
+
+---
+
 ## Local Setup
 
 ### 1. Install

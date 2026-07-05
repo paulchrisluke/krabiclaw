@@ -27,17 +27,17 @@ export default defineComponent({
       cellPadding: '0',
       cellSpacing: '0',
       style: 'border-collapse:collapse',
-    }, () => h('tbody', null, () => rows.map(([label, value], index) =>
-      h('tr', null, () => [
+    }, [h('tbody', null, rows.map(([label, value], index) =>
+      h('tr', null, [
         h('td', {
           class: 'email-details-label',
           style: `padding:${index === 0 ? '0' : '12px'} 16px 0 0;font-size:13px;font-weight:700;color:${FG_MUTED};line-height:1.5;vertical-align:top;width:120px`,
-        }, () => label),
+        }, label),
         h('td', {
           class: 'email-details-value',
           style: `padding:${index === 0 ? '0' : '12px'} 0 0;font-size:15px;color:${FG};line-height:1.5;vertical-align:top;white-space:pre-line`,
-        }, () => String(value)),
+        }, String(value)),
       ])
-    ))))
+    ))]))
   },
 })

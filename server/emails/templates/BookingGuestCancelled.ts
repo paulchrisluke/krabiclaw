@@ -1,4 +1,4 @@
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, type PropType } from 'vue'
 import { EText } from 'vue-email'
 import EmailShell from '../layouts/EmailShell'
 import EmailDetails from '../components/EmailDetails'
@@ -11,6 +11,7 @@ export default defineComponent({
     date: { type: String, required: true },
     time: { type: String, required: true },
     partySize: { type: Number, required: true },
+    notes: { type: String as PropType<string | null>, default: null },
     wasConfirmed: { type: Boolean, required: true },
     platformDomain: { type: String, required: true },
   },
@@ -26,7 +27,8 @@ export default defineComponent({
             ['Date', props.date],
             ['Time', props.time],
             ['Party size', String(props.partySize)],
-          ]
+            props.notes && ['Special requests', props.notes],
+          ].filter(Boolean) as [string, string][]
         }),
         h(EText, { style: 'margin:0;font-size:13px;color:#71717a;line-height:1.6' }, () => `The team at ${props.siteName}`),
       ])

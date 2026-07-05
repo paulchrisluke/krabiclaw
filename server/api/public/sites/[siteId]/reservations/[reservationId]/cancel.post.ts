@@ -108,6 +108,7 @@ export default defineEventHandler(async (event) => {
     date: string
     time: string
     guests: string
+    requests: string | null
     location_id: string | null
     location_name: string | null
   }>(
@@ -121,7 +122,7 @@ export default defineEventHandler(async (event) => {
       AND cancellation_token_used_at IS NULL
       AND cancellation_token_expires_at > ?
       AND status IN ('new', 'confirmed')
-    RETURNING organization_id, site_id, name, email, phone, date, time, guests, location_id,
+    RETURNING organization_id, site_id, name, email, phone, date, time, guests, requests, location_id,
       (SELECT title FROM business_locations WHERE id = reservation_submissions.location_id) AS location_name
   `,
     [now, reservationId, siteId, tokenHash, now],
@@ -151,6 +152,7 @@ export default defineEventHandler(async (event) => {
       date: reservation.date,
       time: reservation.time,
       guests: reservation.guests,
+      requests: reservation.requests,
       wasConfirmed: cancellable.status === 'confirmed'
     })
   } catch (error) {
