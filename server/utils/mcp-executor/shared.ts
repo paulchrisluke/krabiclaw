@@ -19,7 +19,6 @@ import {
 import { chargeFlatCredits, type FlatCreditAction } from "~/server/utils/ai-credits";
 import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, R2_IMAGE_MIME_TYPES } from "~/server/utils/media-mime";
 import { hasCloudflareImagesConfig } from "~/server/utils/cloudflare-images";
-import type { ApiRecord } from "~/types/api-record.d";
 
 /**
  * Resolves the upload provider for an image based on content type and Cloudflare Images config.
