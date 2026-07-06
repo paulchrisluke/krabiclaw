@@ -169,6 +169,13 @@
       "when": 1783236784824,
       "tag": "0030_yielding_havok",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1783312459127,
+      "tag": "0031_familiar_lady_bullseye",
+      "breakpoints": true
     }
   ]
 }

@@ -205,8 +205,11 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
         { openDay: 'SATURDAY', openTime: '14:00', closeTime: '23:00' },
         { openDay: 'SUNDAY', openTime: '14:00', closeTime: '23:00' },
       ],
-      rating: null,
-      reviewCount: null,
+      // Verified against the live Google Places API 2026-07-06.
+      rating: 4.7,
+      reviewCount: 440,
+      googlePlaceId: 'ChIJi-IgEJ2VUTAR1R3W1qDnhQ8',
+      lastSyncedAt: '2026-07-06T06:15:00.338Z',
       priceLevel: '฿฿฿',
       categories: ['Japanese Restaurant', 'Robatayaki', 'Sushi', 'Izakaya'],
       instagramUrl: '',
@@ -244,8 +247,11 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
         { openDay: 'SATURDAY', openTime: '12:00', closeTime: '22:30' },
         { openDay: 'SUNDAY', openTime: '12:00', closeTime: '22:30' },
       ],
+      // Verified against the live Google Places API 2026-07-06.
       rating: 4.9,
-      reviewCount: 60,
+      reviewCount: 59,
+      googlePlaceId: 'ChIJCxOPlc-VUTARJZPLnnedztg',
+      lastSyncedAt: '2026-07-06T06:15:00.338Z',
       priceLevel: '',
       categories: ['Japanese Restaurant', 'Sushi'],
       instagramUrl: '',
@@ -544,6 +550,15 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     { id: 'review-tkma-3', locationId: 'loc-kikuzuki-tkma', authorName: 'Yaniv Freeman', reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/d828a856-763a-43ab-5c98-6109db976100/public', rating: 5, content: "The most professional and delicious sushi we've ever had in Krabi! ❤️ An amazing, high-quality place with such a cool vibe. The owners are awesome, and they have the best flavored beers and alcohol we've ever tasted. Excellent desserts too—the most beautiful and tasty sushi spot in Klong Muang! ❤️\nWe love it", ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
     { id: 'review-tkma-4', locationId: 'loc-kikuzuki-tkma', authorName: 'Glasshouse', reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/ead20103-7413-4abc-1715-ef34c003a300/public', rating: 5, content: 'Love this its so great to meet new friends, eat great food and have a few 🍸', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
     { id: 'review-tkma-5', locationId: 'loc-kikuzuki-tkma', authorName: 'Mike Sperle', reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/5864559e-bafe-47e4-c50a-57709a9d9500/public', rating: 5, content: "Well I arrived, tired and wet! I was looking for something that was more fresh then the local Thai food! With real home style Japanese fixing! First I tried some meat! Wow! Cooked to my request medium rare! Then a bit of not so sweet Sake to wash it down! Hmmm that warmed me and I tried some fresh sashimi. That was it! I dont leave reviews. But this little spot on the road was fabulous 👌! There was a Scottish man there that made the time a bit enjoyable.  Claimed he was married to the owner.  But you know those Scottish! Lol! Left a bit dryer and alot happier.", ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    // Verified against the live Google Places API 2026-07-06.
+    { id: 'review-tkma-6', locationId: 'loc-kikuzuki-tkma', authorName: 'Dan Dared', reviewerPhotoUrl: '', rating: 5, content: 'Veey good, newly rennovated, great draft beers even off season and fresh produce', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    // Verified against the live Google Places API 2026-07-06 — main location had no
+    // seeded reviews before, despite carrying a real Google rating.
+    { id: 'review-kiku-1', locationId: 'loc-kikuzuki', authorName: 'Caro Ri', reviewerPhotoUrl: '', rating: 4, content: 'Very accommodating and friendly, great food. Had Lobster Ramen, Don and Sushi. All excellent and fresh. The Mango Sticky Rice Sushi was a tasty and funny dish which you should try.\n\nBut the food here really is on the expensive side. The only complaint I have is that they charge 5 % service fee, 7 % tax and 3 % credit card fee on top. I dont have a problem with that in general and they inform you about it on the first page of the menu. But I think it would have been better to include the tax/fees in the price for the dishes. Makes it more transparent and people are not surprised by the steep bill upon payment.', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'review-kiku-2', locationId: 'loc-kikuzuki', authorName: 'IEiYA', reviewerPhotoUrl: '', rating: 5, content: "A cozy, laid-back vibe.\n\nA perfectly chilled glass of Asahi Super Dry takes center stage on the wooden table, giving that ideal after-work relaxation feeling. The place has a charming bar-meets-cafe style, with warm, dim lighting that creates a comfortable and welcoming atmosphere. It's the kind of spot where you can sit back and enjoy unhurried conversations.\n\nThe frosty mug with condensation all around shows it's served at just the right temperature crisp, refreshing, and smooth with every sip. It pairs perfectly with the calm evening ambiance.\n\nGreat for a solo unwind session or a casual night out with friends and some shared bites.", ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'review-kiku-3', locationId: 'loc-kikuzuki', authorName: 'Melzer M', reviewerPhotoUrl: '', rating: 5, content: 'As a Japanese cuisine fan. I can honestly say that this is one of the most special restaurants ever visited. The place is beautiful. The variety of option is incredible and the service is just amazing really not one complaint to say I tried the wagyo Ramen and the boil egg entree. Also the hot sake was really good highly recommended.', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'review-kiku-4', locationId: 'loc-kikuzuki', authorName: 'Saber', reviewerPhotoUrl: '', rating: 5, content: 'I recently visited this Japanese restaurant and was genuinely impressed. The food was incredibly delicious, full of authentic flavors and beautifully presented. The service was exceptionally attentive staff members were friendly, quick, and made sure everything was perfect throughout the meal. The quality of the dishes was outstanding, and you can really taste the freshness and care put into every detail.\nHighly recommended for anyone who enjoys top-tier Japanese cuisine!', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'review-kiku-5', locationId: 'loc-kikuzuki', authorName: 'Frank Dahlinger', reviewerPhotoUrl: '', rating: 5, content: 'What a wonderful evening at Kikuzuki!\n\nWe started with a fantastic sashimi platter incredibly fresh, delicate, and beautifully presented with great attention to detail. Afterwards, we enjoyed the teppanyaki, perfectly cooked and full of harmonious flavors.\n\nThe absolute highlight was Jane\'s creative interpretation of "Mango & Sticky Rice" a dreamy finale, refined yet comfortingly familiar in taste.\n\nThank you for that wonderful evening, we will for sure return', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
   ],
   menus: [
     {
@@ -718,6 +733,8 @@ export function renderKikuzukiMediaBlock(): string {
       sqlJson(location.openingHours),
       sqlValue(location.rating),
       sqlValue(location.reviewCount),
+      sqlValue(location.googlePlaceId ?? null),
+      sqlValue(location.lastSyncedAt ?? null),
       sqlValue(location.priceLevel),
       sqlJson(location.categories),
       sqlValue(location.instagramUrl),
@@ -745,7 +762,7 @@ INSERT OR REPLACE INTO business_locations (
   latitude, longitude,
   description, short_description,
   opening_hours,
-  rating, review_count,
+  rating, review_count, google_place_id, last_synced_at,
   price_level, categories,
   instagram_url, facebook_url,
   is_primary, status,

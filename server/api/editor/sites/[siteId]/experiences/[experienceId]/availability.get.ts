@@ -1,10 +1,10 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { getExperienceById, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
+import { DASHBOARD_MANAGEMENT_WINDOW_DAYS, getExperienceById, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
 import { queryFirst } from '~/server/db'
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
-const MAX_DAYS = 31
+const MAX_DAYS = DASHBOARD_MANAGEMENT_WINDOW_DAYS
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')

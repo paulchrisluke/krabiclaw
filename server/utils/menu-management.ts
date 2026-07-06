@@ -8,7 +8,7 @@ import type {
   CreateMenuItemRequest,
   UpdateMenuItemRequest,
 } from "../types/menu";
-import { normalizePriceAmount } from "~/shared/money";
+import { normalizePriceAmount, assertValidSaleWindow } from "~/shared/money";
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from "~/server/db";
 
 const MAX_SUFFIX_ATTEMPTS = 50;
@@ -446,6 +446,7 @@ export async function getMenuWithItems(
     db,
     `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
+           mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
            mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
@@ -478,6 +479,7 @@ async function loadPublishedMenuById(
     db,
     `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
+           mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
            mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
@@ -580,6 +582,7 @@ export async function getPublicMenuItem(
     db,
     `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
+           mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
            mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
@@ -755,6 +758,7 @@ export async function createMenuItem(
     [menuId, organizationId, siteId],
   );
   if (!menuOwner) throw createError({ statusCode: 404, statusMessage: "Menu not found" });
+  assertValidSaleWindow(item.sale_starts_at, item.sale_ends_at);
 
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -763,9 +767,9 @@ export async function createMenuItem(
   const result = await execute(
     db,
     `
-    INSERT INTO menu_items (id, menu_id, section, name, slug, description, price_amount, image_asset_id, available, featured, featured_sort_order, sort_order,
+    INSERT INTO menu_items (id, menu_id, section, name, slug, description, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, image_asset_id, available, featured, featured_sort_order, sort_order,
       allergens, ingredients, dietary_notes, preparation, serving_note, created_at, updated_at, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
     [
       id,
@@ -775,6 +779,9 @@ export async function createMenuItem(
       slug,
       item.description || null,
       normalizePriceAmount(item.price_amount),
+      normalizePriceAmount(item.compare_at_price_amount),
+      item.sale_starts_at || null,
+      item.sale_ends_at || null,
       item.image_asset_id || null,
       item.available !== undefined ? item.available : true,
       item.featured !== undefined ? item.featured : false,
@@ -802,6 +809,7 @@ export async function createMenuItem(
     db,
     `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
+           mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
            mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
@@ -832,6 +840,7 @@ export async function updateMenuItem(
   updatedBy: string,
 ): Promise<MenuItem> {
   const now = new Date().toISOString();
+  assertValidSaleWindow(updates.sale_starts_at, updates.sale_ends_at);
 
   const existing = await queryFirst<{ menu_id: string; section: string | null }>(
     db,
@@ -876,6 +885,18 @@ export async function updateMenuItem(
   if (updates.price_amount !== undefined) {
     setParts.push("price_amount = ?");
     params.push(normalizePriceAmount(updates.price_amount));
+  }
+  if (updates.compare_at_price_amount !== undefined) {
+    setParts.push("compare_at_price_amount = ?");
+    params.push(normalizePriceAmount(updates.compare_at_price_amount));
+  }
+  if (updates.sale_starts_at !== undefined) {
+    setParts.push("sale_starts_at = ?");
+    params.push(updates.sale_starts_at || null);
+  }
+  if (updates.sale_ends_at !== undefined) {
+    setParts.push("sale_ends_at = ?");
+    params.push(updates.sale_ends_at || null);
   }
   if (updates.image_asset_id !== undefined) {
     setParts.push("image_asset_id = ?");
@@ -928,7 +949,8 @@ export async function updateMenuItem(
 
   // Only change source to manual when actual content is edited, not for metadata-only changes
   const hasContentChange = updates.name !== undefined || updates.description !== undefined || updates.section !== undefined ||
-    updates.price_amount !== undefined || updates.image_asset_id !== undefined || updates.allergens !== undefined ||
+    updates.price_amount !== undefined || updates.compare_at_price_amount !== undefined || updates.sale_starts_at !== undefined ||
+    updates.sale_ends_at !== undefined || updates.image_asset_id !== undefined || updates.allergens !== undefined ||
     updates.ingredients !== undefined || updates.dietary_notes !== undefined || updates.preparation !== undefined ||
     updates.serving_note !== undefined
   if (hasContentChange) {
@@ -959,6 +981,7 @@ export async function updateMenuItem(
     db,
     `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
+           mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
            mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by

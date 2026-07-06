@@ -84,6 +84,10 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Invalid price amount' }, { status: 400 })
     }
 
+    if (body.compare_at_price_amount !== undefined && body.compare_at_price_amount !== null && String(body.compare_at_price_amount).trim() !== '' && !normalizePriceAmount(body.compare_at_price_amount)) {
+      return jsonResponse({ error: 'Invalid compare-at price amount' }, { status: 400 })
+    }
+
     const menuItem = await createMenuItem(db, site.organization_id, siteId, menuId, body, session.user.id)
     
     return jsonResponse({

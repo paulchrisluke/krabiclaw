@@ -106,6 +106,12 @@ export interface CuratedLocationDefinition {
   }>
   rating: number | null
   reviewCount: number | null
+  // Set only when rating/reviewCount reflect a real, verified Google Places
+  // sync (matches the last_synced_at gate in bootstrap.get.ts) — never fill
+  // these in without a real place_id, or the public reviews UI will treat
+  // fabricated numbers as a verified aggregate.
+  googlePlaceId?: string | null
+  lastSyncedAt?: string | null
   priceLevel: string
   categories: string[]
   instagramUrl: string

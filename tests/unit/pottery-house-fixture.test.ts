@@ -108,7 +108,7 @@ test("pottery house reviews block includes reviews for both locations", () => {
   assert.match(sql, /INSERT OR IGNORE INTO reviews/);
   assert.match(sql, /loc-pottery-house'/);
   assert.match(sql, /loc-pottery-beachfront'/);
-  assert.match(sql, /Sophie L\./);
+  assert.match(sql, /Kathy Evans Car/);
 });
 
 test("pottery house qa block includes Q&A for both locations", () => {

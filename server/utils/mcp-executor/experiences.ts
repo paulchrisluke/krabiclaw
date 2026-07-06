@@ -28,6 +28,10 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
       if (priceAmountRaw !== undefined && priceAmountRaw !== null && typeof priceAmountRaw !== "number") {
         throw mcpProtocolError(MCP_ERROR.invalidParams, "price_amount must be a number or null");
       }
+      const compareAtPriceAmountRaw = ceArgs.compare_at_price_amount;
+      if (compareAtPriceAmountRaw !== undefined && compareAtPriceAmountRaw !== null && typeof compareAtPriceAmountRaw !== "number") {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "compare_at_price_amount must be a number or null");
+      }
       let locationId = ceArgs.location_id ? String(ceArgs.location_id) : null;
       if (!locationId) {
         const siteRow = (await loadSiteSettings(site.db, site.organizationId, site.siteId)) as Record<string, unknown>;
@@ -47,6 +51,7 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
             ...(ceArgs as unknown as CreateExperienceInput),
             location_id: locationId,
             price_amount: typeof priceAmountRaw === "number" ? priceAmountRaw : null,
+            compare_at_price_amount: typeof compareAtPriceAmountRaw === "number" ? compareAtPriceAmountRaw : null,
           },
           site.userId,
         );
@@ -61,6 +66,10 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
       if (priceAmountRaw !== undefined && priceAmountRaw !== null && typeof priceAmountRaw !== "number") {
         throw mcpProtocolError(MCP_ERROR.invalidParams, "price_amount must be a number or null");
       }
+      const compareAtPriceAmountRaw = ueArgs.compare_at_price_amount;
+      if (compareAtPriceAmountRaw !== undefined && compareAtPriceAmountRaw !== null && typeof compareAtPriceAmountRaw !== "number") {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "compare_at_price_amount must be a number or null");
+      }
       const experience = await updateExperience(
           site.db,
           site.siteId,
@@ -69,6 +78,9 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
             ...(ueArgs as unknown as UpdateExperienceInput),
             ...(priceAmountRaw !== undefined
               ? { price_amount: typeof priceAmountRaw === "number" ? priceAmountRaw : null }
+              : {}),
+            ...(compareAtPriceAmountRaw !== undefined
+              ? { compare_at_price_amount: typeof compareAtPriceAmountRaw === "number" ? compareAtPriceAmountRaw : null }
               : {}),
           },
         );

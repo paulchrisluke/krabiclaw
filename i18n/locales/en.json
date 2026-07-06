@@ -71,6 +71,8 @@
       "response_label": "Restaurant Response:",
       "empty_title": "No reviews yet.",
       "empty_desc": "Be the first to share your experience with us.",
+      "aggregate_only_title": "Rated {average} on Google from {count} reviews",
+      "aggregate_only_desc": "Individual reviews aren't available here yet — check back soon.",
       "view_all": "View All Reviews",
       "anonymous": "Anonymous"
     },
@@ -193,6 +195,8 @@
       "synced_live": "Synced live from Google Business",
       "no_reviews_title": "No reviews yet.",
       "no_reviews_desc": "Be the first to share your experience with us on Google.",
+      "aggregate_only_title": "Rated {rating} on Google from {count} reviews",
+      "aggregate_only_desc": "Individual reviews aren't available here yet — check back soon.",
       "no_match_title": "No reviews match this filter.",
       "no_match_desc": "Switch filter, or read all reviews.",
       "reset_filter": "Reset filter",

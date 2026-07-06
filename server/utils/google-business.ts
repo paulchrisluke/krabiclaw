@@ -523,7 +523,7 @@ export const syncGoogleLocations = async (
               (id, organization_id, site_id, location_id, google_review_id,
                author_name, reviewer_photo_url, rating, content,
                status, source, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', 'google_business', ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'google_business', ?, ?)
           `, [
             reviewId,
             organizationId,

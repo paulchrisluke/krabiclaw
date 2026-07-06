@@ -17,7 +17,7 @@ import {
   parseStringArray,
 } from "~/server/utils/menu-management";
 import { verifyPreviewToken } from "~/server/utils/preview-token";
-import { type Experience } from "~/server/utils/experiences";
+import { attachAvailabilitySummaries, type Experience } from "~/server/utils/experiences";
 import { type MenuWithItems } from "~/server/types/menu";
 import {
   attachFeaturedImageFromBareJoin,
@@ -440,7 +440,7 @@ export default defineEventHandler(async (event) => {
   );
 
   idxExpCount = push(
-    `SELECT COUNT(*) AS cnt FROM experiences WHERE site_id = ? AND status = 'active'`,
+    `SELECT COUNT(*) AS cnt FROM experiences WHERE site_id = ? AND status != 'inactive'`,
     [siteId],
   );
 
@@ -506,6 +506,7 @@ export default defineEventHandler(async (event) => {
 
     idxMenuItems = push(
       `SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
+              mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
               mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured,
               mi.featured_sort_order, mi.sort_order, mi.allergens, mi.ingredients, mi.dietary_notes,
               mi.preparation, mi.serving_note, mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
@@ -549,7 +550,7 @@ export default defineEventHandler(async (event) => {
     let expSql = `SELECT e.id, e.organization_id, e.site_id, e.location_id,
                          e.title, e.slug, e.tagline, e.body, e.image_asset_id,
                          e.video_asset_id, e.images,
-                         e.price, e.price_amount, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
+                         e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
                          e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
                          e.status, e.sort_order, e.featured, e.featured_sort_order,
                          e.seo_title, e.seo_description, e.created_at, e.updated_at,
@@ -557,7 +558,7 @@ export default defineEventHandler(async (event) => {
                   FROM experiences e
                   LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
                   LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
-                  WHERE e.organization_id = ? AND e.site_id = ? AND e.status = 'active'`;
+                  WHERE e.organization_id = ? AND e.site_id = ? AND e.status != 'inactive'`;
     if (page === "location" && locationId) {
       expSql += ` AND e.location_id = ?`;
       expParams.push(locationId);
@@ -571,7 +572,7 @@ export default defineEventHandler(async (event) => {
       `SELECT e.id, e.organization_id, e.site_id, e.location_id,
               e.title, e.slug, e.tagline, e.body, e.image_asset_id,
               e.video_asset_id, e.images,
-              e.price, e.price_amount, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
+              e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
               e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
               e.status, e.sort_order, e.featured, e.featured_sort_order,
               e.seo_title, e.seo_description, e.created_at, e.updated_at,
@@ -579,7 +580,7 @@ export default defineEventHandler(async (event) => {
        FROM experiences e
        LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
        LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
-       WHERE e.organization_id = ? AND e.site_id = ? AND e.slug = ? AND e.status = 'active'
+       WHERE e.organization_id = ? AND e.site_id = ? AND e.slug = ?
        LIMIT 1`,
       [orgId, siteId, experienceSlug],
     );
@@ -892,14 +893,15 @@ export default defineEventHandler(async (event) => {
   }
 
   // Build experiences
-  const experiencesList: Experience[] =
+  const experiencesListRaw: Experience[] =
     idxExperiencesList >= 0
       ? (
           (batchResults[idxExperiencesList] as { results: Record<string, unknown>[] })?.results ?? []
         ).map(parseExperienceRow)
       : [];
+  const experiencesList = await attachAvailabilitySummaries(db, orgId, siteId, experiencesListRaw);
 
-  const experienceDetail: Experience | null =
+  const experienceDetailRaw: Experience | null =
     idxExperienceDetail >= 0
       ? (
           (batchResults[idxExperienceDetail] as { results: Record<string, unknown>[] })?.results[0] ?? null
@@ -908,6 +910,12 @@ export default defineEventHandler(async (event) => {
             (batchResults[idxExperienceDetail] as { results: Record<string, unknown>[] }).results[0]!,
           )
         : null
+      : null;
+  // inactive experiences are never public, at any route — sold_out stays visible
+  // with its own messaging (see server/utils/experiences.ts listExperiences).
+  const experienceDetail =
+    experienceDetailRaw && experienceDetailRaw.status !== "inactive"
+      ? (await attachAvailabilitySummaries(db, orgId, siteId, [experienceDetailRaw]))[0]
       : null;
 
   // Locations rarely have their own email (Google Places API doesn't expose
@@ -996,10 +1004,13 @@ export default defineEventHandler(async (event) => {
               ? { latitude: primary.latitude, longitude: primary.longitude }
               : null,
           profile: { description: primary.description },
-          reviewSummary: {
-            averageRating: primary.rating,
-            totalReviewCount: primary.review_count,
-          },
+          reviewSummary:
+            primary.last_synced_at && primary.rating != null && primary.review_count != null
+              ? {
+                  averageRating: primary.rating,
+                  totalReviewCount: primary.review_count,
+                }
+              : null,
         }
       : null,
     reviews: reviewRows.results ?? [],
@@ -1147,13 +1158,16 @@ export default defineEventHandler(async (event) => {
     // Type A — full reviews for /locations/[slug]/reviews
     ...(dataType === "reviews"
       ? {
-          reviewsAggregate: locationForAggregate
-            ? {
-                rating: locationForAggregate.rating,
-                review_count: locationForAggregate.review_count,
-                distribution: reviewsDist,
-              }
-            : null,
+          reviewsAggregate:
+            locationForAggregate?.last_synced_at &&
+            locationForAggregate.rating != null &&
+            locationForAggregate.review_count != null
+              ? {
+                  rating: locationForAggregate.rating,
+                  review_count: locationForAggregate.review_count,
+                  distribution: reviewsDist,
+                }
+              : null,
           reviewsList: fullReviews,
         }
       : {}),

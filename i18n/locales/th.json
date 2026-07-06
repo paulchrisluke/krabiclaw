@@ -71,6 +71,8 @@
       "response_label": "การตอบกลับจากเรา:",
       "empty_title": "ยังไม่มีรีวิว",
       "empty_desc": "เป็นคนแรกที่แบ่งปันประสบการณ์ของคุณกับเรา",
+      "aggregate_only_title": "คะแนน {average} จาก Google จาก {count} รีวิว",
+      "aggregate_only_desc": "ยังไม่มีรีวิวแบบเต็มในหน้านี้ — กลับมาดูใหม่เร็ว ๆ นี้",
       "view_all": "ดูรีวิวทั้งหมด",
       "anonymous": "ไม่ระบุชื่อ"
     },
@@ -193,6 +195,8 @@
       "synced_live": "ซิงก์แบบเรียลไทม์จาก Google Business",
       "no_reviews_title": "ยังไม่มีรีวิว",
       "no_reviews_desc": "เป็นคนแรกที่แชร์ประสบการณ์ของคุณกับเราบน Google",
+      "aggregate_only_title": "คะแนน {rating} จาก Google จาก {count} รีวิว",
+      "aggregate_only_desc": "ยังไม่มีรีวิวแบบเต็มในหน้านี้ — กลับมาดูใหม่เร็ว ๆ นี้",
       "no_match_title": "ไม่มีรีวิวที่ตรงกับตัวกรองนี้",
       "no_match_desc": "เปลี่ยนตัวกรอง หรืออ่านรีวิวทั้งหมด",
       "reset_filter": "รีเซ็ตตัวกรอง",

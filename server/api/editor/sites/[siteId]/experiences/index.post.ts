@@ -67,6 +67,12 @@ export default defineEventHandler(async (event) => {
     throw err
   }
 
+  // Validate compare_at_price_amount before object construction
+  if (body.compare_at_price_amount !== null && body.compare_at_price_amount !== undefined && body.compare_at_price_amount !== '') {
+    const parsed = Number(body.compare_at_price_amount)
+    if (!Number.isFinite(parsed)) return jsonResponse({ error: 'compare_at_price_amount must be a valid number' }, { status: 400 })
+  }
+
   const experience = await createExperience(db, site.organization_id, siteId, {
     title,
     tagline: body.tagline ? String(body.tagline).trim() : null,
@@ -79,6 +85,9 @@ export default defineEventHandler(async (event) => {
     meeting_point: body.meeting_point ? String(body.meeting_point).trim() : null,
     price: body.price ? String(body.price).trim() : null,
     price_amount: body.price_amount === null || body.price_amount === undefined || body.price_amount === '' ? null : Number(body.price_amount),
+    compare_at_price_amount: body.compare_at_price_amount === null || body.compare_at_price_amount === undefined || body.compare_at_price_amount === '' ? null : Number(body.compare_at_price_amount),
+    sale_starts_at: body.sale_starts_at ? String(body.sale_starts_at) : null,
+    sale_ends_at: body.sale_ends_at ? String(body.sale_ends_at) : null,
     duration_minutes: optionalInteger(body.duration_minutes),
     max_capacity: optionalInteger(body.max_capacity),
     time_slots: Array.isArray(body.time_slots) ? body.time_slots.map(String) : null,
