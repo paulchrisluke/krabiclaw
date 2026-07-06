@@ -4,8 +4,8 @@
 // changes (router.afterEach) and the visibilitychange/sendBeacon duration ping.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { execute, queryFirst } from '~/server/db'
+import { getClientIp } from '~/server/utils/hourly-rate-limit'
 import {
-  getClientIp,
   getCloudflareGeo,
   getOrCreateSessionId,
   getOrCreateVisitorId,

@@ -106,7 +106,7 @@
             <div class="flex flex-col gap-3 px-2">
               <UTooltip :text="collapsed ? 'New conversation' : undefined">
                 <UButton
-                  icon="i-heroicons-plus"
+                  icon="i-lucide-plus"
                   :label="collapsed ? undefined : 'New conversation'"
                   color="primary"
                   variant="soft"
@@ -478,25 +478,25 @@ const organizationMenuItems = computed(() => [
   organizations.value.map((org) => ({
     label: org.name,
     avatar: { src: org.logo ?? undefined, icon: org.logo ? undefined : 'i-lucide-building-2' },
-    icon: org.id === organization.value?.id ? 'i-heroicons-check' : undefined,
+    icon: org.id === organization.value?.id ? 'i-lucide-check' : undefined,
     onSelect: () => switchOrganization(org.id)
   })),
   [
     {
       label: 'New business',
-      icon: 'i-heroicons-plus',
+      icon: 'i-lucide-plus',
       to: '/dashboard/onboarding'
     }
   ],
   sites.value.map((s) => ({
     label: s.brand_name ?? s.subdomain ?? 'Site',
-    icon: s.subdomain === activeSiteSlug.value ? 'i-heroicons-check' : 'i-lucide-globe',
+    icon: s.subdomain === activeSiteSlug.value ? 'i-lucide-check' : 'i-lucide-globe',
     to: orgBase.value && s.subdomain ? `${orgBase.value}/sites/${s.subdomain}` : undefined
   })),
   [
     {
       label: 'Add site',
-      icon: 'i-heroicons-plus',
+      icon: 'i-lucide-plus',
       to: orgBase.value ? `${orgBase.value}/sites/new` : undefined
     }
   ]
@@ -505,7 +505,7 @@ const organizationMenuItems = computed(() => [
 const locationMenuItems = computed(() => [
   locations.value.map((location) => ({
     label: location.title,
-    icon: location.id === selectedLocation.value?.id ? 'i-heroicons-check' : 'i-lucide-map-pin',
+    icon: location.id === selectedLocation.value?.id ? 'i-lucide-check' : 'i-lucide-map-pin',
     onSelect: () => dashboard.selectLocation(location.id)
   })),
   [
@@ -525,7 +525,7 @@ const mainNavigation = computed(() => [
   [
     { label: 'Blog', icon: 'i-lucide-newspaper', to: siteBase.value ? `${siteBase.value}/blog` : '/dashboard' },
     { label: 'Translations', icon: 'i-lucide-languages', to: siteBase.value ? `${siteBase.value}/translations` : '/dashboard' },
-    { label: 'Support', icon: 'i-lucide-headphones', to: orgBase.value ? `${orgBase.value}/support` : '/dashboard' },
+    { label: 'Support', icon: 'i-lucide-life-buoy', to: orgBase.value ? `${orgBase.value}/support` : '/dashboard' },
   ],
   [
     { label: 'Settings', icon: 'i-lucide-settings', to: orgSettingsBase.value ? `${orgSettingsBase.value}/general` : '/dashboard' },
@@ -541,15 +541,15 @@ const locationNavigation = computed(() => {
     ],
     [
       { label: 'Menu', icon: 'i-lucide-utensils', to: `${project}/menu` },
-      { label: 'Content', icon: 'i-lucide-files', to: `${project}/content?page=location` },
+      { label: 'Content', icon: 'i-lucide-copy', to: `${project}/content?page=location` },
       { label: 'Posts', icon: 'i-lucide-newspaper', to: `${project}/posts` },
-      { label: 'Media', icon: 'i-lucide-images', to: `${project}/media` },
+      { label: 'Media', icon: 'i-lucide-image', to: `${project}/media` },
       { label: 'Pages', icon: 'i-lucide-file-text', to: `${project}/pages` },
     ],
     [
       { label: 'Reviews', icon: 'i-lucide-star', to: `${project}/reviews` },
       { label: 'Inbox', icon: 'i-lucide-inbox', to: `${project}/inbox` },
-      { label: 'Reservations', icon: 'i-lucide-calendar-check', to: `${project}/reservations` },
+      { label: 'Reservations', icon: 'i-lucide-calendar', to: `${project}/reservations` },
       { label: 'Orders', icon: 'i-lucide-shopping-bag', to: `${project}/order` },
     ],
     [
@@ -574,7 +574,7 @@ const adminNavigation = computed(() => [[
   { label: 'Add-ons',  icon: 'i-lucide-inbox',           to: '/admin?tab=queue',     active: adminTab.value === 'queue' },
   { label: 'Clients',  icon: 'i-lucide-building-2',       to: '/admin?tab=clients',   active: adminTab.value === 'clients' },
   { label: 'Members',  icon: 'i-lucide-user-plus',        to: '/admin?tab=members',   active: adminTab.value === 'members' },
-  { label: 'Analytics',icon: 'i-lucide-bar-chart-2',      to: '/admin?tab=analytics', active: adminTab.value === 'analytics' },
+  { label: 'Analytics',icon: 'i-lucide-chart-bar',      to: '/admin?tab=analytics', active: adminTab.value === 'analytics' },
   { label: 'Domains',  icon: 'i-lucide-globe',            to: '/admin?tab=domains',   active: adminTab.value === 'domains' },
   { label: 'Users',    icon: 'i-lucide-users',            to: '/admin?tab=users',     active: adminTab.value === 'users' },
   { label: 'Content',  icon: 'i-lucide-file-text',        to: '/admin?tab=content',   active: adminTab.value === 'content' },
@@ -596,10 +596,10 @@ const orgSettingsNavigation = computed(() => {
   const org = orgSettingsBase.value
   if (!org) return [[]]
   return [[
-    { label: 'General', icon: 'i-lucide-sliders', to: `${org}/general` },
+    { label: 'General', icon: 'i-lucide-sliders-horizontal', to: `${org}/general` },
     { label: 'ChatGPT', icon: 'i-lucide-bot', to: `${org}/chatgpt` },
     { label: 'Domains', icon: 'i-lucide-globe', to: `${org}/domains` },
-    { label: 'Analytics', icon: 'i-lucide-bar-chart-3', to: `${org}/analytics` },
+    { label: 'Analytics', icon: 'i-lucide-chart-bar', to: `${org}/analytics` },
     { label: 'Billing', icon: 'i-lucide-credit-card', to: `${org}/billing` },
     { label: 'Members', icon: 'i-lucide-users', to: `${org}/members` },
   ]]

@@ -20,7 +20,7 @@
             size="xs"
             color="neutral"
             variant="ghost"
-            :icon="copiedStarter ? 'i-heroicons-check' : 'i-heroicons-clipboard'"
+            :icon="copiedStarter ? 'i-lucide-check' : 'i-lucide-clipboard'"
             @click="copyStarterPrompt"
           >
             {{ copiedStarter ? 'Copied' : 'Copy prompt' }}

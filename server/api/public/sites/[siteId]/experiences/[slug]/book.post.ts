@@ -5,43 +5,13 @@ import { fmt12Hour } from '~/shared/reservation-hours'
 import { notifyExperienceBookingCreated } from '~/server/utils/notifications'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { normalizePhone } from '~/server/utils/whatsapp'
-import { execute, queryFirst, type DbClient } from '~/server/db'
+import { queryFirst } from '~/server/db'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
+import { getPlatformDomain } from '~/server/utils/notifications'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
-
-const IP_HOURLY_LIMIT = 5
-const EMAIL_DAILY_LIMIT = 3
-
-async function hashValue(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value.toLowerCase().trim())
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-function getClientIp(event: ApiValue): string {
-  const fwd = event.node?.req?.headers?.['x-forwarded-for']
-  const forwardedFor = Array.isArray(fwd) ? fwd.join(',') : String(fwd || '')
-  return forwardedFor.split(',').map((p: string) => p.trim()).find(Boolean)
-    || event.node?.req?.socket?.remoteAddress
-    || 'unknown'
-}
-
-async function incrementRateLimit(db: DbClient, key: string, limit: number, expireMs: number): Promise<boolean> {
-  const now = new Date().toISOString()
-  const expiresAt = new Date(Date.now() + expireMs).toISOString()
-  const result = await execute(db,
-    `INSERT INTO rate_limits (key, count, updated_at, expires_at) VALUES (?, 1, ?, ?)
-       ON CONFLICT(key) DO UPDATE SET
-         count = CASE WHEN rate_limits.expires_at <= ? THEN 1 ELSE rate_limits.count + 1 END,
-         expires_at = CASE WHEN rate_limits.expires_at <= ? THEN ? ELSE rate_limits.expires_at END,
-         updated_at = ?
-       WHERE (CASE WHEN rate_limits.expires_at <= ? THEN 1 ELSE rate_limits.count + 1 END) <= ?`,
-    [key, now, expiresAt, now, now, expiresAt, now, now, limit],
-  )
-  return Boolean(result?.success && result?.meta?.changes)
-}
+import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -52,7 +22,7 @@ export default defineEventHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const site = await queryFirst<{ id: string; organization_id: string; brand_name: string | null }>(db, `SELECT id, organization_id, brand_name FROM sites WHERE id = ? AND status = 'active' LIMIT 1`, [siteId])
+  const site = await queryFirst<{ id: string; organization_id: string; brand_name: string | null; public_url: string | null; subdomain: string | null }>(db, `SELECT id, organization_id, brand_name, public_url, subdomain FROM sites WHERE id = ? AND status = 'active' LIMIT 1`, [siteId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const experience = await getExperienceBySlug(db, siteId, slug)
@@ -133,18 +103,18 @@ export default defineEventHandler(async (event) => {
 
   // Rate limiting (skipped in dev so E2E tests can run repeatedly without hitting limits)
   const clientIp = getClientIp(event)
-  const ipHash = await hashValue(clientIp)
-  const emailHash = await hashValue(guestEmail)
+  const ipHash = await hashClientIp(clientIp)
+  const emailHash = await hashIdentifier(guestEmail)
 
   const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
   if (!import.meta.dev && !e2eOverride) {
     const hourWindow = Math.floor(Date.now() / 3_600_000)
     const today = new Date().toISOString().split('T')[0]
 
-    const ipOk = await incrementRateLimit(db, `rate:xp-book:ip:${ipHash}:${hourWindow}`, IP_HOURLY_LIMIT, 3_600_000)
+    const ipOk = await incrementHourlyRateLimit(db, `rate:xp-book:ip:${ipHash}:${hourWindow}`, IP_HOURLY_LIMIT, 3_600_000)
     if (!ipOk) return jsonResponse({ error: 'Too many requests. Please try again later.' }, { status: 429 })
 
-    const emailOk = await incrementRateLimit(db, `rate:xp-book:email:${emailHash}:${today}`, EMAIL_DAILY_LIMIT, 86_400_000)
+    const emailOk = await incrementHourlyRateLimit(db, `rate:xp-book:email:${emailHash}:${today}`, EMAIL_DAILY_LIMIT, 86_400_000)
     if (!emailOk) return jsonResponse({ error: 'Too many booking requests from this email. Please try again tomorrow.' }, { status: 429 })
   }
 
@@ -171,6 +141,9 @@ export default defineEventHandler(async (event) => {
 
   try {
     const { contactPhone, contactEmail } = await resolveLocationContact(db, siteId, experience.location_id)
+    const platformDomain = getPlatformDomain(env)
+    const siteBaseUrl = site.public_url?.replace(/\/$/, '') || (site.subdomain ? `https://${site.subdomain}.${platformDomain}` : null)
+    const cancelUrl = siteBaseUrl ? `${siteBaseUrl}/experiences/cancel?id=${booking.id}#${cancellation.token}` : null
     await notifyExperienceBookingCreated(env, db, {
       organizationId: site.organization_id,
       siteId,
@@ -185,6 +158,7 @@ export default defineEventHandler(async (event) => {
       timeSlot,
       partySize,
       notes: notes || null,
+      cancelUrl,
       contactPhone,
       contactEmail,
     })

@@ -343,13 +343,17 @@ export async function updateContactSubmissionStatus(
 export async function listReservationSubmissions(
   db: D1Database,
   siteId: string,
-  opts: { locationId?: string | null } = {},
+  opts: { locationId?: string | null; sinceDays?: number | null } = {},
 ) {
-  const params: string[] = [siteId]
+  const params: (string | number)[] = [siteId]
   let where = `rs.site_id = ?`
   if (opts.locationId) {
     where += ` AND rs.location_id = ?`
     params.push(opts.locationId)
+  }
+  if (opts.sinceDays) {
+    where += ` AND rs.created_at >= datetime('now', ?)`
+    params.push(`-${opts.sinceDays} days`)
   }
   return await queryAll<Record<string, unknown>>(db, `
     SELECT rs.*, bl.title AS location_title
@@ -359,6 +363,57 @@ export async function listReservationSubmissions(
     ORDER BY rs.created_at DESC
     LIMIT 200
   `, params);
+}
+
+export async function countReservationSubmissions(
+  db: D1Database,
+  siteId: string,
+  opts: { locationId?: string | null; sinceDays?: number | null } = {},
+) {
+  const params: (string | number)[] = [siteId]
+  let where = `rs.site_id = ?`
+  if (opts.locationId) {
+    where += ` AND rs.location_id = ?`
+    params.push(opts.locationId)
+  }
+  if (opts.sinceDays) {
+    where += ` AND rs.created_at >= datetime('now', ?)`
+    params.push(`-${opts.sinceDays} days`)
+  }
+  const row = await queryFirst<{ total: number }>(db, `
+    SELECT COUNT(*) AS total
+    FROM reservation_submissions rs
+    WHERE ${where}
+  `, params);
+  return row?.total ?? 0;
+}
+
+export async function getReservationSubmissionsByStatus(
+  db: D1Database,
+  siteId: string,
+  opts: { locationId?: string | null; sinceDays?: number | null } = {},
+): Promise<Record<string, number>> {
+  const params: (string | number)[] = [siteId]
+  let where = `rs.site_id = ?`
+  if (opts.locationId) {
+    where += ` AND rs.location_id = ?`
+    params.push(opts.locationId)
+  }
+  if (opts.sinceDays) {
+    where += ` AND rs.created_at >= datetime('now', ?)`
+    params.push(`-${opts.sinceDays} days`)
+  }
+  const results = await queryAll<{ status: string; count: number }>(db, `
+    SELECT status, COUNT(*) as count
+    FROM reservation_submissions rs
+    WHERE ${where}
+    GROUP BY status
+  `, params);
+  const byStatus: Record<string, number> = {}
+  for (const row of results ?? []) {
+    byStatus[row.status] = row.count
+  }
+  return byStatus
 }
 
 export async function updateReservationSubmissionStatus(

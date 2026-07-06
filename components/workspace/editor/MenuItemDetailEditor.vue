@@ -4,7 +4,7 @@
       v-if="error"
       color="error"
       variant="soft"
-      icon="i-heroicons-exclamation-triangle"
+      icon="i-lucide-triangle-alert"
       :description="error"
       class="mb-6"
     />
@@ -119,7 +119,7 @@
           v-if="itemId"
           color="error"
           variant="ghost"
-          icon="i-heroicons-trash"
+          icon="i-lucide-trash-2"
           :loading="deleting"
           @click="handleDelete"
         >

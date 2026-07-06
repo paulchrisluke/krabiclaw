@@ -95,14 +95,14 @@
             <UAlert
               color="warning"
               variant="soft"
-              icon="i-heroicons-lock-closed"
+              icon="i-lucide-lock"
               title="Growth plan required"
               description="Facebook and Instagram sync is available on the Growth plan and above. Upgrade to connect your Page and auto-sync posts to your site."
             />
             <UButton
               color="primary"
               variant="outline"
-              icon="i-heroicons-arrow-up-circle"
+              icon="i-lucide-circle-arrow-up"
               :to="`/dashboard/${route.params.orgSlug}/~/settings/billing`"
             >
               Upgrade to Growth
@@ -112,7 +112,7 @@
             <UAlert
               color="info"
               variant="soft"
-              icon="i-heroicons-light-bulb"
+              icon="i-lucide-lightbulb"
               description="Link your Facebook Page and Instagram Business Account to automatically sync posts to your website. Just post to Facebook or Instagram and we'll handle the rest."
             />
 
@@ -179,7 +179,7 @@
               Need a different number for one location only? Set its manager alert number from that location's page instead of here.
             </p>
             <UButton
-              icon="i-heroicons-check"
+              icon="i-lucide-check"
               :loading="savingWhatsapp"
               @click="saveWhatsappSettings"
             >
@@ -217,7 +217,7 @@
               />
             </UFormField>
             <UButton
-              icon="i-heroicons-check"
+              icon="i-lucide-check"
               :loading="savingCurrency"
               @click="saveCurrency"
             >
@@ -259,7 +259,7 @@
           v-if="deleteError"
           color="error"
           variant="soft"
-          icon="i-heroicons-exclamation-triangle"
+          icon="i-lucide-triangle-alert"
           :description="deleteError"
         />
 

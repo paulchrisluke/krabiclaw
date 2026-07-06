@@ -3,7 +3,7 @@
     <template #header>
       <div class="flex items-start gap-3 px-4 pt-4">
         <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <UIcon name="i-heroicons-bell" class="size-4" />
+          <UIcon name="i-lucide-bell" class="size-4" />
         </div>
         <div class="min-w-0">
           <p class="text-[13px] font-semibold text-highlighted">{{ title }}</p>

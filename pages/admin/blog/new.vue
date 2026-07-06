@@ -5,7 +5,7 @@
         <h1 class="text-2xl font-bold text-default">New Blog Post</h1>
         <p class="mt-1 text-sm text-muted">Draft and publish platform blog content.</p>
       </div>
-      <UButton to="/admin" color="neutral" variant="soft" icon="i-heroicons-arrow-left">Admin</UButton>
+      <UButton to="/admin" color="neutral" variant="soft" icon="i-lucide-arrow-left">Admin</UButton>
     </div>
 
     <UCard>
@@ -74,7 +74,7 @@
           <div class="space-y-3">
             <div class="flex items-center justify-between gap-3">
               <h3 class="text-sm font-medium text-default">FAQ</h3>
-              <UButton color="neutral" variant="soft" size="sm" icon="i-heroicons-plus" @click="addFaqItem">
+              <UButton color="neutral" variant="soft" size="sm" icon="i-lucide-plus" @click="addFaqItem">
                 Add question
               </UButton>
             </div>
@@ -116,7 +116,7 @@
           <div class="space-y-3">
             <div class="flex items-center justify-between gap-3">
               <h3 class="text-sm font-medium text-default">How-To</h3>
-              <UButton color="neutral" variant="soft" size="sm" icon="i-heroicons-plus" @click="addHowToStep">
+              <UButton color="neutral" variant="soft" size="sm" icon="i-lucide-plus" @click="addHowToStep">
                 Add step
               </UButton>
             </div>
@@ -166,8 +166,8 @@
         </div>
 
         <div v-if="errorMessage || successMessage" class="space-y-2">
-          <UAlert v-if="errorMessage" color="error" variant="soft" icon="i-heroicons-exclamation-triangle" :description="errorMessage" />
-          <UAlert v-if="successMessage" color="success" variant="soft" icon="i-heroicons-check-circle" :description="successMessage" />
+          <UAlert v-if="errorMessage" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
+          <UAlert v-if="successMessage" color="success" variant="soft" icon="i-lucide-circle-check" :description="successMessage" />
         </div>
 
         <div class="flex flex-wrap items-center gap-2 border-t border-default pt-4">

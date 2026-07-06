@@ -1,0 +1,180 @@
+import type { McpToolDefinition } from './shared'
+import { bookingObject, bookingsSummaryObject, experienceObject, experienceWriteSchema, siteTool } from './shared'
+import { EXPERIENCE_STATUSES } from '~/server/utils/experiences'
+
+export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
+  siteTool({
+      name: 'list_experiences',
+      description: 'Use this when the user asks what experiences/activities the site offers, or as the first step before looking at bookings for a specific one. Optionally filter by location_id. If no experiences exist yet and the site has no primary location, create a location first before calling create_experience.',
+      domain: 'experiences',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: { location_id: { type: 'string' } },
+      outputSchema: {
+        type: 'object',
+        properties: { experiences: { type: 'array', items: experienceObject } },
+        required: ['experiences'],
+      },
+    }),
+  siteTool({
+      name: 'get_experience',
+      description: 'Get an experience.',
+      domain: 'experiences',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: { experience_id: { type: 'string', description: 'Experience id, or its slug from the public URL (/experiences/<slug>).' } },
+      required: ['experience_id'],
+      outputSchema: {
+        type: 'object',
+        properties: { experience: experienceObject },
+        required: ['experience'],
+      },
+    }),
+  siteTool({
+      name: 'create_experience',
+      description: `Create an experience. Gather and store the details in the dedicated fields instead of collapsing everything into body: title for the public name, tagline for the short hook, body for the main narrative, highlights for short selling points, included_items for what is included, what_to_bring for guest prep, meeting_point for arrival instructions, price_amount/price for pricing, duration_minutes for length, max_capacity for guest count, time_slots or recurring_slots for schedule, available_note for urgency text, and image/video fields for primary media. Use update_booking_policy after creation for cancellation, refund, or other guest policy rules. status must be one of: ${EXPERIENCE_STATUSES.join(', ')}. Every experience must belong to a location. Pass location_id directly, or omit it only when the site already has a primary location. If no location exists yet, call list_locations or create_location first.`,
+      domain: 'experiences',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: experienceWriteSchema,
+      required: ['title'],
+      outputSchema: {
+        type: 'object',
+        properties: { experience: experienceObject },
+        required: ['experience'],
+      },
+    }),
+  siteTool({
+      name: 'update_experience',
+      description: `Update an experience using the dedicated fields instead of stuffing all details into body. Keep tagline as the short hook, body as the full description, highlights as short selling points, included_items as what is included, what_to_bring as guest prep notes, meeting_point as arrival instructions, duration_minutes for length, max_capacity for guest count, price_amount/price for pricing, and time_slots or recurring_slots for scheduling. Use update_booking_policy for cancellation, refund, or other guest policy rules. status must be one of: ${EXPERIENCE_STATUSES.join(', ')}. Do NOT set status to 'inactive' to reflect a whole location being temporarily closed (e.g. "closed for renovations for two weeks") — that hides the experience entirely behind a generic placeholder instead of showing it as unavailable. For a location-wide temporary closure, call update_location with special_hours on that location instead; every experience at that location automatically shows as unavailable for booking while the closure is active, and reopens automatically without any further action.`,
+      domain: 'experiences',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        experience_id: { type: 'string', description: 'Experience id or slug.' },
+        ...experienceWriteSchema,
+        location_id: { type: 'string', description: 'Move this experience to a different location. Omit to leave its current location unchanged — unlike create_experience, omitting this does not fall back to the site primary location.' },
+      },
+      required: ['experience_id'],
+      outputSchema: {
+        type: 'object',
+        properties: { experience: experienceObject },
+        required: ['experience'],
+      },
+    }),
+  siteTool({
+      name: 'set_experience_image',
+      description: 'Use this when the user wants to add or change the photo for a bookable experience or activity. Call get_site_media_assets first to find an active image asset id, then pass it here with the target experience_id.',
+      domain: 'experiences',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        experience_id: { type: 'string', description: 'Experience id or slug.' },
+        asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+      },
+      required: ['experience_id', 'asset_id'],
+      outputSchema: {
+        type: 'object',
+        properties: { experience: experienceObject },
+        required: ['experience'],
+      },
+    }),
+  siteTool({
+      name: 'set_experience_video',
+      description: 'Assign a saved video asset as an experience video. Upload the video via the dashboard media library first, then call get_site_media_assets to find its asset id.',
+      domain: 'experiences',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        experience_id: { type: 'string', description: 'Experience id or slug.' },
+        asset_id: { type: 'string', description: 'Active video asset id from get_site_media_assets.' },
+      },
+      required: ['experience_id', 'asset_id'],
+      outputSchema: {
+        type: 'object',
+        properties: { experience: experienceObject },
+        required: ['experience'],
+      },
+    }),
+  siteTool({
+      name: 'reorder_experience_gallery',
+      description: 'Reorder an experience\'s additional media gallery (the images array shown as a carousel, separate from the primary image/video). Pass every existing gallery item — same url and kind values — in the new desired order. This only reorders; to add or remove gallery items, call update_experience with the full images array instead.',
+      domain: 'experiences',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        experience_id: { type: 'string', description: 'Experience id or slug.' },
+        images: experienceWriteSchema.images,
+      },
+      required: ['experience_id', 'images'],
+      outputSchema: {
+        type: 'object',
+        properties: { experience: experienceObject },
+        required: ['experience'],
+      },
+    }),
+  siteTool({
+      name: 'delete_experience',
+      description: 'Delete an experience.',
+      domain: 'experiences',
+      minimumRole: 'editor',
+      confirmRequired: true,
+      inputSchema: {
+        experience_id: { type: 'string', description: 'Experience id or slug.' },
+        location_id: { type: 'string', description: 'Optional location id to constrain deletion to an experience in that location.' },
+      },
+      required: ['experience_id'],
+      outputSchema: {
+        type: 'object',
+        properties: { deleted: { type: 'boolean' } },
+        required: ['deleted'],
+      },
+    }),
+  siteTool({
+      name: 'list_experience_bookings',
+      description: 'List bookings for one specific experience. Use list_all_experience_bookings instead when the user asks about bookings across the whole site, not just one experience.',
+      domain: 'experiences',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: { experience_id: { type: 'string', description: 'Experience id or slug.' } },
+      required: ['experience_id'],
+      outputSchema: {
+        type: 'object',
+        properties: { bookings: { type: 'array', items: bookingObject } },
+        required: ['bookings'],
+      },
+    }),
+  siteTool({
+      name: 'list_all_experience_bookings',
+      description: 'Use this when the user asks about bookings site-wide — "how many bookings do we have", "bookings from the past two days", "site-wide bookings" — without naming a specific experience. Returns bookings across every experience on the site plus a summary (total, counts by status, counts by experience). Optionally filter by location_id and/or days (e.g. days=2 for "the past two days", based on when the booking was made).',
+      domain: 'experiences',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        location_id: { type: 'string', description: 'Optional location id to limit to one location.' },
+        days: { type: 'number', description: 'Optional: only include bookings made in the last N days (max 90).' },
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          bookings: { type: 'array', items: bookingObject },
+          summary: bookingsSummaryObject,
+        },
+        required: ['bookings', 'summary'],
+      },
+    }),
+  siteTool({
+      name: 'update_experience_booking',
+      description: 'Update a booking status.',
+      domain: 'experiences',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: { experience_id: { type: 'string', description: 'Experience id or slug.' }, booking_id: { type: 'string' }, status: { type: 'string', enum: ['pending', 'confirmed', 'cancelled'] } },
+      required: ['experience_id', 'booking_id', 'status'],
+      outputSchema: {
+        type: 'object',
+        properties: { booking: bookingObject },
+        required: ['booking'],
+      },
+    }),
+]

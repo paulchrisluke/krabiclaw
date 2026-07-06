@@ -81,7 +81,6 @@ const productLinks = [
 const companyLinks = [
   { label: 'About', to: '/about' },
   { label: 'Blog', to: '/blog' },
-  { label: 'Contact', to: '/contact' },
 ]
 const resourceLinks = [
   { label: 'Docs', to: '/docs' },

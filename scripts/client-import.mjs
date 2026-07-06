@@ -432,6 +432,12 @@ function detectMissingFields(places) {
     }
     if (!place.phone && !place.international_phone)
       missing.push({ location: place.name, field: "phone" });
+    if (!place.email)
+      missing.push({
+        location: place.name,
+        field: "email",
+        issue: "Not returned by Google Places API — supply via overrides.json",
+      });
     if (!place.opening_hours)
       missing.push({ location: place.name, field: "opening_hours" });
     if (!place.lat || !place.lng)
@@ -526,6 +532,9 @@ function generateSeedSql(places, mediaManifest) {
         : "NULL";
       const rating = place.rating ?? "NULL";
       const ratingCount = place.user_ratings_total ?? "NULL";
+      const email = place.email
+        ? `'${place.email.replace(/'/g, "''")}'`
+        : "NULL";
       const slug = (place.name ?? "location")
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
@@ -533,18 +542,18 @@ function generateSeedSql(places, mediaManifest) {
 
       return `-- Location: ${place.name}
 INSERT INTO business_locations (
-  id, site_id, organization_id, slug, title, address, phone,
+  id, site_id, organization_id, slug, title, address, phone, email,
   maps_url, latitude, longitude, opening_hours,
   rating, review_count, is_primary, status
 ) VALUES (
   '${locId}', '${siteId}', '${orgId}',
   '${slug}', '${(place.name ?? "").replace(/'/g, "''")}',
-  ${address}, ${phone === "NULL" ? "NULL" : `'${phone}'`},
+  ${address}, ${phone === "NULL" ? "NULL" : `'${phone}'`}, ${email},
   ${mapsUrl}, ${lat}, ${lng}, ${hours},
   ${rating}, ${ratingCount}, ${isPrimary}, 'active'
 ) ON CONFLICT(id) DO UPDATE SET
   title = excluded.title, address = excluded.address,
-  phone = excluded.phone, maps_url = excluded.maps_url,
+  phone = excluded.phone, email = excluded.email, maps_url = excluded.maps_url,
   latitude = excluded.latitude, longitude = excluded.longitude,
   opening_hours = excluded.opening_hours,
   rating = excluded.rating, review_count = excluded.review_count,
@@ -1046,6 +1055,9 @@ if (existsSync(overridesPath)) {
         }
         if (overrides.website) {
           places[0].website = overrides.website;
+        }
+        if (overrides.email) {
+          places[0].email = overrides.email;
         }
         if (overrides.lat) {
           const lat = parseFloat(overrides.lat);

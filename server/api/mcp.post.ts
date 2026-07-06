@@ -35,6 +35,20 @@ import {
   mcpAuthRequiredResult,
   setMcpAuthChallenge,
 } from "~/server/utils/mcp-route-helpers";
+import { logMcpToolCallEvent } from "~/server/utils/mcp-telemetry";
+
+// Fires a telemetry write without ever blocking or failing the MCP response.
+function logMcpEventDetached(
+  event: Parameters<typeof getCloudflareWaitUntil>[0],
+  db: D1Database | undefined,
+  input: Parameters<typeof logMcpToolCallEvent>[1],
+) {
+  if (!db) return;
+  const logPromise = logMcpToolCallEvent(db, input);
+  const waitUntil = getCloudflareWaitUntil(event);
+  if (waitUntil) waitUntil(logPromise);
+  else logPromise.catch(() => {});
+}
 
 const TENANT_AUTH_DESCRIPTION = "Connect KrabiClaw to continue.";
 const TENANT_AUTH_REQUIRED_TEXT = "Authentication required: connect KrabiClaw to continue.";
@@ -88,6 +102,14 @@ export default defineEventHandler(async (event) => {
         tool_name: requestToolName ?? null,
       }));
       if (requestMethod === "tools/call") {
+        logMcpEventDetached(event, cfEnv.DB, {
+          requestId: requestId ?? null,
+          method: requestMethod,
+          toolName: requestToolName ?? null,
+          toolDomain: MCP_TOOLS.find((t) => t.name === requestToolName)?.domain ?? null,
+          status: "auth_required",
+          errorMessage: "Missing bearer token or cookie",
+        });
         return mcpSuccess(requestId ?? null, mcpAuthRequiredResult({ challenge: authChallenge, message: TENANT_AUTH_REQUIRED_TEXT }));
       }
       setResponseStatus(event, 401);
@@ -335,6 +357,23 @@ Common workflows: update menus and items, create and publish site posts, triage 
         },
       }));
 
+      const domains = (() => {
+        try {
+          return [...new Set(tools.map((t) => t._meta["krabiclaw/toolInfo"].domain))]
+        } catch {
+          return []
+        }
+      })()
+      logMcpEventDetached(event, cfEnv.DB, {
+        organizationId: siteCtx?.organizationId ?? null,
+        siteId: siteCtx?.siteId ?? null,
+        userId: user.userId,
+        requestId: request.id,
+        method: request.method,
+        result: { count: tools.length, domains },
+        status: "success",
+      });
+
       return mcpSuccess(request.id, { tools });
     }
 
@@ -354,7 +393,51 @@ Common workflows: update menus and items, create and publish site posts, triage 
 
       assertConversationalToolEnabled(toolName, cfEnv as ApiRecord);
 
-      const result = await executeMcpToolCall(event, toolName, rawArgs);
+      const toolDef = MCP_TOOLS.find((t) => t.name === toolName);
+      const toolStartedAt = Date.now();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let mcpUser: any = null;
+      try {
+        mcpUser = await requireMcpUser(event, tenantAuthOptions);
+      } catch (authError) {
+        logMcpEventDetached(event, cfEnv.DB, {
+          requestId: request.id,
+          method: request.method,
+          toolName,
+          toolDomain: toolDef?.domain ?? null,
+          isMutating: isMcpMutatingTool(toolDef),
+          arguments: rawArgs,
+          status: "auth_required",
+          errorMessage: authError instanceof Error ? authError.message : String(authError),
+          durationMs: Date.now() - toolStartedAt,
+        });
+        throw authError;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let result: any;
+      try {
+        result = await executeMcpToolCall(event, toolName, rawArgs);
+      } catch (toolError) {
+        const mcpErr = asMcpError(toolError);
+        logMcpEventDetached(event, cfEnv.DB, {
+          userId: mcpUser.userId,
+          organizationId: mcpUser.activeOrganizationId ?? null,
+          siteId: typeof rawArgs.site_id === "string" ? rawArgs.site_id : null,
+          requestId: request.id,
+          method: request.method,
+          toolName,
+          toolDomain: toolDef?.domain ?? null,
+          isMutating: isMcpMutatingTool(toolDef),
+          arguments: rawArgs,
+          status: "error",
+          errorCode: mcpErr.code,
+          errorMessage: mcpErr.message,
+          durationMs: Date.now() - toolStartedAt,
+        });
+        throw toolError;
+      }
 
       const isRender = isMcpRenderResponse(result);
       const structuredContent = isRender ? result.structuredContent : result;
@@ -362,16 +445,36 @@ Common workflows: update menus and items, create and publish site posts, triage 
         ? result.fallbackText
         : JSON.stringify(structuredContent, null, 2);
 
+      // Resolved once and reused for both telemetry and the cache-purge below.
+      const ctxSiteId = structuredContent && typeof structuredContent === 'object' && 'context' in structuredContent
+        ? (structuredContent.context as Record<string, unknown>)?.site_id
+        : null;
+      const resolvedSiteId = typeof ctxSiteId === "string"
+        ? ctxSiteId.trim()
+        : typeof rawArgs.site_id === "string"
+          ? rawArgs.site_id.trim()
+          : null;
+
+      logMcpEventDetached(event, cfEnv.DB, {
+        userId: mcpUser.userId,
+        organizationId: mcpUser.activeOrganizationId ?? null,
+        siteId: resolvedSiteId,
+        requestId: request.id,
+        method: request.method,
+        toolName,
+        toolDomain: toolDef?.domain ?? null,
+        isMutating: isMcpMutatingTool(toolDef),
+        arguments: rawArgs,
+        result: structuredContent,
+        status: "success",
+        durationMs: Date.now() - toolStartedAt,
+      });
+
       // After any mutating tool call, purge KV HTML cache for the site so the
       // next browser load gets fresh SSR HTML with the correct /_nuxt/ asset hashes.
       // Fire-and-forget — never block the MCP response on cache ops.
-      const mutatedTool = MCP_TOOLS.find((t) => t.name === toolName);
-      if (isMcpMutatingTool(mutatedTool)) {
-        const ctxSiteId = structuredContent && typeof structuredContent === 'object' && 'context' in structuredContent
-          ? (structuredContent.context as Record<string, unknown>)?.site_id
-          : null;
-        const rawSiteId = ctxSiteId ?? rawArgs.site_id;
-        const siteId = typeof rawSiteId === "string" ? rawSiteId.trim() : null;
+      if (isMcpMutatingTool(toolDef)) {
+        const siteId = resolvedSiteId;
         if (siteId) {
           const env = cloudflareEnv(event);
           // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -8,7 +8,7 @@
           <!-- AI compose input -->
           <div class="overflow-hidden rounded-lg border border-default">
             <div class="flex items-center gap-2 border-b border-default bg-elevated px-4 py-2.5">
-              <UIcon name="i-heroicons-sparkles" class="size-4 text-muted" />
+              <UIcon name="i-lucide-sparkles" class="size-4 text-muted" />
               <span class="text-xs font-semibold uppercase tracking-wider text-muted">AI Composer</span>
             </div>
             <div class="p-4 space-y-3">
@@ -27,11 +27,11 @@
                 <div class="flex items-center gap-2">
                   <label class="cursor-pointer">
                     <input ref="aiImageInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="onAiImageSelect" />
-                    <UButton size="sm" color="neutral" variant="ghost" icon="i-heroicons-photo" :class="aiImageFile ? 'text-green-600' : ''" @click="aiImageInput?.click()">
+                    <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-image" :class="aiImageFile ? 'text-green-600' : ''" @click="aiImageInput?.click()">
                       {{ aiImageFile ? aiImageFile.name.slice(0, 12) + '…' : 'Photo' }}
                     </UButton>
                   </label>
-                  <UButton size="sm" :loading="aiLoading" :disabled="!aiPrompt.trim()" icon="i-heroicons-sparkles" @click="generatePost">
+                  <UButton size="sm" :loading="aiLoading" :disabled="!aiPrompt.trim()" icon="i-lucide-sparkles" @click="generatePost">
                     Generate
                   </UButton>
                 </div>
@@ -68,7 +68,7 @@
 
             <!-- Empty state -->
             <div v-if="!loading && posts.length === 0" class="px-4 py-10 text-center">
-              <UIcon name="i-heroicons-newspaper" class="mx-auto size-8 text-muted" />
+              <UIcon name="i-lucide-newspaper" class="mx-auto size-8 text-muted" />
               <p class="mt-3 text-sm text-muted">No posts yet. Use the AI composer or write one manually.</p>
             </div>
 
@@ -96,7 +96,7 @@
                 class="h-full w-full object-cover"
               >
               <div v-else class="flex h-full w-full items-center justify-center">
-                <UIcon name="i-heroicons-document-text" class="size-4 text-muted" />
+                <UIcon name="i-lucide-file-text" class="size-4 text-muted" />
               </div>
             </div>
               <div class="min-w-0 flex-1">
@@ -160,7 +160,7 @@ const toast = useToast()
 const sitePublicUrl = ref<string | null>(null)
 const { buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'New post', icon: 'i-heroicons-plus', color: 'primary' as const, onClick: openCompose }
+  { label: 'New post', icon: 'i-lucide-plus', color: 'primary' as const, onClick: openCompose }
 ]))
 
 interface LocationRow {

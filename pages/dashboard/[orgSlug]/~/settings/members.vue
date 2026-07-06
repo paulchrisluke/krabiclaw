@@ -63,7 +63,7 @@
             class="mt-4"
             color="error"
             variant="soft"
-            icon="i-lucide-alert-circle"
+            icon="i-lucide-circle-alert"
             :description="memberError"
           />
         </UCard>
@@ -154,7 +154,7 @@
             class="mt-4"
             color="error"
             variant="soft"
-            icon="i-lucide-alert-circle"
+            icon="i-lucide-circle-alert"
             :description="inviteError"
           />
           <UAlert
@@ -162,7 +162,7 @@
             class="mt-4"
             color="success"
             variant="soft"
-            icon="i-lucide-check-circle"
+            icon="i-lucide-circle-check"
             description="Invitation sent."
           />
         </UCard>

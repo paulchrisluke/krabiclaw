@@ -141,7 +141,7 @@ function normalizeHostnameForIpChecks(hostname: string): string {
   return hostname
 }
 
-function assertSafeDownloadUrl(rawUrl: string, label: string): URL {
+export function assertSafeDownloadUrl(rawUrl: string, label: string): URL {
   let parsed: URL
   try {
     parsed = new URL(rawUrl)

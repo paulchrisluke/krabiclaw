@@ -23,7 +23,7 @@
             <p class="text-xs text-dimmed">Your KrabiClaw team</p>
           </div>
           <UButton
-            icon="i-heroicons-x-mark"
+            icon="i-lucide-x"
             color="neutral"
             variant="ghost"
             size="sm"
@@ -44,7 +44,7 @@
         <!-- Bullets -->
         <ul class="space-y-2 mb-6">
           <li v-for="bullet in content.bullets" :key="bullet" class="flex items-start gap-2 text-sm text-default">
-            <UIcon name="i-heroicons-check-circle" class="mt-0.5 size-4 shrink-0 text-primary" />
+            <UIcon name="i-lucide-circle-check" class="mt-0.5 size-4 shrink-0 text-primary" />
             <span>{{ bullet }}</span>
           </li>
         </ul>

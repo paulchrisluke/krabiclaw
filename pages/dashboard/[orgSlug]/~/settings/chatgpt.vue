@@ -33,7 +33,7 @@
                   size="xs"
                   color="neutral"
                   variant="ghost"
-                  :icon="copied ? 'i-heroicons-check' : 'i-heroicons-clipboard'"
+                  :icon="copied ? 'i-lucide-check' : 'i-lucide-clipboard'"
                   @click="copyUrl"
                 >
                   {{ copied ? 'Copied' : 'Copy' }}

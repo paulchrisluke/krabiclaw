@@ -29,6 +29,13 @@ playwright-report/
 .idea
 curl_output.html
 
+# Root scratch files from ad hoc debugging sessions — never commit
+cookies.txt
+pr_body.txt
+*.tmp.mjs
+/screenshot*.mjs
+/watch-*.mjs
+
 # AI tool local state (like .claude/ — never commit)
 .codex/
 

@@ -3,7 +3,7 @@
 
     <UPageBody>
       <div v-if="!loading" class="mb-4 flex items-center justify-end">
-        <UButton icon="i-heroicons-plus" @click="openCreate">Add experience</UButton>
+        <UButton icon="i-lucide-plus" @click="openCreate">Add experience</UButton>
       </div>
 
       <div v-if="loading" class="space-y-3">
@@ -11,10 +11,10 @@
       </div>
 
       <UCard v-else-if="experiences.length === 0" :ui="{ root: 'border border-dashed border-default', body: 'py-20 sm:py-20 text-center' }">
-        <UIcon name="i-heroicons-ticket" class="mx-auto size-10 text-muted" />
+        <UIcon name="i-lucide-ticket" class="mx-auto size-10 text-muted" />
         <p class="mt-4 text-sm font-semibold text-highlighted">No experiences yet</p>
         <p class="mt-1 text-sm text-muted">Create your first bookable experience — a tasting menu, a chef's table, a cooking class.</p>
-        <UButton class="mt-6" icon="i-heroicons-plus" @click="openCreate">Add experience</UButton>
+        <UButton class="mt-6" icon="i-lucide-plus" @click="openCreate">Add experience</UButton>
       </UCard>
 
       <div v-else class="space-y-3">
@@ -43,9 +43,9 @@
               </div>
             </div>
             <div class="flex shrink-0 items-center gap-2">
-              <UButton size="sm" color="neutral" variant="ghost" icon="i-heroicons-calendar-days" aria-label="Manage availability" @click="openAvailability(exp)" />
-              <UButton size="sm" color="neutral" variant="ghost" icon="i-heroicons-pencil-square" aria-label="Edit experience" @click="openEdit(exp)" />
-              <UButton size="sm" color="neutral" variant="ghost" icon="i-heroicons-trash" aria-label="Delete experience" @click="confirmDelete(exp)" />
+              <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-calendar-days" aria-label="Manage availability" @click="openAvailability(exp)" />
+              <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-square-pen" aria-label="Edit experience" @click="openEdit(exp)" />
+              <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-trash-2" aria-label="Delete experience" @click="confirmDelete(exp)" />
             </div>
           </div>
         </UCard>
@@ -102,7 +102,7 @@
                   size="sm"
                   color="neutral"
                   variant="ghost"
-                  icon="i-heroicons-chevron-up"
+                  icon="i-lucide-chevron-up"
                   aria-label="Move image up"
                   :disabled="index === 0"
                   @click="moveGalleryMedia(index, -1)"
@@ -111,14 +111,14 @@
                   size="sm"
                   color="neutral"
                   variant="ghost"
-                  icon="i-heroicons-chevron-down"
+                  icon="i-lucide-chevron-down"
                   aria-label="Move image down"
                   :disabled="index === form.images.length - 1"
                   @click="moveGalleryMedia(index, 1)"
                 />
-                <UButton size="sm" color="error" variant="ghost" icon="i-heroicons-x-mark" @click="removeGalleryMedia(index)" />
+                <UButton size="sm" color="error" variant="ghost" icon="i-lucide-x" @click="removeGalleryMedia(index)" />
               </div>
-              <UButton size="sm" color="neutral" variant="soft" icon="i-heroicons-plus" @click="addGalleryMedia">
+              <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-plus" @click="addGalleryMedia">
                 Add media
               </UButton>
             </div>
@@ -197,7 +197,7 @@
               <div v-for="day in weekdayNames" :key="day" class="grid grid-cols-[5.5rem_1fr_auto] items-center gap-2">
                 <span class="text-sm font-medium text-highlighted">{{ day }}</span>
                 <UInput v-model="recurringInputs[day]" placeholder="18:00, 20:30" class="w-full" />
-                <UButton size="xs" color="neutral" variant="ghost" icon="i-heroicons-bolt" :loading="generating" :aria-label="`Generate for ${day}`" @click="runGenerator('recurring', day)" />
+                <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-zap" :loading="generating" :aria-label="`Generate for ${day}`" @click="runGenerator('recurring', day)" />
               </div>
             </div>
           </UFormField>
@@ -297,7 +297,7 @@
                 <span class="font-medium text-highlighted">{{ ov.time_slot }}</span>
                 <UBadge :color="ov.status === 'closed' ? 'error' : 'success'" variant="soft" size="xs">{{ ov.status }}</UBadge>
                 <span v-if="ov.capacity_override != null" class="text-xs text-muted">cap {{ ov.capacity_override }}</span>
-                <UButton size="xs" color="neutral" variant="ghost" icon="i-heroicons-trash" class="ml-auto" aria-label="Delete override" @click="deleteOverride(ov)" />
+                <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-trash-2" class="ml-auto" aria-label="Delete override" @click="deleteOverride(ov)" />
               </div>
             </div>
           </div>

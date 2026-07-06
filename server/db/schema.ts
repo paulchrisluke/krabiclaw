@@ -197,6 +197,27 @@ export const submission_messages = sqliteTable("submission_messages", {
 	index("submission_type_id_idx").on(table.submission_type, table.submission_id),
 ]);
 
+export const notification_events = sqliteTable("notification_events", {
+	id: text().primaryKey(),
+	scope_type: text().notNull(),
+	organization_id: text().references(() => organization.id, { onDelete: "set null" } ),
+	site_id: text().references(() => sites.id, { onDelete: "set null" } ),
+	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
+	submission_type: text().notNull(),
+	submission_id: text().notNull(),
+	event_type: text().notNull(),
+	channels: text(),
+	recipients: text(),
+	payload: text(),
+	status: text().default("pending").notNull(),
+	error: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("notification_events_scope_created_idx").on(table.scope_type, table.created_at),
+	index("notification_events_submission_idx").on(table.submission_type, table.submission_id),
+	index("notification_events_event_created_idx").on(table.event_type, table.created_at),
+]);
+
 export const dashboard_preferences = sqliteTable("dashboard_preferences", {
 	id: text().primaryKey(),
 	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
@@ -695,7 +716,12 @@ export const platform_contact_submissions = sqliteTable("platform_contact_submis
 	id: text().primaryKey(),
 	name: text().notNull(),
 	email: text().notNull(),
+	topic: text(),
 	message: text().notNull(),
+	source: text().default("contact_page").notNull(),
+	route_context: text(),
+	suggested_summary: text(),
+	agent_metadata_json: text(),
 	status: text().default("new").notNull(),
 	ip_hash: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -1144,6 +1170,32 @@ export const site_pageview_events = sqliteTable("site_pageview_events", {
 	city: text(),
 });
 
+export const mcp_tool_call_events = sqliteTable("mcp_tool_call_events", {
+	id: text().primaryKey(),
+	organization_id: text().references(() => organization.id, { onDelete: "set null" } ),
+	site_id: text().references(() => sites.id, { onDelete: "set null" } ),
+	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
+	user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	mcp_surface: text().default("client").notNull(),
+	request_id: text(),
+	method: text().notNull(),
+	tool_name: text(),
+	tool_domain: text(),
+	is_mutating: integer(),
+	arguments_summary_json: text(),
+	result_summary_json: text(),
+	status: text().notNull(),
+	error_code: text(),
+	error_message: text(),
+	duration_ms: integer(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("idx_mcp_tool_call_events_created_at").on(table.created_at),
+	index("idx_mcp_tool_call_events_tool_status").on(table.tool_name, table.status),
+	index("idx_mcp_tool_call_events_site").on(table.site_id, table.created_at),
+	index("idx_mcp_tool_call_events_org").on(table.organization_id, table.created_at),
+]);
+
 export const site_transfer_requests = sqliteTable("site_transfer_requests", {
 	id: text().primaryKey(),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
@@ -1355,7 +1407,10 @@ export const experiences = sqliteTable("experiences", {
 	what_to_bring: text(),
 	meeting_point: text(),
 	cancellation_policy: text(),
-});
+	source: text().default("manual").notNull(),
+}, (_table) => [
+	check("experiences_source_check", sql`source IN ('manual', 'template')`),
+]);
 
 export const mcp_workspace_preferences = sqliteTable("mcp_workspace_preferences", {
 	user_id: text().primaryKey().references(() => user.id, { onDelete: "cascade" } ),

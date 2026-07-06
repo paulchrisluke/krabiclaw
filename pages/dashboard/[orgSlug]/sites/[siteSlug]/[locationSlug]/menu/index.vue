@@ -12,16 +12,16 @@
         v-else-if="error"
         color="error"
         variant="soft"
-        icon="i-heroicons-exclamation-triangle"
+        icon="i-lucide-triangle-alert"
         :description="error"
       />
 
       <UCard v-else-if="locations.length === 0">
         <div class="mx-auto max-w-md py-10 text-center">
-          <UIcon name="i-heroicons-map-pin" class="mx-auto size-10 text-muted" />
+          <UIcon name="i-lucide-map-pin" class="mx-auto size-10 text-muted" />
           <h2 class="mt-4 text-xl font-semibold text-highlighted">Add a location first</h2>
           <p class="mt-2 text-sm text-muted">Menus are managed per physical location.</p>
-          <UButton class="mt-6" :to="paths.locations" icon="i-heroicons-plus" color="primary">
+          <UButton class="mt-6" :to="paths.locations" icon="i-lucide-plus" color="primary">
             Add Location
           </UButton>
         </div>
@@ -84,7 +84,7 @@ const _handleLocationChange = (value: string) => {
 }
 
 const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'Locations', icon: 'i-heroicons-map-pin', to: paths.value.locations, color: 'neutral' as const, variant: 'soft' as const }
+  { label: 'Locations', icon: 'i-lucide-map-pin', to: paths.value.locations, color: 'neutral' as const, variant: 'soft' as const }
 ]))
 
 const loadMenuWorkspace = async () => {

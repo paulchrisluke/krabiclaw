@@ -81,7 +81,7 @@
       <div v-if="activeTab === 'queue'" class="space-y-4">
         <div class="flex justify-end">
           <UButton color="neutral" variant="ghost" size="xs" :loading="queueLoading" @click="loadQueue">
-            <UIcon name="i-heroicons-arrow-path" class="size-4" />
+            <UIcon name="i-lucide-refresh-cw" class="size-4" />
           </UButton>
         </div>
 
@@ -93,7 +93,7 @@
 
         <UCard v-else-if="purchases.length === 0">
           <div class="text-center">
-            <UIcon name="i-heroicons-check-badge" class="mx-auto size-10 text-success mb-3" />
+            <UIcon name="i-lucide-badge-check" class="mx-auto size-10 text-success mb-3" />
             <p class="font-semibold text-highlighted">All caught up</p>
             <p class="text-sm text-muted mt-1">No pending service add-ons.</p>
           </div>
@@ -120,7 +120,7 @@
                 size="xs"
                 color="neutral"
                 variant="ghost"
-                icon="i-heroicons-arrow-top-right-on-square"
+                icon="i-lucide-external-link"
                 :to="`/dashboard/${purchase.org_slug}`"
                 target="_blank"
               >
@@ -130,7 +130,7 @@
                 size="xs"
                 color="success"
                 variant="soft"
-                icon="i-heroicons-check"
+                icon="i-lucide-check"
                 :loading="fulfillingId === purchase.id"
                 @click="markDone(purchase.id)"
               >
@@ -262,7 +262,7 @@
       <div v-if="activeTab === 'clients'" class="space-y-4">
         <div class="flex justify-end">
           <UButton color="neutral" variant="ghost" size="xs" :loading="clientsLoading" @click="loadClients">
-            <UIcon name="i-heroicons-arrow-path" class="size-4" />
+            <UIcon name="i-lucide-refresh-cw" class="size-4" />
           </UButton>
         </div>
 
@@ -274,7 +274,7 @@
 
         <UCard v-else-if="clients.length === 0">
           <div class="text-center">
-            <UIcon name="i-heroicons-building-storefront" class="mx-auto size-10 text-muted mb-3" />
+            <UIcon name="i-lucide-store" class="mx-auto size-10 text-muted mb-3" />
             <p class="font-semibold text-highlighted">No managed clients yet</p>
             <p class="text-sm text-muted mt-1">Clients on Growth, Managed, or SEO Accelerator will appear here.</p>
           </div>
@@ -288,7 +288,7 @@
           >
             <div class="flex items-center gap-3 min-w-0">
               <div class="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <UIcon name="i-heroicons-building-storefront" class="size-4" />
+                <UIcon name="i-lucide-store" class="size-4" />
               </div>
               <div class="min-w-0">
                 <div class="flex items-center gap-2">
@@ -308,7 +308,7 @@
                 size="xs"
                 color="neutral"
                 variant="ghost"
-                icon="i-heroicons-language"
+                icon="i-lucide-languages"
                 :to="`/dashboard/${client.org_slug}/translations`"
                 target="_blank"
               >
@@ -319,7 +319,7 @@
                 size="xs"
                 color="success"
                 variant="soft"
-                icon="i-heroicons-paper-airplane"
+                icon="i-lucide-send"
                 @click="openHandoff(client)"
               >
                 Send Handoff
@@ -338,7 +338,7 @@
                 size="xs"
                 color="primary"
                 variant="soft"
-                icon="i-heroicons-arrow-top-right-on-square"
+                icon="i-lucide-external-link"
                 :to="`/dashboard/${client.org_slug}`"
                 target="_blank"
               >
@@ -383,7 +383,7 @@
       <!-- ── DOMAINS ── -->
       <div v-if="activeTab === 'domains'" class="space-y-4">
         <div class="flex flex-col sm:flex-row gap-2">
-          <UInput v-model="domainSearch" placeholder="Search domains" icon="i-heroicons-magnifying-glass" class="flex-1" />
+          <UInput v-model="domainSearch" placeholder="Search domains" icon="i-lucide-search" class="flex-1" />
           <UButton variant="soft" color="neutral" :loading="domainsLoading" @click="loadDomains">Refresh</UButton>
         </div>
 
@@ -402,7 +402,7 @@
                 <p class="mt-0.5 text-xs text-muted">{{ domain.cloudflare_hostname_id || 'pending CF ID' }}</p>
                 <p v-if="domain.error_message" class="mt-0.5 text-xs text-error">{{ domain.error_message }}</p>
               </div>
-              <UButton size="sm" variant="soft" color="neutral" icon="i-heroicons-arrow-path" :loading="syncingDomainId === domain.id" @click="syncDomain(domain.id)">Sync</UButton>
+              <UButton size="sm" variant="soft" color="neutral" icon="i-lucide-refresh-cw" :loading="syncingDomainId === domain.id" @click="syncDomain(domain.id)">Sync</UButton>
             </div>
           </div>
         </div>
@@ -418,7 +418,7 @@
       <!-- ── USERS ── -->
       <div v-if="activeTab === 'users'" class="space-y-4">
         <div class="flex gap-2">
-          <UInput v-model="userSearch" placeholder="Search users" icon="i-heroicons-magnifying-glass" class="flex-1" @keyup.enter="loadUsers" />
+          <UInput v-model="userSearch" placeholder="Search users" icon="i-lucide-search" class="flex-1" @keyup.enter="loadUsers" />
           <UButton variant="soft" color="neutral" :loading="usersLoading" @click="loadUsers">Search</UButton>
         </div>
 
@@ -440,7 +440,7 @@
           </template>
           <template #actions-cell="{ row }">
             <UTooltip :text="row.original.role === 'admin' ? 'Cannot impersonate admin' : 'Impersonate user'">
-              <UButton size="xs" variant="ghost" color="neutral" icon="i-heroicons-arrow-right-on-rectangle" :disabled="row.original.role === 'admin'" :loading="impersonatingUserId === row.original.id" @click="impersonateUser(row.original.id)" />
+              <UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-log-out" :disabled="row.original.role === 'admin'" :loading="impersonatingUserId === row.original.id" @click="impersonateUser(row.original.id)" />
             </UTooltip>
           </template>
         </UTable>
@@ -525,7 +525,7 @@
               color="primary"
               :loading="handoffSending"
               :disabled="!handoffEmail.trim() || handoffDomainNeedsPlan"
-              icon="i-heroicons-paper-airplane"
+              icon="i-lucide-send"
               @click="sendHandoff"
             >
               Send invite email
@@ -537,7 +537,7 @@
           <UAlert
             color="success"
             variant="soft"
-            icon="i-heroicons-check-circle"
+            icon="i-lucide-circle-check"
             :title="`Invite sent to ${handoffResult.to_email}`"
             :description="handoffResult.invited_plan ? `Plan: ${handoffResult.invited_plan} — checkout happens before ownership transfers.` : 'No plan attached — ownership transfers as soon as they claim it.'"
           />
@@ -610,7 +610,7 @@
                 class="font-mono text-xs text-primary hover:underline flex items-center gap-1"
               >
                 {{ billingStatus.stripe_customer_id }}
-                <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-3" />
+                <UIcon name="i-lucide-external-link" class="size-3" />
               </a>
               <span v-else class="text-muted italic text-xs">Not created</span>
             </div>
@@ -623,7 +623,7 @@
                 class="font-mono text-xs text-primary hover:underline flex items-center gap-1"
               >
                 {{ billingStatus.stripe_subscription_id }}
-                <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-3" />
+                <UIcon name="i-lucide-external-link" class="size-3" />
               </a>
               <span v-else class="text-muted italic text-xs">None</span>
             </div>
@@ -638,7 +638,7 @@
               </p>
               <UAlert v-if="markPaidError" color="error" variant="soft" :description="markPaidError" />
               <UAlert v-if="markPaidResult" color="success" variant="soft" :title="`Period advanced to ${markPaidResult.new_period_end ? new Date(markPaidResult.new_period_end).toLocaleDateString() : 'N/A'}`" description="Invoice marked paid. Next reminder will fire closer to the new due date." />
-              <UButton v-if="!markPaidResult" block color="success" :loading="markPaying" icon="i-lucide-check-circle" @click="markMonthPaid">
+              <UButton v-if="!markPaidResult" block color="success" :loading="markPaying" icon="i-lucide-circle-check" @click="markMonthPaid">
                 Mark this month paid
               </UButton>
             </div>
@@ -852,9 +852,9 @@ const ADDON_LABELS: Record<string, string> = {
   gbp_setup: 'Google Business Optimization',
 }
 const ADDON_ICONS: Record<string, string> = {
-  translation: 'i-heroicons-language',
-  seasonal: 'i-heroicons-sparkles',
-  gbp_setup: 'i-heroicons-map-pin',
+  translation: 'i-lucide-languages',
+  seasonal: 'i-lucide-sparkles',
+  gbp_setup: 'i-lucide-map-pin',
 }
 const ADDON_COLORS: Record<string, string> = {
   translation: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400',
@@ -863,7 +863,7 @@ const ADDON_COLORS: Record<string, string> = {
 }
 
 function addonLabel(type: string) { return ADDON_LABELS[type] ?? type }
-function addonIcon(type: string) { return ADDON_ICONS[type] ?? 'i-heroicons-shopping-bag' }
+function addonIcon(type: string) { return ADDON_ICONS[type] ?? 'i-lucide-shopping-bag' }
 function addonColor(type: string) { return ADDON_COLORS[type] ?? 'bg-muted text-muted' }
 
 async function loadQueue() {

@@ -23,14 +23,14 @@
           v-else-if="selectedUrl && selectedKind === 'video'"
           class="flex size-10 shrink-0 items-center justify-center rounded bg-elevated"
         >
-          <UIcon name="i-heroicons-film" class="size-5 text-muted" />
+          <UIcon name="i-lucide-film" class="size-5 text-muted" />
         </div>
         <div
           v-else
           class="flex size-10 shrink-0 items-center justify-center rounded bg-elevated"
         >
           <UIcon
-            :name="accept === 'video' ? 'i-heroicons-film' : 'i-heroicons-photo'"
+            :name="accept === 'video' ? 'i-lucide-film' : 'i-lucide-image'"
             class="size-4 text-muted"
           />
         </div>
@@ -42,7 +42,7 @@
         </div>
         <UButton
           v-if="modelValue"
-          icon="i-heroicons-x-mark"
+          icon="i-lucide-x"
           size="xs"
           color="neutral"
           variant="ghost"
@@ -88,7 +88,7 @@
       <div class="flex w-full items-center justify-between gap-2">
         <UButton
           v-if="panel === 'generate'"
-          icon="i-heroicons-arrow-left"
+          icon="i-lucide-arrow-left"
           color="neutral"
           variant="ghost"
           size="sm"

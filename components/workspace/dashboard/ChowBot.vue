@@ -19,7 +19,7 @@
         >
           <UCard :ui="{ root: 'border-2 border-dashed border-primary mx-8 my-10', body: 'px-8 py-10 sm:px-8 sm:py-10' }">
             <div class="flex flex-col items-center gap-3">
-              <UIcon name="i-heroicons-arrow-up-tray" class="size-10 text-primary" />
+              <UIcon name="i-lucide-upload" class="size-10 text-primary" />
               <p class="font-medium">Drop menu image or PDF</p>
               <p class="text-xs text-muted">JPEG, PNG, WEBP, PDF or TXT — max 10 MB</p>
             </div>
@@ -45,7 +45,7 @@
         <div class="flex items-center gap-1">
           <UTooltip text="New conversation">
             <UButton
-              icon="i-heroicons-plus"
+              icon="i-lucide-plus"
               color="neutral"
               variant="ghost"
               size="xs"
@@ -55,7 +55,7 @@
           </UTooltip>
           <UButton
             v-if="!embedded"
-            icon="i-heroicons-x-mark"
+            icon="i-lucide-x"
             color="neutral"
             variant="ghost"
             size="xs"
@@ -66,7 +66,7 @@
 
       <div v-if="isDepleted" class="shrink-0 border-b border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-950 px-4 py-3 flex flex-col gap-2">
         <div class="flex items-center gap-2 text-xs text-error-600 dark:text-error-400">
-          <UIcon name="i-heroicons-exclamation-triangle" class="size-3.5 shrink-0" />
+          <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
           <span class="font-medium">No AI credits remaining</span>
         </div>
         <div class="flex gap-2">
@@ -76,77 +76,32 @@
         </div>
       </div>
       <div v-else-if="isLow" class="shrink-0 bg-warning-50 dark:bg-warning-950 px-4 py-2 text-xs text-warning-600 dark:text-warning-400 flex items-center gap-2">
-        <UIcon name="i-heroicons-exclamation-triangle" class="size-3.5 shrink-0" />
+        <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
         Low credits ({{ balance }} remaining). <NuxtLink :to="orgSettings.billing.value" class="underline" @click="close">Top up →</NuxtLink>
       </div>
 
-      <div class="flex-1 min-h-0 overflow-y-auto">
-        <UChatMessages :status="isUploading ? 'submitted' : undefined">
-          <div
-            v-if="messages.length === 0"
-            class="flex h-full flex-col items-center justify-center gap-3 px-6 py-16 text-center"
-          >
-            <UIcon name="i-lucide-bot" class="size-8 text-primary opacity-60" />
-            <p class="text-sm font-medium">{{ emptyTitle }}</p>
-            <p class="text-xs text-muted">{{ emptyDescription }}</p>
-            <div class="mt-4 flex w-full flex-col gap-2">
-              <UButton
-                v-for="prompt in starterPrompts"
-                :key="prompt"
-                color="neutral"
-                variant="outline"
-                size="xs"
-                class="justify-start text-left"
-                @click="handleStarter(prompt)"
-              >
-                {{ prompt }}
-              </UButton>
-            </div>
-          </div>
-
-          <UChatMessage
-            v-for="(msg, i) in messages"
-            :key="i"
-            :id="String(i)"
-            :role="msg.role"
-            :parts="[{ type: 'text', text: msg.content }]"
-            :side="msg.role === 'user' ? 'right' : 'left'"
-          >
-            <template #content>
-              <div v-if="msg.role === 'assistant'" class="space-y-2">
-                <!-- Running tools appear first while streaming -->
-                <div v-if="msg.toolCalls?.length" class="flex flex-col gap-1">
-                  <UChatTool
-                    v-for="(tool, ti) in msg.toolCalls"
-                    :key="tool.name + i + ti"
-                    :text="toolLabel(tool.name)"
-                    :loading="tool.status === 'running'"
-                  />
-                </div>
-                <!-- Message text (empty while tools are still running) -->
-                <!-- eslint-disable vue/no-v-html -->
-                <div
-                  v-if="msg.content"
-                  class="prose prose-sm dark:prose-invert max-w-none"
-                  v-html="renderMarkdown(msg.content)"
-                />
-                <!-- eslint-enable vue/no-v-html -->
-              </div>
-              <div v-else class="prose prose-sm dark:prose-invert max-w-none">
-                {{ msg.content }}
-              </div>
-            </template>
-          </UChatMessage>
-        </UChatMessages>
-      </div>
-
-      <div class="shrink-0 border-t border-default p-3">
+      <ChowBotConversation
+        v-model:input="input"
+        :messages="messages"
+        :placeholder="promptPlaceholder"
+        :disabled="isLoading || isUploading || creatingRestaurant || (!siteId && !setupMode) || isDepleted"
+        :loading="isLoading || isUploading || creatingRestaurant"
+        :messages-status="isLoading ? 'streaming' : isUploading ? 'submitted' : undefined"
+        :empty-title="emptyTitle"
+        :empty-description="emptyDescription"
+        :starter-prompts="starterPrompts"
+        :render-markdown="renderMarkdown"
+        :tool-label="toolLabel"
+        @submit="handleSubmit"
+        @starter="handleStarter"
+      >
+        <template #prompt-before>
         <!-- pending text chip -->
         <div v-if="pendingText" class="mb-2 flex items-center gap-2 rounded-lg border border-default bg-elevated px-3 py-1.5">
-          <UIcon name="i-heroicons-document-text" class="size-3.5 shrink-0 text-muted" />
+          <UIcon name="i-lucide-file-text" class="size-3.5 shrink-0 text-muted" />
           <span class="min-w-0 flex-1 truncate text-xs">{{ pendingText.name }} — {{ pendingText.content.length.toLocaleString() }} chars</span>
           <UButton
-            icon="i-heroicons-x-mark"
+            icon="i-lucide-x"
             size="xs"
             color="neutral"
             variant="ghost"
@@ -157,10 +112,10 @@
 
         <!-- pending file chip -->
         <div v-if="pendingFile" class="mb-2 flex items-center gap-2 rounded-lg border border-default bg-elevated px-3 py-1.5">
-          <UIcon name="i-heroicons-paper-clip" class="size-3.5 shrink-0 text-muted" />
+          <UIcon name="i-lucide-paperclip" class="size-3.5 shrink-0 text-muted" />
           <span class="min-w-0 flex-1 truncate text-xs">{{ pendingFile.name }}</span>
           <UButton
-            icon="i-heroicons-x-mark"
+            icon="i-lucide-x"
             size="xs"
             color="neutral"
             variant="ghost"
@@ -168,15 +123,8 @@
             @click="pendingFile = null"
           />
         </div>
-
-        <UChatPrompt
-          v-model="input"
-          :placeholder="promptPlaceholder"
-          :disabled="isLoading || isUploading || creatingRestaurant || (!siteId && !setupMode) || isDepleted"
-          :loading="isLoading || isUploading || creatingRestaurant"
-          :maxrows="8"
-          @submit="handleSubmit"
-        />
+        </template>
+        <template #prompt-after>
         <div class="mt-1 flex items-center justify-end gap-2">
           <p v-if="input.length > 1000" class="text-right text-xs" :class="input.length > 20000 ? 'text-warning' : 'text-muted'">
             {{ input.length.toLocaleString() }} chars{{ input.length > 20000 ? ' — will be truncated' : '' }}
@@ -186,7 +134,7 @@
             size="xs"
             variant="ghost"
             color="neutral"
-            icon="i-heroicons-paper-clip"
+            icon="i-lucide-paperclip"
             @click="convertToAttachment"
           >
             Attach as file
@@ -195,7 +143,7 @@
         <div class="mt-2 flex items-center gap-2">
           <UTooltip text="Attach menu image or PDF">
             <UButton
-              icon="i-heroicons-paper-clip"
+              icon="i-lucide-paperclip"
               color="neutral"
               variant="ghost"
               size="xs"
@@ -209,7 +157,8 @@
         <p v-if="!siteId && !setupMode" class="mt-2 text-center text-xs text-muted">
           Create your workspace to use ChowBot.
         </p>
-      </div>
+        </template>
+      </ChowBotConversation>
 
       <input
         ref="fileInputRef"
@@ -223,6 +172,7 @@
 </template>
 
 <script setup lang="ts">
+import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
 import { useChowBot } from '~/composables/useChowBot'
 import { useAiCredits } from '~/composables/useAiCredits'
 import { getQuickActionPrompts } from '~/composables/useOnboardingPrompts'
@@ -275,7 +225,10 @@ const setupRestaurantName = ref('')
 const setupSubdomain = ref('')
 const creatingRestaurant = ref(false)
 
-const regularStarterPrompts = computed(() => getQuickActionPrompts(dashboard.site.value?.vertical))
+const regularStarterPrompts = computed(() => [
+  'Find the right KrabiClaw doc for this task',
+  ...getQuickActionPrompts(dashboard.site.value?.vertical),
+])
 
 const setupStarterPrompts = [
   'Start from Google Business',
@@ -671,6 +624,7 @@ const toolLabel = (name: string): string => {
     delete_qa: 'Deleting Q&A…',
     get_contact_submissions: 'Fetching contacts…',
     get_reservation_submissions: 'Fetching reservations…',
+    search_public_resources: 'Searching docs and help…',
   }
   return labels[name] ?? name
 }

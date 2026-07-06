@@ -54,19 +54,6 @@ export async function hashIp(ip: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16)
 }
 
-export function getClientIp(event: H3Event): string {
-  const cfIp = getHeader(event, 'cf-connecting-ip')
-  if (cfIp) return cfIp
-
-  const forwarded = getHeader(event, 'x-forwarded-for')
-  if (forwarded) {
-    const first = forwarded.split(',')[0]
-    if (first) return first.trim()
-  }
-
-  return event.node?.req?.socket?.remoteAddress || 'unknown'
-}
-
 interface CloudflareGeo {
   country?: string
   region?: string

@@ -7,7 +7,7 @@
             <h2 class="text-lg font-semibold text-highlighted">Add a poster image</h2>
             <p class="mt-1 text-sm text-muted">Recommended.</p>
           </div>
-          <UButton color="neutral" variant="ghost" icon="i-heroicons-x-mark" :disabled="uploading" @click="emit('update:open', false)" />
+          <UButton color="neutral" variant="ghost" icon="i-lucide-x" :disabled="uploading" @click="emit('update:open', false)" />
         </div>
         <p class="mt-4 text-sm text-muted">
           We can't auto-generate a video thumbnail, so without one this video may show blank while it loads.
@@ -15,7 +15,7 @@
         </p>
         <p v-if="videoName" class="mt-3 truncate text-xs text-muted">Video: {{ videoName }}</p>
         <div class="mt-6 flex flex-wrap gap-2">
-          <UButton icon="i-heroicons-photo" :loading="uploading" :disabled="uploading" @click="posterInput?.click()">
+          <UButton icon="i-lucide-image" :loading="uploading" :disabled="uploading" @click="posterInput?.click()">
             Choose poster image
           </UButton>
           <UButton color="neutral" variant="soft" :disabled="uploading" @click="emit('submit', null)">

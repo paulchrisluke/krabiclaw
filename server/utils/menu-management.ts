@@ -51,6 +51,31 @@ export class MenuSectionNotFoundError extends Error {
   }
 }
 
+export class MenuNotFoundError extends Error {
+  code = "MENU_NOT_FOUND" as const;
+
+  constructor(message = "Menu not found or does not belong to this site") {
+    super(message);
+    this.name = "MenuNotFoundError";
+  }
+}
+
+async function assertMenuOwnership(
+  db: DbClient,
+  menuId: string,
+  organizationId: string,
+  siteId: string,
+) {
+  const menu = await queryFirst<{ id: string }>(
+    db,
+    `SELECT id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+    [menuId, organizationId, siteId],
+  );
+  if (!menu) {
+    throw new MenuNotFoundError();
+  }
+}
+
 async function assertValidMenuLocation(
   db: DbClient,
   organizationId: string,
@@ -1029,11 +1054,14 @@ export async function deleteMenuItem(
 // Rename a menu section by updating every item that belongs to it
 export async function renameMenuSection(
   db: DbClient,
+  organizationId: string,
+  siteId: string,
   menuId: string,
   oldSection: string,
   newSection: string,
   updatedBy: string,
 ): Promise<number> {
+  await assertMenuOwnership(db, menuId, organizationId, siteId);
   const now = new Date().toISOString();
   const sectionOrder = await getMenuSectionOrder(db, menuId);
   const oldSectionInOrder = sectionOrder.includes(oldSection);
@@ -1103,9 +1131,12 @@ export async function renameMenuSection(
 // Delete every item in a menu section
 export async function deleteMenuSection(
   db: DbClient,
+  organizationId: string,
+  siteId: string,
   menuId: string,
   section: string,
 ): Promise<number> {
+  await assertMenuOwnership(db, menuId, organizationId, siteId);
   const sectionOrder = await getMenuSectionOrder(db, menuId);
   const result = await execute(
     db,
@@ -1134,9 +1165,12 @@ export async function deleteMenuSection(
 // Reorder menu items
 export async function reorderMenuItems(
   db: DbClient,
+  organizationId: string,
+  siteId: string,
   menuId: string,
   items: Array<{ id: string; sort_order: number }>,
 ): Promise<void> {
+  await assertMenuOwnership(db, menuId, organizationId, siteId);
   // Reorder must commit atomically: a partial failure here must not leave
   // items with inconsistent sort_order relative to each other.
   const results = await executeBatch(

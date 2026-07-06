@@ -245,7 +245,7 @@ function statusLabel(status: string) {
 }
 
 function statusIcon(status: string) {
-  return { active: 'i-lucide-check-circle', pending: 'i-lucide-clock', verifying: 'i-lucide-loader', failed: 'i-lucide-x-circle', blocked: 'i-lucide-ban' }[status] ?? 'i-lucide-circle'
+  return { active: 'i-lucide-circle-check', pending: 'i-lucide-clock', verifying: 'i-lucide-refresh-cw', failed: 'i-lucide-circle-x', blocked: 'i-lucide-ban' }[status] ?? 'i-lucide-circle'
 }
 
 function statusIconColor(status: string) {

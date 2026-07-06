@@ -1,0 +1,207 @@
+import type { McpToolDefinition } from './shared'
+import { SUPPORTED_CURRENCIES, currentUserObject, globalTool, siteListItem, siteTool, withToolAnnotations } from './shared'
+
+export const SITES_TOOLS: McpToolDefinition[] = [
+  globalTool(withToolAnnotations({
+      name: 'list_sites',
+      description: 'List the caller\'s accessible sites and current authenticated account identity.',
+      domain: 'sites',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: { type: 'object', properties: {}, additionalProperties: true },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          sites: {
+            type: 'array',
+            items: siteListItem,
+          },
+          currentUser: currentUserObject,
+        },
+        required: ['sites', 'currentUser'],
+      },
+    })),
+  globalTool(withToolAnnotations({
+      name: 'create_site',
+      description: 'Create a new site in the caller\'s organization.',
+      domain: 'sites',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          subdomain: { type: 'string' },
+          vertical: { type: 'string', enum: ['restaurant', 'experience'] },
+        },
+        required: ['name', 'subdomain', 'vertical'],
+        additionalProperties: true,
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'New site ID — pass as site_id in all subsequent calls.' },
+          siteId: { type: 'string', description: 'New site ID — pass as site_id in all subsequent calls.' },
+          subdomain: { type: 'string' },
+          organizationId: { type: 'string' },
+          status: { type: 'string' },
+          message: { type: 'string' },
+        },
+        required: ['id', 'siteId', 'subdomain'],
+      },
+    })),
+  siteTool({
+      name: 'get_site',
+      description: 'Get site details.',
+      domain: 'sites',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      outputSchema: {
+        type: 'object',
+        properties: {
+          site: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              organization_id: { type: 'string' },
+              subdomain: { type: 'string' },
+              theme: { type: 'string' },
+              status: { type: 'string' },
+              brand_name: { type: ['string', 'null'] },
+              brand_description: { type: ['string', 'null'] },
+              logo_url: { type: ['string', 'null'] },
+              public_url: { type: ['string', 'null'] },
+              last_published_at: { type: ['string', 'null'] },
+              created_at: { type: 'string' },
+              updated_at: { type: 'string' },
+            },
+            required: ['id', 'subdomain', 'status'],
+          },
+        },
+        required: ['site'],
+      },
+    }),
+  siteTool({
+      name: 'get_site_settings',
+      description: 'Get editable site settings.',
+      domain: 'sites',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      outputSchema: {
+        type: 'object',
+        properties: {
+          settings: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              subdomain: { type: 'string' },
+              theme: { type: 'string' },
+              status: { type: 'string' },
+              brand_name: { type: ['string', 'null'] },
+              brand_description: { type: ['string', 'null'] },
+              logo_url: { type: ['string', 'null'] },
+              logo_asset_id: { type: ['string', 'null'] },
+              contact_email: { type: ['string', 'null'] },
+              default_currency: { type: ['string', 'null'] },
+              url_structure: { type: 'string' },
+            },
+            required: ['id', 'subdomain'],
+          },
+        },
+        required: ['settings'],
+      },
+    }),
+  siteTool({
+      name: 'update_site_settings',
+      description: 'Update editable site settings such as brand name, description, logo, contact email, currency, social links, footer tagline, analytics IDs, and URL structure. For brand color changes, use the dedicated set_brand_color tool instead of this generic settings tool.',
+      domain: 'sites',
+      minimumRole: 'admin',
+      confirmRequired: false,
+      inputSchema: {
+        brand_name: { type: 'string' },
+        brand_description: { type: 'string' },
+        logo_url: { type: 'string' },
+        logo_asset_id: { type: 'string' },
+        contact_email: { type: ['string', 'null'], description: 'Public contact email shown to guests. Pass null to clear it.' },
+        default_currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] },
+        social_facebook: { type: 'string', description: 'Full Facebook page URL, e.g. https://facebook.com/yourpage. Must include the https:// scheme — bare domains or handles are rejected.' },
+        social_instagram: { type: 'string', description: 'Full Instagram profile URL, e.g. https://instagram.com/yourhandle. Must include the https:// scheme — bare domains or handles are rejected.' },
+        social_tiktok: { type: 'string', description: 'Full TikTok profile URL, e.g. https://tiktok.com/@yourhandle. Must include the https:// scheme — bare domains or handles are rejected.' },
+        footer_tagline: { type: 'string' },
+        press_email: { type: 'string' },
+        partnerships_email: { type: 'string' },
+        catering_email: { type: 'string' },
+        careers_email: { type: 'string' },
+        google_analytics_measurement_id: { type: 'string' },
+        google_site_verification: { type: 'string' },
+        url_structure: { type: 'string' },
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          updated: { type: 'boolean' },
+        },
+        required: ['id'],
+      },
+    }),
+  siteTool({
+      name: 'set_default_currency',
+      description: 'Set the default currency for this site. Affects how prices are displayed on menus and experiences.',
+      domain: 'sites',
+      minimumRole: 'admin',
+      confirmRequired: false,
+      inputSchema: {
+        currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES], description: 'ISO 4217 currency code.' },
+      },
+      required: ['currency'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          default_currency: { type: 'string' },
+          updated: { type: 'boolean' },
+        },
+        required: ['default_currency', 'updated'],
+      },
+    }),
+  siteTool({
+      name: 'set_brand_color',
+      description: 'Set the brand color theme for the site. Use this tool for any accent-color or theme-color change. Accepts natural language color descriptions like "earthy", "warm terracotta", "ocean blue", "sage green", or hex codes like #8F1D21. The brand color controls the primary accent color across the Saya template (buttons, links, highlights).',
+      domain: 'sites',
+      minimumRole: 'admin',
+      confirmRequired: false,
+      inputSchema: {
+        color: { type: 'string', description: 'Color description in natural language (e.g., "earthy", "warm terracotta", "ocean blue") or hex format (e.g., #8F1D21).' },
+      },
+      required: ['color'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          brand_color: { type: 'string', description: 'The resolved hex color code that was set.' },
+          updated: { type: 'boolean' },
+          description: { type: 'string', description: 'Human-readable description of what color was set.' },
+        },
+        required: ['brand_color', 'updated', 'description'],
+      },
+    }),
+  siteTool({
+      name: 'set_logo',
+      description: 'Use this when the user wants to change their logo or business mark. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id.',
+      domain: 'sites',
+      minimumRole: 'admin',
+      confirmRequired: false,
+      inputSchema: {
+        asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+      },
+      required: ['asset_id'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          updated: { type: 'boolean' },
+          logo_asset_id: { type: 'string' },
+        },
+        required: ['id', 'updated', 'logo_asset_id'],
+      },
+    }),
+]

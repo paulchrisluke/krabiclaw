@@ -6,7 +6,7 @@
         <div class="space-y-3">
           <div class="flex items-center justify-between gap-3">
             <h1 class="text-lg font-semibold text-default">Blog</h1>
-            <UButton size="sm" icon="i-heroicons-plus" @click="openCompose">New post</UButton>
+            <UButton size="sm" icon="i-lucide-plus" @click="openCompose">New post</UButton>
           </div>
 
           <div class="overflow-hidden rounded-lg border border-default">
@@ -21,7 +21,7 @@
             </div>
 
             <div v-if="!loading && posts.length === 0" class="px-4 py-10 text-center">
-              <UIcon name="i-heroicons-newspaper" class="mx-auto size-8 text-muted" />
+              <UIcon name="i-lucide-newspaper" class="mx-auto size-8 text-muted" />
               <p class="mt-3 text-sm text-muted">No posts yet. Write your first one.</p>
             </div>
 
@@ -81,8 +81,8 @@
             </UFormField>
 
             <div v-if="errorMessage || successMessage" class="space-y-2">
-              <UAlert v-if="errorMessage" color="error" variant="soft" icon="i-heroicons-exclamation-triangle" :description="errorMessage" />
-              <UAlert v-if="successMessage" color="success" variant="soft" icon="i-heroicons-check-circle" :description="successMessage" />
+              <UAlert v-if="errorMessage" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
+              <UAlert v-if="successMessage" color="success" variant="soft" icon="i-lucide-circle-check" :description="successMessage" />
             </div>
 
             <div class="flex flex-wrap items-center gap-2 border-t border-default pt-4">

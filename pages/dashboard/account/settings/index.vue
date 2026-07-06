@@ -27,8 +27,8 @@
                 class="ring-1 ring-border group-hover:ring-primary transition-all"
               />
               <div class="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity text-white">
-                <UIcon name="i-heroicons-camera" class="size-6" v-if="!uploadLoading" />
-                <UIcon name="i-heroicons-arrow-path" class="size-6 animate-spin" v-else />
+                <UIcon name="i-lucide-camera" class="size-6" v-if="!uploadLoading" />
+                <UIcon name="i-lucide-refresh-cw" class="size-6 animate-spin" v-else />
               </div>
               <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onFileSelect" />
             </div>
@@ -136,7 +136,7 @@
               @keydown.enter="requestPhoneVerify"
             />
             <div v-if="sessionData?.user?.phoneNumberVerified && phoneInput === sessionData?.user?.phoneNumber" class="flex items-center gap-2 mt-2">
-              <UIcon name="i-heroicons-check-circle" class="text-success size-5" />
+              <UIcon name="i-lucide-circle-check" class="text-success size-5" />
               <span class="text-sm text-success">Verified</span>
             </div>
           </div>
@@ -174,7 +174,7 @@
               <UButton
                 color="neutral"
                 variant="ghost"
-                icon="i-heroicons-clipboard"
+                icon="i-lucide-clipboard"
                 @click="copyUserId"
               />
             </div>
@@ -217,7 +217,7 @@
           v-if="deleteError"
           color="error"
           variant="soft"
-          icon="i-heroicons-exclamation-triangle"
+          icon="i-lucide-triangle-alert"
           :description="deleteError"
         />
 
@@ -334,10 +334,10 @@ async function onFileSelect(event: Event) {
     
     await authClient.updateUser({ image: asset.public_url })
     await refreshSession()
-    toast.add({ title: 'Avatar updated', icon: 'i-heroicons-check-circle', color: 'success' })
+    toast.add({ title: 'Avatar updated', icon: 'i-lucide-circle-check', color: 'success' })
   } catch (_err) {
     const msg = _err instanceof Error ? _err.message : String(_err)
-    toast.add({ title: 'Upload failed', description: msg, color: 'error', icon: 'i-heroicons-exclamation-triangle' })
+    toast.add({ title: 'Upload failed', description: msg, color: 'error', icon: 'i-lucide-triangle-alert' })
   } finally {
     uploadLoading.value = false
     target.value = ''
@@ -355,7 +355,7 @@ async function saveName() {
   try {
     await authClient.updateUser({ name: nameInput.value.trim() })
     await refreshSession()
-    toast.add({ title: 'Name updated', icon: 'i-heroicons-check-circle', color: 'success' })
+    toast.add({ title: 'Name updated', icon: 'i-lucide-circle-check', color: 'success' })
   } catch (_err) {
     const msg = _err instanceof Error ? _err.message : String(_err)
     toast.add({ title: 'Update failed', description: msg, color: 'error' })
@@ -381,7 +381,7 @@ async function saveOrgName() {
       organizationId: organization.value.id, 
       data: { name: orgNameInput.value.trim() } 
     })
-    toast.add({ title: 'Organization updated', icon: 'i-heroicons-check-circle', color: 'success' })
+    toast.add({ title: 'Organization updated', icon: 'i-lucide-circle-check', color: 'success' })
   } catch (_err) {
     const msg = _err instanceof Error ? _err.message : String(_err)
     toast.add({ title: 'Update failed', description: msg, color: 'error' })
@@ -434,7 +434,7 @@ async function verifyPhone() {
     
     await refreshSession()
     verifyModalOpen.value = false
-    toast.add({ title: 'Phone verified', icon: 'i-heroicons-check-circle', color: 'success' })
+    toast.add({ title: 'Phone verified', icon: 'i-lucide-circle-check', color: 'success' })
   } catch (_err) {
     verifyError.value = _err instanceof Error ? _err.message : String(_err)
   } finally {
@@ -450,7 +450,7 @@ watch(() => sessionData.value?.user?.phoneNumber, (newVal) => {
 function copyUserId() {
   if (!sessionData.value?.user?.id) return
   navigator.clipboard.writeText(sessionData.value.user.id)
-  toast.add({ title: 'User ID copied', icon: 'i-heroicons-check-circle', color: 'success' })
+  toast.add({ title: 'User ID copied', icon: 'i-lucide-circle-check', color: 'success' })
 }
 
 // Danger Zone

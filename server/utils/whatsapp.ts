@@ -135,6 +135,7 @@ const TEMPLATES: Record<
       parameters: [
         { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
         { type: 'text', text: cleanTemplateText(v.email, 'No email provided', 120) },
+        { type: 'text', text: cleanTemplateText(v.subject, 'General', 40) },
         { type: 'text', text: cleanTemplateText(v.message_preview, 'No message preview', 100) },
       ],
     }],
