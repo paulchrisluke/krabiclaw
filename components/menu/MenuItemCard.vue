@@ -31,7 +31,10 @@
       </div>
 
       <!-- Price badge -->
-      <div class="absolute top-3 right-3">
+      <div class="absolute top-3 right-3 flex items-center gap-1.5">
+        <span v-if="onSale" class="bg-black/60 text-white/70 text-xs line-through px-2 py-1 rounded-full">
+          {{ formatMoneyAmount(item.compare_at_price_amount, item.currency || 'THB') }}
+        </span>
         <span class="bg-black/80 text-white text-sm font-semibold px-3 py-1 rounded-full">
           {{ formatMoneyAmount(item.price_amount, item.currency || 'THB') }}
         </span>
@@ -54,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { formatMoneyAmount } from '~/shared/money'
+import { formatMoneyAmount, isSaleActive } from '~/shared/money'
 
 interface MenuItem {
   slug: string
@@ -63,6 +66,9 @@ interface MenuItem {
   public_url?: string
   poster?: string
   price_amount?: string | number | null
+  compare_at_price_amount?: string | number | null
+  sale_starts_at?: string | null
+  sale_ends_at?: string | null
   currency?: string
   available?: boolean
   description?: string
@@ -72,6 +78,8 @@ const props = defineProps<{
   item: MenuItem
   resolveAssetUrl?: (_assetId: string) => string
 }>()
+
+const onSale = computed(() => isSaleActive(props.item))
 
 const mediaUrl = computed(() => {
   if (props.item.public_url) return props.item.public_url

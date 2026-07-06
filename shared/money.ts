@@ -36,3 +36,19 @@ export function formatMoneyAmount(amount: unknown, currency: string, emptyLabel 
   const symbol = CURRENCY_SYMBOLS[code] || `${code} `
   return `${symbol}${normalized}`
 }
+
+export interface SaleFields {
+  price_amount?: string | number | null
+  compare_at_price_amount?: string | number | null
+  sale_starts_at?: string | null
+  sale_ends_at?: string | null
+}
+
+export function isSaleActive(fields: SaleFields, now: Date = new Date()): boolean {
+  const compareAt = normalizePriceAmount(fields.compare_at_price_amount)
+  const price = normalizePriceAmount(fields.price_amount)
+  if (!compareAt || !price || Number(compareAt) <= Number(price)) return false
+  if (fields.sale_starts_at && now < new Date(fields.sale_starts_at)) return false
+  if (fields.sale_ends_at && now > new Date(fields.sale_ends_at)) return false
+  return true
+}

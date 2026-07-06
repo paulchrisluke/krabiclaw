@@ -506,6 +506,7 @@ export default defineEventHandler(async (event) => {
 
     idxMenuItems = push(
       `SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
+              mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
               mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured,
               mi.featured_sort_order, mi.sort_order, mi.allergens, mi.ingredients, mi.dietary_notes,
               mi.preparation, mi.serving_note, mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
@@ -549,7 +550,7 @@ export default defineEventHandler(async (event) => {
     let expSql = `SELECT e.id, e.organization_id, e.site_id, e.location_id,
                          e.title, e.slug, e.tagline, e.body, e.image_asset_id,
                          e.video_asset_id, e.images,
-                         e.price, e.price_amount, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
+                         e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
                          e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
                          e.status, e.sort_order, e.featured, e.featured_sort_order,
                          e.seo_title, e.seo_description, e.created_at, e.updated_at,
@@ -571,7 +572,7 @@ export default defineEventHandler(async (event) => {
       `SELECT e.id, e.organization_id, e.site_id, e.location_id,
               e.title, e.slug, e.tagline, e.body, e.image_asset_id,
               e.video_asset_id, e.images,
-              e.price, e.price_amount, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
+              e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
               e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
               e.status, e.sort_order, e.featured, e.featured_sort_order,
               e.seo_title, e.seo_description, e.created_at, e.updated_at,
@@ -996,10 +997,13 @@ export default defineEventHandler(async (event) => {
               ? { latitude: primary.latitude, longitude: primary.longitude }
               : null,
           profile: { description: primary.description },
-          reviewSummary: {
-            averageRating: primary.rating,
-            totalReviewCount: primary.review_count,
-          },
+          reviewSummary:
+            primary.last_synced_at && primary.rating != null
+              ? {
+                  averageRating: primary.rating,
+                  totalReviewCount: primary.review_count,
+                }
+              : null,
         }
       : null,
     reviews: reviewRows.results ?? [],
@@ -1147,13 +1151,15 @@ export default defineEventHandler(async (event) => {
     // Type A — full reviews for /locations/[slug]/reviews
     ...(dataType === "reviews"
       ? {
-          reviewsAggregate: locationForAggregate
-            ? {
-                rating: locationForAggregate.rating,
-                review_count: locationForAggregate.review_count,
-                distribution: reviewsDist,
-              }
-            : null,
+          reviewsAggregate:
+            locationForAggregate?.last_synced_at &&
+            locationForAggregate.rating != null
+              ? {
+                  rating: locationForAggregate.rating,
+                  review_count: locationForAggregate.review_count,
+                  distribution: reviewsDist,
+                }
+              : null,
           reviewsList: fullReviews,
         }
       : {}),

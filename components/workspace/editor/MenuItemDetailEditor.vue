@@ -85,6 +85,15 @@
               <UFormField label="Price amount" :help="`Displayed in ${displayCurrency}. Change currency in Site Settings.`">
                 <UInput v-model="form.price_amount" :placeholder="pricePlaceholder" />
               </UFormField>
+              <UFormField label="Compare-at price" help="Optional. The regular/pre-sale price shown struck through when running a sale. Leave empty when not on sale.">
+                <UInput v-model="form.compare_at_price_amount" :placeholder="pricePlaceholder" />
+              </UFormField>
+              <UFormField label="Sale starts" help="Optional. Leave empty to start immediately.">
+                <UInput v-model="form.sale_starts_at" type="date" />
+              </UFormField>
+              <UFormField label="Sale ends" help="Optional. Leave empty for no end date.">
+                <UInput v-model="form.sale_ends_at" type="date" />
+              </UFormField>
             </div>
           </UCard>
 
@@ -168,6 +177,9 @@ const form = reactive({
   name: '',
   description: '',
   price_amount: '',
+  compare_at_price_amount: '',
+  sale_starts_at: '',
+  sale_ends_at: '',
   available: true,
   featured: false,
   image_asset_id: null as string | null,
@@ -254,6 +266,9 @@ const loadMenu = async () => {
       form.name = item.name || ''
       form.description = item.description || ''
       form.price_amount = item.price_amount ? String(item.price_amount) : ''
+      form.compare_at_price_amount = item.compare_at_price_amount ? String(item.compare_at_price_amount) : ''
+      form.sale_starts_at = item.sale_starts_at ? item.sale_starts_at.slice(0, 10) : ''
+      form.sale_ends_at = item.sale_ends_at ? item.sale_ends_at.slice(0, 10) : ''
       form.available = item.available
       form.featured = item.featured
       form.image_asset_id = item.image_asset_id || null
@@ -278,6 +293,9 @@ const payload = computed<CreateMenuItemRequest & UpdateMenuItemRequest>(() => ({
   name: form.name.trim(),
   description: form.description.trim() || undefined,
   price_amount: form.price_amount.trim() || undefined,
+  compare_at_price_amount: form.compare_at_price_amount.trim() || null,
+  sale_starts_at: form.sale_starts_at.trim() || null,
+  sale_ends_at: form.sale_ends_at.trim() || null,
   available: form.available,
   featured: form.featured,
   image_asset_id: form.image_asset_id,

@@ -27,7 +27,6 @@ export function schedulePlatformKnowledgeIndexRebuild(
       await rebuildPlatformKnowledgeIndex(env, db)
     })
     .catch((error) => {
-      rebuildPending = false
       throw error
     })
 

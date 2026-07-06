@@ -29,6 +29,7 @@
         class="lg:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-between gap-4 border-t border-default bg-default/95 backdrop-blur-sm px-5 py-4 shadow-lg"
       >
         <div class="min-w-0">
+          <p v-if="experienceIsOnSale" class="text-xs text-muted line-through">{{ experienceCompareAtPrice }}</p>
           <p v-if="experience.price" class="font-semibold text-default leading-tight">{{ experience.price }}</p>
           <p class="text-xs text-muted">per person</p>
         </div>
@@ -303,6 +304,7 @@
 
               <!-- Price -->
               <div v-if="experience.price" class="hidden lg:flex items-baseline gap-1.5">
+                <span v-if="experienceIsOnSale" class="text-lg text-muted line-through">{{ experienceCompareAtPrice }}</span>
                 <span class="text-2xl font-bold text-default">{{ experience.price }}</span>
                 <span class="text-sm text-muted">per person</span>
               </div>
@@ -413,6 +415,7 @@
 <script setup lang="ts">
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 import { getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
+import { formatMoneyAmount, isSaleActive } from '~/shared/money'
 
 definePageMeta({ key: (route) => route.fullPath })
 
@@ -426,6 +429,11 @@ const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 
 const { experienceDetail: experience, config: siteConfig, pending, locations, experiencePolicyById } = useBootstrap()
+
+const experienceIsOnSale = computed(() => isSaleActive((experience.value as ApiValue) ?? {}))
+const experienceCompareAtPrice = computed(() =>
+  formatMoneyAmount((experience.value as ApiValue)?.compare_at_price_amount, siteConfig.value?.default_currency || 'THB')
+)
 
 const experienceLocation = computed(() => {
   const locId = (experience.value as ApiValue)?.location_id
@@ -729,6 +737,7 @@ useHead({
               url: experienceUrl,
               price: priceNum,
               priceCurrency: currency,
+              ...(isSaleActive(val) && val.sale_ends_at ? { priceValidUntil: val.sale_ends_at } : {}),
               availability: val.status === 'sold_out'
                 ? 'https://schema.org/SoldOut'
                 : 'https://schema.org/InStock',

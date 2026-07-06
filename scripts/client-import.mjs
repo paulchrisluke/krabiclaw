@@ -539,24 +539,29 @@ function generateSeedSql(places, mediaManifest) {
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "");
+      const placeId = place.place_id
+        ? `'${place.place_id.replace(/'/g, "''")}'`
+        : "NULL";
+      const lastSyncedAt = place.place_id ? `'${now}'` : "NULL";
 
       return `-- Location: ${place.name}
 INSERT INTO business_locations (
   id, site_id, organization_id, slug, title, address, phone, email,
   maps_url, latitude, longitude, opening_hours,
-  rating, review_count, is_primary, status
+  rating, review_count, google_place_id, last_synced_at, is_primary, status
 ) VALUES (
   '${locId}', '${siteId}', '${orgId}',
   '${slug}', '${(place.name ?? "").replace(/'/g, "''")}',
   ${address}, ${phone === "NULL" ? "NULL" : `'${phone}'`}, ${email},
   ${mapsUrl}, ${lat}, ${lng}, ${hours},
-  ${rating}, ${ratingCount}, ${isPrimary}, 'active'
+  ${rating}, ${ratingCount}, ${placeId}, ${lastSyncedAt}, ${isPrimary}, 'active'
 ) ON CONFLICT(id) DO UPDATE SET
   title = excluded.title, address = excluded.address,
   phone = excluded.phone, email = excluded.email, maps_url = excluded.maps_url,
   latitude = excluded.latitude, longitude = excluded.longitude,
   opening_hours = excluded.opening_hours,
   rating = excluded.rating, review_count = excluded.review_count,
+  google_place_id = excluded.google_place_id, last_synced_at = excluded.last_synced_at,
   updated_at = CURRENT_TIMESTAMP;`;
     })
     .join("\n\n");

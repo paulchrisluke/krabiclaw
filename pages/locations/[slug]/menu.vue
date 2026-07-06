@@ -113,7 +113,10 @@
                     >{{ tag }}</span>
                   </div>
                   <div class="saya-dotted-leader" />
-                  <div class="shrink-0 tabular-nums text-base text-default">{{ formatMenuPrice(item.price_amount, '—') }}</div>
+                  <div class="shrink-0 flex items-baseline gap-1.5 tabular-nums text-base text-default">
+                    <span v-if="isSaleActive(item)" class="text-sm text-muted line-through">{{ formatMenuPrice(item.compare_at_price_amount) }}</span>
+                    <span>{{ formatMenuPrice(item.price_amount, '—') }}</span>
+                  </div>
                 </div>
                 <p v-if="item.description" class="mt-1.5 max-w-xl text-sm leading-relaxed text-muted">
                   {{ item.description }}
@@ -139,7 +142,7 @@
 </template>
 
 <script setup lang="ts">
-import { formatMoneyAmount } from '~/shared/money'
+import { formatMoneyAmount, isSaleActive } from '~/shared/money'
 
 definePageMeta({ layout: 'saya' })
 

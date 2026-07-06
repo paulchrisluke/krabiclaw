@@ -26,6 +26,9 @@ export interface Experience {
   images: Array<{ url: string; kind: 'image' | 'video' }>
   price: string | null
   price_amount: number | null
+  compare_at_price_amount: number | null
+  sale_starts_at: string | null
+  sale_ends_at: string | null
   duration_minutes: number | null
   max_capacity: number | null
   time_slots: string[] | null
@@ -64,6 +67,9 @@ interface ExperienceRow {
   images: string | null
   price: string | null
   price_amount: number | null
+  compare_at_price_amount: number | null
+  sale_starts_at: string | null
+  sale_ends_at: string | null
   duration_minutes: number | null
   max_capacity: number | null
   time_slots: string | null
@@ -131,7 +137,7 @@ const SELECT = `
   SELECT e.id, e.organization_id, e.site_id, e.location_id,
          e.title, e.slug, e.tagline, e.body, e.image_asset_id,
          e.video_asset_id, e.images,
-         e.price, e.price_amount, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
+         e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
          e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point, e.status, e.sort_order,
          e.featured, e.featured_sort_order,
          e.seo_title, e.seo_description, e.created_at, e.updated_at,
@@ -221,6 +227,9 @@ export interface CreateExperienceInput {
   images?: Array<{ url: string; kind: 'image' | 'video' }>
   price?: string | null
   price_amount?: number | null
+  compare_at_price_amount?: number | null
+  sale_starts_at?: string | null
+  sale_ends_at?: string | null
   duration_minutes?: number | null
   max_capacity?: number | null
   time_slots?: string[] | null
@@ -253,6 +262,13 @@ function assertFiniteNonNegative(value: number | null | undefined, field: string
   if (value == null) return
   if (!Number.isFinite(value) || value < 0) {
     throw createError({ statusCode: 400, statusMessage: `${field} must be a finite non-negative number` })
+  }
+}
+
+function assertValidSaleWindow(startsAt: string | null | undefined, endsAt: string | null | undefined): void {
+  if (!startsAt || !endsAt) return
+  if (new Date(startsAt) > new Date(endsAt)) {
+    throw createError({ statusCode: 400, statusMessage: 'sale_starts_at must be before sale_ends_at' })
   }
 }
 
@@ -356,7 +372,9 @@ export async function createExperience(
     throw createError({ statusCode: 400, statusMessage: 'location_id is required' })
   }
   assertFiniteNonNegative(input.price_amount, 'price_amount')
+  assertFiniteNonNegative(input.compare_at_price_amount, 'compare_at_price_amount')
   assertFiniteNonNegative(input.duration_minutes, 'duration_minutes')
+  assertValidSaleWindow(input.sale_starts_at, input.sale_ends_at)
   const id = crypto.randomUUID()
   const slug = await uniqueSlug(db, siteId, slugify(input.title))
   const now = new Date().toISOString()
@@ -373,10 +391,10 @@ export async function createExperience(
     db,
     `INSERT INTO experiences
        (id, organization_id, site_id, location_id, title, slug, tagline, body,
-        image_asset_id, video_asset_id, images, price, price_amount, duration_minutes, max_capacity, time_slots, recurring_slots,
+        image_asset_id, video_asset_id, images, price, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, duration_minutes, max_capacity, time_slots, recurring_slots,
         available_note, highlights, included_items, what_to_bring, meeting_point, status, sort_order, featured, featured_sort_order,
         seo_title, seo_description, created_at, updated_at, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id, organizationId, siteId,
       input.location_id,
@@ -389,6 +407,9 @@ export async function createExperience(
       imagesJson,
       input.price ?? null,
       input.price_amount ?? null,
+      input.compare_at_price_amount ?? null,
+      input.sale_starts_at ?? null,
+      input.sale_ends_at ?? null,
       input.duration_minutes ?? null,
       input.max_capacity ?? null,
       slotsJson,
@@ -429,7 +450,9 @@ export async function updateExperience(
 ): Promise<Experience | null> {
   const id = (await resolveExperienceId(db, siteId, idOrSlug)) ?? idOrSlug
   assertFiniteNonNegative(input.price_amount, 'price_amount')
+  assertFiniteNonNegative(input.compare_at_price_amount, 'compare_at_price_amount')
   assertFiniteNonNegative(input.duration_minutes, 'duration_minutes')
+  assertValidSaleWindow(input.sale_starts_at, input.sale_ends_at)
   const sets: string[] = []
   const params: (string | number | null)[] = []
 
@@ -453,6 +476,9 @@ export async function updateExperience(
   }
   if (input.price !== undefined) { sets.push('price = ?'); params.push(input.price ?? null) }
   if (input.price_amount !== undefined) { sets.push('price_amount = ?'); params.push(input.price_amount ?? null) }
+  if (input.compare_at_price_amount !== undefined) { sets.push('compare_at_price_amount = ?'); params.push(input.compare_at_price_amount ?? null) }
+  if (input.sale_starts_at !== undefined) { sets.push('sale_starts_at = ?'); params.push(input.sale_starts_at ?? null) }
+  if (input.sale_ends_at !== undefined) { sets.push('sale_ends_at = ?'); params.push(input.sale_ends_at ?? null) }
   if (input.duration_minutes !== undefined) { sets.push('duration_minutes = ?'); params.push(input.duration_minutes ?? null) }
   if (input.max_capacity !== undefined) { sets.push('max_capacity = ?'); params.push(input.max_capacity ?? null) }
   if (input.time_slots !== undefined) {

@@ -248,22 +248,15 @@ async function ensurePlatformKnowledgeInstance(env: CloudflareEnv) {
   const instanceId = platformKnowledgeInstanceId(env)
   const namespace = searchNamespace(env)
 
-  let instanceExists = false
   try {
-    await namespace.get(instanceId)
-    instanceExists = true
-  } catch {
-    // Instance does not exist
-  }
-
-  if (!instanceExists) {
-    await namespace.create({
-      id: platformKnowledgeInstanceId(env),
+    const instance = namespace.get(instanceId)
+    await instance.update({
+      id: instanceId,
       ...platformKnowledgeInstanceConfig(),
     })
-  } else {
-    await namespace.get(instanceId).update({
-      id: instanceId,
+  } catch {
+    await namespace.create({
+      id: platformKnowledgeInstanceId(env),
       ...platformKnowledgeInstanceConfig(),
     })
   }

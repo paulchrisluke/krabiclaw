@@ -35,6 +35,18 @@ export const EXPERIENCES_CHOWBOT_TOOLS: AiTool[] = [
             type: ["string", "null"],
             description: 'Display override for non-numeric prices, e.g. "Ask us". Leave null when price_amount is set. Pass null to clear.',
           },
+          compare_at_price_amount: {
+            type: ["number", "null"],
+            description: "Regular/pre-sale price. Set alongside price_amount only when the user asks to run a discount/sale. Pass null to clear.",
+          },
+          sale_starts_at: {
+            type: ["string", "null"],
+            description: "ISO 8601 date/time the sale becomes active. Optional.",
+          },
+          sale_ends_at: {
+            type: ["string", "null"],
+            description: "ISO 8601 date/time the sale ends. Optional.",
+          },
           featured: {
             type: "boolean",
             description:
@@ -131,6 +143,9 @@ export const EXPERIENCES_CHOWBOT_TOOLS: AiTool[] = [
           },
           price_amount: { type: ["number", "null"], description: "Numeric price amount. Preferred over price string. Pass null to clear." },
           price: { type: ["string", "null"], description: 'Display override for non-numeric prices, e.g. "Ask us". Pass null to clear.' },
+          compare_at_price_amount: { type: ["number", "null"], description: "Regular/pre-sale price. Set alongside price_amount only when the user asks to run a discount/sale. Pass null to clear." },
+          sale_starts_at: { type: ["string", "null"], description: "ISO 8601 date/time the sale becomes active. Pass null to clear." },
+          sale_ends_at: { type: ["string", "null"], description: "ISO 8601 date/time the sale ends. Pass null to clear." },
           duration_minutes: { type: "number" },
           max_capacity: { type: "number" },
           time_slots: { type: "array", items: { type: "string" } },

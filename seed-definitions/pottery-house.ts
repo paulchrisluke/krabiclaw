@@ -121,8 +121,11 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
         { openDay: 'SATURDAY', openTime: '10:00', closeTime: '18:00' },
         { openDay: 'SUNDAY', openTime: '10:00', closeTime: '18:00' },
       ],
-      rating: 4.9,
-      reviewCount: 74,
+      // No hardcoded rating/reviewCount: this is a real client site. These fields
+      // are only ever correct when populated by a real Google Places sync
+      // (see scripts/client-import.mjs / server/utils/google-places.ts).
+      rating: null,
+      reviewCount: null,
       priceLevel: '฿฿',
       categories: ['Pottery Studio', 'Pottery Classes', 'Ceramic Workshop', 'Art Experience'],
       instagramUrl: 'https://instagram.com/potteryclasseskrabi',
@@ -162,8 +165,9 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
         { openDay: 'SATURDAY', openTime: '12:00', closeTime: '19:30' },
         { openDay: 'SUNDAY', openTime: '12:00', closeTime: '19:30' },
       ],
-      rating: 4.9,
-      reviewCount: 18,
+      // No hardcoded rating/reviewCount: see note on the primary location above.
+      rating: null,
+      reviewCount: null,
       priceLevel: '฿฿',
       categories: ['Pottery Studio', 'Beachfront Experience', 'Pottery Classes'],
       instagramUrl: 'https://instagram.com/potteryclasseskrabi',
@@ -593,100 +597,10 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
         'Monthly pottery studio membership at Pottery House Krabi. For long-stay visitors, expats, and remote workers. Studio access, tools, storage, and firing included.',
     },
   ],
-  reviews: [
-    {
-      id: 'rev-ph-1',
-      locationId: 'loc-pottery-house',
-      authorName: 'Sophie L.',
-      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/45239b3d-625e-49da-e751-a5ff8cc7e700/public',
-      rating: 5,
-      content:
-        'Absolutely loved my wheel class here. The instructor was patient and encouraging — I managed to make an actual bowl on my first try. The studio has such a great vibe, dark walls covered in plants and shelves of beautiful pottery. Already booked my next session.',
-      ownerReply: 'Thank you Sophie! See you at the wheel soon.',
-      ownerReplyAt: '2026-05-10T09:00:00.000Z',
-      status: 'approved',
-      source: 'google',
-    },
-    {
-      id: 'rev-ph-2',
-      locationId: 'loc-pottery-house',
-      authorName: 'Marcus T.',
-      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/699707fd-1559-4dc9-b115-3fe4a753aa00/public',
-      rating: 5,
-      content:
-        'Cocktails & Clay on Friday night is such a fun concept. Our group of four had a blast — the instructor kept us laughing while actually teaching us proper technique. And the clay somehow ended up all over our faces. 10/10 would recommend.',
-      ownerReply: null,
-      ownerReplyAt: null,
-      status: 'approved',
-      source: 'google',
-    },
-    {
-      id: 'rev-ph-3',
-      locationId: 'loc-pottery-house',
-      authorName: 'Nadia K.',
-      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/6e004069-4d01-4709-34bd-d1a0cacc4600/public',
-      rating: 5,
-      content:
-        'I did the beachfront session at Klong Muang and it was surreal. Sitting at the wheel with the sea right there, long-tail boats floating past. One of the most memorable things I did in Thailand.',
-      ownerReply: 'That setting never gets old for us either. Thank you Nadia!',
-      ownerReplyAt: '2026-05-18T14:00:00.000Z',
-      status: 'approved',
-      source: 'google',
-    },
-    {
-      id: 'rev-ph-4',
-      locationId: 'loc-pottery-house',
-      authorName: 'James W.',
-      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/ee18283c-d024-4bf0-15a5-73fc6c321e00/public',
-      rating: 4,
-      content:
-        'Took a wheel class during my second week in Krabi. The instruction is genuinely good — they actually teach you the mechanics of centering rather than just guiding your hands. My piece came out much better than I expected. The 2–3 week turnaround for firing means you need to plan ahead if you want to take it home.',
-      ownerReply:
-        'Thanks James, and great point about the firing time. We do offer shipping worldwide for guests who cannot wait.',
-      ownerReplyAt: '2026-05-05T11:00:00.000Z',
-      status: 'approved',
-      source: 'google',
-    },
-    {
-      id: 'rev-ph-5',
-      locationId: 'loc-pottery-house',
-      authorName: 'Camille D.',
-      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b010933f-cac7-420f-1b4e-130b3b01ca00/public',
-      rating: 5,
-      content:
-        'I got the monthly membership while working remotely from Krabi for six weeks and it was the best decision. Having a creative routine in the afternoons completely changed how I felt about being away from home. The community here is warm and unpretentious.',
-      ownerReply: null,
-      ownerReplyAt: null,
-      status: 'approved',
-      source: 'google',
-    },
-    {
-      id: 'rev-ph-6',
-      locationId: 'loc-pottery-house',
-      authorName: 'Ryo M.',
-      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/6413ee7e-ca8d-4616-00f4-8a4224217a00/public',
-      rating: 5,
-      content:
-        'Clay, calm, and a place to return to each week. That is exactly what this place is. Discovered it on a Tuesday and was back on Friday for Cocktails & Clay. The instructor remembered what I was working on. That kind of attention makes a big difference.',
-      ownerReply: null,
-      ownerReplyAt: null,
-      status: 'approved',
-      source: 'google',
-    },
-    {
-      id: 'rev-ph-b1',
-      locationId: 'loc-pottery-beachfront',
-      authorName: 'Anna R.',
-      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/45239b3d-625e-49da-e751-a5ff8cc7e700/public',
-      rating: 5,
-      content:
-        'The beachfront session is special. I was staying at a resort in Klong Muang and this was the highlight of my whole trip. Four people, one instructor, the Gulf right there. Totally peaceful and strangely meditative.',
-      ownerReply: 'Thank you Anna. That little spot is something else.',
-      ownerReplyAt: '2026-05-20T10:00:00.000Z',
-      status: 'approved',
-      source: 'google',
-    },
-  ],
+  // No hardcoded reviews: this is a real client site. Review rows only ever
+  // come from a real Google Places/Business sync (see server/utils/google-places.ts,
+  // server/utils/google-business.ts), never from seed data.
+  reviews: [],
   menus: [],
   locationQa: [
     {
@@ -1173,6 +1087,13 @@ ${experienceRows};
 }
 
 export function renderCompiledPotteryHouseReviewsBlock(): string {
+  if (compiledPotteryHouseSeed.reviews.length === 0) {
+    return `-- BEGIN GENERATED: pottery_reviews
+-- No seeded reviews — Pottery House Krabi review rows come only from a real
+-- Google Places/Business sync, never from seed data.
+-- END GENERATED: pottery_reviews`
+  }
+
   const reviewRows = compiledPotteryHouseSeed.reviews
     .map((review) => `  (${[
       sqlValue(review.id),
