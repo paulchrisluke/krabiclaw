@@ -4,7 +4,7 @@
   </span>
 </template>
 
-<script setup lang="ts">
+<script lang="ts">
 export const PLATFORM_SEARCH_GLYPHS = {
   search: 'i-lucide-search',
   book: 'i-lucide-book-open',
@@ -32,6 +32,9 @@ export const PLATFORM_SEARCH_GLYPHS = {
 } as const
 
 export type PlatformSearchGlyphName = keyof typeof PLATFORM_SEARCH_GLYPHS
+</script>
+
+<script setup lang="ts">
 
 const props = withDefaults(defineProps<{
   name: PlatformSearchGlyphName
