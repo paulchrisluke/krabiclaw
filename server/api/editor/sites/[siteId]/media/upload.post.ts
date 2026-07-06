@@ -7,6 +7,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { uploadToR2, buildR2Key, deleteFromR2 } from '~/server/utils/cloudflare-r2'
 import { createMediaAsset } from '~/server/utils/media-asset-manager'
 import { deleteImage, uploadImageBuffer } from '~/server/utils/cloudflare-images'
+import { assertPublicMediaUrl } from '~/server/utils/public-media-verification'
 
 const MAX_BYTES = 50 * 1024 * 1024
 const IMAGE_MAX_BYTES = 10 * 1024 * 1024
@@ -86,34 +87,6 @@ function sniffMimeType(data: Uint8Array): string {
 
 function toArrayBuffer(data: Uint8Array): ArrayBuffer {
   return data.slice().buffer
-}
-
-async function assertPublicMediaUrl(publicUrl: string, expectedContentType: string): Promise<void> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 8_000)
-  try {
-    const response = await fetch(publicUrl, {
-      method: 'GET',
-      headers: { range: 'bytes=0-0' },
-      signal: controller.signal,
-    })
-
-    if (response.status !== 200 && response.status !== 206) {
-      throw new Error(`Public media URL returned HTTP ${response.status}`)
-    }
-
-    const actualContentType = response.headers.get('content-type')?.split(';', 1)[0]?.toLowerCase()
-    if (actualContentType && actualContentType !== expectedContentType) {
-      throw new Error(`Public media URL returned ${actualContentType}, expected ${expectedContentType}`)
-    }
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Public media URL verification timed out')
-    }
-    throw error
-  } finally {
-    clearTimeout(timeout)
-  }
 }
 
 export default defineEventHandler(async (event) => {
@@ -260,7 +233,24 @@ export default defineEventHandler(async (event) => {
     const publicUrl = await uploadToR2(env, r2Key, filePart.data, contentType)
 
     try {
-      await assertPublicMediaUrl(publicUrl, contentType)
+      if (import.meta.dev) {
+        try {
+          await assertPublicMediaUrl(publicUrl, contentType)
+        } catch (verificationError) {
+          const normalizedError = verificationError instanceof Error
+            ? verificationError
+            : new Error('Unknown public media verification error')
+          console.warn('media_upload_public_url_verification_skipped_in_dev', {
+            siteId,
+            assetId,
+            publicUrl,
+            error: normalizedError.message,
+          })
+        }
+      } else {
+        await assertPublicMediaUrl(publicUrl, contentType)
+      }
+
       await createMediaAsset(db, {
         id: assetId,
         organization_id: site.organization_id,
