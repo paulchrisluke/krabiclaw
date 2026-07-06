@@ -624,7 +624,7 @@ const toolLabel = (name: string): string => {
     delete_qa: 'Deleting Q&A…',
     get_contact_submissions: 'Fetching contacts…',
     get_reservation_submissions: 'Fetching reservations…',
-    search_public_resources: 'Searching docs and help…',
+    search_public_resources: 'Searching platform knowledge…',
   }
   return labels[name] ?? name
 }

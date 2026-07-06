@@ -19,7 +19,7 @@
         >
           <PlatformIcon name="menu" class="size-5" />
         </button>
-        <template v-if="isAuthenticated">
+        <template v-if="showAuthenticated">
           <PlatformButton to="/dashboard" size="sm">
             Dashboard
             <PlatformIcon name="arrow-right" class="size-3.5" />
@@ -49,4 +49,10 @@ const emit = defineEmits<{
 }>()
 
 const { isAuthenticated } = useAuth()
+const mounted = ref(false)
+const showAuthenticated = computed(() => mounted.value && isAuthenticated.value)
+
+onMounted(() => {
+  mounted.value = true
+})
 </script>

@@ -30,6 +30,8 @@ BETTER_AUTH_URL = "https://krabiclaw.com"
 NUXT_PUBLIC_PLATFORM_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "KrabiClaw"
+AI_SEARCH_NAMESPACE = "default"
+AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge"
 GA4_MEASUREMENT_ID = "G-NJ1BSP9BYG"
 # Production is the only environment that should send real email/WhatsApp — made explicit
 # here rather than relying on getEmailDeliveryMode/getWhatsAppDeliveryMode's default, since
@@ -59,6 +61,9 @@ WHATSAPP_DELIVERY_MODE = "provider"
 # touched by CI:
 #   yarn wrangler secret put EMAIL_REPLY_SECRET
 #   yarn wrangler secret put EMAIL_INBOUND_SECRET
+# PLATFORM_SEARCH_REINDEX_SECRET protects POST /api/internal/search/reindex and is required for
+# yarn ai-search:sync. Set it per environment:
+#   yarn wrangler secret put PLATFORM_SEARCH_REINDEX_SECRET
 
 [[d1_databases]]
 binding = "DB"
@@ -80,6 +85,11 @@ remote = false
 [ai]
 binding = "AI"
 remote = false
+
+[[ai_search_namespaces]]
+binding = "AI_SEARCH"
+namespace = "default"
+remote = true
 
 [observability]
 enabled = true
@@ -107,6 +117,8 @@ BETTER_AUTH_URL = "https://preview.krabiclaw.com"
 NUXT_PUBLIC_PLATFORM_DOMAIN = "https://preview.krabiclaw.com"
 NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "KrabiClaw"
+AI_SEARCH_NAMESPACE = "default"
+AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-preview"
 EMAIL_DELIVERY_MODE = "log_only"
 WHATSAPP_DELIVERY_MODE = "log_only"
 E2E_ALLOW_DEV_ROUTES = "true"
@@ -133,6 +145,11 @@ remote = false
 binding = "AI"
 remote = false
 
+[[env.preview.ai_search_namespaces]]
+binding = "AI_SEARCH"
+namespace = "default"
+remote = true
+
 [env.preview.observability]
 enabled = false
 
@@ -152,6 +169,8 @@ BETTER_AUTH_URL = "https://staging.krabiclaw.com"
 NUXT_PUBLIC_PLATFORM_DOMAIN = "https://staging.krabiclaw.com"
 NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "KrabiClaw Staging"
+AI_SEARCH_NAMESPACE = "default"
+AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-staging"
 EMAIL_DELIVERY_MODE = "log_only"
 WHATSAPP_DELIVERY_MODE = "log_only"
 E2E_ALLOW_DEV_ROUTES = "true"
@@ -177,6 +196,11 @@ remote = false
 [env.staging.ai]
 binding = "AI"
 remote = false
+
+[[env.staging.ai_search_namespaces]]
+binding = "AI_SEARCH"
+namespace = "default"
+remote = true
 
 [env.staging.observability]
 enabled = true

@@ -2525,14 +2525,15 @@ async function executeTool(
     case "search_public_resources": {
       const query = toSqlText(input.q)?.trim();
       const type = toSqlText(input.type);
-      const allowedTypes = ["all", "doc", "blog", "faq", "route"];
+      const allowedTypes = ["all", "doc", "blog", "faq", "route", "platform_page", "dashboard_route"];
       if (!query) return { error: "q is required." };
       if (type && !allowedTypes.includes(type)) {
         return { error: `type must be one of: ${allowedTypes.join(", ")}` };
       }
-      const results = await searchPublicResources(db, query, {
-        type: (type as "all" | "doc" | "blog" | "faq" | "route") ?? "all",
+      const results = await searchPublicResources(env, query, {
+        type: (type as "all" | "doc" | "blog" | "faq" | "route" | "platform_page" | "dashboard_route") ?? "all",
         limit: 8,
+        surface: "chowbot",
       });
       return { results };
     }

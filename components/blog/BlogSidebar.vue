@@ -1,5 +1,12 @@
 <template>
   <nav aria-label="Blog">
+    <PlatformCommandSearchTrigger
+      surface="blog"
+      label="Search blog, docs, help..."
+      aria-label="Open blog search"
+      class="mb-3"
+    />
+
     <NuxtLink
       to="/blog"
       class="mb-3 flex items-center gap-2 px-2.5 py-1.5 text-sm font-semibold text-muted transition-colors no-underline hover:text-default"
@@ -15,6 +22,7 @@
 </template>
 
 <script setup lang="ts">
+import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import { getBlogPostPath } from '~/utils/blog-categories'
 
 const emit = defineEmits<{ navigate: [] }>()

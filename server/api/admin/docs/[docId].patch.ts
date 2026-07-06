@@ -1,8 +1,10 @@
 // PATCH /api/admin/docs/[docId] - Update platform doc
+import { createDb } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { updatePlatformDoc } from '~/server/utils/platform-content'
+import { rebuildPlatformKnowledgeIndex } from '~/server/utils/public-search'
 
 import type { PlatformDocRequestBody } from '~/server/types/platform-content'
 
@@ -27,7 +29,13 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    return jsonResponse(await updatePlatformDoc(db, docId, body))
+    const result = await updatePlatformDoc(db, docId, body)
+    try {
+      await rebuildPlatformKnowledgeIndex(env, env.db ?? createDb(db))
+    } catch (error) {
+      console.error('Failed to rebuild platform knowledge index after doc update:', error)
+    }
+    return jsonResponse(result)
   } catch (err) {
     const statusCode = typeof (err as { statusCode?: unknown })?.statusCode === 'number' ? Number((err as { statusCode: number }).statusCode) : 500
     const message = err instanceof Error ? err.message : 'Failed to update doc'

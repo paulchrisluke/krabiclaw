@@ -22,6 +22,7 @@
       </div>
     </main>
     <LazyPlatformFooter />
+    <PlatformCommandSearchModal surface="docs" />
 
     <PlatformDrawer v-model="mobileNavOpen" title="Documentation">
       <DocsSidebar @navigate="mobileNavOpen = false" />
@@ -32,6 +33,7 @@
 <script setup>
 import DocsHeader from '~/components/platform/DocsHeader.vue'
 import PlatformDrawer from '~/components/platform/PlatformDrawer.vue'
+import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
 
 const mobileNavOpen = ref(false)
 

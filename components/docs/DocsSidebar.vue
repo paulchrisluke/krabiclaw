@@ -1,5 +1,12 @@
 <template>
   <nav aria-label="Documentation">
+    <PlatformCommandSearchTrigger
+      surface="docs"
+      label="Search docs, blog, help..."
+      aria-label="Open documentation search"
+      class="mb-3"
+    />
+
     <NuxtLink
       v-if="drilledCategory"
       to="/docs"
@@ -15,6 +22,8 @@
 </template>
 
 <script setup lang="ts">
+import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
+
 const emit = defineEmits<{ navigate: [] }>()
 
 const route = useRoute()

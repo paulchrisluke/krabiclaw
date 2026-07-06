@@ -53,18 +53,18 @@ export const MANAGED_SERVICE_CHOWBOT_TOOLS: AiTool[] = [
     },
   {
       name: "search_public_resources",
-      description: "Search KrabiClaw public docs, blog posts, FAQs, and route guidance for support answers or direct links.",
+      description: "Search the unified KrabiClaw AI Search knowledge index across docs, blog posts, support answers, platform pages, and route guidance.",
       input_schema: {
         type: "object",
         properties: {
           q: {
             type: "string",
-            description: "The search query to run against public help resources.",
+            description: "The search query to run against the KrabiClaw platform knowledge index.",
           },
           type: {
             type: "string",
-            enum: ["all", "doc", "blog", "faq", "route"],
-            description: "Optional result type filter. Omit for all public support resources.",
+            enum: ["all", "doc", "blog", "faq", "route", "platform_page", "dashboard_route"],
+            description: "Optional result type filter. Omit for all indexed platform knowledge resources.",
           },
         },
         required: ["q"],

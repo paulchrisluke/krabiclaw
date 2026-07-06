@@ -13,6 +13,7 @@ import { executePlatformMcpToolCall } from '~/server/utils/platform-mcp-executor
 import { PLATFORM_MCP_TOOLS } from '~/server/utils/platform-mcp-tools'
 import { PLATFORM_MCP_RESOURCES, readPlatformMcpResource } from '~/server/utils/platform-mcp-resources'
 import { PLATFORM_MCP_PROMPTS, renderPlatformMcpPrompt } from '~/server/utils/platform-mcp-prompts'
+import { rebuildPlatformKnowledgeIndex } from '~/server/utils/public-search'
 import {
   buildMcpAuthChallengeForError,
   buildMcpOAuthChallenge,
@@ -25,6 +26,18 @@ import { getPlatformHtmlCacheHosts } from '~/server/utils/tenant-hosts'
 
 const PLATFORM_AUTH_DESCRIPTION = 'Connect the KrabiClaw platform admin app to continue.'
 const PLATFORM_AUTH_REQUIRED_TEXT = 'Authentication required: connect the KrabiClaw platform admin app to continue.'
+const PLATFORM_KNOWLEDGE_MUTATION_TOOLS = new Set([
+  'create_platform_blog_post',
+  'update_platform_blog_post',
+  'publish_platform_blog_post',
+  'unpublish_platform_blog_post',
+  'delete_platform_blog_post',
+  'create_platform_doc',
+  'update_platform_doc',
+  'publish_platform_doc',
+  'unpublish_platform_doc',
+  'delete_platform_doc',
+])
 
 function resourceMetadataUrl(baseUrl: string) {
   return `${baseUrl}/.well-known/oauth-protected-resource/platform-mcp`
@@ -206,6 +219,13 @@ export default defineEventHandler(async (event) => {
           } catch (err: unknown) {
             console.warn('[platform-mcp-cache-purge] failed:', String(err))
           }
+        }
+      }
+      if (PLATFORM_KNOWLEDGE_MUTATION_TOOLS.has(toolName) && env.db) {
+        try {
+          await rebuildPlatformKnowledgeIndex(env, env.db)
+        } catch (error) {
+          console.error('[platform-mcp-search-rebuild] failed:', error)
         }
       }
 

@@ -1,8 +1,10 @@
 // DELETE /api/admin/blog/posts/[postId] - Delete platform blog post
+import { createDb } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { deletePlatformBlogPost } from '~/server/utils/platform-content'
+import { rebuildPlatformKnowledgeIndex } from '~/server/utils/public-search'
 
 export default defineEventHandler(async (event) => {
   const postId = getRouterParam(event, 'postId')
@@ -20,7 +22,13 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    return jsonResponse(await deletePlatformBlogPost(db, postId))
+    const result = await deletePlatformBlogPost(db, postId)
+    try {
+      await rebuildPlatformKnowledgeIndex(env, env.db ?? createDb(db))
+    } catch (error) {
+      console.error('Failed to rebuild platform knowledge index after blog post delete:', error)
+    }
+    return jsonResponse(result)
   } catch (err) {
     const statusCode = typeof (err as { statusCode?: unknown })?.statusCode === 'number' ? Number((err as { statusCode: number }).statusCode) : 500
     const message = err instanceof Error ? err.message : 'Failed to delete post'

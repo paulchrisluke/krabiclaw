@@ -1,8 +1,10 @@
 // PATCH /api/admin/blog/posts/[postId] - Update platform blog post
+import { createDb } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { updatePlatformBlogPost } from '~/server/utils/platform-content'
+import { rebuildPlatformKnowledgeIndex } from '~/server/utils/public-search'
 
 import type { PlatformBlogPostRequestBody } from '~/server/types/platform-content'
 
@@ -27,7 +29,13 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    return jsonResponse(await updatePlatformBlogPost(db, postId, body))
+    const result = await updatePlatformBlogPost(db, postId, body)
+    try {
+      await rebuildPlatformKnowledgeIndex(env, env.db ?? createDb(db))
+    } catch (error) {
+      console.error('Failed to rebuild platform knowledge index after blog post update:', error)
+    }
+    return jsonResponse(result)
   } catch (err) {
     const statusCode = typeof (err as { statusCode?: unknown })?.statusCode === 'number' ? Number((err as { statusCode: number }).statusCode) : 500
     if (statusCode >= 500) {
