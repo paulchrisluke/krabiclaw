@@ -115,7 +115,7 @@ type HelpMessage = {
   loading?: boolean
 }
 
-const supportIntro = 'Hello, I\'m ChowBot an AI assistant from KrabiClaw. If we find something I can\'t solve, I\'ll help create a support case for you.'
+const supportIntro = 'Hello, I\'m ChowBot from KrabiClaw. I can search docs, product guidance, pricing, and support answers, and if you are still blocked I\'ll help send it to support.'
 const input = ref('')
 const messages = ref<HelpMessage[]>([
   {

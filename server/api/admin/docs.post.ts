@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { createPlatformDoc } from '~/server/utils/platform-content'
+import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-search-rebuild'
 
 import type { PlatformDocRequestBody } from '~/server/types/platform-content'
 
@@ -49,6 +50,7 @@ export default defineEventHandler(async (event) => {
       how_to_schema_enabled: body.how_to_schema_enabled,
       publish: body.publish ?? false,
     })
+    schedulePlatformKnowledgeIndexRebuild(event, env, 'doc create')
     return jsonResponse(result)
   } catch (err) {
     const statusCode = typeof (err as { statusCode?: unknown })?.statusCode === 'number' ? Number((err as { statusCode: number }).statusCode) : 500

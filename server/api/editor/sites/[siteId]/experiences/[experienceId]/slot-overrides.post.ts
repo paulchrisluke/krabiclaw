@@ -55,8 +55,11 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'capacity_override must be a non-negative number' }, { status: 400 })
   }
 
+  // Closing a slot only makes sense if it's part of the existing schedule.
+  // Opening one is allowed to add a one-off extra session outside the
+  // recurring/flat schedule (e.g. a special date with no regular slots).
   const effectiveSlots = resolveEffectiveTimeSlots(experience, overrideDate)
-  if (!effectiveSlots.includes(timeSlot)) {
+  if (status === 'closed' && !effectiveSlots.includes(timeSlot)) {
     return jsonResponse({ error: 'time_slot is not an effective slot for that date' }, { status: 400 })
   }
 

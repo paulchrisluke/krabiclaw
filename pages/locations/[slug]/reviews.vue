@@ -82,8 +82,19 @@
 
       <!-- Review list -->
       <section class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
-        <!-- True empty: no reviews at all -->
-        <div v-if="reviews.length === 0" class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-default py-20 text-center">
+        <!-- Aggregate-only: verified Google rating exists, but no individual review rows yet -->
+        <div v-if="reviews.length === 0 && aggregate?.rating" class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-default py-20 text-center">
+          <div class="flex gap-1 text-primary" aria-hidden="true">
+            <SayaIcon v-for="s in 5" :key="s" name="star" solid class="size-5" :class="s <= Math.round(aggregate.rating) ? 'text-primary' : 'text-muted'" />
+          </div>
+          <div class="mt-4 saya-display saya-italic text-3xl text-default">
+            {{ t('saya.reviews_page.aggregate_only_title', { rating: Number(aggregate.rating).toFixed(1), count: aggregate.review_count ?? 0 }) }}
+          </div>
+          <p class="mt-2 max-w-sm text-sm text-muted">{{ t('saya.reviews_page.aggregate_only_desc') }}</p>
+        </div>
+
+        <!-- True empty: no reviews, no verified aggregate -->
+        <div v-else-if="reviews.length === 0" class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-default py-20 text-center">
           <div class="flex size-14 items-center justify-center rounded-full bg-elevated text-muted">
             <SayaIcon name="star" class="size-7" />
           </div>

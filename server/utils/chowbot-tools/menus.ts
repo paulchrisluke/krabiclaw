@@ -111,6 +111,19 @@ export const MENUS_CHOWBOT_TOOLS: AiTool[] = [
                   description:
                     'Numeric price amount only, without currency, e.g. "120". Optional.',
                 },
+                compare_at_price_amount: {
+                  type: "string",
+                  description:
+                    "Regular/pre-sale price. Set alongside price_amount only when running a discount/sale the user asked for. Optional.",
+                },
+                sale_starts_at: {
+                  type: "string",
+                  description: "ISO 8601 date/time the sale becomes active. Optional.",
+                },
+                sale_ends_at: {
+                  type: "string",
+                  description: "ISO 8601 date/time the sale ends. Optional.",
+                },
                 image_asset_id: {
                   type: "string",
                   description:
@@ -181,6 +194,19 @@ export const MENUS_CHOWBOT_TOOLS: AiTool[] = [
                   description:
                     'Numeric price amount only, without currency, e.g. "120". Optional.',
                 },
+                compare_at_price_amount: {
+                  type: "string",
+                  description:
+                    "Regular/pre-sale price. Set alongside price_amount only when running a discount/sale the user asked for. Optional.",
+                },
+                sale_starts_at: {
+                  type: "string",
+                  description: "ISO 8601 date/time the sale becomes active. Optional.",
+                },
+                sale_ends_at: {
+                  type: "string",
+                  description: "ISO 8601 date/time the sale ends. Optional.",
+                },
                 image_asset_id: {
                   type: "string",
                   description: "Media asset ID from generate_image. Optional.",
@@ -236,6 +262,19 @@ export const MENUS_CHOWBOT_TOOLS: AiTool[] = [
             type: "string",
             description: "Numeric price amount only, without currency. Optional.",
           },
+          compare_at_price_amount: {
+            type: "string",
+            description:
+              "Regular/pre-sale price. Set alongside price_amount only when running a discount/sale the user asked for. Optional.",
+          },
+          sale_starts_at: {
+            type: "string",
+            description: "ISO 8601 date/time the sale becomes active. Optional.",
+          },
+          sale_ends_at: {
+            type: "string",
+            description: "ISO 8601 date/time the sale ends. Optional.",
+          },
           image_asset_id: {
             type: "string",
             description:
@@ -264,6 +303,19 @@ export const MENUS_CHOWBOT_TOOLS: AiTool[] = [
           price_amount: {
             type: "string",
             description: "Numeric price amount only, without currency.",
+          },
+          compare_at_price_amount: {
+            type: "string",
+            description:
+              "Regular/pre-sale price. Set alongside price_amount only when running a discount/sale the user asked for.",
+          },
+          sale_starts_at: {
+            type: "string",
+            description: "ISO 8601 date/time the sale becomes active.",
+          },
+          sale_ends_at: {
+            type: "string",
+            description: "ISO 8601 date/time the sale ends.",
           },
           image_asset_id: {
             type: "string",

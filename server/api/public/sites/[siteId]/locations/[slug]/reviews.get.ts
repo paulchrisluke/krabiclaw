@@ -11,14 +11,15 @@ export default defineEventHandler(async (event) => {
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const location = await queryFirst<{ id: string; rating: number | null; review_count: number | null }>(
+  const location = await queryFirst<{ id: string; rating: number | null; review_count: number | null; last_synced_at: string | null }>(
     db,
-    `SELECT id, rating, review_count FROM business_locations
+    `SELECT id, rating, review_count, last_synced_at FROM business_locations
      WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`
     ,
     [siteId, slug],
   )
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
+  const aggregateVerified = Boolean(location.last_synced_at) && location.rating != null && location.review_count != null
 
   const results = await queryAll<ApiValue>(
     db,
@@ -44,11 +45,13 @@ export default defineEventHandler(async (event) => {
   }))
 
   return jsonResponse({
-    aggregate: {
-      rating: location.rating,
-      review_count: location.review_count,
-      distribution: dist,
-    },
+    aggregate: aggregateVerified
+      ? {
+          rating: location.rating,
+          review_count: location.review_count ?? 0,
+          distribution: dist,
+        }
+      : null,
     reviews,
   })
 })

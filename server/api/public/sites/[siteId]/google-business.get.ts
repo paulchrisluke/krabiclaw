@@ -112,10 +112,13 @@ export default defineEventHandler(async (event) => {
       profile: {
         description: location.description
       },
-      reviewSummary: {
-        averageRating: location.rating,
-        totalReviewCount: location.review_count
-      }
+      reviewSummary:
+        location.last_synced_at && location.rating != null && location.review_count != null
+          ? {
+              averageRating: location.rating,
+              totalReviewCount: location.review_count
+            }
+          : null
     }
     
     // Get published posts for this site (used for homepage highlights + /posts feed)

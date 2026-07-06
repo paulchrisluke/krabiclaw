@@ -4,6 +4,8 @@ import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { createLocation, deleteLocation, updateLocation } from '~/server/utils/location-management'
 import { getLocationForMcp, hydrateSeededLocationForOnboarding } from '~/server/utils/mcp-workflows'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
+import { renderStructuredResponse } from '~/server/utils/mcp-render'
+import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, omit, optionalString, requireActiveImageAsset, requireActiveVideoAsset, requiredString, requiredStringArray, workspaceContextPayload, workspaceLocationsPayload } from './shared'
 
 export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unknown> {
@@ -233,6 +235,19 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         ...result.data,
         context: await mutationContextPayload(site, { locationId }),
       };
+    }
+    case "open_location_media_upload": {
+      const locationId = requiredString(args, "location_id");
+      const accept = optionalString(args, "accept") ?? "both";
+      return renderStructuredResponse(
+        {
+          launched: true,
+          resourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
+          location_id: locationId,
+          context: { site_id: site.siteId, location_id: locationId, accept },
+        },
+        "Media upload widget launched for this location.",
+      );
     }
     case "delete_location": {
       const locationId = requiredString(args, "location_id");

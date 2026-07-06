@@ -130,6 +130,15 @@
             <UFormField label="Price display override" help='Optional. Overrides the displayed price text, e.g. "Ask us" or "Free".'>
               <UInput v-model="form.price" placeholder="Ask us" class="w-full" />
             </UFormField>
+            <UFormField label="Compare-at price" :help="`Optional. Regular/pre-sale price in ${defaultCurrency}, shown struck through when running a sale. Leave empty when not on sale.`">
+              <UInput v-model="form.compare_at_price_amount" type="number" min="0" step="any" class="w-full" />
+            </UFormField>
+            <UFormField label="Sale starts" help="Optional. Leave empty to start immediately.">
+              <UInput v-model="form.sale_starts_at" type="date" class="w-full" />
+            </UFormField>
+            <UFormField label="Sale ends" help="Optional. Leave empty for no end date.">
+              <UInput v-model="form.sale_ends_at" type="date" class="w-full" />
+            </UFormField>
             <UFormField label="Duration (minutes)">
               <UInput v-model="form.duration_minutes" type="number" min="0" class="w-full" />
             </UFormField>
@@ -201,7 +210,7 @@
               </div>
             </div>
           </UFormField>
-          <UFormField label="Availability note" help="Short note shown when near capacity, e.g. 'Last 2 spots'.">
+          <UFormField label="Availability note" help="Stable note shown on the listing, e.g. 'Runs weekends' or 'Seasonal class'. Avoid claims like 'Last 2 spots' — remaining capacity is now shown automatically from real bookings.">
             <UInput v-model="form.available_note" class="w-full" />
           </UFormField>
           <UFormField label="Highlights" help="One highlight per line.">
@@ -457,6 +466,9 @@ const emptyForm = () => ({
   images: [] as Array<{ _key: string; asset_id: string | null; url: string | null; kind: 'image' | 'video' }>,
   price: '',
   price_amount: '',
+  compare_at_price_amount: '',
+  sale_starts_at: '',
+  sale_ends_at: '',
   duration_minutes: '',
   max_capacity: '',
   available_note: '',
@@ -530,6 +542,9 @@ function openEdit(exp: ApiRecord) {
     images: Array.isArray(exp.images) ? exp.images.map((img: { asset_id?: string | null; url: string | null; kind: 'image' | 'video' }) => ({ _key: crypto.randomUUID(), asset_id: img.asset_id ?? null, url: img.url, kind: img.kind })) : [],
     price: exp.price ?? '',
     price_amount: exp.price_amount != null ? String(exp.price_amount) : '',
+    compare_at_price_amount: exp.compare_at_price_amount != null ? String(exp.compare_at_price_amount) : '',
+    sale_starts_at: exp.sale_starts_at ? String(exp.sale_starts_at).slice(0, 10) : '',
+    sale_ends_at: exp.sale_ends_at ? String(exp.sale_ends_at).slice(0, 10) : '',
     duration_minutes: exp.duration_minutes != null ? String(exp.duration_minutes) : '',
     max_capacity: exp.max_capacity != null ? String(exp.max_capacity) : '',
     available_note: exp.available_note ?? '',
@@ -586,6 +601,9 @@ async function save() {
     const payload = {
       ...form,
       price_amount: parseNumber(form.price_amount),
+      compare_at_price_amount: parseNumber(form.compare_at_price_amount),
+      sale_starts_at: form.sale_starts_at.trim() || null,
+      sale_ends_at: form.sale_ends_at.trim() || null,
       duration_minutes: parseNumber(form.duration_minutes),
       max_capacity: parseNumber(form.max_capacity),
       featured_sort_order: parseNumber(form.featured_sort_order),

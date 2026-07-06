@@ -23,6 +23,9 @@ export interface MenuItem {
   slug: string
   description: string | null
   price_amount: string | number | null
+  compare_at_price_amount: string | number | null
+  sale_starts_at: string | null
+  sale_ends_at: string | null
   image_asset_id: string | null
   public_url?: string | null  // from media_assets join
   kind?: string | null
@@ -64,6 +67,9 @@ export interface CreateMenuItemRequest {
   // slug is generated server-side from name
   description?: string
   price_amount?: string | number | null
+  compare_at_price_amount?: string | number | null
+  sale_starts_at?: string | null
+  sale_ends_at?: string | null
   image_asset_id?: string | null
   available?: boolean
   featured?: boolean
@@ -82,6 +88,9 @@ export interface UpdateMenuItemRequest {
   // slug is intentionally not editable via the standard update path
   description?: string
   price_amount?: string | number | null
+  compare_at_price_amount?: string | number | null
+  sale_starts_at?: string | null
+  sale_ends_at?: string | null
   image_asset_id?: string | null
   available?: boolean
   featured?: boolean

@@ -54,7 +54,10 @@
         </div>
         <div class="p-3 pt-2">
           <p class="saya-display saya-italic text-base text-default leading-snug line-clamp-2">{{ item.name }}</p>
-          <p v-if="item.price" class="mt-0.5 text-xs tabular-nums text-muted">{{ item.price }}</p>
+          <p v-if="item.price" class="mt-0.5 flex items-baseline gap-1.5 text-xs tabular-nums text-muted">
+            <span v-if="item.compareAtPrice" class="line-through">{{ item.compareAtPrice }}</span>
+            <span>{{ item.price }}</span>
+          </p>
         </div>
       </NuxtLink>
     </div>
@@ -81,6 +84,7 @@ interface Props {
       imageKind?: string
       alt?: string
       price?: string
+      compareAtPrice?: string
       href?: string
       unavailable?: boolean
     }>

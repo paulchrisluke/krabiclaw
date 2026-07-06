@@ -108,7 +108,10 @@ export default defineEventHandler(async (event) => {
     }
 
     const lowIntentOpening = isLowIntentOpening(message)
-    const results = await searchPublicResources(db, `${topic ? `${topic} ` : ''}${message}`, { limit: 6 })
+    const results = await searchPublicResources(env, `${topic ? `${topic} ` : ''}${message}`, {
+      limit: 6,
+      surface: 'help',
+    })
     const promptResults = formatPublicSearchResultsForPrompt(results)
     let parsed = {
       escalate: false,

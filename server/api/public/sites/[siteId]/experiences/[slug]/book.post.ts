@@ -1,5 +1,5 @@
 import { cloudflareEnv, jsonResponse, cleanString } from '~/server/utils/api-response'
-import { getExperienceBySlug, createExperienceBooking, resolveEffectiveTimeSlots, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
+import { getExperienceBySlug, createExperienceBookingClaimingCapacity, resolveEffectiveTimeSlots, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
 import { isDateBeforeTimezoneToday, isTimeSlotInPast } from '~/server/utils/site-config'
 import { fmt12Hour } from '~/shared/reservation-hours'
 import { notifyExperienceBookingCreated } from '~/server/utils/notifications'
@@ -90,6 +90,7 @@ export default defineEventHandler(async (event) => {
   if (experience.max_capacity && partySize > experience.max_capacity) {
     return jsonResponse({ error: `Maximum party size for this experience is ${experience.max_capacity}` }, { status: 400 })
   }
+  let slotCapacity: number | null = null
   if (effectiveSlots.length) {
     const availability = await getSlotAvailability(db, siteId, experience, bookingDate, experienceTimezone)
     const slotAvailability = availability.find((s) => s.time_slot === timeSlot)
@@ -99,6 +100,7 @@ export default defineEventHandler(async (event) => {
     if (slotAvailability && slotAvailability.remaining !== null && partySize > slotAvailability.remaining) {
       return jsonResponse({ error: `Only ${Math.max(slotAvailability.remaining, 0)} spot(s) left for this time slot.` }, { status: 409 })
     }
+    slotCapacity = slotAvailability?.capacity ?? null
   }
 
   // Rate limiting (skipped in dev so E2E tests can run repeatedly without hitting limits)
@@ -121,7 +123,7 @@ export default defineEventHandler(async (event) => {
   const cancellation = createReservationCancelToken()
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
 
-  const booking = await createExperienceBooking(db, {
+  const booking = await createExperienceBookingClaimingCapacity(db, {
     experience_id: experience.id,
     organization_id: site.organization_id,
     site_id: siteId,
@@ -137,7 +139,14 @@ export default defineEventHandler(async (event) => {
     ip_hash: ipHash,
     cancellation_token_hash: cancellationTokenHash,
     cancellation_token_expires_at: cancellation.expiresAt,
+    capacity: slotCapacity,
   })
+  // The capacity check above and this insert aren't atomic with each other —
+  // another request can claim the last spot in between. createExperienceBookingClaimingCapacity
+  // re-checks capacity as part of the insert itself, so this is the authoritative guard.
+  if (!booking) {
+    return jsonResponse({ error: 'This time slot just filled up. Please pick another time.' }, { status: 409 })
+  }
 
   try {
     const { contactPhone, contactEmail } = await resolveLocationContact(db, siteId, experience.location_id)

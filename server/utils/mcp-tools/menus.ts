@@ -1,5 +1,6 @@
 import type { McpToolDefinition } from './shared'
 import { menuItemObject, menuObject, siteTool } from './shared'
+import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const MENUS_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -126,6 +127,9 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         description: { type: ['string', 'null'] },
         price_amount: { type: ['string', 'number', 'null'], description: 'Canonical price field for menu items.' },
         price: { type: ['string', 'number', 'null'], description: 'Legacy alias accepted for compatibility. Prefer price_amount.' },
+        compare_at_price_amount: { type: ['string', 'number', 'null'], description: 'Regular/pre-sale price. Set alongside price_amount to run a sale.' },
+        sale_starts_at: { type: ['string', 'null'], description: 'ISO 8601 date/time the sale becomes active. Optional.' },
+        sale_ends_at: { type: ['string', 'null'], description: 'ISO 8601 date/time the sale ends. Optional.' },
         image_asset_id: { type: ['string', 'null'] },
         available: { type: 'boolean' },
         featured: { type: 'boolean' },
@@ -163,6 +167,9 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
               description: { type: ['string', 'null'] },
               price_amount: { type: ['string', 'number', 'null'], description: 'Canonical price field for menu items.' },
               price: { type: ['string', 'number', 'null'], description: 'Legacy alias accepted for compatibility. Prefer price_amount.' },
+              compare_at_price_amount: { type: ['string', 'number', 'null'], description: 'Regular/pre-sale price. Set alongside price_amount to run a sale.' },
+              sale_starts_at: { type: ['string', 'null'], description: 'ISO 8601 date/time the sale becomes active. Optional.' },
+              sale_ends_at: { type: ['string', 'null'], description: 'ISO 8601 date/time the sale ends. Optional.' },
               image_asset_id: { type: ['string', 'null'] },
               available: { type: 'boolean' },
               featured: { type: 'boolean' },
@@ -227,6 +234,9 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         description: { type: ['string', 'null'] },
         price_amount: { type: ['string', 'number', 'null'], description: 'Canonical price field for menu items.' },
         price: { type: ['string', 'number', 'null'], description: 'Legacy alias accepted for compatibility. Prefer price_amount.' },
+        compare_at_price_amount: { type: ['string', 'number', 'null'], description: 'Regular/pre-sale price. Set alongside price_amount to run a sale.' },
+        sale_starts_at: { type: ['string', 'null'], description: 'ISO 8601 date/time the sale becomes active. Optional.' },
+        sale_ends_at: { type: ['string', 'null'], description: 'ISO 8601 date/time the sale ends. Optional.' },
         image_asset_id: { type: ['string', 'null'] },
         available: { type: 'boolean' },
         featured: { type: 'boolean' },
@@ -260,6 +270,28 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: { item: menuItemObject },
         required: ['item'],
+      },
+    }),
+  siteTool({
+      name: 'open_menu_item_media_upload',
+      description: 'Launches the inline media upload widget scoped to a specific menu item — image only for menu items today. After the widget reports a completed upload, call set_menu_item_image with the returned assetId and this menu_item_id.',
+      domain: 'menus',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      uiResourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
+      inputSchema: {
+        menu_item_id: { type: 'string' },
+      },
+      required: ['menu_item_id'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          launched: { type: 'boolean' },
+          resourceUri: { type: 'string' },
+          menu_item_id: { type: 'string' },
+          context: { type: 'object' },
+        },
+        required: ['launched', 'resourceUri', 'menu_item_id'],
       },
     }),
   siteTool({

@@ -1,5 +1,5 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getExperienceBySlug } from '~/server/utils/experiences'
+import { attachAvailabilitySummaries, getExperienceBySlug } from '~/server/utils/experiences'
 import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -11,14 +11,15 @@ export default defineEventHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE id = ? AND status = 'active' LIMIT 1`, [siteId])
+  const site = await queryFirst<{ id: string; organization_id: string }>(db, `SELECT id, organization_id FROM sites WHERE id = ? AND status = 'active' LIMIT 1`, [siteId])
 
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
-  const experience = await getExperienceBySlug(db, siteId, slug)
-  if (!experience || experience.status === 'inactive') {
+  const experienceRaw = await getExperienceBySlug(db, siteId, slug)
+  if (!experienceRaw || experienceRaw.status === 'inactive') {
     return jsonResponse({ error: 'Experience not found' }, { status: 404 })
   }
+  const [experience] = await attachAvailabilitySummaries(db, site.organization_id, siteId, [experienceRaw])
 
   return jsonResponse({ experience })
 })

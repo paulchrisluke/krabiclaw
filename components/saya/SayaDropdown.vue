@@ -5,7 +5,7 @@
     <div
       v-if="open"
       role="menu"
-      :class="['absolute top-full mt-2 z-50 overflow-hidden rounded-xl border border-default bg-default py-1 shadow-lg', panelClass]"
+      :class="[placement === 'top' ? 'absolute bottom-full mb-2' : 'absolute top-full mt-2', 'z-50 min-w-40 overflow-hidden rounded-xl border border-default bg-default py-1 shadow-lg', panelClass]"
       @keydown="onPanelKeydown"
       @focusout="onPanelFocusOut"
     >
@@ -31,10 +31,13 @@ export interface SayaDropdownItem {
   onSelect?: () => void
 }
 
-defineProps<{
+withDefaults(defineProps<{
   items: SayaDropdownItem[]
   panelClass?: string
-}>()
+  placement?: 'top' | 'bottom'
+}>(), {
+  placement: 'bottom',
+})
 
 const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)

@@ -1,6 +1,8 @@
 import type { McpExecutorContext } from './shared'
 import { createExperience, deleteExperience, getExperienceBookingsSummary, getExperienceById, getSlotAvailability, listExperienceBookings, listExperienceBookingsForSite, listExperiences, listSlotOverrides, resolveExperienceTimezone, updateBookingStatus, updateExperience, upsertSlotOverride, type CreateExperienceInput, type UpdateExperienceInput } from '~/server/utils/experiences'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
+import { renderStructuredResponse } from '~/server/utils/mcp-render'
+import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 import { NOT_HANDLED, expandSlotGeneratorArgs, loadSiteSettings, mutationContextPayload, objectArray, omit, optionalDaysWindow, optionalString, requireActiveImageAsset, requireActiveVideoAsset, requiredString } from './shared'
 
 export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<unknown> {
@@ -26,6 +28,10 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
       if (priceAmountRaw !== undefined && priceAmountRaw !== null && typeof priceAmountRaw !== "number") {
         throw mcpProtocolError(MCP_ERROR.invalidParams, "price_amount must be a number or null");
       }
+      const compareAtPriceAmountRaw = ceArgs.compare_at_price_amount;
+      if (compareAtPriceAmountRaw !== undefined && compareAtPriceAmountRaw !== null && typeof compareAtPriceAmountRaw !== "number") {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "compare_at_price_amount must be a number or null");
+      }
       let locationId = ceArgs.location_id ? String(ceArgs.location_id) : null;
       if (!locationId) {
         const siteRow = (await loadSiteSettings(site.db, site.organizationId, site.siteId)) as Record<string, unknown>;
@@ -45,6 +51,7 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
             ...(ceArgs as unknown as CreateExperienceInput),
             location_id: locationId,
             price_amount: typeof priceAmountRaw === "number" ? priceAmountRaw : null,
+            compare_at_price_amount: typeof compareAtPriceAmountRaw === "number" ? compareAtPriceAmountRaw : null,
           },
           site.userId,
         );
@@ -59,6 +66,10 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
       if (priceAmountRaw !== undefined && priceAmountRaw !== null && typeof priceAmountRaw !== "number") {
         throw mcpProtocolError(MCP_ERROR.invalidParams, "price_amount must be a number or null");
       }
+      const compareAtPriceAmountRaw = ueArgs.compare_at_price_amount;
+      if (compareAtPriceAmountRaw !== undefined && compareAtPriceAmountRaw !== null && typeof compareAtPriceAmountRaw !== "number") {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "compare_at_price_amount must be a number or null");
+      }
       const experience = await updateExperience(
           site.db,
           site.siteId,
@@ -67,6 +78,9 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
             ...(ueArgs as unknown as UpdateExperienceInput),
             ...(priceAmountRaw !== undefined
               ? { price_amount: typeof priceAmountRaw === "number" ? priceAmountRaw : null }
+              : {}),
+            ...(compareAtPriceAmountRaw !== undefined
+              ? { compare_at_price_amount: typeof compareAtPriceAmountRaw === "number" ? compareAtPriceAmountRaw : null }
               : {}),
           },
         );
@@ -114,6 +128,19 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
           locationId: experience && typeof experience.location_id === "string" ? experience.location_id : null,
         }),
       };
+    }
+    case "open_experience_media_upload": {
+      const experienceId = requiredString(args, "experience_id");
+      const accept = optionalString(args, "accept") ?? "both";
+      return renderStructuredResponse(
+        {
+          launched: true,
+          resourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
+          experience_id: experienceId,
+          context: { site_id: site.siteId, experience_id: experienceId, accept },
+        },
+        "Media upload widget launched for this experience.",
+      );
     }
     case "reorder_experience_gallery": {
       const experienceId = requiredString(args, "experience_id");

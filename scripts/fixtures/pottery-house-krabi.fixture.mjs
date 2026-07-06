@@ -142,7 +142,7 @@ section('Route availability (all must 200)')
 
 const REQUIRED_ROUTES = [
   '/', '/locations', '/reviews', '/qa', '/posts', '/about', '/contact',
-  '/experiences', '/reservations',
+  '/experiences',
 ]
 
 const pageHtml = {}

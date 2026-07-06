@@ -14,7 +14,10 @@
           <p class="text-sm font-medium text-muted">{{ category?.name }}</p>
           <div class="mt-2 flex items-start justify-between gap-6">
             <h1 class="text-2xl font-semibold leading-tight text-highlighted md:text-4xl">{{ item.name }}</h1>
-            <p class="shrink-0 text-2xl font-semibold text-highlighted">{{ formattedPrice }}</p>
+            <div class="shrink-0 flex items-baseline gap-2">
+              <span v-if="isOnSale" class="text-base text-muted line-through">{{ compareAtPrice }}</span>
+              <p class="text-2xl font-semibold text-highlighted">{{ formattedPrice }}</p>
+            </div>
           </div>
 
           <div class="mt-5 flex flex-wrap gap-2">
@@ -283,7 +286,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'saya' })
 import AppBreadcrumb from '~/components/ui/AppBreadcrumb.vue'
-import { formatMoneyAmount } from '~/shared/money'
+import { formatMoneyAmount, isSaleActive } from '~/shared/money'
 import {
   useBootstrapParams,
   useBootstrapKey,
@@ -314,6 +317,9 @@ interface MenuItemType {
   name: string
   section?: string
   price_amount?: number | string | null
+  compare_at_price_amount?: number | string | null
+  sale_starts_at?: string | null
+  sale_ends_at?: string | null
   available: boolean
   public_url?: string
   kind?: string
@@ -419,6 +425,8 @@ const formatPrice = (menuItem: MenuItemType | null) => {
 }
 
 const formattedPrice = computed(() => formatPrice(item.value))
+const isOnSale = computed(() => isSaleActive(item.value ?? {}))
+const compareAtPrice = computed(() => formatMoneyAmount(item.value?.compare_at_price_amount, currency.value))
 
 const isRobatayaki = computed(() =>
   category.value?.name?.toLowerCase().includes('robatayaki') ?? false

@@ -16,6 +16,7 @@ export interface McpToolDefinition {
   inputSchema: Record<string, unknown>
   outputSchema: Record<string, unknown>
   fileParams?: string[]
+  uiResourceUri?: string
 }
 
 export interface McpToolAnnotations {
@@ -107,6 +108,9 @@ export const menuItemObject = {
     slug: { type: 'string' },
     description: { type: ['string', 'null'] },
     price_amount: { type: ['string', 'number', 'null'] },
+    compare_at_price_amount: { type: ['string', 'number', 'null'] },
+    sale_starts_at: { type: ['string', 'null'] },
+    sale_ends_at: { type: ['string', 'null'] },
     image_asset_id: { type: ['string', 'null'] },
     public_url: { type: ['string', 'null'] },
     thumbnail_url: { type: ['string', 'null'] },
@@ -279,6 +283,9 @@ export const experienceObject = {
     duration_minutes: { type: ['number', 'null'] },
     price: { type: ['string', 'null'] },
     price_amount: { type: ['number', 'null'] },
+    compare_at_price_amount: { type: ['number', 'null'] },
+    sale_starts_at: { type: ['string', 'null'] },
+    sale_ends_at: { type: ['string', 'null'] },
     max_capacity: { type: ['number', 'null'] },
     status: { type: 'string', enum: [...EXPERIENCE_STATUSES] },
     location_id: { type: ['string', 'null'] },
@@ -342,6 +349,9 @@ export const experienceWriteSchema = {
   },
   price: { type: ['string', 'null'], description: 'Optional display override for pricing text, e.g. "Ask us" or "Free".' },
   price_amount: { type: ['number', 'null'], description: 'Numeric price amount when the experience has a concrete price.' },
+  compare_at_price_amount: { type: ['number', 'null'], description: 'Regular/pre-sale price. Set alongside price_amount to run a sale.' },
+  sale_starts_at: { type: ['string', 'null'], description: 'ISO 8601 date/time the sale becomes active. Optional.' },
+  sale_ends_at: { type: ['string', 'null'], description: 'ISO 8601 date/time the sale ends. Optional.' },
   duration_minutes: { type: ['number', 'null'], description: 'Expected duration in minutes.' },
   max_capacity: { type: ['number', 'null'], description: 'Maximum guest count for a single booking or session.' },
   time_slots: { type: ['array', 'null'], items: { type: 'string' }, description: 'Flat daily time slots in HH:MM format, used when the same schedule applies every day.' },
@@ -691,6 +701,7 @@ export function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 
     },
     outputSchema: definition.outputSchema ?? { type: 'object' },
     fileParams: definition.fileParams,
+    uiResourceUri: definition.uiResourceUri,
   })
 }
 
@@ -747,6 +758,12 @@ export const READ_ONLY_TOOL_NAMES = [
   'list_blog_posts',
   'get_blog_post',
   'get_site_media_assets',
+  'open_media_upload',
+  'open_experience_media_upload',
+  'open_home_hero_media_upload',
+  'open_location_media_upload',
+  'open_post_media_upload',
+  'open_menu_item_media_upload',
   'get_facebook_connection',
   'get_dashboard_link',
   'get_page_fields',
@@ -779,6 +796,7 @@ export const BOUNDED_WRITE_TOOL_NAMES = [
   'save_generated_image',
   'save_generated_image_file',
   'upload_user_photo',
+  'upload_user_media',
   'set_logo',
   'set_brand_color',
   'set_home_hero_image',

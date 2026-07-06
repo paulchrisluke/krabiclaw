@@ -1,14 +1,14 @@
 import type { McpExecutorContext } from './shared'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
-import { createMediaAsset } from '~/server/utils/media-asset-manager'
 import { getPlatformDomain } from '~/server/utils/notifications'
 import { createPreviewToken } from '~/server/utils/preview-token'
 import { getFreeSiteDomain } from '~/server/utils/tenant-hosts'
 import { getSiteForMcp } from '~/server/utils/mcp-workflows'
-import { hasCloudflareImagesConfig, uploadImageBuffer } from '~/server/utils/cloudflare-images'
+import { hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
+import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
 import { queryAll } from '~/server/db'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { NOT_HANDLED, mutationContextPayload, optionalString, requiredString, resolveGeneratedImageFile, resolveGeneratedImageUpload, resolveUserUploadedImageFile, toolFileReference } from './shared'
+import { NOT_HANDLED, mutationContextPayload, optionalString, requiredString, resolveGeneratedImageFile, resolveGeneratedImageUpload, resolveImageUploadProvider, resolveUserUploadedImageFile, toolFileReference } from './shared'
 
 export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
@@ -72,8 +72,6 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
       );
     }
     case "save_generated_image": {
-      if (!hasCloudflareImagesConfig(site.env))
-        throw new Error("Cloudflare Images not configured");
       const imageData = requiredString(args, "image_data_base64");
       const prompt = optionalString(args, "prompt") ?? null;
       let upload: Awaited<ReturnType<typeof resolveGeneratedImageUpload>>;
@@ -85,33 +83,27 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
       }
       console.error("[MCP] save_generated_image uploading bytes=%d contentType=%s", upload.buffer.byteLength, upload.contentType);
 
-      const uploaded = await uploadImageBuffer(
-        site.env as Parameters<typeof uploadImageBuffer>[0],
-        upload.buffer,
-        upload.filename,
-        upload.contentType,
-      );
+      const provider = resolveImageUploadProvider(upload.contentType, site.env);
 
-      const assetId = crypto.randomUUID();
-      await createMediaAsset(site.db, {
-        id: assetId,
-        organization_id: site.organizationId,
-        site_id: site.siteId,
+      const uploaded = await uploadResolvedMediaToAssetStore({
+        db: site.db,
+        env: site.env as never,
+        siteId: site.siteId,
+        organizationId: site.organizationId,
+        userId: site.userId,
+        buffer: upload.buffer,
+        contentType: upload.contentType,
+        filename: upload.filename,
         kind: "image",
-        provider: "cloudflare_images",
         source: "generated",
-        cloudflare_image_id: uploaded.imageId,
-        public_url: uploaded.publicUrl,
-        thumbnail_url: uploaded.thumbnailUrl,
-        alt_text: prompt ?? "AI-generated hero image",
-        status: "active",
-        created_by_user_id: site.userId,
+        provider,
+        altText: prompt ?? "AI-generated hero image",
       });
 
       return {
         uploaded: true,
         assigned: false,
-        assetId,
+        assetId: uploaded.assetId,
         publicUrl: uploaded.publicUrl,
         thumbnailUrl: uploaded.thumbnailUrl,
         nextStep:
@@ -120,47 +112,33 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
       };
     }
     case "save_generated_image_file": {
-      if (!hasCloudflareImagesConfig(site.env))
-        throw new Error("Cloudflare Images not configured");
       const attachment = toolFileReference(args.attachment_id, "attachment_id");
       const prompt = optionalString(args, "prompt") ?? null;
       const upload = await resolveGeneratedImageFile(attachment);
-      const uploaded = await uploadImageBuffer(
-        site.env as Parameters<typeof uploadImageBuffer>[0],
-        upload.buffer,
-        upload.filename,
-        upload.contentType,
-      );
-
-      const assetId = crypto.randomUUID();
-      await createMediaAsset(site.db, {
-        id: assetId,
-        organization_id: site.organizationId,
-        site_id: site.siteId,
+      const provider = resolveImageUploadProvider(upload.contentType, site.env);
+      const uploaded = await uploadResolvedMediaToAssetStore({
+        db: site.db,
+        env: site.env as never,
+        siteId: site.siteId,
+        organizationId: site.organizationId,
+        userId: site.userId,
+        buffer: upload.buffer,
+        contentType: upload.contentType,
+        filename: upload.filename,
         kind: "image",
-        provider: "cloudflare_images",
         source: "generated",
-        cloudflare_image_id: uploaded.imageId,
-        public_url: uploaded.publicUrl,
-        thumbnail_url: uploaded.thumbnailUrl,
-        alt_text:
-          prompt ?? attachment.file_name ?? "AI-generated image attachment",
-        mime_type: upload.contentType,
-        file_name: upload.filename,
-        status: "active",
-        created_by_user_id: site.userId,
+        provider,
+        altText: prompt ?? attachment.file_name ?? "AI-generated image attachment",
       });
 
       return {
-        assetId,
+        assetId: uploaded.assetId,
         publicUrl: uploaded.publicUrl,
         thumbnailUrl: uploaded.thumbnailUrl,
         context: await mutationContextPayload(site),
       };
     }
     case "upload_user_photo": {
-      if (!hasCloudflareImagesConfig(site.env))
-        throw new Error("Cloudflare Images not configured");
       const description = optionalString(args, "description") ?? null;
       const category = optionalString(args, "category") ?? null;
       const fileReferenceValue = args.file;
@@ -180,34 +158,25 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
       const upload = fileReference
         ? await resolveGeneratedImageFile(fileReference)
         : await resolveUserUploadedImageFile(fileId!, site.env);
-      const uploaded = await uploadImageBuffer(
-        site.env as Parameters<typeof uploadImageBuffer>[0],
-        upload.buffer,
-        upload.filename,
-        upload.contentType,
-      );
-
-      const assetId = crypto.randomUUID();
-      await createMediaAsset(site.db, {
-        id: assetId,
-        organization_id: site.organizationId,
-        site_id: site.siteId,
+      const provider = resolveImageUploadProvider(upload.contentType, site.env);
+      const uploaded = await uploadResolvedMediaToAssetStore({
+        db: site.db,
+        env: site.env as never,
+        siteId: site.siteId,
+        organizationId: site.organizationId,
+        userId: site.userId,
+        buffer: upload.buffer,
+        contentType: upload.contentType,
+        filename: upload.filename,
         kind: "image",
-        provider: "cloudflare_images",
         source: "uploaded",
-        cloudflare_image_id: uploaded.imageId,
-        public_url: uploaded.publicUrl,
-        thumbnail_url: uploaded.thumbnailUrl,
-        alt_text: description ?? fileReference?.file_name ?? fileId,
-        mime_type: upload.contentType,
-        file_name: upload.filename,
+        provider,
+        altText: description ?? fileReference?.file_name ?? fileId,
         category: (category as never) ?? null,
-        status: "active",
-        created_by_user_id: site.userId,
       });
 
       return {
-        assetId,
+        assetId: uploaded.assetId,
         publicUrl: uploaded.publicUrl,
         thumbnailUrl: uploaded.thumbnailUrl,
         context: await mutationContextPayload(site),

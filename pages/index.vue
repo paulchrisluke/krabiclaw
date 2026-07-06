@@ -303,7 +303,15 @@
           <p class="saya-kicker mb-6">{{ homeCopy.reviewsKicker }}</p>
           <template v-if="hasGoogleBusiness && googleReviewSummary && Number(googleReviewSummary.average) > 0">
             <h2 class="saya-display-md flex flex-wrap items-center gap-4 text-default">
-              <SayaIcon name="star" solid class="size-8 text-primary" aria-hidden="true" />
+              <span class="flex text-primary" aria-hidden="true">
+                <SayaIcon
+                  v-for="i in 5"
+                  :key="i"
+                  name="star"
+                  :solid="i <= Math.round(Number(googleReviewSummary.average))"
+                  class="size-8"
+                />
+              </span>
               {{ googleReviewSummary.average }}
               <span v-if="googleReviewSummary.count" class="text-muted">· {{ googleReviewSummary.count?.toLocaleString() }} reviews</span>
             </h2>
@@ -398,7 +406,7 @@
 
 <script setup>
 import { useAuth } from '~/composables/useAuth'
-import { formatMoneyAmount } from '~/shared/money'
+import { formatMoneyAmount, isSaleActive, resolveOverridePriceDisplay } from '~/shared/money'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { getActiveSpecialClosure } from '~/utils/formatters'
@@ -653,6 +661,7 @@ const featuredContent = computed(() => {
       return {
         name: item.name,
         price: formatMoneyAmount(item.price_amount, defaultCurrency.value, ''),
+        compareAtPrice: isSaleActive(item) ? formatMoneyAmount(item.compare_at_price_amount, defaultCurrency.value, '') : '',
         image: isVideo ? (item.thumbnail_url || null) : (item.public_url || null),
         imageKind: 'image',
         alt: item.name ? `${item.name} dish` : 'Featured dish image',
@@ -661,7 +670,7 @@ const featuredContent = computed(() => {
     } else {
       return {
         name: item.title,
-        price: item.price || '',
+        ...resolveOverridePriceDisplay(item, defaultCurrency.value),
         image: item.image_url || null,
         imageKind: 'image',
         alt: item.title ? `${item.title} experience` : 'Featured experience image',

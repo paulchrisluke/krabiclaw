@@ -17,6 +17,21 @@ import {
   type McpSiteSummary,
 } from "~/server/utils/mcp-context";
 import { chargeFlatCredits, type FlatCreditAction } from "~/server/utils/ai-credits";
+import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, R2_IMAGE_MIME_TYPES } from "~/server/utils/media-mime";
+import { hasCloudflareImagesConfig } from "~/server/utils/cloudflare-images";
+
+/**
+ * Resolves the upload provider for an image based on content type and Cloudflare Images config.
+ * Returns "cloudflare_r2" for R2-compatible formats (e.g., AVIF), otherwise undefined (requires Cloudflare Images).
+ * Throws if Cloudflare Images is required but not configured.
+ */
+export function resolveImageUploadProvider(contentType: string, env: ApiRecord): "cloudflare_r2" | "cloudflare_images" | undefined {
+  const provider = R2_IMAGE_MIME_TYPES.has(contentType) ? "cloudflare_r2" : undefined;
+  if (!provider && !hasCloudflareImagesConfig(env)) {
+    throw new Error("Cloudflare Images not configured");
+  }
+  return provider as "cloudflare_r2" | "cloudflare_images" | undefined;
+}
 
 // Prefers the user's active organization (session-based auth only — see
 // McpUserContext.activeOrganizationId) and falls back to the oldest
@@ -433,10 +448,11 @@ export function toolFileReference(value: unknown, key: string): ToolFileReferenc
   };
 }
 
-export async function resolveUserUploadedImageFile(
+async function fetchUploadedFileFromAiGateway(
   fileId: string,
   env: ApiRecord,
-): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
+  maxBytes: number,
+): Promise<{ buffer: ArrayBuffer; contentType: string; normalizedFileId: string }> {
   const accountId = env.CF_ACCOUNT_ID as string | undefined;
   const gatewayName = env.CF_GATEWAY_NAME as string | undefined;
   const aigToken = env.CLOUDFLARE_API_TOKEN as string | undefined;
@@ -473,8 +489,17 @@ export async function resolveUserUploadedImageFile(
     });
   }
 
-  const contentType =
-    response.headers.get("content-type") ?? "application/octet-stream";
+  const buffer = await readMediaBufferWithLimit(response, `File ${normalizedFileId}`, maxBytes);
+  const contentType = response.headers.get("content-type") ?? "application/octet-stream";
+  return { buffer, contentType, normalizedFileId };
+}
+
+export async function resolveUserUploadedImageFile(
+  fileId: string,
+  env: ApiRecord,
+): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
+  const { buffer, contentType, normalizedFileId } = await fetchUploadedFileFromAiGateway(fileId, env, MAX_IMAGE_BYTES);
+
   if (!contentType.startsWith("image/")) {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
@@ -482,7 +507,6 @@ export async function resolveUserUploadedImageFile(
     );
   }
 
-  const buffer = await response.arrayBuffer();
   const bytes = new Uint8Array(buffer);
   const detectedContentType = validateImageBuffer(
     bytes,
@@ -490,6 +514,45 @@ export async function resolveUserUploadedImageFile(
   );
   const filename = `${normalizedFileId}.${detectedContentType.split("/")[1] ?? "png"}`;
   return { buffer, contentType: detectedContentType, filename };
+}
+
+/**
+ * file_id-only fallback for upload_user_media, mirroring
+ * resolveUserUploadedImageFile's AI Gateway fetch but accepting video/* in
+ * addition to image/*, using the same magic-byte sniffing as
+ * resolveUserUploadedMediaFile rather than trusting the declared content type.
+ */
+export async function resolveUserUploadedMediaFileById(
+  fileId: string,
+  env: ApiRecord,
+): Promise<ResolvedMediaFile> {
+  const { buffer, contentType, normalizedFileId } = await fetchUploadedFileFromAiGateway(fileId, env, MAX_VIDEO_BYTES);
+  const bytes = new Uint8Array(buffer);
+  if (bytes.byteLength < 64) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Invalid media payload from file ${normalizedFileId}: payload too small.`,
+    });
+  }
+
+  const sniffedContentType = sniffMediaMimeType(bytes);
+  const isVideo = VIDEO_MIME_TYPES.has(sniffedContentType);
+  const isImage = RESOLVED_MEDIA_IMAGE_TYPES.has(sniffedContentType);
+  if (!isVideo && !isImage) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `File ${normalizedFileId} is not a supported image or video type.`,
+    );
+  }
+  if (isImage && bytes.byteLength > MAX_IMAGE_BYTES) {
+    throw createError({
+      statusCode: 413,
+      statusMessage: `Invalid image payload from file ${normalizedFileId}: payload exceeds ${MAX_IMAGE_BYTES} byte limit.`,
+    });
+  }
+
+  const filename = `${normalizedFileId}.${sniffedContentType.split("/")[1] ?? "bin"}`;
+  return { buffer, contentType: sniffedContentType, filename, kind: isVideo ? "video" : "image" };
 }
 
 export async function resolveGeneratedImageFile(
@@ -527,6 +590,116 @@ export async function resolveGeneratedImageFile(
     file.file_name ??
     `${file.file_id}.${detectedContentType.split("/")[1] ?? "png"}`;
   return { buffer, contentType: detectedContentType, filename };
+}
+
+export interface ResolvedMediaFile {
+  buffer: ArrayBuffer;
+  contentType: string;
+  filename: string;
+  kind: "image" | "video";
+}
+
+const RESOLVED_MEDIA_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
+
+async function readMediaBufferWithLimit(
+  response: Response,
+  label: string,
+  maxBytes: number,
+): Promise<ArrayBuffer> {
+  const declaredLength = Number.parseInt(response.headers.get("content-length") ?? "", 10);
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} exceeds the ${maxBytes} byte limit.`);
+  }
+
+  if (!response.body) {
+    const buffer = await response.arrayBuffer();
+    if (buffer.byteLength > maxBytes) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} exceeds the ${maxBytes} byte limit.`);
+    }
+    return buffer;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} exceeds the ${maxBytes} byte limit.`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return merged.buffer;
+}
+
+/**
+ * Resolves a ChatGPT file reference to raw bytes for either an image or a
+ * video, using the same magic-byte sniffing as the dashboard's multipart
+ * video/file upload route (server/utils/media-mime.ts) rather
+ * than trusting the declared content type. Unlike resolveGeneratedImageFile,
+ * this accepts video/* in addition to image/*.
+ */
+export async function resolveUserUploadedMediaFile(
+  file: ToolFileReference,
+): Promise<ResolvedMediaFile> {
+  const safeDownloadUrl = assertSafeDownloadUrl(file.download_url, `Attachment ${file.file_id}`);
+  const response = await fetch(safeDownloadUrl, {
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Failed to download attachment ${file.file_id}: ${response.status}`,
+    });
+  }
+
+  const buffer = await readMediaBufferWithLimit(
+    response,
+    `Attachment ${file.file_id}`,
+    MAX_VIDEO_BYTES,
+  );
+  const bytes = new Uint8Array(buffer);
+  if (bytes.byteLength < 64) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Invalid media payload from attachment ${file.file_id}: payload too small.`,
+    });
+  }
+
+  const sniffedContentType = sniffMediaMimeType(bytes);
+  const isVideo = VIDEO_MIME_TYPES.has(sniffedContentType);
+  const isImage = RESOLVED_MEDIA_IMAGE_TYPES.has(sniffedContentType);
+  if (!isVideo && !isImage) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `Attachment ${file.file_id} is not a supported image or video type.`,
+    );
+  }
+  if (isImage && bytes.byteLength > MAX_IMAGE_BYTES) {
+    throw createError({
+      statusCode: 413,
+      statusMessage: `Invalid image payload from attachment ${file.file_id}: payload exceeds ${MAX_IMAGE_BYTES} byte limit.`,
+    });
+  }
+
+  const filename = file.file_name ?? `${file.file_id}.${sniffedContentType.split("/")[1] ?? "bin"}`;
+  return { buffer, contentType: sniffedContentType, filename, kind: isVideo ? "video" : "image" };
 }
 
 export interface GoogleMapsSignals {

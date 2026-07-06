@@ -142,12 +142,19 @@
               </ClientOnly>
             </div>
           </template>
-          <UNavigationMenu
-            v-else
-            :collapsed="collapsed"
-            :items="navigationItems"
-            orientation="vertical"
-          />
+          <div v-else class="flex flex-col gap-2 px-2">
+            <PlatformCommandSearchTrigger
+              surface="dashboard"
+              :compact="collapsed"
+              label="Search dashboard, docs, help..."
+              aria-label="Open dashboard search"
+            />
+            <UNavigationMenu
+              :collapsed="collapsed"
+              :items="navigationItems"
+              orientation="vertical"
+            />
+          </div>
 
         </template>
 
@@ -353,6 +360,7 @@
 
       <ChowBot v-if="!inConversationsWorkspace" />
     </UDashboardGroup>
+    <PlatformCommandSearchModal surface="dashboard" />
     <BillingCreditPurchaseModal />
     <BillingServiceUpsellModal />
     <BillingSiteSubscribeModal />
@@ -361,6 +369,8 @@
 </template>
 
 <script setup lang="ts">
+import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
+import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
 import { useChowBot } from '~/composables/useChowBot'

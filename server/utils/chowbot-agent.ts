@@ -108,6 +108,7 @@ import {
   type DashboardDestination,
 } from "~/server/utils/dashboard-links";
 import { searchPublicResources } from "~/server/utils/public-search";
+import { PUBLIC_SEARCH_TYPES, type PublicSearchTypeFilter } from '~/server/utils/platform-search-types'
 
 const MAX_ITERATIONS = 10;
 const HERO_FIELDS = new Set([
@@ -474,6 +475,9 @@ function buildMenuItemUpdates(
   const name = getToolString(itemRecord, "name", 200);
   const description = getToolString(itemRecord, "description", 500);
   const priceAmount = getToolString(itemRecord, "price_amount", 50);
+  const compareAtPriceAmount = getToolString(itemRecord, "compare_at_price_amount", 50);
+  const saleStartsAt = getToolString(itemRecord, "sale_starts_at", 50);
+  const saleEndsAt = getToolString(itemRecord, "sale_ends_at", 50);
   const imageAssetId = getToolString(itemRecord, "image_asset_id", 120);
   const available = getToolBoolean(itemRecord, "available");
 
@@ -490,6 +494,12 @@ function buildMenuItemUpdates(
     updates.description = description;
   if (priceAmount !== undefined && priceAmount !== match?.price_amount)
     updates.price_amount = priceAmount;
+  if (compareAtPriceAmount !== undefined && compareAtPriceAmount !== match?.compare_at_price_amount)
+    updates.compare_at_price_amount = compareAtPriceAmount;
+  if (saleStartsAt !== undefined && saleStartsAt !== match?.sale_starts_at)
+    updates.sale_starts_at = saleStartsAt;
+  if (saleEndsAt !== undefined && saleEndsAt !== match?.sale_ends_at)
+    updates.sale_ends_at = saleEndsAt;
   if (imageAssetId !== undefined && imageAssetId !== match?.image_asset_id)
     updates.image_asset_id = imageAssetId;
   if (available !== undefined && available !== Boolean(match?.available))
@@ -888,6 +898,9 @@ async function executeTool(
               name,
               description: getToolString(itemRecord, "description", 500),
               price_amount: getToolString(itemRecord, "price_amount", 50),
+              compare_at_price_amount: getToolString(itemRecord, "compare_at_price_amount", 50),
+              sale_starts_at: getToolString(itemRecord, "sale_starts_at", 50),
+              sale_ends_at: getToolString(itemRecord, "sale_ends_at", 50),
               image_asset_id: getToolString(itemRecord, "image_asset_id", 120),
             },
             userId,
@@ -1012,6 +1025,9 @@ async function executeTool(
               name,
               description: getToolString(itemRecord, "description", 500),
               price_amount: getToolString(itemRecord, "price_amount", 50),
+              compare_at_price_amount: getToolString(itemRecord, "compare_at_price_amount", 50),
+              sale_starts_at: getToolString(itemRecord, "sale_starts_at", 50),
+              sale_ends_at: getToolString(itemRecord, "sale_ends_at", 50),
               image_asset_id: getToolString(itemRecord, "image_asset_id", 120),
               available: getToolBoolean(itemRecord, "available"),
             },
@@ -1075,6 +1091,9 @@ async function executeTool(
           name: input.name,
           description: input.description,
           price_amount: input.price_amount,
+          compare_at_price_amount: input.compare_at_price_amount,
+          sale_starts_at: input.sale_starts_at,
+          sale_ends_at: input.sale_ends_at,
           image_asset_id: input.image_asset_id,
         },
         userId,
@@ -1094,6 +1113,9 @@ async function executeTool(
         "name",
         "description",
         "price_amount",
+        "compare_at_price_amount",
+        "sale_starts_at",
+        "sale_ends_at",
         "image_asset_id",
         "available",
         "featured",
@@ -2199,6 +2221,9 @@ async function executeTool(
           body: toSqlText(input.body) ?? null,
           price: toSqlText(input.price) ?? null,
           price_amount: typeof input.price_amount === "number" ? input.price_amount : null,
+          compare_at_price_amount: typeof input.compare_at_price_amount === "number" ? input.compare_at_price_amount : null,
+          sale_starts_at: toSqlText(input.sale_starts_at) ?? null,
+          sale_ends_at: toSqlText(input.sale_ends_at) ?? null,
           duration_minutes:
             typeof input.duration_minutes === "number"
               ? Math.round(input.duration_minutes)
@@ -2259,6 +2284,16 @@ async function executeTool(
         }
         updates.price_amount = typeof input.price_amount === "number" ? input.price_amount : null;
       }
+      if (input.compare_at_price_amount !== undefined) {
+        if (input.compare_at_price_amount !== null && typeof input.compare_at_price_amount !== "number") {
+          return { error: "compare_at_price_amount must be a number or null" };
+        }
+        updates.compare_at_price_amount = typeof input.compare_at_price_amount === "number" ? input.compare_at_price_amount : null;
+      }
+      if (input.sale_starts_at !== undefined)
+        updates.sale_starts_at = toSqlText(input.sale_starts_at) ?? null;
+      if (input.sale_ends_at !== undefined)
+        updates.sale_ends_at = toSqlText(input.sale_ends_at) ?? null;
       if (input.duration_minutes !== undefined)
         updates.duration_minutes =
           typeof input.duration_minutes === "number"
@@ -2525,14 +2560,14 @@ async function executeTool(
     case "search_public_resources": {
       const query = toSqlText(input.q)?.trim();
       const type = toSqlText(input.type);
-      const allowedTypes = ["all", "doc", "blog", "faq", "route"];
       if (!query) return { error: "q is required." };
-      if (type && !allowedTypes.includes(type)) {
-        return { error: `type must be one of: ${allowedTypes.join(", ")}` };
+      if (type && !PUBLIC_SEARCH_TYPES.includes(type as PublicSearchTypeFilter)) {
+        return { error: `type must be one of: ${PUBLIC_SEARCH_TYPES.join(", ")}` };
       }
-      const results = await searchPublicResources(db, query, {
-        type: (type as "all" | "doc" | "blog" | "faq" | "route") ?? "all",
+      const results = await searchPublicResources(env, query, {
+        type: (type as PublicSearchTypeFilter) ?? "all",
         limit: 8,
+        surface: "chowbot",
       });
       return { results };
     }
@@ -3032,6 +3067,7 @@ Guidelines:
 - For deleting one dish use delete_menu_item; for deleting a whole category and all dishes inside it use delete_menu_section
 - Store menu prices as price_amount only. Use the site default currency for display unless the user asks to change the currency, then call set_default_currency.
 - Store experience prices as price_amount (numeric). Use price (string) only for non-numeric display like "Ask us". If a user sets an experience price, always set price_amount; never store it only as a price string.
+- compare_at_price_amount/sale_starts_at/sale_ends_at are the canonical sale fields for both menu items and experiences: keep price_amount as the current selling price, set compare_at_price_amount to the regular/pre-sale price, and optionally set sale_starts_at/sale_ends_at (ISO 8601) to schedule when it auto-expires. Only set these when the user explicitly asks to run, change, or end a sale — never fabricate a discount they didn't ask for.
 - Use add_menu_items_batch only when the user is clearly adding brand-new items that are not already on the menu
 - Never use add_menu_items_batch to replace, revise, rename, or update existing menu items
 - When creating menus, omit location_id — the server links it to the current location automatically

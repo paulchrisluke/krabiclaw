@@ -1,9 +1,9 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getExperienceBySlug, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
+import { PUBLIC_BOOKING_WINDOW_DAYS, getExperienceBySlug, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
 import { queryFirst } from '~/server/db'
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
-const MAX_DAYS = 14
+const MAX_DAYS = PUBLIC_BOOKING_WINDOW_DAYS
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -25,8 +25,13 @@ export default defineEventHandler(async (event) => {
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const experience = await getExperienceBySlug(db, siteId, slug)
-  if (!experience || experience.status !== 'active') {
+  if (!experience || experience.status === 'inactive') {
     return jsonResponse({ error: 'Experience not found' }, { status: 404 })
+  }
+  // sold_out is a global "not bookable right now" flag set by the owner — the
+  // experience is still public, but every date has zero real availability.
+  if (experience.status === 'sold_out') {
+    return jsonResponse({ timezone: null, dates: [] })
   }
 
   const timezone = await resolveExperienceTimezone(db, site.organization_id, siteId, experience)

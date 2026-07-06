@@ -1,5 +1,6 @@
 import type { McpToolDefinition } from './shared'
 import { bookingPolicyObject, bookingPolicyWriteSchema, renderedBookingPolicySummaryObject, siteTool } from './shared'
+import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const CONTENT_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -171,7 +172,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'set_home_hero_video',
-      description: 'Assign a saved video asset as the homepage hero video. Upload the video via the dashboard media library first, then call get_site_media_assets to find its asset id. Hero videos take display priority over any existing hero image for the same page.',
+      description: 'Assign a saved video asset as the homepage hero video. Upload the video first via open_home_hero_media_upload (or upload_user_media if you already have a resolved file reference), then call get_site_media_assets to find its asset id. Hero videos take display priority over any existing hero image for the same page.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -230,6 +231,26 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
           public_path: { type: 'string' },
         },
         required: ['success', 'page', 'changes_count'],
+      },
+    }),
+  siteTool({
+      name: 'open_home_hero_media_upload',
+      description: 'Launches the inline media upload widget scoped to the homepage hero — image or video. After the widget reports a completed upload, call set_home_hero_image or set_home_hero_video with the returned assetId.',
+      domain: 'content',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      uiResourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
+      inputSchema: {
+        location_id: { type: 'string', description: 'Optional location scope when the homepage content is location-specific.' },
+        accept: { type: 'string', enum: ['image', 'video', 'both'], description: 'Restrict the widget file picker. Defaults to both.' },
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          launched: { type: 'boolean' },
+          resourceUri: { type: 'string' },
+        },
+        required: ['launched', 'resourceUri'],
       },
     }),
   siteTool({

@@ -10,6 +10,7 @@
     "build": "nuxi build --preset=cloudflare-module",
     "postbuild": "node patch.cjs",
     "build:cf": "nuxt build",
+    "ai-search:sync": "node --experimental-strip-types scripts/ai-search-sync.ts",
     "typecheck": "nuxi typecheck",
     "lint": "eslint . --ignore-pattern '.agents/**'",
     "lint:fix": "eslint . --fix --ignore-pattern '.agents/**'",

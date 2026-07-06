@@ -39,7 +39,7 @@ export const isInternalSelfFetch = (event: H3Event): boolean =>
 export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
   const runtimeEnv = (() => {
     const env = event.context.cloudflare?.env as Record<string, unknown> | undefined
-    const requiredBindings = ['DB', 'MEDIA_BUCKET', 'SITE_CACHE', 'AI'] as const
+    const requiredBindings = ['DB', 'MEDIA_BUCKET', 'SITE_CACHE', 'AI', 'AI_SEARCH'] as const
     const missing = requiredBindings.filter((key) => !env?.[key])
 
     if (missing.length > 0) {
