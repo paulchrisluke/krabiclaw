@@ -1,10 +1,11 @@
 import type { McpToolDefinition } from './shared'
-import { mediaAssetObject, siteTool } from './shared'
+import { chatgptFileInput, mediaAssetObject, siteTool } from './shared'
+import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const MEDIA_TOOLS: McpToolDefinition[] = [
   siteTool({
       name: 'get_site_media_assets',
-      description: 'Use this to see the photos and videos already uploaded for a site — "what pictures do I have", "show me my photos". Use it first to find asset IDs before assigning images through business-level tools like set_logo, set_home_hero_image, set_about_story_image, set_home_story_image, set_location_hero_image, set_menu_item_image, set_post_image, or set_experience_image. Filter by kind="image" to narrow results. For video uploads, direct the user to the dashboard media library: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/{locationSlug}/media — orgSlug and subdomain come from list_sites, locationSlug from list_locations. After the user uploads, call get_site_media_assets to get the public_url and place it on the page.',
+      description: 'Use this to see the photos and videos already uploaded for a site — "what pictures do I have", "show me my photos". Use it first to find asset IDs before assigning images through business-level tools like set_logo, set_home_hero_image, set_about_story_image, set_home_story_image, set_location_hero_image, set_menu_item_image, set_post_image, or set_experience_image. Filter by kind="image" to narrow results. For video, call open_media_upload, or the matching scoped widget (open_home_hero_media_upload, open_location_media_upload, open_experience_media_upload) to launch the inline upload widget; the dashboard media library is a fallback only for chat clients that do not support inline widgets. After upload, call get_site_media_assets to get the public_url and place it on the page.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -13,6 +14,58 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: { assets: { type: 'array', items: mediaAssetObject } },
         required: ['assets'],
+      },
+    }),
+  siteTool({
+      name: 'upload_user_media',
+      description: 'Canonical inline upload path for user-provided images and videos — "add photos", "upload my pictures", "add this video". Accepts a ChatGPT file reference for either an image or a video; the content type is auto-detected from the file bytes, not from a hint. For a video, you may also pass poster_file (an image) to use as its thumbnail. This tool only uploads into the site media library; it does not place the asset on a page. After upload succeeds, call the matching assignment tool (set_home_hero_image, set_home_hero_video, set_logo, set_location_hero_image, set_location_hero_video, set_post_image, set_experience_image, set_experience_video, etc.). Prefer opening the media upload widget (open_media_upload / open_experience_media_upload) for user-driven picking; call this tool directly when you already have a resolved file reference (e.g. from an attachment the user shared in chat). Prefer the file argument over file_id when available; file_id is a fallback for hosts that can only supply a resolved file identifier.',
+      domain: 'media',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        file: chatgptFileInput,
+        file_id: { type: 'string', description: 'Resolved file identifier for a user-uploaded image or video (e.g. file_abc123). Prefer file when the host can supply it directly.' },
+        poster_file: { ...chatgptFileInput, description: 'Optional poster/thumbnail image for a video upload. Ignored for image uploads.' },
+        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this media will be used for.' },
+        description: { type: 'string', description: 'Description of the media (stored as alt text).' },
+        oneOf: [
+          { required: ['file'] },
+          { required: ['file_id'] },
+        ],
+      },
+      required: [],
+      fileParams: ['file', 'poster_file'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          assetId: { type: 'string' },
+          publicUrl: { type: 'string' },
+          thumbnailUrl: { type: ['string', 'null'] },
+          kind: { type: 'string', enum: ['image', 'video'] },
+          posterWarning: { type: ['string', 'null'] },
+          nextStep: { type: 'string' },
+        },
+        required: ['assetId', 'publicUrl', 'kind'],
+      },
+    }),
+  siteTool({
+      name: 'open_media_upload',
+      description: 'Launches the inline KrabiClaw media upload widget so the user can pick or drag an image or video without leaving the conversation. This is the primary path for video, and an alternative to the file-attachment path for images. After the widget reports a completed upload, call the matching assignment tool (set_home_hero_image, set_home_hero_video, set_logo, set_location_hero_image, set_location_hero_video, set_post_image, etc.) with the returned assetId. Prefer a scoped variant when the target is already known: open_home_hero_media_upload, open_location_media_upload, open_experience_media_upload, open_post_media_upload, or open_menu_item_media_upload.',
+      domain: 'media',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      uiResourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
+      inputSchema: {
+        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this media will be used for.' },
+        accept: { type: 'string', enum: ['image', 'video', 'both'], description: 'Restrict the widget file picker. Defaults to both.' },
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          launched: { type: 'boolean' },
+          resourceUri: { type: 'string' },
+        },
+        required: ['launched', 'resourceUri'],
       },
     }),
   siteTool({

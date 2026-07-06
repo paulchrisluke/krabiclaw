@@ -6,6 +6,8 @@ import { createPost, deletePost, getPost, listPosts, publishPost, updatePost } f
 import { getFacebookPagesConnection, getLinkedInstagramAccount, publishToInstagram, publishToPage } from '~/server/utils/facebook-pages'
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { isConversationalToolGroupEnabled } from '~/server/utils/conversational-tool-surface'
+import { renderStructuredResponse } from '~/server/utils/mcp-render'
+import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 import { NOT_HANDLED, mutationContextPayload, normalizeChannelsInput, omit, optionalString, requireActiveImageAsset, requiredString } from './shared'
 
 export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown> {
@@ -83,6 +85,18 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           locationId: post && typeof post.location_id === "string" ? post.location_id : null,
         }),
       };
+    }
+    case "open_post_media_upload": {
+      const postId = requiredString(args, "post_id");
+      return renderStructuredResponse(
+        {
+          launched: true,
+          resourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
+          post_id: postId,
+          context: { site_id: site.siteId, post_id: postId, accept: "image" },
+        },
+        "Media upload widget launched for this post.",
+      );
     }
     case "publish_post": {
       const channels = normalizeChannelsInput(args);

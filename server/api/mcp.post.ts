@@ -18,6 +18,7 @@ import {
 } from "~/server/utils/mcp-auth";
 import { MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
+import { MCP_APP_RESOURCES, readMcpAppResource } from "~/server/utils/mcp-widgets";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { queryAll } from "~/server/db";
 import { purgeSiteKvCache } from "~/server/utils/edge-cache";
@@ -162,13 +163,15 @@ This entire flow runs within the current conversation — do not tell the user t
 2. When the user has attached an image in ChatGPT, inspect it visually first. Do not upload or mutate anything yet.
 3. If the intended use is obvious, describe it briefly and ask the user to confirm the target site, the target placement, and that the attached image should be used.
 4. Do not upload media, assign an image, publish, or overwrite anything until the user explicitly confirms.
-5. After confirmation, call upload_user_photo({ site_id, file: <attached local file argument>, category, description }).
+5. After confirmation, call upload_user_photo({ site_id, file: <attached local file argument>, category, description }). upload_user_media is the newer generic path (image or video) and is also acceptable here if you already have a resolved file reference.
 6. The file argument is the primary contract. Pass the ChatGPT attachment through the file field and let the host rewrite it into an authorized file reference for KrabiClaw. Do not fabricate download URLs, wrap fake file objects, or suggest an in-app photo uploader.
 7. After upload_user_photo returns assetId/publicUrl, call the appropriate assignment tool such as set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, or set_experience_image.
 8. Reply with the exact site, placement, assetId, and publicUrl that were updated.
 
-**Videos:**
-- ChatGPT photo attachment flow is for images only. For video uploads, direct the user to the dashboard media library, then use get_site_media_assets and the appropriate video assignment tool after the video is uploaded.
+**Videos (and an alternative image path):**
+- Call open_media_upload (or open_experience_media_upload when scoped to a specific experience) to launch the inline upload widget so the user can pick or drag a file without leaving the conversation. After it reports a completed upload, call the matching assignment tool (set_home_hero_video, set_location_hero_video, set_experience_video, etc.) with the returned assetId.
+- If you already have a resolved ChatGPT file reference for a video (or an image), you can call upload_user_media directly instead of opening the widget.
+- The dashboard media library remains a fallback only for chat clients that do not support inline widgets.
 
 ## Session start
 Start every conversation by calling get_workspace_context. If no active site is set yet, call list_sites to discover the user's sites and present them clearly.
@@ -227,7 +230,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
 
     if (request.method === "resources/list") {
       await requireMcpUser(event, tenantAuthOptions);
-      return mcpSuccess(request.id, { resources: [] });
+      return mcpSuccess(request.id, { resources: MCP_APP_RESOURCES });
     }
 
     if (request.method === "resources/templates/list") {
@@ -239,10 +242,8 @@ Common workflows: update menus and items, create and publish site posts, triage 
       await requireMcpUser(event, tenantAuthOptions);
       const uri =
         typeof request.params?.uri === "string" ? request.params.uri : "";
-      throw mcpProtocolError(
-        MCP_ERROR.methodNotFound,
-        `Client MCP does not expose resources: ${uri}`,
-      );
+      const content = await readMcpAppResource(uri, baseUrl);
+      return mcpSuccess(request.id, { contents: [content] });
     }
 
     if (request.method === "prompts/list") {
@@ -353,6 +354,12 @@ Common workflows: update menus and items, create and publish site posts, triage 
           },
           ...(tool.fileParams?.length
             ? { "openai/fileParams": tool.fileParams }
+            : {}),
+          ...(tool.uiResourceUri
+            ? {
+                ui: { resourceUri: tool.uiResourceUri },
+                "openai/outputTemplate": tool.uiResourceUri,
+              }
             : {}),
         },
       }));

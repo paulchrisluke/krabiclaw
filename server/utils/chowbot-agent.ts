@@ -108,6 +108,7 @@ import {
   type DashboardDestination,
 } from "~/server/utils/dashboard-links";
 import { searchPublicResources } from "~/server/utils/public-search";
+import { PUBLIC_SEARCH_TYPES, type PublicSearchTypeFilter } from '~/server/utils/platform-search-types'
 
 const MAX_ITERATIONS = 10;
 const HERO_FIELDS = new Set([
@@ -2525,14 +2526,14 @@ async function executeTool(
     case "search_public_resources": {
       const query = toSqlText(input.q)?.trim();
       const type = toSqlText(input.type);
-      const allowedTypes = ["all", "doc", "blog", "faq", "route"];
       if (!query) return { error: "q is required." };
-      if (type && !allowedTypes.includes(type)) {
-        return { error: `type must be one of: ${allowedTypes.join(", ")}` };
+      if (type && !PUBLIC_SEARCH_TYPES.includes(type as PublicSearchTypeFilter)) {
+        return { error: `type must be one of: ${PUBLIC_SEARCH_TYPES.join(", ")}` };
       }
-      const results = await searchPublicResources(db, query, {
-        type: (type as "all" | "doc" | "blog" | "faq" | "route") ?? "all",
+      const results = await searchPublicResources(env, query, {
+        type: (type as PublicSearchTypeFilter) ?? "all",
         limit: 8,
+        surface: "chowbot",
       });
       return { results };
     }

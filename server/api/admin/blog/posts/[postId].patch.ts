@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { updatePlatformBlogPost } from '~/server/utils/platform-content'
+import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-search-rebuild'
 
 import type { PlatformBlogPostRequestBody } from '~/server/types/platform-content'
 
@@ -27,7 +28,9 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    return jsonResponse(await updatePlatformBlogPost(db, postId, body))
+    const result = await updatePlatformBlogPost(db, postId, body)
+    schedulePlatformKnowledgeIndexRebuild(event, env, 'blog post update')
+    return jsonResponse(result)
   } catch (err) {
     const statusCode = typeof (err as { statusCode?: unknown })?.statusCode === 'number' ? Number((err as { statusCode: number }).statusCode) : 500
     if (statusCode >= 500) {

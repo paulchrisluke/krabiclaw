@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { updatePlatformDoc } from '~/server/utils/platform-content'
+import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-search-rebuild'
 
 import type { PlatformDocRequestBody } from '~/server/types/platform-content'
 
@@ -27,7 +28,9 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    return jsonResponse(await updatePlatformDoc(db, docId, body))
+    const result = await updatePlatformDoc(db, docId, body)
+    schedulePlatformKnowledgeIndexRebuild(event, env, 'doc update')
+    return jsonResponse(result)
   } catch (err) {
     const statusCode = typeof (err as { statusCode?: unknown })?.statusCode === 'number' ? Number((err as { statusCode: number }).statusCode) : 500
     const message = err instanceof Error ? err.message : 'Failed to update doc'

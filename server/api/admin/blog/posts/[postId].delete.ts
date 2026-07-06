@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { deletePlatformBlogPost } from '~/server/utils/platform-content'
+import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-search-rebuild'
 
 export default defineEventHandler(async (event) => {
   const postId = getRouterParam(event, 'postId')
@@ -20,7 +21,9 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    return jsonResponse(await deletePlatformBlogPost(db, postId))
+    const result = await deletePlatformBlogPost(db, postId)
+    schedulePlatformKnowledgeIndexRebuild(event, env, 'blog post delete')
+    return jsonResponse(result)
   } catch (err) {
     const statusCode = typeof (err as { statusCode?: unknown })?.statusCode === 'number' ? Number((err as { statusCode: number }).statusCode) : 500
     const message = err instanceof Error ? err.message : 'Failed to delete post'

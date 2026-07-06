@@ -16,6 +16,7 @@ export interface McpToolDefinition {
   inputSchema: Record<string, unknown>
   outputSchema: Record<string, unknown>
   fileParams?: string[]
+  uiResourceUri?: string
 }
 
 export interface McpToolAnnotations {
@@ -691,6 +692,7 @@ export function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 
     },
     outputSchema: definition.outputSchema ?? { type: 'object' },
     fileParams: definition.fileParams,
+    uiResourceUri: definition.uiResourceUri,
   })
 }
 
@@ -747,6 +749,12 @@ export const READ_ONLY_TOOL_NAMES = [
   'list_blog_posts',
   'get_blog_post',
   'get_site_media_assets',
+  'open_media_upload',
+  'open_experience_media_upload',
+  'open_home_hero_media_upload',
+  'open_location_media_upload',
+  'open_post_media_upload',
+  'open_menu_item_media_upload',
   'get_facebook_connection',
   'get_dashboard_link',
   'get_page_fields',
@@ -779,6 +787,7 @@ export const BOUNDED_WRITE_TOOL_NAMES = [
   'save_generated_image',
   'save_generated_image_file',
   'upload_user_photo',
+  'upload_user_media',
   'set_logo',
   'set_brand_color',
   'set_home_hero_image',
