@@ -1,2 +1,2 @@
 type ApiValue = ReturnType<typeof JSON.parse>
-type ApiRecord = ApiValue
+export type ApiRecord = ApiValue

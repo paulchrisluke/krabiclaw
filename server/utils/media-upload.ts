@@ -89,30 +89,30 @@ export async function uploadResolvedMediaToAssetStore(
     return { assetId, publicUrl: uploaded.publicUrl, thumbnailUrl: uploaded.thumbnailUrl, posterWarning: null };
   }
 
+  const r2Key = buildR2Key(input.siteId, assetId, input.filename);
+  let publicUrl: string;
   let thumbnailUrl: string | null = null;
   let posterImageId: string | null = null;
   let posterWarning: string | null = null;
 
-  if (input.poster) {
-    try {
-      const uploadedPoster = await uploadImageBuffer(
-        input.env,
-        input.poster.buffer,
-        input.poster.filename,
-        input.poster.contentType,
-      );
-      posterImageId = uploadedPoster.imageId;
-      thumbnailUrl = uploadedPoster.publicUrl;
-    } catch (posterError) {
-      console.error("media_upload_poster_failed", { assetId, error: posterError });
-      posterWarning = "The poster image could not be uploaded, so this video will not have a thumbnail yet.";
-    }
-  }
-
-  const r2Key = buildR2Key(input.siteId, assetId, input.filename);
-  const publicUrl = await uploadToR2(input.env, r2Key, input.buffer, input.contentType);
-
   try {
+    if (input.poster) {
+      try {
+        const uploadedPoster = await uploadImageBuffer(
+          input.env,
+          input.poster.buffer,
+          input.poster.filename,
+          input.poster.contentType,
+        );
+        posterImageId = uploadedPoster.imageId;
+        thumbnailUrl = uploadedPoster.publicUrl;
+      } catch (posterError) {
+        console.error("media_upload_poster_failed", { assetId, error: posterError });
+        posterWarning = "The poster image could not be uploaded, so this video will not have a thumbnail yet.";
+      }
+    }
+
+    publicUrl = await uploadToR2(input.env, r2Key, input.buffer, input.contentType);
     if (import.meta.dev) {
       try {
         await assertPublicMediaUrl(publicUrl, input.contentType, {

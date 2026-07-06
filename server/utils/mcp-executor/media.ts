@@ -5,13 +5,13 @@ import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
 import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
-import { R2_IMAGE_MIME_TYPES } from '~/server/utils/media-mime'
 import {
   NOT_HANDLED,
   mutationContextPayload,
   optionalString,
   requiredString,
   resolveGeneratedImageFile,
+  resolveImageUploadProvider,
   resolveUserUploadedMediaFile,
   resolveUserUploadedMediaFileById,
   toolFileReference,
@@ -50,16 +50,16 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         ? await resolveUserUploadedMediaFile(fileReference)
         : await resolveUserUploadedMediaFileById(fileId!, site.env);
 
-      if (
-        (resolved.kind === "image" || posterReference) &&
-        !hasCloudflareImagesConfig(site.env)
-      ) {
-        throw new Error("Cloudflare Images not configured");
-      }
+      const provider = resolved.kind === "image"
+        ? resolveImageUploadProvider(resolved.contentType, site.env)
+        : undefined;
 
       let poster: { buffer: ArrayBuffer; contentType: string; filename: string } | undefined;
       if (resolved.kind === "video" && posterReference) {
-        const posterResolved = await resolveGeneratedImageFile(posterReference);
+        if (!hasCloudflareImagesConfig(site.env)) {
+          throw new Error("Cloudflare Images not configured");
+        }
+        const posterResolved = await resolveUserUploadedMediaFile(posterReference);
         poster = posterResolved;
       }
 
@@ -74,10 +74,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         filename: resolved.filename,
         kind: resolved.kind,
         source: "uploaded",
-        provider:
-          resolved.kind === "image" && R2_IMAGE_MIME_TYPES.has(resolved.contentType)
-            ? "cloudflare_r2"
-            : undefined,
+        provider,
         category: (category as never) ?? null,
         altText: description ?? fileReference?.file_name ?? fileId,
         poster,

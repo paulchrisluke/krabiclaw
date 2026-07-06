@@ -17,7 +17,22 @@ import {
   type McpSiteSummary,
 } from "~/server/utils/mcp-context";
 import { chargeFlatCredits, type FlatCreditAction } from "~/server/utils/ai-credits";
-import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES } from "~/server/utils/media-mime";
+import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, R2_IMAGE_MIME_TYPES } from "~/server/utils/media-mime";
+import { hasCloudflareImagesConfig } from "~/server/utils/cloudflare-images";
+import type { ApiRecord } from "~/types/api-record.d";
+
+/**
+ * Resolves the upload provider for an image based on content type and Cloudflare Images config.
+ * Returns "cloudflare_r2" for R2-compatible formats (e.g., AVIF), otherwise undefined (requires Cloudflare Images).
+ * Throws if Cloudflare Images is required but not configured.
+ */
+export function resolveImageUploadProvider(contentType: string, env: ApiRecord): "cloudflare_r2" | "cloudflare_images" | undefined {
+  const provider = R2_IMAGE_MIME_TYPES.has(contentType) ? "cloudflare_r2" : undefined;
+  if (!provider && !hasCloudflareImagesConfig(env)) {
+    throw new Error("Cloudflare Images not configured");
+  }
+  return provider as "cloudflare_r2" | "cloudflare_images" | undefined;
+}
 
 // Prefers the user's active organization (session-based auth only — see
 // McpUserContext.activeOrganizationId) and falls back to the oldest
@@ -434,10 +449,11 @@ export function toolFileReference(value: unknown, key: string): ToolFileReferenc
   };
 }
 
-export async function resolveUserUploadedImageFile(
+async function fetchUploadedFileFromAiGateway(
   fileId: string,
   env: ApiRecord,
-): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
+  maxBytes: number,
+): Promise<{ buffer: ArrayBuffer; contentType: string; normalizedFileId: string }> {
   const accountId = env.CF_ACCOUNT_ID as string | undefined;
   const gatewayName = env.CF_GATEWAY_NAME as string | undefined;
   const aigToken = env.CLOUDFLARE_API_TOKEN as string | undefined;
@@ -474,8 +490,17 @@ export async function resolveUserUploadedImageFile(
     });
   }
 
-  const contentType =
-    response.headers.get("content-type") ?? "application/octet-stream";
+  const buffer = await readMediaBufferWithLimit(response, `File ${normalizedFileId}`, maxBytes);
+  const contentType = response.headers.get("content-type") ?? "application/octet-stream";
+  return { buffer, contentType, normalizedFileId };
+}
+
+export async function resolveUserUploadedImageFile(
+  fileId: string,
+  env: ApiRecord,
+): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
+  const { buffer, contentType, normalizedFileId } = await fetchUploadedFileFromAiGateway(fileId, env, MAX_IMAGE_BYTES);
+
   if (!contentType.startsWith("image/")) {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
@@ -483,7 +508,6 @@ export async function resolveUserUploadedImageFile(
     );
   }
 
-  const buffer = await response.arrayBuffer();
   const bytes = new Uint8Array(buffer);
   const detectedContentType = validateImageBuffer(
     bytes,
@@ -503,43 +527,7 @@ export async function resolveUserUploadedMediaFileById(
   fileId: string,
   env: ApiRecord,
 ): Promise<ResolvedMediaFile> {
-  const accountId = env.CF_ACCOUNT_ID as string | undefined;
-  const gatewayName = env.CF_GATEWAY_NAME as string | undefined;
-  const aigToken = env.CLOUDFLARE_API_TOKEN as string | undefined;
-
-  if (!accountId || !gatewayName || !aigToken) {
-    throw new Error(
-      "CF AI Gateway env vars not configured (CF_ACCOUNT_ID, CF_GATEWAY_NAME, CLOUDFLARE_API_TOKEN)",
-    );
-  }
-
-  const normalizedFileId = fileId
-    .trim()
-    .replace(/^sediment:\/\//i, "")
-    .replace(/^file:\/\//i, "")
-    .replace(/^\/+/, "");
-
-  if (!normalizedFileId || !/^[a-zA-Z0-9_-]+$/.test(normalizedFileId)) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      "file_id must be a valid uploaded file identifier.",
-    );
-  }
-
-  const url = `https://gateway.ai.cloudflare.com/v1/${accountId}/${gatewayName}/openai/v1/files/${normalizedFileId}/content`;
-  const response = await fetch(url, {
-    headers: { "cf-aig-authorization": `Bearer ${aigToken}` },
-    signal: AbortSignal.timeout(30_000),
-  });
-
-  if (!response.ok) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: `Failed to fetch uploaded file ${normalizedFileId} via AI Gateway: ${response.status}`,
-    });
-  }
-
-  const buffer = await readMediaBufferWithLimit(response, `File ${normalizedFileId}`, MAX_VIDEO_BYTES);
+  const { buffer, contentType, normalizedFileId } = await fetchUploadedFileFromAiGateway(fileId, env, MAX_VIDEO_BYTES);
   const bytes = new Uint8Array(buffer);
   if (bytes.byteLength < 64) {
     throw createError({

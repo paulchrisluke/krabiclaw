@@ -234,11 +234,15 @@ async function openSelectedResult() {
 }
 
 async function openResult(result: PublicSearchResult) {
-  await router.push(result.path)
-  close()
-  query.value = ''
-  results.value = []
-  selectedIndex.value = 0
+  try {
+    await router.push(result.path)
+    close()
+    query.value = ''
+    results.value = []
+    selectedIndex.value = 0
+  } catch {
+    // Navigation failed - keep modal open for user to try again
+  }
 }
 
 let debounceHandle: ReturnType<typeof setTimeout> | null = null

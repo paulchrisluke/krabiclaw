@@ -3,7 +3,9 @@
 // uiResourceUri) and mcp-executor/* (tool executors returning the same URI)
 // so neither side has to import the other.
 
-export const MEDIA_UPLOAD_WIDGET_RESOURCE_URI = "kc-mcp-app://media-upload";
+import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
+
+export const MEDIA_UPLOAD_WIDGET_RESOURCE_URI = "ui://media-upload";
 
 export interface McpAppResourceDefinition {
   uri: string;
@@ -49,12 +51,18 @@ export async function readMcpAppResource(
 ): Promise<McpAppResourceContent> {
   const resource = MCP_APP_RESOURCES.find((entry) => entry.uri === uri);
   if (!resource) {
-    throw new Error(`Unknown MCP app resource: ${uri}`);
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown MCP app resource: ${uri}`);
   }
 
   const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
   const text = mediaUploadWidgetHtml(normalizedBaseUrl);
-  const origin = new URL(normalizedBaseUrl).origin;
+
+  let origin: string;
+  try {
+    origin = new URL(normalizedBaseUrl).origin;
+  } catch (urlError) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid baseUrl: ${baseUrl}`);
+  }
 
   return {
     uri: resource.uri,

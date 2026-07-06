@@ -280,6 +280,7 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
           launched: { type: 'boolean' },
           resourceUri: { type: 'string' },
           menu_item_id: { type: 'string' },
+          context: { type: 'object' },
         },
         required: ['launched', 'resourceUri', 'menu_item_id'],
       },

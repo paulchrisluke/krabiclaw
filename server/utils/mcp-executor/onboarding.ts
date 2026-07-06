@@ -8,8 +8,7 @@ import { hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
 import { queryAll } from '~/server/db'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { R2_IMAGE_MIME_TYPES } from '~/server/utils/media-mime'
-import { NOT_HANDLED, mutationContextPayload, optionalString, requiredString, resolveGeneratedImageFile, resolveGeneratedImageUpload, resolveUserUploadedImageFile, toolFileReference } from './shared'
+import { NOT_HANDLED, mutationContextPayload, optionalString, requiredString, resolveGeneratedImageFile, resolveGeneratedImageUpload, resolveImageUploadProvider, resolveUserUploadedImageFile, toolFileReference } from './shared'
 
 export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
@@ -73,8 +72,6 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
       );
     }
     case "save_generated_image": {
-      if (!hasCloudflareImagesConfig(site.env))
-        throw new Error("Cloudflare Images not configured");
       const imageData = requiredString(args, "image_data_base64");
       const prompt = optionalString(args, "prompt") ?? null;
       let upload: Awaited<ReturnType<typeof resolveGeneratedImageUpload>>;
@@ -85,6 +82,8 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
         throw err;
       }
       console.error("[MCP] save_generated_image uploading bytes=%d contentType=%s", upload.buffer.byteLength, upload.contentType);
+
+      const provider = resolveImageUploadProvider(upload.contentType, site.env);
 
       const uploaded = await uploadResolvedMediaToAssetStore({
         db: site.db,
@@ -97,7 +96,7 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
         filename: upload.filename,
         kind: "image",
         source: "generated",
-        provider: R2_IMAGE_MIME_TYPES.has(upload.contentType) ? "cloudflare_r2" : undefined,
+        provider,
         altText: prompt ?? "AI-generated hero image",
       });
 
@@ -113,11 +112,10 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
       };
     }
     case "save_generated_image_file": {
-      if (!hasCloudflareImagesConfig(site.env))
-        throw new Error("Cloudflare Images not configured");
       const attachment = toolFileReference(args.attachment_id, "attachment_id");
       const prompt = optionalString(args, "prompt") ?? null;
       const upload = await resolveGeneratedImageFile(attachment);
+      const provider = resolveImageUploadProvider(upload.contentType, site.env);
       const uploaded = await uploadResolvedMediaToAssetStore({
         db: site.db,
         env: site.env as never,
@@ -129,7 +127,7 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
         filename: upload.filename,
         kind: "image",
         source: "generated",
-        provider: R2_IMAGE_MIME_TYPES.has(upload.contentType) ? "cloudflare_r2" : undefined,
+        provider,
         altText: prompt ?? attachment.file_name ?? "AI-generated image attachment",
       });
 
@@ -141,8 +139,6 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
       };
     }
     case "upload_user_photo": {
-      if (!hasCloudflareImagesConfig(site.env))
-        throw new Error("Cloudflare Images not configured");
       const description = optionalString(args, "description") ?? null;
       const category = optionalString(args, "category") ?? null;
       const fileReferenceValue = args.file;
@@ -162,6 +158,7 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
       const upload = fileReference
         ? await resolveGeneratedImageFile(fileReference)
         : await resolveUserUploadedImageFile(fileId!, site.env);
+      const provider = resolveImageUploadProvider(upload.contentType, site.env);
       const uploaded = await uploadResolvedMediaToAssetStore({
         db: site.db,
         env: site.env as never,
@@ -173,7 +170,7 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
         filename: upload.filename,
         kind: "image",
         source: "uploaded",
-        provider: R2_IMAGE_MIME_TYPES.has(upload.contentType) ? "cloudflare_r2" : undefined,
+        provider,
         altText: description ?? fileReference?.file_name ?? fileId,
         category: (category as never) ?? null,
       });

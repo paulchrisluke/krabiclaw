@@ -140,7 +140,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'set_location_hero_video',
-      description: 'Assign a saved video asset as a location hero video. Upload the video first via open_media_upload (or upload_user_media if you already have a resolved file reference), then call get_site_media_assets to find its asset id. Hero videos take display priority over any existing hero image for the same location.',
+      description: 'Assign a saved video asset as a location hero video. Upload the video first via open_location_media_upload (or upload_user_media if you already have a resolved file reference), then call get_site_media_assets to find its asset id. Hero videos take display priority over any existing hero image for the same location.',
       domain: 'locations',
       minimumRole: 'editor',
       confirmRequired: false,

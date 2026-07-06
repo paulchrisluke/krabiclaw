@@ -5,7 +5,7 @@ import { rebuildPlatformKnowledgeIndex } from '~/server/utils/public-search'
 async function secretsMatch(expectedSecret: string, providedSecret: string) {
   const encoder = new TextEncoder()
   const subtle = crypto.subtle as SubtleCrypto & {
-    timingSafeEqual?: (left: BufferSource, right: BufferSource) => boolean
+    timingSafeEqual?: (_expectedDigest: BufferSource, _providedDigest: BufferSource) => boolean
   }
   const [expectedDigest, providedDigest] = await Promise.all([
     subtle.digest('SHA-256', encoder.encode(expectedSecret)),

@@ -247,20 +247,26 @@ function platformKnowledgeInstanceConfig(): Omit<AiSearchConfig, 'metadata'> {
 async function ensurePlatformKnowledgeInstance(env: CloudflareEnv) {
   const instanceId = platformKnowledgeInstanceId(env)
   const namespace = searchNamespace(env)
-  const existing = await namespace.list({ search: instanceId, per_page: 50 })
-  const instanceExists = (existing.result ?? []).some(instance => instance.id === instanceId)
+
+  let instanceExists = false
+  try {
+    await namespace.get(instanceId)
+    instanceExists = true
+  } catch {
+    // Instance does not exist
+  }
 
   if (!instanceExists) {
     await namespace.create({
       id: platformKnowledgeInstanceId(env),
       ...platformKnowledgeInstanceConfig(),
     })
+  } else {
+    await namespace.get(instanceId).update({
+      id: instanceId,
+      ...platformKnowledgeInstanceConfig(),
+    })
   }
-
-  await namespace.get(instanceId).update({
-    id: instanceId,
-    ...platformKnowledgeInstanceConfig(),
-  })
 }
 
 async function listAllItems(env: CloudflareEnv) {

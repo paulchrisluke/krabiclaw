@@ -4,6 +4,7 @@ import type { CloudflareEnv } from '~/server/utils/auth'
 import { rebuildPlatformKnowledgeIndex } from '~/server/utils/public-search'
 
 let rebuildQueue: Promise<void> = Promise.resolve()
+let rebuildPending = false
 
 export function schedulePlatformKnowledgeIndexRebuild(
   event: H3Event,
@@ -13,10 +14,21 @@ export function schedulePlatformKnowledgeIndexRebuild(
 ) {
   if (!db) return
 
+  if (rebuildPending) {
+    return
+  }
+
+  rebuildPending = true
+
   const run = rebuildQueue
     .catch(() => {})
     .then(async () => {
+      rebuildPending = false
       await rebuildPlatformKnowledgeIndex(env, db)
+    })
+    .catch((error) => {
+      rebuildPending = false
+      throw error
     })
 
   rebuildQueue = run

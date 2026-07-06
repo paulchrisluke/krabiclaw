@@ -19,20 +19,22 @@
         >
           <PlatformIcon name="menu" class="size-5" />
         </button>
-        <template v-if="showAuthenticated">
-          <PlatformButton to="/dashboard" size="sm">
-            Dashboard
-            <PlatformIcon name="arrow-right" class="size-3.5" />
-          </PlatformButton>
-        </template>
-        <template v-else>
-          <PlatformButton to="/login" variant="ghost" size="sm" class="hidden sm:inline-flex">
-            Login
-          </PlatformButton>
-          <PlatformButton to="/signup" size="sm">
-            Start free
-            <PlatformIcon name="arrow-right" class="size-3.5" />
-          </PlatformButton>
+        <template v-if="mounted">
+          <template v-if="showAuthenticated">
+            <PlatformButton to="/dashboard" size="sm">
+              Dashboard
+              <PlatformIcon name="arrow-right" class="size-3.5" />
+            </PlatformButton>
+          </template>
+          <template v-else>
+            <PlatformButton to="/login" variant="ghost" size="sm" class="hidden sm:inline-flex">
+              Login
+            </PlatformButton>
+            <PlatformButton to="/signup" size="sm">
+              Start free
+              <PlatformIcon name="arrow-right" class="size-3.5" />
+            </PlatformButton>
+          </template>
         </template>
       </div>
     </div>
