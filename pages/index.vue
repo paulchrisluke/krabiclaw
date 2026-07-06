@@ -406,7 +406,7 @@
 
 <script setup>
 import { useAuth } from '~/composables/useAuth'
-import { formatMoneyAmount, isSaleActive } from '~/shared/money'
+import { formatMoneyAmount, isSaleActive, resolveOverridePriceDisplay } from '~/shared/money'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { getActiveSpecialClosure } from '~/utils/formatters'
@@ -670,8 +670,7 @@ const featuredContent = computed(() => {
     } else {
       return {
         name: item.title,
-        price: item.price || '',
-        compareAtPrice: isSaleActive(item) ? formatMoneyAmount(item.compare_at_price_amount, defaultCurrency.value, '') : '',
+        ...resolveOverridePriceDisplay(item, defaultCurrency.value),
         image: item.image_url || null,
         imageKind: 'image',
         alt: item.title ? `${item.title} experience` : 'Featured experience image',

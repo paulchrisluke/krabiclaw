@@ -210,7 +210,7 @@
               </div>
             </div>
           </UFormField>
-          <UFormField label="Availability note" help="Short note shown when near capacity, e.g. 'Last 2 spots'.">
+          <UFormField label="Availability note" help="Stable note shown on the listing, e.g. 'Runs weekends' or 'Seasonal class'. Avoid claims like 'Last 2 spots' — remaining capacity is now shown automatically from real bookings.">
             <UInput v-model="form.available_note" class="w-full" />
           </UFormField>
           <UFormField label="Highlights" help="One highlight per line.">

@@ -44,21 +44,15 @@
               <SayaIcon name="sparkles" class="size-12 text-dimmed" />
             </div>
             <div
-              v-if="exp.status === 'sold_out'"
-              class="absolute inset-0 flex items-center justify-center bg-black/50"
+              v-if="unavailabilityBadge(exp)"
+              class="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/60 to-transparent"
+            />
+            <span
+              v-if="unavailabilityBadge(exp)"
+              class="absolute bottom-3 left-3 rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-widest text-white"
             >
-              <span class="rounded-full bg-white px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-default">
-                {{ expCopy.soldOutLabel }}
-              </span>
-            </div>
-            <div
-              v-else-if="isClosed(exp)"
-              class="absolute inset-0 flex items-center justify-center bg-black/50"
-            >
-              <span class="rounded-full bg-white px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-default">
-                Temporarily unavailable
-              </span>
-            </div>
+              {{ unavailabilityBadge(exp) }}
+            </span>
           </div>
 
           <div class="mt-5">
@@ -95,7 +89,6 @@
 
 <script setup lang="ts">
 import type { Experience } from '~/server/utils/experiences'
-import { getActiveSpecialClosure } from '~/utils/formatters'
 
 const { isPlatform, site } = useTenantSite()
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
@@ -104,19 +97,24 @@ const expCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, loc
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 
-const { experiencesList, locations, pending: bootstrapPending, getField } = useBootstrap()
+const { experiencesList, pending: bootstrapPending, getField } = useBootstrap()
 
 const pending = computed(() => !isPlatform && bootstrapPending.value)
 const experiences = computed<Experience[]>(() => experiencesList.value)
 
-// Location ids currently under an active special_hours closure — their
-// experiences still show, badged as unavailable, instead of being hidden.
-const closedLocationIds = computed(() => new Set(
-  (locations.value as ApiRecord[])
-    .filter(loc => getActiveSpecialClosure(loc.special_hours, loc.timezone))
-    .map(loc => loc.id)
-))
-const isClosed = (exp: Experience) => !!exp.location_id && closedLocationIds.value.has(exp.location_id)
+// availability_state is derived server-side from real slots/bookings/overrides
+// plus location closures and the manual sold_out status — see
+// server/utils/experiences.ts computeExperienceAvailabilitySummary. Card stays
+// clickable in every case; only the badge copy changes.
+function unavailabilityBadge(exp: Experience): string | null {
+  switch (exp.availability_state) {
+    case 'sold_out': return expCopy.value.soldOutLabel
+    case 'temporarily_unavailable': return expCopy.value.temporarilyUnavailableLabel
+    case 'full': return expCopy.value.fullyBookedLabel
+    case 'no_slots': return expCopy.value.notScheduledLabel
+    default: return null
+  }
+}
 const heroKicker = computed(() => getField('hero.kicker', 'Experiences') || 'Experiences')
 const heroTitle = computed(() => getField('hero.title', expCopy.value.experiencesPageTitle) || expCopy.value.experiencesPageTitle)
 const heroSubtitle = computed(() => getField('hero.subtitle', expCopy.value.experiencesPageSubtitle) || expCopy.value.experiencesPageSubtitle)

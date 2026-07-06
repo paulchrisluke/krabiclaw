@@ -57,7 +57,15 @@ export default defineEventHandler(async (event) => {
   if ('meeting_point' in body) updates.meeting_point = body.meeting_point ? String(body.meeting_point).trim() : null
   if ('price' in body) updates.price = body.price ? String(body.price).trim() : null
   if ('price_amount' in body) updates.price_amount = optionalNumber(body.price_amount)
-  if ('compare_at_price_amount' in body) updates.compare_at_price_amount = optionalNumber(body.compare_at_price_amount)
+  if ('compare_at_price_amount' in body) {
+    if (body.compare_at_price_amount === null || body.compare_at_price_amount === undefined || body.compare_at_price_amount === '') {
+      updates.compare_at_price_amount = null
+    } else {
+      const parsed = Number(body.compare_at_price_amount)
+      if (!Number.isFinite(parsed)) return jsonResponse({ error: 'compare_at_price_amount must be a valid number' }, { status: 400 })
+      updates.compare_at_price_amount = parsed
+    }
+  }
   if ('sale_starts_at' in body) updates.sale_starts_at = body.sale_starts_at ? String(body.sale_starts_at) : null
   if ('sale_ends_at' in body) updates.sale_ends_at = body.sale_ends_at ? String(body.sale_ends_at) : null
   if ('duration_minutes' in body) updates.duration_minutes = optionalInteger(body.duration_minutes)

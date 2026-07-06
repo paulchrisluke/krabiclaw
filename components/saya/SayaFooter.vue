@@ -115,7 +115,7 @@
       <div class="flex flex-wrap items-center justify-between gap-4 pt-6 text-xs text-inverted/70">
         <div>© {{ year }} {{ restaurantName }}</div>
         <div class="flex items-center gap-6">
-          <SayaDropdown :items="languageItems" panel-class="saya-theme">
+          <SayaDropdown :items="languageItems" panel-class="saya-theme" placement="top">
             <template #default="{ open, toggle, triggerKeydown }">
               <button
                 type="button"

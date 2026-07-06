@@ -71,6 +71,9 @@ type VerticalCopy = {
   additionalLocationsNote: string
   noExperiencesLabel: string
   soldOutLabel: string
+  temporarilyUnavailableLabel: string
+  fullyBookedLabel: string
+  notScheduledLabel: string
   viewExperienceCta: string
   guestsMaxLabel: string
   nameLabel: string
@@ -188,6 +191,9 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
       additionalLocationsNote: "Additional locations appear here when added.",
       noExperiencesLabel: "No experiences available right now. Check back soon.",
       soldOutLabel: "Sold Out",
+      temporarilyUnavailableLabel: "Temporarily unavailable",
+      fullyBookedLabel: "Fully booked",
+      notScheduledLabel: "Not currently scheduled",
       viewExperienceCta: "View experience",
       guestsMaxLabel: "guests max",
       nameLabel: "Name",
@@ -303,6 +309,9 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
       additionalLocationsNote: "Additional locations appear here when added.",
       noExperiencesLabel: "No experiences available right now. Check back soon.",
       soldOutLabel: "Sold Out",
+      temporarilyUnavailableLabel: "Temporarily unavailable",
+      fullyBookedLabel: "Fully booked",
+      notScheduledLabel: "Not currently scheduled",
       viewExperienceCta: "View experience",
       guestsMaxLabel: "guests max",
       nameLabel: "Name",
@@ -420,6 +429,9 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
       additionalLocationsNote: "สาขาเพิ่มเติมจะปรากฏที่นี่เมื่อเพิ่มแล้ว",
       noExperiencesLabel: "ยังไม่มีประสบการณ์ให้เลือกตอนนี้ ตรวจสอบอีกครั้งเร็วๆ นี้",
       soldOutLabel: "เต็มแล้ว",
+      temporarilyUnavailableLabel: "ปิดให้บริการชั่วคราว",
+      fullyBookedLabel: "เต็มแล้ว",
+      notScheduledLabel: "ยังไม่มีกำหนดการ",
       viewExperienceCta: "ดูประสบการณ์",
       guestsMaxLabel: "แขกสูงสุด",
       nameLabel: "ชื่อ",
@@ -535,6 +547,9 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
       additionalLocationsNote: "สาขาเพิ่มเติมจะปรากฏที่นี่เมื่อเพิ่มแล้ว",
       noExperiencesLabel: "ยังไม่มีประสบการณ์ให้เลือกตอนนี้ ตรวจสอบอีกครั้งเร็วๆ นี้",
       soldOutLabel: "เต็มแล้ว",
+      temporarilyUnavailableLabel: "ปิดให้บริการชั่วคราว",
+      fullyBookedLabel: "เต็มแล้ว",
+      notScheduledLabel: "ยังไม่มีกำหนดการ",
       viewExperienceCta: "ดูประสบการณ์",
       guestsMaxLabel: "แขกสูงสุด",
       nameLabel: "ชื่อ",

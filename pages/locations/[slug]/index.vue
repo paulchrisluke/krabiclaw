@@ -289,7 +289,7 @@
 
 <script setup lang="ts">
 import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
-import { formatMoneyAmount, isSaleActive } from '~/shared/money'
+import { formatMoneyAmount, isSaleActive, resolveOverridePriceDisplay } from '~/shared/money'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
@@ -431,8 +431,7 @@ const featuredItems = computed(() => {
     const closureMessage = activeClosureMessage.value
     return toUse.slice(0, 4).map(exp => ({
       name: exp.title,
-      price: exp.price && isFinite(parseFloat(String(exp.price))) ? formatMoneyAmount(Number(parseFloat(String(exp.price))), defaultCurrency, '') : (exp.price || ''),
-      compareAtPrice: isSaleActive(exp) ? formatMoneyAmount(exp.compare_at_price_amount, defaultCurrency, '') : '',
+      ...resolveOverridePriceDisplay(exp, defaultCurrency),
       image: exp.image_url || null,
       imageKind: 'image',
       alt: exp.title ? `${exp.title} experience` : 'Featured experience image',

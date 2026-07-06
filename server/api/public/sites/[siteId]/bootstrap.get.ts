@@ -17,7 +17,7 @@ import {
   parseStringArray,
 } from "~/server/utils/menu-management";
 import { verifyPreviewToken } from "~/server/utils/preview-token";
-import { type Experience } from "~/server/utils/experiences";
+import { attachAvailabilitySummaries, type Experience } from "~/server/utils/experiences";
 import { type MenuWithItems } from "~/server/types/menu";
 import {
   attachFeaturedImageFromBareJoin,
@@ -440,7 +440,7 @@ export default defineEventHandler(async (event) => {
   );
 
   idxExpCount = push(
-    `SELECT COUNT(*) AS cnt FROM experiences WHERE site_id = ? AND status = 'active'`,
+    `SELECT COUNT(*) AS cnt FROM experiences WHERE site_id = ? AND status != 'inactive'`,
     [siteId],
   );
 
@@ -558,7 +558,7 @@ export default defineEventHandler(async (event) => {
                   FROM experiences e
                   LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
                   LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
-                  WHERE e.organization_id = ? AND e.site_id = ? AND e.status = 'active'`;
+                  WHERE e.organization_id = ? AND e.site_id = ? AND e.status != 'inactive'`;
     if (page === "location" && locationId) {
       expSql += ` AND e.location_id = ?`;
       expParams.push(locationId);
@@ -580,7 +580,7 @@ export default defineEventHandler(async (event) => {
        FROM experiences e
        LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
        LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
-       WHERE e.organization_id = ? AND e.site_id = ? AND e.slug = ? AND e.status = 'active'
+       WHERE e.organization_id = ? AND e.site_id = ? AND e.slug = ?
        LIMIT 1`,
       [orgId, siteId, experienceSlug],
     );
@@ -893,14 +893,15 @@ export default defineEventHandler(async (event) => {
   }
 
   // Build experiences
-  const experiencesList: Experience[] =
+  const experiencesListRaw: Experience[] =
     idxExperiencesList >= 0
       ? (
           (batchResults[idxExperiencesList] as { results: Record<string, unknown>[] })?.results ?? []
         ).map(parseExperienceRow)
       : [];
+  const experiencesList = await attachAvailabilitySummaries(db, orgId, siteId, experiencesListRaw);
 
-  const experienceDetail: Experience | null =
+  const experienceDetailRaw: Experience | null =
     idxExperienceDetail >= 0
       ? (
           (batchResults[idxExperienceDetail] as { results: Record<string, unknown>[] })?.results[0] ?? null
@@ -909,6 +910,12 @@ export default defineEventHandler(async (event) => {
             (batchResults[idxExperienceDetail] as { results: Record<string, unknown>[] }).results[0]!,
           )
         : null
+      : null;
+  // inactive experiences are never public, at any route — sold_out stays visible
+  // with its own messaging (see server/utils/experiences.ts listExperiences).
+  const experienceDetail =
+    experienceDetailRaw && experienceDetailRaw.status !== "inactive"
+      ? (await attachAvailabilitySummaries(db, orgId, siteId, [experienceDetailRaw]))[0]
       : null;
 
   // Locations rarely have their own email (Google Places API doesn't expose
@@ -998,7 +1005,7 @@ export default defineEventHandler(async (event) => {
               : null,
           profile: { description: primary.description },
           reviewSummary:
-            primary.last_synced_at && primary.rating != null
+            primary.last_synced_at && primary.rating != null && primary.review_count != null
               ? {
                   averageRating: primary.rating,
                   totalReviewCount: primary.review_count,
@@ -1153,7 +1160,8 @@ export default defineEventHandler(async (event) => {
       ? {
           reviewsAggregate:
             locationForAggregate?.last_synced_at &&
-            locationForAggregate.rating != null
+            locationForAggregate.rating != null &&
+            locationForAggregate.review_count != null
               ? {
                   rating: locationForAggregate.rating,
                   review_count: locationForAggregate.review_count,

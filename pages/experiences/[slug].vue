@@ -25,7 +25,7 @@
 
       <!-- ── Mobile sticky bottom CTA ───────────────────────── -->
       <div
-        v-if="experience.status !== 'sold_out' && !experienceLocationClosureMessage"
+        v-if="experience.status !== 'sold_out' && !experienceLocationClosureMessage && !noBookableSlotsMessage"
         class="lg:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-between gap-4 border-t border-default bg-default/95 backdrop-blur-sm px-5 py-4 shadow-lg"
       >
         <div class="min-w-0">
@@ -350,6 +350,15 @@
                 {{ experienceLocationClosureMessage }}
               </div>
 
+              <!-- No bookable slots — never shows a misleading free-text time
+                   field; only a clear "not currently bookable" message. -->
+              <div
+                v-else-if="noBookableSlotsMessage"
+                class="rounded-lg bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm font-medium text-amber-700 dark:text-amber-400 text-center"
+              >
+                {{ noBookableSlotsMessage }}
+              </div>
+
               <!-- Booking Button (Desktop) -->
               <div v-else class="pt-2">
                 <SayaButton block @click="openBookingModal">
@@ -448,6 +457,19 @@ const experienceLocationClosureMessage = computed(() => {
   const loc = experienceLocation.value as ApiRecord | null
   if (!loc) return null
   return formatClosureMessage(getActiveSpecialClosure(loc.special_hours, loc.timezone))
+})
+
+// availability_state is derived server-side from real slots/bookings/overrides
+// (see computeExperienceAvailabilitySummary) — 'full'/'no_slots'/'inquiry_only'
+// mean there's nothing bookable right now, so the CTA/booking button is
+// replaced with a clear message instead of opening a modal with no real slots.
+const noBookableSlotsMessage = computed(() => {
+  switch ((experience.value as ApiValue)?.availability_state) {
+    case 'full': return 'Fully booked for the next few weeks. Please check back later.'
+    case 'no_slots': return 'This experience has no scheduled times right now.'
+    case 'inquiry_only': return 'Contact us to arrange a booking for this experience.'
+    default: return null
+  }
 })
 
 const experiencePolicySummary = computed(() => {
@@ -738,9 +760,18 @@ useHead({
               price: priceNum,
               priceCurrency: currency,
               ...(isSaleActive(val) && val.sale_ends_at ? { priceValidUntil: val.sale_ends_at } : {}),
-              availability: val.status === 'sold_out'
-                ? 'https://schema.org/SoldOut'
-                : 'https://schema.org/InStock',
+              // Matches the same availability_state canonical mapping used for
+              // the card badge/booking UI — see computeExperienceAvailabilitySummary.
+              availability: (() => {
+                switch (val.availability_state) {
+                  case 'sold_out': return 'https://schema.org/SoldOut'
+                  case 'full':
+                  case 'no_slots':
+                  case 'temporarily_unavailable': return 'https://schema.org/OutOfStock'
+                  case 'limited': return 'https://schema.org/LimitedAvailability'
+                  default: return 'https://schema.org/InStock'
+                }
+              })(),
               seller: { '@id': orgId },
               ...(val.max_capacity ? {
                 eligibleQuantity: {

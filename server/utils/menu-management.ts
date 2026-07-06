@@ -8,7 +8,7 @@ import type {
   CreateMenuItemRequest,
   UpdateMenuItemRequest,
 } from "../types/menu";
-import { normalizePriceAmount } from "~/shared/money";
+import { normalizePriceAmount, assertValidSaleWindow } from "~/shared/money";
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from "~/server/db";
 
 const MAX_SUFFIX_ATTEMPTS = 50;
@@ -57,21 +57,6 @@ export class MenuNotFoundError extends Error {
   constructor(message = "Menu not found or does not belong to this site") {
     super(message);
     this.name = "MenuNotFoundError";
-  }
-}
-
-function assertValidSaleWindow(
-  startsAt: string | null | undefined,
-  endsAt: string | null | undefined,
-): void {
-  if (!startsAt || !endsAt) return;
-  const start = new Date(startsAt);
-  const end = new Date(endsAt);
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-    throw createError({ statusCode: 400, statusMessage: "sale_starts_at and sale_ends_at must be valid dates" });
-  }
-  if (start > end) {
-    throw createError({ statusCode: 400, statusMessage: "sale_starts_at must be before sale_ends_at" });
   }
 }
 

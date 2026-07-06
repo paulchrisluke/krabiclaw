@@ -106,7 +106,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       },
       phone: '+66817794877',
       email: null,
-      mapsUrl: 'https://maps.app.goo.gl/pottery-house-krabi',
+      mapsUrl: 'https://maps.google.com/?cid=13737672931096703953',
       latitude: 8.0557285,
       longitude: 98.7504791,
       description:
@@ -121,11 +121,11 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
         { openDay: 'SATURDAY', openTime: '10:00', closeTime: '18:00' },
         { openDay: 'SUNDAY', openTime: '10:00', closeTime: '18:00' },
       ],
-      // No hardcoded rating/reviewCount: this is a real client site. These fields
-      // are only ever correct when populated by a real Google Places sync
-      // (see scripts/client-import.mjs / server/utils/google-places.ts).
-      rating: null,
-      reviewCount: null,
+      // Verified against the live Google Places API 2026-07-06.
+      rating: 5,
+      reviewCount: 3,
+      googlePlaceId: 'ChIJ74PDozK_UTAR0bOE2r4Epr4',
+      lastSyncedAt: '2026-07-06T04:50:29.787Z',
       priceLevel: '฿฿',
       categories: ['Pottery Studio', 'Pottery Classes', 'Ceramic Workshop', 'Art Experience'],
       instagramUrl: 'https://instagram.com/potteryclasseskrabi',
@@ -149,8 +149,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       },
       phone: '+66858037108',
       email: null,
-      mapsUrl:
-        'https://www.google.com/maps/place/Beachfront+Pottery+Krabi/@8.0556415,98.7476018,17z/data=!4m7!3m6!1s0x3051bf001b03f635:0xafb40b8ba3d4f053!8m2!3d8.057425!4d98.7486163!15sCgdwb3R0ZXJ5WgkiB3BvdHRlcnmSAQ9wb3R0ZXJ5X2NsYXNzZXOaAURDaTlEUVVsUlFVTnZaRU5vZEhsalJqbHZUMnQwZEdJeWNHaFRNRFI1VkZaV2ExWlZXakZWYkVJeFUxZHdURTVYWXhBQuABAPoBBAhYEDg!16s%2Fg%2F11yfvr97vw?entry=tts&g_ep=EgoyMDI2MDUyNS4wIPu8ASoASAFQAw%3D%3D&skid=1d6266f5-0075-4577-a084-27409b012140',
+      mapsUrl: 'https://maps.google.com/?cid=12660757146822307923',
       latitude: 8.057425,
       longitude: 98.7486163,
       description:
@@ -165,9 +164,11 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
         { openDay: 'SATURDAY', openTime: '12:00', closeTime: '19:30' },
         { openDay: 'SUNDAY', openTime: '12:00', closeTime: '19:30' },
       ],
-      // No hardcoded rating/reviewCount: see note on the primary location above.
-      rating: null,
-      reviewCount: null,
+      // Verified against the live Google Places API 2026-07-06.
+      rating: 4.5,
+      reviewCount: 8,
+      googlePlaceId: 'ChIJNfYDGwC_UTARU_DUo4sLtK8',
+      lastSyncedAt: '2026-07-06T04:50:29.787Z',
       priceLevel: '฿฿',
       categories: ['Pottery Studio', 'Beachfront Experience', 'Pottery Classes'],
       instagramUrl: 'https://instagram.com/potteryclasseskrabi',
@@ -597,10 +598,18 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
         'Monthly pottery studio membership at Pottery House Krabi. For long-stay visitors, expats, and remote workers. Studio access, tools, storage, and firing included.',
     },
   ],
-  // No hardcoded reviews: this is a real client site. Review rows only ever
-  // come from a real Google Places/Business sync (see server/utils/google-places.ts,
-  // server/utils/google-business.ts), never from seed data.
-  reviews: [],
+  // Verified against the live Google Places API 2026-07-06 — do not hand-author
+  // review content here. Only ever populate this array from a real Google sync.
+  reviews: [
+    { id: 'gplaces-ph-1772088302', locationId: 'loc-pottery-house', authorName: 'Kathy Evans Car', reviewerPhotoUrl: '', rating: 5, content: 'Amazing experience, a great way to spend a few hours. At their beach front area we were given instructions and help from Poe, the genius potter, to make something on the wheels and another day also we hand crafted some pieces.\nAs we were staying in the area for a while we were also lucky enough to be able to return to the studio to  paint and then glaze our items during one of the paint and sip evenings.\n100% recommend, The items they have for sale are inspired , I was able to get some amazing gifts, we did not want to give ours away!\nI went with my 6 year old, she was really into it and it gave us a breather for a few hours.', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'gplaces-ph-1776596323', locationId: 'loc-pottery-house', authorName: 'John Napoli', reviewerPhotoUrl: '', rating: 5, content: 'Unique experience, always wanted to throw something on the wheel. It was a fair price, had personalized service, made some unique souvenirs, had fun!! Highly recommended.', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'gplaces-ph-1778956907', locationId: 'loc-pottery-house', authorName: 'Cari', reviewerPhotoUrl: '', rating: 5, content: "I threw some cups on the pottery wheel, by the beach, during our vacation a few months ago. It was definitely one of the highlights of our trip for me. It had been a while since I threw pottery and I had really wanted to. It's a convenient (and beautiful) location and a reasonable price for the class. Also they were very helpful when I went to paint the cups later, and had them ready on the day I said I would be leaving. My boyfriend is drinking coffee out of the cup I made him every day. Thank you very much.", ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'gplaces-beach-1769434503', locationId: 'loc-pottery-beachfront', authorName: 'Julia', reviewerPhotoUrl: '', rating: 5, content: 'Once in a lifetime experience. The wonderful Po will ensure you have an amazing time. I had the chance to create a unique piece of pottery in-front of such an incredible backdrop. My son (8) loved it even more. If you cannot take your work home (it will take a couple of days to dry and burn) you can have it sent anywhere in Thailand or even home. The three ours of the class flew by in no time and were well worth the price of 1500THB. Can highly recommend!', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'gplaces-beach-1766915654', locationId: 'loc-pottery-beachfront', authorName: 'Stanley Yeo', reviewerPhotoUrl: '', rating: 5, content: 'I will come here again . This is the first time I done pottery I done a bayan tree aroma buner.  Hope can do more . Time is short . Will have more hours here . Is peaceful and can clam myself . And also slow myself down .', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'gplaces-beach-1767514091', locationId: 'loc-pottery-beachfront', authorName: 'Eleni Magkli', reviewerPhotoUrl: '', rating: 5, content: 'Fantastic vibes, my kids were able to create whatever they wanted and came back a couple days later to paint them (in the price). Very welcoming, cozy, wonderful people. A fantastic environment to create', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'gplaces-beach-1767088509', locationId: 'loc-pottery-beachfront', authorName: 'Alexandros Karamitsos', reviewerPhotoUrl: '', rating: 5, content: 'Fantastic experience. We brought our two young daughters 6 and 8 years old for pottery. They were super focused for 2h and enjoyed it very much.', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'gplaces-beach-1763788324', locationId: 'loc-pottery-beachfront', authorName: 'Ory Covo', reviewerPhotoUrl: '', rating: 5, content: "Didn't know really what to except and how will we spend our time , staff where great and time well spent !", ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+  ],
   menus: [],
   locationQa: [
     {
@@ -992,6 +1001,8 @@ export function renderCompiledPotteryHouseMediaBlock(): string {
       sqlJson(location.openingHours),
       sqlValue(location.rating),
       sqlValue(location.reviewCount),
+      sqlValue(location.googlePlaceId ?? null),
+      sqlValue(location.lastSyncedAt ?? null),
       sqlValue(location.priceLevel),
       sqlJson(location.categories),
       sqlValue(location.instagramUrl),
@@ -1019,7 +1030,7 @@ INSERT OR REPLACE INTO business_locations (
   latitude, longitude,
   description, short_description,
   opening_hours,
-  rating, review_count,
+  rating, review_count, google_place_id, last_synced_at,
   price_level, categories,
   instagram_url, facebook_url,
   is_primary, status,

@@ -113,10 +113,10 @@ export default defineEventHandler(async (event) => {
         description: location.description
       },
       reviewSummary:
-        location.last_synced_at && location.rating != null
+        location.last_synced_at && location.rating != null && location.review_count != null
           ? {
               averageRating: location.rating,
-              totalReviewCount: location.review_count ?? 0
+              totalReviewCount: location.review_count
             }
           : null
     }
