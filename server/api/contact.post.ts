@@ -2,10 +2,16 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { hashEmail, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { execute } from '~/server/db'
+import { notifyPlatformContactSubmitted } from '~/server/utils/notifications'
 
 const NAME_MAX_LENGTH = 100
 const EMAIL_MAX_LENGTH = 254
+const TOPIC_MAX_LENGTH = 200
 const MESSAGE_MAX_LENGTH = 5000
+const SOURCE_MAX_LENGTH = 100
+const ROUTE_CONTEXT_MAX_LENGTH = 500
+const SUMMARY_MAX_LENGTH = 1000
+const AGENT_METADATA_MAX_LENGTH = 10000
 const IP_HOURLY_LIMIT = 5
 const EMAIL_DAILY_LIMIT = 3
 
@@ -14,17 +20,6 @@ const hashIp = async (ip: string) => {
   const bytes = new TextEncoder().encode(ip)
   const digest = await crypto.subtle.digest('SHA-256', bytes)
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
-}
-
-function escapeHtml(text: string): string {
-  const map: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;'
-  }
-  return text.replace(/[&<>"']/g, (m) => map[m] || m)
 }
 
 function getClientIp(event: ApiValue): string {
@@ -55,12 +50,58 @@ async function incrementRateLimit(db: D1Database, key: string, limit: number, ex
 }
 
 export default defineEventHandler(async (event) => {
-  let body: { name?: string; email?: string; message?: string; consent?: boolean }
+  let body: {
+    name?: string
+    email?: string
+    topic?: string | null
+    message?: string
+    consent?: boolean
+    source?: string | null
+    route_context?: string | null
+    suggested_summary?: string | null
+    agent_metadata_json?: string | Record<string, unknown> | null
+  }
   try { body = await readBody(event) } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { name, email, message, consent } = body
+  const { name, email, topic, message, consent } = body
+  const source = typeof body.source === 'string' && body.source.trim()
+    ? body.source.trim().slice(0, SOURCE_MAX_LENGTH)
+    : 'contact_page'
+  const routeContext = typeof body.route_context === 'string' && body.route_context.trim()
+    ? body.route_context.trim().slice(0, ROUTE_CONTEXT_MAX_LENGTH)
+    : null
+  const suggestedSummary = typeof body.suggested_summary === 'string' && body.suggested_summary.trim()
+    ? body.suggested_summary.trim().slice(0, SUMMARY_MAX_LENGTH)
+    : null
+
+  if (topic && typeof topic === 'string' && topic.length > TOPIC_MAX_LENGTH) {
+    return jsonResponse({ error: `topic exceeds maximum length (${TOPIC_MAX_LENGTH})` }, { status: 400 })
+  }
+  const normalizedTopic = typeof topic === 'string' && topic.trim()
+    ? topic.trim().slice(0, TOPIC_MAX_LENGTH)
+    : null
+  let agentMetadataJson: string | null = null
+  if (body.agent_metadata_json != null) {
+    if (typeof body.agent_metadata_json === 'string') {
+      if (body.agent_metadata_json.length > AGENT_METADATA_MAX_LENGTH) {
+        return jsonResponse({ error: `agent_metadata_json exceeds maximum length (${AGENT_METADATA_MAX_LENGTH})` }, { status: 400 })
+      }
+      try {
+        const parsed = JSON.parse(body.agent_metadata_json)
+        agentMetadataJson = JSON.stringify(parsed)
+      } catch {
+        agentMetadataJson = null
+      }
+    } else {
+      const stringified = JSON.stringify(body.agent_metadata_json)
+      if (stringified.length > AGENT_METADATA_MAX_LENGTH) {
+        return jsonResponse({ error: `agent_metadata_json exceeds maximum length (${AGENT_METADATA_MAX_LENGTH})` }, { status: 400 })
+      }
+      agentMetadataJson = stringified
+    }
+  }
 
   if (!name || !email || !message) {
     return jsonResponse({ error: 'name, email, and message are required' }, { status: 400 })
@@ -120,9 +161,8 @@ export default defineEventHandler(async (event) => {
 
   try {
     const env = cloudflareEnv(event)
-    const resendApiKey = env.RESEND_API_KEY
 
-    if (shouldSendRealEmail(env) && !resendApiKey) {
+    if (shouldSendRealEmail(env) && !env.RESEND_API_KEY) {
       return jsonResponse({ error: 'Email service not configured' }, { status: 500 })
     }
 
@@ -135,8 +175,8 @@ export default defineEventHandler(async (event) => {
       try {
         await execute(
           db,
-          `INSERT INTO platform_contact_submissions (id, name, email, message, status, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [id, name, email, message, 'new', ipHash, now]
+          `INSERT INTO platform_contact_submissions (id, name, email, topic, message, source, route_context, suggested_summary, agent_metadata_json, status, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, name, email, normalizedTopic, message, source, routeContext, suggestedSummary, agentMetadataJson, 'new', ipHash, now]
         )
       } catch (err) {
         console.error('Failed to store contact submission:', err)
@@ -144,59 +184,23 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    if (!shouldSendRealEmail(env)) {
-      console.info('email_delivery_log_only', {
-        channel: 'platform_contact',
-        recipient: 'hello@krabiclaw.com',
-        name,
-        email: emailHash,
-        submissionId: id,
-      })
-      return jsonResponse({ success: true, message: 'Message sent successfully' })
-    }
-
-    // Send email with sanitized content
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 5000)
-    
-    let response
     try {
-      response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          from: 'KrabiClaw <hello@krabiclaw.com>',
-          to: ['hello@krabiclaw.com'],
-          subject: `Contact Form: ${escapeHtml(name)}`,
-          html: `
-            <h2>New Contact Form Submission</h2>
-            <p><strong>Name:</strong> ${escapeHtml(name)}</p>
-            <p><strong>Email:</strong> ${escapeHtml(email)}</p>
-            <p><strong>Message:</strong></p>
-            <p>${escapeHtml(message).replace(/\n/g, '<br/>')}</p>
-          `
-        })
+      await notifyPlatformContactSubmitted(env, db, {
+        contactId: id,
+        guestName: name,
+        email,
+        subject: normalizedTopic,
+        message,
+        source,
+        routeContext,
+        suggestedSummary,
       })
-    } finally {
-      clearTimeout(timeout)
-    }
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('Resend API error:', errorText)
-      return jsonResponse({ error: 'Failed to send email' }, { status: 500 })
+    } catch (err) {
+      console.error('Contact notification failed:', err)
     }
 
     return jsonResponse({ success: true, message: 'Message sent successfully' })
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.error('Email send timeout')
-      return jsonResponse({ error: 'Email service timeout' }, { status: 504 })
-    }
     console.error('Contact form error:', error)
     return jsonResponse({ error: 'Failed to send message' }, { status: 500 })
   }

@@ -24,7 +24,7 @@
           class="flex size-10 shrink-0 items-center justify-center rounded bg-elevated"
         >
           <UIcon
-            name="i-heroicons-photo"
+            name="i-lucide-image"
             class="size-4 text-muted"
           />
         </div>
@@ -36,7 +36,7 @@
         </div>
         <UButton
           v-if="modelValue"
-          icon="i-heroicons-x-mark"
+          icon="i-lucide-x"
           size="xs"
           color="neutral"
           variant="ghost"
@@ -56,18 +56,18 @@
     <template #body>
       <div class="space-y-4">
         <div v-if="loading" class="text-center py-12">
-          <UIcon name="i-heroicons-arrow-path" class="size-8 text-muted animate-spin mx-auto mb-2" />
+          <UIcon name="i-lucide-refresh-cw" class="size-8 text-muted animate-spin mx-auto mb-2" />
           <p class="text-sm text-muted">Loading images...</p>
         </div>
 
         <div v-else-if="error" class="text-center py-12">
-          <UIcon name="i-heroicons-exclamation-triangle" class="size-8 text-error mx-auto mb-2" />
+          <UIcon name="i-lucide-triangle-alert" class="size-8 text-error mx-auto mb-2" />
           <p class="text-sm text-error">{{ error }}</p>
           <UButton class="mt-3" size="sm" color="neutral" variant="soft" @click="loadImages">Retry</UButton>
         </div>
 
         <div v-else-if="images.length === 0" class="text-center py-12">
-          <UIcon name="i-heroicons-photo" class="size-8 text-muted mx-auto mb-2" />
+          <UIcon name="i-lucide-image" class="size-8 text-muted mx-auto mb-2" />
           <p class="text-sm text-muted">No uploaded images yet</p>
           <p class="mt-1 text-xs text-muted">
             Upload one in the dashboard media library, then reopen this picker.

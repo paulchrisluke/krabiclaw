@@ -29,7 +29,7 @@
               square
               class="opacity-50 hover:opacity-100"
             >
-              <Icon name="i-heroicons-x-mark" />
+              <Icon name="i-lucide-x" />
             </UButton>
           </div>
         </UCard>

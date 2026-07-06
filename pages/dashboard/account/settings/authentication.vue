@@ -16,7 +16,7 @@
               <!-- Email -->
               <div class="flex items-center justify-between p-4 sm:px-6">
                 <div class="flex items-center gap-4">
-                  <UIcon name="i-heroicons-envelope" class="size-6 text-muted" />
+                  <UIcon name="i-lucide-mail" class="size-6 text-muted" />
                   <div>
                     <p class="font-medium text-highlighted">Email</p>
                     <p class="text-sm text-muted">{{ sessionData?.user?.email }}</p>

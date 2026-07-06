@@ -84,7 +84,7 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
 
   const previewLink = computed<DashboardActionLink>(() => ({
     label: 'Preview',
-    icon: 'i-heroicons-arrow-top-right-on-square',
+    icon: 'i-lucide-external-link',
     to: resolvedPublicUrl.value || undefined,
     target: '_blank',
     external: true,
@@ -95,7 +95,7 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
 
   const overviewLink = computed<DashboardActionLink>(() => ({
     label: 'Site',
-    icon: 'i-heroicons-home',
+    icon: 'i-lucide-house',
     to: paths.value.site,
     color: 'neutral',
     variant: 'soft'

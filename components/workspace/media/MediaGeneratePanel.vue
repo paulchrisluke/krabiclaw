@@ -21,14 +21,14 @@
       />
 
       <div v-else class="flex h-full items-center justify-center bg-elevated">
-        <UIcon name="i-heroicons-sparkles" class="size-8 text-muted" />
+        <UIcon name="i-lucide-sparkles" class="size-8 text-muted" />
       </div>
     </div>
 
     <!-- Out of credits -->
     <div v-if="outOfCredits" class="rounded-lg border border-error-200 bg-error-50 dark:border-error-800 dark:bg-error-950 px-4 py-3 flex flex-col gap-3">
       <div class="flex items-center gap-2 text-sm text-error-600 dark:text-error-400">
-        <UIcon name="i-heroicons-exclamation-triangle" class="size-4 shrink-0" />
+        <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0" />
         <span class="font-medium">No AI credits remaining</span>
       </div>
       <div class="flex flex-wrap gap-2">
@@ -38,7 +38,7 @@
       </div>
     </div>
 
-    <UAlert v-else-if="error" color="error" variant="soft" :description="error" icon="i-heroicons-exclamation-triangle" />
+    <UAlert v-else-if="error" color="error" variant="soft" :description="error" icon="i-lucide-triangle-alert" />
 
     <!-- Prompt textarea -->
     <UTextarea
@@ -52,7 +52,7 @@
     <!-- Actions row -->
     <div class="flex items-center justify-between gap-2">
       <UButton
-        icon="i-heroicons-sparkles"
+        icon="i-lucide-sparkles"
         size="sm"
         color="neutral"
         variant="soft"
@@ -65,7 +65,7 @@
 
       <UButton
         v-if="generating"
-        icon="i-heroicons-stop-circle"
+        icon="i-lucide-circle-stop"
         size="sm"
         color="neutral"
         variant="outline"
@@ -75,7 +75,7 @@
       </UButton>
       <UButton
         v-else
-        icon="i-heroicons-arrow-up"
+        icon="i-lucide-arrow-up"
         size="sm"
         :disabled="!prompt.trim()"
         @click="generate"

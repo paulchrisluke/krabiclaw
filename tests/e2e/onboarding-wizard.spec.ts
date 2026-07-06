@@ -50,7 +50,7 @@ async function completeManualWizard(
   // outrun a 15s wait even though the wizard's own bot-message delay is fixed at ~640ms.
   await expect(draftOrDone.first()).toBeVisible({ timeout: 30_000 })
   if (await page.getByText('Draft ready.').isVisible().catch(() => false)) {
-    await page.locator('[data-testid="wizard-quick-reply"][data-reply-action="commit_draft"]').click()
+    await page.locator('[data-testid="chowbot-quick-reply"][data-reply-action="commit_draft"]').click()
     // Commit chains several sequential round trips (runSiteCreation, primary location
     // update, the content/menu/qa/posts/reviews batch insert, then currency + social
     // status follow-ups) — give this more headroom than the draft-save wait above.

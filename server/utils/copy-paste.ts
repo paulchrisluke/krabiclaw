@@ -552,8 +552,8 @@ async function copyExperiences(
 
     statements.push({
       query: `
-        INSERT INTO experiences (id, organization_id, site_id, location_id, title, slug, tagline, body, image_asset_id, video_asset_id, images, price, price_amount, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, status, sort_order, featured, featured_sort_order, seo_title, seo_description, created_at, updated_at, created_by, highlights, included_items, what_to_bring, meeting_point)
-        SELECT ?, organization_id, site_id, ?, title, ?, tagline, body, ?, ?, images, price, price_amount, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, status, sort_order, featured, featured_sort_order, seo_title, seo_description, ?, updated_at, created_by, highlights, included_items, what_to_bring, meeting_point
+        INSERT INTO experiences (id, organization_id, site_id, location_id, title, slug, tagline, body, image_asset_id, video_asset_id, images, price, price_amount, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, status, sort_order, featured, featured_sort_order, seo_title, seo_description, created_at, updated_at, created_by, highlights, included_items, what_to_bring, meeting_point, source)
+        SELECT ?, organization_id, site_id, ?, title, ?, tagline, body, ?, ?, images, price, price_amount, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, status, sort_order, featured, featured_sort_order, seo_title, seo_description, ?, updated_at, created_by, highlights, included_items, what_to_bring, meeting_point, source
         FROM experiences WHERE id = ?
       `,
       params: [newId, targetLocationId, newSlug, newImageId, newVideoId, now, exp.id],

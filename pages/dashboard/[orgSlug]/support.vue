@@ -16,7 +16,7 @@
           <UCard>
             <div class="flex flex-col items-center text-center gap-4 py-4">
               <div class="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-                <UIcon name="i-lucide-headphones" class="size-7" />
+                <UIcon name="i-lucide-life-buoy" class="size-7" />
               </div>
               <div>
                 <h2 class="text-lg font-bold text-highlighted">Managed support isn't available yet</h2>
@@ -36,7 +36,7 @@
           <UCard>
             <div class="flex flex-col items-center text-center gap-4 py-4">
               <div class="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-                <UIcon name="i-lucide-headphones" class="size-7" />
+                <UIcon name="i-lucide-life-buoy" class="size-7" />
               </div>
               <div>
                 <h2 class="text-lg font-bold text-highlighted">Managed support is included in Growth</h2>
@@ -64,7 +64,7 @@
             <template #header>
               <div class="flex items-center gap-3">
                 <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <UIcon name="i-lucide-plus-circle" class="size-5" />
+                  <UIcon name="i-lucide-circle-plus" class="size-5" />
                 </div>
                 <div>
                   <h2 class="font-semibold text-highlighted">Submit a request</h2>
@@ -118,7 +118,7 @@
               </div>
 
               <UAlert v-if="submitError" color="error" variant="soft" :description="submitError" />
-              <UAlert v-if="submitSuccess" color="success" variant="soft" icon="i-lucide-check-circle" description="Request submitted — we'll get on it shortly." />
+              <UAlert v-if="submitSuccess" color="success" variant="soft" icon="i-lucide-circle-check" description="Request submitted — we'll get on it shortly." />
             </div>
           </UCard>
 

@@ -15,17 +15,17 @@
       v-else-if="error"
       color="error"
       variant="soft"
-      icon="i-heroicons-exclamation-triangle"
+      icon="i-lucide-triangle-alert"
       :description="error"
     />
 
     <UCard v-else-if="!hasMenus">
       <div class="py-10 text-center">
-        <UIcon name="i-heroicons-list-bullet" class="mx-auto size-10 text-muted" />
+        <UIcon name="i-lucide-list" class="mx-auto size-10 text-muted" />
         <h2 class="mt-4 text-base font-semibold text-highlighted">No menus yet</h2>
         <p class="mt-1 text-sm text-muted">Create a menu to start adding sections and items.</p>
         <template v-if="!showCreateMenuForm">
-          <UButton class="mt-5" icon="i-heroicons-plus" @click="showCreateMenuForm = true">Create menu</UButton>
+          <UButton class="mt-5" icon="i-lucide-plus" @click="showCreateMenuForm = true">Create menu</UButton>
         </template>
         <div v-else class="mx-auto mt-5 max-w-sm space-y-3 text-left">
           <UFormField label="Menu name">
@@ -54,7 +54,7 @@
             size="sm"
             color="neutral"
             variant="soft"
-            icon="i-heroicons-arrow-up-tray"
+            icon="i-lucide-upload"
             :loading="saving"
             @click="handlePublish"
           >
@@ -65,7 +65,7 @@
             size="sm"
             color="neutral"
             variant="soft"
-            icon="i-heroicons-archive-box"
+            icon="i-lucide-archive"
             :loading="saving"
             @click="handleUnpublish"
           >
@@ -75,7 +75,7 @@
             color="error"
             variant="ghost"
             size="sm"
-            icon="i-heroicons-trash"
+            icon="i-lucide-trash-2"
             :disabled="saving"
             @click="confirmDeleteOpen = true"
           />
@@ -110,7 +110,7 @@
               size="xs"
               color="neutral"
               variant="ghost"
-              icon="i-heroicons-arrow-up"
+              icon="i-lucide-arrow-up"
               aria-label="Move featured item up"
               :disabled="saving || index === 0"
               @click="moveFeaturedItem(item, -1)"
@@ -119,7 +119,7 @@
               size="xs"
               color="neutral"
               variant="ghost"
-              icon="i-heroicons-arrow-down"
+              icon="i-lucide-arrow-down"
               aria-label="Move featured item down"
               :disabled="saving || index === featuredItems.length - 1"
               @click="moveFeaturedItem(item, 1)"
@@ -128,7 +128,7 @@
               size="xs"
               color="neutral"
               variant="ghost"
-              icon="i-heroicons-x-mark"
+              icon="i-lucide-x"
               aria-label="Remove from featured"
               :disabled="saving"
               @click="handleFeaturedToggle(item, false)"
@@ -186,7 +186,7 @@
                   size="xs"
                   color="neutral"
                   variant="ghost"
-                  icon="i-heroicons-arrow-up"
+                  icon="i-lucide-arrow-up"
                   aria-label="Move section up"
                   :disabled="saving || allSections.indexOf(section) === 0"
                   @click="moveSection(section, -1)"
@@ -195,7 +195,7 @@
                   size="xs"
                   color="neutral"
                   variant="ghost"
-                  icon="i-heroicons-arrow-down"
+                  icon="i-lucide-arrow-down"
                   aria-label="Move section down"
                   :disabled="saving || allSections.indexOf(section) === allSections.length - 1"
                   @click="moveSection(section, 1)"
@@ -204,7 +204,7 @@
                   size="xs"
                   color="neutral"
                   variant="ghost"
-                  icon="i-heroicons-pencil-square"
+                  icon="i-lucide-square-pen"
                   aria-label="Rename section"
                   @click="openRenameSection(section)"
                 />
@@ -212,11 +212,11 @@
                   size="xs"
                   color="error"
                   variant="ghost"
-                  icon="i-heroicons-trash"
+                  icon="i-lucide-trash-2"
                   aria-label="Delete section"
                   @click="openDeleteSection(section)"
                 />
-                <UButton size="sm" color="primary" variant="soft" icon="i-heroicons-plus" :to="itemCreatePath(section)">
+                <UButton size="sm" color="primary" variant="soft" icon="i-lucide-plus" :to="itemCreatePath(section)">
                   Add item
                 </UButton>
               </div>
@@ -244,10 +244,10 @@
                   class="size-full object-cover"
                 />
                 <div v-else class="flex size-full items-center justify-center">
-                  <UIcon :name="item.kind === 'video' ? 'i-heroicons-film' : 'i-heroicons-photo'" class="size-5 text-muted" />
+                  <UIcon :name="item.kind === 'video' ? 'i-lucide-film' : 'i-lucide-image'" class="size-5 text-muted" />
                 </div>
                 <div class="absolute inset-0 flex items-center justify-center bg-default/70 opacity-0 transition-opacity group-hover:opacity-100">
-                  <UIcon name="i-heroicons-photo" class="size-4 text-highlighted" />
+                  <UIcon name="i-lucide-image" class="size-4 text-highlighted" />
                 </div>
               </div>
             </MediaPicker>
@@ -278,7 +278,7 @@
             />
 
             <div class="flex justify-end">
-              <UButton color="neutral" variant="ghost" size="sm" icon="i-heroicons-pencil-square" :to="itemEditPath(item)">
+              <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-square-pen" :to="itemEditPath(item)">
                 Details
               </UButton>
             </div>
@@ -289,14 +289,14 @@
             class="flex items-center justify-between gap-3 border-b border-default px-4 py-3 text-sm text-muted last:border-0"
           >
             <span>No items yet.</span>
-            <UButton size="sm" color="neutral" variant="ghost" icon="i-heroicons-plus" :to="itemCreatePath(section)">
+            <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-plus" :to="itemCreatePath(section)">
               Add item
             </UButton>
           </div>
         </template>
 
         <div v-if="!showAddSectionForm" class="flex justify-center px-4 py-3">
-          <UButton color="neutral" variant="ghost" size="sm" icon="i-heroicons-plus" @click="showAddSectionForm = true">
+          <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-plus" @click="showAddSectionForm = true">
             Add section
           </UButton>
         </div>

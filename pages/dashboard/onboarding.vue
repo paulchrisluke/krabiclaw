@@ -29,7 +29,7 @@
     <!-- Loading state -->
     <div v-else class="flex min-h-0 flex-1 items-center justify-center">
       <div class="flex items-center gap-3 text-muted">
-        <UIcon name="i-heroicons-arrow-path" class="size-5 animate-spin" />
+        <UIcon name="i-lucide-refresh-cw" class="size-5 animate-spin" />
         <span class="text-sm">Loading workspace…</span>
       </div>
     </div>

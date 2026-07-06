@@ -1,4 +1,4 @@
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, type PropType } from 'vue'
 import { EText } from 'vue-email'
 import EmailShell from '../layouts/EmailShell'
 import EmailDetails from '../components/EmailDetails'
@@ -10,6 +10,8 @@ export default defineComponent({
     date: { type: String, required: true },
     time: { type: String, required: true },
     guests: { type: String, required: true },
+    locationName: { type: String as PropType<string | null>, default: null },
+    specialRequests: { type: String as PropType<string | null>, default: null },
     wasConfirmed: { type: Boolean, required: true },
     platformDomain: { type: String, required: true },
   },
@@ -21,11 +23,12 @@ export default defineComponent({
         h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `Hi ${props.guestName}, ${intro}`),
         h(EmailDetails, {
           rows: [
-            ['Restaurant', props.siteName],
+            ['Venue', props.locationName ? `${props.siteName} — ${props.locationName}` : props.siteName],
             ['Date', props.date],
             ['Time', props.time],
             ['Party size', props.guests],
-          ]
+            props.specialRequests && ['Special requests', props.specialRequests],
+          ].filter(Boolean) as [string, string][]
         }),
         h(EText, { style: 'margin:0;font-size:13px;color:#71717a;line-height:1.6' }, () => `The team at ${props.siteName}`),
       ])

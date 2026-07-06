@@ -14,7 +14,7 @@
       >
         <UCard class="mx-8 border-2 border-dashed border-primary" :ui="{ body: 'px-8 py-10 sm:px-8 sm:py-10' }">
           <div class="flex flex-col items-center gap-3 text-center">
-            <UIcon name="i-heroicons-arrow-up-tray" class="size-10 text-primary" />
+            <UIcon name="i-lucide-upload" class="size-10 text-primary" />
             <p class="font-medium text-highlighted">Drop to attach</p>
             <p class="text-xs text-muted">JPEG, PNG, WEBP, PDF — max 10 MB</p>
           </div>
@@ -22,293 +22,206 @@
       </div>
     </Transition>
 
-    <!-- Scroll area -->
-    <div ref="scrollRef" class="min-h-0 flex-1 overflow-y-auto">
-
-      <!-- Welcome screen -->
-      <div v-if="step === 'welcome'" class="flex flex-col gap-[18px] p-6 pb-4">
-        <div class="flex size-16 items-center justify-center rounded-[18px] bg-primary/10 text-primary">
-          <UIcon name="i-heroicons-sparkles" class="size-8" />
-        </div>
-        <div>
-          <p class="mb-1 text-[11px] font-bold uppercase tracking-[0.28em] text-primary">{{ props.isAddingLocation ? "Let's add a location" : "Let's build your site" }}</p>
-          <h1 class="text-3xl font-extrabold leading-tight tracking-tight text-highlighted">
-            {{ props.isAddingLocation ? "Tell me about this location. I'll do the typing." : "Tell me about your business. I'll do the typing." }}
-          </h1>
-        </div>
-        <p class="text-[14.5px] leading-relaxed text-muted">
-          {{ props.isAddingLocation
-            ? "Answer a few questions and this location is added to your site — you decide what to keep."
-            : "Answer a few questions and a real, SEO-ready site builds itself on the right — you decide what to keep." }}
-        </p>
-        <div class="flex flex-col gap-2.5">
-          <div
-            v-for="[icon, text] in WELCOME_POINTS"
-            :key="text"
-            class="flex items-center gap-3 text-sm text-highlighted"
-          >
-            <div class="flex size-[26px] shrink-0 items-center justify-center rounded-[7px] border border-default bg-elevated text-primary">
-              <UIcon :name="icon" class="size-3.5" />
-            </div>
-            {{ text }}
+    <!-- Welcome screen -->
+    <div v-if="step === 'welcome'" class="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto p-6 pb-4">
+      <div class="flex size-16 items-center justify-center rounded-[18px] bg-primary/10 text-primary">
+        <UIcon name="i-lucide-sparkles" class="size-8" />
+      </div>
+      <div>
+        <p class="mb-1 text-[11px] font-bold uppercase tracking-[0.28em] text-primary">{{ props.isAddingLocation ? "Let's add a location" : "Let's build your site" }}</p>
+        <h1 class="text-3xl font-extrabold leading-tight tracking-tight text-highlighted">
+          {{ props.isAddingLocation ? "Tell me about this location. I'll do the typing." : "Tell me about your business. I'll do the typing." }}
+        </h1>
+      </div>
+      <p class="text-[14.5px] leading-relaxed text-muted">
+        {{ props.isAddingLocation
+          ? "Answer a few questions and this location is added to your site — you decide what to keep."
+          : "Answer a few questions and a real, SEO-ready site builds itself on the right — you decide what to keep." }}
+      </p>
+      <div class="flex flex-col gap-2.5">
+        <div
+          v-for="[icon, text] in WELCOME_POINTS"
+          :key="text"
+          class="flex items-center gap-3 text-sm text-highlighted"
+        >
+          <div class="flex size-[26px] shrink-0 items-center justify-center rounded-[7px] border border-default bg-elevated text-primary">
+            <UIcon :name="icon" class="size-3.5" />
           </div>
+          {{ text }}
         </div>
-        <UButton
-          color="primary"
-          size="md"
-          icon="i-heroicons-sparkles"
-          class="self-start"
-          @click="advance(props.skipVertical ? 'source' : 'vertical')"
-        >
-          Start building
-        </UButton>
       </div>
-
-      <!-- Chat transcript -->
-      <UChatMessages
-        v-else
-        :status="typing ? 'streaming' : undefined"
-        class="p-5"
+      <UButton
+        color="primary"
+        size="md"
+        icon="i-lucide-sparkles"
+        class="self-start"
+        @click="advance(props.skipVertical ? 'source' : 'vertical')"
       >
-        <template v-for="(msg, i) in messages" :key="msg.id">
-          <!-- User bubble -->
-          <UChatMessage
-            v-if="msg.from === 'user'"
-            :id="String(i)"
-            role="user"
-            :parts="[]"
-            side="right"
-            variant="soft"
-            color="neutral"
-          >
-            <template #content>
-              <p class="text-sm leading-relaxed">{{ msg.text }}</p>
-            </template>
-          </UChatMessage>
-
-          <!-- Bot bubble -->
-          <UChatMessage
-            v-else
-            :id="String(i)"
-            role="assistant"
-            :parts="[{ type: 'text', text: '' }]"
-            side="left"
-          >
-            <template #content>
-              <div class="space-y-2">
-                <!-- Tool chips -->
-                <div v-if="msg.tools?.length" class="flex flex-col gap-1">
-                  <UChatTool
-                    v-for="(tool, ti) in msg.tools"
-                    :key="ti"
-                    :text="tool.label"
-                    :loading="!tool.done"
-                  />
-                </div>
-                <!-- Text -->
-                <!-- eslint-disable vue/no-v-html -->
-                <div
-                  v-if="msg.text"
-                  class="text-sm leading-relaxed"
-                  v-html="renderMarkdown(msg.text)"
-                />
-                <!-- eslint-enable vue/no-v-html -->
-                <!-- Place preview / confirm card -->
-                <div
-                  v-if="msg.placePreview"
-                  class="mt-2 flex items-start gap-3 rounded-xl border border-default bg-elevated px-4 py-3"
-                >
-                  <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <UIcon name="i-heroicons-map-pin" class="size-4" />
-                  </div>
-                  <div class="min-w-0 flex-1">
-                    <p class="truncate text-[13px] font-semibold text-highlighted">{{ msg.placePreview.name }}</p>
-                    <p class="mt-0.5 text-[12px] leading-relaxed text-muted">{{ msg.placePreview.address }}</p>
-                    <p v-if="msg.placePreview.phone" class="mt-0.5 text-[12px] text-muted">{{ msg.placePreview.phone }}</p>
-                    <a
-                      v-if="msg.placePreview.mapsUrl"
-                      :href="msg.placePreview.mapsUrl"
-                      target="_blank"
-                      rel="noopener"
-                      class="mt-1 inline-flex items-center gap-1 text-[11.5px] text-primary hover:underline"
-                    >
-                      <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-3" />
-                      View on Google Maps
-                    </a>
-                  </div>
-                </div>
-                <div
-                  v-if="msg.detailsCard"
-                  class="mt-2"
-                >
-                  <IntakeDetailsCard
-                    v-model:form="detailsForm"
-                    :title="msg.detailsCard.title"
-                    :description="msg.detailsCard.description"
-                    :action-label="msg.detailsCard.actionLabel"
-                    :require-location-basics="msg.detailsCard.requireLocationBasics"
-                    :show-primary-toggle="msg.detailsCard.showPrimaryToggle"
-                    :loading="importing"
-                    :disabled="importing"
-                    @submit="submitDetails"
-                  />
-                </div>
-                <!-- Handoff card -->
-                <div
-                  v-if="msg.handoff"
-                  class="mt-2 flex items-start gap-3 rounded-xl border border-default bg-elevated px-4 py-3"
-                >
-                  <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <UIcon name="i-heroicons-chat-bubble-left-right" class="size-4" />
-                  </div>
-                  <div>
-                    <p class="text-[13px] font-semibold text-highlighted">Three ways to keep building</p>
-                    <p class="mt-0.5 text-[12px] text-muted leading-relaxed">
-                      Chat with ChowBot in your dashboard, use the structured editor for precise control, or pick it back up in ChatGPT — same site, same words.
-                    </p>
-                  </div>
-                </div>
-                <UCard v-if="msg.socialCard" class="mt-2" :ui="{ body: 'px-4 py-3 space-y-3' }">
-                  <div class="flex items-center gap-2">
-                    <UIcon name="i-simple-icons-facebook" class="size-4 text-[#1877F2] shrink-0" />
-                    <span class="text-[13px] font-semibold text-highlighted">Facebook & Instagram</span>
-                    <UBadge
-                      :label="facebookConnected ? 'Connected' : hasFacebookAccess ? 'Ready to connect' : 'Upgrade required'"
-                      :color="facebookConnected ? 'success' : hasFacebookAccess ? 'info' : 'warning'"
-                      variant="soft"
-                      size="xs"
-                    />
-                  </div>
-                  <p class="text-[12px] text-muted leading-relaxed">
-                    <template v-if="hasFacebookAccess">
-                      Connect your Facebook Page and posts you publish there will automatically sync to your site. Instagram Business accounts linked to the Page sync too.
-                    </template>
-                    <template v-else>
-                      Upgrade to Growth or above to connect your Facebook Page and automatically sync Facebook and linked Instagram Business posts to your site.
-                    </template>
-                  </p>
-                  <div class="flex gap-2 pt-1">
-                    <UButton
-                      v-if="hasFacebookAccess && !facebookConnected"
-                      size="sm"
-                      color="primary"
-                      icon="i-simple-icons-facebook"
-                      :loading="connectingFacebook"
-                      @click="startFacebookConnect"
-                    >
-                      Connect Facebook
-                    </UButton>
-                    <UButton
-                      v-else-if="!hasFacebookAccess && importedOrgSlug"
-                      size="sm"
-                      color="primary"
-                      variant="outline"
-                      icon="i-heroicons-arrow-up-circle"
-                      :to="`/dashboard/${importedOrgSlug}/~/settings/billing`"
-                    >
-                      Upgrade to Growth
-                    </UButton>
-                    <UButton
-                      v-else
-                      size="sm"
-                      color="neutral"
-                      :variant="facebookConnected ? 'solid' : 'ghost'"
-                      @click="workspaceEntryPath && router.push(workspaceEntryPath)"
-                    >
-                      {{ facebookConnected ? 'Open dashboard' : 'Set up later' }}
-                    </UButton>
-                  </div>
-                </UCard>
-                <div v-if="msg.brandCard && importedSiteId" class="mt-2">
-                  <BrandEssentialsCard :site-id="importedSiteId" @done="handleBrandCardDone" />
-                </div>
-                <div v-if="msg.polishCard" class="mt-2">
-                  <PolishSuggestionsCard
-                    :vertical="selectedVertical"
-                    :primary-to="workspaceEntryPath"
-                    primary-label="Open the dashboard"
-                    :secondary-to="brandWorkspacePath"
-                    secondary-label="Open brand pages"
-                  />
-                </div>
-                <div v-if="msg.mcpCard" class="mt-2">
-                  <McpEditCard
-                    :guide-to="chatgptGuidePath"
-                    guide-label="ChatGPT setup guide"
-                    :starter-prompt="chatgptStarterPrompt"
-                    :examples="quickActionExamples"
-                    :dashboard-to="workspaceEntryPath"
-                    dashboard-label="Open the dashboard"
-                  />
-                </div>
-              </div>
-            </template>
-          </UChatMessage>
-        </template>
-      </UChatMessages>
+        Start building
+      </UButton>
     </div>
 
-    <!-- Composer -->
-    <div v-if="step !== 'welcome'" class="shrink-0 border-t border-default bg-default px-[18px] pb-4 pt-[14px]">
-
-      <!-- Error banner -->
-      <div
-        v-if="importError"
-        data-testid="wizard-error-banner"
-        class="mb-3 flex items-center gap-2 rounded-lg border border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-950 px-3 py-2 text-xs text-error-600 dark:text-error-400"
-      >
-        <UIcon name="i-heroicons-exclamation-triangle" class="size-3.5 shrink-0" />
-        <span>{{ importError }}</span>
-        <button class="ml-auto shrink-0 underline underline-offset-2" @click="retryImport">Try again</button>
-      </div>
-
-      <!-- Quick-reply chips (shown when waiting for a selection, not text input) -->
-      <div v-if="replies.length > 0 && !typing && !importError && !awaitingInput" class="mb-3 flex flex-wrap gap-2">
-        <button
-          v-for="(reply, i) in replies"
-          :key="i"
-          data-testid="wizard-quick-reply"
-          :data-reply-action="reply.action"
-          :class="[
-            'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12.5px] font-semibold transition-colors',
-            reply.primary
-              ? 'border-primary bg-primary text-white hover:bg-primary/90'
-              : reply.ghost
-                ? 'border-transparent bg-transparent text-muted hover:border-default hover:text-highlighted'
-                : 'border-default bg-elevated text-highlighted hover:border-primary hover:text-primary',
-          ]"
-          @click="handleReply(reply)"
+    <!-- Chat transcript -->
+    <ChowBotConversation
+      v-else
+      v-model:input="textInput"
+      :messages="conversationMessages"
+      :placeholder="inputPlaceholder"
+      :disabled="!awaitingInput"
+      :loading="typing"
+      :messages-status="typing ? 'streaming' : undefined"
+      :show-empty-state="false"
+      :render-markdown="renderMarkdown"
+      :quick-replies="importError ? [] : replies"
+      @submit="handleTextSubmit"
+      @quick-reply="handleReply"
+    >
+      <template #prompt-before>
+        <!-- Error banner -->
+        <div
+          v-if="importError"
+          data-testid="wizard-error-banner"
+          class="mb-3 flex items-center gap-2 rounded-lg border border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-950 px-3 py-2 text-xs text-error-600 dark:text-error-400"
         >
-          <UIcon v-if="reply.icon" :name="reply.icon" class="size-3.5" />
-          <span class="flex flex-col items-start leading-tight">
-            <span>{{ reply.label }}</span>
-            <span v-if="reply.sub" class="text-[10.5px] font-medium opacity-70">{{ reply.sub }}</span>
-          </span>
-        </button>
-      </div>
+          <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
+          <span>{{ importError }}</span>
+          <button class="ml-auto shrink-0 underline underline-offset-2" @click="retryImport">Try again</button>
+        </div>
+      </template>
 
-      <!-- Text input: only rendered when the bot is waiting for typed input -->
-      <UChatPrompt
-        v-if="awaitingInput"
-        v-model="textInput"
-        :placeholder="inputPlaceholder"
-        :loading="typing"
-        :maxrows="4"
-        autofocus
-        @submit="handleTextSubmit"
-      >
-        <template #trailing>
-          <UButton
-            icon="i-heroicons-paper-airplane"
-            color="primary"
-            variant="solid"
-            size="xs"
-            :disabled="typing || !textInput.trim()"
-            type="submit"
-          />
+      <template #assistant-after="{ index }">
+        <template v-if="messages[index]">
+          <!-- Place preview / confirm card -->
+          <div
+            v-if="messages[index].placePreview"
+            class="mt-2 flex items-start gap-3 rounded-xl border border-default bg-elevated px-4 py-3"
+          >
+            <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <UIcon name="i-lucide-map-pin" class="size-4" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-[13px] font-semibold text-highlighted">{{ messages[index].placePreview.name }}</p>
+              <p class="mt-0.5 text-[12px] leading-relaxed text-muted">{{ messages[index].placePreview.address }}</p>
+              <p v-if="messages[index].placePreview.phone" class="mt-0.5 text-[12px] text-muted">{{ messages[index].placePreview.phone }}</p>
+              <a
+                v-if="messages[index].placePreview.mapsUrl"
+                :href="messages[index].placePreview.mapsUrl"
+                target="_blank"
+                rel="noopener"
+                class="mt-1 inline-flex items-center gap-1 text-[11.5px] text-primary hover:underline"
+              >
+                <UIcon name="i-lucide-external-link" class="size-3" />
+                View on Google Maps
+              </a>
+            </div>
+          </div>
+          <div
+            v-if="messages[index].detailsCard"
+            class="mt-2"
+          >
+            <IntakeDetailsCard
+              v-model:form="detailsForm"
+              :title="messages[index].detailsCard.title"
+              :description="messages[index].detailsCard.description"
+              :action-label="messages[index].detailsCard.actionLabel"
+              :require-location-basics="messages[index].detailsCard.requireLocationBasics"
+              :show-primary-toggle="messages[index].detailsCard.showPrimaryToggle"
+              :loading="importing"
+              :disabled="importing"
+              @submit="submitDetails"
+            />
+          </div>
+          <!-- Handoff card -->
+          <div
+            v-if="messages[index].handoff"
+            class="mt-2 flex items-start gap-3 rounded-xl border border-default bg-elevated px-4 py-3"
+          >
+            <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <UIcon name="i-lucide-messages-square" class="size-4" />
+            </div>
+            <div>
+              <p class="text-[13px] font-semibold text-highlighted">Three ways to keep building</p>
+              <p class="mt-0.5 text-[12px] text-muted leading-relaxed">
+                Chat with ChowBot in your dashboard, use the structured editor for precise control, or pick it back up in ChatGPT — same site, same words.
+              </p>
+            </div>
+          </div>
+          <UCard v-if="messages[index].socialCard" class="mt-2" :ui="{ body: 'px-4 py-3 space-y-3' }">
+            <div class="flex items-center gap-2">
+              <UIcon name="i-simple-icons-facebook" class="size-4 text-[#1877F2] shrink-0" />
+              <span class="text-[13px] font-semibold text-highlighted">Facebook & Instagram</span>
+              <UBadge
+                :label="facebookConnected ? 'Connected' : hasFacebookAccess ? 'Ready to connect' : 'Upgrade required'"
+                :color="facebookConnected ? 'success' : hasFacebookAccess ? 'info' : 'warning'"
+                variant="soft"
+                size="xs"
+              />
+            </div>
+            <p class="text-[12px] text-muted leading-relaxed">
+              <template v-if="hasFacebookAccess">
+                Connect your Facebook Page and posts you publish there will automatically sync to your site. Instagram Business accounts linked to the Page sync too.
+              </template>
+              <template v-else>
+                Upgrade to Growth or above to connect your Facebook Page and automatically sync Facebook and linked Instagram Business posts to your site.
+              </template>
+            </p>
+            <div class="flex gap-2 pt-1">
+              <UButton
+                v-if="hasFacebookAccess && !facebookConnected"
+                size="sm"
+                color="primary"
+                icon="i-simple-icons-facebook"
+                :loading="connectingFacebook"
+                @click="startFacebookConnect"
+              >
+                Connect Facebook
+              </UButton>
+              <UButton
+                v-else-if="!hasFacebookAccess && importedOrgSlug"
+                size="sm"
+                color="primary"
+                variant="outline"
+                icon="i-lucide-circle-arrow-up"
+                :to="`/dashboard/${importedOrgSlug}/~/settings/billing`"
+              >
+                Upgrade to Growth
+              </UButton>
+              <UButton
+                v-else
+                size="sm"
+                color="neutral"
+                :variant="facebookConnected ? 'solid' : 'ghost'"
+                @click="workspaceEntryPath && router.push(workspaceEntryPath)"
+              >
+                {{ facebookConnected ? 'Open dashboard' : 'Set up later' }}
+              </UButton>
+            </div>
+          </UCard>
+          <div v-if="messages[index].brandCard && importedSiteId" class="mt-2">
+            <BrandEssentialsCard :site-id="importedSiteId" @done="handleBrandCardDone" />
+          </div>
+          <div v-if="messages[index].polishCard" class="mt-2">
+            <PolishSuggestionsCard
+              :vertical="selectedVertical"
+              :primary-to="workspaceEntryPath"
+              primary-label="Open the dashboard"
+              :secondary-to="brandWorkspacePath"
+              secondary-label="Open brand pages"
+            />
+          </div>
+          <div v-if="messages[index].mcpCard" class="mt-2">
+            <McpEditCard
+              :guide-to="chatgptGuidePath"
+              guide-label="ChatGPT setup guide"
+              :starter-prompt="chatgptStarterPrompt"
+              :examples="quickActionExamples"
+              :dashboard-to="workspaceEntryPath"
+              dashboard-label="Open the dashboard"
+            />
+          </div>
         </template>
-      </UChatPrompt>
-    </div>
+      </template>
+    </ChowBotConversation>
   </div>
 </template>
 
@@ -316,6 +229,7 @@
 import { getLocalTimezone } from '~/utils/timezone'
 import { marked } from 'marked'
 import { DEFAULT_CURRENCY } from '~/shared/currencies'
+import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
 import {
   buildOnboardingStarterPrompt,
   getQuickActionPrompts,
@@ -386,20 +300,28 @@ const hasFacebookAccess = ref(false)
 
 const WELCOME_POINTS: [string, string][] = props.isAddingLocation
   ? [
-      ['i-heroicons-globe-alt', 'Pulls the address, hours, photos & reviews from Google'],
-      ['i-heroicons-sparkles', 'Adds the location to your existing site as you watch'],
-      ['i-heroicons-map-pin', 'Goes live on your site as soon as you save it'],
+      ['i-lucide-globe', 'Pulls the address, hours, photos & reviews from Google'],
+      ['i-lucide-sparkles', 'Adds the location to your existing site as you watch'],
+      ['i-lucide-map-pin', 'Goes live on your site as soon as you save it'],
     ]
   : [
-      ['i-heroicons-globe-alt', 'Pulls your address, hours, photos & reviews from Google'],
-      ['i-heroicons-sparkles', 'Builds your homepage and story as you watch'],
-      ['i-heroicons-rocket-launch', 'Launches free on a krabiclaw.com address when you are ready'],
+      ['i-lucide-globe', 'Pulls your address, hours, photos & reviews from Google'],
+      ['i-lucide-sparkles', 'Builds your homepage and story as you watch'],
+      ['i-lucide-rocket', 'Launches free on a krabiclaw.com address when you are ready'],
     ]
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
 const step = ref<WizardStep>('welcome')
 const messages = ref<WizardMessage[]>([])
+const conversationMessages = computed(() => messages.value.map(msg => ({
+  role: msg.from === 'user' ? 'user' as const : 'assistant' as const,
+  content: msg.text ?? '',
+  toolCalls: msg.tools?.map(tool => ({
+    name: tool.label,
+    status: tool.done ? 'completed' : 'running',
+  })),
+})))
 const typing = ref(false)
 const replies = ref<QuickReply[]>([])
 const awaitingInput = ref(false)
@@ -452,7 +374,6 @@ const detailsCardDescription = computed(() => detailsSource.value === 'manual'
 )
 const detailsRequireBasics = computed(() => detailsSource.value === 'manual')
 
-const scrollRef = ref<HTMLElement | null>(null)
 const importedSiteId = ref<string | null>(props.siteId ?? null)
 const importedOrgSlug = ref<string | null>(null)
 const importedSiteSlug = ref<string | null>(null)
@@ -481,7 +402,7 @@ onMounted(async () => {
       text: "Welcome back. Your workspace is live — the preview is on the right.",
     })
     replies.value = [
-      { label: 'Open my dashboard', icon: 'i-heroicons-arrow-right', primary: true, action: 'dashboard' },
+      { label: 'Open my dashboard', icon: 'i-lucide-arrow-right', primary: true, action: 'dashboard' },
     ]
   }
 })
@@ -570,15 +491,7 @@ async function pushBot(text: string, extra?: {
   typing.value = false
   messages.value.push({ id: crypto.randomUUID(), from: 'bot', text, ...extra })
   await sleep(80)
-  await scrollBottom()
 }
-
-async function scrollBottom() {
-  await nextTick()
-  if (scrollRef.value) scrollRef.value.scrollTop = scrollRef.value.scrollHeight
-}
-
-watch([messages, typing], scrollBottom)
 
 async function refreshSocialStatus(siteId: string | null) {
   if (!siteId || props.isAddingLocation) return
@@ -632,16 +545,16 @@ async function advance(target: WizardStep) {
   if (target === 'vertical') {
     await pushBot("First — what kind of business is this?")
     replies.value = [
-      { label: 'Restaurant, café or bar', icon: 'i-heroicons-fire', primary: true, action: 'set_vertical_restaurant' },
-      { label: 'Experience, class or activity', icon: 'i-heroicons-academic-cap', action: 'set_vertical_experience' },
+      { label: 'Restaurant, café or bar', icon: 'i-lucide-flame', primary: true, action: 'set_vertical_restaurant' },
+      { label: 'Experience, class or activity', icon: 'i-lucide-graduation-cap', action: 'set_vertical_experience' },
     ]
   }
 
   if (target === 'source') {
     await pushBot("Got it. How would you like to add your business details?")
     replies.value = [
-      { label: 'Google Maps', sub: 'Paste your Maps link', icon: 'i-heroicons-globe-alt', primary: true, action: 'ask_url' },
-      { label: 'Start manually', sub: 'Type your business name', icon: 'i-heroicons-pencil', action: 'ask_manual' },
+      { label: 'Google Maps', sub: 'Paste your Maps link', icon: 'i-lucide-globe', primary: true, action: 'ask_url' },
+      { label: 'Start manually', sub: 'Type your business name', icon: 'i-lucide-pencil', action: 'ask_manual' },
     ]
   }
 
@@ -773,7 +686,6 @@ async function showLookupTools(label: string): Promise<{ label: string; done: bo
   await sleep(400)
   typing.value = false
   messages.value.push({ id: crypto.randomUUID(), from: 'bot', tools })
-  await scrollBottom()
   return tools
 }
 
@@ -782,8 +694,8 @@ function showConfirm(preview: NonNullable<typeof pendingPreview.value>, returnSt
   pendingPreview.value = preview
   step.value = 'confirm'
   replies.value = [
-    { label: "Yes, that's my place", icon: 'i-heroicons-check', primary: true, action: 'confirm_yes' },
-    { label: "That's not my place", icon: 'i-heroicons-x-mark', action: 'confirm_no' },
+    { label: "Yes, that's my place", icon: 'i-lucide-check', primary: true, action: 'confirm_yes' },
+    { label: "That's not my place", icon: 'i-lucide-x', action: 'confirm_no' },
   ]
 }
 
@@ -881,8 +793,8 @@ async function submitDetails() {
         'Draft ready. The preview on the right now shows a private working copy, so you can review the site before reserving a live subdomain.'
       )
       replies.value = [
-        { label: 'Create site', icon: 'i-heroicons-check-badge', primary: true, action: 'commit_draft' },
-        { label: 'Edit details', icon: 'i-heroicons-pencil-square', action: 'edit_draft' },
+        { label: 'Create site', icon: 'i-lucide-badge-check', primary: true, action: 'commit_draft' },
+        { label: 'Edit details', icon: 'i-lucide-square-pen', action: 'edit_draft' },
       ]
       step.value = 'details'
       return
@@ -1068,8 +980,8 @@ async function finishCreation(orgSlug: string | null | undefined, siteSlug: stri
   )
   step.value = 'imported'
   replies.value = [
-    { label: 'Open my dashboard', icon: 'i-heroicons-arrow-right', primary: true, action: 'dashboard' },
-    { label: 'Add another location', icon: 'i-heroicons-map-pin', action: 'add_location' },
+    { label: 'Open my dashboard', icon: 'i-lucide-arrow-right', primary: true, action: 'dashboard' },
+    { label: 'Add another location', icon: 'i-lucide-map-pin', action: 'add_location' },
   ]
 }
 

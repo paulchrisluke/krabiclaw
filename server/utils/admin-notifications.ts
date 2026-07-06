@@ -1,19 +1,13 @@
 import { useRender } from 'vue-email'
 import { shouldSendRealEmail } from '~/server/utils/email-delivery'
 import AdminNewSignup from '~/server/emails/templates/AdminNewSignup'
+import { getPlatformSupportEmails } from '~/server/utils/platform-support'
 
 interface AdminNotificationEnv {
   PLATFORM_OWNER_EMAILS?: string
   RESEND_API_KEY?: string
   EMAIL_DELIVERY_MODE?: string
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
-}
-
-function supportEmails(env: AdminNotificationEnv): string[] {
-  return String(env.PLATFORM_OWNER_EMAILS || '')
-    .split(',')
-    .map((e) => e.trim())
-    .filter(Boolean)
 }
 
 export async function notifyAdminNewUserSignup(
@@ -23,7 +17,7 @@ export async function notifyAdminNewUserSignup(
   // Skip phone/WhatsApp synthetic accounts
   if (user.email.endsWith('@phone.krabiclaw.local')) return
 
-  const recipients = supportEmails(env)
+  const recipients = getPlatformSupportEmails(env)
   if (!recipients.length) return
   if (shouldSendRealEmail(env) && !env.RESEND_API_KEY) return
 

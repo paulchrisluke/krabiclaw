@@ -11,7 +11,7 @@
           size="xs"
           color="error"
           variant="ghost"
-          icon="i-heroicons-trash"
+          icon="i-lucide-trash-2"
           aria-label="Delete post"
           @click="$emit('delete')"
         />
@@ -20,7 +20,7 @@
           size="xs"
           color="neutral"
           variant="ghost"
-          icon="i-heroicons-x-mark"
+          icon="i-lucide-x"
           aria-label="Close editor"
           @click="$emit('close')"
         />
@@ -97,8 +97,8 @@
         </div>
 
         <div v-if="errorMessage || successMessage" class="space-y-2">
-          <UAlert v-if="errorMessage" color="error" variant="soft" icon="i-heroicons-exclamation-triangle" :description="errorMessage" />
-          <UAlert v-if="successMessage" color="success" variant="soft" icon="i-heroicons-check-circle" :description="successMessage" />
+          <UAlert v-if="errorMessage" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
+          <UAlert v-if="successMessage" color="success" variant="soft" icon="i-lucide-circle-check" :description="successMessage" />
         </div>
 
         <div class="flex flex-wrap items-center gap-2 border-t border-default pt-4">

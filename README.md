@@ -25,6 +25,24 @@ Multi-tenant restaurant SaaS. Nuxt 4 + Cloudflare Pages + D1.
 
 ---
 
+## Production Canary Runs
+
+Real-send production canaries are intentionally off on normal `main` deploys to avoid
+accidental email/WhatsApp spend on every merge. To run them on demand, use the GitHub
+Actions workflow `Production Real-Send Canaries` and choose whether to send:
+
+- the auth OTP canary
+- the notification email/WhatsApp canary
+
+That workflow always runs production smoke first, then only sends the real canaries you
+explicitly selected for that run.
+
+See [docs/notification-testing.md](docs/notification-testing.md) for the full policy on
+log-only vs live email/WhatsApp testing, production-safe verification, and which public
+submission paths send for real in production.
+
+---
+
 ## Local Setup
 
 ### 1. Install
@@ -89,7 +107,7 @@ ulimit -n 65536
 yarn deploy
 ```
 
-Builds, patches the Nitro/Cloudflare process shim, applies pending D1 migrations (`wrangler d1 migrations apply DB --remote`), then deploys the Cloudflare Worker (`wrangler deploy`). **Never run `wrangler deploy` directly** — the shim patch and migration step will be skipped. In CI, this same sequence runs automatically on every push to `main` (`prod-deploy` job in `.github/workflows/ci.yml`).
+Builds, patches the Nitro/Cloudflare process shim, applies pending D1 migrations (`yarn migrate:prod`, wraps `wrangler d1 migrations apply DB --remote`), then deploys the Cloudflare Worker (`yarn deploy:prod:worker`, wraps `wrangler deploy` with a retry-once on failure). **Never run `wrangler deploy` or `wrangler d1 migrations apply` directly** — the shim patch, migration step, and retry logic will be skipped. Equivalent per-environment scripts exist for preview (`yarn deploy:preview`, `yarn migrate:preview`, `yarn deploy:preview:worker`) and staging (`yarn deploy:staging`, `yarn migrate:staging`, `yarn deploy:staging:worker`). In CI, the `e2e-smoke`, `e2e-staging`, and `prod-deploy` jobs in `.github/workflows/ci.yml` all call these same named scripts for deploy/migrate — never raw `wrangler deploy`/`wrangler d1 migrations apply` — so that behavior is identical locally and in CI. Raw `wrangler`/`npx wrangler` invocations for other purposes (e.g. `wrangler pages secret put`, `wrangler d1 execute` for read-only inspection) are fine.
 
 Production secrets live in the Cloudflare dashboard → Workers & Pages → krabiclaw → Settings → Variables.
 

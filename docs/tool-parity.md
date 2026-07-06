@@ -22,12 +22,14 @@ The shared gate lives in `server/utils/conversational-tool-surface.ts`.
 
 ## Default Visible Surface
 
-As of 2026-07-02:
+As of 2026-07-05:
 
 | Surface | Raw tools | Default visible tools | Notes |
 | --- | ---: | ---: | --- |
-| Client MCP | 115 | 90 | Deprecated upload primitives removed; feature-flagged groups hidden |
-| ChowBot | 94 | 81 | Same feature-flag policy; WhatsApp-specific tools remain ChowBot-only |
+| Client MCP | 119 | 94 | Deprecated upload primitives removed; feature-flagged groups hidden |
+| ChowBot | 95 | 82 | Same feature-flag policy; WhatsApp-specific tools remain ChowBot-only |
+
+Counts are checked by `yarn lint:tool-parity` (`scripts/lint-tool-parity.mjs`), which also verifies tool names stay in sync across definitions, executor dispatch, the confirm-required set, and feature-gate groups — update this table whenever those counts drift.
 
 ## Feature-Flagged Groups
 

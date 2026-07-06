@@ -2,7 +2,7 @@
   <div class="flex h-screen flex-col overflow-hidden bg-muted text-highlighted  ">
     <header class="flex h-14 shrink-0 items-center justify-between border-b border-default bg-default px-3  ">
       <div class="flex min-w-0 items-center gap-2">
-        <UButton icon="i-heroicons-arrow-left" color="neutral" variant="ghost" size="sm" aria-label="Go back" @click="handleBack" />
+        <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="sm" aria-label="Go back" @click="handleBack" />
         <div class="h-6 w-px bg-gray-200 " />
         <div class="min-w-0">
           <div class="flex items-center gap-2">
@@ -45,7 +45,7 @@
         <UButton
           :href="iframeSrc || undefined"
           target="_blank"
-          icon="i-heroicons-arrow-top-right-on-square"
+          icon="i-lucide-external-link"
           color="neutral"
           variant="ghost"
           size="sm"
@@ -71,7 +71,7 @@
     >
       <UCard class="w-full max-w-xl">
         <div class="text-center">
-          <UIcon name="i-heroicons-map-pin" class="mx-auto size-10 text-muted" />
+          <UIcon name="i-lucide-map-pin" class="mx-auto size-10 text-muted" />
           <h1 class="mt-4 text-xl font-semibold text-highlighted">Add a location first</h1>
           <p class="mt-2 text-sm text-muted">
             The Location and Menu pages are per-location. Add your first location to start editing.
@@ -79,7 +79,7 @@
           <div class="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
             <UButton
               :to="paths.locations"
-              icon="i-heroicons-plus"
+              icon="i-lucide-plus"
             >
               Add Location
             </UButton>
@@ -87,7 +87,7 @@
               :to="contentPath('home')"
               color="neutral"
               variant="soft"
-              icon="i-heroicons-document-text"
+              icon="i-lucide-file-text"
             >
               Edit Brand Pages Instead
             </UButton>
@@ -156,7 +156,7 @@
                 <span class="truncate text-sm font-medium">{{ group.label }}</span>
               </span>
               <UIcon
-                name="i-heroicons-chevron-down-20-solid"
+                name="i-lucide-chevron-down"
                 class="size-4 shrink-0 text-dimmed transition-transform"
                 :class="{ 'rotate-180': openGroups.includes(group.id) }"
               />
@@ -175,7 +175,7 @@
                 >
                     <span class="flex min-w-0 flex-1 items-start gap-2 text-left">
                     <UIcon
-                      :name="fieldHasActiveGoogleSync(fieldKey) ? 'i-simple-icons-google' : 'i-heroicons-bars-3-bottom-left'"
+                      :name="fieldHasActiveGoogleSync(fieldKey) ? 'i-simple-icons-google' : 'i-lucide-align-left'"
                       class="mt-0.5 size-4 shrink-0"
                       :class="fieldHasActiveGoogleSync(fieldKey) ? 'text-primary' : 'text-dimmed'"
                     />
@@ -209,7 +209,7 @@
       <main class="flex min-w-0 flex-col overflow-hidden bg-elevated">
         <div class="flex h-11 shrink-0 items-center justify-between border-b border-default bg-default px-4  ">
           <div class="flex min-w-0 items-center gap-2">
-            <UIcon name="i-heroicons-globe-alt" class="size-4 text-muted" />
+            <UIcon name="i-lucide-globe" class="size-4 text-muted" />
             <p class="truncate text-sm text-muted">{{ siteDomain }}{{ currentPagePath }}</p>
           </div>
           <UBadge color="neutral" variant="subtle" size="xs">Preview</UBadge>
@@ -229,7 +229,7 @@
             <UCard v-if="iframeLoading" class="absolute inset-0 flex items-center justify-center pointer-events-none" :ui="{ root: '' }">
               <UCard :ui="{ body: 'px-4 py-3 sm:px-4 sm:py-3' }">
                 <div class="flex items-center gap-3">
-                  <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin text-muted" />
+                  <UIcon name="i-lucide-refresh-cw" class="size-4 animate-spin text-muted" />
                   <p class="text-sm text-muted">Loading preview...</p>
                 </div>
               </UCard>
@@ -251,7 +251,7 @@
           </div>
           <UButton
             v-if="activeField"
-            icon="i-heroicons-x-mark-20-solid"
+            icon="i-lucide-x"
             color="neutral"
             variant="ghost"
             size="sm"
@@ -358,7 +358,7 @@
             v-if="activeFieldRequiresGoogleUpgrade"
             color="neutral"
             variant="soft"
-            icon="i-heroicons-sparkles"
+            icon="i-lucide-sparkles"
             block
             class="justify-start text-left"
             @click="openUpgradeModal('google-business-sync')"
@@ -370,7 +370,7 @@
 
         <div v-else class="flex min-h-0 flex-1 items-center justify-center p-6 text-center">
           <div>
-            <UIcon name="i-heroicons-cursor-arrow-rays" class="mx-auto mb-3 size-8 text-dimmed" />
+            <UIcon name="i-lucide-mouse-pointer-click" class="mx-auto mb-3 size-8 text-dimmed" />
             <p class="text-sm font-medium text-highlighted ">Select a field</p>
             <p class="mt-1 text-sm text-muted">Choose editable content from the page structure.</p>
           </div>
@@ -597,38 +597,38 @@ const openGroups = ref<string[]>(['hero'])
 
 const groupConfig: Record<string, Array<{ id: string; label: string; icon: string; fields: string[] }>> = {
   home: [
-    { id: 'hero',  label: 'Hero Section',   icon: 'i-heroicons-photo',     fields: ['hero.eyebrow', 'hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
-    { id: 'story', label: 'Brand Story',    icon: 'i-heroicons-book-open', fields: ['story.headline', 'story.body', 'story.image'] },
-    { id: 'cta',   label: 'Call to Action', icon: 'i-heroicons-megaphone', fields: ['cta.title', 'cta.description'] },
+    { id: 'hero',  label: 'Hero Section',   icon: 'i-lucide-image',     fields: ['hero.eyebrow', 'hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
+    { id: 'story', label: 'Brand Story',    icon: 'i-lucide-book-open', fields: ['story.headline', 'story.body', 'story.image'] },
+    { id: 'cta',   label: 'Call to Action', icon: 'i-lucide-megaphone', fields: ['cta.title', 'cta.description'] },
   ],
   about: [
-    { id: 'hero',    label: 'Hero Section',    icon: 'i-heroicons-photo',      fields: ['hero.title', 'hero.subtitle'] },
-    { id: 'story',   label: 'Story',           icon: 'i-heroicons-book-open',  fields: ['story.image', 'story.headline', 'story.body'] },
-    { id: 'journey', label: 'Journey',         icon: 'i-heroicons-map',        fields: ['journey.title', 'journey.body'] },
-    { id: 'cta',     label: 'Call to Action',  icon: 'i-heroicons-megaphone',  fields: ['cta.title'] },
+    { id: 'hero',    label: 'Hero Section',    icon: 'i-lucide-image',      fields: ['hero.title', 'hero.subtitle'] },
+    { id: 'story',   label: 'Story',           icon: 'i-lucide-book-open',  fields: ['story.image', 'story.headline', 'story.body'] },
+    { id: 'journey', label: 'Journey',         icon: 'i-lucide-map',        fields: ['journey.title', 'journey.body'] },
+    { id: 'cta',     label: 'Call to Action',  icon: 'i-lucide-megaphone',  fields: ['cta.title'] },
   ],
   contact: [
-    { id: 'hero', label: 'Hero Section', icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle'] },
+    { id: 'hero', label: 'Hero Section', icon: 'i-lucide-image', fields: ['hero.title', 'hero.subtitle'] },
   ],
   location: [
-    { id: 'hero',    label: 'Hero Section',    icon: 'i-heroicons-photo',         fields: ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
-    { id: 'content', label: 'Additional Info', icon: 'i-heroicons-document-text', fields: ['parking.info', 'extra.notes'] },
+    { id: 'hero',    label: 'Hero Section',    icon: 'i-lucide-image',         fields: ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
+    { id: 'content', label: 'Additional Info', icon: 'i-lucide-file-text', fields: ['parking.info', 'extra.notes'] },
   ],
   menu: [
-    { id: 'hero',   label: 'Hero Section',   icon: 'i-heroicons-photo',          fields: ['hero.title', 'hero.subtitle'] },
-    { id: 'items',  label: 'Menu Items',     icon: 'i-heroicons-list-bullet',    fields: ['menu_items'] },
-    { id: 'google', label: 'Google Products', icon: 'i-heroicons-circle-stack', fields: ['business.products'] },
+    { id: 'hero',   label: 'Hero Section',   icon: 'i-lucide-image',          fields: ['hero.title', 'hero.subtitle'] },
+    { id: 'items',  label: 'Menu Items',     icon: 'i-lucide-list',    fields: ['menu_items'] },
+    { id: 'google', label: 'Google Products', icon: 'i-lucide-layers', fields: ['business.products'] },
   ],
   experiences: [
-    { id: 'hero', label: 'Hero Section', icon: 'i-heroicons-sparkles', fields: ['hero.kicker', 'hero.title', 'hero.subtitle'] },
+    { id: 'hero', label: 'Hero Section', icon: 'i-lucide-sparkles', fields: ['hero.kicker', 'hero.title', 'hero.subtitle'] },
   ],
   order: [
-    { id: 'hero', label: 'Hero Section', icon: 'i-heroicons-shopping-bag', fields: ['hero.title', 'hero.subtitle'] },
+    { id: 'hero', label: 'Hero Section', icon: 'i-lucide-shopping-bag', fields: ['hero.title', 'hero.subtitle'] },
   ],
   reservations: [
-    { id: 'hero',     label: 'Hero Section',    icon: 'i-heroicons-photo',                   fields: ['hero.title', 'hero.subtitle'] },
-    { id: 'contact',  label: 'Contact Details', icon: 'i-heroicons-phone',                   fields: ['contact.phone', 'contact.email'] },
-    { id: 'policies', label: 'Policies',        icon: 'i-heroicons-clipboard-document-list', fields: ['policies.structured'] },
+    { id: 'hero',     label: 'Hero Section',    icon: 'i-lucide-image',                   fields: ['hero.title', 'hero.subtitle'] },
+    { id: 'contact',  label: 'Contact Details', icon: 'i-lucide-phone',                   fields: ['contact.phone', 'contact.email'] },
+    { id: 'policies', label: 'Policies',        icon: 'i-lucide-clipboard-list', fields: ['policies.structured'] },
   ]
 }
 

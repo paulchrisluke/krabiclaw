@@ -15,7 +15,6 @@ export const PLATFORM_ROUTE_PREFIXES = [
   "/.well-known",
   "/accept-invitation",
   "/blog",
-  "/contact",
   "/dev",
   "/experiences",
   "/locations",

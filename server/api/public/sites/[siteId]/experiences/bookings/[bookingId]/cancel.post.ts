@@ -75,6 +75,7 @@ export default defineEventHandler(async (event) => {
     booking_date: string
     time_slot: string
     party_size: number
+    notes: string | null
     location_id: string | null
     experience_title: string
   }>(
@@ -88,7 +89,7 @@ export default defineEventHandler(async (event) => {
       AND cancellation_token_used_at IS NULL
       AND cancellation_token_expires_at > ?
       AND status IN ('pending', 'confirmed')
-    RETURNING organization_id, site_id, guest_name, guest_email, guest_phone, booking_date, time_slot, party_size, location_id,
+    RETURNING organization_id, site_id, guest_name, guest_email, guest_phone, booking_date, time_slot, party_size, notes, location_id,
       (SELECT title FROM experiences WHERE id = experience_bookings.experience_id) AS experience_title
   `,
     [now, bookingId, siteId, tokenHash, now],
@@ -118,6 +119,7 @@ export default defineEventHandler(async (event) => {
       bookingDate: booking.booking_date,
       timeSlot: booking.time_slot,
       partySize: booking.party_size,
+      notes: booking.notes,
       wasConfirmed: cancellable.status === 'confirmed'
     })
   } catch (error) {

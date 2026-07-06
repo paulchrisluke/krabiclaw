@@ -3,7 +3,7 @@
     <div class="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between gap-4">
         <div class="flex items-center gap-2 text-sm text-muted">
-          <UIcon name="i-heroicons-circle-stack" class="size-4" />
+          <UIcon name="i-lucide-layers" class="size-4" />
           <span>Unsaved changes</span>
         </div>
         <div class="flex items-center gap-2">

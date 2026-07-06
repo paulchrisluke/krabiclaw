@@ -27,7 +27,7 @@
         class="inline-flex items-center gap-1.5 rounded-[10px] border border-default bg-default px-3 py-2 text-[12.5px] font-semibold text-highlighted shadow-sm transition-colors hover:border-default/80"
         @click="cycleLocation"
       >
-        <UIcon name="i-heroicons-map-pin" class="size-3.5 text-primary" />
+        <UIcon name="i-lucide-map-pin" class="size-3.5 text-primary" />
         {{ selectedLocationLabel }}
       </button>
 
@@ -70,7 +70,7 @@
           :href="iframeSrc"
           target="_blank"
           rel="noopener noreferrer"
-          icon="i-heroicons-arrow-top-right-on-square"
+          icon="i-lucide-external-link"
           color="neutral"
           variant="ghost"
           size="xs"
@@ -82,7 +82,7 @@
     <!-- Empty state (no site yet) -->
     <div v-if="!iframeSrc" class="flex flex-1 flex-col items-center justify-center gap-4 p-10 text-center text-muted">
       <div class="flex size-[60px] items-center justify-center rounded-2xl border border-default bg-default text-dimmed">
-        <UIcon name="i-heroicons-globe-alt" class="size-7" />
+        <UIcon name="i-lucide-globe" class="size-7" />
       </div>
       <p class="text-[15px] font-semibold text-highlighted">Your site shows up here.</p>
       <p class="max-w-[30ch] text-[12.5px] leading-relaxed">
@@ -102,7 +102,7 @@
             <i class="block size-[9px] rounded-full bg-default-300" />
           </div>
           <div class="flex h-6 flex-1 items-center gap-1.5 rounded-md border border-default bg-muted px-2.5 font-mono text-[10.5px] text-muted">
-            <UIcon name="i-heroicons-lock-closed" class="size-2.5 text-dimmed" />
+            <UIcon name="i-lucide-lock" class="size-2.5 text-dimmed" />
             {{ urlDisplay }}
           </div>
         </div>
@@ -128,7 +128,7 @@
             <div v-if="iframeLoading" class="absolute inset-0 flex items-center justify-center pointer-events-none bg-elevated/60">
               <UCard :ui="{ body: 'px-4 py-3 sm:px-4 sm:py-3' }">
                 <div class="flex items-center gap-3">
-                  <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin text-muted" />
+                  <UIcon name="i-lucide-refresh-cw" class="size-4 animate-spin text-muted" />
                   <p class="text-sm text-muted">Loading preview…</p>
                 </div>
               </UCard>

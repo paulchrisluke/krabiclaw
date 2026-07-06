@@ -30,7 +30,7 @@
                 <p class="text-xs text-muted">Connected Google account</p>
               </div>
               <UButton
-                icon="i-lucide-unlink"
+                icon="i-lucide-link-2-off"
                 color="error"
                 variant="ghost"
                 size="xs"

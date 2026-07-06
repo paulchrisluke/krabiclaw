@@ -5,7 +5,7 @@
         <div class="mb-4 flex items-start justify-between gap-4">
           <div class="flex min-w-0 items-start gap-3">
             <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <UIcon name="i-heroicons-sparkles" class="size-5" />
+              <UIcon name="i-lucide-sparkles" class="size-5" />
             </div>
             <div class="min-w-0">
               <p class="text-xs font-semibold uppercase tracking-wide text-muted">{{ $t('saya.upgrade.pro_feature') }}</p>
@@ -15,7 +15,7 @@
             </div>
           </div>
           <UButton
-            icon="i-heroicons-x-mark"
+            icon="i-lucide-x"
             color="neutral"
             variant="ghost"
             size="sm"
@@ -28,7 +28,7 @@
 
         <ul class="mt-5 space-y-2 text-sm text-default">
           <li v-for="item in featureBullets" :key="item" class="flex gap-2">
-            <UIcon name="i-heroicons-check-circle" class="mt-0.5 size-4 shrink-0 text-primary" />
+            <UIcon name="i-lucide-circle-check" class="mt-0.5 size-4 shrink-0 text-primary" />
             <span>{{ item }}</span>
           </li>
         </ul>

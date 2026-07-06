@@ -10,10 +10,10 @@
       @drop.prevent="onDrop"
       @click="fileInput?.click()"
     >
-      <UIcon name="i-heroicons-arrow-up-tray" class="size-6 text-muted" />
+      <UIcon name="i-lucide-upload" class="size-6 text-muted" />
       <div class="flex items-center gap-2">
         <UButton size="sm" color="neutral" variant="outline" @click.stop="fileInput?.click()">+ Add files</UButton>
-        <UButton size="sm" color="neutral" variant="ghost" icon="i-heroicons-sparkles" @click.stop="emit('generate')">
+        <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-sparkles" @click.stop="emit('generate')">
           Generate image
         </UButton>
       </div>
@@ -37,14 +37,14 @@
     </div>
 
     <!-- Error -->
-    <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-heroicons-exclamation-triangle" />
+    <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-lucide-triangle-alert" />
 
     <!-- Search + filters -->
     <div class="flex items-center gap-2">
       <UInput
         v-model="search"
         placeholder="Search files…"
-        icon="i-heroicons-magnifying-glass"
+        icon="i-lucide-search"
         size="sm"
         class="flex-1"
       />
@@ -66,7 +66,7 @@
     </div>
 
     <div v-else-if="filteredAssets.length === 0" class="py-10 text-center">
-      <UIcon name="i-heroicons-photo" class="mx-auto size-8 text-muted" />
+      <UIcon name="i-lucide-image" class="mx-auto size-8 text-muted" />
       <p class="mt-3 text-sm text-muted">No media yet. Upload or generate your first image.</p>
     </div>
 
@@ -101,14 +101,14 @@
           />
           <UIcon
             v-else
-            :name="asset.kind === 'video' ? 'i-heroicons-film' : 'i-heroicons-document'"
+            :name="asset.kind === 'video' ? 'i-lucide-film' : 'i-lucide-file'"
             class="size-6 text-muted"
           />
         </div>
 
         <!-- Video overlay icon -->
         <div v-if="asset.kind === 'video'" class="absolute inset-0 flex items-center justify-center bg-black/10 pointer-events-none">
-          <UIcon name="i-heroicons-play-circle" class="size-8 text-white/70 shadow-sm" />
+          <UIcon name="i-lucide-circle-play" class="size-8 text-white/70 shadow-sm" />
         </div>
 
         <!-- Selected overlay -->
@@ -117,7 +117,7 @@
           class="absolute inset-0 flex items-center justify-center bg-primary/20"
         >
           <div class="flex size-6 items-center justify-center rounded-full bg-primary">
-            <UIcon name="i-heroicons-check" class="size-3.5 text-white" />
+            <UIcon name="i-lucide-check" class="size-3.5 text-white" />
           </div>
         </div>
 

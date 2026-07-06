@@ -52,7 +52,7 @@ const publicPath = (path: string) => {
 }
 const previewAction = (path: string) => ({
   label: 'View live',
-  icon: 'i-heroicons-arrow-top-right-on-square',
+  icon: 'i-lucide-external-link',
   to: publicPath(path),
   target: '_blank' as const,
   external: true,
@@ -61,124 +61,124 @@ const previewAction = (path: string) => ({
 })
 
 const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'Content editor', icon: 'i-heroicons-pencil-square', to: paths.value.content, color: 'neutral' as const, variant: 'soft' as const }
+  { label: 'Content editor', icon: 'i-lucide-square-pen', to: paths.value.content, color: 'neutral' as const, variant: 'soft' as const }
 ]))
 
 const pageRows = computed(() => [
   {
     key: 'home',
     label: 'Home',
-    icon: 'i-heroicons-home',
+    icon: 'i-lucide-house',
     scope: 'Brand',
     description: 'Hero media, story, primary CTA, featured locations, and first impression.',
     actions: [
-      { label: 'Edit page', icon: 'i-heroicons-pencil-square', to: contentUrl('home'), color: 'primary' as const, variant: 'soft' as const },
+      { label: 'Edit page', icon: 'i-lucide-square-pen', to: contentUrl('home'), color: 'primary' as const, variant: 'soft' as const },
       previewAction('/'),
-      { label: 'Photos', icon: 'i-heroicons-photo', to: paths.value.photos, color: 'neutral' as const, variant: 'ghost' as const }
+      { label: 'Photos', icon: 'i-lucide-image', to: paths.value.photos, color: 'neutral' as const, variant: 'ghost' as const }
     ]
   },
   {
     key: 'about',
     label: 'About',
-    icon: 'i-heroicons-book-open',
+    icon: 'i-lucide-book-open',
     scope: 'Brand',
     description: 'Brand story, editorial imagery, journey copy, and brand-level CTA.',
     actions: [
-      { label: 'Edit page', icon: 'i-heroicons-pencil-square', to: contentUrl('about'), color: 'primary' as const, variant: 'soft' as const },
+      { label: 'Edit page', icon: 'i-lucide-square-pen', to: contentUrl('about'), color: 'primary' as const, variant: 'soft' as const },
       previewAction('/about')
     ]
   },
   {
     key: 'locations',
     label: 'Locations',
-    icon: 'i-heroicons-map-pin',
+    icon: 'i-lucide-map-pin',
     scope: 'Location',
     description: 'Location directory, location home pages, local hours, address, maps, and hero media.',
     actions: [
-      { label: 'Manage locations', icon: 'i-heroicons-map-pin', to: paths.value.locations, color: 'primary' as const, variant: 'soft' as const },
-      { label: 'Edit location page', icon: 'i-heroicons-document-text', to: contentUrl('location'), color: 'neutral' as const, variant: 'ghost' as const },
+      { label: 'Manage locations', icon: 'i-lucide-map-pin', to: paths.value.locations, color: 'primary' as const, variant: 'soft' as const },
+      { label: 'Edit location page', icon: 'i-lucide-file-text', to: contentUrl('location'), color: 'neutral' as const, variant: 'ghost' as const },
       previewAction('/locations')
     ]
   },
   {
     key: 'menu',
     label: 'Menu',
-    icon: 'i-heroicons-list-bullet',
+    icon: 'i-lucide-list',
     scope: 'Location',
     description: 'Menu page hero copy plus menu sections, items, prices, photos, and availability.',
     actions: [
-      { label: 'Manage menu', icon: 'i-heroicons-list-bullet', to: paths.value.menu, color: 'primary' as const, variant: 'soft' as const },
-      { label: 'Edit page copy', icon: 'i-heroicons-document-text', to: contentUrl('menu'), color: 'neutral' as const, variant: 'ghost' as const },
+      { label: 'Manage menu', icon: 'i-lucide-list', to: paths.value.menu, color: 'primary' as const, variant: 'soft' as const },
+      { label: 'Edit page copy', icon: 'i-lucide-file-text', to: contentUrl('menu'), color: 'neutral' as const, variant: 'ghost' as const },
       previewAction('/menu')
     ]
   },
   {
     key: 'reviews',
     label: 'Reviews',
-    icon: 'i-heroicons-star',
+    icon: 'i-lucide-star',
     scope: 'Location',
     description: 'Review cards, ratings, owner replies, moderation, and Google/manual sources.',
     actions: [
-      { label: 'Manage reviews', icon: 'i-heroicons-star', to: paths.value.reviews, color: 'primary' as const, variant: 'soft' as const },
+      { label: 'Manage reviews', icon: 'i-lucide-star', to: paths.value.reviews, color: 'primary' as const, variant: 'soft' as const },
       previewAction('/reviews')
     ]
   },
   {
     key: 'photos',
     label: 'Photos',
-    icon: 'i-heroicons-photo',
+    icon: 'i-lucide-image',
     scope: 'Location',
     description: 'Guest-facing galleries, location media, hero assets, and uploaded or generated images.',
     actions: [
-      { label: 'Manage photos', icon: 'i-heroicons-photo', to: paths.value.photos, color: 'primary' as const, variant: 'soft' as const },
+      { label: 'Manage photos', icon: 'i-lucide-image', to: paths.value.photos, color: 'primary' as const, variant: 'soft' as const },
       previewAction('/photos'),
-      { label: 'Media library', icon: 'i-heroicons-squares-2x2', to: paths.value.media, color: 'neutral' as const, variant: 'ghost' as const }
+      { label: 'Media library', icon: 'i-lucide-layout-dashboard', to: paths.value.media, color: 'neutral' as const, variant: 'ghost' as const }
     ]
   },
   {
     key: 'qa',
     label: 'Q&A',
-    icon: 'i-heroicons-question-mark-circle',
+    icon: 'i-lucide-circle-help',
     scope: 'Location',
     description: 'Public questions and owner answers for each location.',
     actions: [
-      { label: 'Manage Q&A', icon: 'i-heroicons-question-mark-circle', to: paths.value.qa, color: 'primary' as const, variant: 'soft' as const },
+      { label: 'Manage Q&A', icon: 'i-lucide-circle-help', to: paths.value.qa, color: 'primary' as const, variant: 'soft' as const },
       previewAction('/qa')
     ]
   },
   {
     key: 'contact',
     label: 'Contact',
-    icon: 'i-heroicons-envelope',
+    icon: 'i-lucide-mail',
     scope: 'Brand + Location',
     description: 'Contact page copy, maps, location contact details, and guest messages.',
     actions: [
-      { label: 'Edit page', icon: 'i-heroicons-pencil-square', to: contentUrl('contact'), color: 'primary' as const, variant: 'soft' as const },
+      { label: 'Edit page', icon: 'i-lucide-square-pen', to: contentUrl('contact'), color: 'primary' as const, variant: 'soft' as const },
       previewAction('/contact'),
-      { label: 'Inbox', icon: 'i-heroicons-inbox', to: paths.value.inbox, color: 'neutral' as const, variant: 'ghost' as const }
+      { label: 'Inbox', icon: 'i-lucide-inbox', to: paths.value.inbox, color: 'neutral' as const, variant: 'ghost' as const }
     ]
   },
   {
     key: 'reservations',
     label: 'Reservations',
-    icon: 'i-heroicons-calendar-days',
+    icon: 'i-lucide-calendar-days',
     scope: 'Brand',
     description: 'Reservation page copy, policy text, contact details, and incoming booking requests.',
     actions: [
-      { label: 'Manage reservations', icon: 'i-heroicons-calendar-days', to: paths.value.reservations, color: 'primary' as const, variant: 'soft' as const },
-      { label: 'Edit page copy', icon: 'i-heroicons-document-text', to: contentUrl('reservations'), color: 'neutral' as const, variant: 'ghost' as const },
+      { label: 'Manage reservations', icon: 'i-lucide-calendar-days', to: paths.value.reservations, color: 'primary' as const, variant: 'soft' as const },
+      { label: 'Edit page copy', icon: 'i-lucide-file-text', to: contentUrl('reservations'), color: 'neutral' as const, variant: 'ghost' as const },
       previewAction('/reservations')
     ]
   },
   {
     key: 'order',
     label: 'Order Online',
-    icon: 'i-heroicons-shopping-bag',
+    icon: 'i-lucide-shopping-bag',
     scope: 'Location',
     description: 'Delivery links, order page copy, and location-specific ordering options.',
     actions: [
-      { label: 'Manage order', icon: 'i-heroicons-shopping-bag', to: paths.value.order, color: 'primary' as const, variant: 'soft' as const },
-      { label: 'Edit page copy', icon: 'i-heroicons-document-text', to: contentUrl('order'), color: 'neutral' as const, variant: 'ghost' as const },
+      { label: 'Manage order', icon: 'i-lucide-shopping-bag', to: paths.value.order, color: 'primary' as const, variant: 'soft' as const },
+      { label: 'Edit page copy', icon: 'i-lucide-file-text', to: contentUrl('order'), color: 'neutral' as const, variant: 'ghost' as const },
       previewAction('/order')
     ]
   }

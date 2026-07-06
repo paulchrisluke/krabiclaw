@@ -19,12 +19,15 @@ export default defineComponent({
     message: { type: String, required: true },
     siteName: { type: String, required: true },
     platformDomain: { type: String, required: true },
+    replyUrl: { type: String as PropType<string | null>, default: null },
   },
   setup(props) {
     return () => h(EmailShell, {
       preheader: `New contact message for ${props.siteName}`,
       title: `New website message from ${props.guestName}`,
       platformDomain: props.platformDomain,
+      ctaUrl: props.replyUrl ?? undefined,
+      ctaText: props.replyUrl ? 'Reply in dashboard' : undefined,
     }, () => [
       h(EText, { class: 'email-text', style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `New website message from ${props.guestName}.`),
       h(EmailDetails, {

@@ -8,20 +8,23 @@ import cloudflareDevModule from './build/cloudflare-dev-module'
 const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
 
 // nuxt/icon's serverBundle bundles a named collection in full — no usage-based
-// tree-shaking. heroicons/lucide are used broadly enough that this is fine, but
-// simple-icons (~3000 icons) and logos (719 icons, multi-color art) are only
-// used for a handful of brand marks, so pull just those icons out of the full
-// collection JSON instead of shipping the whole package into the Worker bundle.
+// tree-shaking. lucide is the app's sole icon pack (it's also what Nuxt UI's
+// own internal defaults are hardcoded to), so only one collection ships.
+// simple-icons/logos brand marks are owned locally in
+// build/icon-data/custom-icons.json instead of depending on @iconify-json
+// packages at build time (see that file for how to regenerate it).
 const requireFromConfig = createRequire(import.meta.url)
+const customIconData = requireFromConfig('./build/icon-data/custom-icons.json')
 function pickIcons(collection: string, names: string[]) {
-  const data = requireFromConfig(`@iconify-json/${collection}/icons.json`)
+  const data = customIconData[collection]
+  if (!data) throw new Error(`No local icon data for collection: ${collection}`)
   const subset = getIcons(data, names, true)
-  if (!subset) throw new Error(`Missing icon(s) in @iconify-json/${collection}: ${names.join(', ')}`)
-  
+  if (!subset) throw new Error(`Missing icon(s) in local ${collection} data: ${names.join(', ')}`)
+
   if (subset.not_found && subset.not_found.length > 0) {
-    throw new Error(`Missing icon(s) in @iconify-json/${collection}: ${subset.not_found.join(', ')}`)
+    throw new Error(`Missing icon(s) in local ${collection} data: ${subset.not_found.join(', ')}`)
   }
-  
+
   return subset
 }
 // Opt-out only: GitHub Actions sets CI=true on every runner, including the
@@ -141,14 +144,22 @@ export default defineNuxtConfig({
   css: skipGlobalCss ? [] : ['~/assets/css/main.css'],
   icon: {
     fallbackToApi: false,
+    // Nuxt UI's own internal default icons (UChatPromptSubmit's arrowUp, etc.)
+    // are resolved from appConfig.ui.icons dynamically, not as static name=""
+    // literals, so Nuxt Icon can't inline them at build time — they're
+    // resolved at request time via a self-fetch to /api/_nuxt_icon/lucide.json
+    // (same internal-self-fetch category as isInternalSelfFetch() in
+    // server/utils/api-response.ts). The default 1500ms fetchTimeout is too
+    // tight for that round-trip in local dev; bump it so it resolves instead
+    // of silently failing to render.
+    fetchTimeout: 5000,
     serverBundle: {
       collections: [
-        'heroicons',
         'lucide',
       ],
     },
     customCollections: [
-      pickIcons('simple-icons', ['facebook', 'instagram', 'tiktok', 'google', 'googlemaps', 'openai', 'whatsapp']),
+      pickIcons('simple-icons', ['facebook', 'google', 'googlemaps', 'openai', 'whatsapp']),
       pickIcons('logos', ['google-icon', 'whatsapp-icon']),
     ],
   },

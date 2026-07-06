@@ -7,7 +7,7 @@
       <!-- Welcome screen -->
       <div v-if="step === 'welcome'" class="flex flex-col gap-[18px] p-6 pb-4">
         <div class="flex size-16 items-center justify-center rounded-[18px] bg-primary/10 text-primary">
-          <UIcon name="i-heroicons-check-badge" class="size-8" />
+          <UIcon name="i-lucide-badge-check" class="size-8" />
         </div>
         <div>
           <p class="mb-1 text-[11px] font-bold uppercase tracking-[0.28em] text-primary">Your site is ready</p>
@@ -33,7 +33,7 @@
         <UButton
           color="primary"
           size="md"
-          icon="i-heroicons-arrow-right"
+          icon="i-lucide-arrow-right"
           class="self-start"
           @click="advance('preview')"
         >
@@ -65,7 +65,7 @@
                 <!-- Site preview card -->
                 <div v-if="msg.siteCard" class="rounded-xl border border-default bg-elevated px-4 py-3 space-y-2">
                   <div class="flex items-center gap-2">
-                    <UIcon name="i-heroicons-globe-alt" class="size-4 text-primary shrink-0" />
+                    <UIcon name="i-lucide-globe" class="size-4 text-primary shrink-0" />
                     <span class="text-[13px] font-semibold text-highlighted">{{ msg.siteCard.name }}</span>
                   </div>
                   <p class="text-[12px] text-muted">{{ msg.siteCard.locationCount }} location{{ msg.siteCard.locationCount === 1 ? '' : 's' }} · {{ msg.siteCard.plan }} plan</p>
@@ -75,7 +75,7 @@
                     rel="noopener"
                     class="inline-flex items-center gap-1.5 text-[12px] text-primary hover:underline"
                   >
-                    <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-3.5" />
+                    <UIcon name="i-lucide-external-link" class="size-3.5" />
                     Open live site
                   </a>
                 </div>
@@ -151,7 +151,7 @@
                 <!-- Domain card -->
                 <div v-if="msg.domainCard" class="rounded-xl border border-default bg-elevated px-4 py-3 space-y-2">
                   <div class="flex items-center gap-2">
-                    <UIcon name="i-heroicons-globe-alt" class="size-4 text-primary shrink-0" />
+                    <UIcon name="i-lucide-globe" class="size-4 text-primary shrink-0" />
                     <span class="text-[13px] font-semibold text-highlighted">Custom domain setup</span>
                   </div>
                   <p class="text-[12px] text-muted leading-relaxed">Point <code class="font-mono">www.yourdomain.com</code> to us with a CNAME, then add the SSL verification TXT records. Full instructions are in Settings → Domains.</p>
@@ -179,7 +179,7 @@
                     :dashboard-to="`/dashboard/${orgSlug}`"
                     dashboard-label="Open the dashboard"
                   />
-                  <UButton color="primary" icon="i-heroicons-arrow-right" @click="finish">
+                  <UButton color="primary" icon="i-lucide-arrow-right" @click="finish">
                     Go to my dashboard
                   </UButton>
                 </div>
@@ -247,10 +247,10 @@ interface BotMessage {
 }
 
 const WELCOME_POINTS: [string, string][] = [
-  ['i-heroicons-check-circle', 'Your site is live and indexed'],
-  ['i-heroicons-bell', 'Confirm where operational alerts should go'],
-  ['i-heroicons-users', 'Invite your team to manage locations'],
-  ['i-heroicons-chat-bubble-left-right', 'Edit anything from ChatGPT'],
+  ['i-lucide-circle-check', 'Your site is live and indexed'],
+  ['i-lucide-bell', 'Confirm where operational alerts should go'],
+  ['i-lucide-users', 'Invite your team to manage locations'],
+  ['i-lucide-messages-square', 'Edit anything from ChatGPT'],
 ]
 
 const scrollRef = ref<HTMLElement | null>(null)

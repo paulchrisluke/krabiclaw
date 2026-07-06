@@ -4,7 +4,7 @@
       <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <div class="flex gap-4">
           <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            <UIcon name="i-heroicons-language" class="size-5 text-primary" />
+            <UIcon name="i-lucide-languages" class="size-5 text-primary" />
           </div>
           <div>
             <UBadge color="primary" variant="soft">Growth opportunity</UBadge>
@@ -15,7 +15,7 @@
           </div>
         </div>
         <div class="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col">
-          <UButton icon="i-heroicons-language" @click="openModal">
+          <UButton icon="i-lucide-languages" @click="openModal">
             Start translation
           </UButton>
           <UButton color="neutral" variant="ghost" @click="dismissed = true">
@@ -67,7 +67,7 @@
         <UAlert
           color="neutral"
           variant="soft"
-          icon="i-heroicons-clock"
+          icon="i-lucide-clock"
           title="This can take a few minutes"
           description="You can keep editing your site while ChowBot works. Nothing publishes until you review and approve the drafts."
         />
@@ -76,7 +76,7 @@
           v-if="error"
           color="error"
           variant="soft"
-          icon="i-heroicons-exclamation-triangle"
+          icon="i-lucide-triangle-alert"
           :description="error"
         />
       </div>
@@ -88,7 +88,7 @@
           Cancel
         </UButton>
         <UButton
-          icon="i-heroicons-sparkles"
+          icon="i-lucide-sparkles"
           :loading="jobCreating"
           :disabled="!canStart"
           @click="startTranslation"

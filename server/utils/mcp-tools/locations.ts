@@ -1,0 +1,201 @@
+import type { McpToolDefinition } from './shared'
+import { locationListItemObject, locationMutationResultObject, locationObject, openingHoursInputSchema, siteTool, specialHoursInputSchema } from './shared'
+
+export const LOCATIONS_TOOLS: McpToolDefinition[] = [
+  siteTool({
+      name: 'list_locations',
+      description: 'List site locations in a compact format with ids, slugs, titles, and active-state markers so you can target location-scoped tools reliably.',
+      domain: 'locations',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      outputSchema: {
+        type: 'object',
+        properties: {
+          locations: { type: 'array', items: locationListItemObject },
+        },
+        required: ['locations'],
+      },
+    }),
+  siteTool({
+      name: 'get_location',
+      description: 'Get one location.',
+      domain: 'locations',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: { location_id: { type: 'string', description: 'Location id or slug.' } },
+      required: ['location_id'],
+      outputSchema: {
+        type: 'object',
+        properties: { location: locationObject },
+        required: ['location'],
+      },
+    }),
+  siteTool({
+      name: 'create_location',
+      description: 'Create a location. Social and delivery-app links (facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url) can be set here or later via update_location.',
+      domain: 'locations',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        title: { type: 'string' },
+        facebook_url: { type: 'string', description: 'Full Facebook page URL for this location, e.g. https://facebook.com/yourpage. Include the https:// scheme.' },
+        instagram_url: { type: 'string', description: 'Full Instagram profile URL for this location, e.g. https://instagram.com/yourhandle. Include the https:// scheme.' },
+        tiktok_url: { type: 'string', description: 'Full TikTok profile URL for this location, e.g. https://tiktok.com/@yourhandle. Include the https:// scheme.' },
+        grab_url: { type: 'string', description: 'Grab delivery/booking URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
+        uber_eats_url: { type: 'string', description: 'Uber Eats URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
+        foodpanda_url: { type: 'string', description: 'Foodpanda URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
+        opening_hours: openingHoursInputSchema,
+        special_hours: specialHoursInputSchema,
+      },
+      required: ['title'],
+      outputSchema: {
+        ...locationMutationResultObject,
+        properties: {
+          ...locationMutationResultObject.properties,
+          hydrated_seed_location: { type: 'boolean' },
+          previous_slug: { type: ['string', 'null'] },
+        },
+      },
+    }),
+  siteTool({
+      name: 'update_location',
+      description: 'Update a location\'s own details: hero image/video, regular opening hours, temporary closures/special hours, contact info, and social/delivery links. This is the tool for anything scoped to one specific location — including "close this location for renovations" or "swap this location\'s announcement image" — never update_home_hero or set_home_hero_image, which only affect the shared site-wide homepage. To assign a hero image: call get_site_media_assets first to find the asset id, then pass it as hero_image_asset_id here. Only provided fields are changed — omitting hero_image_asset_id leaves the existing one intact.',
+      domain: 'locations',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        location_id: { type: 'string', description: 'Location id or slug.' },
+        phone: { type: 'string', description: 'Public phone number shown to guests on the website and in booking/reservation confirmation emails.' },
+        email: { type: ['string', 'null'], description: 'Public email shown to guests on the website and in booking/reservation confirmation emails. Pass null to clear it.' },
+        notification_phone: { type: 'string', description: 'WhatsApp number for internal booking/reservation alerts to this location\'s manager. Not shown to guests. Falls back to the site-level whatsapp_phone if null. International format: +66812345678' },
+        hero_image_asset_id: { type: 'string', description: 'Asset ID from get_site_media_assets. Assigns the hero image for this location.' },
+        hero_video_asset_id: { type: 'string', description: 'Asset ID from get_site_media_assets. Assigns the hero video for this location.' },
+        facebook_url: { type: 'string', description: 'Full Facebook page URL for this location, e.g. https://facebook.com/yourpage. Include the https:// scheme.' },
+        instagram_url: { type: 'string', description: 'Full Instagram profile URL for this location, e.g. https://instagram.com/yourhandle. Include the https:// scheme.' },
+        tiktok_url: { type: 'string', description: 'Full TikTok profile URL for this location, e.g. https://tiktok.com/@yourhandle. Include the https:// scheme.' },
+        grab_url: { type: 'string', description: 'Grab delivery/booking URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
+        uber_eats_url: { type: 'string', description: 'Uber Eats URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
+        foodpanda_url: { type: 'string', description: 'Foodpanda URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
+        opening_hours: openingHoursInputSchema,
+        special_hours: specialHoursInputSchema,
+      },
+      required: ['location_id'],
+      outputSchema: {
+        ...locationMutationResultObject,
+      },
+    }),
+  siteTool({
+      name: 'copy_location_batch',
+      description: 'Copy menus, media, content, reviews, Q&A, and/or experiences from one location to another. Use this to duplicate a fully-built location as a starting point for a new one, instead of recreating content by hand. Provide target_location_id to copy into an existing location, or new_location_title to create a fresh one first. Items with external identifiers (Google review/question ids) are copied without that identifier since the copy is not the literal external record.',
+      domain: 'locations',
+      minimumRole: 'editor',
+      confirmRequired: true,
+      inputSchema: {
+        source_location_id: { type: 'string', description: 'Location to copy content from. Use list_locations to find ids.' },
+        target_location_id: { type: 'string', description: 'Existing location to copy content into. Omit if using new_location_title instead.' },
+        new_location_title: { type: 'string', description: 'Title for a brand-new location to create and copy content into. Omit if using target_location_id instead.' },
+        entities: {
+          type: 'array',
+          items: { type: 'string', enum: ['menus', 'menu_items', 'media_assets', 'site_content', 'reviews', 'location_qa', 'experiences'] },
+          minItems: 1,
+          description: 'Which kinds of content to copy. menu_items requires menus to also be listed, since copied items attach to newly copied menus.',
+        },
+        include_translations: { type: 'boolean', description: 'Copy existing translations for menus/menu items/site content along with the source-locale content. Defaults to true.' },
+        oneOf: [
+          { required: ['target_location_id'] },
+          { required: ['new_location_title'] },
+        ],
+      },
+      required: ['source_location_id', 'entities'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          manifest: {
+            type: 'object',
+            description: 'Per-entity counts of what was copied and the resulting location id/slug.',
+          },
+        },
+        required: ['manifest'],
+      },
+    }),
+  siteTool({
+      name: 'set_location_hero_image',
+      description: 'Use this when the user wants to change the main photo, cover photo, or big photo for a specific location. Call get_site_media_assets first to find an active image asset id, then pass it here with the target location_id. If this location already has a hero video, that video keeps display priority until you call clear_location_hero_video.',
+      domain: 'locations',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        location_id: { type: 'string' },
+        asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+      },
+      required: ['location_id', 'asset_id'],
+      outputSchema: {
+        ...locationMutationResultObject,
+        properties: {
+          ...locationMutationResultObject.properties,
+          warning: { type: 'string' },
+        },
+      },
+    }),
+  siteTool({
+      name: 'set_location_hero_video',
+      description: 'Assign a saved video asset as a location hero video. Upload the video via the dashboard media library first, then call get_site_media_assets to find its asset id. Hero videos take display priority over any existing hero image for the same location.',
+      domain: 'locations',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        location_id: { type: 'string' },
+        asset_id: { type: 'string', description: 'Active video asset id from get_site_media_assets.' },
+      },
+      required: ['location_id', 'asset_id'],
+      outputSchema: {
+        ...locationMutationResultObject,
+        properties: {
+          ...locationMutationResultObject.properties,
+          warning: { type: 'string' },
+        },
+      },
+    }),
+  siteTool({
+      name: 'clear_location_hero_image',
+      description: 'Clear the current hero image from a location without affecting its hero video.',
+      domain: 'locations',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        location_id: { type: 'string' },
+      },
+      required: ['location_id'],
+      outputSchema: {
+        ...locationMutationResultObject,
+      },
+    }),
+  siteTool({
+      name: 'clear_location_hero_video',
+      description: 'Clear the current hero video from a location without affecting its hero image.',
+      domain: 'locations',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        location_id: { type: 'string' },
+      },
+      required: ['location_id'],
+      outputSchema: {
+        ...locationMutationResultObject,
+      },
+    }),
+  siteTool({
+      name: 'delete_location',
+      description: 'Delete a location.',
+      domain: 'locations',
+      minimumRole: 'admin',
+      confirmRequired: true,
+      inputSchema: { location_id: { type: 'string', description: 'Location id or slug.' } },
+      required: ['location_id'],
+      outputSchema: {
+        type: 'object',
+        properties: { deleted: { type: 'boolean' } },
+        required: ['deleted'],
+      },
+    }),
+]

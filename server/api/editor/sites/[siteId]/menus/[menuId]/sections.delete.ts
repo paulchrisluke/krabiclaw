@@ -1,7 +1,7 @@
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { deleteMenuSection } from '~/server/utils/menu-management'
+import { deleteMenuSection, MenuNotFoundError } from '~/server/utils/menu-management'
 
 interface SiteRow {
   id: string
@@ -62,7 +62,7 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Menu not found' }, { status: 404 })
     }
 
-    const deleted = await deleteMenuSection(db, menuId, section)
+    const deleted = await deleteMenuSection(db, site.organization_id, siteId, menuId, section)
 
     if (!deleted || deleted === 0) {
       return jsonResponse({ error: 'Section not found' }, { status: 404 })
@@ -74,6 +74,9 @@ export default defineEventHandler(async (event) => {
       deleted
     })
   } catch (error) {
+    if (error instanceof MenuNotFoundError) {
+      return jsonResponse({ error: 'Menu not found' }, { status: 404 })
+    }
     console.error('Failed to delete menu section:', error)
     return jsonResponse({ error: 'Failed to delete menu section' }, { status: 500 })
   }
