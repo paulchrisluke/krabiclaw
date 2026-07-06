@@ -13,6 +13,7 @@ import {
   type PlatformKnowledgeResultType,
   type PlatformKnowledgeSurface,
 } from '~/config/platform-knowledge'
+import type { PublicSearchTypeFilter } from '~/server/utils/platform-search-types'
 
 const AI_SEARCH_CUSTOM_METADATA: AiSearchConfig['custom_metadata'] = [
   { field_name: 'record_id', data_type: 'text' },
@@ -41,7 +42,7 @@ export interface PublicSearchResult {
 
 interface SearchOptions {
   limit?: number
-  type?: PublicSearchType | 'all'
+  type?: PublicSearchTypeFilter
   surface?: PlatformKnowledgeSurface
   dashboardContext?: DashboardRouteContext
 }
@@ -88,74 +89,16 @@ function platformKnowledgeInstanceId(env: CloudflareEnv) {
   throw new Error('AI_SEARCH_INSTANCE_ID is not configured')
 }
 
-function cloudflareAccountId(env: CloudflareEnv) {
-  const value = env.CLOUDFLARE_ACCOUNT_ID ?? env.CF_ACCOUNT_ID
-  if (typeof value === 'string' && value.trim()) return value.trim()
-  throw new Error('CLOUDFLARE_ACCOUNT_ID is not configured')
-}
-
-function cloudflareApiToken(env: CloudflareEnv) {
-  const value = env.CLOUDFLARE_API_TOKEN
-  if (typeof value === 'string' && value.trim()) return value.trim()
-  throw new Error('CLOUDFLARE_API_TOKEN is not configured')
-}
-
 function normalizeQuery(query: string) {
   return query.trim()
 }
 
-function aiSearchApiUrl(env: CloudflareEnv, suffix = '') {
-  const accountId = cloudflareAccountId(env)
-  const instanceId = platformKnowledgeInstanceId(env)
-  return `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai-search/instances/${instanceId}${suffix}`
-}
-
-async function readApiResponse(response: Response) {
-  const payload = await response.json().catch(() => null) as {
-    success?: boolean
-    errors?: Array<{ message?: string }>
-    result?: ApiValue
-    result_info?: ApiValue
-  } | null
-
-  if (!response.ok || payload?.success === false) {
-    const detail = payload?.errors?.map(error => error.message).filter(Boolean).join('; ')
-      || JSON.stringify(payload)
-      || response.statusText
-    throw new Error(`Cloudflare AI Search API error ${response.status}: ${detail}`)
+function searchNamespace(env: CloudflareEnv) {
+  const binding = env.AI_SEARCH as AiSearchNamespace | undefined
+  if (!binding) {
+    throw new Error('Cloudflare AI Search binding is not available')
   }
-
-  return payload
-}
-
-async function aiSearchApiRequest(env: CloudflareEnv, path: string, init: RequestInit = {}) {
-  let lastError: unknown = null
-
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
-    try {
-      const response = await fetch(aiSearchApiUrl(env, path), {
-        ...init,
-        headers: {
-          Authorization: `Bearer ${cloudflareApiToken(env)}`,
-          ...(init.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
-          ...(init.headers ?? {}),
-        },
-      })
-
-      if (response.status >= 500 && attempt < 5) {
-        await new Promise(resolve => setTimeout(resolve, attempt * 500))
-        continue
-      }
-
-      return await readApiResponse(response)
-    } catch (error) {
-      lastError = error
-      if (attempt >= 5) break
-      await new Promise(resolve => setTimeout(resolve, attempt * 500))
-    }
-  }
-
-  throw lastError instanceof Error ? lastError : new Error('Cloudflare AI Search API request failed')
+  return binding
 }
 
 function stripMarkdown(value: string | null | undefined) {
@@ -303,40 +246,30 @@ function platformKnowledgeInstanceConfig(): Omit<AiSearchConfig, 'metadata'> {
 
 async function ensurePlatformKnowledgeInstance(env: CloudflareEnv) {
   const instanceId = platformKnowledgeInstanceId(env)
-  try {
-    await aiSearchApiRequest(env, '', {
-      method: 'GET',
-    })
-  } catch {
-    await aiSearchApiRequest(env, '', {
-      method: 'POST',
-      body: JSON.stringify({
-        id: platformKnowledgeInstanceId(env),
-        ...platformKnowledgeInstanceConfig(),
-      }),
+  const namespace = searchNamespace(env)
+  const existing = await namespace.list({ search: instanceId, per_page: 50 })
+  const instanceExists = (existing.result ?? []).some(instance => instance.id === instanceId)
+
+  if (!instanceExists) {
+    await namespace.create({
+      id: platformKnowledgeInstanceId(env),
+      ...platformKnowledgeInstanceConfig(),
     })
   }
 
-  await aiSearchApiRequest(env, '', {
-    method: 'PUT',
-    body: JSON.stringify({
-      id: instanceId,
-      ...platformKnowledgeInstanceConfig(),
-    }),
+  await namespace.get(instanceId).update({
+    id: instanceId,
+    ...platformKnowledgeInstanceConfig(),
   })
 }
 
 async function listAllItems(env: CloudflareEnv) {
+  const instance = searchNamespace(env).get(platformKnowledgeInstanceId(env))
   const items: AiSearchItemInfo[] = []
   let page = 1
 
   while (true) {
-    const response = await aiSearchApiRequest(env, `/items?page=${page}&per_page=50`, {
-      method: 'GET',
-    }) as {
-      result?: AiSearchItemInfo[]
-      result_info?: { per_page: number, total_count: number }
-    }
+    const response = await instance.items.list({ page, per_page: 50 })
     const pageItems = response.result ?? []
     items.push(...pageItems)
     if (!response.result_info || page * response.result_info.per_page >= response.result_info.total_count) break
@@ -347,35 +280,19 @@ async function listAllItems(env: CloudflareEnv) {
 }
 
 async function deleteIndexItem(env: CloudflareEnv, itemId: string) {
-  await aiSearchApiRequest(env, `/items/${encodeURIComponent(itemId)}`, {
-    method: 'DELETE',
-  })
+  await searchNamespace(env).get(platformKnowledgeInstanceId(env)).items.delete(itemId)
 }
 
 async function uploadIndexItem(env: CloudflareEnv, key: string, content: string, metadata: Record<string, string>) {
-  const formData = new FormData()
-  formData.set('file', new Blob([content], { type: 'text/markdown' }), key)
-  formData.set('metadata', JSON.stringify(metadata))
-
-  await aiSearchApiRequest(env, '/items', {
-    method: 'POST',
-    body: formData,
-  })
-}
-
-async function getIndexStats(env: CloudflareEnv) {
-  const response = await aiSearchApiRequest(env, '/stats', {
-    method: 'GET',
-  }) as { result?: AiSearchStatsResponse }
-
-  return response.result ?? {}
+  await searchNamespace(env).get(platformKnowledgeInstanceId(env)).items.upload(key, content, { metadata })
 }
 
 async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000) {
+  const instance = searchNamespace(env).get(platformKnowledgeInstanceId(env))
   const startedAt = Date.now()
 
   while (Date.now() - startedAt < timeoutMs) {
-    const stats = await getIndexStats(env)
+    const stats = await instance.stats()
     const queued = Number(stats.queued ?? 0)
     const running = Number(stats.running ?? 0)
     const outdated = Number(stats.outdated ?? 0)
@@ -535,17 +452,18 @@ export async function rebuildPlatformKnowledgeIndex(env: CloudflareEnv, db: DbCl
     buildPlatformKnowledgeDocuments(db),
   ])
   const records = expandDocumentsForSurfaces(baseRecords)
-
-  await Promise.all(existingItems.map(item => deleteIndexItem(env, item.id)))
+  const nextKeys = new Set(records.map(record => record.key))
   for (const record of records) {
     await uploadIndexItem(env, record.key, renderDocumentContent(record), record.metadata)
   }
+  const staleItems = existingItems.filter(item => !nextKeys.has(item.key))
+  await Promise.all(staleItems.map(item => deleteIndexItem(env, item.id)))
   await waitForIndexing(env)
 
   return {
     instanceId: platformKnowledgeInstanceId(env),
     indexed: records.length,
-    deleted: existingItems.length,
+    deleted: staleItems.length,
   }
 }
 
@@ -560,31 +478,29 @@ export async function searchPublicResources(
   const surface = options.surface ?? 'public'
   const limit = Math.max(1, Math.min(options.limit ?? 8, 20))
   const typeFilter = resultTypeFilter(options.type ?? 'all')
+  const instance = searchNamespace(env).get(platformKnowledgeInstanceId(env))
 
-  const response = await aiSearchApiRequest(env, '/search', {
-    method: 'POST',
-    body: JSON.stringify({
-      query: normalized,
-      ai_search_options: {
-        retrieval: {
-          retrieval_type: 'hybrid',
-          match_threshold: 0,
-          max_num_results: Math.min(50, limit * 5),
-          keyword_match_mode: 'or',
-          return_on_failure: true,
-          filters: buildSearchFilters(surface, typeFilter),
-        },
-        query_rewrite: {
-          enabled: false,
-        },
-        reranking: {
-          enabled: false,
-        },
+  const response = await instance.search({
+    query: normalized,
+    ai_search_options: {
+      retrieval: {
+        retrieval_type: 'hybrid',
+        match_threshold: 0,
+        max_num_results: Math.min(50, limit * 5),
+        keyword_match_mode: 'or',
+        return_on_failure: true,
+        filters: buildSearchFilters(surface, typeFilter),
       },
-    }),
-  }) as { result?: { chunks?: AiSearchSearchResponse['chunks'] } }
+      query_rewrite: {
+        enabled: false,
+      },
+      reranking: {
+        enabled: false,
+      },
+    },
+  })
 
-  return normalizeSearchResults(response.result?.chunks ?? [], {
+  return normalizeSearchResults(response.chunks ?? [], {
     limit,
     surface,
     dashboardContext: options.dashboardContext,

@@ -47,3 +47,41 @@ test('assertPublicMediaUrl fails immediately on content-type mismatch', async ()
 
   assert.equal(attempts, 1)
 })
+
+test('assertPublicMediaUrl rejects after exhausting retryable failures', async () => {
+  let attempts = 0
+
+  await assert.rejects(
+    () => assertPublicMediaUrl('https://media.example.test/video.mp4', 'video/mp4', {
+      attempts: 3,
+      fetchImpl: async () => {
+        attempts += 1
+        return new Response('', { status: 404 })
+      },
+      retryDelaysMs: [0, 0],
+      sleepImpl: async () => {},
+    }),
+    /HTTP 404/,
+  )
+
+  assert.equal(attempts, 3)
+})
+
+test('assertPublicMediaUrl treats AbortError timeouts as retryable failures', async () => {
+  let attempts = 0
+
+  await assert.rejects(
+    () => assertPublicMediaUrl('https://media.example.test/video.mp4', 'video/mp4', {
+      attempts: 2,
+      fetchImpl: async () => {
+        attempts += 1
+        throw new DOMException('timed out', 'AbortError')
+      },
+      retryDelaysMs: [0],
+      sleepImpl: async () => {},
+    }),
+    /timed out/,
+  )
+
+  assert.equal(attempts, 2)
+})

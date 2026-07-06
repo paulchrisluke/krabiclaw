@@ -2,6 +2,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { searchPublicResources } from '~/server/utils/public-search'
+import { PUBLIC_SEARCH_TYPES, type PublicSearchTypeFilter } from '~/server/utils/platform-search-types'
 
 const IP_HOURLY_LIMIT = 120
 
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const orgSlug = typeof query.orgSlug === 'string' ? query.orgSlug : ''
   const siteSlug = typeof query.siteSlug === 'string' ? query.siteSlug : ''
   const locationSlug = typeof query.locationSlug === 'string' ? query.locationSlug : ''
-  const validTypes = new Set(['all', 'doc', 'blog', 'faq', 'route', 'platform_page', 'dashboard_route'])
+  const validTypes = new Set<string>(PUBLIC_SEARCH_TYPES)
   const validSurfaces = new Set(['public', 'docs', 'blog', 'dashboard', 'help', 'chowbot'])
   const requiresDashboardAuth = surface === 'dashboard' || type === 'dashboard_route'
 
@@ -54,7 +55,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const results = await searchPublicResources(env, q, {
-      type: type as 'all' | 'doc' | 'blog' | 'faq' | 'route' | 'platform_page' | 'dashboard_route',
+      type: type as PublicSearchTypeFilter,
       surface: surface as 'public' | 'docs' | 'blog' | 'dashboard' | 'help' | 'chowbot',
       limit: 10,
       dashboardContext: requiresDashboardAuth

@@ -21,7 +21,7 @@ export interface CloudflareEnv {
   STRIPE_WEBHOOK_SECRET?: string
   GA4_MEASUREMENT_ID?: string
   GA4_API_SECRET?: string
-  AI_SEARCH_NAMESPACE?: string
+  AI_SEARCH?: AiSearchNamespace
   AI_SEARCH_INSTANCE_ID?: string
   PLATFORM_SEARCH_REINDEX_SECRET?: string
   CF_ACCOUNT_ID?: string

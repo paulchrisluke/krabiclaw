@@ -10,7 +10,7 @@ KrabiClaw uses Cloudflare AI Search as the single retrieval backend for platform
   - staging: `krabiclaw-platform-knowledge-staging`
   - preview: `krabiclaw-platform-knowledge-preview`
 
-KrabiClaw keeps the `AI_SEARCH` namespace binding in Wrangler, but the canonical runtime retrieval and indexing paths call the Cloudflare AI Search REST API against the environment-specific instance in the built-in `default` namespace.
+KrabiClaw uses the native `AI_SEARCH` Workers namespace binding as the canonical runtime path for instance management, item indexing, and search queries against the environment-specific instance in the built-in `default` namespace.
 
 ## Indexed corpus
 
@@ -36,16 +36,6 @@ Required secret:
 
 - `PLATFORM_SEARCH_REINDEX_SECRET`
 
-Required Cloudflare credentials:
-
-- `CF_ACCOUNT_ID` or `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN`
-
-The token must include:
-
-- `Account > AI Search:Edit`
-- `Account > AI Search:Run`
-
 The script calls:
 
 - `POST /api/internal/search/reindex`
@@ -59,6 +49,6 @@ Platform doc and platform blog admin writes trigger a full AI Search rebuild aft
 ## Environment expectations
 
 - AI Search is required infrastructure for local, preview, staging, and production.
-- `wrangler.toml` must keep the `AI_SEARCH` namespace binding in every environment block and the environment must expose the Cloudflare account/token credentials used by the shared retrieval service.
-- Local development should run with the normal Cloudflare dev environment plus valid AI Search API credentials.
+- `wrangler.toml` must keep the `AI_SEARCH` namespace binding in every environment block.
+- Local development should run with the normal Cloudflare dev environment and remote AI Search bindings available.
 - An environment should not be treated as healthy after content changes until the AI Search rebuild has completed successfully.

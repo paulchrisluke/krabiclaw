@@ -1,6 +1,8 @@
 import type { McpExecutorContext } from './shared'
 import { createExperience, deleteExperience, getExperienceBookingsSummary, getExperienceById, getSlotAvailability, listExperienceBookings, listExperienceBookingsForSite, listExperiences, listSlotOverrides, resolveExperienceTimezone, updateBookingStatus, updateExperience, upsertSlotOverride, type CreateExperienceInput, type UpdateExperienceInput } from '~/server/utils/experiences'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
+import { renderStructuredResponse } from '~/server/utils/mcp-render'
+import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 import { NOT_HANDLED, expandSlotGeneratorArgs, loadSiteSettings, mutationContextPayload, objectArray, omit, optionalDaysWindow, optionalString, requireActiveImageAsset, requireActiveVideoAsset, requiredString } from './shared'
 
 export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<unknown> {
@@ -114,6 +116,19 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
           locationId: experience && typeof experience.location_id === "string" ? experience.location_id : null,
         }),
       };
+    }
+    case "open_experience_media_upload": {
+      const experienceId = requiredString(args, "experience_id");
+      const accept = optionalString(args, "accept") ?? "both";
+      return renderStructuredResponse(
+        {
+          launched: true,
+          resourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
+          experience_id: experienceId,
+          context: { site_id: site.siteId, experience_id: experienceId, accept },
+        },
+        "Media upload widget launched for this experience.",
+      );
     }
     case "reorder_experience_gallery": {
       const experienceId = requiredString(args, "experience_id");

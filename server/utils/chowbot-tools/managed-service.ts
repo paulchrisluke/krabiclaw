@@ -1,4 +1,5 @@
 import type { AiTool } from '~/server/utils/ai-gateway'
+import { PUBLIC_SEARCH_TYPES } from '~/server/utils/platform-search-types'
 
 export const MANAGED_SERVICE_CHOWBOT_TOOLS: AiTool[] = [
   // ── Managed service work requests ─────────────────────────────────────────
@@ -63,7 +64,7 @@ export const MANAGED_SERVICE_CHOWBOT_TOOLS: AiTool[] = [
           },
           type: {
             type: "string",
-            enum: ["all", "doc", "blog", "faq", "route", "platform_page", "dashboard_route"],
+            enum: [...PUBLIC_SEARCH_TYPES],
             description: "Optional result type filter. Omit for all indexed platform knowledge resources.",
           },
         },

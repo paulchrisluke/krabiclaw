@@ -5,7 +5,16 @@
       class="fixed inset-0 z-[120] flex items-start justify-center bg-black/35 px-4 py-8 backdrop-blur-[2px] sm:py-12"
       @click.self="close"
     >
-      <div class="flex max-h-[min(80vh,720px)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-default bg-default shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
+      <div
+        ref="panelRef"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="dialogTitleId"
+        tabindex="-1"
+        class="flex max-h-[min(80vh,720px)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-default bg-default shadow-[0_24px_80px_rgba(0,0,0,0.18)]"
+        @keydown.tab="onTabKeydown"
+      >
+        <h2 :id="dialogTitleId" class="sr-only">Search {{ surfaceLabel.toLowerCase() }}</h2>
         <div class="flex items-center gap-3 border-b border-default px-4 py-3 sm:px-5">
           <PlatformSearchGlyph name="search" class="size-4 shrink-0 text-muted" />
           <input
@@ -53,8 +62,9 @@
                 {{ group.label }}
               </p>
               <button
-                v-for="(result, index) in group.items"
+                v-for="result in group.items"
                 :key="result.id"
+                :ref="(element) => setResultRef(result.id, element)"
                 type="button"
                 :class="[
                   'flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left transition',
@@ -66,7 +76,7 @@
                 @click="void openResult(result)"
               >
                 <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border border-default bg-default text-muted">
-                  <PlatformSearchGlyph :name="result.icon" class="size-4" />
+                  <PlatformSearchGlyph :name="glyphName(result.icon)" class="size-4" />
                 </div>
                 <div class="min-w-0 flex-1">
                   <div class="flex items-start justify-between gap-3">
@@ -90,7 +100,9 @@
 </template>
 
 <script setup lang="ts">
-import PlatformSearchGlyph from '~/components/platform/search/PlatformSearchGlyph.vue'
+import PlatformSearchGlyph, { PLATFORM_SEARCH_GLYPHS } from '~/components/platform/search/PlatformSearchGlyph.vue'
+import type { PlatformSearchGlyphName } from '~/components/platform/search/PlatformSearchGlyph.vue'
+import type { ComponentPublicInstance } from 'vue'
 import type { PlatformSearchPaletteSurface } from '~/composables/usePlatformSearchPalette'
 import type { PublicSearchResult } from '~/server/utils/public-search'
 
@@ -106,10 +118,21 @@ const route = useRoute()
 const router = useRouter()
 const { isOpen, open, close } = usePlatformSearchPalette(props.surface)
 const inputRef = ref<HTMLInputElement | null>(null)
+const panelRef = ref<HTMLElement | null>(null)
 const query = ref('')
 const loading = ref(false)
 const results = ref<PublicSearchResult[]>([])
 const selectedIndex = ref(0)
+const resultRefs = new Map<string, HTMLButtonElement>()
+const dialogTitleId = useId()
+const resultTypeMeta: Record<PublicSearchResult['type'], { badge: string, group: string }> = {
+  doc: { badge: 'Doc', group: 'Documentation' },
+  blog: { badge: 'Blog', group: 'Blog' },
+  faq: { badge: 'FAQ', group: 'Support FAQs' },
+  route: { badge: 'Route', group: 'Routes' },
+  platform_page: { badge: 'Page', group: 'Platform Pages' },
+  dashboard_route: { badge: 'Dashboard', group: 'Dashboard' },
+}
 
 const surfaceLabel = computed(() => {
   if (props.surface === 'docs') return 'Documentation'
@@ -140,27 +163,62 @@ const flatIndexById = computed(() => {
 })
 
 function resultTypeLabel(type: PublicSearchResult['type']) {
-  switch (type) {
-    case 'doc': return 'Doc'
-    case 'blog': return 'Blog'
-    case 'faq': return 'FAQ'
-    case 'route': return 'Route'
-    case 'platform_page': return 'Page'
-    case 'dashboard_route': return 'Dashboard'
-    default: return 'Result'
-  }
+  return resultTypeMeta[type]?.badge ?? 'Result'
 }
 
 function groupLabel(type: PublicSearchResult['type']) {
-  switch (type) {
-    case 'doc': return 'Documentation'
-    case 'blog': return 'Blog'
-    case 'faq': return 'Support FAQs'
-    case 'route': return 'Routes'
-    case 'platform_page': return 'Platform Pages'
-    case 'dashboard_route': return 'Dashboard'
-    default: return 'Results'
+  return resultTypeMeta[type]?.group ?? 'Results'
+}
+
+function setResultRef(resultId: string, element: Element | ComponentPublicInstance | null) {
+  if (element instanceof HTMLButtonElement) {
+    resultRefs.set(resultId, element)
+    return
   }
+  resultRefs.delete(resultId)
+}
+
+function scrollSelectedResultIntoView() {
+  const selected = flatResults.value[selectedIndex.value]
+  if (!selected) return
+  resultRefs.get(selected.id)?.scrollIntoView({ block: 'nearest' })
+}
+
+function getFocusableElements() {
+  return [...(panelRef.value?.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  ) ?? [])].filter(element => !element.hasAttribute('disabled') && element.tabIndex !== -1)
+}
+
+function onTabKeydown(event: KeyboardEvent) {
+  const focusable = getFocusableElements()
+  if (!focusable.length) {
+    event.preventDefault()
+    panelRef.value?.focus()
+    return
+  }
+
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (!first || !last) return
+  const active = document.activeElement
+
+  if (event.shiftKey) {
+    if (active === first || active === panelRef.value) {
+      event.preventDefault()
+      last.focus()
+    }
+    return
+  }
+
+  if (active === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+function glyphName(icon: string): PlatformSearchGlyphName {
+  return icon in PLATFORM_SEARCH_GLYPHS ? icon as PlatformSearchGlyphName : 'search'
 }
 
 function moveSelection(delta: number) {
@@ -230,6 +288,11 @@ watch(query, () => {
   }, 120)
 })
 
+watch(selectedIndex, async () => {
+  await nextTick()
+  scrollSelectedResultIntoView()
+})
+
 watch(isOpen, async (openNow) => {
   if (!openNow) {
     requestSequence += 1
@@ -237,11 +300,13 @@ watch(isOpen, async (openNow) => {
     results.value = []
     selectedIndex.value = 0
     loading.value = false
+    resultRefs.clear()
     return
   }
   await nextTick()
   inputRef.value?.focus()
   inputRef.value?.select()
+  scrollSelectedResultIntoView()
 })
 
 function onGlobalKeydown(event: KeyboardEvent) {

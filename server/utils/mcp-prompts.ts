@@ -46,7 +46,7 @@ export const MCP_PROMPTS: McpPromptDefinition[] = [
   },
   {
     name: "triage_inbox",
-    description: "Summarize new contact messages, reservation requests, and experience bookings awaiting action.",
+    description: "Summarize new contact messages, reservation requests, experience bookings, and reviews awaiting a reply.",
     arguments: [],
   },
   {
@@ -72,6 +72,11 @@ export const MCP_PROMPTS: McpPromptDefinition[] = [
   {
     name: "make_my_site_look_better",
     description: "General visual/content review of the site with concrete suggestions the user can approve one at a time.",
+    arguments: [],
+  },
+  {
+    name: "grow_my_bookings",
+    description: "Look at traffic, listing completeness, and booking/reservation demand together, and suggest the highest-impact next move to get more bookings this week.",
     arguments: [],
   },
 ];
@@ -147,11 +152,13 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
     }
     case "triage_inbox": {
       return {
-        description: "Summarize what's new across contact, reservations, and bookings",
+        description: "Summarize what's new across contact, reservations, bookings, and unreplied reviews",
         text: [
           "Call get_contact_inquiries for site-level contact messages, get_reservation_inquiries with location_id when the site has multiple locations, and list_all_experience_bookings for experience bookings across the whole site; summarize only pending experience bookings from that last result.",
-          "Summarize what's new, grouped by type, oldest first.",
+          "Call list_locations, then list_location_reviews for each location, and pull out any review that has no owner reply yet.",
+          "Summarize what's new, grouped by type (messages, reservations, bookings, reviews needing a reply), oldest first.",
           "For pending experience bookings only, update_experience_booking exists to confirm or decline — offer to do that with the user's explicit approval for each one, don't act unilaterally.",
+          "For unreplied reviews, offer to draft a reply for any the user wants to answer now, and call reply_to_review only after they approve the exact wording.",
           "There is no tool on this connection to reply to or change the status of contact or reservation submissions — for those, tell the user what's waiting and point them to the dashboard inbox and reservations pages to respond. Do not attempt to call a tool that doesn't exist for this.",
         ].join(" "),
       };
@@ -209,6 +216,18 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           "Review the main photo, headline, story section, and overall completeness. Note anything that looks unfinished, generic, or low-quality (e.g. a missing or blurry main photo, thin story text, no menu or experiences).",
           "Suggest specific, actionable improvements in plain language — avoid internal field names. Offer to act on one at a time, starting with whichever has the biggest visual impact (usually the main photo).",
           "Only make changes the user has explicitly approved.",
+        ].join(" "),
+      };
+    }
+    case "grow_my_bookings": {
+      return {
+        description: "Combine traffic, listing completeness, and booking demand into one concrete next move",
+        text: [
+          "Call get_workspace_context, then get_site_analytics for the last 30 days to see traffic, top pages, and whether traffic is up or down versus the prior period.",
+          "Call list_menus or list_experiences (whichever fits the business) and list_locations to check whether what's actually bookable is complete — clear pricing, description, and availability. Call list_all_experience_bookings and get_reservation_inquiries to see current demand and whether anything is sitting unconfirmed or unanswered.",
+          "Cross-reference the three: if traffic is healthy but the listing is thin or bookings are stalling unconfirmed, say so explicitly — don't treat these as separate topics.",
+          "Suggest exactly one highest-impact next move, not a list — for example confirming stalled bookings, completing a thin listing, or publishing a post about a specific under-booked experience. Explain it in plain language tied to what you actually found in the data.",
+          "Ask the user to confirm before doing anything. If they approve a post, use create_post; if they approve a listing fix, use update_menu_item/update_experience/set_*_image as appropriate. Do not claim to change pricing or availability automatically — surface it as something to review and decide, then apply only the specific field the user approves.",
         ].join(" "),
       };
     }

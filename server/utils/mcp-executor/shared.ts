@@ -17,6 +17,7 @@ import {
   type McpSiteSummary,
 } from "~/server/utils/mcp-context";
 import { chargeFlatCredits, type FlatCreditAction } from "~/server/utils/ai-credits";
+import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES } from "~/server/utils/media-mime";
 
 // Prefers the user's active organization (session-based auth only — see
 // McpUserContext.activeOrganizationId) and falls back to the oldest
@@ -492,6 +493,81 @@ export async function resolveUserUploadedImageFile(
   return { buffer, contentType: detectedContentType, filename };
 }
 
+/**
+ * file_id-only fallback for upload_user_media, mirroring
+ * resolveUserUploadedImageFile's AI Gateway fetch but accepting video/* in
+ * addition to image/*, using the same magic-byte sniffing as
+ * resolveUserUploadedMediaFile rather than trusting the declared content type.
+ */
+export async function resolveUserUploadedMediaFileById(
+  fileId: string,
+  env: ApiRecord,
+): Promise<ResolvedMediaFile> {
+  const accountId = env.CF_ACCOUNT_ID as string | undefined;
+  const gatewayName = env.CF_GATEWAY_NAME as string | undefined;
+  const aigToken = env.CLOUDFLARE_API_TOKEN as string | undefined;
+
+  if (!accountId || !gatewayName || !aigToken) {
+    throw new Error(
+      "CF AI Gateway env vars not configured (CF_ACCOUNT_ID, CF_GATEWAY_NAME, CLOUDFLARE_API_TOKEN)",
+    );
+  }
+
+  const normalizedFileId = fileId
+    .trim()
+    .replace(/^sediment:\/\//i, "")
+    .replace(/^file:\/\//i, "")
+    .replace(/^\/+/, "");
+
+  if (!normalizedFileId || !/^[a-zA-Z0-9_-]+$/.test(normalizedFileId)) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      "file_id must be a valid uploaded file identifier.",
+    );
+  }
+
+  const url = `https://gateway.ai.cloudflare.com/v1/${accountId}/${gatewayName}/openai/v1/files/${normalizedFileId}/content`;
+  const response = await fetch(url, {
+    headers: { "cf-aig-authorization": `Bearer ${aigToken}` },
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (!response.ok) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Failed to fetch uploaded file ${normalizedFileId} via AI Gateway: ${response.status}`,
+    });
+  }
+
+  const buffer = await readMediaBufferWithLimit(response, `File ${normalizedFileId}`, MAX_VIDEO_BYTES);
+  const bytes = new Uint8Array(buffer);
+  if (bytes.byteLength < 64) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Invalid media payload from file ${normalizedFileId}: payload too small.`,
+    });
+  }
+
+  const sniffedContentType = sniffMediaMimeType(bytes);
+  const isVideo = VIDEO_MIME_TYPES.has(sniffedContentType);
+  const isImage = RESOLVED_MEDIA_IMAGE_TYPES.has(sniffedContentType);
+  if (!isVideo && !isImage) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `File ${normalizedFileId} is not a supported image or video type.`,
+    );
+  }
+  if (isImage && bytes.byteLength > MAX_IMAGE_BYTES) {
+    throw createError({
+      statusCode: 413,
+      statusMessage: `Invalid image payload from file ${normalizedFileId}: payload exceeds ${MAX_IMAGE_BYTES} byte limit.`,
+    });
+  }
+
+  const filename = `${normalizedFileId}.${sniffedContentType.split("/")[1] ?? "bin"}`;
+  return { buffer, contentType: sniffedContentType, filename, kind: isVideo ? "video" : "image" };
+}
+
 export async function resolveGeneratedImageFile(
   file: ToolFileReference,
 ): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
@@ -527,6 +603,116 @@ export async function resolveGeneratedImageFile(
     file.file_name ??
     `${file.file_id}.${detectedContentType.split("/")[1] ?? "png"}`;
   return { buffer, contentType: detectedContentType, filename };
+}
+
+export interface ResolvedMediaFile {
+  buffer: ArrayBuffer;
+  contentType: string;
+  filename: string;
+  kind: "image" | "video";
+}
+
+const RESOLVED_MEDIA_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
+
+async function readMediaBufferWithLimit(
+  response: Response,
+  label: string,
+  maxBytes: number,
+): Promise<ArrayBuffer> {
+  const declaredLength = Number.parseInt(response.headers.get("content-length") ?? "", 10);
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} exceeds the ${maxBytes} byte limit.`);
+  }
+
+  if (!response.body) {
+    const buffer = await response.arrayBuffer();
+    if (buffer.byteLength > maxBytes) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} exceeds the ${maxBytes} byte limit.`);
+    }
+    return buffer;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} exceeds the ${maxBytes} byte limit.`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return merged.buffer;
+}
+
+/**
+ * Resolves a ChatGPT file reference to raw bytes for either an image or a
+ * video, using the same magic-byte sniffing as the dashboard's multipart
+ * video/file upload route (server/utils/media-mime.ts) rather
+ * than trusting the declared content type. Unlike resolveGeneratedImageFile,
+ * this accepts video/* in addition to image/*.
+ */
+export async function resolveUserUploadedMediaFile(
+  file: ToolFileReference,
+): Promise<ResolvedMediaFile> {
+  const safeDownloadUrl = assertSafeDownloadUrl(file.download_url, `Attachment ${file.file_id}`);
+  const response = await fetch(safeDownloadUrl, {
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Failed to download attachment ${file.file_id}: ${response.status}`,
+    });
+  }
+
+  const buffer = await readMediaBufferWithLimit(
+    response,
+    `Attachment ${file.file_id}`,
+    MAX_VIDEO_BYTES,
+  );
+  const bytes = new Uint8Array(buffer);
+  if (bytes.byteLength < 64) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Invalid media payload from attachment ${file.file_id}: payload too small.`,
+    });
+  }
+
+  const sniffedContentType = sniffMediaMimeType(bytes);
+  const isVideo = VIDEO_MIME_TYPES.has(sniffedContentType);
+  const isImage = RESOLVED_MEDIA_IMAGE_TYPES.has(sniffedContentType);
+  if (!isVideo && !isImage) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `Attachment ${file.file_id} is not a supported image or video type.`,
+    );
+  }
+  if (isImage && bytes.byteLength > MAX_IMAGE_BYTES) {
+    throw createError({
+      statusCode: 413,
+      statusMessage: `Invalid image payload from attachment ${file.file_id}: payload exceeds ${MAX_IMAGE_BYTES} byte limit.`,
+    });
+  }
+
+  const filename = file.file_name ?? `${file.file_id}.${sniffedContentType.split("/")[1] ?? "bin"}`;
+  return { buffer, contentType: sniffedContentType, filename, kind: isVideo ? "video" : "image" };
 }
 
 export interface GoogleMapsSignals {

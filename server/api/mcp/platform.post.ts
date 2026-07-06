@@ -13,7 +13,7 @@ import { executePlatformMcpToolCall } from '~/server/utils/platform-mcp-executor
 import { PLATFORM_MCP_TOOLS } from '~/server/utils/platform-mcp-tools'
 import { PLATFORM_MCP_RESOURCES, readPlatformMcpResource } from '~/server/utils/platform-mcp-resources'
 import { PLATFORM_MCP_PROMPTS, renderPlatformMcpPrompt } from '~/server/utils/platform-mcp-prompts'
-import { rebuildPlatformKnowledgeIndex } from '~/server/utils/public-search'
+import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-search-rebuild'
 import {
   buildMcpAuthChallengeForError,
   buildMcpOAuthChallenge,
@@ -222,11 +222,7 @@ export default defineEventHandler(async (event) => {
         }
       }
       if (PLATFORM_KNOWLEDGE_MUTATION_TOOLS.has(toolName) && env.db) {
-        try {
-          await rebuildPlatformKnowledgeIndex(env, env.db)
-        } catch (error) {
-          console.error('[platform-mcp-search-rebuild] failed:', error)
-        }
+        schedulePlatformKnowledgeIndexRebuild(event, env, `platform MCP ${toolName}`, env.db)
       }
 
       return mcpSuccess(request.id, {

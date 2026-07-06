@@ -1,5 +1,6 @@
 import type { McpToolDefinition } from './shared'
 import { menuItemObject, menuObject, siteTool } from './shared'
+import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const MENUS_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -260,6 +261,27 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: { item: menuItemObject },
         required: ['item'],
+      },
+    }),
+  siteTool({
+      name: 'open_menu_item_media_upload',
+      description: 'Launches the inline media upload widget scoped to a specific menu item — image only for menu items today. After the widget reports a completed upload, call set_menu_item_image with the returned assetId and this menu_item_id.',
+      domain: 'menus',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      uiResourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
+      inputSchema: {
+        menu_item_id: { type: 'string' },
+      },
+      required: ['menu_item_id'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          launched: { type: 'boolean' },
+          resourceUri: { type: 'string' },
+          menu_item_id: { type: 'string' },
+        },
+        required: ['launched', 'resourceUri', 'menu_item_id'],
       },
     }),
   siteTool({

@@ -1,5 +1,6 @@
 import type { McpToolDefinition } from './shared'
 import { locationListItemObject, locationMutationResultObject, locationObject, openingHoursInputSchema, siteTool, specialHoursInputSchema } from './shared'
+import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const LOCATIONS_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -139,7 +140,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'set_location_hero_video',
-      description: 'Assign a saved video asset as a location hero video. Upload the video via the dashboard media library first, then call get_site_media_assets to find its asset id. Hero videos take display priority over any existing hero image for the same location.',
+      description: 'Assign a saved video asset as a location hero video. Upload the video first via open_media_upload (or upload_user_media if you already have a resolved file reference), then call get_site_media_assets to find its asset id. Hero videos take display priority over any existing hero image for the same location.',
       domain: 'locations',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -182,6 +183,28 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
       required: ['location_id'],
       outputSchema: {
         ...locationMutationResultObject,
+      },
+    }),
+  siteTool({
+      name: 'open_location_media_upload',
+      description: 'Launches the inline media upload widget scoped to a specific location\'s hero — image or video. After the widget reports a completed upload, call set_location_hero_image or set_location_hero_video with the returned assetId and this location_id.',
+      domain: 'locations',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      uiResourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
+      inputSchema: {
+        location_id: { type: 'string' },
+        accept: { type: 'string', enum: ['image', 'video', 'both'], description: 'Restrict the widget file picker. Defaults to both.' },
+      },
+      required: ['location_id'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          launched: { type: 'boolean' },
+          resourceUri: { type: 'string' },
+          location_id: { type: 'string' },
+        },
+        required: ['launched', 'resourceUri', 'location_id'],
       },
     }),
   siteTool({

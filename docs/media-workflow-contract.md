@@ -52,7 +52,8 @@ Related workflow helpers:
   - ChatGPT native image-generation output: `save_generated_image_file({ site_id, attachment_id, prompt })`
   - Raw base64 from a non-native image source: `save_generated_image({ site_id, image_data_base64, prompt })`
 - For user-attached ChatGPT images, use `upload_user_photo({ site_id, file, category, description })` and pass the attachment via the `file` argument so ChatGPT can rewrite the local mounted path into an authorized file reference before KrabiClaw receives it.
-- In the Client MCP ChatGPT app, this ChatGPT attachment path is the only supported user-photo path. Do not direct users to the KrabiClaw dashboard/media uploader for photos; reserve the dashboard media library handoff for videos.
+- `upload_user_media({ site_id, file, poster_file?, category, description })` is the canonical generic upload path for both images and videos — the content type is auto-detected from the file bytes. `upload_user_photo` remains a thin, image-only back-compat wrapper over the same underlying upload utility.
+- `open_media_upload` / `open_experience_media_upload` launch an inline MCP Apps widget so the user can pick or drag a file (image or video) without leaving the chat; the widget calls `upload_user_media` once a file is selected. This is now the primary video-upload path. The dashboard media library remains a fallback only for chat clients that do not support inline widgets.
 - Do not bypass the ChatGPT file-argument rewrite by fabricating `download_url` objects or inventing attachment transport.
 - Prefer business-level image workflows over generic file handoff when the user intent is domain-specific:
   - Generate into KrabiClaw first, persist to Cloudflare Images immediately, then assign by `assetId`
@@ -61,6 +62,13 @@ Related workflow helpers:
 - MCP tools should be coarse-grained and business-level:
   - `get_site_media_assets`
   - `upload_user_photo`
+  - `upload_user_media`
+  - `open_media_upload`
+  - `open_home_hero_media_upload`
+  - `open_location_media_upload`
+  - `open_experience_media_upload`
+  - `open_post_media_upload`
+  - `open_menu_item_media_upload`
   - `update_media_asset`
   - `delete_media_asset`
   - `save_generated_image`

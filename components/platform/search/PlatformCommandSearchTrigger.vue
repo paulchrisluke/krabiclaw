@@ -2,8 +2,8 @@
   <button
     type="button"
     :class="[
-      'group flex w-full items-center gap-3 rounded-xl border border-default bg-default/80 px-3 py-2.5 text-left transition hover:border-muted hover:bg-elevated',
-      compact ? 'justify-center px-2.5' : '',
+      'group flex w-full items-center gap-3 rounded-xl border border-default bg-default/80 py-2.5 text-left transition hover:border-muted hover:bg-elevated',
+      compact ? 'justify-center px-2.5' : 'px-3',
     ]"
     :aria-label="ariaLabel"
     @click="open"

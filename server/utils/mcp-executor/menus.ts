@@ -2,6 +2,8 @@ import type { McpExecutorContext } from './shared'
 import { queryFirst } from '~/server/db'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { createMenu, createMenuItem, deleteMenu, deleteMenuItem, deleteMenuSection, getMenuWithItems, getMenus, MenuNotFoundError, renameMenuSection, reorderMenuItems, updateMenu, updateMenuItem } from '~/server/utils/menu-management'
+import { renderStructuredResponse } from '~/server/utils/mcp-render'
+import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 import { NOT_HANDLED, isUniqueConstraintError, menuItemLookupKey, mutationContextPayload, normalizeMenuItemArgs, objectArray, omit, optionalString, requireActiveImageAsset, requiredString, resolveMenuLocationId, toolString } from './shared'
 
 function rethrowMenuOwnershipAsInvalidParams(error: unknown): never {
@@ -254,6 +256,18 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
           ),
         }),
       };
+    }
+    case "open_menu_item_media_upload": {
+      const menuItemId = requiredString(args, "menu_item_id");
+      return renderStructuredResponse(
+        {
+          launched: true,
+          resourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
+          menu_item_id: menuItemId,
+          context: { site_id: site.siteId, menu_item_id: menuItemId, accept: "image" },
+        },
+        "Media upload widget launched for this menu item.",
+      );
     }
     case "delete_menu_item": {
       const menuItemId = requiredString(args, "menu_item_id");

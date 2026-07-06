@@ -7,7 +7,7 @@ interface VerifyPublicMediaUrlOptions {
   attempts?: number
   fetchImpl?: typeof fetch
   retryDelaysMs?: number[]
-  sleepImpl?: (ms: number) => Promise<void>
+  sleepImpl?: (_ms: number) => Promise<void>
   timeoutMs?: number
 }
 
