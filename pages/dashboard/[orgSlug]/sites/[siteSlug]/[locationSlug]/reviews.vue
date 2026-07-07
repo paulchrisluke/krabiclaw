@@ -20,7 +20,13 @@
       </div>
 
       <div v-else class="space-y-3">
-        <div v-for="review in filteredReviews" :key="review.id" class="rounded-lg border border-default bg-default p-4">
+        <div
+          v-for="review in filteredReviews"
+          :id="`review-${review.id}`"
+          :key="review.id"
+          class="rounded-lg border bg-default p-4 transition-colors"
+          :class="review.id === highlightedReviewId ? 'border-primary ring-2 ring-primary' : 'border-default'"
+        >
           <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2">
@@ -194,6 +200,7 @@ interface CustomerPanel {
 
 const siteId = await useDashboardSiteId()
 const toast = useToast()
+const route = useRoute()
 const sitePublicUrl = ref<string | null>(null)
 const locations = ref<LocationRow[]>([])
 const reviews = ref<ReviewRow[]>([])
@@ -250,6 +257,16 @@ const filteredReviews = computed(() => reviews.value.filter((review) => {
   return locationMatches && statusMatches
 }))
 
+const highlightedReviewId = computed(() => typeof route.query.reply === 'string' ? route.query.reply : null)
+
+function scrollToHighlightedReview() {
+  const reviewId = highlightedReviewId.value
+  if (!reviewId) return
+  nextTick(() => {
+    document.getElementById(`review-${reviewId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value))
 }
@@ -275,6 +292,7 @@ async function loadReviews() {
       return (res.reviews ?? []).map(review => ({ ...review, locationTitle: location.title }))
     }))
     reviews.value = batches.flat()
+    scrollToHighlightedReview()
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load reviews', color: 'error' })
   } finally {

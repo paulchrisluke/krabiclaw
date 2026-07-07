@@ -263,15 +263,15 @@ test.describe('reply threading', () => {
     const inboxResponse = await page.goto(inboxUrl, { waitUntil: 'load' })
     expect(inboxResponse?.status()).toBeLessThan(400)
 
-    await expect(page.locator('body')).toContainText('Reservations')
-    await expect(page.getByRole('heading', { name: 'Reply to guest' })).toBeVisible()
+    await expect(page.locator('body')).toContainText('Inbox')
+    await expect(page.getByRole('heading', { name: 'Owner Reply Flow Test' })).toBeVisible()
     await expect(page.locator('body')).toContainText('Replies from this inbox are sent by email.')
 
-    await page.getByPlaceholder('Write your email reply...').fill(replyBody)
+    await page.getByPlaceholder('Write your reply…').fill(replyBody)
     await page.getByRole('button', { name: 'Send reply' }).click()
 
     await expect(page.locator('body')).toContainText('Reply sent')
-    await expect(page.getByRole('heading', { name: 'Reply to guest' })).toBeHidden()
+    await expect(page.locator('body')).toContainText(replyBody)
 
     const messages = await waitForSubmissionMessages(
       request,
