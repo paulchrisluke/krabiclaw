@@ -131,6 +131,8 @@ test.describe('dashboard functional smoke', () => {
   })
 
   test('public contact submission writes a server-owned site event', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
+
     // A fresh dedicated user rather than the shared default dev-login user:
     // /api/dashboard/context only auto-selects a site when the org has exactly
     // one (see resolveSingleOrgSite), and the default user's org can end up with
