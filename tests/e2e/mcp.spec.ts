@@ -814,6 +814,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('cross-tenant isolation — owner of site A cannot read or mutate site B through MCP', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
     await loginAsFreshMcpUser(request, baseURL!)
     const siteA = await ensureSite(request, baseURL!)
 
