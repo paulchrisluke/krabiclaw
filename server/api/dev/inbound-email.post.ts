@@ -1,4 +1,5 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import type { H3Event } from 'h3'
 import {
   buildReplyToAddress,
   getSubmissionOrgSite,
@@ -12,8 +13,8 @@ function timingSafeEqualText(a: string, b: string): boolean {
   const left = enc.encode(a)
   const right = enc.encode(b)
   if (left.length !== right.length) {
-    let noop = 0
-    for (let i = 0; i < left.length; i += 1) noop |= left[i]!
+    let _noop = 0
+    for (let i = 0; i < left.length; i += 1) _noop |= left[i]!
     return false
   }
   let diff = 0
@@ -21,7 +22,7 @@ function timingSafeEqualText(a: string, b: string): boolean {
   return diff === 0
 }
 
-function ensureDevAccess(event: any) {
+function ensureDevAccess(event: H3Event) {
   const devMode = import.meta.dev
   const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
   if (!devMode && !e2eOverride) {

@@ -2,7 +2,6 @@ import { createError, getHeader } from "h3";
 import {
   asMcpError,
   mcpFailure,
-  mcpProtocolError,
   mcpSuccess,
   MCP_ERROR,
   MCP_PROTOCOL_VERSION,

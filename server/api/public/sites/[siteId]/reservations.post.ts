@@ -8,6 +8,7 @@ import { generateReservationTimes, isStructuredOpeningHours } from '~/shared/res
 import { getReservationSlotAvailability } from '~/server/utils/reservations'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
+import { deleteCustomerIfUnlinked, findOrCreateCustomer } from '~/server/utils/customers'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
 // Fallback used only when a location has no structured opening_hours (e.g. Google Places imports,
@@ -118,6 +119,15 @@ export default defineEventHandler(async (event) => {
   const emailHash = await hashIdentifier(email)
   const cancellation = createReservationCancelToken()
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
+  const customer = await findOrCreateCustomer(db, {
+    organizationId: site.organization_id,
+    siteId,
+    name,
+    email,
+    phone,
+    source: 'reservation',
+    bookingAt: `${date}T${time}:00`,
+  })
 
   // Rate limiting (skipped in dev so local work and E2E can submit repeatedly)
   const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
@@ -139,10 +149,10 @@ export default defineEventHandler(async (event) => {
   // or unstructured hours), the WHERE clause is unconditionally true and the insert always runs.
   const insertResult = await execute(db, `
     INSERT INTO reservation_submissions (
-      id, organization_id, site_id, name, email, phone, date, time, guests, requests, ip_hash,
+      id, organization_id, site_id, customer_id, name, email, phone, date, time, guests, requests, ip_hash,
       cancellation_token_hash, cancellation_token_expires_at, location_id
     )
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     WHERE ? IS NULL OR (
       COALESCE((
         SELECT SUM(CASE WHEN guests = '8+' THEN 8 ELSE CAST(guests AS INTEGER) END)
@@ -154,6 +164,7 @@ export default defineEventHandler(async (event) => {
     id,
     site.organization_id,
     siteId,
+    customer.id,
     name,
     email,
     phone,
@@ -174,6 +185,7 @@ export default defineEventHandler(async (event) => {
   ])
 
   if (!insertResult?.meta?.changes) {
+    if (customer.created) await deleteCustomerIfUnlinked(db, customer.id)
     return jsonResponse({ error: 'This time is no longer available. Please choose another time.' }, { status: 409 })
   }
 
