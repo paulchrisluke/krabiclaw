@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const migrationSql = readFileSync('migrations/0032_goofy_aqueduct.sql', 'utf8')
+const postSlugIndexMigrationSql = readFileSync('migrations/0036_tough_glorian.sql', 'utf8')
 
 test('customers migration creates site-scoped customer identity table', () => {
   assert.match(migrationSql, /CREATE TABLE `customers`/)
@@ -22,4 +23,11 @@ test('customers migration links booking tables to customers', () => {
 
 test('customers migration adds Better Auth anonymous support', () => {
   assert.match(migrationSql, /ALTER TABLE `user` ADD `isAnonymous` integer DEFAULT 0 NOT NULL/)
+})
+
+test('post slug index migration deduplicates existing slugs before recreating unique index', () => {
+  assert.match(postSlugIndexMigrationSql, /WITH duplicate_post_slugs AS/)
+  assert.match(postSlugIndexMigrationSql, /ROW_NUMBER\(\) OVER \(PARTITION BY site_id, slug/)
+  assert.match(postSlugIndexMigrationSql, /UPDATE posts/)
+  assert.match(postSlugIndexMigrationSql, /CREATE UNIQUE INDEX `posts_site_slug_idx`/)
 })

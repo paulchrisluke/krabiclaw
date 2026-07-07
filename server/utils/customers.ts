@@ -89,6 +89,26 @@ async function findExistingCustomer(
   return null
 }
 
+async function hasCustomerEmailConflict(
+  db: DbClient,
+  siteId: string,
+  emailNormalized: string | null,
+  customerId: string,
+): Promise<boolean> {
+  if (!emailNormalized) return false
+
+  const existing = await queryFirst<{ id: string }>(db, `
+    SELECT id
+    FROM customers
+    WHERE site_id = ?
+      AND email_normalized = ?
+      AND id != ?
+    LIMIT 1
+  `, [siteId, emailNormalized, customerId])
+
+  return Boolean(existing)
+}
+
 export async function findOrCreateCustomer(
   db: DbClient,
   input: FindOrCreateCustomerInput,
@@ -158,25 +178,51 @@ export async function findOrCreateCustomer(
   }
 }
 
-export async function recordCustomerBooking(
+async function updateCustomerBooking(
   db: DbClient,
   customerId: string,
   input: FindOrCreateCustomerInput,
+  includeEmail: boolean,
 ): Promise<void> {
   const email = input.email?.trim() || null
   const emailNormalized = normalizeCustomerEmail(email)
   const phone = input.phone?.trim() || null
   const phoneNormalized = normalizeCustomerPhone(phone)
-  const emailHash = emailNormalized ? await hashIdentifier(emailNormalized) : null
+  const emailHash = includeEmail && emailNormalized ? await hashIdentifier(emailNormalized) : null
   const name = input.name?.trim() || null
   const bookingAt = input.bookingAt ?? new Date().toISOString()
+
+  if (includeEmail) {
+    await execute(db, `
+      UPDATE customers
+      SET name = COALESCE(NULLIF(?, ''), name),
+          email = COALESCE(NULLIF(?, ''), email),
+          email_normalized = COALESCE(?, email_normalized),
+          email_hash = COALESCE(?, email_hash),
+          phone = COALESCE(NULLIF(?, ''), phone),
+          phone_normalized = COALESCE(?, phone_normalized),
+          source = CASE WHEN source = 'manual' THEN source ELSE ? END,
+          last_booking_at = ?,
+          updated_at = ?
+      WHERE id = ?
+    `, [
+      name,
+      email,
+      emailNormalized,
+      emailHash,
+      phone,
+      phoneNormalized,
+      input.source,
+      bookingAt,
+      new Date().toISOString(),
+      customerId,
+    ])
+    return
+  }
 
   await execute(db, `
     UPDATE customers
     SET name = COALESCE(NULLIF(?, ''), name),
-        email = COALESCE(NULLIF(?, ''), email),
-        email_normalized = COALESCE(?, email_normalized),
-        email_hash = COALESCE(?, email_hash),
         phone = COALESCE(NULLIF(?, ''), phone),
         phone_normalized = COALESCE(?, phone_normalized),
         source = CASE WHEN source = 'manual' THEN source ELSE ? END,
@@ -185,9 +231,6 @@ export async function recordCustomerBooking(
     WHERE id = ?
   `, [
     name,
-    email,
-    emailNormalized,
-    emailHash,
     phone,
     phoneNormalized,
     input.source,
@@ -195,6 +238,23 @@ export async function recordCustomerBooking(
     new Date().toISOString(),
     customerId,
   ])
+}
+
+export async function recordCustomerBooking(
+  db: DbClient,
+  customerId: string,
+  input: FindOrCreateCustomerInput,
+): Promise<void> {
+  const email = input.email?.trim() || null
+  const emailNormalized = normalizeCustomerEmail(email)
+  const includeEmail = !(await hasCustomerEmailConflict(db, input.siteId, emailNormalized, customerId))
+
+  try {
+    await updateCustomerBooking(db, customerId, input, includeEmail)
+  } catch (error) {
+    if (!includeEmail || !isUniqueCustomerConflict(error)) throw error
+    await updateCustomerBooking(db, customerId, input, false)
+  }
 }
 
 export async function deleteCustomerIfUnlinked(db: DbClient, customerId: string): Promise<void> {
@@ -223,7 +283,13 @@ export async function linkAnonymousCustomerToUser(
   const now = new Date().toISOString()
   for (const row of anonymousRows) {
     const existingForRealUser = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM customers WHERE site_id = ? AND user_id = ? AND id != ? LIMIT 1
+      SELECT id
+      FROM customers
+      WHERE site_id = ?
+        AND user_id = ?
+        AND id != ?
+        AND status = 'active'
+      LIMIT 1
     `, [row.site_id, realUserId, row.id])
 
     if (existingForRealUser) {
