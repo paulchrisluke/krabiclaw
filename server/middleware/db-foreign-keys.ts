@@ -1,5 +1,5 @@
 import { cloudflareEnv, isInternalSelfFetch } from '~/server/utils/api-response'
-import { execute } from '~/server/db'
+import { rawClient } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   // Nested self-fetches (i18n/icon/internal API calls during SSR) are already
@@ -10,6 +10,6 @@ export default defineEventHandler(async (event) => {
   const db = cloudflareEnv(event).db
 
   if (db) {
-    await execute(db, 'PRAGMA foreign_keys = ON')
+    await rawClient(db).prepare('PRAGMA foreign_keys = ON').run()
   }
 })

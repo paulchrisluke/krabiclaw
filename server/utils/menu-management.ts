@@ -10,6 +10,7 @@ import type {
 } from "../types/menu";
 import { normalizePriceAmount, assertValidSaleWindow } from "~/shared/money";
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from "~/server/db";
+import { fireSiteEventSafe } from "~/server/utils/site-events";
 
 const MAX_SUFFIX_ATTEMPTS = 50;
 
@@ -635,6 +636,18 @@ export async function createMenu(
     throw new Error("Failed to create menu");
   }
 
+  await fireSiteEventSafe({
+    db,
+    organizationId,
+    siteId,
+    locationId,
+    actorId: createdBy,
+    eventType: "menu.created",
+    entityType: "menu",
+    entityId: id,
+    metadata: { name: menu.name },
+  })
+
   return {
     id,
     organization_id: organizationId,
@@ -826,6 +839,21 @@ export async function createMenuItem(
   }
 
   await ensureMenuSectionInOrder(db, menuId, item.section, createdBy);
+
+  await fireSiteEventSafe({
+    db,
+    organizationId,
+    siteId,
+    actorId: createdBy,
+    eventType: "menu.item_added",
+    entityType: "menu_item",
+    entityId: id,
+    metadata: {
+      menu_id: menuId,
+      section: item.section,
+      name: item.name,
+    },
+  })
 
   return mapMenuItem(createdItem);
 }
@@ -1024,6 +1052,19 @@ export async function updateMenuItem(
     }
   }
 
+  await fireSiteEventSafe({
+    db,
+    organizationId,
+    siteId,
+    actorId: updatedBy,
+    eventType: "menu.item_updated",
+    entityType: "menu_item",
+    entityId: menuItemId,
+    metadata: {
+      menu_id: existing.menu_id,
+    },
+  })
+
   return mapMenuItem(updatedItem);
 }
 
@@ -1070,6 +1111,20 @@ export async function deleteMenuItem(
       );
     }
   }
+
+  await fireSiteEventSafe({
+    db,
+    organizationId,
+    siteId,
+    actorId: updatedBy ?? null,
+    eventType: "menu.item_deleted",
+    entityType: "menu_item",
+    entityId: menuItemId,
+    metadata: {
+      menu_id: existing.menu_id,
+      section: existing.section,
+    },
+  })
 
   return true;
 }

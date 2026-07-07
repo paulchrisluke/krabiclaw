@@ -321,7 +321,7 @@
     "@babel/helper-string-parser" "^7.29.7"
     "@babel/helper-validator-identifier" "^7.29.7"
 
-"@better-auth/core@1.6.18", "@better-auth/core@^1.6.18":
+"@better-auth/core@1.6.18":
   version "1.6.18"
   resolved "https://registry.yarnpkg.com/@better-auth/core/-/core-1.6.18.tgz#a9e7d5582ab51206a410a534b319f009ebd78ba5"
   integrity sha512-mlPZBKHY6gZdJtuY6LiuKjN2r8AWu0LCss7CEnI0xMbE9D7Sw6WofwPPwiMm+0Hi0QBKIaZGYRmR7/WasbOs+Q==
@@ -350,7 +350,7 @@
   resolved "https://registry.yarnpkg.com/@better-auth/mongo-adapter/-/mongo-adapter-1.6.18.tgz#2c50c4d63cb46266f9cb6b37d443443ea4b72b17"
   integrity sha512-A6aD3sKsptQl5sBq2wFoLGckEIM5Pa93T//R1DR+erAZOMejZGyaqYaPXWwRk7ZejFOyrftMm98OP0IJsz52gg==
 
-"@better-auth/oauth-provider@^1.6.18":
+"@better-auth/oauth-provider@1.6.18":
   version "1.6.18"
   resolved "https://registry.yarnpkg.com/@better-auth/oauth-provider/-/oauth-provider-1.6.18.tgz#16dbde347f9ba06b17ad7dbad5f2c64eb01b4c2e"
   integrity sha512-Ae6d9btZQoqXAkXqYpxagcf6u4Q3oT5OkBy/RTw1Uox5s+pqodl5EQYWXfHjiuLfO/NwfjGDxeD3j5cTIkCfCg==
@@ -6013,7 +6013,7 @@ baseline-browser-mapping@^2.10.12:
   resolved "https://registry.npmjs.org/baseline-browser-mapping/-/baseline-browser-mapping-2.10.25.tgz"
   integrity sha512-QO/VHsXCQdnzADMfmkeOPvHdIAkoB7i0/rGjINPJEetLx75hNttVWGQ/jycHUDP9zZ9rupbm60WRxcwViB0MiA==
 
-better-auth@^1.6.18:
+better-auth@1.6.18:
   version "1.6.18"
   resolved "https://registry.yarnpkg.com/better-auth/-/better-auth-1.6.18.tgz#3dc4da07d9d8da6ec4a6f09cc58f01ae5d82cf83"
   integrity sha512-6jONqD0gNjE0S6ehhSZhZ7We0rBwjAzbqnQMJQg/zY0387M+agak7VsOAuE78r7Z0Qv7C/KBRKhHSuyJDQ4iLw==

@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
   `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const post = await getPost(db, site.organization_id, siteId, postId)
+  const post = await getPost(db, site.organization_id, siteId, postId, env)
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
 
   return jsonResponse({ success: true, post })

@@ -1,4 +1,5 @@
 import { updateSubscriptionQuantity } from "~/server/utils/billing";
+import { fireSiteEventSafe } from "~/server/utils/site-events";
 import { execute, executeBatch, queryFirst } from "~/server/db";
 import { isValidTimezone, normalizeTimezone } from "~/utils/timezone";
 
@@ -22,6 +23,7 @@ export interface CreateLocationInput {
   email?: string | null;
   website_url?: string | null;
   maps_url?: string | null;
+  google_review_url?: string | null;
   google_place_id?: string | null;
   description?: string | null;
   short_description?: string | null;
@@ -58,6 +60,7 @@ export interface LocationRecord {
   email: string | null;
   website_url: string | null;
   maps_url: string | null;
+  google_review_url: string | null;
   google_place_id: string | null;
   rating: number | null;
   review_count: number | null;
@@ -268,7 +271,7 @@ async function loadLocation(
   siteId: string,
   locationIdOrSlug: string,
 ) {
-  const columns = `id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
+  const columns = `id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_review_url, google_place_id,
            rating, review_count, description, short_description, status, is_primary,
            address, opening_hours, special_hours, hero_image_asset_id, hero_video_asset_id, price_level,
            facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
@@ -401,11 +404,11 @@ export async function createLocation(
         query: `
           INSERT INTO business_locations (
             id, organization_id, site_id, title, slug, city, neighborhood, phone, email, website_url, maps_url,
-            google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
+            google_review_url, google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
             price_level, facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
             hero_image_asset_id, hero_video_asset_id, notification_phone, timezone, is_primary, status, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
         `,
         params: [
           id,
@@ -419,6 +422,7 @@ export async function createLocation(
           input.email ?? null,
           input.website_url ?? null,
           input.maps_url ?? null,
+          input.google_review_url ?? null,
           input.google_place_id ?? null,
           input.description ?? null,
           input.short_description ?? null,
@@ -457,6 +461,20 @@ export async function createLocation(
 
       await executeBatch(db, statements);
       const location = await loadLocation(db, organizationId, siteId, id);
+      await fireSiteEventSafe({
+        db,
+        organizationId,
+        siteId,
+        locationId: id,
+        actorId: userId,
+        eventType: "location.created",
+        entityType: "business_location",
+        entityId: id,
+        metadata: {
+          title,
+          is_primary: isPrimary,
+        },
+      })
       void updateSubscriptionQuantity(env, db, organizationId).catch(
         (error) => {
           console.error(
@@ -595,6 +613,7 @@ export async function updateLocation(
     "tiktok_url",
     "website_url",
     "maps_url",
+    "google_review_url",
     "google_place_id",
     "hero_image_asset_id",
     "hero_video_asset_id",
@@ -752,6 +771,19 @@ export async function updateLocation(
           siteId,
           locationId,
         );
+        await fireSiteEventSafe({
+          db,
+          organizationId,
+          siteId,
+          locationId,
+          actorId: userId,
+          eventType: "location.updated",
+          entityType: "business_location",
+          entityId: locationId,
+          metadata: {
+            title: location?.title ?? null,
+          },
+        })
         return { status: 200, data: { success: true, location } };
       } catch (error) {
         if (isUniqueConstraintError(error)) continue;
@@ -773,6 +805,19 @@ export async function updateLocation(
   params.push(locationId, organizationId, siteId);
   await runUpdate(params);
   const location = await loadLocation(db, organizationId, siteId, locationId);
+  await fireSiteEventSafe({
+    db,
+    organizationId,
+    siteId,
+    locationId,
+    actorId: userId,
+    eventType: "location.updated",
+    entityType: "business_location",
+    entityId: locationId,
+    metadata: {
+      title: location?.title ?? null,
+    },
+  })
   return { status: 200, data: { success: true, location } };
 }
 

@@ -100,7 +100,7 @@
                         class="text-default no-underline hover:underline underline-offset-2"
                       >{{ item.name }}</NuxtLink>
                       <span v-else class="text-default opacity-50">{{ item.name }}</span>
-                      <span v-if="!item.available" class="inline-flex shrink-0 items-center rounded-full border border-default px-2 py-0.5 text-xs font-medium text-muted">Unavailable</span>
+                      <SayaBadgeUnavailable v-if="!item.available" text="Unavailable" />
                       <span
                         v-for="tag in getDietaryTags(item)"
                         :key="tag"

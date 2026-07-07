@@ -1,6 +1,6 @@
 // POST /api/contact - Platform contact form submission via Resend
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { hashEmail, shouldSendRealEmail } from '~/server/utils/email-delivery'
+import { hashEmail, isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { execute } from '~/server/db'
 import { notifyPlatformContactSubmitted } from '~/server/utils/notifications'
 
@@ -124,6 +124,11 @@ export default defineEventHandler(async (event) => {
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!emailPattern.test(email)) {
     return jsonResponse({ error: 'Invalid email address' }, { status: 400 })
+  }
+  // Reserved test domains (example.com, wa-verify@example.com, etc.) are guaranteed to
+  // hard-bounce and must never be accepted where the environment sends real email.
+  if (shouldSendRealEmail(cloudflareEnv(event)) && isReservedTestDomain(email)) {
+    return jsonResponse({ error: 'Please enter a real email address.' }, { status: 422 })
   }
 
   // Rate limiting (simplified - in production use KV or proper rate limit store)

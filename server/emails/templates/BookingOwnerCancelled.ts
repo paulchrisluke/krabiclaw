@@ -16,13 +16,21 @@ export default defineComponent({
     notes: { type: String as PropType<string | null>, default: null },
     wasConfirmed: { type: Boolean, required: true },
     platformDomain: { type: String, required: true },
+    replyUrl: { type: String as PropType<string | null>, default: null },
   },
   setup(props) {
     return () => {
       const title = props.wasConfirmed
         ? `Booking cancelled for ${props.guestName}`
         : `Booking request cancelled by ${props.guestName}`
-      return h(EmailShell, { preheader: title, title, siteName: props.siteName, platformDomain: props.platformDomain }, () => [
+      return h(EmailShell, {
+        preheader: title,
+        title,
+        siteName: props.siteName,
+        platformDomain: props.platformDomain,
+        ctaUrl: props.replyUrl ?? undefined,
+        ctaText: props.replyUrl ? 'View in dashboard' : undefined,
+      }, () => [
         h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `${props.guestName} cancelled their booking.`),
         h(EmailDetails, {
           rows: [

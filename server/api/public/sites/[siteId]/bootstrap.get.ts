@@ -35,6 +35,7 @@ import {
 } from "~/server/utils/booking-policies";
 import { getCloudflareWaitUntil } from "~/server/utils/mcp-route-helpers";
 import { isPreviewContext } from "~/server/utils/tenant-hosts";
+import { getPublishedPosts } from "~/server/utils/post-management";
 
 function groupContentBlocks(rows: SiteContent[]): Array<SiteContent & { _section: string }> {
   const groups: Record<string, SiteContent & { _section: string }> = {}
@@ -372,12 +373,10 @@ export default defineEventHandler(async (event) => {
     idxLocale = -1,
     idxExpCount = -1;
   let idxReviews = -1,
-    idxPosts = -1,
     idxLocReviews = -1;
   let idxFullReviews = -1,
     idxPhotos = -1,
-    idxQa = -1,
-    idxLocPosts = -1;
+    idxQa = -1;
   let idxSourceContent = -1,
     idxContentTranslations = -1;
   let idxMenus = -1,
@@ -594,25 +593,9 @@ export default defineEventHandler(async (event) => {
       [siteId],
     );
 
-  if (needsGlobalPosts)
-    idxPosts = push(
-      `SELECT p.id, p.title, p.body, p.published_at, ma.public_url, ma.kind
-       FROM posts p
-       LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
-       WHERE p.site_id = ? AND p.status = 'published'
-       ORDER BY p.published_at DESC LIMIT ${page === "posts" ? 50 : 6}`,
-      [siteId],
-    );
-
-  if (locationId && dataType === "posts")
-    idxLocPosts = push(
-      `SELECT p.id, p.title, p.body, p.published_at, p.created_at, ma.public_url, ma.kind
-       FROM posts p
-       LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
-       WHERE p.site_id = ? AND p.location_id = ? AND p.status = 'published'
-       ORDER BY p.published_at DESC LIMIT 50`,
-      [siteId, locationId],
-    );
+  // Posts are fetched separately via getPublishedPosts() below, which returns the fully
+  // formatted PublishedPostSummary shape (slug, canonical_url, gallery media) that this raw
+  // row shape doesn't have — no point running an equivalent query here just to discard it.
 
   if (locationId)
     idxLocReviews = push(
@@ -701,10 +684,6 @@ export default defineEventHandler(async (event) => {
     idxReviews >= 0
       ? (batchResults[idxReviews] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
-  const postRows =
-    idxPosts >= 0
-      ? (batchResults[idxPosts] as { results: Record<string, unknown>[] })
-      : { results: [] as Record<string, unknown>[] };
   const locationReviewRows =
     idxLocReviews >= 0
       ? (batchResults[idxLocReviews] as { results: Record<string, unknown>[] })
@@ -720,10 +699,6 @@ export default defineEventHandler(async (event) => {
   const qaRows =
     idxQa >= 0
       ? (batchResults[idxQa] as { results: Record<string, unknown>[] })
-      : { results: [] as Record<string, unknown>[] };
-  const locPostRows =
-    idxLocPosts >= 0
-      ? (batchResults[idxLocPosts] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
   const localeRows = batchResults[idxLocale] as {
     results: {
@@ -917,6 +892,11 @@ export default defineEventHandler(async (event) => {
       ? (await attachAvailabilitySummaries(db, orgId, siteId, [experienceDetailRaw]))[0]
       : null;
 
+  const [globalPublishedPosts, locationPublishedPosts] = await Promise.all([
+    needsGlobalPosts ? getPublishedPosts(db, siteId, env, page === "posts" ? 50 : 6) : Promise.resolve([]),
+    locationId && dataType === "posts" ? getPublishedPosts(db, siteId, env, 50, locationId) : Promise.resolve([]),
+  ]);
+
   // Shape locations
   const locations = (locRows.results ?? []).map((loc) => {
     const heroVideoUrl = loc.hero_video_public_url as string | null;
@@ -1006,13 +986,7 @@ export default defineEventHandler(async (event) => {
       : null,
     reviews: reviewRows.results ?? [],
     media: [],
-    posts: (postRows.results ?? []).map((p) => ({
-      name: `posts/${p.id}`,
-      summary: p.body,
-      title: p.title ?? "",
-      createTime: p.published_at ?? "",
-      media: p.public_url ? [{ googleUrl: p.public_url, mediaFormat: p.kind === "video" ? "VIDEO" : "IMAGE" }] : [],
-    })),
+    posts: globalPublishedPosts,
     syncedAt: primary?.last_synced_at ?? null,
   };
 
@@ -1173,13 +1147,7 @@ export default defineEventHandler(async (event) => {
     // Type G — posts for /locations/[slug]/posts
     ...(dataType === "posts"
       ? {
-          postsList: (locPostRows?.results ?? []).map((p) => ({
-            name: `posts/${p.id}`,
-            summary: p.body,
-            title: p.title ?? "",
-            createTime: p.published_at ?? p.created_at ?? "",
-            media: p.public_url ? [{ googleUrl: p.public_url, mediaFormat: p.kind === "video" ? "VIDEO" : "IMAGE" }] : [],
-          })),
+          postsList: locationPublishedPosts,
         }
       : {}),
     // Site locales + experiences — always included for header/nav

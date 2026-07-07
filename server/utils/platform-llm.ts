@@ -5,6 +5,7 @@ import {
   resolveContentComponentsMedia,
   type PlatformFaqComponentData,
   type PlatformHowToComponentData,
+  type PlatformAiAssistanceComponentData,
   type PlatformContentComponent,
 } from './platform-content.ts'
 import { blogCategoryToSlug, slugToBlogCategory } from '../../utils/blog-categories.ts'
@@ -148,12 +149,36 @@ function serializeHowToMarkdown(component: PlatformContentComponent) {
   return normalizeWhitespace(lines.join('\n'))
 }
 
+function serializeAiAssistanceMarkdown(component: PlatformContentComponent) {
+  if (component.type !== 'ai_assistance') return ''
+  const data = component.data as PlatformAiAssistanceComponentData
+  const validPrompts = (data.prompts ?? [])
+    .filter(item => item.prompt?.trim())
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+
+  if (!validPrompts.length) return ''
+
+  const lines: string[] = [`## ${normalizeWhitespace(component.label) || 'AI Assistance'}`]
+  const intro = normalizeWhitespace(data.intro)
+  if (intro) lines.push('', intro)
+
+  for (const prompt of validPrompts) {
+    const title = normalizeWhitespace(prompt.title)
+    const description = normalizeWhitespace(prompt.description)
+    if (title) lines.push('', `### ${title}`)
+    if (description) lines.push('', description)
+    lines.push('', '```text', prompt.prompt.trim(), '```')
+  }
+
+  return normalizeWhitespace(lines.join('\n'))
+}
+
 function serializeComponentMarkdown(component: PlatformContentComponent) {
   if (component.render_enabled === false) return ''
   if (component.status !== 'active') return ''
   if (component.type === 'faq') return serializeFaqMarkdown(component)
   if (component.type === 'how_to') return serializeHowToMarkdown(component)
-  return ''
+  return serializeAiAssistanceMarkdown(component)
 }
 
 export function renderContentMarkdownWithComponents(body: string, components: PlatformContentComponent[]) {
@@ -165,11 +190,12 @@ export function renderContentMarkdownWithComponents(body: string, components: Pl
   const queues = {
     faq: activeComponents.filter(component => component.type === 'faq'),
     how_to: activeComponents.filter(component => component.type === 'how_to'),
+    ai_assistance: activeComponents.filter(component => component.type === 'ai_assistance'),
   }
   const usedComponentIds = new Set<string>()
   const replacedBody = body.replace(COMPONENT_EMBED_REGEX, (_match, quoted, singleQuoted, bare) => {
     const type = String(quoted ?? singleQuoted ?? bare ?? '').trim()
-    if (type !== 'faq' && type !== 'how_to') return ''
+    if (type !== 'faq' && type !== 'how_to' && type !== 'ai_assistance') return ''
     const component = queues[type].shift()
     if (!component) return ''
     usedComponentIds.add(component.id)

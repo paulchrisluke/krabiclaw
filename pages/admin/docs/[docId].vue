@@ -50,6 +50,33 @@
           </UFormField>
         </div>
 
+        <div class="grid gap-4 border-t border-default pt-4 sm:grid-cols-2 lg:grid-cols-3">
+          <UFormField label="Nav Section" hint="Optional">
+            <USelect
+              v-model="form.nav_section"
+              :items="navSectionItems"
+              value-key="value"
+              label-key="label"
+              placeholder="Use category default"
+            />
+          </UFormField>
+          <UFormField label="Nav Title" hint="Optional">
+            <UInput v-model="form.nav_title" placeholder="Short sidebar label" />
+          </UFormField>
+          <UFormField label="Nav Order" hint="Optional">
+            <UInput v-model="form.nav_order" type="number" min="0" placeholder="10" />
+          </UFormField>
+          <UFormField label="Section Order" hint="Optional">
+            <UInput v-model="form.nav_section_order" type="number" min="0" placeholder="20" />
+          </UFormField>
+          <UFormField label="Featured Order" hint="Optional">
+            <UInput v-model="form.featured_order" type="number" min="0" placeholder="1" />
+          </UFormField>
+          <UFormField label="Hide From Nav">
+            <USwitch v-model="form.hide_from_nav" />
+          </UFormField>
+        </div>
+
         <UFormField label="Excerpt">
           <UTextarea v-model="form.excerpt" :rows="3" placeholder="One or two sentences that summarize this documentation." />
         </UFormField>
@@ -219,9 +246,11 @@ import { getErrorMessage } from '~/utils/errors'
 import { createEmptyFaqItem, createEmptyHowToStep } from '~/composables/useBlogForm'
 import { useDocForm } from '~/composables/useDocForm'
 import { categoryToSlug } from '~/utils/docs-categories'
+import { PLATFORM_DOC_NAV_SECTION_LABELS } from '~/utils/platform-content-nav'
+import { parseOptionalNumber } from '~/utils/optional-number'
 
 interface DocComponent {
-  type: 'faq' | 'how_to'
+  type: 'faq' | 'how_to' | 'ai_assistance'
   label?: string | null
   status?: 'active' | 'inactive' | null
   render_enabled?: boolean | null
@@ -229,6 +258,7 @@ interface DocComponent {
   data?: {
     items?: Array<{ question?: string | null; answer?: string | null }>
     steps?: Array<{ name?: string | null; text?: string | null; image_asset_id?: string | null; url?: string | null }>
+    prompts?: Array<{ title?: string | null; prompt?: string | null; description?: string | null; copy_label?: string | null }>
   } | null
 }
 
@@ -238,6 +268,12 @@ interface Doc {
   slug?: string | null
   excerpt?: string | null
   category?: string | null
+  nav_section?: string | null
+  nav_title?: string | null
+  nav_order?: number | null
+  nav_section_order?: number | null
+  hide_from_nav?: boolean | number | null
+  featured_order?: number | null
   difficulty_level?: string | null
   seo_description?: string | null
   seo_keywords?: string | null
@@ -262,6 +298,10 @@ const docId = route.params.docId as string
 const { form, canSave, canPublish, handleImageChange } = useDocForm()
 const categoryItems = computed(() => categories.map((item) => ({ label: item, value: item })))
 const difficultyItems = computed(() => difficultyLevels.map((item) => ({ label: item, value: item })))
+const navSectionItems = computed(() => [
+  { label: 'Use category default', value: '' },
+  ...PLATFORM_DOC_NAV_SECTION_LABELS.map((item) => ({ label: item, value: item })),
+])
 const robotsItems = [
   { label: 'Default (index,follow)', value: '' },
   { label: 'index,follow', value: 'index,follow' },
@@ -337,6 +377,11 @@ function buildPayload() {
     ...form,
     canonical_url: form.canonical_url.trim() || null,
     robots: form.robots.trim() || null,
+    nav_section: form.nav_section.trim() || null,
+    nav_title: form.nav_title.trim() || null,
+    nav_order: parseOptionalNumber(form.nav_order),
+    nav_section_order: parseOptionalNumber(form.nav_section_order),
+    featured_order: parseOptionalNumber(form.featured_order),
     faq_items: form.faq_items
       .map(item => ({ question: item.question.trim(), answer: item.answer.trim() }))
       .filter(item => item.question && item.answer),
@@ -361,6 +406,12 @@ async function loadDoc() {
     form.title = res.doc.title
     form.excerpt = res.doc.excerpt ?? ''
     form.category = res.doc.category ?? ''
+    form.nav_section = res.doc.nav_section ?? ''
+    form.nav_title = res.doc.nav_title ?? ''
+    form.nav_order = res.doc.nav_order != null ? String(res.doc.nav_order) : ''
+    form.nav_section_order = res.doc.nav_section_order != null ? String(res.doc.nav_section_order) : ''
+    form.hide_from_nav = Boolean(res.doc.hide_from_nav)
+    form.featured_order = res.doc.featured_order != null ? String(res.doc.featured_order) : ''
     form.difficulty_level = res.doc.difficulty_level ?? ''
     form.seo_description = res.doc.seo_description ?? ''
     form.seo_keywords = res.doc.seo_keywords ?? ''

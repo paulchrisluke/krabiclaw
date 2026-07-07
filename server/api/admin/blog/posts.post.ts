@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { createPlatformBlogPost } from '~/server/utils/platform-content'
+import { platformContentNavInput } from '~/server/utils/platform-content-request'
 import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-search-rebuild'
 
 import type { PlatformBlogPostRequestBody } from '~/server/types/platform-content'
@@ -30,6 +31,7 @@ export default defineEventHandler(async (event) => {
       body: body.body ?? '',
       excerpt: body.excerpt ?? null,
       category: body.category ?? null,
+      ...platformContentNavInput(body, { defaultHideFromNav: false }),
       seo_description: body.seo_description ?? null,
       seo_keywords: body.seo_keywords ?? null,
       canonical_url: body.canonical_url ?? null,

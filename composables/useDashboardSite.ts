@@ -55,7 +55,16 @@ export function useDashboardSite() {
   const pending = useState<boolean>('dashboard:site-context:pending', () => false)
 
   async function refresh() {
-    const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined
+    // dashboard-site-header.client.ts attaches x-dashboard-site-slug on every /api/dashboard/*
+    // call, but only client-side. On SSR (a direct full-page load of a nested
+    // /dashboard/{orgSlug}/sites/{siteSlug}/... route) that plugin never runs, so without this
+    // the request falls back to context.ts's "auto-select if the org has exactly one site" path
+    // and returns site: null for any org with 2+ sites. Read the same siteSlug route segment
+    // here so SSR resolves the right site too.
+    const route = useRoute()
+    const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
+    const headers = new Headers(import.meta.server ? useRequestHeaders(['cookie']) : undefined)
+    if (siteSlug) headers.set('x-dashboard-site-slug', siteSlug)
 
     pending.value = true
     try {

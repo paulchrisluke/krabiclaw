@@ -108,6 +108,12 @@ function platformDomainCandidates(env: DomainEnv): string[] {
     .map((value) => value.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase())
 }
 
+// Non-throwing variant of platformHostname for callers building a best-effort fallback URL
+// (e.g. a tenant subdomain link) where an unconfigured env should not break the response.
+export function platformHostnameFallback(env: DomainEnv): string {
+  return platformDomainCandidates(env)[0]!
+}
+
 export function normalizeDomain(domain: string): string {
   if (!domain) return ''
 

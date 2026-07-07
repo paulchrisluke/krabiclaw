@@ -17,15 +17,18 @@ import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-s
 import {
   buildMcpAuthChallengeForError,
   buildMcpOAuthChallenge,
+  getCloudflareWaitUntil,
   isMcpMutatingTool,
   mcpAuthRequiredResult,
   setMcpAuthChallenge,
 } from '~/server/utils/mcp-route-helpers'
 import { purgeSiteKvCache } from '~/server/utils/edge-cache'
 import { getPlatformHtmlCacheHosts } from '~/server/utils/tenant-hosts'
+import { logMcpToolCallEvent } from '~/server/utils/mcp-telemetry'
 
 const PLATFORM_AUTH_DESCRIPTION = 'Connect the KrabiClaw platform admin app to continue.'
 const PLATFORM_AUTH_REQUIRED_TEXT = 'Authentication required: connect the KrabiClaw platform admin app to continue.'
+const PLATFORM_MCP_TOOL_DOMAIN = 'platform_admin'
 const PLATFORM_KNOWLEDGE_MUTATION_TOOLS = new Set([
   'create_platform_blog_post',
   'update_platform_blog_post',
@@ -41,6 +44,36 @@ const PLATFORM_KNOWLEDGE_MUTATION_TOOLS = new Set([
 
 function resourceMetadataUrl(baseUrl: string) {
   return `${baseUrl}/.well-known/oauth-protected-resource/platform-mcp`
+}
+
+function summarizePayloadShape(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {
+      type: Array.isArray(value) ? 'array' : typeof value,
+    }
+  }
+
+  const keys = Object.keys(value as Record<string, unknown>)
+  return {
+    type: 'object',
+    key_count: keys.length,
+    keys: keys.slice(0, 20),
+  }
+}
+
+function logPlatformMcpEventDetached(
+  event: Parameters<typeof getCloudflareWaitUntil>[0],
+  db: D1Database | undefined,
+  input: Parameters<typeof logMcpToolCallEvent>[1],
+) {
+  if (!db) return
+  const logPromise = logMcpToolCallEvent(db, {
+    ...input,
+    mcpSurface: 'platform',
+  })
+  const waitUntil = getCloudflareWaitUntil(event)
+  if (waitUntil) waitUntil(logPromise)
+  else logPromise.catch(() => {})
 }
 
 export default defineEventHandler(async (event) => {
@@ -73,6 +106,14 @@ export default defineEventHandler(async (event) => {
         ? String((rawBody.params as Record<string, unknown>).name)
         : undefined
       if (requestMethod === 'tools/call') {
+        logPlatformMcpEventDetached(event, env.DB, {
+          requestId: requestId ?? null,
+          method: requestMethod,
+          toolName: requestToolName ?? null,
+          toolDomain: requestToolName ? PLATFORM_MCP_TOOL_DOMAIN : null,
+          status: 'auth_required',
+          errorMessage: 'Missing bearer token or cookie',
+        })
         return mcpSuccess(requestId ?? null, mcpAuthRequiredResult({ challenge: authChallenge, message: PLATFORM_AUTH_REQUIRED_TEXT }))
       }
       setResponseStatus(event, 401)
@@ -196,6 +237,7 @@ export default defineEventHandler(async (event) => {
 
     if (request.method === 'tools/call') {
       const toolName = typeof request.params?.name === 'string' ? request.params.name : ''
+      const toolStart = Date.now()
       const rawArgs =
         request.params?.arguments &&
         typeof request.params.arguments === 'object' &&
@@ -225,6 +267,18 @@ export default defineEventHandler(async (event) => {
         schedulePlatformKnowledgeIndexRebuild(event, env, `platform MCP ${toolName}`, env.db)
       }
 
+      logPlatformMcpEventDetached(event, env.DB, {
+        requestId: request.id,
+        method: request.method,
+        toolName,
+        toolDomain: PLATFORM_MCP_TOOL_DOMAIN,
+        isMutating: isMcpMutatingTool(mutatedTool),
+        arguments: summarizePayloadShape(rawArgs),
+        result: summarizePayloadShape(result),
+        status: 'success',
+        durationMs: Date.now() - toolStart,
+      })
+
       return mcpSuccess(request.id, {
         isError: false,
         structuredContent: result,
@@ -239,6 +293,18 @@ export default defineEventHandler(async (event) => {
       statusMessage: `Unsupported MCP method: ${request.method}`,
     })
   } catch (error) {
+    if (requestMethod === 'tools/call') {
+      logPlatformMcpEventDetached(event, env.DB, {
+        requestId: requestId ?? null,
+        method: requestMethod,
+        toolName: requestToolName ?? null,
+        toolDomain: requestToolName ? PLATFORM_MCP_TOOL_DOMAIN : null,
+        isMutating: isMcpMutatingTool(PLATFORM_MCP_TOOLS.find((t) => t.name === requestToolName)),
+        status: error instanceof Error && /Authentication required/i.test(error.message) ? 'auth_required' : 'error',
+        errorCode: asMcpError(error).code,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      })
+    }
     const mcpError = asMcpError(error)
     const errorStatus =
       typeof (error as { statusCode?: unknown })?.statusCode === 'number'

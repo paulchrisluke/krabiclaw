@@ -1,5 +1,6 @@
 import { execute, executeBatch, queryFirst, type DbClient } from '~/server/db'
 import { logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
+import { attachThreadToSubmissionMessages, ensureGuestThread, syncGuestThreadAfterMessage } from '~/server/utils/guest-threads'
 import {
   buildReplyLocalPart,
   buildReplyToken,
@@ -241,12 +242,15 @@ export async function insertSubmissionMessage(db: DbClient, opts: {
   error?: string | null
 }): Promise<string> {
   const id = crypto.randomUUID()
+  const thread = await ensureGuestThread(db, opts.submissionType, opts.submissionId)
+  const createdAt = new Date().toISOString()
   await execute(db, `
     INSERT INTO submission_messages
-    (id, submission_type, submission_id, organization_id, site_id, direction, channel, body, sender_user_id, meta_message_id, status, error, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (id, thread_id, submission_type, submission_id, organization_id, site_id, direction, channel, body, sender_user_id, meta_message_id, status, error, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     id,
+    thread.id,
     opts.submissionType,
     opts.submissionId,
     opts.organizationId,
@@ -258,8 +262,14 @@ export async function insertSubmissionMessage(db: DbClient, opts: {
     opts.metaMessageId ?? null,
     opts.status ?? 'sent',
     opts.error ?? null,
-    new Date().toISOString(),
+    createdAt,
   ])
+  await syncGuestThreadAfterMessage(db, {
+    threadId: thread.id,
+    direction: opts.direction,
+    body: opts.body,
+    createdAt,
+  })
   return id
 }
 
@@ -273,6 +283,7 @@ export async function insertInboundSubmissionReply(db: DbClient, opts: {
   metaMessageId?: string | null
   from?: string | null
 }): Promise<string> {
+  const thread = await ensureGuestThread(db, opts.submissionType, opts.submissionId)
   const messageId = crypto.randomUUID()
   const notificationId = crypto.randomUUID()
   const now = new Date().toISOString()
@@ -283,11 +294,12 @@ export async function insertInboundSubmissionReply(db: DbClient, opts: {
     {
       query: `
         INSERT INTO submission_messages
-        (id, submission_type, submission_id, organization_id, site_id, direction, channel, body, sender_user_id, meta_message_id, status, error, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, thread_id, submission_type, submission_id, organization_id, site_id, direction, channel, body, sender_user_id, meta_message_id, status, error, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       params: [
         messageId,
+        thread.id,
         opts.submissionType,
         opts.submissionId,
         opts.organizationId,
@@ -326,6 +338,14 @@ export async function insertInboundSubmissionReply(db: DbClient, opts: {
       ],
     },
   ])
+
+  await attachThreadToSubmissionMessages(db, thread.id, opts.submissionType, opts.submissionId)
+  await syncGuestThreadAfterMessage(db, {
+    threadId: thread.id,
+    direction: 'in',
+    body: opts.body,
+    createdAt: now,
+  })
 
   return messageId
 }

@@ -1,6 +1,8 @@
 import { execute, type DbClient } from '~/server/db'
 
 export type SiteEventType =
+  // Contact
+  | 'contact.created'
   // Posts
   | 'post.created'
   | 'post.published'
@@ -66,4 +68,18 @@ export async function fireSiteEvent(params: FireEventParams): Promise<void> {
     entityId ?? null,
     metadata ? JSON.stringify(metadata) : null
   ])
+}
+
+export async function fireSiteEventSafe(params: FireEventParams): Promise<void> {
+  try {
+    await fireSiteEvent(params)
+  } catch (error) {
+    console.warn('site_event_write_failed', {
+      eventType: params.eventType,
+      siteId: params.siteId,
+      entityType: params.entityType ?? null,
+      entityId: params.entityId ?? null,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 }

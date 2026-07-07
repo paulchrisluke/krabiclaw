@@ -247,9 +247,27 @@ section('Contact data (phone and email)')
 
 if (bootstrapData) {
   const phones = (bootstrapData.locations ?? []).map(l => l.phone).filter(Boolean)
-  const emails = (bootstrapData.locations ?? []).map(l => l.email).filter(Boolean)
   assert('At least one location has a phone number', phones.length >= 1, true)
-  assert('At least one location has an email', emails.length >= 1, true)
+
+  // Location email is legitimately nullable: Google Places doesn't expose a
+  // per-location email, and this client has no site-level contact_email
+  // configured. bootstrap.get.ts used to backfill it with the org owner's
+  // private account email, which leaked personal contact info onto a public
+  // page (fixed in 4d08888a) — so "no email at all" is the correct state
+  // here, not a regression.
+
+  // Regression: Google Places sync once wrote Thai-script locality text (e.g. "ตำบล
+  // หนองทะเล") into English-source-locale location fields because languageCode was
+  // omitted from the API request. business_locations has no locale column of its own,
+  // so this must never surface silently — catch it here.
+  const NON_LATIN_SCRIPT_RE = /[฀-๿一-鿿぀-ヿ가-힯؀-ۿЀ-ӿ]/
+  for (const loc of (bootstrapData.locations ?? [])) {
+    for (const field of ['city', 'address']) {
+      if (loc[field]) {
+        assert(`Location "${loc.title ?? loc.id}" ${field} is Latin script`, NON_LATIN_SCRIPT_RE.test(loc[field]), false)
+      }
+    }
+  }
 }
 
 // ── 8. Q&A presence ──────────────────────────────────────────────────────────

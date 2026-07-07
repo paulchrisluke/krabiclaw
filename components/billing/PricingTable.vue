@@ -208,6 +208,7 @@ const comparisonRows: ComparisonRow[] = [
   { feature: 'Custom domain',                     free: false,   growth: true,      managed: true },
   { feature: 'Facebook auto-sync',                free: false,   growth: true,      managed: true },
   { feature: 'Google Business sync',              free: false,   growth: 'Basics',  managed: 'Full management' },
+  { feature: 'Post-booking review requests',      free: false,   growth: true,      managed: true },
   { feature: 'WhatsApp notifications',            free: false,   growth: true,      managed: true },
   { feature: 'Managed by Paul & Julia',           free: false,   growth: false,     managed: true },
   { feature: 'Support',                           free: 'Community', growth: 'WhatsApp', managed: 'Priority WhatsApp' },

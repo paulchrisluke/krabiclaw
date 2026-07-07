@@ -23,7 +23,6 @@ interface WhatsAppEnv {
 }
 
 const DEFAULT_MAX_WHATSAPP_MEDIA_BYTES = 20 * 1024 * 1024
-const DEFAULT_DASHBOARD_URL = 'https://krabiclaw.com/dashboard'
 
 interface MetaGraphErrorPayload {
   message?: string
@@ -52,10 +51,16 @@ export type WhatsAppTemplate =
   | 'ai_action_complete'
   | 'low_credits'
   | 'new_contact_msg'
+  | 'guest_thread_reply_whatsapp'
   | 'new_reservation'
   | 'reservation_cancelled'
   | 'domain_update'
   | 'otp_code'
+
+interface TemplateHeaderComponent {
+  type: 'header'
+  parameters: Array<{ type: 'text'; text: string }>
+}
 
 interface TemplateBodyComponent {
   type: 'body'
@@ -69,7 +74,7 @@ interface TemplateButtonComponent {
   parameters: Array<{ type: 'text'; text: string }>
 }
 
-type TemplateComponent = TemplateBodyComponent | TemplateButtonComponent
+type TemplateComponent = TemplateHeaderComponent | TemplateBodyComponent | TemplateButtonComponent
 
 function cleanTemplateText(value: string | undefined, fallback: string, maxLen = 120): string {
   const raw = String(value ?? '').replace(/\s+/g, ' ').trim()
@@ -79,12 +84,52 @@ function cleanTemplateText(value: string | undefined, fallback: string, maxLen =
   return fb.slice(0, maxLen)
 }
 
+// Dynamic URL buttons in approved Meta templates are declared as a fixed prefix +
+// single {{1}} variable (e.g. "https://krabiclaw.com/dashboard/{{1}}"), so callers
+// that already built a full dashboard URL only need the suffix after that prefix.
+export function toDashboardButtonPath(url: string | undefined, fallback = ''): string {
+  const marker = '/dashboard/'
+  const idx = String(url ?? '').indexOf(marker)
+  return idx >= 0 ? String(url).slice(idx + marker.length) : fallback
+}
+
 function normalizeTemplateVars(vars: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {}
   for (const [key, val] of Object.entries(vars)) {
     out[key] = String(val ?? '').replace(/\s+/g, ' ').trim()
   }
   return out
+}
+
+// Shared by new_contact_msg and guest_thread_reply_whatsapp, which both send through the
+// same approved "new_contact_msg" Meta template and only differ in fallback copy.
+function buildContactAlertTemplate(
+  v: Record<string, string>,
+  fallbacks: { subjectFallback: string; messageFallback: string },
+): { name: string; language: { code: string }; components: TemplateComponent[] } {
+  return {
+    name: 'new_contact_msg',
+    language: { code: 'en_US' },
+    components: [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
+          { type: 'text', text: cleanTemplateText(v.email, 'No email provided', 120) },
+          { type: 'text', text: cleanTemplateText(v.subject, fallbacks.subjectFallback, 40) },
+          { type: 'text', text: cleanTemplateText(v.message_preview, fallbacks.messageFallback, 100) },
+        ],
+      },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.reply_path, '', 300) },
+        ],
+      },
+    ],
+  }
 }
 
 // Map our template names to Meta template names + variable builders.
@@ -96,66 +141,101 @@ const TEMPLATES: Record<
   new_review: (v) => ({
     name: 'new_review',
     language: { code: 'en_US' },
-    components: [{
-      type: 'body',
-      parameters: [
-        { type: 'text', text: v.rating ?? '5' },
-        { type: 'text', text: v.site_name ?? 'your site' },
-        { type: 'text', text: cleanTemplateText(v.excerpt, 'Open dashboard for full review.', 100) },
-      ],
-    }],
+    components: [
+      {
+        type: 'header',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.site_name, 'your site', 60) },
+        ],
+      },
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: v.rating ?? '5' },
+          { type: 'text', text: cleanTemplateText(v.excerpt, 'Open the dashboard for the full review.', 300) },
+        ],
+      },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [
+          { type: 'text', text: toDashboardButtonPath(v.reviews_url) },
+        ],
+      },
+    ],
   }),
   ai_action_complete: (v) => ({
     name: 'ai_action_complete',
     language: { code: 'en_US' },
-    components: [{
-      type: 'body',
-      parameters: [
-        { type: 'text', text: cleanTemplateText(v.action_summary, 'AI task completed') },
-        { type: 'text', text: cleanTemplateText(v.preview_url, DEFAULT_DASHBOARD_URL, 200) },
-      ],
-    }],
+    components: [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.action_summary, 'AI task completed') },
+        ],
+      },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [
+          { type: 'text', text: toDashboardButtonPath(v.preview_url) },
+        ],
+      },
+    ],
   }),
   low_credits: (v) => ({
     name: 'low_credits',
     language: { code: 'en_US' },
-    components: [{
-      type: 'body',
-      parameters: [
-        { type: 'text', text: cleanTemplateText(v.credits_remaining, '0', 32) },
-        { type: 'text', text: cleanTemplateText(v.upgrade_url, DEFAULT_DASHBOARD_URL, 200) },
-      ],
-    }],
+    components: [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.credits_remaining, '0', 32) },
+        ],
+      },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [
+          { type: 'text', text: toDashboardButtonPath(v.upgrade_url) },
+        ],
+      },
+    ],
   }),
-  new_contact_msg: (v) => ({
-    name: 'new_contact_msg',
-    language: { code: 'en_US' },
-    components: [{
-      type: 'body',
-      parameters: [
-        { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
-        { type: 'text', text: cleanTemplateText(v.email, 'No email provided', 120) },
-        { type: 'text', text: cleanTemplateText(v.subject, 'General', 40) },
-        { type: 'text', text: cleanTemplateText(v.message_preview, 'No message preview', 100) },
-      ],
-    }],
-  }),
+  new_contact_msg: (v) => buildContactAlertTemplate(v, { subjectFallback: 'General', messageFallback: 'No message preview' }),
+  // Reuses the approved owner contact template shape so guest reply alerts
+  // stay within Meta's existing parameter contract while deep-linking into
+  // the exact dashboard thread.
+  guest_thread_reply_whatsapp: (v) => buildContactAlertTemplate(v, { subjectFallback: 'Guest reply', messageFallback: 'Open the dashboard for the full reply.' }),
   new_reservation: (v) => ({
     name: 'new_reservation',
     language: { code: 'en_US' },
-    components: [{
-      type: 'body',
-      parameters: [
-        { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
-        { type: 'text', text: cleanTemplateText(v.date, 'Date pending', 40) },
-        { type: 'text', text: cleanTemplateText(v.time, 'Time pending', 40) },
-        { type: 'text', text: cleanTemplateText(v.guests, 'Unknown', 24) },
-        { type: 'text', text: cleanTemplateText(v.phone, 'No phone provided', 40) },
-        { type: 'text', text: cleanTemplateText(v.email, 'No email provided', 100) },
-        { type: 'text', text: cleanTemplateText(v.context, 'Context not provided', 100) },
-        { type: 'text', text: cleanTemplateText(v.requests, 'None', 100) },
-      ],
-    }],
+    components: [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
+          { type: 'text', text: cleanTemplateText(v.date, 'Date pending', 40) },
+          { type: 'text', text: cleanTemplateText(v.time, 'Time pending', 40) },
+          { type: 'text', text: cleanTemplateText(v.guests, 'Unknown', 24) },
+          { type: 'text', text: cleanTemplateText(v.phone, 'No phone provided', 40) },
+          { type: 'text', text: cleanTemplateText(v.email, 'No email provided', 100) },
+          { type: 'text', text: cleanTemplateText(v.context, 'Context not provided', 100) },
+          { type: 'text', text: cleanTemplateText(v.requests, 'None', 100) },
+        ],
+      },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.reply_path, '', 300) },
+        ],
+      },
+    ],
   }),
   reservation_cancelled: (v) => ({
     name: 'reservation_cancelled',
@@ -169,20 +249,35 @@ const TEMPLATES: Record<
         { type: 'text', text: cleanTemplateText(v.guests, 'Unknown', 24) },
         { type: 'text', text: cleanTemplateText(v.phone, 'No phone provided', 40) },
         { type: 'text', text: cleanTemplateText(v.context, 'Context not provided', 100) },
+        { type: 'text', text: cleanTemplateText(v.requests, 'None', 100) },
       ],
     }],
   }),
   domain_update: (v) => ({
     name: 'domain_update',
     language: { code: 'en_US' },
-    components: [{
-      type: 'body',
-      parameters: [
-        { type: 'text', text: cleanTemplateText(v.domain, 'your domain', 120) },
-        { type: 'text', text: cleanTemplateText(v.status, 'updated', 40) },
-        { type: 'text', text: cleanTemplateText(v.dashboard_url, DEFAULT_DASHBOARD_URL, 200) },
-      ],
-    }],
+    components: [
+      {
+        type: 'header',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.domain, 'your domain', 60) },
+        ],
+      },
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.status, 'updated', 40) },
+        ],
+      },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [
+          { type: 'text', text: toDashboardButtonPath(v.dashboard_url, 'settings') },
+        ],
+      },
+    ],
   }),
   otp_code: (v) => ({
     name: 'otp_code',

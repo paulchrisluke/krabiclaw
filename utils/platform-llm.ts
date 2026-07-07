@@ -14,7 +14,7 @@ export interface LlmHowToStep {
 
 export interface LlmContentComponent {
   id: string
-  type: 'faq' | 'how_to'
+  type: 'faq' | 'how_to' | 'ai_assistance'
   content_type?: string
   content_id?: string
   label?: string | null
@@ -30,6 +30,16 @@ export interface LlmContentComponent {
     estimated_time?: string | null
     tool_items?: string[] | null
     supply_items?: string[] | null
+    intro?: string | null
+    collapsed?: boolean | null
+    max_visible_lines?: number | null
+    prompts?: Array<{
+      title?: string | null
+      prompt?: string | null
+      description?: string | null
+      copy_label?: string | null
+      position?: number | null
+    }> | null
   }
 }
 
@@ -168,11 +178,34 @@ function serializeHowToMarkdown(component: LlmContentComponent) {
   return normalizeWhitespace(lines.join('\n'))
 }
 
+function serializeAiAssistanceMarkdown(component: LlmContentComponent) {
+  const validPrompts = (component.data.prompts ?? [])
+    .filter(item => item.prompt?.trim())
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+
+  if (!validPrompts.length) return ''
+
+  const lines: string[] = [`## ${normalizeWhitespace(component.label) || 'AI Assistance'}`]
+  const intro = normalizeWhitespace(component.data.intro)
+  if (intro) lines.push('', intro)
+
+  for (const prompt of validPrompts) {
+    const title = normalizeWhitespace(prompt.title)
+    const description = normalizeWhitespace(prompt.description)
+    if (title) lines.push('', `### ${title}`)
+    if (description) lines.push('', description)
+    lines.push('', '```text', prompt.prompt!.trim(), '```')
+  }
+
+  return normalizeWhitespace(lines.join('\n'))
+}
+
 function serializeComponentMarkdown(component: LlmContentComponent) {
   if (component.render_enabled === false) return ''
   if (component.status !== 'active') return ''
   if (component.type === 'faq') return serializeFaqMarkdown(component)
-  return serializeHowToMarkdown(component)
+  if (component.type === 'how_to') return serializeHowToMarkdown(component)
+  return serializeAiAssistanceMarkdown(component)
 }
 
 export function renderContentMarkdownWithComponents(body: string, components: LlmContentComponent[]) {
@@ -184,11 +217,12 @@ export function renderContentMarkdownWithComponents(body: string, components: Ll
   const queues = {
     faq: activeComponents.filter(component => component.type === 'faq'),
     how_to: activeComponents.filter(component => component.type === 'how_to'),
+    ai_assistance: activeComponents.filter(component => component.type === 'ai_assistance'),
   }
   const usedComponentIds = new Set<string>()
   const replacedBody = body.replace(COMPONENT_EMBED_REGEX, (_match, quoted, singleQuoted, bare) => {
     const type = String(quoted ?? singleQuoted ?? bare ?? '').trim()
-    if (type !== 'faq' && type !== 'how_to') return ''
+    if (type !== 'faq' && type !== 'how_to' && type !== 'ai_assistance') return ''
     const component = queues[type].shift()
     if (!component) return ''
     usedComponentIds.add(component.id)

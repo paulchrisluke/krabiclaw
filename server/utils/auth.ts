@@ -1,11 +1,12 @@
 import { APIError, betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { hashPassword } from 'better-auth/crypto'
-import { admin, jwt, organization, phoneNumber } from 'better-auth/plugins'
+import { admin, anonymous, jwt, organization, phoneNumber } from 'better-auth/plugins'
 import { oauthProvider } from '@better-auth/oauth-provider'
 import { getHeaders } from 'h3'
 import type { H3Event } from 'h3'
-import { createDb, schema } from '~/server/db'
+import { createDb, execute, schema } from '~/server/db'
+import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { normalizePhone, sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { notifyAdminNewUserSignup } from '~/server/utils/admin-notifications'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
@@ -75,6 +76,7 @@ export function createAuth(env: CloudflareEnv) {
       user: {
         create: {
           after: async (user) => {
+            if ((user as { isAnonymous?: boolean }).isAnonymous) return
             const now = new Date()
             const orgId = `org-${user.id}`
             try {
@@ -167,6 +169,28 @@ export function createAuth(env: CloudflareEnv) {
           // (https://krabiclaw.com/api/auth) but jwt() signs with options.baseURL
           // (https://krabiclaw.com) — the mismatch causes ChatGPT to reject the connector.
           issuer: (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, ''),
+        },
+      }),
+      anonymous({
+        generateRandomEmail: () => `anon-${crypto.randomUUID()}@customers.krabiclaw.local`,
+        onLinkAccount: async ({ anonymousUser, newUser }) => {
+          const now = new Date().toISOString()
+          await linkAnonymousCustomerToUser(db, anonymousUser.user.id, newUser.user.id)
+          await execute(db, `
+            UPDATE review_requests
+            SET user_id = ?, updated_at = ?
+            WHERE anonymous_user_id = ?
+          `, [newUser.user.id, now, anonymousUser.user.id])
+          await execute(db, `
+            UPDATE reviews
+            SET user_id = ?, updated_at = ?
+            WHERE user_id = ?
+               OR review_request_id IN (
+                 SELECT id
+                 FROM review_requests
+                 WHERE anonymous_user_id = ?
+               )
+          `, [newUser.user.id, now, anonymousUser.user.id, anonymousUser.user.id])
         },
       }),
       oauthProvider({

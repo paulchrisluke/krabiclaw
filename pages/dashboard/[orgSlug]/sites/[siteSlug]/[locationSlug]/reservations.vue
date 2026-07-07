@@ -51,11 +51,18 @@
             </div>
             <p class="mt-1 text-sm text-muted">{{ reservation.date }} at {{ reservation.time }} · {{ reservation.guests }} guests</p>
             <p class="mt-1 text-sm text-muted">{{ reservation.email }} · {{ reservation.phone }}</p>
+            <p v-if="reservation.completed_at" class="mt-1 text-xs text-muted">
+              Completed {{ formatDateTime(reservation.completed_at) }}
+              <span v-if="reservation.review_request_sent_at">· review requested {{ formatDateTime(reservation.review_request_sent_at) }}</span>
+              <span v-if="reservation.review_reminder_sent_at">· reminder sent {{ formatDateTime(reservation.review_reminder_sent_at) }}</span>
+            </p>
             <p v-if="reservation.requests" class="mt-2 text-sm text-default">{{ reservation.requests }}</p>
           </div>
           <div class="flex shrink-0 flex-wrap gap-2">
             <UButton size="sm" color="success" variant="ghost" @click="updateReservationStatus(reservation, 'confirmed')">Confirm</UButton>
             <UButton size="sm" color="neutral" variant="ghost" @click="updateReservationStatus(reservation, 'completed')">Complete</UButton>
+            <UButton size="sm" color="primary" variant="soft" :disabled="!reservation.completed_at || Boolean(reservation.review_request_sent_at)" @click="sendReviewRequest(reservation, 'first')">Ask review</UButton>
+            <UButton size="sm" color="primary" variant="ghost" :disabled="!reservation.review_request_sent_at || Boolean(reservation.review_reminder_sent_at) || Boolean(reservation.review_submitted_at)" @click="sendReviewRequest(reservation, 'reminder')">Reminder</UButton>
             <UButton size="sm" color="error" variant="ghost" @click="updateReservationStatus(reservation, 'cancelled')">Cancel</UButton>
             <UButton :to="`mailto:${reservation.email}`" icon="i-lucide-mail" color="neutral" variant="soft" size="sm">Reply</UButton>
           </div>
@@ -80,6 +87,12 @@ interface ReservationSubmission {
   guests: string
   requests: string | null
   status: string
+  completed_at: string | null
+  completion_source: string | null
+  review_request_sent_at: string | null
+  review_reminder_sent_at: string | null
+  review_submitted_at: string | null
+  review_id: string | null
 }
 
 const siteId = await useDashboardSiteId()
@@ -101,6 +114,10 @@ const _headerLinks = computed(() => buildHeaderLinks([
 const newCount = computed(() => reservations.value.filter(item => item.status === 'new').length)
 const confirmedCount = computed(() => reservations.value.filter(item => item.status === 'confirmed').length)
 
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(value))
+}
+
 async function loadReservations() {
   loading.value = true
   try {
@@ -119,7 +136,7 @@ async function loadReservations() {
     const locationId = current?.id
     if (!locationId) throw new Error('Location not found')
 
-    const reservationsResult = await $fetch<{ submissions: ReservationSubmission[] }>(`/api/dashboard/editor/reservation-submissions`, {
+    const reservationsResult = await $fetch<{ submissions: ReservationSubmission[] }>(`/api/editor/sites/${siteId}/reservation-submissions`, {
       query: { location_id: locationId }
     })
     reservations.value = reservationsResult.submissions ?? []
@@ -141,15 +158,34 @@ async function loadReservations() {
 
 async function updateReservationStatus(submission: ReservationSubmission, status: 'new' | 'confirmed' | 'cancelled' | 'completed') {
   try {
-    await $fetch(`/api/dashboard/editor/reservation-submissions/${submission.id}`, {
+    await $fetch(`/api/editor/sites/${siteId}/reservation-submissions/${submission.id}`, {
       method: 'PATCH',
       query: { location_id: submission.location_id },
       body: { status }
     })
     submission.status = status
+    if (status === 'completed') {
+      submission.completed_at ||= new Date().toISOString()
+      submission.completion_source ||= 'manual'
+    }
     toast.add({ description: 'Reservation status updated', color: 'success' })
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to update reservation status', color: 'error' })
+  }
+}
+
+async function sendReviewRequest(submission: ReservationSubmission, kind: 'first' | 'reminder') {
+  try {
+    await $fetch(`/api/editor/sites/${siteId}/reservation-submissions/${submission.id}/review-request`, {
+      method: 'POST',
+      body: { kind }
+    })
+    const now = new Date().toISOString()
+    if (kind === 'first') submission.review_request_sent_at = now
+    else submission.review_reminder_sent_at = now
+    toast.add({ description: kind === 'first' ? 'Review request sent' : 'Review reminder sent', color: 'success' })
+  } catch (error) {
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to send review request', color: 'error' })
   }
 }
 
