@@ -9,6 +9,19 @@ import { createMediaAsset, deleteMediaAsset, updateMediaAssetMetadata } from '~/
 import { getPlatformMcpTool } from '~/server/utils/platform-mcp-tools'
 import { ensurePlatformMediaScope, listPlatformMediaAssets, PLATFORM_MEDIA_ORG_ID, PLATFORM_MEDIA_SITE_ID } from '~/server/utils/platform-media'
 import {
+  appendContentBlock,
+  deleteContentBlock,
+  getContentBlock,
+  getContentDocumentById,
+  getContentDocumentByOwner,
+  getContentOutline,
+  publishContentDocumentRevision,
+  renderContentPreview,
+  replaceContentBlock,
+  type ContentBlockType,
+  type ContentDocumentOwnerType,
+} from '~/server/utils/content-documents'
+import {
   createPlatformBlogPost,
   createPlatformDoc,
   deletePlatformBlogPost,
@@ -55,6 +68,72 @@ function optionalNullableNumber(args: Record<string, unknown>, key: string) {
 function optionalArray(args: Record<string, unknown>, key: string) {
   const value = args[key]
   return Array.isArray(value) ? value : undefined
+}
+
+const CONTENT_DOCUMENT_OWNER_TYPES: readonly ContentDocumentOwnerType[] = ['platform_blog', 'platform_doc', 'tenant_blog']
+const CONTENT_BLOCK_TYPES: readonly ContentBlockType[] = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'ai_assistance', 'cta', 'callout']
+
+function requiredObject(args: Record<string, unknown>, key: string) {
+  const value = args[key]
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be an object.`)
+  }
+  return value as Record<string, unknown>
+}
+
+function optionalNullableString(args: Record<string, unknown>, key: string) {
+  const value = args[key]
+  if (value === null) return null
+  return typeof value === 'string' ? value : undefined
+}
+
+function optionalContentBlockType(args: Record<string, unknown>, key: string) {
+  const value = args[key]
+  if (!CONTENT_BLOCK_TYPES.includes(value as ContentBlockType)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be one of: ${CONTENT_BLOCK_TYPES.join(', ')}.`)
+  }
+  return value as ContentBlockType
+}
+
+function optionalContentDocumentOwnerType(args: Record<string, unknown>, key: string) {
+  const value = args[key]
+  if (!CONTENT_DOCUMENT_OWNER_TYPES.includes(value as ContentDocumentOwnerType)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be one of: ${CONTENT_DOCUMENT_OWNER_TYPES.join(', ')}.`)
+  }
+  return value as ContentDocumentOwnerType
+}
+
+async function resolveContentDocument(db: D1Database, args: Record<string, unknown>) {
+  const documentId = optionalString(args, 'document_id')
+  if (documentId) {
+    const document = await getContentDocumentById(db, documentId)
+    if (!document) throw mcpProtocolError(MCP_ERROR.invalidParams, 'content document not found.')
+    return document
+  }
+
+  const ownerId = optionalString(args, 'owner_id')
+  const ownerType = args.owner_type !== undefined ? optionalContentDocumentOwnerType(args, 'owner_type') : undefined
+  if (!ownerType || !ownerId) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, 'Provide either document_id, or owner_type and owner_id.')
+  }
+
+  const document = await getContentDocumentByOwner(db, ownerType, ownerId)
+  if (!document) throw mcpProtocolError(MCP_ERROR.invalidParams, 'content document not found.')
+  return document
+}
+
+async function getFormattedContentBlock(db: D1Database, blockId: string) {
+  const block = await getContentBlock(db, blockId)
+  return {
+    document_id: block.document_id,
+    id: block.id,
+    parent_block_id: block.parent_block_id,
+    type: block.type,
+    position: block.position,
+    level: block.level,
+    updated_at: block.updated_at,
+    data: block.data,
+  }
 }
 
 function dateString(date: Date): string {
@@ -457,6 +536,56 @@ export async function executePlatformMcpToolCall(
       const asset = (await listPlatformMediaAssets(user.db, { id: assetId, limit: 1 }))[0] ?? null
       if (!asset) throw mcpProtocolError(MCP_ERROR.invalidParams, 'Platform media asset not found.')
       await deleteMediaAsset(user.db, user.env, assetId, PLATFORM_MEDIA_SITE_ID)
+      return { success: true }
+    }
+    case 'get_content_document_outline': {
+      const document = await resolveContentDocument(user.db, rawArguments)
+      return {
+        document: {
+          id: document.id,
+          owner_type: document.owner_type,
+          owner_id: document.owner_id,
+          draft_revision_id: document.draft_revision_id,
+          published_revision_id: document.published_revision_id,
+          updated_at: document.updated_at,
+        },
+        blocks: await getContentOutline(user.db, document.id),
+      }
+    }
+    case 'get_content_block':
+      return { block: await getFormattedContentBlock(user.db, requiredString(rawArguments, 'block_id')) }
+    case 'append_content_block': {
+      const document = await resolveContentDocument(user.db, rawArguments)
+      return await appendContentBlock(user.db, document.id, {
+        after_block_id: optionalNullableString(rawArguments, 'after_block_id'),
+        type: optionalContentBlockType(rawArguments, 'type'),
+        data: requiredObject(rawArguments, 'data'),
+        parent_block_id: optionalNullableString(rawArguments, 'parent_block_id'),
+        level: optionalNullableNumber(rawArguments, 'level'),
+        createdBy: user.userId,
+        label: 'MCP block append',
+      })
+    }
+    case 'replace_content_block':
+      return await replaceContentBlock(user.db, requiredString(rawArguments, 'block_id'), {
+        expected_updated_at: requiredString(rawArguments, 'expected_updated_at'),
+        data: requiredObject(rawArguments, 'data'),
+        createdBy: user.userId,
+        label: 'MCP block replace',
+      })
+    case 'delete_content_block':
+      return await deleteContentBlock(user.db, requiredString(rawArguments, 'block_id'), {
+        expected_updated_at: requiredString(rawArguments, 'expected_updated_at'),
+        createdBy: user.userId,
+        label: 'MCP block delete',
+      })
+    case 'render_content_preview': {
+      const document = await resolveContentDocument(user.db, rawArguments)
+      return await renderContentPreview(user.db, document.id)
+    }
+    case 'publish_content_revision': {
+      const document = await resolveContentDocument(user.db, rawArguments)
+      await publishContentDocumentRevision(user.db, document.id)
       return { success: true }
     }
     case 'list_platform_blog_posts':

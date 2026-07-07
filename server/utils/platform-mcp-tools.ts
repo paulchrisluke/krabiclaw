@@ -23,6 +23,8 @@ const ROBOTS_ENUM = ['index,follow', 'noindex,follow', 'index,nofollow', 'noinde
 const BLOG_CATEGORY_ENUM = BLOG_CATEGORY_LABELS
 const DOC_CATEGORY_ENUM = ['Getting Started', 'Menu Management', 'Theme Customization', 'SEO & Marketing', 'Integrations', 'Advanced']
 const DOC_DIFFICULTY_ENUM = ['Beginner', 'Intermediate', 'Advanced']
+const CONTENT_DOCUMENT_OWNER_TYPE_ENUM = ['platform_blog', 'platform_doc', 'tenant_blog']
+const CONTENT_BLOCK_TYPE_ENUM = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'ai_assistance', 'cta', 'callout']
 
 const SEO_FIELDS_SCHEMA = {
   seo_description: NULLABLE_STRING,
@@ -220,6 +222,47 @@ const COMPONENT_INPUT_SCHEMA = {
   },
   required: ['type', 'data'],
   additionalProperties: false,
+}
+
+const CONTENT_BLOCK_DATA_SCHEMA = { type: 'object' }
+
+const CONTENT_BLOCK_SCHEMA = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    parent_block_id: NULLABLE_STRING,
+    type: { type: 'string', enum: CONTENT_BLOCK_TYPE_ENUM },
+    position: { type: 'number' },
+    level: NULLABLE_NUMBER,
+    updated_at: { type: 'string' },
+    data: CONTENT_BLOCK_DATA_SCHEMA,
+  },
+  required: ['id', 'parent_block_id', 'type', 'position', 'level', 'updated_at', 'data'],
+  additionalProperties: false,
+}
+
+const CONTENT_BLOCK_WRITE_RESULT_SCHEMA = {
+  type: 'object',
+  properties: {
+    revision_id: { type: 'string' },
+    body_markdown: { type: 'string' },
+    blocks: { type: 'array', items: CONTENT_BLOCK_SCHEMA },
+  },
+  required: ['revision_id', 'body_markdown', 'blocks'],
+  additionalProperties: false,
+}
+
+const CONTENT_DOCUMENT_LOOKUP_SCHEMA = {
+  document_id: { type: 'string' },
+  owner_type: { type: 'string', enum: CONTENT_DOCUMENT_OWNER_TYPE_ENUM },
+  owner_id: { type: 'string' },
+}
+
+const CONTENT_BLOCK_INPUT_PROPERTIES = {
+  type: { type: 'string', enum: CONTENT_BLOCK_TYPE_ENUM },
+  data: CONTENT_BLOCK_DATA_SCHEMA,
+  parent_block_id: NULLABLE_STRING,
+  level: NULLABLE_NUMBER,
 }
 
 const BLOG_SUMMARY_SCHEMA = {
@@ -611,6 +654,144 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       additionalProperties: false,
     },
     outputSchema: DELETE_RESPONSE_SCHEMA,
+  }),
+  readTool({
+    name: 'get_content_document_outline',
+    description: 'Get the block outline for a platform blog, platform doc, or tenant blog content document. Provide either document_id, or owner_type plus owner_id.',
+    inputSchema: {
+      type: 'object',
+      properties: CONTENT_DOCUMENT_LOOKUP_SCHEMA,
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        document: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            owner_type: { type: 'string', enum: CONTENT_DOCUMENT_OWNER_TYPE_ENUM },
+            owner_id: { type: 'string' },
+            draft_revision_id: NULLABLE_STRING,
+            published_revision_id: NULLABLE_STRING,
+            updated_at: { type: 'string' },
+          },
+          required: ['id', 'owner_type', 'owner_id', 'draft_revision_id', 'published_revision_id', 'updated_at'],
+          additionalProperties: false,
+        },
+        blocks: { type: 'array', items: CONTENT_BLOCK_SCHEMA },
+      },
+      required: ['document', 'blocks'],
+      additionalProperties: false,
+    },
+  }),
+  readTool({
+    name: 'get_content_block',
+    description: 'Fetch a single content block, including its data payload and updated_at value for optimistic replacement.',
+    inputSchema: {
+      type: 'object',
+      properties: { block_id: { type: 'string' } },
+      required: ['block_id'],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        block: {
+          type: 'object',
+          properties: {
+            document_id: { type: 'string' },
+            ...CONTENT_BLOCK_SCHEMA.properties,
+          },
+          required: ['document_id', 'id', 'parent_block_id', 'type', 'position', 'level', 'updated_at', 'data'],
+          additionalProperties: false,
+        },
+      },
+      required: ['block'],
+      additionalProperties: false,
+    },
+  }),
+  writeTool({
+    name: 'append_content_block',
+    description: 'Append a block to a content document. Provide either document_id, or owner_type plus owner_id; after_block_id inserts after a specific block.',
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...CONTENT_DOCUMENT_LOOKUP_SCHEMA,
+        after_block_id: NULLABLE_STRING,
+        ...CONTENT_BLOCK_INPUT_PROPERTIES,
+      },
+      required: ['type', 'data'],
+      additionalProperties: false,
+    },
+    outputSchema: CONTENT_BLOCK_WRITE_RESULT_SCHEMA,
+  }),
+  writeTool({
+    name: 'replace_content_block',
+    description: 'Replace one block data payload using optimistic concurrency. expected_updated_at must match the block returned by get_content_block or get_content_document_outline.',
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        block_id: { type: 'string' },
+        expected_updated_at: { type: 'string' },
+        data: CONTENT_BLOCK_DATA_SCHEMA,
+      },
+      required: ['block_id', 'expected_updated_at', 'data'],
+      additionalProperties: false,
+    },
+    outputSchema: CONTENT_BLOCK_WRITE_RESULT_SCHEMA,
+  }),
+  writeTool({
+    name: 'delete_content_block',
+    description: 'Delete one block using optimistic concurrency. expected_updated_at must match the block returned by get_content_block or get_content_document_outline.',
+    destructive: true,
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        block_id: { type: 'string' },
+        expected_updated_at: { type: 'string' },
+      },
+      required: ['block_id', 'expected_updated_at'],
+      additionalProperties: false,
+    },
+    outputSchema: CONTENT_BLOCK_WRITE_RESULT_SCHEMA,
+  }),
+  readTool({
+    name: 'render_content_preview',
+    description: 'Render the current content blocks back to a compatibility Markdown body without publishing.',
+    inputSchema: {
+      type: 'object',
+      properties: CONTENT_DOCUMENT_LOOKUP_SCHEMA,
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        body_markdown: { type: 'string' },
+        blocks: { type: 'array', items: CONTENT_BLOCK_SCHEMA },
+      },
+      required: ['body_markdown', 'blocks'],
+      additionalProperties: false,
+    },
+  }),
+  writeTool({
+    name: 'publish_content_revision',
+    description: 'Publish the current draft revision for a platform blog, platform doc, or tenant blog content document. Provide either document_id, or owner_type plus owner_id.',
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: CONTENT_DOCUMENT_LOOKUP_SCHEMA,
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: { success: { type: 'boolean' } },
+      required: ['success'],
+      additionalProperties: false,
+    },
   }),
   readTool({
     name: 'list_platform_blog_posts',

@@ -183,6 +183,13 @@
       "when": 1783389744892,
       "tag": "0032_new_scourge",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1783391736305,
+      "tag": "0033_flippant_night_nurse",
+      "breakpoints": true
     }
   ]
 }
