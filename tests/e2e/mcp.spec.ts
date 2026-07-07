@@ -813,13 +813,13 @@ test.describe('stateless MCP server', () => {
     expect(gbConnectionCall.status()).toBe(404)
   })
 
-  test('cross-tenant isolation — owner of site A cannot read or mutate site B through MCP', async ({ request, baseURL }) => {
+  test('cross-tenant isolation — owner of site B cannot read or mutate site A through MCP', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
     await loginAsFreshMcpUser(request, baseURL!)
     const siteA = await ensureSite(request, baseURL!)
 
     await loginAsFreshMcpUser(request, baseURL!)
-    const siteB = await ensureSite(request, baseURL!)
+    await ensureSite(request, baseURL!)
 
     const crossRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -834,6 +834,14 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteA, brand_description: 'cross-tenant injection attempt' },
     })
     expect(crossMutate.status()).toBe(404)
+  })
+
+  // Positive control for the isolation test above — proves the 404s there come
+  // from cross-tenant isolation and not from the caller's own session/site
+  // being broken.
+  test('owner can still read their own site through MCP after a cross-tenant isolation check', async ({ request, baseURL }) => {
+    await loginAsFreshMcpUser(request, baseURL!)
+    const siteB = await ensureSite(request, baseURL!)
 
     const ownSiteRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',

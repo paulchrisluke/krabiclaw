@@ -37,7 +37,7 @@ export function assertDevRouteAllowed(event: H3Event) {
     // leaks into a production-looking deploy, this login-bypass route would
     // otherwise become a live impersonate-any-user backdoor. Gate on the
     // request host too, so a config mistake 404s instead of granting access.
-    const hostname = (getRequestHost(event, { xForwardedHost: true }) || '').split(':')[0] || ''
+    const hostname = (getRequestHost(event) || '').split(':')[0] || ''
     const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1'
     if (!isLocalHost && !isPreviewContext(hostname)) {
       throw createError({ statusCode: 404, statusMessage: 'Not found' })
