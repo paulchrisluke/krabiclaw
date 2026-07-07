@@ -201,15 +201,16 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
     managed_service: false,
     seo_accelerator: false,
     whatsapp_notifications: false,
+    review_requests: false,
   }
 
   switch (plan) {
     case 'growth':
-      return { ...base, translation: true, translation_languages: 1, ai_credits: 2000, google_business: true, custom_domains: true, managed_service: true, whatsapp_notifications: true }
+      return { ...base, translation: true, translation_languages: 1, ai_credits: 2000, google_business: true, custom_domains: true, managed_service: true, whatsapp_notifications: true, review_requests: true }
     case 'managed':
-      return { ...base, translation: true, translation_languages: -1, ai_credits: 'unlimited', managed_service: true, custom_domains: true, google_business: true, advanced_seo: true, whatsapp_notifications: true }
+      return { ...base, translation: true, translation_languages: -1, ai_credits: 'unlimited', managed_service: true, custom_domains: true, google_business: true, advanced_seo: true, whatsapp_notifications: true, review_requests: true }
     case 'seo_accelerator':
-      return { ...base, translation: true, translation_languages: -1, ai_credits: 'unlimited', managed_service: true, seo_accelerator: true, custom_domains: true, google_business: true, advanced_seo: true, whatsapp_notifications: true }
+      return { ...base, translation: true, translation_languages: -1, ai_credits: 'unlimited', managed_service: true, seo_accelerator: true, custom_domains: true, google_business: true, advanced_seo: true, whatsapp_notifications: true, review_requests: true }
     default:
       return base
   }

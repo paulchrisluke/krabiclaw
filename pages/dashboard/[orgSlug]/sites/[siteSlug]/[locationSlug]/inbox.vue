@@ -50,11 +50,17 @@
               </div>
               <p class="mt-1 text-sm text-muted">{{ reservation.date }} at {{ reservation.time }} · {{ reservation.guests }} guests</p>
               <p class="mt-1 text-sm text-muted">{{ reservation.email }} · {{ reservation.phone }}</p>
+              <p v-if="reservation.completed_at" class="mt-1 text-xs text-muted">
+                Completed {{ formatDate(reservation.completed_at) }}
+                <span v-if="reservation.review_request_sent_at">· review requested {{ formatDate(reservation.review_request_sent_at) }}</span>
+              </p>
               <p v-if="reservation.requests" class="mt-3 text-sm text-default">{{ reservation.requests }}</p>
             </div>
             <div class="flex shrink-0 flex-wrap gap-2">
               <UButton size="sm" color="success" variant="ghost" @click="updateReservationStatus(reservation, 'confirmed')">Confirm</UButton>
               <UButton size="sm" color="neutral" variant="ghost" @click="updateReservationStatus(reservation, 'completed')">Complete</UButton>
+              <UButton size="sm" color="primary" variant="soft" :disabled="!reservation.completed_at || Boolean(reservation.review_request_sent_at)" @click="sendReservationReviewRequest(reservation, 'first')">Ask review</UButton>
+              <UButton size="sm" color="primary" variant="ghost" :disabled="!reservation.review_request_sent_at || Boolean(reservation.review_reminder_sent_at) || Boolean(reservation.review_submitted_at)" @click="sendReservationReviewRequest(reservation, 'reminder')">Remind</UButton>
               <UButton size="sm" color="error" variant="ghost" @click="updateReservationStatus(reservation, 'cancelled')">Cancel</UButton>
               <UButton icon="i-lucide-messages-square" color="neutral" variant="soft" size="sm" @click="startReply('reservation', reservation)">Reply</UButton>
             </div>
@@ -79,10 +85,17 @@
               </div>
               <p class="mt-1 text-sm text-muted">{{ booking.experience_title }} · {{ booking.booking_date }} at {{ booking.time_slot }} · {{ booking.party_size }} guests</p>
               <p class="mt-1 text-sm text-muted">{{ booking.guest_email }}<span v-if="booking.guest_phone"> · {{ booking.guest_phone }}</span></p>
+              <p v-if="booking.completed_at" class="mt-1 text-xs text-muted">
+                Completed {{ formatDate(booking.completed_at) }}
+                <span v-if="booking.review_request_sent_at">· review requested {{ formatDate(booking.review_request_sent_at) }}</span>
+              </p>
               <p v-if="booking.notes" class="mt-3 text-sm text-default">{{ booking.notes }}</p>
             </div>
             <div class="flex shrink-0 flex-wrap gap-2">
               <UButton size="sm" color="success" variant="ghost" @click="updateBookingStatus(booking, 'confirmed')">Confirm</UButton>
+              <UButton size="sm" color="neutral" variant="ghost" :disabled="booking.status !== 'confirmed' || Boolean(booking.completed_at)" @click="completeBooking(booking)">Complete</UButton>
+              <UButton size="sm" color="primary" variant="soft" :disabled="!booking.completed_at || Boolean(booking.review_request_sent_at)" @click="sendBookingReviewRequest(booking, 'first')">Ask review</UButton>
+              <UButton size="sm" color="primary" variant="ghost" :disabled="!booking.review_request_sent_at || Boolean(booking.review_reminder_sent_at) || Boolean(booking.review_submitted_at)" @click="sendBookingReviewRequest(booking, 'reminder')">Remind</UButton>
               <UButton size="sm" color="error" variant="ghost" @click="updateBookingStatus(booking, 'cancelled')">Cancel</UButton>
               <UButton icon="i-lucide-messages-square" color="neutral" variant="soft" size="sm" @click="startReply('experience_booking', { id: booking.id, email: booking.guest_email, phone: booking.guest_phone })">Reply</UButton>
             </div>
@@ -141,6 +154,10 @@ interface ReservationSubmission {
   requests: string | null
   status: string
   created_at: string
+  completed_at: string | null
+  review_request_sent_at: string | null
+  review_reminder_sent_at: string | null
+  review_submitted_at: string | null
 }
 
 interface ExperienceBooking {
@@ -155,6 +172,10 @@ interface ExperienceBooking {
   status: string
   notes: string | null
   created_at: string
+  completed_at: string | null
+  review_request_sent_at: string | null
+  review_reminder_sent_at: string | null
+  review_submitted_at: string | null
 }
 
 type SubmissionKind = 'contact' | 'reservation' | 'experience_booking'
@@ -277,9 +298,24 @@ async function updateReservationStatus(submission: ReservationSubmission, status
       body: { status }
     })
     submission.status = status
+    if (status === 'completed') submission.completed_at ||= new Date().toISOString()
     toast.add({ description: 'Reservation status updated', color: 'success' })
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to update reservation status', color: 'error' })
+  }
+}
+
+async function sendReservationReviewRequest(submission: ReservationSubmission, kind: 'first' | 'reminder') {
+  try {
+    await $fetch(`/api/dashboard/editor/reservation-submissions/${submission.id}/review-request`, {
+      method: 'POST',
+      body: { kind }
+    })
+    if (kind === 'first') submission.review_request_sent_at = new Date().toISOString()
+    else submission.review_reminder_sent_at = new Date().toISOString()
+    toast.add({ description: 'Review request sent', color: 'success' })
+  } catch (error) {
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to send review request', color: 'error' })
   }
 }
 
@@ -293,6 +329,30 @@ async function updateBookingStatus(booking: ExperienceBooking, status: 'pending'
     toast.add({ description: 'Booking status updated', color: 'success' })
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to update booking status', color: 'error' })
+  }
+}
+
+async function completeBooking(booking: ExperienceBooking) {
+  try {
+    await $fetch(`/api/dashboard/editor/experience-bookings/${booking.id}/complete`, { method: 'POST' })
+    booking.completed_at = new Date().toISOString()
+    toast.add({ description: 'Booking completed', color: 'success' })
+  } catch (error) {
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to complete booking', color: 'error' })
+  }
+}
+
+async function sendBookingReviewRequest(booking: ExperienceBooking, kind: 'first' | 'reminder') {
+  try {
+    await $fetch(`/api/dashboard/editor/experience-bookings/${booking.id}/review-request`, {
+      method: 'POST',
+      body: { kind }
+    })
+    if (kind === 'first') booking.review_request_sent_at = new Date().toISOString()
+    else booking.review_reminder_sent_at = new Date().toISOString()
+    toast.add({ description: 'Review request sent', color: 'success' })
+  } catch (error) {
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to send review request', color: 'error' })
   }
 }
 

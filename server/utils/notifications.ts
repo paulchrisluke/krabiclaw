@@ -15,6 +15,8 @@ import BookingOwnerNew from '~/server/emails/templates/BookingOwnerNew'
 import BookingGuestReceived from '~/server/emails/templates/BookingGuestReceived'
 import BookingOwnerCancelled from '~/server/emails/templates/BookingOwnerCancelled'
 import BookingGuestCancelled from '~/server/emails/templates/BookingGuestCancelled'
+import BookingThankYouReviewRequest from '~/server/emails/templates/BookingThankYouReviewRequest'
+import BookingReviewReminder from '~/server/emails/templates/BookingReviewReminder'
 
 const SUBJECT_LABELS: Record<string, string> = {
   general: 'General',
@@ -123,6 +125,20 @@ interface ReviewNotificationInput extends SiteContext {
   authorName: string
   rating: number
   content?: string | null
+}
+
+interface ReviewRequestNotificationInput extends SiteContext {
+  locationId?: string | null
+  requestId: string
+  bookingType: 'reservation' | 'experience_booking'
+  bookingId: string
+  kind: 'first' | 'reminder'
+  guestName: string
+  email: string
+  locationName?: string | null
+  bookingLabel: string
+  reviewUrl: string
+  optOutUrl: string
 }
 
 interface EmailTemplate {
@@ -328,7 +344,7 @@ async function sendEmailNotification(
     payload: Record<string, string>
     email: EmailTemplate
   }
-) {
+): Promise<boolean> {
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   const payloadWithPreview = {
@@ -368,7 +384,7 @@ async function sendEmailNotification(
       title: opts.title,
       reservedTestDomain: isReservedTestDomain(opts.to),
     })
-    return
+    return true
   }
 
   if (!env.RESEND_API_KEY) {
@@ -377,7 +393,7 @@ async function sendEmailNotification(
       `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`,
       ['RESEND_API_KEY not configured', new Date().toISOString(), id],
     )
-    return
+    return false
   }
 
   const controller = new AbortController()
@@ -411,7 +427,7 @@ async function sendEmailNotification(
       `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`,
       [message, new Date().toISOString(), id],
     )
-    return
+    return false
   }
 
   clearTimeout(timeout)
@@ -423,7 +439,7 @@ async function sendEmailNotification(
       `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`,
       [error, new Date().toISOString(), id],
     )
-    return
+    return false
   }
 
   const data = await response.json().catch(() => ({})) as { id?: string }
@@ -432,6 +448,7 @@ async function sendEmailNotification(
     `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`,
     [data.id ?? null, new Date().toISOString(), id],
   )
+  return true
 }
 
 async function getLocationNotificationPhone(db: DbClient, locationId: string, organizationId: string, siteId: string): Promise<string | null> {
@@ -1020,6 +1037,56 @@ export async function notifyReviewReceived(
       error: error instanceof Error ? error.message : String(error)
     })
   }
+}
+
+export async function notifyReviewRequest(
+  env: NotificationEnv,
+  db: DbClient,
+  opts: ReviewRequestNotificationInput
+): Promise<boolean> {
+  const restaurant = siteName(opts)
+  const platformDomain = getPlatformDomain(env)
+  const templateComponent = opts.kind === 'reminder' ? BookingReviewReminder : BookingThankYouReviewRequest
+  const templateName = opts.kind === 'reminder' ? 'booking_review_reminder' : 'booking_thank_you_review_request'
+  const title = opts.kind === 'reminder'
+    ? `Review reminder for ${opts.bookingLabel}`
+    : `Review request for ${opts.bookingLabel}`
+
+  const email = await useRender(templateComponent, {
+    props: {
+      guestName: opts.guestName,
+      siteName: restaurant,
+      locationName: opts.locationName ?? null,
+      bookingLabel: opts.bookingLabel,
+      reviewUrl: opts.reviewUrl,
+      optOutUrl: opts.optOutUrl,
+      platformDomain,
+    },
+  })
+
+  return await sendEmailNotification(env, db, {
+    ...opts,
+    to: opts.email,
+    template: templateName,
+    title,
+    payload: {
+      request_id: opts.requestId,
+      booking_type: opts.bookingType,
+      booking_id: opts.bookingId,
+      guest_name: opts.guestName,
+      booking_label: opts.bookingLabel,
+      review_url: opts.reviewUrl,
+      opt_out_url: opts.optOutUrl,
+      site_name: restaurant,
+    },
+    email: {
+      subject: opts.kind === 'reminder'
+        ? `Reminder: review ${restaurant}`
+        : `How was your visit to ${restaurant}?`,
+      html: email.html,
+      text: email.text,
+    },
+  })
 }
 
 export async function notifyExperienceBookingCreated(
