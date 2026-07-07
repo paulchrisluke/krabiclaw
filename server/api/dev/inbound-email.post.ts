@@ -1,6 +1,5 @@
 import type { H3Event } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import type { H3Event } from 'h3'
 import {
   buildReplyToAddress,
   getSubmissionOrgSite,

@@ -2,7 +2,6 @@ import type { H3Event } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { findSubmissionByPhone, insertInboundSubmissionReply } from '~/server/utils/submission-messages'
 import { normalizePhone } from '~/server/utils/whatsapp'
-import type { H3Event } from 'h3'
 
 const enc = new TextEncoder()
 
