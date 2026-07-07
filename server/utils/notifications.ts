@@ -177,15 +177,13 @@ function formatTimeHuman(timeValue: string): string {
   }).format(dt)
 }
 
-function buildReservationWhatsAppContext(locationName?: string | null, requests?: string | null): string {
-  const location = locationName?.trim() ? `Location: ${locationName.trim()}` : 'Location not provided'
-  return requests?.trim() ? `${location} · Special requests: ${requests.trim()}` : location
+function buildReservationWhatsAppContext(locationName?: string | null): string {
+  return locationName?.trim() ? `Location: ${locationName.trim()}` : 'Location not provided'
 }
 
-function buildExperienceWhatsAppContext(experienceTitle: string, siteName?: string | null, requests?: string | null): string {
+function buildExperienceWhatsAppContext(experienceTitle: string, siteName?: string | null): string {
   const business = siteName?.trim() || 'the business'
-  const base = `Business: ${business} · Experience: ${experienceTitle}`
-  return requests?.trim() ? `${base} · Special requests: ${requests.trim()}` : base
+  return `Business: ${business} · Experience: ${experienceTitle}`
 }
 
 // Deep-links an owner notification email straight to the dashboard inbox thread for that
@@ -755,7 +753,8 @@ export async function notifyReservationCancelled(
           time: prettyTime,
           guests: opts.guests,
           phone: opts.phone,
-          context: buildReservationWhatsAppContext(opts.locationName, opts.requests),
+          context: buildReservationWhatsAppContext(opts.locationName),
+          requests: opts.requests ?? '',
         },
       },
     }),
@@ -1147,7 +1146,8 @@ export async function notifyExperienceBookingCancelled(
           time: prettyTime,
           guests: String(opts.partySize),
           phone: opts.guestPhone ?? '',
-          context: buildExperienceWhatsAppContext(opts.experienceTitle, opts.siteName, opts.notes),
+          context: buildExperienceWhatsAppContext(opts.experienceTitle, opts.siteName),
+          requests: opts.notes ?? '',
         },
       },
     }),

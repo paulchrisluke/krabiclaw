@@ -1,13 +1,13 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { publishPost } from '~/server/utils/post-management'
+import { getPost, publishPost } from '~/server/utils/post-management'
 import {
   getFacebookPagesConnection,
   publishToPage,
   getLinkedInstagramAccount,
   publishToInstagram,
 } from '~/server/utils/facebook-pages'
-import { execute, queryAll, queryFirst } from '~/server/db'
+import { execute, queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -147,23 +147,11 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Re-fetch post so channel job statuses are current
-  const updatedPost = await queryFirst<Record<string, unknown>>(db, `
-    SELECT p.*, ma.public_url, ma.kind
-    FROM posts p
-    LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
-    WHERE p.id = ? AND p.organization_id = ? AND p.site_id = ?
-  `, [postId, site.organization_id, siteId])
-
-  const jobs = await queryAll(
-    db,
-    `SELECT * FROM post_channel_jobs WHERE post_id = ? ORDER BY channel`,
-    [postId],
-  )
+  const updatedPost = await getPost(db, site.organization_id, siteId, postId)
 
   return jsonResponse({
     success: true,
-    post: { ...updatedPost, channels: jobs },
+    post: updatedPost,
     ...(Object.keys(socialErrors).length > 0 ? { socialErrors } : {}),
   })
 })

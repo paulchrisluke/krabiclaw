@@ -192,6 +192,7 @@ export const postObject = {
   type: 'object',
   properties: {
     id: { type: 'string' },
+    slug: { type: ['string', 'null'] },
     title: { type: ['string', 'null'] },
     body: { type: 'string' },
     post_type: { type: 'string', enum: ['standard', 'offer', 'event', 'update'] },
@@ -206,6 +207,41 @@ export const postObject = {
     status: { type: 'string', enum: ['draft', 'published', 'scheduled', 'archived'] },
     scheduled_for: { type: ['string', 'null'] },
     published_at: { type: ['string', 'null'] },
+    public_path: { type: ['string', 'null'] },
+    canonical_url: { type: ['string', 'null'] },
+    seo_title: { type: ['string', 'null'] },
+    seo_description: { type: ['string', 'null'] },
+    og_image_asset_id: { type: ['string', 'null'] },
+    media: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          mediaAssetId: { type: ['string', 'null'] },
+          url: { type: 'string' },
+          googleUrl: { type: 'string' },
+          kind: { type: 'string', enum: ['image', 'video'] },
+          mediaFormat: { type: 'string', enum: ['IMAGE', 'VIDEO'] },
+          role: { type: ['string', 'null'], enum: ['cover', 'gallery', null] },
+          caption: { type: ['string', 'null'] },
+          altText: { type: ['string', 'null'] },
+        },
+      },
+    },
+    gallery_media: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          mediaAssetId: { type: ['string', 'null'] },
+          url: { type: 'string' },
+          kind: { type: 'string', enum: ['image', 'video'] },
+          role: { type: ['string', 'null'], enum: ['cover', 'gallery', null] },
+          caption: { type: ['string', 'null'] },
+          altText: { type: ['string', 'null'] },
+        },
+      },
+    },
     channels: {
       type: 'array',
       description: 'Per-channel publish job status. Check this for facebook/instagram publish failures — publish_post can succeed overall while an individual channel is skipped or failed.',

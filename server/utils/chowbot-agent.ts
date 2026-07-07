@@ -604,6 +604,11 @@ async function executeTool(
           title: input.title,
           body: input.body,
           image_asset_id: input.image_asset_id,
+          slug: input.slug,
+          seo_title: input.seo_title,
+          seo_description: input.seo_description,
+          og_image_asset_id: input.og_image_asset_id,
+          gallery_media: input.gallery_media,
           location_id: input.location_id,
           post_type: input.post_type,
           cta_type: input.cta_type,
@@ -622,6 +627,8 @@ async function executeTool(
         body: post.body,
         status: post.status,
         post_type: post.post_type,
+        public_path: post.public_path,
+        public_url: post.canonical_url,
       };
     }
 
@@ -635,6 +642,8 @@ async function executeTool(
         title: result.title,
         status: result.status,
         published_at: result.published_at,
+        public_path: result.public_path,
+        public_url: result.canonical_url,
       };
     }
 
@@ -648,6 +657,11 @@ async function executeTool(
           title: input.title,
           body: input.body,
           image_asset_id: input.image_asset_id,
+          slug: input.slug,
+          seo_title: input.seo_title,
+          seo_description: input.seo_description,
+          og_image_asset_id: input.og_image_asset_id,
+          gallery_media: input.gallery_media,
           location_id: input.location_id,
           post_type: input.post_type,
           cta_type: input.cta_type,
@@ -666,6 +680,8 @@ async function executeTool(
         title: post.title,
         body: post.body,
         status: post.status,
+        public_path: post.public_path,
+        public_url: post.canonical_url,
         updated: true,
       };
     }
@@ -3045,7 +3061,7 @@ ${SETUP_PREAMBLE}
 Site: ${siteName}
 Default menu currency: ${opts.defaultCurrency}
 Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?? locationId} (id: ${locationId})` : ""}
-${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. Use this asset_id directly in any tool that accepts image/media — update_menu_item (image_asset_id), create_menu_item (image_asset_id), add_menu_items_batch (image_asset_id), update_location or create_location (hero_image_asset_id / hero_video_asset_id), create_post (image_asset_id). If the user wants to import/extract menu items from it, call import_menu_from_media. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call, also call resolve_pending_media with action=save_media to clear the pending state. If the user's intent is unclear, ask one short clarifying question.` : ""}
+${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. Use this asset_id directly in any tool that accepts image/media — update_menu_item (image_asset_id), create_menu_item (image_asset_id), add_menu_items_batch (image_asset_id), update_location or create_location (hero_image_asset_id / hero_video_asset_id), create_post (image_asset_id for the cover, or gallery_media for additional public post media). If the user wants to import/extract menu items from it, call import_menu_from_media. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call, also call resolve_pending_media with action=save_media to clear the pending state. If the user's intent is unclear, ask one short clarifying question.` : ""}
 
 Capabilities (always use tools — never say you can't do something the tools support):
 - Posts: list, create, update, delete, publish (standard/offer/event/update with CTA) — optionally location-scoped

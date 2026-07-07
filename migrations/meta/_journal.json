@@ -190,6 +190,13 @@
       "when": 1783397715691,
       "tag": "0033_silly_psynapse",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1783397832027,
+      "tag": "0034_unknown_red_wolf",
+      "breakpoints": true
     }
   ]
 }

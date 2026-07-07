@@ -124,7 +124,7 @@ interface RawPlace {
   rating?: number
   userRatingCount?: number
   regularOpeningHours?: { weekdayDescriptions?: string[] }
-  addressComponents?: Array<{ longText?: string; types?: string[] }>
+  addressComponents?: Array<{ longText?: string; types?: string[]; languageCode?: string }>
   reviews?: RawReview[]
   photos?: RawPhoto[]
 }
@@ -142,10 +142,16 @@ function scrubNonLatin(value: string | null): string | null {
 
 function extractCity(components?: RawPlace['addressComponents']): string | null {
   if (!components) return null
+  // Some Thai subdistricts (locality) have no English name in Google's dataset even
+  // with languageCode=en on the request — that field comes back Thai-only. Prefer an
+  // explicitly English-tagged component for the type, then fall through to the next
+  // type (e.g. administrative_area_level_2) rather than surfacing Thai script.
   const cityTypes = ['locality', 'administrative_area_level_2', 'administrative_area_level_1']
   for (const type of cityTypes) {
-    const comp = components.find(c => c.types?.includes(type))
-    if (comp?.longText) return comp.longText
+    const matches = components.filter(c => c.types?.includes(type) && c.longText)
+    const preferred = matches.find(c => c.languageCode === 'en')
+      ?? matches.find(c => c.longText && !NON_LATIN_SCRIPT_RE.test(c.longText))
+    if (preferred?.longText) return preferred.longText
   }
   return null
 }

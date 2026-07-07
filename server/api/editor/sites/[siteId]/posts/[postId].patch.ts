@@ -1,6 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { updatePost } from '~/server/utils/post-management'
+import { PostValidationError, updatePost } from '~/server/utils/post-management'
 import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -25,21 +25,34 @@ export default defineEventHandler(async (event) => {
   `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const post = await updatePost(db, site.organization_id, siteId, postId, {
-    title: body.title,
-    body: body.body,
-    image_asset_id: body.image_asset_id,
-    scheduled_for: body.scheduled_for,
-    location_id: body.location_id,
-    post_type: body.post_type,
-    cta_type: body.cta_type,
-    cta_url: body.cta_url,
-    event_title: body.event_title,
-    event_start: body.event_start,
-    event_end: body.event_end,
-    offer_coupon: body.offer_coupon,
-    offer_terms: body.offer_terms,
-  }, session.user.id)
+  let post
+  try {
+    post = await updatePost(db, site.organization_id, siteId, postId, {
+      title: body.title,
+      body: body.body,
+      image_asset_id: body.image_asset_id,
+      slug: body.slug,
+      seo_title: body.seo_title,
+      seo_description: body.seo_description,
+      og_image_asset_id: body.og_image_asset_id,
+      gallery_media: body.gallery_media,
+      scheduled_for: body.scheduled_for,
+      location_id: body.location_id,
+      post_type: body.post_type,
+      cta_type: body.cta_type,
+      cta_url: body.cta_url,
+      event_title: body.event_title,
+      event_start: body.event_start,
+      event_end: body.event_end,
+      offer_coupon: body.offer_coupon,
+      offer_terms: body.offer_terms,
+    }, session.user.id)
+  } catch (error) {
+    if (error instanceof PostValidationError) {
+      return jsonResponse({ error: error.message }, { status: error.statusCode })
+    }
+    throw error
+  }
 
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   return jsonResponse({ success: true, post })

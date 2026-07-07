@@ -14,7 +14,7 @@
         :id="getPostSlug(post.name) || `post-${index}`"
         :key="getPostSlug(post.name) || `post-${index}`"
         class="flex flex-col bg-default border border-default rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 group cursor-pointer"
-        @click="openModal(post)"
+        @click="openPost(post)"
       >
         <div class="aspect-4/5 overflow-hidden bg-muted relative">
           <template v-if="post.media?.[0]">
@@ -115,6 +115,21 @@
           <p class="mb-1 font-bold text-white">{{ t('saya.posts.special_offer_label') }}</p>
           <p class="text-white/90">{{ selectedPost.offer.title }} <span v-if="selectedPost.offer.couponCode">• {{ t('saya.posts.code_label') }} {{ selectedPost.offer.couponCode }}</span></p>
         </div>
+        <div v-if="selectedPostPath" class="mt-4 flex flex-wrap gap-2">
+          <NuxtLink
+            :to="selectedPostPath"
+            class="inline-flex items-center justify-center rounded-full bg-white px-5 py-2.5 text-base font-medium text-black no-underline transition hover:bg-zinc-200"
+          >
+            {{ t('saya.posts.read_full_story') }}
+          </NuxtLink>
+          <button
+            type="button"
+            class="inline-flex items-center justify-center rounded-full bg-white/15 px-5 py-2.5 text-base font-medium text-white transition hover:bg-white/25"
+            @click="copySelectedPostUrl"
+          >
+            Copy link
+          </button>
+        </div>
         <NuxtLink
           v-if="selectedPost.callToAction && selectedPost.callToAction.url"
           :to="selectedPost.callToAction.url"
@@ -145,16 +160,33 @@ const props = defineProps({
 const modalOpen = ref(false)
 const selectedPost = ref(null)
 
+async function openPost(post) {
+  const path = resolvePostPath(post)
+  if (path) {
+    await navigateTo(path)
+    return
+  }
+  openModal(post)
+}
+
 function openModal(post) {
   selectedPost.value = post
   modalOpen.value = true
 }
 
 const lightboxItems = computed(() => {
-  const media = selectedPost.value?.media?.[0]
-  if (!media) return []
-  return [{ url: media.googleUrl, kind: media.mediaFormat === 'VIDEO' ? 'video' : 'image', alt: selectedPost.value.title || t('saya.posts.image_alt') }]
+  const media = selectedPost.value?.media || selectedPost.value?.gallery || []
+  return media
+    .filter(item => item?.googleUrl || item?.url)
+    .map(item => ({
+      url: item.googleUrl || item.url,
+      kind: item.mediaFormat === 'VIDEO' || item.kind === 'video' ? 'video' : 'image',
+      alt: item.alt || item.altText || selectedPost.value.title || t('saya.posts.image_alt'),
+      description: item.caption || selectedPost.value.summary
+    }))
 })
+
+const selectedPostPath = computed(() => selectedPost.value ? resolvePostPath(selectedPost.value) : '')
 
 const displayedPosts = computed(() => {
   return props.limit ? props.posts.slice(0, props.limit) : props.posts
@@ -175,5 +207,15 @@ const { t } = useI18n()
 function getPostSlug(name) {
   if (!name) return ''
   return name.split('/').pop()
+}
+
+function resolvePostPath(post) {
+  return post?.publicPath || post?.public_path || ''
+}
+
+async function copySelectedPostUrl() {
+  if (!selectedPostPath.value || !import.meta.client) return
+  const url = new URL(selectedPostPath.value, window.location.origin).toString()
+  await navigator.clipboard?.writeText(url)
 }
 </script>

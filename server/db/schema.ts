@@ -844,10 +844,14 @@ export const posts = sqliteTable("posts", {
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
 	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
 	google_post_id: text(),
+	slug: text(),
 	post_type: text().default("standard").notNull(),
 	title: text(),
 	body: text().notNull(),
 	image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
+	seo_title: text(),
+	seo_description: text(),
+	og_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	cta_type: text(),
 	cta_url: text(),
 	event_title: text(),
@@ -862,8 +866,26 @@ export const posts = sqliteTable("posts", {
 	created_by: text().notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (_table) => [
+}, (table) => [
+	uniqueIndex("posts_site_slug_idx").on(table.site_id, table.slug).where(sql`slug IS NOT NULL`),
 	check("posts_source_check", sql`source IN ('manual', 'template')`),
+]);
+
+export const post_media = sqliteTable("post_media", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	post_id: text().notNull().references(() => posts.id, { onDelete: "cascade" } ),
+	media_asset_id: text().notNull().references(() => media_assets.id, { onDelete: "cascade" } ),
+	role: text().default("gallery").notNull(),
+	sort_order: integer().default(0).notNull(),
+	caption: text(),
+	alt_text: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("post_media_post_idx").on(table.post_id, table.sort_order),
+	check("post_media_role_check", sql`role IN ('cover', 'gallery')`),
 ]);
 
 export const rate_limits = sqliteTable("rate_limits", {
