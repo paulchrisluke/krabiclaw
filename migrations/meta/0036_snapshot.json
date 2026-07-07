@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "88e99d74-2193-40c9-b999-31a1dd5ab8cb",
+  "id": "2ff48f0e-ed71-4ff6-9e06-d7227cb6ca16",
   "prevId": "cd8ee7ad-0cdc-4f75-a4e8-cfef907e7b78",
   "tables": {
     "account": {
@@ -8023,6 +8023,22 @@
             "sort_order"
           ],
           "isUnique": false
+        },
+        "post_media_post_asset_unique": {
+          "name": "post_media_post_asset_unique",
+          "columns": [
+            "post_id",
+            "media_asset_id"
+          ],
+          "isUnique": true
+        },
+        "post_media_cover_unique": {
+          "name": "post_media_cover_unique",
+          "columns": [
+            "post_id"
+          ],
+          "isUnique": true,
+          "where": "role = 'cover'"
         }
       },
       "foreignKeys": {
