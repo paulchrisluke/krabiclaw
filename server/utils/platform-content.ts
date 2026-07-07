@@ -1,4 +1,11 @@
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import {
+  deleteContentDocumentForOwner,
+  publishCurrentContentRevision,
+  syncContentDocumentFromMarkdown,
+  unpublishContentDocument,
+  type ContentDocumentOwnerType,
+} from '~/server/utils/content-documents'
 import { slugifyTitle } from '~/utils/post-slugs'
 import { PLATFORM_MEDIA_SITE_ID } from '~/server/utils/platform-media'
 import { BLOG_CATEGORY_LABELS, blogCategoryToSlug } from '~/utils/blog-categories'
@@ -43,6 +50,50 @@ export type PlatformRobotsDirective = 'index,follow' | 'noindex,follow' | 'index
 export const PLATFORM_CONTENT_COMPONENT_TYPES: readonly PlatformContentComponentType[] = ['faq', 'how_to', 'ai_assistance']
 export const PLATFORM_COMPONENT_STATUSES: readonly PlatformContentComponentStatus[] = ['active', 'inactive']
 export const PLATFORM_ROBOTS_DIRECTIVES: readonly PlatformRobotsDirective[] = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow']
+
+function blogContentOwnerType(siteId: string | null): ContentDocumentOwnerType {
+  return siteId ? 'tenant_blog' : 'platform_blog'
+}
+
+async function syncBlogContentDocument(
+  db: D1Database,
+  postId: string,
+  siteId: string | null,
+  input: { body?: string; publish?: boolean; unpublish?: boolean },
+  createdBy?: string | null,
+) {
+  const ownerType = blogContentOwnerType(siteId)
+  if (input.body !== undefined) {
+    await syncContentDocumentFromMarkdown(db, {
+      ownerType,
+      ownerId: postId,
+      bodyMarkdown: input.body,
+      createdBy,
+      label: input.publish ? 'Published markdown body' : 'Draft markdown body',
+      publish: Boolean(input.publish),
+    })
+  } else if (input.publish) await publishCurrentContentRevision(db, ownerType, postId)
+  if (input.unpublish) await unpublishContentDocument(db, ownerType, postId)
+}
+
+async function syncDocContentDocument(
+  db: D1Database,
+  docId: string,
+  input: { body?: string; publish?: boolean; unpublish?: boolean },
+  createdBy?: string | null,
+) {
+  if (input.body !== undefined) {
+    await syncContentDocumentFromMarkdown(db, {
+      ownerType: 'platform_doc',
+      ownerId: docId,
+      bodyMarkdown: input.body,
+      createdBy,
+      label: input.publish ? 'Published markdown body' : 'Draft markdown body',
+      publish: Boolean(input.publish),
+    })
+  } else if (input.publish) await publishCurrentContentRevision(db, 'platform_doc', docId)
+  if (input.unpublish) await unpublishContentDocument(db, 'platform_doc', docId)
+}
 
 export interface PlatformFaqItemInput {
   question: string
@@ -1250,8 +1301,10 @@ export async function createPlatformBlogPost(
 
       try {
         await syncStructuredContent(db, 'blog_post', id, input)
+        await syncBlogContentDocument(db, id, siteId, input, authorId)
       } catch (err) {
         try {
+          await deleteContentDocumentForOwner(db, blogContentOwnerType(siteId), id)
           await execute(db, 'DELETE FROM blog_posts WHERE id = ?', [id])
           await replaceContentComponents(db, 'blog_post', id, [])
         } catch (cleanupErr) {
@@ -1388,6 +1441,7 @@ export async function updatePlatformBlogPost(
     const priorPost = await getPlatformBlogPost(db, postId, siteId)
     try {
       await syncStructuredContent(db, 'blog_post', postId, input)
+      await syncBlogContentDocument(db, postId, siteId, input)
     } catch (err) {
       await syncStructuredContent(db, 'blog_post', postId, {
         components: priorPost?.components ?? []
@@ -1416,6 +1470,7 @@ export async function deletePlatformBlogPost(db: D1Database, postIdOrSlug: strin
     await replaceContentComponents(db, 'blog_post', postId, [])
     const result = await execute(db, 'DELETE FROM blog_posts WHERE id = ?', [postId])
     if (!result.meta.changes || result.meta.changes === 0) notFound('Post not found')
+    await deleteContentDocumentForOwner(db, blogContentOwnerType(siteId), postId)
   } catch (err) {
     await replaceContentComponents(db, 'blog_post', postId, priorComponents.map(c => ({
       type: c.type,
@@ -1554,8 +1609,15 @@ export async function createPlatformDoc(
 
       try {
         await syncStructuredContent(db, 'doc', id, input)
+        await syncDocContentDocument(db, id, input, authorId)
       } catch (syncErr) {
-        await execute(db, 'DELETE FROM platform_docs WHERE id = ?', [id])
+        try {
+          await deleteContentDocumentForOwner(db, 'platform_doc', id)
+          await execute(db, 'DELETE FROM platform_docs WHERE id = ?', [id])
+          await replaceContentComponents(db, 'doc', id, [])
+        } catch (cleanupErr) {
+          console.error('Failed to clean up platform doc after create rollback:', cleanupErr)
+        }
         throw syncErr
       }
 
@@ -1678,7 +1740,16 @@ export async function updatePlatformDoc(
        RETURNING id`, params)
     if (!doc) notFound('Doc not found')
 
-    await syncStructuredContent(db, 'doc', docId, input)
+    const priorDoc = await getPlatformDoc(db, docId)
+    try {
+      await syncStructuredContent(db, 'doc', docId, input)
+      await syncDocContentDocument(db, docId, input)
+    } catch (err) {
+      await syncStructuredContent(db, 'doc', docId, {
+        components: priorDoc?.components ?? []
+      })
+      throw err
+    }
     const updatedDoc = await getPlatformDoc(db, docId)
     return {
       success: true,
@@ -1696,9 +1767,24 @@ export async function updatePlatformDoc(
 
 export async function deletePlatformDoc(db: D1Database, docIdOrSlug: string) {
   const docId = await resolvePlatformContentId(db, 'platform_docs', docIdOrSlug, 'Doc not found')
-  await replaceContentComponents(db, 'doc', docId, [])
-  const result = await execute(db, 'DELETE FROM platform_docs WHERE id = ?', [docId])
-  if (!result.meta.changes || result.meta.changes === 0) notFound('Doc not found')
+  const priorComponents = await listContentComponents(db, 'doc', docId)
+  try {
+    await replaceContentComponents(db, 'doc', docId, [])
+    const result = await execute(db, 'DELETE FROM platform_docs WHERE id = ?', [docId])
+    if (!result.meta.changes || result.meta.changes === 0) notFound('Doc not found')
+    await deleteContentDocumentForOwner(db, 'platform_doc', docId)
+  } catch (err) {
+    await replaceContentComponents(db, 'doc', docId, priorComponents.map(c => ({
+      type: c.type,
+      data: c.data,
+      label: c.label,
+      status: c.status,
+      render_enabled: c.render_enabled,
+      schema_enabled: c.schema_enabled,
+      position: c.position,
+    })))
+    throw err
+  }
   return { success: true }
 }
 
