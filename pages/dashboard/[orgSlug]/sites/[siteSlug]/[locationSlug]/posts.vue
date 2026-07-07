@@ -403,13 +403,28 @@ const handleSave = async () => {
   finally { saving.value = false }
 }
 
+function hasUnsavedEdits(): boolean {
+  const post = selectedPost.value
+  if (!post) return true
+  if (editForm.title !== (post.title ?? '')) return true
+  if (editForm.body !== (post.body ?? '')) return true
+  if (editForm.slug !== (post.slug ?? '')) return true
+  if (editForm.seo_title !== (post.seo_title ?? '')) return true
+  if (editForm.seo_description !== (post.seo_description ?? '')) return true
+  if (editForm.image_asset_id !== (post.image_asset_id ?? null)) return true
+  if (editForm.location_id !== (post.location_id ?? '')) return true
+  const currentGallery = normalizeGalleryForForm(post.gallery_media ?? post.gallery ?? [])
+  if (JSON.stringify(editForm.gallery_media) !== JSON.stringify(currentGallery)) return true
+  return false
+}
+
 const handlePublish = async () => {
   if (!editForm.body.trim()) return
   publishing.value = true
   try {
     // Save any edits first
     let postId = selectedPost.value?.id
-    if (!postId || selectedPost.value) {
+    if (!postId || hasUnsavedEdits()) {
       const method = postId ? 'PATCH' : 'POST'
       const url = postId ? `/api/editor/sites/${siteId}/posts/${postId}` : `/api/editor/sites/${siteId}/posts`
       const res = await $fetch<ApiRecord>(url, { method, body: buildPostPayload(postId ? String(postId) : undefined) })

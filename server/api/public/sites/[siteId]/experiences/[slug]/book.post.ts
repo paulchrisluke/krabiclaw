@@ -6,7 +6,7 @@ import { fmt12Hour } from '~/shared/reservation-hours'
 import { notifyExperienceBookingCreated } from '~/server/utils/notifications'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { normalizePhone } from '~/server/utils/whatsapp'
-import { queryFirst } from '~/server/db'
+import { execute, queryFirst } from '~/server/db'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
 import { getPlatformDomain } from '~/server/utils/notifications'
@@ -168,6 +168,14 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'This time slot just filled up. Please pick another time.' }, { status: 409 })
   }
   await recordCustomerBooking(db, customer.id, customerInput)
+
+  // Update customer fields only after successful booking to avoid mutating existing
+  // customers on failed bookings (e.g., capacity conflicts).
+  await execute(db, `
+    UPDATE customers
+    SET last_booking_at = ?, updated_at = ?
+    WHERE id = ?
+  `, [`${bookingDate}T${timeSlot}:00`, new Date().toISOString(), customer.id])
 
   await fireSiteEventSafe({
     db,

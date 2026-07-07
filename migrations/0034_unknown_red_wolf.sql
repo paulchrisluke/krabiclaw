@@ -14,7 +14,9 @@ CREATE TABLE `post_media` (
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`post_id`) REFERENCES `posts`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`media_asset_id`) REFERENCES `media_assets`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "post_media_role_check" CHECK(role IN ('cover', 'gallery'))
+	CONSTRAINT "post_media_role_check" CHECK(role IN ('cover', 'gallery')),
+	UNIQUE(`post_id`, `media_asset_id`),
+	UNIQUE(`post_id`, `role`) WHERE role = 'cover'
 );
 --> statement-breakpoint
 CREATE INDEX `post_media_post_idx` ON `post_media` (`post_id`,`sort_order`);--> statement-breakpoint
