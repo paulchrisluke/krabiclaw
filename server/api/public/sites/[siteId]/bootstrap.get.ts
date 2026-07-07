@@ -374,12 +374,10 @@ export default defineEventHandler(async (event) => {
     idxLocale = -1,
     idxExpCount = -1;
   let idxReviews = -1,
-    idxPosts = -1,
     idxLocReviews = -1;
   let idxFullReviews = -1,
     idxPhotos = -1,
-    idxQa = -1,
-    idxLocPosts = -1;
+    idxQa = -1;
   let idxSourceContent = -1,
     idxContentTranslations = -1;
   let idxMenus = -1,
@@ -596,26 +594,6 @@ export default defineEventHandler(async (event) => {
       [siteId],
     );
 
-  if (needsGlobalPosts)
-    idxPosts = push(
-      `SELECT p.id, p.title, p.body, p.published_at, ma.public_url, ma.kind
-       FROM posts p
-       LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
-       WHERE p.site_id = ? AND p.status = 'published'
-       ORDER BY p.published_at DESC LIMIT ${page === "posts" ? 50 : 6}`,
-      [siteId],
-    );
-
-  if (locationId && dataType === "posts")
-    idxLocPosts = push(
-      `SELECT p.id, p.title, p.body, p.published_at, p.created_at, ma.public_url, ma.kind
-       FROM posts p
-       LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
-       WHERE p.site_id = ? AND p.location_id = ? AND p.status = 'published'
-       ORDER BY p.published_at DESC LIMIT 50`,
-      [siteId, locationId],
-    );
-
   if (locationId)
     idxLocReviews = push(
       `SELECT id, author_name, rating, content, created_at
@@ -703,10 +681,6 @@ export default defineEventHandler(async (event) => {
     idxReviews >= 0
       ? (batchResults[idxReviews] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
-  const postRows =
-    idxPosts >= 0
-      ? (batchResults[idxPosts] as { results: Record<string, unknown>[] })
-      : { results: [] as Record<string, unknown>[] };
   const locationReviewRows =
     idxLocReviews >= 0
       ? (batchResults[idxLocReviews] as { results: Record<string, unknown>[] })
@@ -723,12 +697,6 @@ export default defineEventHandler(async (event) => {
     idxQa >= 0
       ? (batchResults[idxQa] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
-  const locPostRows =
-    idxLocPosts >= 0
-      ? (batchResults[idxLocPosts] as { results: Record<string, unknown>[] })
-      : { results: [] as Record<string, unknown>[] };
-  void postRows;
-  void locPostRows;
   const localeRows = batchResults[idxLocale] as {
     results: {
       locale: string;

@@ -1051,6 +1051,10 @@ function normalizeHideFromNav(value: PlatformContentNavInput['hide_from_nav']) {
   return value ? 1 : 0
 }
 
+function hasOwnField<T extends object>(input: T, key: PropertyKey) {
+  return Object.prototype.hasOwnProperty.call(input, key)
+}
+
 // The fixed PLATFORM_BLOG_CATEGORIES taxonomy (Marketing, SEO, ...) only makes sense
 // for KrabiClaw's own marketing blog — a tenant restaurant's blog category is free text.
 function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant = false) {
@@ -1486,15 +1490,25 @@ export async function reorderPlatformBlogPosts(
   const queries: { query: string; params: unknown[] }[] = []
 
   for (const item of items) {
-    validateNavMetadata({
-      nav_section: item.nav_section ?? null,
-      nav_order: item.nav_order,
-      nav_section_order: item.nav_section_order ?? null,
-    })
+    const metadata: Partial<PlatformContentNavInput> = { nav_order: item.nav_order }
+    if (hasOwnField(item, 'nav_section')) metadata.nav_section = item.nav_section ?? null
+    if (hasOwnField(item, 'nav_section_order')) metadata.nav_section_order = item.nav_section_order ?? null
+    validateNavMetadata(metadata)
     const postId = await resolvePlatformContentId(db, 'blog_posts', item.post_id, 'Post not found')
+    const updates = ['nav_order = ?', 'updated_at = ?']
+    const params: ApiValue[] = [item.nav_order, now]
+    if (hasOwnField(item, 'nav_section')) {
+      updates.splice(1, 0, 'nav_section = ?')
+      params.splice(1, 0, item.nav_section ?? null)
+    }
+    if (hasOwnField(item, 'nav_section_order')) {
+      updates.splice(updates.length - 1, 0, 'nav_section_order = ?')
+      params.splice(params.length - 1, 0, item.nav_section_order ?? null)
+    }
+    params.push(postId)
     queries.push({
-      query: 'UPDATE blog_posts SET nav_section = ?, nav_order = ?, nav_section_order = ?, updated_at = ? WHERE id = ? AND site_id IS NULL',
-      params: [item.nav_section ?? null, item.nav_order, item.nav_section_order ?? null, now, postId],
+      query: `UPDATE blog_posts SET ${updates.join(', ')} WHERE id = ? AND site_id IS NULL`,
+      params,
     })
   }
 
@@ -1513,7 +1527,7 @@ export async function listPlatformDocs(db: DbClient, status?: string | null) {
     LEFT JOIN media_assets ma ON ma.id = d.featured_image_asset_id AND ma.status = 'active'`
   if (status === 'published') sql += " WHERE d.status = 'published'"
   else if (status === 'draft') sql += " WHERE d.status = 'draft'"
-  sql += ' ORDER BY COALESCE(d.nav_section_order, 999999), COALESCE(d.nav_section, d.category), COALESCE(d.nav_order, d.sort_order, 999999), d.created_at DESC'
+  sql += ' ORDER BY COALESCE(d.featured_order, 999999), COALESCE(d.nav_section_order, 999999), COALESCE(d.nav_section, d.category), COALESCE(d.nav_order, d.sort_order, 999999), d.created_at DESC'
   const results = await queryAll<ApiRecord>(db, sql)
   return (results ?? []).map(record => contentReviewUrls(attachFeaturedImage(attachPublished(record, record.status === 'published')), 'doc'))
 }
@@ -1751,15 +1765,25 @@ export async function reorderPlatformDocs(
   const queries: { query: string; params: unknown[] }[] = []
 
   for (const item of items) {
-    validateNavMetadata({
-      nav_section: item.nav_section ?? null,
-      nav_order: item.nav_order,
-      nav_section_order: item.nav_section_order ?? null,
-    })
+    const metadata: Partial<PlatformContentNavInput> = { nav_order: item.nav_order }
+    if (hasOwnField(item, 'nav_section')) metadata.nav_section = item.nav_section ?? null
+    if (hasOwnField(item, 'nav_section_order')) metadata.nav_section_order = item.nav_section_order ?? null
+    validateNavMetadata(metadata)
     const docId = await resolvePlatformContentId(db, 'platform_docs', item.doc_id, 'Doc not found')
+    const updates = ['nav_order = ?', 'updated_at = ?']
+    const params: ApiValue[] = [item.nav_order, now]
+    if (hasOwnField(item, 'nav_section')) {
+      updates.splice(1, 0, 'nav_section = ?')
+      params.splice(1, 0, item.nav_section ?? null)
+    }
+    if (hasOwnField(item, 'nav_section_order')) {
+      updates.splice(updates.length - 1, 0, 'nav_section_order = ?')
+      params.splice(params.length - 1, 0, item.nav_section_order ?? null)
+    }
+    params.push(docId)
     queries.push({
-      query: 'UPDATE platform_docs SET nav_section = ?, nav_order = ?, nav_section_order = ?, updated_at = ? WHERE id = ?',
-      params: [item.nav_section ?? null, item.nav_order, item.nav_section_order ?? null, now, docId],
+      query: `UPDATE platform_docs SET ${updates.join(', ')} WHERE id = ?`,
+      params,
     })
   }
 

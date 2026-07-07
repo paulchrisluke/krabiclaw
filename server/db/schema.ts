@@ -302,6 +302,7 @@ export const experience_bookings = sqliteTable("experience_bookings", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
+	index("idx_experience_bookings_customer_id").on(table.customer_id),
 	index("idx_experience_bookings_review_request_due").on(table.site_id, table.status, table.completed_at, table.review_request_sent_at),
 	index("idx_experience_bookings_review_reminder_due").on(table.site_id, table.review_request_sent_at, table.review_reminder_sent_at, table.review_submitted_at),
 	check("experience_bookings_completion_source_check", sql`completion_source IS NULL OR completion_source IN ('manual', 'auto')`),
@@ -952,6 +953,7 @@ export const reservation_submissions = sqliteTable("reservation_submissions", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
+	index("idx_reservation_submissions_customer_id").on(table.customer_id),
 	index("idx_reservation_submissions_review_request_due").on(table.site_id, table.status, table.completed_at, table.review_request_sent_at),
 	index("idx_reservation_submissions_review_reminder_due").on(table.site_id, table.review_request_sent_at, table.review_reminder_sent_at, table.review_submitted_at),
 	check("reservation_submissions_completion_source_check", sql`completion_source IS NULL OR completion_source IN ('manual', 'auto')`),

@@ -49,6 +49,14 @@ function optionalString(args: Record<string, unknown>, key: string) {
   return typeof value === 'string' ? value : undefined
 }
 
+function optionalNullableString(args: Record<string, unknown>, key: string) {
+  const value = args[key]
+  if (value === null) return null
+  if (value === undefined) return undefined
+  if (typeof value === 'string') return value
+  throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be a string or null when provided.`)
+}
+
 function optionalBoolean(args: Record<string, unknown>, key: string) {
   const value = args[key]
   return typeof value === 'boolean' ? value : undefined
@@ -79,12 +87,6 @@ function requiredObject(args: Record<string, unknown>, key: string) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be an object.`)
   }
   return value as Record<string, unknown>
-}
-
-function optionalNullableString(args: Record<string, unknown>, key: string) {
-  const value = args[key]
-  if (value === null) return null
-  return typeof value === 'string' ? value : undefined
 }
 
 function optionalContentBlockType(args: Record<string, unknown>, key: string) {
@@ -193,12 +195,17 @@ function reorderItems(args: Record<string, unknown>, idKey: 'doc_id' | 'post_id'
     if (navSectionOrder !== undefined && navSectionOrder !== null && (typeof navSectionOrder !== 'number' || !Number.isInteger(navSectionOrder))) {
       throw mcpProtocolError(MCP_ERROR.invalidParams, 'nav_section_order must be an integer when provided.')
     }
-    return {
+    const result: Record<string, string | number | null> = {
       [idKey]: requiredString(record, idKey),
-      nav_section: record.nav_section === null ? null : optionalString(record, 'nav_section') ?? null,
       nav_order: navOrder,
-      nav_section_order: navSectionOrder === null ? null : (typeof navSectionOrder === 'number' ? navSectionOrder : undefined),
     }
+    if (Object.prototype.hasOwnProperty.call(record, 'nav_section')) {
+      result.nav_section = optionalNullableString(record, 'nav_section') ?? null
+    }
+    if (Object.prototype.hasOwnProperty.call(record, 'nav_section_order')) {
+      result.nav_section_order = navSectionOrder === null ? null : (typeof navSectionOrder === 'number' ? navSectionOrder : undefined) ?? null
+    }
+    return result
   })
 }
 

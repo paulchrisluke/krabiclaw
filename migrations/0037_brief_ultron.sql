@@ -1,0 +1,2 @@
+CREATE INDEX `idx_experience_bookings_customer_id` ON `experience_bookings` (`customer_id`);--> statement-breakpoint
+CREATE INDEX `idx_reservation_submissions_customer_id` ON `reservation_submissions` (`customer_id`);

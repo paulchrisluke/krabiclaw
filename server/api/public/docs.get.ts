@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
     FROM platform_docs d
     LEFT JOIN media_assets ma ON ma.id = d.featured_image_asset_id AND ma.status = 'active'
     WHERE d.status = 'published'
-    ORDER BY COALESCE(d.nav_section_order, 999999), COALESCE(d.nav_section, d.category), COALESCE(d.nav_order, d.sort_order, 999999), d.published_at DESC
+    ORDER BY COALESCE(d.featured_order, 999999), COALESCE(d.nav_section_order, 999999), COALESCE(d.nav_section, d.category), COALESCE(d.nav_order, d.sort_order, 999999), d.published_at DESC
   `
 
   try {

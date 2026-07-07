@@ -152,11 +152,11 @@ export const POSTS_CHOWBOT_TOOLS: AiTool[] = [
             description: "New headline (max 80 chars). Omit to leave unchanged.",
           },
           slug: {
-            type: "string",
+            type: ["string", "null"],
             description: "Update the public URL slug. Omit to leave unchanged.",
           },
-          seo_title: { type: "string" },
-          seo_description: { type: "string" },
+          seo_title: { type: ["string", "null"] },
+          seo_description: { type: ["string", "null"] },
           body: {
             type: "string",
             description:
@@ -182,7 +182,7 @@ export const POSTS_CHOWBOT_TOOLS: AiTool[] = [
             type: "string",
             description: "New media asset ID. Omit to leave unchanged.",
           },
-          og_image_asset_id: { type: "string" },
+          og_image_asset_id: { type: ["string", "null"] },
           gallery_media: {
             type: "array",
             description: "Replace the ordered public post gallery. Omit to leave unchanged.",

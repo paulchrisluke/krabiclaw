@@ -127,7 +127,7 @@
             class="inline-flex items-center justify-center rounded-full bg-white/15 px-5 py-2.5 text-base font-medium text-white transition hover:bg-white/25"
             @click="copySelectedPostUrl"
           >
-            Copy link
+            {{ t('saya.posts.copy_link') }}
           </button>
         </div>
         <NuxtLink
