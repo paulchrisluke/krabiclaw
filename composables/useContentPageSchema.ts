@@ -24,8 +24,16 @@ interface ContentHowToStep {
   image_height?: number | null
 }
 
+interface ContentAiAssistancePrompt {
+  title?: string | null
+  prompt?: string | null
+  description?: string | null
+  copy_label?: string | null
+  position?: number | null
+}
+
 interface ContentComponent {
-  type: 'faq' | 'how_to'
+  type: 'faq' | 'how_to' | 'ai_assistance'
   status?: string | null
   render_enabled?: boolean | null
   schema_enabled?: boolean | null
@@ -35,6 +43,10 @@ interface ContentComponent {
     estimated_time?: string | null
     tool_items?: string[] | null
     supply_items?: string[] | null
+    intro?: string | null
+    collapsed?: boolean | null
+    max_visible_lines?: number | null
+    prompts?: ContentAiAssistancePrompt[] | null
   } | null
 }
 
