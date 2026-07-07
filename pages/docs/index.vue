@@ -194,6 +194,9 @@ interface PublicDoc {
   slug: string
   excerpt?: string | null
   category?: string | null
+  nav_title?: string | null
+  nav_order?: number | null
+  hide_from_nav?: boolean | number | null
   difficulty_level?: string | null
 }
 
@@ -213,6 +216,7 @@ const docs = computed<PublicDoc[]>(() => data.value?.docs ?? [])
 const docsWithCategorySlug = computed(() =>
   docs.value
     .map((doc) => {
+      if (doc.hide_from_nav) return null
       const categorySlug = categoryToSlug(doc.category)
       if (!categorySlug) return null
       return {

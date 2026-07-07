@@ -12,6 +12,7 @@ export default defineEventHandler(async (event) => {
   const sql = `
     SELECT
       p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords, p.canonical_url, p.robots, p.published_at,
+      p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
       p.featured_image_asset_id,
       ma.public_url,
       ma.kind,
@@ -20,7 +21,7 @@ export default defineEventHandler(async (event) => {
     FROM blog_posts p
     LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
     WHERE p.status = 'published' AND p.site_id IS NULL
-    ORDER BY p.category, p.published_at DESC
+    ORDER BY COALESCE(p.featured_order, 999999), COALESCE(p.nav_section_order, 999999), COALESCE(p.nav_section, p.category), COALESCE(p.nav_order, 999999), p.published_at DESC
     LIMIT 100
   `
 

@@ -24,6 +24,27 @@
           />
         </UFormField>
 
+        <div class="grid gap-4 border-t border-default pt-4 sm:grid-cols-2 lg:grid-cols-3">
+          <UFormField label="Nav Section" hint="Optional">
+            <UInput v-model="form.nav_section" placeholder="Use category default" />
+          </UFormField>
+          <UFormField label="Nav Title" hint="Optional">
+            <UInput v-model="form.nav_title" placeholder="Short sidebar label" />
+          </UFormField>
+          <UFormField label="Nav Order" hint="Optional">
+            <UInput v-model="form.nav_order" type="number" min="0" placeholder="10" />
+          </UFormField>
+          <UFormField label="Section Order" hint="Optional">
+            <UInput v-model="form.nav_section_order" type="number" min="0" placeholder="20" />
+          </UFormField>
+          <UFormField label="Featured Order" hint="Optional">
+            <UInput v-model="form.featured_order" type="number" min="0" placeholder="1" />
+          </UFormField>
+          <UFormField label="Hide From Nav">
+            <USwitch v-model="form.hide_from_nav" />
+          </UFormField>
+        </div>
+
         <UFormField label="Excerpt">
           <UTextarea v-model="form.excerpt" :rows="3" placeholder="One or two sentences that summarize this post." />
         </UFormField>
@@ -245,6 +266,11 @@ function buildPayload() {
     ...form,
     canonical_url: form.canonical_url.trim() || null,
     robots: form.robots.trim() || null,
+    nav_section: form.nav_section.trim() || null,
+    nav_title: form.nav_title.trim() || null,
+    nav_order: parseOptionalNumber(form.nav_order),
+    nav_section_order: parseOptionalNumber(form.nav_section_order),
+    featured_order: parseOptionalNumber(form.featured_order),
     faq_items: form.faq_items
       .map(item => ({ question: item.question.trim(), answer: item.answer.trim() }))
       .filter(item => item.question && item.answer),
@@ -257,6 +283,11 @@ function buildPayload() {
       }))
       .filter(step => step.name && step.text),
   }
+}
+
+function parseOptionalNumber(value: string | number) {
+  const trimmed = String(value).trim()
+  return trimmed ? Number(trimmed) : null
 }
 
 async function save(publish: boolean) {

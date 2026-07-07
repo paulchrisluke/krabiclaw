@@ -39,6 +39,27 @@
           />
         </UFormField>
 
+        <div class="grid gap-4 border-t border-default pt-4 sm:grid-cols-2 lg:grid-cols-3">
+          <UFormField label="Nav Section" hint="Optional">
+            <UInput v-model="form.nav_section" placeholder="Use category default" />
+          </UFormField>
+          <UFormField label="Nav Title" hint="Optional">
+            <UInput v-model="form.nav_title" placeholder="Short sidebar label" />
+          </UFormField>
+          <UFormField label="Nav Order" hint="Optional">
+            <UInput v-model="form.nav_order" type="number" min="0" placeholder="10" />
+          </UFormField>
+          <UFormField label="Section Order" hint="Optional">
+            <UInput v-model="form.nav_section_order" type="number" min="0" placeholder="20" />
+          </UFormField>
+          <UFormField label="Featured Order" hint="Optional">
+            <UInput v-model="form.featured_order" type="number" min="0" placeholder="1" />
+          </UFormField>
+          <UFormField label="Hide From Nav">
+            <USwitch v-model="form.hide_from_nav" />
+          </UFormField>
+        </div>
+
         <UFormField label="Excerpt">
           <UTextarea v-model="form.excerpt" :rows="3" placeholder="One or two sentences that summarize this post." />
         </UFormField>
@@ -225,6 +246,12 @@ interface BlogPost {
   slug?: string | null
   excerpt?: string | null
   category?: string | null
+  nav_section?: string | null
+  nav_title?: string | null
+  nav_order?: number | null
+  nav_section_order?: number | null
+  hide_from_nav?: boolean | number | null
+  featured_order?: number | null
   seo_description?: string | null
   seo_keywords?: string | null
   canonical_url?: string | null
@@ -308,6 +335,12 @@ function resetForm() {
   form.title = ''
   form.excerpt = ''
   form.category = ''
+  form.nav_section = ''
+  form.nav_title = ''
+  form.nav_order = ''
+  form.nav_section_order = ''
+  form.hide_from_nav = false
+  form.featured_order = ''
   form.seo_description = ''
   form.seo_keywords = ''
   form.canonical_url = ''
@@ -356,6 +389,11 @@ function buildPayload() {
     ...form,
     canonical_url: form.canonical_url.trim() || null,
     robots: form.robots.trim() || null,
+    nav_section: form.nav_section.trim() || null,
+    nav_title: form.nav_title.trim() || null,
+    nav_order: parseOptionalNumber(form.nav_order),
+    nav_section_order: parseOptionalNumber(form.nav_section_order),
+    featured_order: parseOptionalNumber(form.featured_order),
     faq_items: form.faq_items
       .map(item => ({ question: item.question.trim(), answer: item.answer.trim() }))
       .filter(item => item.question && item.answer),
@@ -368,6 +406,11 @@ function buildPayload() {
       }))
       .filter(step => step.name && step.text),
   }
+}
+
+function parseOptionalNumber(value: string | number) {
+  const trimmed = String(value).trim()
+  return trimmed ? Number(trimmed) : null
 }
 
 async function loadPost() {
@@ -388,6 +431,12 @@ async function loadPost() {
     form.title = res.post.title
     form.excerpt = res.post.excerpt ?? ''
     form.category = res.post.category ?? ''
+    form.nav_section = res.post.nav_section ?? ''
+    form.nav_title = res.post.nav_title ?? ''
+    form.nav_order = res.post.nav_order != null ? String(res.post.nav_order) : ''
+    form.nav_section_order = res.post.nav_section_order != null ? String(res.post.nav_section_order) : ''
+    form.hide_from_nav = Boolean(res.post.hide_from_nav)
+    form.featured_order = res.post.featured_order != null ? String(res.post.featured_order) : ''
     form.seo_description = res.post.seo_description ?? ''
     form.seo_keywords = res.post.seo_keywords ?? ''
     form.canonical_url = res.post.canonical_url ?? ''
