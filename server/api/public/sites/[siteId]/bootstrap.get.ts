@@ -35,7 +35,6 @@ import {
 } from "~/server/utils/booking-policies";
 import { getCloudflareWaitUntil } from "~/server/utils/mcp-route-helpers";
 import { isPreviewContext } from "~/server/utils/tenant-hosts";
-import { getOwnerEmail } from "~/server/utils/notifications";
 import { getPublishedPosts } from "~/server/utils/post-management";
 
 function groupContentBlocks(rows: SiteContent[]): Array<SiteContent & { _section: string }> {
@@ -893,13 +892,6 @@ export default defineEventHandler(async (event) => {
       ? (await attachAvailabilitySummaries(db, orgId, siteId, [experienceDetailRaw]))[0]
       : null;
 
-  // Locations rarely have their own email (Google Places API doesn't expose
-  // one) — fall back to the site's contact email, then the org owner's
-  // account email, so guests always have a way to reach someone.
-  const anyLocationMissingEmail = (locRows.results ?? []).some((loc) => !loc.email);
-  const fallbackEmail =
-    site.contact_email ??
-    (anyLocationMissingEmail ? await getOwnerEmail(db, site.organization_id) : null);
   const [globalPublishedPosts, locationPublishedPosts] = await Promise.all([
     needsGlobalPosts ? getPublishedPosts(db, siteId, env, page === "posts" ? 50 : 6) : Promise.resolve([]),
     locationId && dataType === "posts" ? getPublishedPosts(db, siteId, env, 50, locationId) : Promise.resolve([]),
@@ -918,7 +910,7 @@ export default defineEventHandler(async (event) => {
       title: loc.title,
       address: parseJson(loc.address as string | null),
       phone: loc.phone,
-      email: (loc.email as string | null) ?? fallbackEmail,
+      email: (loc.email as string | null) ?? null,
       website_url: loc.website_url,
       maps_url: loc.maps_url,
       map_embed_url: calculateMapEmbedUrl({

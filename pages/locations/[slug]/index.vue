@@ -352,7 +352,7 @@ const dialablePhone = computed(() => displayPhone.value?.replace(/[^\d+]/g, '') 
 const displayEmail = computed(() => {
   const e = location.value?.email
   if (e && !e.includes('example.com') && !e.includes('krabiclaw.com')) return e
-  return (site as ApiValue)?.config?.email || null
+  return null
 })
 
 // Other locations for the "Sister rooms" rail
