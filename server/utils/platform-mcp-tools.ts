@@ -32,6 +32,15 @@ const SEO_FIELDS_SCHEMA = {
   featured_image_asset_id: NULLABLE_STRING,
 }
 
+const NAV_FIELDS_SCHEMA = {
+  nav_section: NULLABLE_STRING,
+  nav_title: NULLABLE_STRING,
+  nav_order: NULLABLE_NUMBER,
+  nav_section_order: NULLABLE_NUMBER,
+  hide_from_nav: NULLABLE_BOOLEAN,
+  featured_order: NULLABLE_NUMBER,
+}
+
 const FEATURED_IMAGE_SCHEMA = {
   type: 'object',
   properties: {
@@ -183,6 +192,7 @@ const BLOG_SUMMARY_SCHEMA = {
     excerpt: NULLABLE_STRING,
     body: NULLABLE_STRING,
     category: NULLABLE_STRING,
+    ...NAV_FIELDS_SCHEMA,
     published: { type: 'boolean' },
     published_at: NULLABLE_STRING,
     created_at: { type: 'string' },
@@ -196,6 +206,12 @@ const BLOG_SUMMARY_SCHEMA = {
     'slug',
     'excerpt',
     'category',
+    'nav_section',
+    'nav_title',
+    'nav_order',
+    'nav_section_order',
+    'hide_from_nav',
+    'featured_order',
     'published',
     'published_at',
     'created_at',
@@ -234,6 +250,7 @@ const DOC_SUMMARY_SCHEMA = {
     excerpt: NULLABLE_STRING,
     body: NULLABLE_STRING,
     category: NULLABLE_STRING,
+    ...NAV_FIELDS_SCHEMA,
     difficulty_level: NULLABLE_STRING,
     sort_order: NULLABLE_NUMBER,
     parent_doc_id: NULLABLE_STRING,
@@ -251,6 +268,12 @@ const DOC_SUMMARY_SCHEMA = {
     'slug',
     'excerpt',
     'category',
+    'nav_section',
+    'nav_title',
+    'nav_order',
+    'nav_section_order',
+    'hide_from_nav',
+    'featured_order',
     'difficulty_level',
     'sort_order',
     'parent_doc_id',
@@ -569,6 +592,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
         excerpt: { type: 'string' },
         category: { type: 'string', enum: BLOG_CATEGORY_ENUM },
+        ...NAV_FIELDS_SCHEMA,
         ...SEO_FIELDS_SCHEMA,
         components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
         publish: { type: 'boolean' },
@@ -590,6 +614,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
         excerpt: { type: 'string' },
         category: { type: 'string', enum: BLOG_CATEGORY_ENUM },
+        ...NAV_FIELDS_SCHEMA,
         ...SEO_FIELDS_SCHEMA,
         components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
         publish: { type: 'boolean' },
@@ -645,6 +670,41 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         post: BLOG_RECORD_SCHEMA,
       },
       required: ['success', 'post'],
+      additionalProperties: false,
+    },
+  }),
+  writeTool({
+    name: 'reorder_platform_blog_posts',
+    description: 'Set editorial navigation section and order for platform blog posts without changing their taxonomy category or public URL.',
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              post_id: { type: 'string', description: 'Post id or slug.' },
+              nav_section: NULLABLE_STRING,
+              nav_order: { type: 'number' },
+              nav_section_order: NULLABLE_NUMBER,
+            },
+            required: ['post_id', 'nav_order'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['items'],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        posts: { type: 'array', items: BLOG_SUMMARY_SCHEMA },
+      },
+      required: ['success', 'posts'],
       additionalProperties: false,
     },
   }),
@@ -705,6 +765,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
         excerpt: { type: 'string' },
         category: { type: 'string', enum: DOC_CATEGORY_ENUM },
+        ...NAV_FIELDS_SCHEMA,
         difficulty_level: { type: 'string', enum: DOC_DIFFICULTY_ENUM },
         sort_order: { type: 'number' },
         parent_doc_id: { type: 'string' },
@@ -729,6 +790,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
         excerpt: { type: 'string' },
         category: { type: 'string', enum: DOC_CATEGORY_ENUM },
+        ...NAV_FIELDS_SCHEMA,
         difficulty_level: { type: 'string', enum: DOC_DIFFICULTY_ENUM },
         sort_order: { type: 'number' },
         parent_doc_id: { type: 'string' },
@@ -787,6 +849,41 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         doc: DOC_RECORD_SCHEMA,
       },
       required: ['success', 'doc'],
+      additionalProperties: false,
+    },
+  }),
+  writeTool({
+    name: 'reorder_platform_docs',
+    description: 'Set editorial navigation section and order for platform docs without changing their taxonomy category or public URL.',
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              doc_id: { type: 'string', description: 'Doc id or slug.' },
+              nav_section: NULLABLE_STRING,
+              nav_order: { type: 'number' },
+              nav_section_order: NULLABLE_NUMBER,
+            },
+            required: ['doc_id', 'nav_order'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['items'],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        docs: { type: 'array', items: DOC_SUMMARY_SCHEMA },
+      },
+      required: ['success', 'docs'],
       additionalProperties: false,
     },
   }),

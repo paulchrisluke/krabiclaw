@@ -139,6 +139,9 @@ interface DocListItem {
   slug: string
   category?: string | null
   excerpt?: string | null
+  nav_title?: string | null
+  nav_order?: number | null
+  hide_from_nav?: boolean | number | null
 }
 
 const route = useRoute()
@@ -185,7 +188,9 @@ const effectiveSlug = computed(() => slugParam.value ?? categoryOverviewSlug.val
 const isCategoryRedirect = computed(() => segments.value.length === 1 && !categoryOverviewSlug.value)
 
 if (!slugParam.value && !categoryOverviewSlug.value) {
-  const firstDoc = (docsList.value?.docs ?? []).find(doc => doc.category === slugToCategory(categoryParam.value))
+  const firstDoc = (docsList.value?.docs ?? []).find(doc =>
+    doc.category === slugToCategory(categoryParam.value) && !doc.hide_from_nav,
+  )
   if (!firstDoc) {
     throw createError({ statusCode: 404, statusMessage: 'Documentation category not found' })
   }
@@ -280,6 +285,7 @@ const renderedComponents = computed(() => {
 })
 
 const orderedDocs = computed(() => (docsList.value?.docs ?? [])
+  .filter(item => !item.hide_from_nav)
   .map((item) => {
     const itemCategorySlug = categoryToSlug(item.category)
     if (!itemCategorySlug) return null

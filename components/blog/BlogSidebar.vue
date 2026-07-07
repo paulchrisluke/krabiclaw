@@ -36,7 +36,7 @@ const groups = computed(() => categories.value.map(({ category, posts }) => ({
     const to = getBlogPostPath(post.category, post.slug)
     if (!to) return items
     items.push({
-      label: post.title,
+      label: post.label,
       to,
       active: route.path === to,
     })

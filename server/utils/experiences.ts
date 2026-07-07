@@ -565,6 +565,7 @@ export interface ExperienceBooking {
   experience_id: string
   organization_id: string
   site_id: string
+  customer_id?: string | null
   location_id: string
   location_title?: string | null
   guest_name: string
@@ -590,12 +591,13 @@ export async function createExperienceBooking(
   const result = await execute(
     db,
     `INSERT INTO experience_bookings
-       (id, experience_id, organization_id, site_id, location_id, guest_name, guest_email, guest_phone,
+       (id, experience_id, organization_id, site_id, customer_id, location_id, guest_name, guest_email, guest_phone,
         party_size, booking_date, time_slot, status, notes, ip_hash,
         cancellation_token_hash, cancellation_token_expires_at, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id, input.experience_id, input.organization_id, input.site_id,
+      input.customer_id ?? null,
       input.location_id,
       input.guest_name, input.guest_email, input.guest_phone ?? null,
       input.party_size, input.booking_date, input.time_slot,
@@ -635,16 +637,17 @@ export async function createExperienceBookingClaimingCapacity(
   const result = await execute(
     db,
     `INSERT INTO experience_bookings
-       (id, experience_id, organization_id, site_id, location_id, guest_name, guest_email, guest_phone,
+       (id, experience_id, organization_id, site_id, customer_id, location_id, guest_name, guest_email, guest_phone,
         party_size, booking_date, time_slot, status, notes, ip_hash,
         cancellation_token_hash, cancellation_token_expires_at, created_at, updated_at)
-     SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+     SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
      WHERE (
        SELECT COALESCE(SUM(party_size), 0) FROM experience_bookings
        WHERE site_id = ? AND experience_id = ? AND booking_date = ? AND time_slot = ? AND status IN ('pending', 'confirmed')
      ) + ? <= ?`,
     [
       id, input.experience_id, input.organization_id, input.site_id,
+      input.customer_id ?? null,
       input.location_id,
       input.guest_name, input.guest_email, input.guest_phone ?? null,
       input.party_size, input.booking_date, input.time_slot,

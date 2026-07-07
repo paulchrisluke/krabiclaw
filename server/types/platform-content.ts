@@ -17,7 +17,16 @@ export interface PlatformStructuredContentRequestBody {
   components?: PlatformContentComponentInput[]
 }
 
-export interface PlatformBlogPostRequestBody extends PlatformStructuredContentRequestBody {
+export interface PlatformContentNavRequestBody {
+  nav_section?: string | null
+  nav_title?: string | null
+  nav_order?: number | null
+  nav_section_order?: number | null
+  hide_from_nav?: boolean | number | null
+  featured_order?: number | null
+}
+
+export interface PlatformBlogPostRequestBody extends PlatformStructuredContentRequestBody, PlatformContentNavRequestBody {
   title?: string
   body?: string
   excerpt?: string
@@ -31,7 +40,7 @@ export interface PlatformBlogPostRequestBody extends PlatformStructuredContentRe
   unpublish?: boolean
 }
 
-export interface PlatformDocRequestBody extends PlatformStructuredContentRequestBody {
+export interface PlatformDocRequestBody extends PlatformStructuredContentRequestBody, PlatformContentNavRequestBody {
   title?: string
   body?: string
   excerpt?: string

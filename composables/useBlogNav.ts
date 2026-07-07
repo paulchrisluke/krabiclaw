@@ -1,10 +1,17 @@
 import { BLOG_CATEGORY_SLUGS, blogCategoryToSlug } from '~/utils/blog-categories'
+import { groupItemsByNavSection } from '~/utils/platform-content-nav'
 
 interface PublicBlogPost {
   id: string
   slug: string
   title: string
   category?: string | null
+  nav_section?: string | null
+  nav_title?: string | null
+  nav_order?: number | null
+  nav_section_order?: number | null
+  hide_from_nav?: boolean | number | null
+  featured_order?: number | null
   excerpt?: string | null
   published_at?: string | null
   featured_image?: {
@@ -19,7 +26,7 @@ interface PublicBlogPost {
 interface BlogNavCategory {
   category: string
   categorySlug: string
-  posts: PublicBlogPost[]
+  posts: Array<PublicBlogPost & { label: string }>
 }
 
 export function useBlogNav() {
@@ -28,21 +35,21 @@ export function useBlogNav() {
   const posts = computed(() => data.value?.posts || [])
 
   const categories = computed<BlogNavCategory[]>(() => {
-    const byCategory = new Map<string, PublicBlogPost[]>()
-    for (const post of posts.value) {
-      if (!post.category) continue
-      const list = byCategory.get(post.category) ?? []
-      list.push(post)
-      byCategory.set(post.category, list)
-    }
+    const eligible = posts.value
+      .filter(post => post.category && blogCategoryToSlug(post.category) && !post.hide_from_nav)
+      .map(post => ({ ...post, _categorySlug: blogCategoryToSlug(post.category!)! }))
 
-    return Object.keys(BLOG_CATEGORY_SLUGS)
-      .filter(category => byCategory.has(category))
-      .map(category => ({
-        category,
-        categorySlug: blogCategoryToSlug(category)!,
-        posts: byCategory.get(category)!,
-      }))
+    const groups = groupItemsByNavSection(
+      eligible,
+      (post) => post.nav_section?.trim() || post.category!,
+      Object.keys(BLOG_CATEGORY_SLUGS),
+    )
+
+    return groups.map(group => ({
+      category: group.category,
+      categorySlug: group.items[0]?._categorySlug ?? '',
+      posts: group.items,
+    }))
   })
 
   return { posts, categories, pending, error }

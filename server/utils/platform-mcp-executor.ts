@@ -17,6 +17,8 @@ import {
   getPlatformDoc,
   listPlatformBlogPosts,
   listPlatformDocs,
+  reorderPlatformBlogPosts,
+  reorderPlatformDocs,
   updatePlatformBlogPost,
   updatePlatformDoc,
 } from '~/server/utils/platform-content'
@@ -34,6 +36,14 @@ function optionalString(args: Record<string, unknown>, key: string) {
   return typeof value === 'string' ? value : undefined
 }
 
+function optionalNullableString(args: Record<string, unknown>, key: string) {
+  const value = args[key]
+  if (value === null) return null
+  if (value === undefined) return undefined
+  if (typeof value === 'string') return value
+  throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be a string or null when provided.`)
+}
+
 function optionalBoolean(args: Record<string, unknown>, key: string) {
   const value = args[key]
   return typeof value === 'boolean' ? value : undefined
@@ -41,6 +51,12 @@ function optionalBoolean(args: Record<string, unknown>, key: string) {
 
 function optionalNumber(args: Record<string, unknown>, key: string) {
   const value = args[key]
+  return typeof value === 'number' ? value : undefined
+}
+
+function optionalNullableNumber(args: Record<string, unknown>, key: string) {
+  const value = args[key]
+  if (value === null) return null
   return typeof value === 'number' ? value : undefined
 }
 
@@ -75,6 +91,49 @@ function structuredContentInput(args: Record<string, unknown>) {
       data: unknown
     }> | undefined,
   }
+}
+
+function navMetadataInput(args: Record<string, unknown>) {
+  return {
+    nav_section: args.nav_section === null ? null : optionalString(args, 'nav_section'),
+    nav_title: args.nav_title === null ? null : optionalString(args, 'nav_title'),
+    nav_order: optionalNullableNumber(args, 'nav_order'),
+    nav_section_order: optionalNullableNumber(args, 'nav_section_order'),
+    hide_from_nav: args.hide_from_nav === null ? null : optionalBoolean(args, 'hide_from_nav'),
+    featured_order: optionalNullableNumber(args, 'featured_order'),
+  }
+}
+
+function reorderItems(args: Record<string, unknown>, idKey: 'doc_id' | 'post_id') {
+  const items = optionalArray(args, 'items')
+  if (!items?.length) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, 'items must be a non-empty array.')
+  }
+  return items.map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, 'Each reorder item must be an object.')
+    }
+    const record = item as Record<string, unknown>
+    const navOrder = record.nav_order
+    if (typeof navOrder !== 'number' || !Number.isInteger(navOrder)) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, 'Each reorder item must have an integer nav_order.')
+    }
+    const navSectionOrder = record.nav_section_order
+    if (navSectionOrder !== undefined && navSectionOrder !== null && (typeof navSectionOrder !== 'number' || !Number.isInteger(navSectionOrder))) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, 'nav_section_order must be an integer when provided.')
+    }
+    const result: Record<string, string | number | null> = {
+      [idKey]: requiredString(record, idKey),
+      nav_order: navOrder,
+    }
+    if (Object.prototype.hasOwnProperty.call(record, 'nav_section')) {
+      result.nav_section = optionalNullableString(record, 'nav_section') ?? null
+    }
+    if (Object.prototype.hasOwnProperty.call(record, 'nav_section_order')) {
+      result.nav_section_order = navSectionOrder === null ? null : (typeof navSectionOrder === 'number' ? navSectionOrder : undefined) ?? null
+    }
+    return result
+  })
 }
 
 interface ToolFileReference {
@@ -423,6 +482,7 @@ export async function executePlatformMcpToolCall(
         body: requiredString(rawArguments, 'body'),
         excerpt: optionalString(rawArguments, 'excerpt') ?? null,
         category: optionalString(rawArguments, 'category') ?? null,
+        ...navMetadataInput(rawArguments),
         seo_description: optionalString(rawArguments, 'seo_description') ?? null,
         seo_keywords: optionalString(rawArguments, 'seo_keywords') ?? null,
         canonical_url: optionalString(rawArguments, 'canonical_url') ?? null,
@@ -437,6 +497,7 @@ export async function executePlatformMcpToolCall(
         body: optionalString(rawArguments, 'body'),
         excerpt: optionalString(rawArguments, 'excerpt'),
         category: optionalString(rawArguments, 'category'),
+        ...navMetadataInput(rawArguments),
         seo_description: optionalString(rawArguments, 'seo_description'),
         seo_keywords: optionalString(rawArguments, 'seo_keywords'),
         canonical_url: optionalString(rawArguments, 'canonical_url'),
@@ -450,6 +511,8 @@ export async function executePlatformMcpToolCall(
       return await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), { publish: true })
     case 'unpublish_platform_blog_post':
       return await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), { unpublish: true })
+    case 'reorder_platform_blog_posts':
+      return await reorderPlatformBlogPosts(user.db, reorderItems(rawArguments, 'post_id') as Array<{ post_id: string; nav_section?: string | null; nav_order: number; nav_section_order?: number | null }>)
     case 'delete_platform_blog_post':
       return await deletePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'))
     case 'list_platform_docs':
@@ -462,6 +525,7 @@ export async function executePlatformMcpToolCall(
         body: requiredString(rawArguments, 'body'),
         excerpt: optionalString(rawArguments, 'excerpt') ?? null,
         category: optionalString(rawArguments, 'category') ?? null,
+        ...navMetadataInput(rawArguments),
         seo_description: optionalString(rawArguments, 'seo_description') ?? null,
         seo_keywords: optionalString(rawArguments, 'seo_keywords') ?? null,
         canonical_url: optionalString(rawArguments, 'canonical_url') ?? null,
@@ -479,6 +543,7 @@ export async function executePlatformMcpToolCall(
         body: optionalString(rawArguments, 'body'),
         excerpt: optionalString(rawArguments, 'excerpt'),
         category: optionalString(rawArguments, 'category'),
+        ...navMetadataInput(rawArguments),
         seo_description: optionalString(rawArguments, 'seo_description'),
         seo_keywords: optionalString(rawArguments, 'seo_keywords'),
         canonical_url: optionalString(rawArguments, 'canonical_url'),
@@ -495,6 +560,8 @@ export async function executePlatformMcpToolCall(
       return await updatePlatformDoc(user.db, requiredString(rawArguments, 'doc_id'), { publish: true })
     case 'unpublish_platform_doc':
       return await updatePlatformDoc(user.db, requiredString(rawArguments, 'doc_id'), { unpublish: true })
+    case 'reorder_platform_docs':
+      return await reorderPlatformDocs(user.db, reorderItems(rawArguments, 'doc_id') as Array<{ doc_id: string; nav_section?: string | null; nav_order: number; nav_section_order?: number | null }>)
     case 'delete_platform_doc':
       return await deletePlatformDoc(user.db, requiredString(rawArguments, 'doc_id'))
     default:
