@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
   `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const post = await publishPost(db, site.organization_id, siteId, postId, channels)
+  const post = await publishPost(db, site.organization_id, siteId, postId, channels, env)
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
 
   const socialErrors: Record<string, string> = {}
@@ -147,7 +147,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const updatedPost = await getPost(db, site.organization_id, siteId, postId)
+  const updatedPost = await getPost(db, site.organization_id, siteId, postId, env)
 
   return jsonResponse({
     success: true,

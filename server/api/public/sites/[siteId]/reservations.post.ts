@@ -126,7 +126,8 @@ export default defineEventHandler(async (event) => {
   const cancellation = createReservationCancelToken()
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
 
-  // Rate limiting (skipped in dev so local work and E2E can submit repeatedly)
+  // Rate limiting (skipped in dev so local work and E2E can submit repeatedly) — runs before
+  // customer creation so a rate-limited request never leaves behind an orphaned customer row.
   const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
   if (!import.meta.dev && !e2eOverride) {
     const hourWindow = Math.floor(Date.now() / 3_600_000)
@@ -197,6 +198,14 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'This time is no longer available. Please choose another time.' }, { status: 409 })
   }
   await recordCustomerBooking(db, customer.id, customerInput)
+
+  // Update customer fields only after successful reservation to avoid mutating existing
+  // customers on failed reservations (e.g., capacity conflicts).
+  await execute(db, `
+    UPDATE customers
+    SET last_booking_at = ?, updated_at = ?
+    WHERE id = ?
+  `, [`${date}T${time}:00`, new Date().toISOString(), customer.id])
 
   await fireSiteEventSafe({
     db,

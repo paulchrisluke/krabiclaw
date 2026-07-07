@@ -879,7 +879,7 @@ export const posts = sqliteTable("posts", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	uniqueIndex("posts_site_slug_idx").on(table.site_id, table.slug).where(sql`slug IS NOT NULL`),
+	uniqueIndex("posts_site_slug_idx").on(table.site_id, table.slug),
 	check("posts_source_check", sql`source IN ('manual', 'template')`),
 ]);
 
@@ -898,6 +898,8 @@ export const post_media = sqliteTable("post_media", {
 }, (table) => [
 	index("post_media_post_idx").on(table.post_id, table.sort_order),
 	check("post_media_role_check", sql`role IN ('cover', 'gallery')`),
+	uniqueIndex("post_media_post_asset_unique").on(table.post_id, table.media_asset_id),
+	uniqueIndex("post_media_cover_unique").on(table.post_id).where(sql`role = 'cover'`),
 ]);
 
 export const rate_limits = sqliteTable("rate_limits", {

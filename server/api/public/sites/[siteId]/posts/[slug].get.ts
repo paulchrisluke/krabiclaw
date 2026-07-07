@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const post = await getPublishedPostBySlug(db, siteId, slug)
+  const post = await getPublishedPostBySlug(db, siteId, slug, env)
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
 
   return jsonResponse({ success: true, post })

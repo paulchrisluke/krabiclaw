@@ -594,6 +594,10 @@ export default defineEventHandler(async (event) => {
       [siteId],
     );
 
+  // Posts are fetched separately via getPublishedPosts() below, which returns the fully
+  // formatted PublishedPostSummary shape (slug, canonical_url, gallery media) that this raw
+  // row shape doesn't have — no point running an equivalent query here just to discard it.
+
   if (locationId)
     idxLocReviews = push(
       `SELECT id, author_name, rating, content, created_at
@@ -896,12 +900,10 @@ export default defineEventHandler(async (event) => {
   const fallbackEmail =
     site.contact_email ??
     (anyLocationMissingEmail ? await getOwnerEmail(db, site.organization_id) : null);
-  const globalPublishedPosts = needsGlobalPosts
-    ? await getPublishedPosts(db, siteId, page === "posts" ? 50 : 6)
-    : [];
-  const locationPublishedPosts = locationId && dataType === "posts"
-    ? await getPublishedPosts(db, siteId, 50, locationId)
-    : [];
+  const [globalPublishedPosts, locationPublishedPosts] = await Promise.all([
+    needsGlobalPosts ? getPublishedPosts(db, siteId, env, page === "posts" ? 50 : 6) : Promise.resolve([]),
+    locationId && dataType === "posts" ? getPublishedPosts(db, siteId, env, 50, locationId) : Promise.resolve([]),
+  ]);
 
   // Shape locations
   const locations = (locRows.results ?? []).map((loc) => {

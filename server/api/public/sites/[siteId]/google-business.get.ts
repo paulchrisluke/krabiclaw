@@ -114,7 +114,7 @@ export default defineEventHandler(async (event) => {
           : null
     }
     
-    const posts = await getPublishedPosts(db, siteId, 6)
+    const posts = await getPublishedPosts(db, siteId, env, 6)
 
     return jsonResponse({
       business,

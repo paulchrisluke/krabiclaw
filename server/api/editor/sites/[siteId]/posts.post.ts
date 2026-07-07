@@ -68,7 +68,7 @@ export default defineEventHandler(async (event) => {
       event_end: body.event_end || undefined,
       offer_coupon: body.offer_coupon || undefined,
       offer_terms: body.offer_terms || undefined,
-    }, session.user.id)
+    }, session.user.id, env)
   } catch (error) {
     if (error instanceof PostValidationError) {
       return jsonResponse({ error: error.message }, { status: error.statusCode })
