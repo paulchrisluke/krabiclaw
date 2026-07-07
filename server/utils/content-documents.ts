@@ -242,22 +242,25 @@ async function writeRevisionFromBlocks(
     data_json: JSON.stringify(block.data),
   })))
 
-  if (opts.expectedBlock) {
-    const guard = await execute(
-      db,
-      'UPDATE content_blocks SET updated_at = ? WHERE id = ? AND updated_at = ?',
-      [now, opts.expectedBlock.id, opts.expectedBlock.updatedAt],
-    )
-    if (!Number(guard.meta.changes ?? 0)) {
-      throw createError({ statusCode: 409, statusMessage: 'Content block was updated by another writer' })
-    }
-  }
+  // The guard is folded into the DELETE's WHERE clause (rather than run as a
+  // separate pre-batch UPDATE) so the check and the rewrite commit atomically:
+  // if opts.expectedBlock no longer matches, this DELETE removes zero rows,
+  // which makes every subsequent INSERT below collide on its (still-present)
+  // primary key and abort the whole batch instead of silently overwriting it.
+  const deleteBlocksQuery = opts.expectedBlock
+    ? {
+        query: `DELETE FROM content_blocks WHERE document_id = ? AND NOT EXISTS (
+          SELECT 1 FROM content_blocks WHERE id = ? AND updated_at != ?
+        )`,
+        params: [document.id, opts.expectedBlock.id, opts.expectedBlock.updatedAt],
+      }
+    : {
+        query: 'DELETE FROM content_blocks WHERE document_id = ?',
+        params: [document.id],
+      }
 
   const queries: { query: string; params: unknown[] }[] = [
-    {
-      query: 'DELETE FROM content_blocks WHERE document_id = ?',
-      params: [document.id],
-    },
+    deleteBlocksQuery,
     ...snapshots.map(block => ({
       query: `INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -288,7 +291,32 @@ async function writeRevisionFromBlocks(
     },
   ]
 
-  await executeBatch(db, queries)
+  let results: Awaited<ReturnType<typeof executeBatch>>
+  try {
+    results = await executeBatch(db, queries)
+  } catch (error) {
+    if (opts.expectedBlock) {
+      throw createError({ statusCode: 409, statusMessage: 'Content block was updated by another writer', cause: error })
+    }
+    throw error
+  }
+
+  if (opts.expectedBlock && !Number(results[0]?.meta?.changes ?? 0)) {
+    // The guard blocked the delete but the insert list happened to be empty
+    // (e.g. deleting a document's last remaining block), so nothing collided
+    // on a primary key to abort the batch above. The revision/document rows
+    // still went in, so compensate by putting content_documents back and
+    // discarding the bad revision before reporting the conflict.
+    await executeBatch(db, [
+      { query: 'DELETE FROM content_revisions WHERE id = ?', params: [revisionId] },
+      {
+        query: 'UPDATE content_documents SET draft_revision_id = ?, published_revision_id = ?, updated_at = ? WHERE id = ?',
+        params: [document.draft_revision_id, document.published_revision_id, now, document.id],
+      },
+    ])
+    throw createError({ statusCode: 409, statusMessage: 'Content block was updated by another writer' })
+  }
+
   return { revision_id: revisionId, body_markdown: bodyMarkdown, blocks: snapshots }
 }
 
@@ -304,7 +332,26 @@ export async function syncContentDocumentFromMarkdown(
   },
 ) {
   const document = await ensureContentDocument(db, opts.ownerType, opts.ownerId)
-  const blocks = markdownToContentBlocks(opts.bodyMarkdown)
+
+  // Markdown only ever encodes heading/markdown blocks, but writeRevisionFromBlocks
+  // replaces the document's entire block set. Carry forward any existing
+  // structured blocks (image, gallery, faq, etc.) so a plain-markdown sync
+  // doesn't delete content the block editor or MCP tools already built.
+  const existingBlocks = await listBlocksForDocument(db, document.id)
+  const preservedStructuredBlocks = existingBlocks
+    .filter(block => block.type !== 'heading' && block.type !== 'markdown')
+    .map(block => ({
+      id: block.id,
+      parent_block_id: block.parent_block_id,
+      type: block.type,
+      level: block.level,
+      data: parseBlockData(block),
+      updated_at: block.updated_at,
+    }))
+
+  const blocks = [...markdownToContentBlocks(opts.bodyMarkdown), ...preservedStructuredBlocks]
+    .map((block, index) => ({ ...block, position: index }))
+
   const revision = await writeRevisionFromBlocks(db, document, blocks, {
     bodyMarkdown: opts.bodyMarkdown,
     createdBy: opts.createdBy,
@@ -475,7 +522,16 @@ export async function appendContentBlock(
     })),
   ].map((block, index) => ({ ...block, position: index, updated_at: block.position === index ? block.updated_at : null }))
 
-  return await writeRevisionFromBlocks(db, document, snapshots, { createdBy: input.createdBy, label: input.label })
+  // Anchor on the block we're inserting after (or the last block, when
+  // appending to the end) so a concurrent edit to the existing content is
+  // detected instead of silently overwritten. An empty document has nothing
+  // to race against, so no guard is needed there.
+  const anchorBlock = afterIndex >= 0 ? existing[afterIndex] : undefined
+  return await writeRevisionFromBlocks(db, document, snapshots, {
+    createdBy: input.createdBy,
+    label: input.label,
+    expectedBlock: anchorBlock ? { id: anchorBlock.id, updatedAt: anchorBlock.updated_at } : undefined,
+  })
 }
 
 export async function replaceContentBlock(
@@ -519,8 +575,24 @@ export async function deleteContentBlock(
   const document = await getContentDocumentById(db, current.document_id)
   if (!document) notFound('Content document not found')
 
-  const snapshots = (await listBlocksForDocument(db, document.id))
-    .filter(block => block.id !== blockId)
+  const allBlocks = await listBlocksForDocument(db, document.id)
+
+  // Cascade-delete descendants so removing a block never leaves a surviving
+  // block pointing at a parent_block_id that no longer exists.
+  const removedIds = new Set<string>([blockId])
+  let addedDescendant = true
+  while (addedDescendant) {
+    addedDescendant = false
+    for (const block of allBlocks) {
+      if (block.parent_block_id && removedIds.has(block.parent_block_id) && !removedIds.has(block.id)) {
+        removedIds.add(block.id)
+        addedDescendant = true
+      }
+    }
+  }
+
+  const snapshots = allBlocks
+    .filter(block => !removedIds.has(block.id))
     .map((block, index) => ({
       id: block.id,
       parent_block_id: block.parent_block_id,

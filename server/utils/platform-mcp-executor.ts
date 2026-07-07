@@ -129,7 +129,15 @@ async function resolveContentDocument(db: D1Database, args: Record<string, unkno
 }
 
 async function getFormattedContentBlock(db: D1Database, blockId: string) {
-  const block = await getContentBlock(db, blockId)
+  let block: Awaited<ReturnType<typeof getContentBlock>>
+  try {
+    block = await getContentBlock(db, blockId)
+  } catch (error) {
+    if (error && typeof error === 'object' && 'statusCode' in error && (error as { statusCode?: number }).statusCode === 404) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, 'content block not found.')
+    }
+    throw error
+  }
   return {
     document_id: block.document_id,
     id: block.id,

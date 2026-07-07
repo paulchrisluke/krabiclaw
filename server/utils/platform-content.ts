@@ -1611,8 +1611,13 @@ export async function createPlatformDoc(
         await syncStructuredContent(db, 'doc', id, input)
         await syncDocContentDocument(db, id, input, authorId)
       } catch (syncErr) {
-        await deleteContentDocumentForOwner(db, 'platform_doc', id)
-        await execute(db, 'DELETE FROM platform_docs WHERE id = ?', [id])
+        try {
+          await deleteContentDocumentForOwner(db, 'platform_doc', id)
+          await execute(db, 'DELETE FROM platform_docs WHERE id = ?', [id])
+          await replaceContentComponents(db, 'doc', id, [])
+        } catch (cleanupErr) {
+          console.error('Failed to clean up platform doc after create rollback:', cleanupErr)
+        }
         throw syncErr
       }
 
@@ -1735,8 +1740,16 @@ export async function updatePlatformDoc(
        RETURNING id`, params)
     if (!doc) notFound('Doc not found')
 
-    await syncStructuredContent(db, 'doc', docId, input)
-    await syncDocContentDocument(db, docId, input)
+    const priorDoc = await getPlatformDoc(db, docId)
+    try {
+      await syncStructuredContent(db, 'doc', docId, input)
+      await syncDocContentDocument(db, docId, input)
+    } catch (err) {
+      await syncStructuredContent(db, 'doc', docId, {
+        components: priorDoc?.components ?? []
+      })
+      throw err
+    }
     const updatedDoc = await getPlatformDoc(db, docId)
     return {
       success: true,
