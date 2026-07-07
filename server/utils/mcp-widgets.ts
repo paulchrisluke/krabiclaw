@@ -60,7 +60,7 @@ export async function readMcpAppResource(
   let origin: string;
   try {
     origin = new URL(normalizedBaseUrl).origin;
-  } catch (urlError) {
+  } catch {
     throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid baseUrl: ${baseUrl}`);
   }
 

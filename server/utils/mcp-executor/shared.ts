@@ -526,7 +526,7 @@ export async function resolveUserUploadedMediaFileById(
   fileId: string,
   env: ApiRecord,
 ): Promise<ResolvedMediaFile> {
-  const { buffer, contentType, normalizedFileId } = await fetchUploadedFileFromAiGateway(fileId, env, MAX_VIDEO_BYTES);
+  const { buffer, normalizedFileId } = await fetchUploadedFileFromAiGateway(fileId, env, MAX_VIDEO_BYTES);
   const bytes = new Uint8Array(buffer);
   if (bytes.byteLength < 64) {
     throw createError({

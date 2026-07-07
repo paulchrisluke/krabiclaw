@@ -176,6 +176,13 @@
       "when": 1783312459127,
       "tag": "0031_familiar_lady_bullseye",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1783389744892,
+      "tag": "0032_new_scourge",
+      "breakpoints": true
     }
   ]
 }

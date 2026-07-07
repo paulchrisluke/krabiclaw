@@ -36,15 +36,20 @@ const drilledCategory = computed(() => typeof route.params.category === 'string'
 
 const groups = computed(() => {
   const visible = drilledCategory.value
-    ? categories.value.filter(c => c.categorySlug === drilledCategory.value)
+    ? categories.value.filter(group => group.docs.some(doc => doc.categorySlug === drilledCategory.value))
+      .map(group => ({
+        ...group,
+        docs: group.docs.filter(doc => doc.categorySlug === drilledCategory.value),
+      }))
+      .filter(group => group.docs.length)
     : categories.value
 
-  return visible.map(({ category, categorySlug, docs }) => ({
+  return visible.map(({ category, docs }) => ({
     label: category,
     items: docs.map(doc => ({
-      label: doc.title,
-      to: `/docs/${categorySlug}/${doc.slug}`,
-      active: route.path === `/docs/${categorySlug}/${doc.slug}`,
+      label: doc.label,
+      to: doc.path,
+      active: route.path === doc.path,
     })),
   }))
 })
