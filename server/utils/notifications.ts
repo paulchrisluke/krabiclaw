@@ -177,6 +177,16 @@ function formatTimeHuman(timeValue: string): string {
   }).format(dt)
 }
 
+// The WhatsApp "Reply in dashboard" button URL is declared in the approved Meta
+// template as a fixed prefix + single {{1}} variable, so only the path/query
+// suffix after that prefix can be sent per-message.
+function inboxUrlToWhatsAppReplyPath(inboxUrl: string | null): string {
+  if (!inboxUrl) return ''
+  const marker = '/dashboard/'
+  const idx = inboxUrl.indexOf(marker)
+  return idx >= 0 ? inboxUrl.slice(idx + marker.length) : ''
+}
+
 function buildReservationWhatsAppContext(locationName?: string | null): string {
   return locationName?.trim() ? `Location: ${locationName.trim()}` : 'Location not provided'
 }
@@ -680,6 +690,7 @@ export async function notifyReservationCreated(
           email: opts.email,
           context: buildReservationWhatsAppContext(opts.locationName),
           requests: opts.requests ?? '',
+          reply_path: inboxUrlToWhatsAppReplyPath(inboxUrl),
         },
       },
     }),
@@ -822,6 +833,7 @@ export async function notifyContactSubmitted(
           email: opts.email,
           subject: opts.subject ? SUBJECT_LABELS[opts.subject] ?? opts.subject : '',
           message_preview: opts.message,
+          reply_path: inboxUrlToWhatsAppReplyPath(inboxUrl),
         },
       },
     }),
@@ -1074,6 +1086,7 @@ export async function notifyExperienceBookingCreated(
           email: opts.email,
           context: buildExperienceWhatsAppContext(opts.experienceTitle, opts.siteName),
           requests: opts.notes ?? '',
+          reply_path: inboxUrlToWhatsAppReplyPath(inboxUrl),
         },
       },
     }),

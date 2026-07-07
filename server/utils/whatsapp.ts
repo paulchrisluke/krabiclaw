@@ -130,32 +130,52 @@ const TEMPLATES: Record<
   new_contact_msg: (v) => ({
     name: 'new_contact_msg',
     language: { code: 'en_US' },
-    components: [{
-      type: 'body',
-      parameters: [
-        { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
-        { type: 'text', text: cleanTemplateText(v.email, 'No email provided', 120) },
-        { type: 'text', text: cleanTemplateText(v.subject, 'General', 40) },
-        { type: 'text', text: cleanTemplateText(v.message_preview, 'No message preview', 100) },
-      ],
-    }],
+    components: [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
+          { type: 'text', text: cleanTemplateText(v.email, 'No email provided', 120) },
+          { type: 'text', text: cleanTemplateText(v.subject, 'General', 40) },
+          { type: 'text', text: cleanTemplateText(v.message_preview, 'No message preview', 100) },
+        ],
+      },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.reply_path, '', 300) },
+        ],
+      },
+    ],
   }),
   new_reservation: (v) => ({
     name: 'new_reservation',
     language: { code: 'en_US' },
-    components: [{
-      type: 'body',
-      parameters: [
-        { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
-        { type: 'text', text: cleanTemplateText(v.date, 'Date pending', 40) },
-        { type: 'text', text: cleanTemplateText(v.time, 'Time pending', 40) },
-        { type: 'text', text: cleanTemplateText(v.guests, 'Unknown', 24) },
-        { type: 'text', text: cleanTemplateText(v.phone, 'No phone provided', 40) },
-        { type: 'text', text: cleanTemplateText(v.email, 'No email provided', 100) },
-        { type: 'text', text: cleanTemplateText(v.context, 'Context not provided', 100) },
-        { type: 'text', text: cleanTemplateText(v.requests, 'None', 100) },
-      ],
-    }],
+    components: [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
+          { type: 'text', text: cleanTemplateText(v.date, 'Date pending', 40) },
+          { type: 'text', text: cleanTemplateText(v.time, 'Time pending', 40) },
+          { type: 'text', text: cleanTemplateText(v.guests, 'Unknown', 24) },
+          { type: 'text', text: cleanTemplateText(v.phone, 'No phone provided', 40) },
+          { type: 'text', text: cleanTemplateText(v.email, 'No email provided', 100) },
+          { type: 'text', text: cleanTemplateText(v.context, 'Context not provided', 100) },
+          { type: 'text', text: cleanTemplateText(v.requests, 'None', 100) },
+        ],
+      },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.reply_path, '', 300) },
+        ],
+      },
+    ],
   }),
   reservation_cancelled: (v) => ({
     name: 'reservation_cancelled',
