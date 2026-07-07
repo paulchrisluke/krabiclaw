@@ -869,7 +869,7 @@ export const posts = sqliteTable("posts", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	uniqueIndex("posts_site_slug_idx").on(table.site_id, table.slug).where(sql`slug IS NOT NULL`),
+	uniqueIndex("posts_site_slug_idx").on(table.site_id, table.slug),
 	check("posts_source_check", sql`source IN ('manual', 'template')`),
 ]);
 

@@ -22,4 +22,4 @@ ALTER TABLE `posts` ADD `slug` text;--> statement-breakpoint
 ALTER TABLE `posts` ADD `seo_title` text;--> statement-breakpoint
 ALTER TABLE `posts` ADD `seo_description` text;--> statement-breakpoint
 ALTER TABLE `posts` ADD `og_image_asset_id` text REFERENCES media_assets(id) ON DELETE SET NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX `posts_site_slug_idx` ON `posts` (`site_id`,`slug`) WHERE slug IS NOT NULL;
+CREATE UNIQUE INDEX `posts_site_slug_idx` ON `posts` (`site_id`,`slug`);
