@@ -51,6 +51,7 @@ export type WhatsAppTemplate =
   | 'ai_action_complete'
   | 'low_credits'
   | 'new_contact_msg'
+  | 'guest_thread_reply_whatsapp'
   | 'new_reservation'
   | 'reservation_cancelled'
   | 'domain_update'
@@ -98,6 +99,37 @@ function normalizeTemplateVars(vars: Record<string, string>): Record<string, str
     out[key] = String(val ?? '').replace(/\s+/g, ' ').trim()
   }
   return out
+}
+
+// Shared by new_contact_msg and guest_thread_reply_whatsapp, which both send through the
+// same approved "new_contact_msg" Meta template and only differ in fallback copy.
+function buildContactAlertTemplate(
+  v: Record<string, string>,
+  fallbacks: { subjectFallback: string; messageFallback: string },
+): { name: string; language: { code: string }; components: TemplateComponent[] } {
+  return {
+    name: 'new_contact_msg',
+    language: { code: 'en_US' },
+    components: [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
+          { type: 'text', text: cleanTemplateText(v.email, 'No email provided', 120) },
+          { type: 'text', text: cleanTemplateText(v.subject, fallbacks.subjectFallback, 40) },
+          { type: 'text', text: cleanTemplateText(v.message_preview, fallbacks.messageFallback, 100) },
+        ],
+      },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.reply_path, '', 300) },
+        ],
+      },
+    ],
+  }
 }
 
 // Map our template names to Meta template names + variable builders.
@@ -173,29 +205,11 @@ const TEMPLATES: Record<
       },
     ],
   }),
-  new_contact_msg: (v) => ({
-    name: 'new_contact_msg',
-    language: { code: 'en_US' },
-    components: [
-      {
-        type: 'body',
-        parameters: [
-          { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
-          { type: 'text', text: cleanTemplateText(v.email, 'No email provided', 120) },
-          { type: 'text', text: cleanTemplateText(v.subject, 'General', 40) },
-          { type: 'text', text: cleanTemplateText(v.message_preview, 'No message preview', 100) },
-        ],
-      },
-      {
-        type: 'button',
-        sub_type: 'url',
-        index: '0',
-        parameters: [
-          { type: 'text', text: cleanTemplateText(v.reply_path, '', 300) },
-        ],
-      },
-    ],
-  }),
+  new_contact_msg: (v) => buildContactAlertTemplate(v, { subjectFallback: 'General', messageFallback: 'No message preview' }),
+  // Reuses the approved owner contact template shape so guest reply alerts
+  // stay within Meta's existing parameter contract while deep-linking into
+  // the exact dashboard thread.
+  guest_thread_reply_whatsapp: (v) => buildContactAlertTemplate(v, { subjectFallback: 'Guest reply', messageFallback: 'Open the dashboard for the full reply.' }),
   new_reservation: (v) => ({
     name: 'new_reservation',
     language: { code: 'en_US' },

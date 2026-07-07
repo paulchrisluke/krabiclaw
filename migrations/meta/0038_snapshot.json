@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "82b75e02-0948-4140-85f0-1487fbbdd587",
-  "prevId": "397fcaed-6ce2-4956-80f4-f3574bc83b76",
+  "id": "3e3812da-a4f6-4b85-ae78-ef6dcbf38004",
+  "prevId": "82b75e02-0948-4140-85f0-1487fbbdd587",
   "tables": {
     "account": {
       "name": "account",
@@ -2071,6 +2071,296 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "content_blocks": {
+      "name": "content_blocks",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "document_id": {
+          "name": "document_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "parent_block_id": {
+          "name": "parent_block_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "level": {
+          "name": "level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "data_json": {
+          "name": "data_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "content_blocks_document_position_idx": {
+          "name": "content_blocks_document_position_idx",
+          "columns": [
+            "document_id",
+            "position"
+          ],
+          "isUnique": false
+        },
+        "content_blocks_parent_idx": {
+          "name": "content_blocks_parent_idx",
+          "columns": [
+            "parent_block_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "content_blocks_document_id_content_documents_id_fk": {
+          "name": "content_blocks_document_id_content_documents_id_fk",
+          "tableFrom": "content_blocks",
+          "tableTo": "content_documents",
+          "columnsFrom": [
+            "document_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "content_blocks_type_check": {
+          "name": "content_blocks_type_check",
+          "value": "type IN ('heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'ai_assistance', 'cta', 'callout')"
+        }
+      }
+    },
+    "content_documents": {
+      "name": "content_documents",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "owner_type": {
+          "name": "owner_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "draft_revision_id": {
+          "name": "draft_revision_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "published_revision_id": {
+          "name": "published_revision_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "content_documents_owner_idx": {
+          "name": "content_documents_owner_idx",
+          "columns": [
+            "owner_type",
+            "owner_id"
+          ],
+          "isUnique": false
+        },
+        "content_documents_owner_unique": {
+          "name": "content_documents_owner_unique",
+          "columns": [
+            "owner_type",
+            "owner_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "content_documents_owner_type_check": {
+          "name": "content_documents_owner_type_check",
+          "value": "owner_type IN ('platform_blog', 'platform_doc', 'tenant_blog')"
+        }
+      }
+    },
+    "content_revisions": {
+      "name": "content_revisions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "document_id": {
+          "name": "document_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "snapshot_json": {
+          "name": "snapshot_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "body_markdown": {
+          "name": "body_markdown",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "content_revisions_document_created_idx": {
+          "name": "content_revisions_document_created_idx",
+          "columns": [
+            "document_id",
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "content_revisions_document_id_content_documents_id_fk": {
+          "name": "content_revisions_document_id_content_documents_id_fk",
+          "tableFrom": "content_revisions",
+          "tableTo": "content_documents",
+          "columnsFrom": [
+            "document_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "content_revisions_created_by_user_id_fk": {
+          "name": "content_revisions_created_by_user_id_fk",
+          "tableFrom": "content_revisions",
+          "tableTo": "user",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

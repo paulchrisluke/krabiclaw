@@ -1,9 +1,7 @@
 // POST /api/editor/sites/[siteId]/experience-bookings/[bookingId]/reply
-// Owner/admin sends a reply to the guest who booked an experience, over email or WhatsApp.
+// Owner/admin sends an email reply to the guest who booked an experience.
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
-import { hasSiteEntitlement } from '~/server/utils/billing'
-import { sendWhatsAppText } from '~/server/utils/whatsapp'
 import { queryFirst } from '~/server/db'
 import { getSubmissionContact, insertSubmissionMessage, sendReplyEmail } from '~/server/utils/submission-messages'
 
@@ -17,8 +15,8 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event) as { channel?: unknown; body?: unknown }
   const channel = body.channel
   const replyBody = typeof body.body === 'string' ? body.body.trim() : ''
-  if (channel !== 'email' && channel !== 'whatsapp') {
-    return jsonResponse({ error: 'channel must be "email" or "whatsapp"' }, { status: 400 })
+  if (channel !== 'email') {
+    return jsonResponse({ error: 'Experience booking replies are email-only in the dashboard inbox' }, { status: 400 })
   }
   if (!replyBody) {
     return jsonResponse({ error: 'Reply body is required' }, { status: 400 })
@@ -27,36 +25,6 @@ export default defineEventHandler(async (event) => {
   const contact = await getSubmissionContact(db, siteId, 'experience_booking', bookingId)
   if (!contact) {
     return jsonResponse({ error: 'Booking not found' }, { status: 404 })
-  }
-
-  if (channel === 'whatsapp') {
-    if (!contact.phone) {
-      return jsonResponse({ error: 'This guest has no phone number on file' }, { status: 400 })
-    }
-    if (!(await hasSiteEntitlement(db, siteId, 'whatsapp_notifications'))) {
-      return jsonResponse({ error: 'WhatsApp replies require a Growth plan or higher.' }, { status: 403 })
-    }
-
-    const result = await sendWhatsAppText(env, contact.phone, replyBody)
-
-    await insertSubmissionMessage(db, {
-      submissionType: 'experience_booking',
-      submissionId: bookingId,
-      organizationId: site.organization_id,
-      siteId,
-      direction: 'out',
-      channel: 'whatsapp',
-      body: replyBody,
-      senderUserId: session.user.id,
-      metaMessageId: result.messageId ?? null,
-      status: result.success ? 'sent' : 'failed',
-      error: result.error ?? null,
-    })
-
-    if (!result.success) {
-      return jsonResponse({ error: result.error || 'Failed to send WhatsApp reply' }, { status: 502 })
-    }
-    return jsonResponse({ sent: true })
   }
 
   if (!contact.email) {

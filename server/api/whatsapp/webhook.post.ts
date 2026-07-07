@@ -16,6 +16,8 @@ import {
   type ChowBotConversation,
 } from '~/server/utils/chowbot-conversations'
 import { queryFirst } from '~/server/db'
+import { ensureGuestThread, getGuestThreadSource } from '~/server/utils/guest-threads'
+import { notifyGuestThreadReply } from '~/server/utils/notifications'
 import { findSubmissionByPhone, insertInboundSubmissionReply } from '~/server/utils/submission-messages'
 
 interface WhatsAppMessage {
@@ -206,6 +208,23 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
             metaMessageId: message.id,
             from: toPhone,
           })
+          const thread = await ensureGuestThread(db, match.submissionType, match.submissionId)
+          const source = await getGuestThreadSource(db, match.submissionType, match.submissionId)
+          if (source) {
+            await notifyGuestThreadReply(env, db, {
+              organizationId: match.organizationId,
+              siteId: match.siteId,
+              locationId: source.location_id,
+              threadId: thread.id,
+              submissionType: match.submissionType,
+              submissionId: match.submissionId,
+              guestName: source.guest_name,
+              guestEmail: source.guest_email,
+              guestPhone: source.guest_phone,
+              inboundChannel: 'whatsapp',
+              messagePreview: text,
+            })
+          }
         } catch (err) {
           console.error('[whatsapp] Failed to insert guest reply for submission:', err)
         }

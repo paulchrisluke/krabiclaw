@@ -210,8 +210,37 @@ export const contact_submissions = sqliteTable("contact_submissions", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
+export const guest_threads = sqliteTable("guest_threads", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
+	submission_type: text().notNull(),
+	submission_id: text().notNull(),
+	guest_name: text().notNull(),
+	guest_email: text(),
+	guest_phone: text(),
+	inbox_status: text().default("open").notNull(),
+	unread_count: integer().default(0).notNull(),
+	last_message_at: text(),
+	last_inbound_at: text(),
+	last_outbound_at: text(),
+	last_message_preview: text(),
+	owner_last_seen_at: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	unique("guest_threads_submission_unique").on(table.submission_type, table.submission_id),
+	index("guest_threads_site_updated_idx").on(table.site_id, table.updated_at),
+	index("guest_threads_location_updated_idx").on(table.location_id, table.updated_at),
+	index("guest_threads_inbox_status_idx").on(table.site_id, table.inbox_status, table.updated_at),
+	check("guest_threads_submission_type_check", sql`submission_type IN ('contact', 'reservation', 'experience_booking')`),
+	check("guest_threads_inbox_status_check", sql`inbox_status IN ('open', 'waiting_on_owner', 'waiting_on_guest', 'closed')`),
+]);
+
 export const submission_messages = sqliteTable("submission_messages", {
 	id: text().primaryKey(),
+	thread_id: text().references(() => guest_threads.id, { onDelete: "cascade" } ),
 	submission_type: text().notNull(), // 'contact' | 'reservation' | 'experience_booking'
 	submission_id: text().notNull(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
@@ -229,6 +258,7 @@ export const submission_messages = sqliteTable("submission_messages", {
 	check("direction_check", sql`direction IN ('in', 'out')`),
 	check("channel_check", sql`channel IN ('email', 'whatsapp')`),
 	index("submission_type_id_idx").on(table.submission_type, table.submission_id),
+	index("submission_messages_thread_created_idx").on(table.thread_id, table.created_at),
 ]);
 
 export const notification_events = sqliteTable("notification_events", {
