@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { notifyReservationCancelled } from '~/server/utils/notifications'
 import { hashReservationCancelToken, readBearerToken } from '~/server/utils/reservation-cancel-token'
 import { getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
+import { fireSiteEventSafe } from '~/server/utils/site-events'
 
 const IP_HOURLY_LIMIT = 20
 const RESERVATION_HOURLY_LIMIT = 5
@@ -98,6 +99,21 @@ export default defineEventHandler(async (event) => {
   if (!reservation) {
     return jsonResponse({ error: 'Reservation not found or already cancelled' }, { status: 404 })
   }
+
+  await fireSiteEventSafe({
+    db,
+    organizationId: reservation.organization_id,
+    siteId: reservation.site_id,
+    locationId: reservation.location_id,
+    eventType: 'reservation.cancelled',
+    entityType: 'reservation_submission',
+    entityId: reservationId,
+    metadata: {
+      date: reservation.date,
+      time: reservation.time,
+      guests: reservation.guests,
+    },
+  })
 
   const site = await queryFirst<{ brand_name?: string | null }>(
     db,

@@ -1528,7 +1528,7 @@ async function executeTool(
     case "delete_media_asset": {
       const { deleteMediaAsset } =
         await import("~/server/utils/media-asset-manager");
-      await deleteMediaAsset(db, env, input.asset_id, siteId);
+      await deleteMediaAsset(db, env, input.asset_id, siteId, userId);
       return { asset_id: input.asset_id, deleted: true };
     }
 

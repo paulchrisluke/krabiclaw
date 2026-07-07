@@ -47,7 +47,7 @@ export default defineEventHandler(async (event) => {
   if (asset.site_id !== siteId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
   try {
-    await deleteMediaAsset(db, env, assetId, siteId)
+    await deleteMediaAsset(db, env, assetId, siteId, session.user.id)
     return jsonResponse({ deleted: true })
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Unknown error')

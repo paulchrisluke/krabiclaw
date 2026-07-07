@@ -1,5 +1,6 @@
 import { resolveLocationTimezone, isTimeSlotInPast } from '~/server/utils/site-config'
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { assertValidSaleWindow } from '~/shared/money'
 import { revokeReviewRequestForBooking } from '~/server/utils/review-requests'
@@ -441,6 +442,20 @@ export async function createExperience(
   if (!created) {
     throw new Error(`Failed to retrieve newly created experience with ID: ${id}`)
   }
+  await fireSiteEventSafe({
+    db,
+    organizationId,
+    siteId,
+    locationId: created.location_id,
+    actorId: userId,
+    eventType: 'experience.created',
+    entityType: 'experience',
+    entityId: id,
+    metadata: {
+      title: created.title,
+      status: created.status,
+    },
+  })
   return created
 }
 

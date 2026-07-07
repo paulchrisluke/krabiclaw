@@ -1,2 +1,11 @@
 [mcp_servers.nuxt-ui]
 url = "https://ui.nuxt.com/mcp"
+
+[[hooks.PreToolUse]]
+matcher = ".*"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = '/usr/bin/env python3 "$(git rev-parse --show-toplevel)/.codex/hooks/block_prod_krabiclaw.py"'
+timeout = 10
+statusMessage = "Checking KrabiClaw target host policy"

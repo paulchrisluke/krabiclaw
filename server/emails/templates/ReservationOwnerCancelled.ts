@@ -16,13 +16,20 @@ export default defineComponent({
     specialRequests: { type: String as PropType<string | null>, default: null },
     wasConfirmed: { type: Boolean, required: true },
     platformDomain: { type: String, required: true },
+    replyUrl: { type: String as PropType<string | null>, default: null },
   },
   setup(props) {
     return () => {
       const title = props.wasConfirmed
         ? `Reservation cancelled for ${props.guestName}`
         : `Reservation request cancelled by ${props.guestName}`
-      return h(EmailShell, { preheader: `Cancellation for ${props.siteName}`, title, platformDomain: props.platformDomain }, () => [
+      return h(EmailShell, {
+        preheader: `Cancellation for ${props.siteName}`,
+        title,
+        platformDomain: props.platformDomain,
+        ctaUrl: props.replyUrl ?? undefined,
+        ctaText: props.replyUrl ? 'View in dashboard' : undefined,
+      }, () => [
         h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `A reservation was cancelled for ${props.siteName}.`),
         h(EmailDetails, {
           rows: [
