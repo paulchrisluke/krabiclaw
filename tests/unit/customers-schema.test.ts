@@ -23,4 +23,3 @@ test('customers migration links booking tables to customers', () => {
 test('customers migration adds Better Auth anonymous support', () => {
   assert.match(migrationSql, /ALTER TABLE `user` ADD `isAnonymous` integer DEFAULT 0 NOT NULL/)
 })
-
