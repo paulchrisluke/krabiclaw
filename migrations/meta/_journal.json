@@ -197,6 +197,13 @@
       "when": 1783397832027,
       "tag": "0034_unknown_red_wolf",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1783400001641,
+      "tag": "0035_stale_zodiak",
+      "breakpoints": true
     }
   ]
 }

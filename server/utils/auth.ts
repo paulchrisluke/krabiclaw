@@ -152,11 +152,32 @@ export function createAuth(env: CloudflareEnv) {
       anonymous({
         generateRandomEmail: () => `anon-${crypto.randomUUID()}@customers.krabiclaw.local`,
         onLinkAccount: async ({ anonymousUser, newUser }) => {
+          const now = new Date().toISOString()
           await execute(db, `
             UPDATE customers
             SET user_id = ?, updated_at = ?
             WHERE user_id = ?
-          `, [newUser.user.id, new Date().toISOString(), anonymousUser.user.id])
+               OR id IN (
+                 SELECT customer_id
+                 FROM review_requests
+                 WHERE anonymous_user_id = ?
+               )
+          `, [newUser.user.id, now, anonymousUser.user.id, anonymousUser.user.id])
+          await execute(db, `
+            UPDATE review_requests
+            SET user_id = ?, updated_at = ?
+            WHERE anonymous_user_id = ?
+          `, [newUser.user.id, now, anonymousUser.user.id])
+          await execute(db, `
+            UPDATE reviews
+            SET user_id = ?, updated_at = ?
+            WHERE user_id = ?
+               OR review_request_id IN (
+                 SELECT id
+                 FROM review_requests
+                 WHERE anonymous_user_id = ?
+               )
+          `, [newUser.user.id, now, anonymousUser.user.id, anonymousUser.user.id])
         },
       }),
       oauthProvider({

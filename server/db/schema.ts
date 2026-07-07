@@ -133,6 +133,7 @@ export const business_locations = sqliteTable("business_locations", {
 	uber_eats_url: text(),
 	foodpanda_url: text(),
 	google_place_id: text(),
+	google_review_url: text(),
 	hero_image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
 	hero_video_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
@@ -292,9 +293,19 @@ export const experience_bookings = sqliteTable("experience_bookings", {
 	cancellation_token_hash: text(),
 	cancellation_token_expires_at: text(),
 	cancellation_token_used_at: text(),
+	completed_at: text(),
+	completion_source: text(),
+	review_request_sent_at: text(),
+	review_reminder_sent_at: text(),
+	review_submitted_at: text(),
+	review_id: text().references(() => reviews.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	index("idx_experience_bookings_review_request_due").on(table.site_id, table.status, table.completed_at, table.review_request_sent_at),
+	index("idx_experience_bookings_review_reminder_due").on(table.site_id, table.review_request_sent_at, table.review_reminder_sent_at, table.review_submitted_at),
+	check("experience_bookings_completion_source_check", sql`completion_source IS NULL OR completion_source IN ('manual', 'auto')`),
+]);
 
 export const experience_slot_overrides = sqliteTable("experience_slot_overrides", {
 	id: text().primaryKey(),
@@ -932,8 +943,19 @@ export const reservation_submissions = sqliteTable("reservation_submissions", {
 	cancellation_token_hash: text(),
 	cancellation_token_expires_at: text(),
 	cancellation_token_used_at: text(),
+	completed_at: text(),
+	completion_source: text(),
+	review_request_sent_at: text(),
+	review_reminder_sent_at: text(),
+	review_submitted_at: text(),
+	review_id: text().references(() => reviews.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("idx_reservation_submissions_review_request_due").on(table.site_id, table.status, table.completed_at, table.review_request_sent_at),
+	index("idx_reservation_submissions_review_reminder_due").on(table.site_id, table.review_request_sent_at, table.review_reminder_sent_at, table.review_submitted_at),
+	check("reservation_submissions_completion_source_check", sql`completion_source IS NULL OR completion_source IN ('manual', 'auto')`),
+]);
 
 export const booking_policies = sqliteTable("booking_policies", {
 	id: text().primaryKey(),
@@ -970,11 +992,46 @@ export const booking_policies = sqliteTable("booking_policies", {
 	check("booking_policies_scope_type_check", sql`scope_type IN ('site', 'location', 'experience')`),
 ]);
 
+export const review_requests = sqliteTable("review_requests", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
+	customer_id: text().notNull().references(() => customers.id, { onDelete: "cascade" } ),
+	booking_type: text().notNull(),
+	booking_id: text().notNull(),
+	token_hash: text().notNull().unique(),
+	expires_at: text().notNull(),
+	first_sent_at: text(),
+	reminder_sent_at: text(),
+	submitted_at: text(),
+	clicked_at: text(),
+	revoked_at: text(),
+	send_count: integer().default(0).notNull(),
+	last_error: text(),
+	anonymous_user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	uniqueIndex("idx_review_requests_active_booking_unique")
+		.on(table.site_id, table.booking_type, table.booking_id)
+		.where(sql`revoked_at IS NULL AND submitted_at IS NULL`),
+	index("idx_review_requests_token_hash").on(table.token_hash),
+	index("idx_review_requests_send_due").on(table.site_id, table.first_sent_at, table.reminder_sent_at, table.submitted_at, table.expires_at),
+	check("review_requests_booking_type_check", sql`booking_type IN ('reservation', 'experience_booking')`),
+]);
+
 export const reviews = sqliteTable("reviews", {
 	id: text().primaryKey(),
 	organization_id: text().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().references(() => sites.id, { onDelete: "cascade" } ),
 	location_id: text().references(() => business_locations.id, { onDelete: "cascade" } ),
+	customer_id: text().references(() => customers.id, { onDelete: "set null" } ),
+	booking_id: text(),
+	booking_type: text(),
+	review_request_id: text().references(() => review_requests.id, { onDelete: "set null" } ),
+	user_id: text().references(() => user.id, { onDelete: "set null" } ),
 	menu_item_slug: text(),
 	author_name: text(),
 	reviewer_photo_url: text(),
@@ -992,7 +1049,31 @@ export const reviews = sqliteTable("reviews", {
 	user_agent: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
-});
+}, (table) => [
+	index("idx_reviews_request_id").on(table.review_request_id),
+	index("idx_reviews_customer_id").on(table.customer_id),
+	index("idx_reviews_location_status").on(table.location_id, table.status, table.created_at),
+	check("reviews_booking_type_check", sql`booking_type IS NULL OR booking_type IN ('reservation', 'experience_booking')`),
+]);
+
+export const review_media = sqliteTable("review_media", {
+	id: text().primaryKey(),
+	review_id: text().references(() => reviews.id, { onDelete: "cascade" } ),
+	review_request_id: text().notNull().references(() => review_requests.id, { onDelete: "cascade" } ),
+	customer_id: text().notNull().references(() => customers.id, { onDelete: "cascade" } ),
+	media_asset_id: text().notNull().references(() => media_assets.id, { onDelete: "cascade" } ),
+	kind: text().notNull(),
+	sort_order: integer().default(0).notNull(),
+	status: text().default("pending").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	unique("review_media_media_asset_id_unique").on(table.media_asset_id),
+	index("idx_review_media_review_request_id").on(table.review_request_id),
+	index("idx_review_media_review_id").on(table.review_id),
+	check("review_media_kind_check", sql`kind IN ('image', 'video')`),
+	check("review_media_status_check", sql`status IN ('pending', 'approved', 'rejected', 'deleted')`),
+]);
 
 export const service_addon_purchases = sqliteTable("service_addon_purchases", {
 	id: text().primaryKey(),

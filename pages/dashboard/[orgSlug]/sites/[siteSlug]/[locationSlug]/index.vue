@@ -266,6 +266,9 @@
                 <UFormField label="Maps URL">
                   <UInput v-model="detailsForm.maps_url" type="url" />
                 </UFormField>
+                <UFormField label="Google Review URL">
+                  <UInput v-model="detailsForm.google_review_url" type="url" />
+                </UFormField>
                 <UFormField label="Google Place ID">
                   <UInput v-model="detailsForm.google_place_id" />
                 </UFormField>
@@ -427,6 +430,7 @@ interface BusinessLocation {
   email: string | null
   website_url: string | null
   maps_url: string | null
+  google_review_url: string | null
   description: string | null
   short_description: string | null
   price_level: string | null
@@ -555,6 +559,7 @@ const detailsForm = reactive({
   email: '',
   website_url: '',
   maps_url: '',
+  google_review_url: '',
   google_place_id: '',
   rating: '',
   review_count: '',
@@ -642,6 +647,7 @@ function fillDetailsForm(loc: BusinessLocation) {
   detailsForm.email = loc.email ?? ''
   detailsForm.website_url = loc.website_url ?? ''
   detailsForm.maps_url = loc.maps_url ?? ''
+  detailsForm.google_review_url = loc.google_review_url ?? ''
   detailsForm.google_place_id = loc.google_place_id ?? ''
   detailsForm.rating = loc.rating === null || loc.rating === undefined ? '' : String(loc.rating)
   detailsForm.review_count = loc.review_count === null || loc.review_count === undefined ? '' : String(loc.review_count)
@@ -785,6 +791,7 @@ async function saveLocationDetails() {
         email: detailsForm.email || null,
         website_url: detailsForm.website_url || null,
         maps_url: detailsForm.maps_url || null,
+        google_review_url: detailsForm.google_review_url || null,
         google_place_id: detailsForm.google_place_id || null,
         rating: optionalNumber(detailsForm.rating),
         review_count: optionalInteger(detailsForm.review_count),
