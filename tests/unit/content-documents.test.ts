@@ -110,7 +110,9 @@ async function execute(db: Store, query: string, params: unknown[] = []) {
 }
 
 async function executeBatch(db: Store, queries: Array<{ query: string; params: unknown[] }>) {
-  for (const item of queries) await execute(db, item.query, item.params)
+  const results: Array<{ meta: { changes: number } }> = []
+  for (const item of queries) results.push(await execute(db, item.query, item.params))
+  return results
 }
 
 async function queryFirst<T>(db: Store, query: string, params: unknown[] = []): Promise<T | null> {
