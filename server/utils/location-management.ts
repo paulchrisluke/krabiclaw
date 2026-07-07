@@ -1,4 +1,5 @@
 import { updateSubscriptionQuantity } from "~/server/utils/billing";
+import { fireSiteEventSafe } from "~/server/utils/site-events";
 import { execute, executeBatch, queryFirst } from "~/server/db";
 import { isValidTimezone, normalizeTimezone } from "~/utils/timezone";
 
@@ -457,6 +458,20 @@ export async function createLocation(
 
       await executeBatch(db, statements);
       const location = await loadLocation(db, organizationId, siteId, id);
+      await fireSiteEventSafe({
+        db,
+        organizationId,
+        siteId,
+        locationId: id,
+        actorId: userId,
+        eventType: "location.created",
+        entityType: "business_location",
+        entityId: id,
+        metadata: {
+          title,
+          is_primary: isPrimary,
+        },
+      })
       void updateSubscriptionQuantity(env, db, organizationId).catch(
         (error) => {
           console.error(
@@ -752,6 +767,19 @@ export async function updateLocation(
           siteId,
           locationId,
         );
+        await fireSiteEventSafe({
+          db,
+          organizationId,
+          siteId,
+          locationId,
+          actorId: userId,
+          eventType: "location.updated",
+          entityType: "business_location",
+          entityId: locationId,
+          metadata: {
+            title: location?.title ?? null,
+          },
+        })
         return { status: 200, data: { success: true, location } };
       } catch (error) {
         if (isUniqueConstraintError(error)) continue;
@@ -773,6 +801,19 @@ export async function updateLocation(
   params.push(locationId, organizationId, siteId);
   await runUpdate(params);
   const location = await loadLocation(db, organizationId, siteId, locationId);
+  await fireSiteEventSafe({
+    db,
+    organizationId,
+    siteId,
+    locationId,
+    actorId: userId,
+    eventType: "location.updated",
+    entityType: "business_location",
+    entityId: locationId,
+    metadata: {
+      title: location?.title ?? null,
+    },
+  })
   return { status: 200, data: { success: true, location } };
 }
 

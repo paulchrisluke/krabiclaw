@@ -52,9 +52,15 @@ export function logOnlyEmailProviderId(prefix = 'email'): string {
 // it reaches Resend.
 const RESERVED_TEST_TLDS = new Set(['test', 'example', 'invalid', 'localhost'])
 
+// RFC 2606 also reserves these exact second-level domains under otherwise-real TLDs
+// (example.com/net/org) — these are the ones actually seen bouncing in production
+// (wa-verify@example.com, verify-guest@example.com), since their TLD is "com", not "example".
+const RESERVED_TEST_DOMAINS = new Set(['example.com', 'example.net', 'example.org'])
+
 export function isReservedTestDomain(email: string): boolean {
   const domain = email.trim().toLowerCase().split('@')[1]
   if (!domain) return false
+  if (RESERVED_TEST_DOMAINS.has(domain)) return true
   const tld = domain.split('.').pop() ?? ''
   return RESERVED_TEST_TLDS.has(tld)
 }

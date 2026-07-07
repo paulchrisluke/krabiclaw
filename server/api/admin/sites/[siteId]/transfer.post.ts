@@ -2,7 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { executeBatch, queryFirst, type BatchQuery } from '~/server/db'
-import { hashEmail, shouldSendRealEmail } from '~/server/utils/email-delivery'
+import { hashEmail, isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { normalizeHost } from '~/server/utils/tenant-hosts'
 import { rootDomainForPair } from '~/server/utils/domains'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
@@ -78,6 +78,11 @@ export default defineEventHandler(async (event) => {
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!emailPattern.test(toEmail)) {
     return jsonResponse({ error: 'A valid recipient email is required' }, { status: 400 })
+  }
+  // Reserved test domains (example.com, wa-verify@example.com, etc.) are guaranteed to
+  // hard-bounce and must never be accepted where the environment sends real email.
+  if (shouldSendRealEmail(env) && isReservedTestDomain(toEmail)) {
+    return jsonResponse({ error: 'A valid recipient email is required' }, { status: 422 })
   }
 
   // Check for identical pending request to avoid double-submission

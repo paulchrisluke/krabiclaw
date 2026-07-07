@@ -6,6 +6,7 @@
 </template>
 
 <script setup lang="ts">
+import type { KrabiAnalyticsEvent } from '~/composables/useAnalytics'
 import { calculateThemeColors } from '~/utils/color-utils'
 import { buildTenantHeadLinks } from '~/utils/tenant-head'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
@@ -51,25 +52,48 @@ useHead(() => {
 // intentionally accept any normalized G-prefixed token instead of hard-coding
 // a fixed length, to avoid rejecting future-compatible GA4-style IDs.
 const GA4_MEASUREMENT_ID_RE = /^G-[A-Z0-9]+$/
+const PLATFORM_GA_MEASUREMENT_ID = 'G-NJ1BSP9BYG'
 
-// Google Analytics: platform uses KrabiClaw's own GA4 property. Tenant (Saya)
-// pages use the site's own connected GA4 property (server/utils/google-analytics.ts),
-// surfaced via site_config → bootstrap config.google_analytics_measurement_id.
-// Sites without a GA connection get no tag at all.
+declare global {
+  interface Window {
+    krabiLayer?: KrabiAnalyticsEvent[]
+  }
+}
+
+// Google Analytics: only the platform/dashboard surface uses KrabiClaw's own
+// GA4 property here. Tenant/Saya pages keep their own pageview-only GA tag in
+// layouts/saya.vue and must never inherit the platform product-event bridge.
 //
-// Deferred loading: GA4 is loaded on first interaction (or a long passive
-// fallback) to avoid blocking LCP/FCP/TTI. See the note below for why
+// Deferred loading: platform GA4 is loaded on first interaction (or a long
+// passive fallback) to avoid blocking LCP/FCP/TTI. See the note below for why
 // requestIdleCallback was removed.
 if (import.meta.client) {
+  const installKrabiLayerBridge = () => {
+    const queue = window.krabiLayer || []
+    const currentPush = queue.push.bind(queue)
+    queue.push = (...events: KrabiAnalyticsEvent[]) => {
+      const result = currentPush(...events)
+      for (const event of events) {
+        window.gtag?.('event', event.name, event.params)
+      }
+      return result
+    }
+    window.krabiLayer = queue
+  }
+
+  const flushKrabiLayer = () => {
+    if (!window.gtag || !window.krabiLayer?.length) return
+    for (const event of window.krabiLayer) {
+      window.gtag('event', event.name, event.params)
+    }
+  }
+
   const loadGa4 = () => {
     if (runtimeConfig.public.perfNoGa4) return
+    if (!isPlatform) return
 
-    const measurementId = isPlatform
-      ? 'G-NJ1BSP9BYG'
-      : config.value.google_analytics_measurement_id
-
-    const normalizedMeasurementId = String(measurementId || '').trim().toUpperCase()
-    if (!normalizedMeasurementId || !GA4_MEASUREMENT_ID_RE.test(normalizedMeasurementId)) return
+    const normalizedMeasurementId = PLATFORM_GA_MEASUREMENT_ID
+    if (!GA4_MEASUREMENT_ID_RE.test(normalizedMeasurementId)) return
 
     // Load gtag script
     const script = document.createElement('script')
@@ -83,6 +107,9 @@ if (import.meta.client) {
     window.gtag = function gtag(...args: unknown[]) { dataLayer.push(args) }
     window.gtag('js', new Date())
     window.gtag('config', normalizedMeasurementId)
+
+    installKrabiLayerBridge()
+    flushKrabiLayer()
   }
 
   // Load GA4 on first real user interaction, so it never competes with
@@ -116,9 +143,11 @@ if (import.meta.client) {
   }, 15000)
 
   // Set up interaction listeners
-  document.addEventListener('click', loadOnInteraction, { once: true, passive: true })
-  document.addEventListener('scroll', loadOnInteraction, { once: true, passive: true })
-  document.addEventListener('keydown', loadOnInteraction, { once: true, passive: true })
+  if (isPlatform) {
+    document.addEventListener('click', loadOnInteraction, { once: true, passive: true })
+    document.addEventListener('scroll', loadOnInteraction, { once: true, passive: true })
+    document.addEventListener('keydown', loadOnInteraction, { once: true, passive: true })
+  }
 }
 
 const loadingColor = computed(() => {

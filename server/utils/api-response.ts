@@ -73,10 +73,18 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
 
   const d1 = runtimeEnv.DB as D1Database | undefined
   const db = d1 ? createDb(d1) : undefined
+  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  const e2eDeliveryOverrides = e2eOverride
+    ? {
+        EMAIL_DELIVERY_MODE: process.env.EMAIL_DELIVERY_MODE,
+        WHATSAPP_DELIVERY_MODE: process.env.WHATSAPP_DELIVERY_MODE,
+      }
+    : {}
 
   return {
     ...process.env,
     ...runtimeEnv,
+    ...e2eDeliveryOverrides,
     db,
   } as CloudflareEnv
 }

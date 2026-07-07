@@ -1,6 +1,7 @@
 import { deleteImage } from './cloudflare-images'
 import { deleteFromR2 } from './cloudflare-r2'
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { fireSiteEventSafe } from '~/server/utils/site-events'
 
 type SqlBindValue = string | number | boolean | null
 type MediaProviderEnv = Parameters<typeof deleteImage>[0]
@@ -55,6 +56,23 @@ export async function createMediaAsset(db: DbClient, data: CreateInput): Promise
     data.alt_text ?? null, data.category ?? null, data.status ?? 'active',
     data.created_by_user_id ?? null, now, now,
   ])
+
+  await fireSiteEventSafe({
+    db,
+    organizationId: data.organization_id,
+    siteId: data.site_id,
+    locationId: data.location_id ?? null,
+    actorId: data.created_by_user_id ?? null,
+    eventType: 'media.uploaded',
+    entityType: 'media_asset',
+    entityId: data.id,
+    metadata: {
+      kind: data.kind,
+      provider: data.provider,
+      source: data.source,
+      status: data.status ?? 'active',
+    },
+  })
 }
 
 export async function getMediaAsset(db: DbClient, id: string, siteId: string): Promise<MediaAsset | null> {
@@ -211,4 +229,29 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     SET status = 'deleted', delete_pending_at = NULL, updated_at = ?
     WHERE id = ? AND site_id = ?
   `, [new Date().toISOString(), pendingAsset.id, siteId])
+
+  const deletedAsset = await queryFirst<{
+    organization_id: string
+    location_id: string | null
+    created_by_user_id: string | null
+  }>(
+    db,
+    `SELECT organization_id, location_id, created_by_user_id FROM media_assets WHERE id = ? AND site_id = ? LIMIT 1`,
+    [pendingAsset.id, siteId],
+  )
+  if (deletedAsset) {
+    await fireSiteEventSafe({
+      db,
+      organizationId: deletedAsset.organization_id,
+      siteId,
+      locationId: deletedAsset.location_id,
+      actorId: deletedAsset.created_by_user_id,
+      eventType: 'media.deleted',
+      entityType: 'media_asset',
+      entityId: pendingAsset.id,
+      metadata: {
+        provider: pendingAsset.provider,
+      },
+    })
+  }
 }

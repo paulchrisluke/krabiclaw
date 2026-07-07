@@ -114,6 +114,59 @@ test.describe('dashboard functional smoke', () => {
     const contentBody = await contentRes.json() as { fields: Array<{ field: string; hero_title?: string }> }
     const hero = contentBody.fields.find((entry) => entry.field === 'hero')
     expect(hero?.hero_title).toBe(uniqueTitle)
+
+    const eventsRes = await request.get(`${baseURL}/api/dashboard/events?limit=50`)
+    expect(eventsRes.status()).toBe(200)
+    const eventsBody = await eventsRes.json() as {
+      events: Array<{ event_type: string; entity_type: string | null; metadata: Record<string, unknown> | null }>
+    }
+    expect(
+      eventsBody.events.some((entry) =>
+        entry.event_type === 'content.updated'
+        && entry.entity_type === 'site_content'
+        && entry.metadata?.page === 'home'
+      ),
+    ).toBe(true)
+  })
+
+  test('public contact submission writes a server-owned site event', async ({ request, baseURL }) => {
+    const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
+    expect(login.status()).toBeLessThan(400)
+
+    const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
+    expect(contextRes.status()).toBe(200)
+    const context = await contextRes.json()
+    const siteId = context?.site?.id as string | undefined
+
+    if (!siteId) {
+      return
+    }
+
+    const subject = 'general'
+
+    const contactRes = await request.post(`${baseURL}/api/public/sites/${siteId}/contact`, {
+      data: {
+        name: 'Playwright Analytics Contact',
+        email: `analytics-contact-${Date.now()}@example.test`,
+        subject,
+        message: 'Analytics reset contact coverage from Playwright.',
+      },
+    })
+    expect(contactRes.status()).toBe(201)
+
+    const eventsRes = await request.get(`${baseURL}/api/dashboard/events?limit=50`)
+    expect(eventsRes.status()).toBe(200)
+    const eventsBody = await eventsRes.json() as {
+      events: Array<{ event_type: string; entity_type: string | null; metadata: Record<string, unknown> | null }>
+    }
+    expect(
+      eventsBody.events.some((entry) =>
+        entry.event_type === 'contact.created'
+        && entry.entity_type === 'contact_submission'
+        && entry.metadata?.subject === subject
+        && !('guest_email' in (entry.metadata ?? {}))
+      ),
+    ).toBe(true)
   })
 
   test('support work-request submission is enforced by plan entitlement', async ({ request, baseURL }) => {

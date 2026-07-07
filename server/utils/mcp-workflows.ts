@@ -21,6 +21,7 @@ import type { CloudflareEnv } from "~/server/utils/auth";
 import { signOAuthState } from "~/server/utils/encryption";
 import { updateLocation } from "~/server/utils/location-management";
 import { execute, queryAll, queryFirst } from "~/server/db";
+import { fireSiteEventSafe } from "~/server/utils/site-events";
 
 export async function listSitesForUser(
   db: D1Database,
@@ -690,6 +691,21 @@ export async function updatePageContent(
     } as Omit<SiteContent, "updated_at">);
   }
 
+  await fireSiteEventSafe({
+    db,
+    organizationId,
+    siteId,
+    locationId: locationId ?? null,
+    eventType: "content.updated",
+    entityType: "site_content",
+    entityId: `${locationId ?? "site"}:${input.page}`,
+    metadata: {
+      page: input.page,
+      fields: Array.from(normalizedFields.keys()),
+      includes_hero: hasHeroChange,
+    },
+  })
+
   return {
     success: true,
     page: input.page,
@@ -890,6 +906,19 @@ export async function deleteContentField(
     input.field,
     locationId,
   );
+  await fireSiteEventSafe({
+    db,
+    organizationId,
+    siteId,
+    locationId: locationId ?? null,
+    eventType: "content.updated",
+    entityType: "site_content",
+    entityId: `${locationId ?? "site"}:${input.page}`,
+    metadata: {
+      page: input.page,
+      deleted_field: input.field,
+    },
+  })
   return {
     deleted: true,
     page: input.page,
