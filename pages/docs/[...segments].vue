@@ -283,10 +283,10 @@ const orderedDocs = computed(() => (docsList.value?.docs ?? [])
   .map((item) => {
     const itemCategorySlug = categoryToSlug(item.category)
     if (!itemCategorySlug) return null
-    return {
-      ...item,
-      path: `/docs/${itemCategorySlug}/${item.slug}`,
-    }
+    // A doc whose slug matches its own category slug is that category's overview
+    // doc — link to the category-only route, not a duplicate /category/category URL.
+    const path = item.slug === itemCategorySlug ? `/docs/${itemCategorySlug}` : `/docs/${itemCategorySlug}/${item.slug}`
+    return { ...item, path }
   })
   .filter((item): item is DocListItem & { path: string } => Boolean(item)))
 
@@ -324,7 +324,11 @@ const docMedia = computed(() => resolveMedia({
 }))
 
 const categorySlug = computed(() => categoryToSlug(doc.value?.category) || categoryParam.value)
-const canonicalUrl = usePlatformSeoUrl(() => doc.value ? (doc.value.canonical_url || `/docs/${categorySlug.value}/${doc.value.slug}`) : '/docs')
+const canonicalUrl = usePlatformSeoUrl(() => {
+  if (!doc.value) return '/docs'
+  if (doc.value.canonical_url) return doc.value.canonical_url
+  return isOverviewDoc.value ? `/docs/${categorySlug.value}` : `/docs/${categorySlug.value}/${doc.value.slug}`
+})
 const ogImage = useSharedOgImage(() => docMedia.value.thumb)
 const seoTitle = computed(() => doc.value?.title || 'Documentation')
 const seoDescription = computed(() => doc.value?.seo_description || doc.value?.excerpt || `Learn about ${doc.value?.title || 'this topic'} in KrabiClaw documentation.`)
