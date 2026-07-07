@@ -13,6 +13,7 @@ import { getPlatformDomain } from '~/server/utils/notifications'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
+import { deleteCustomerIfUnlinked, findOrCreateCustomer } from '~/server/utils/customers'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
 export default defineEventHandler(async (event) => {
@@ -129,11 +130,21 @@ export default defineEventHandler(async (event) => {
 
   const cancellation = createReservationCancelToken()
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
+  const customer = await findOrCreateCustomer(db, {
+    organizationId: site.organization_id,
+    siteId,
+    name: guestName,
+    email: guestEmail,
+    phone: guestPhone || null,
+    source: 'experience_booking',
+    bookingAt: `${bookingDate}T${timeSlot}:00`,
+  })
 
   const booking = await createExperienceBookingClaimingCapacity(db, {
     experience_id: experience.id,
     organization_id: site.organization_id,
     site_id: siteId,
+    customer_id: customer.id,
     location_id: experience.location_id,
     guest_name: guestName,
     guest_email: guestEmail,
@@ -152,6 +163,7 @@ export default defineEventHandler(async (event) => {
   // another request can claim the last spot in between. createExperienceBookingClaimingCapacity
   // re-checks capacity as part of the insert itself, so this is the authoritative guard.
   if (!booking) {
+    if (customer.created) await deleteCustomerIfUnlinked(db, customer.id)
     return jsonResponse({ error: 'This time slot just filled up. Please pick another time.' }, { status: 409 })
   }
 

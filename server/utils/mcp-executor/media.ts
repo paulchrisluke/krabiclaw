@@ -10,7 +10,6 @@ import {
   mutationContextPayload,
   optionalString,
   requiredString,
-  resolveGeneratedImageFile,
   resolveImageUploadProvider,
   resolveUserUploadedMediaFile,
   resolveUserUploadedMediaFileById,
