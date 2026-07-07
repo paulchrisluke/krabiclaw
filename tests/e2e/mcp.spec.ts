@@ -174,8 +174,8 @@ test.describe('stateless MCP server', () => {
     expect(invalidBody.error.message).toContain('Unsupported MCP method')
   })
 
-  test('owner can use content, notifications, and submissions workflow tools', async ({ request, baseURL }) => {
-    test.setTimeout(180_000)
+  test('owner can use site content and settings tools', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = MCP_GROWTH_SITE_ID
 
@@ -195,22 +195,6 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId },
     })
     expect(siteRead.status()).toBe(200)
-
-    const locationId = await createScratchLocation(request, baseURL!, siteId)
-
-    const locationRead = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'get_location',
-      args: { site_id: siteId, location_id: locationId },
-    })
-    expect(locationRead.status()).toBe(200)
-
-    const locationUpdate = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'update_location',
-      args: { site_id: siteId, location_id: locationId, phone: '+1 555 555 0111', city: 'Ao Nang' },
-    })
-    expect(locationUpdate.status()).toBe(200)
 
     const contentUpdate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -279,6 +263,12 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, page: 'about', field: 'story.headline' },
     })
     expect(deleteField.status()).toBe(200)
+  })
+
+  test('owner can use notification settings and submission inquiry tools', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
+    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+    const siteId = MCP_GROWTH_SITE_ID
 
     const notifications = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -363,6 +353,28 @@ test.describe('stateless MCP server', () => {
     expect(toolNames).toContain('get_reservation_inquiries')
     expect(toolNames).not.toContain('update_contact_submission')
     expect(toolNames).not.toContain('update_reservation_submission')
+  })
+
+  test('owner can use location, reviews, and QA lifecycle tools', async ({ request, baseURL }) => {
+    test.setTimeout(90_000)
+    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+    const siteId = MCP_GROWTH_SITE_ID
+
+    const locationId = await createScratchLocation(request, baseURL!, siteId)
+
+    const locationRead = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'get_location',
+      args: { site_id: siteId, location_id: locationId },
+    })
+    expect(locationRead.status()).toBe(200)
+
+    const locationUpdate = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'update_location',
+      args: { site_id: siteId, location_id: locationId, phone: '+1 555 555 0111', city: 'Ao Nang' },
+    })
+    expect(locationUpdate.status()).toBe(200)
 
     const reviewsList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',

@@ -139,7 +139,7 @@ test.describe('dashboard functional smoke', () => {
     const siteId = context?.site?.id as string | undefined
 
     if (!siteId) {
-      return
+      throw new Error('Dashboard context missing siteId - test setup regression')
     }
 
     const subject = 'general'

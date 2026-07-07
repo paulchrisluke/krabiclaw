@@ -166,7 +166,7 @@ export async function updateMediaAssetMetadata(
  * external delete leaves the asset in a retryable state (status untouched)
  * instead of being marked 'deleted' while the underlying file is still live.
  */
-export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: string, siteId: string): Promise<void> {
+export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: string, siteId: string, deletedByUserId: string | null): Promise<void> {
   const now = new Date().toISOString()
   const pendingAsset = await queryFirst<{
     id: string
@@ -238,7 +238,7 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     organizationId: pendingAsset.organization_id,
     siteId,
     locationId: pendingAsset.location_id,
-    actorId: pendingAsset.created_by_user_id,
+    actorId: deletedByUserId,
     eventType: 'media.deleted',
     entityType: 'media_asset',
     entityId: pendingAsset.id,

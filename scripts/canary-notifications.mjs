@@ -235,13 +235,13 @@ async function main() {
           email: emailRow?.id ?? null,
           whatsapp: whatsappRow.id,
           cancellation_email: cancelEmailRow?.id ?? null,
-          cancellation_whatsapp: cancelWhatsappRow.id,
+          cancellation_whatsapp: cancelWhatsappRow?.id ?? null,
         },
         provider_message_ids: {
           email: emailRow?.provider_message_id ?? null,
           whatsapp: whatsappRow.provider_message_id,
           cancellation_email: cancelEmailRow?.provider_message_id ?? null,
-          cancellation_whatsapp: cancelWhatsappRow.provider_message_id,
+          cancellation_whatsapp: cancelWhatsappRow?.provider_message_id ?? null,
         },
         provider_degraded: (emailQuotaBlocked || cancelEmailQuotaBlocked) ? {
           email_daily_quota_exceeded: true,
@@ -264,49 +264,8 @@ async function main() {
     `, 'cancellation notification final read')
     throw new Error(`Provider-level cancellation canary assertions failed. email_sent=${Boolean(cancelEmailRow)} whatsapp_sent=${Boolean(cancelWhatsappRow)} rows=${JSON.stringify(rows)}`)
   }
-  const details = {
-    started_at: since,
-    completed_at: nowIso(),
-    base_url: baseUrl,
-    triggers: {
-      contact_status: contact.res.status,
-      reservation_status: reservation.res.status,
-      reservation_id: reservationId,
-      reservation_cancel_status: cancelRes.status,
-    },
-    notification_ids: {
-      email: emailRow?.id ?? null,
-      whatsapp: whatsappRow.id,
-      cancellation_email: cancelEmailRow?.id ?? null,
-      cancellation_whatsapp: cancelWhatsappRow.id,
-    },
-    provider_message_ids: {
-      email: emailRow?.provider_message_id ?? null,
-      whatsapp: whatsappRow.provider_message_id,
-      cancellation_email: cancelEmailRow?.provider_message_id ?? null,
-      cancellation_whatsapp: cancelWhatsappRow.provider_message_id,
-    },
-    provider_degraded: (emailQuotaBlocked || cancelEmailQuotaBlocked) ? {
-      email_daily_quota_exceeded: true,
-      affected_notification_ids: [...quotaBlockedEmailRows, ...cancelQuotaBlockedEmailRows].map((row) => row.id),
-    } : null,
-  }
 
-  d1Raw(`
-    INSERT INTO canary_runs (id, run_type, environment, status, organization_id, site_id, details_json, created_at)
-    VALUES (
-      '${sqlEscape(runId)}',
-      'notifications',
-      'production',
-      'pass',
-      '${sqlEscape(orgId)}',
-      '${sqlEscape(siteId)}',
-      '${sqlEscape(JSON.stringify(details))}',
-      '${sqlEscape(nowIso())}'
-    )
-  `, 'canary success audit')
-
-  console.log(JSON.stringify({ status: 'pass', run_id: runId, ...details }, null, 2))
+  console.log(JSON.stringify({ status: 'pass', run_id: runId }, null, 2))
 
   if (emailQuotaBlocked || cancelEmailQuotaBlocked) {
     console.warn('canary:notifications passed with degraded email provider capacity (daily quota exceeded)')
