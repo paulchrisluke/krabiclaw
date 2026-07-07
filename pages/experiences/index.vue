@@ -43,16 +43,11 @@
             <div v-else class="flex h-full items-center justify-center">
               <SayaIcon name="sparkles" class="size-12 text-dimmed" />
             </div>
-            <div
+            <SayaBadgeUnavailable
               v-if="unavailabilityBadge(exp)"
-              class="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/60 to-transparent"
+              overlay
+              :text="unavailabilityBadge(exp) as string"
             />
-            <span
-              v-if="unavailabilityBadge(exp)"
-              class="absolute bottom-3 left-3 rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-widest text-white"
-            >
-              {{ unavailabilityBadge(exp) }}
-            </span>
           </div>
 
           <div class="mt-5">

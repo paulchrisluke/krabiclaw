@@ -18,6 +18,7 @@ export interface FindOrCreateCustomerInput {
   phone?: string | null
   source: CustomerSource
   bookingAt?: string | null
+  userId?: string | null
 }
 
 export interface CustomerRow {
@@ -72,7 +73,7 @@ async function findExistingCustomer(
   if (emailNormalized) {
     return await queryFirst<CustomerRow>(db, `
       ${CUSTOMER_SELECT}
-      WHERE site_id = ? AND email_normalized = ? AND status != 'deleted'
+      WHERE site_id = ? AND email_normalized = ? AND status = 'active'
       LIMIT 1
     `, [siteId, emailNormalized])
   }
@@ -80,7 +81,7 @@ async function findExistingCustomer(
   if (phoneNormalized) {
     return await queryFirst<CustomerRow>(db, `
       ${CUSTOMER_SELECT}
-      WHERE site_id = ? AND phone_normalized = ? AND status != 'deleted'
+      WHERE site_id = ? AND phone_normalized = ? AND status = 'active'
       ORDER BY created_at ASC
       LIMIT 1
     `, [siteId, phoneNormalized])
@@ -134,14 +135,15 @@ export async function findOrCreateCustomer(
   try {
     await execute(db, `
       INSERT INTO customers (
-        id, organization_id, site_id, name, email, email_normalized, email_hash,
+        id, organization_id, site_id, user_id, name, email, email_normalized, email_hash,
         phone, phone_normalized, source, status, last_booking_at, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
     `, [
       id,
       input.organizationId,
       input.siteId,
+      input.userId ?? null,
       name,
       email,
       emailNormalized,

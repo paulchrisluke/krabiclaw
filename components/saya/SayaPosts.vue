@@ -159,6 +159,7 @@ const props = defineProps({
 
 const modalOpen = ref(false)
 const selectedPost = ref(null)
+const selectedPostPathOverride = ref('')
 
 async function openPost(post) {
   const path = resolvePostPath(post)
@@ -166,11 +167,12 @@ async function openPost(post) {
     await navigateTo(path)
     return
   }
-  openModal(post)
+  openModal(post, '')
 }
 
-function openModal(post) {
+function openModal(post, path = '') {
   selectedPost.value = post
+  selectedPostPathOverride.value = path
   modalOpen.value = true
 }
 
@@ -186,7 +188,7 @@ const lightboxItems = computed(() => {
     }))
 })
 
-const selectedPostPath = computed(() => selectedPost.value ? resolvePostPath(selectedPost.value) : '')
+const selectedPostPath = computed(() => selectedPostPathOverride.value || (selectedPost.value ? resolvePostPath(selectedPost.value) : ''))
 
 const displayedPosts = computed(() => {
   return props.limit ? props.posts.slice(0, props.limit) : props.posts

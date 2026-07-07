@@ -36,7 +36,7 @@ export function useBlogNav() {
 
   const categories = computed<BlogNavCategory[]>(() => {
     const eligible = posts.value
-      .filter(post => post.category && blogCategoryToSlug(post.category))
+      .filter(post => post.category && blogCategoryToSlug(post.category) && !post.hide_from_nav)
       .map(post => ({ ...post, _categorySlug: blogCategoryToSlug(post.category!)! }))
 
     const groups = groupItemsByNavSection(

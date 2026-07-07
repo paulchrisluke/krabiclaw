@@ -1287,10 +1287,10 @@ export async function createPlatformBlogPost(
         input.category ?? null,
         input.nav_section ?? null,
         input.nav_title ?? null,
-        input.nav_order ?? null,
-        input.nav_section_order ?? null,
+        input.nav_order != null ? Number(input.nav_order) : null,
+        input.nav_section_order != null ? Number(input.nav_section_order) : null,
         normalizeHideFromNav(input.hide_from_nav) ?? 0,
-        input.featured_order ?? null,
+        input.featured_order != null ? Number(input.featured_order) : null,
         input.publish ? 'published' : 'draft',
         input.seo_description ?? null,
         input.seo_keywords ?? null,
@@ -1505,14 +1505,14 @@ export async function reorderPlatformBlogPosts(
     validateNavMetadata(metadata)
     const postId = await resolvePlatformContentId(db, 'blog_posts', item.post_id, 'Post not found')
     const updates = ['nav_order = ?', 'updated_at = ?']
-    const params: ApiValue[] = [item.nav_order, now]
+    const params: ApiValue[] = [Number(item.nav_order), now]
     if (hasOwnField(item, 'nav_section')) {
       updates.splice(1, 0, 'nav_section = ?')
       params.splice(1, 0, item.nav_section ?? null)
     }
     if (hasOwnField(item, 'nav_section_order')) {
       updates.splice(updates.length - 1, 0, 'nav_section_order = ?')
-      params.splice(params.length - 1, 0, item.nav_section_order ?? null)
+      params.splice(params.length - 1, 0, Number(item.nav_section_order))
     }
     params.push(postId)
     queries.push({
@@ -1592,10 +1592,10 @@ export async function createPlatformDoc(
         input.category ?? null,
         input.nav_section ?? null,
         input.nav_title ?? null,
-        input.nav_order ?? null,
-        input.nav_section_order ?? null,
+        input.nav_order != null ? Number(input.nav_order) : null,
+        input.nav_section_order != null ? Number(input.nav_section_order) : null,
         normalizeHideFromNav(input.hide_from_nav) ?? 0,
-        input.featured_order ?? null,
+        input.featured_order != null ? Number(input.featured_order) : null,
         authorId,
         input.seo_description ?? null,
         input.seo_keywords ?? null,
@@ -1780,14 +1780,14 @@ export async function reorderPlatformDocs(
     validateNavMetadata(metadata)
     const docId = await resolvePlatformContentId(db, 'platform_docs', item.doc_id, 'Doc not found')
     const updates = ['nav_order = ?', 'updated_at = ?']
-    const params: ApiValue[] = [item.nav_order, now]
+    const params: ApiValue[] = [Number(item.nav_order), now]
     if (hasOwnField(item, 'nav_section')) {
       updates.splice(1, 0, 'nav_section = ?')
       params.splice(1, 0, item.nav_section ?? null)
     }
     if (hasOwnField(item, 'nav_section_order')) {
       updates.splice(updates.length - 1, 0, 'nav_section_order = ?')
-      params.splice(params.length - 1, 0, item.nav_section_order ?? null)
+      params.splice(params.length - 1, 0, Number(item.nav_section_order))
     }
     params.push(docId)
     queries.push({

@@ -14,6 +14,7 @@ import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking } from '~/server/utils/customers'
+import { getAuthSession } from '~/server/utils/auth'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
 export default defineEventHandler(async (event) => {
@@ -130,6 +131,8 @@ export default defineEventHandler(async (event) => {
 
   const cancellation = createReservationCancelToken()
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
+  const session = await getAuthSession(event, env)
+  const userId = session?.user?.id || null
   const customerInput = {
     organizationId: site.organization_id,
     siteId,
@@ -138,6 +141,7 @@ export default defineEventHandler(async (event) => {
     phone: guestPhone || null,
     source: 'experience_booking',
     bookingAt: `${bookingDate}T${timeSlot}:00`,
+    userId,
   } as const
   const customer = await findOrCreateCustomer(db, customerInput)
 

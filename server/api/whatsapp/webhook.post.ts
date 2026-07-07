@@ -46,6 +46,12 @@ interface UserRow {
   phoneNumberVerified: number
 }
 
+function platformLoginUrl(env: ApiRecord): string {
+  const raw = String(env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'https://krabiclaw.com').trim()
+  const origin = /^https?:\/\//i.test(raw) ? raw.replace(/\/$/, '') : `https://${raw.replace(/\/$/, '')}`
+  return `${origin}/login`
+}
+
 function inboundMessages(payload: WhatsAppPayload): WhatsAppMessage[] {
   return (payload.entry ?? [])
     .flatMap((entry) => entry.changes ?? [])
@@ -206,7 +212,7 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
       }
       return
     }
-    await reply(null, env, toPhone, 'This WhatsApp number is not linked to a verified KrabiClaw account. Sign in once with WhatsApp OTP, then message ChowBot again.')
+    await reply(null, env, toPhone, `To continue, open KrabiClaw: ${platformLoginUrl(env)}`)
     return
   }
 
