@@ -129,6 +129,17 @@ interface RawPlace {
   photos?: RawPhoto[]
 }
 
+// business_locations is source-locale (English) only — no locale column exists on it,
+// unlike business_location_translations. languageCode=en on both API calls is the real
+// fix; this only guards against Google still returning script-mismatched text (e.g. a
+// component Google won't localize) so it never lands silently in that table.
+const NON_LATIN_SCRIPT_RE = /[฀-๿一-鿿぀-ヿ가-힯؀-ۿЀ-ӿ]/
+
+function scrubNonLatin(value: string | null): string | null {
+  if (value && NON_LATIN_SCRIPT_RE.test(value)) return null
+  return value
+}
+
 function extractCity(components?: RawPlace['addressComponents']): string | null {
   if (!components) return null
   const cityTypes = ['locality', 'administrative_area_level_2', 'administrative_area_level_1']
@@ -143,7 +154,7 @@ function normalizeSearchResult(place: RawPlace): PlaceSearchResult {
   return {
     placeId: place.id ?? '',
     name: place.displayName?.text ?? '',
-    formattedAddress: place.formattedAddress ?? '',
+    formattedAddress: scrubNonLatin(place.formattedAddress ?? '') ?? '',
     lat: place.location?.latitude ?? null,
     lng: place.location?.longitude ?? null,
     mapsUrl: place.googleMapsUri ?? null,
@@ -157,8 +168,8 @@ function normalizeDetail(place: RawPlace): Omit<PlaceDetails, 'photos'> & { rawP
   return {
     placeId: place.id ?? '',
     name: place.displayName?.text ?? '',
-    formattedAddress: place.formattedAddress ?? '',
-    city: extractCity(place.addressComponents),
+    formattedAddress: scrubNonLatin(place.formattedAddress ?? '') ?? '',
+    city: scrubNonLatin(extractCity(place.addressComponents)),
     lat: place.location?.latitude ?? null,
     lng: place.location?.longitude ?? null,
     mapsUrl: place.googleMapsUri ?? null,
@@ -287,7 +298,7 @@ export async function searchPlaces(
   query: string,
   locationBias?: { latitude: number; longitude: number; radiusMeters?: number },
 ): Promise<PlaceSearchResult[]> {
-  const body: Record<string, unknown> = { textQuery: query, maxResultCount: 5 }
+  const body: Record<string, unknown> = { textQuery: query, maxResultCount: 5, languageCode: 'en' }
   if (locationBias) {
     body.locationBias = {
       circle: {
@@ -386,7 +397,7 @@ export async function getPlaceDetails(
   fetchPhotos = true,
   photoLimit = 5,
 ): Promise<PlaceDetails> {
-  const response = await fetch(`${PLACES_BASE}/${encodeURIComponent(placeId)}`, {
+  const response = await fetch(`${PLACES_BASE}/${encodeURIComponent(placeId)}?languageCode=en`, {
     headers: {
       'X-Goog-Api-Key': apiKey,
       'X-Goog-FieldMask': DETAIL_FIELD_MASK,

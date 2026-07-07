@@ -250,6 +250,19 @@ if (bootstrapData) {
   const emails = (bootstrapData.locations ?? []).map(l => l.email).filter(Boolean)
   assert('At least one location has a phone number', phones.length >= 1, true)
   assert('At least one location has an email', emails.length >= 1, true)
+
+  // Regression: Google Places sync once wrote Thai-script locality text (e.g. "ตำบล
+  // หนองทะเล") into English-source-locale location fields because languageCode was
+  // omitted from the API request. business_locations has no locale column of its own,
+  // so this must never surface silently — catch it here.
+  const NON_LATIN_SCRIPT_RE = /[฀-๿一-鿿぀-ヿ가-힯؀-ۿЀ-ӿ]/
+  for (const loc of (bootstrapData.locations ?? [])) {
+    for (const field of ['city', 'address']) {
+      if (loc[field]) {
+        assert(`Location "${loc.title ?? loc.id}" ${field} is Latin script`, NON_LATIN_SCRIPT_RE.test(loc[field]), false)
+      }
+    }
+  }
 }
 
 // ── 8. Q&A presence ──────────────────────────────────────────────────────────
