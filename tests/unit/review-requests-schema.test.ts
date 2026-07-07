@@ -1,8 +1,17 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
-const migrationSql = readFileSync('migrations/0033_faulty_mariko_yashida.sql', 'utf8')
+function findReviewRequestMigration() {
+  for (const name of readdirSync('migrations').filter(file => /^\d+_.*\.sql$/.test(file)).sort()) {
+    const sql = readFileSync(join('migrations', name), 'utf8')
+    if (sql.includes('CREATE TABLE `review_requests`')) return sql
+  }
+  throw new Error('review_requests migration not found')
+}
+
+const migrationSql = findReviewRequestMigration()
 const billingSource = readFileSync('server/utils/billing.ts', 'utf8')
 
 test('review request migration creates canonical request and media tables', () => {
