@@ -16,8 +16,7 @@ import {
   type ChowBotConversation,
 } from '~/server/utils/chowbot-conversations'
 import { queryFirst } from '~/server/db'
-import { findSubmissionByPhone, insertInboundSubmissionReply, insertSubmissionMessage } from '~/server/utils/submission-messages'
-import { insertDashboardNotification } from '~/server/utils/notifications'
+import { findSubmissionByPhone, insertInboundSubmissionReply } from '~/server/utils/submission-messages'
 
 interface WhatsAppMessage {
   id: string
