@@ -35,7 +35,6 @@ import {
 } from "~/server/utils/booking-policies";
 import { getCloudflareWaitUntil } from "~/server/utils/mcp-route-helpers";
 import { isPreviewContext } from "~/server/utils/tenant-hosts";
-import { getOwnerEmail } from "~/server/utils/notifications";
 
 function groupContentBlocks(rows: SiteContent[]): Array<SiteContent & { _section: string }> {
   const groups: Record<string, SiteContent & { _section: string }> = {}
@@ -918,14 +917,6 @@ export default defineEventHandler(async (event) => {
       ? (await attachAvailabilitySummaries(db, orgId, siteId, [experienceDetailRaw]))[0]
       : null;
 
-  // Locations rarely have their own email (Google Places API doesn't expose
-  // one) — fall back to the site's contact email, then the org owner's
-  // account email, so guests always have a way to reach someone.
-  const anyLocationMissingEmail = (locRows.results ?? []).some((loc) => !loc.email);
-  const fallbackEmail =
-    site.contact_email ??
-    (anyLocationMissingEmail ? await getOwnerEmail(db, site.organization_id) : null);
-
   // Shape locations
   const locations = (locRows.results ?? []).map((loc) => {
     const heroVideoUrl = loc.hero_video_public_url as string | null;
@@ -939,7 +930,7 @@ export default defineEventHandler(async (event) => {
       title: loc.title,
       address: parseJson(loc.address as string | null),
       phone: loc.phone,
-      email: (loc.email as string | null) ?? fallbackEmail,
+      email: (loc.email as string | null) ?? null,
       website_url: loc.website_url,
       maps_url: loc.maps_url,
       map_embed_url: calculateMapEmbedUrl({
