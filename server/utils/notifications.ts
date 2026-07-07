@@ -1,7 +1,7 @@
 import { useRender } from 'vue-email'
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { hashEmail, isReservedTestDomain, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
-import { getOrgWhatsAppPhone, sendWhatsAppNotification, type WhatsAppTemplate } from '~/server/utils/whatsapp'
+import { getOrgWhatsAppPhone, sendWhatsAppNotification, toDashboardButtonPath, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 import { buildReplyToAddress } from '~/server/utils/submission-messages'
 import { getPlatformSupportEmails } from '~/server/utils/platform-support'
 import ReservationOwnerNew from '~/server/emails/templates/ReservationOwnerNew'
@@ -181,7 +181,7 @@ function formatTimeHuman(timeValue: string): string {
 // template as a fixed prefix + single {{1}} variable, so only the path/query
 // suffix after that prefix can be sent per-message.
 function inboxUrlToWhatsAppReplyPath(inboxUrl: string | null): string {
-  return toDashboardButtonPath(inboxUrl, '')
+  return toDashboardButtonPath(inboxUrl ?? undefined, '')
 }
 
 function buildReservationWhatsAppContext(locationName?: string | null): string {
@@ -1062,7 +1062,7 @@ export async function notifyReviewReceived(
       email: { subject: `New review from ${opts.authorName}`, html: ownerEmail.html, text: ownerEmail.text },
       whatsapp: {
         template: 'new_review',
-        vars: { rating: String(opts.rating), site_name: restaurant, excerpt: opts.content ?? '', reviews_url: reviewsUrl ?? toDashboardButtonPath(undefined, 'settings') },
+        vars: { rating: String(opts.rating), site_name: restaurant, excerpt: opts.content ?? '', reviews_url: reviewsUrl ?? '' },
       },
     })
   } catch (error) {

@@ -86,7 +86,7 @@ function cleanTemplateText(value: string | undefined, fallback: string, maxLen =
 // Dynamic URL buttons in approved Meta templates are declared as a fixed prefix +
 // single {{1}} variable (e.g. "https://krabiclaw.com/dashboard/{{1}}"), so callers
 // that already built a full dashboard URL only need the suffix after that prefix.
-function toDashboardButtonPath(url: string | undefined, fallback = ''): string {
+export function toDashboardButtonPath(url: string | undefined, fallback = ''): string {
   const marker = '/dashboard/'
   const idx = String(url ?? '').indexOf(marker)
   return idx >= 0 ? String(url).slice(idx + marker.length) : fallback

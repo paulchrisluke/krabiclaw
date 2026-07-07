@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { collectPageErrors, setupTenantHeaders } from './helpers'
 import { devLoginHeaders, devLoginUrl } from './test-env'
+import { ensureSite } from './helpers/ensure-site'
 
 function extractOrgSlug(url: string) {
   const pathname = new URL(url).pathname
@@ -130,17 +131,19 @@ test.describe('dashboard functional smoke', () => {
   })
 
   test('public contact submission writes a server-owned site event', async ({ request, baseURL }) => {
-    const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
+    // A fresh dedicated user rather than the shared default dev-login user:
+    // /api/dashboard/context only auto-selects a site when the org has exactly
+    // one (see resolveSingleOrgSite), and the default user's org can end up with
+    // zero or several sites depending on what else ran earlier in the suite.
+    // Creating our own site keeps this deterministic.
+    const suffix = Date.now()
+    const login = await request.get(devLoginUrl(baseURL!, `e2e-dashboard-contact-event-${suffix}`), { headers: devLoginHeaders() })
     expect(login.status()).toBeLessThan(400)
 
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json()
-    const siteId = context?.site?.id as string | undefined
-
-    if (!siteId) {
-      throw new Error('Dashboard context missing siteId - test setup regression')
-    }
+    const siteId = await ensureSite(request, baseURL!, context.site?.id ?? null)
 
     const subject = 'general'
 

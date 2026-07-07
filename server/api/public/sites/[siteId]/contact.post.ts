@@ -69,7 +69,9 @@ export default defineEventHandler(async (event) => {
     eventType: 'contact.created',
     entityType: 'contact_submission',
     entityId: id,
-    metadata: {},
+    metadata: {
+      subject: subject || null,
+    },
   })
 
   try {
