@@ -247,6 +247,7 @@ import { createEmptyFaqItem, createEmptyHowToStep } from '~/composables/useBlogF
 import { useDocForm } from '~/composables/useDocForm'
 import { categoryToSlug } from '~/utils/docs-categories'
 import { PLATFORM_DOC_NAV_SECTION_LABELS } from '~/utils/platform-content-nav'
+import { parseOptionalNumber } from '~/utils/optional-number'
 
 interface DocComponent {
   type: 'faq' | 'how_to' | 'ai_assistance'
@@ -393,11 +394,6 @@ function buildPayload() {
       }))
       .filter(step => step.name && step.text),
   }
-}
-
-function parseOptionalNumber(value: string | number) {
-  const trimmed = String(value).trim()
-  return trimmed ? Number(trimmed) : null
 }
 
 async function loadDoc() {

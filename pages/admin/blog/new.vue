@@ -208,6 +208,7 @@
 import { getErrorMessage } from '~/utils/errors'
 import { createEmptyFaqItem, createEmptyHowToStep, useBlogForm } from '~/composables/useBlogForm'
 import { BLOG_CATEGORY_LABELS } from '~/utils/blog-categories'
+import { parseOptionalNumber } from '~/utils/optional-number'
 
 interface CreatePostResponse {
   id: string | number
@@ -283,11 +284,6 @@ function buildPayload() {
       }))
       .filter(step => step.name && step.text),
   }
-}
-
-function parseOptionalNumber(value: string | number) {
-  const trimmed = String(value).trim()
-  return trimmed ? Number(trimmed) : null
 }
 
 async function save(publish: boolean) {

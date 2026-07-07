@@ -225,6 +225,7 @@ import { getErrorMessage } from '~/utils/errors'
 import { createEmptyFaqItem, createEmptyHowToStep } from '~/composables/useBlogForm'
 import { useDocForm } from '~/composables/useDocForm'
 import { PLATFORM_DOC_NAV_SECTION_LABELS } from '~/utils/platform-content-nav'
+import { parseOptionalNumber } from '~/utils/optional-number'
 
 interface CreateDocResponse {
   id: string | number
@@ -305,11 +306,6 @@ function buildPayload() {
       }))
       .filter(step => step.name && step.text),
   }
-}
-
-function parseOptionalNumber(value: string | number) {
-  const trimmed = String(value).trim()
-  return trimmed ? Number(trimmed) : null
 }
 
 async function save(publish: boolean) {

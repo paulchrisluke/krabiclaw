@@ -290,9 +290,7 @@ const channelOptions = computed(() => [
   { value: 'instagram', label: 'Instagram', disabled: !facebookConnected.value, hint: facebookConnected.value ? 'Requires image' : 'Connect in Integrations' },
 ])
 
-const openCompose = () => {
-  selectedPost.value = null
-  composing.value = true
+function resetEditForm(locationId = '') {
   editForm.title = ''
   editForm.body = ''
   editForm.slug = ''
@@ -302,23 +300,20 @@ const openCompose = () => {
   editForm.imagePreviewUrl = null
   editForm.imageKind = 'image'
   editForm.gallery_media = []
-  editForm.location_id = selectedLocationId.value !== 'all' ? selectedLocationId.value : ''
+  editForm.location_id = locationId
+}
+
+const openCompose = () => {
+  selectedPost.value = null
+  composing.value = true
+  resetEditForm(selectedLocationId.value !== 'all' ? selectedLocationId.value : '')
   selectedChannels.value = ['site']
 }
 
 const closeEditor = () => {
   selectedPost.value = null
   composing.value = false
-  editForm.title = ''
-  editForm.body = ''
-  editForm.slug = ''
-  editForm.seo_title = ''
-  editForm.seo_description = ''
-  editForm.image_asset_id = null
-  editForm.imagePreviewUrl = null
-  editForm.imageKind = 'image'
-  editForm.gallery_media = []
-  editForm.location_id = ''
+  resetEditForm()
   selectedChannels.value = []
 }
 
@@ -452,8 +447,13 @@ async function copyPublicLink() {
   const path = selectedPost.value?.canonical_url || selectedPost.value?.public_path
   if (!path || !import.meta.client) return
   const url = String(path).startsWith('http') ? String(path) : new URL(String(path), window.location.origin).toString()
-  await navigator.clipboard?.writeText(url)
-  toast.add({ description: 'Public link copied', color: 'success' })
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable')
+    await navigator.clipboard.writeText(url)
+    toast.add({ description: 'Public link copied', color: 'success' })
+  } catch {
+    toast.add({ description: 'Failed to copy public link', color: 'error' })
+  }
 }
 
 // AI composer

@@ -37,6 +37,12 @@ export interface CustomerRow {
   created?: boolean
 }
 
+const CUSTOMER_SELECT = `
+  SELECT id, organization_id, site_id, user_id, stripe_customer_id, name, email,
+         email_normalized, email_hash, phone, phone_normalized, source, status
+  FROM customers
+`
+
 export function normalizeCustomerEmail(email: string | null | undefined): string | null {
   const normalized = email?.trim().toLowerCase()
   return normalized || null
@@ -52,6 +58,37 @@ export function normalizeCustomerPhone(phone: string | null | undefined): string
   }
 }
 
+function isUniqueCustomerConflict(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /unique constraint failed/i.test(message) && message.includes('customers.')
+}
+
+async function findExistingCustomer(
+  db: DbClient,
+  siteId: string,
+  emailNormalized: string | null,
+  phoneNormalized: string | null,
+): Promise<CustomerRow | null> {
+  if (emailNormalized) {
+    return await queryFirst<CustomerRow>(db, `
+      ${CUSTOMER_SELECT}
+      WHERE site_id = ? AND email_normalized = ? AND status != 'deleted'
+      LIMIT 1
+    `, [siteId, emailNormalized])
+  }
+
+  if (phoneNormalized) {
+    return await queryFirst<CustomerRow>(db, `
+      ${CUSTOMER_SELECT}
+      WHERE site_id = ? AND phone_normalized = ? AND status != 'deleted'
+      ORDER BY created_at ASC
+      LIMIT 1
+    `, [siteId, phoneNormalized])
+  }
+
+  return null
+}
+
 export async function findOrCreateCustomer(
   db: DbClient,
   input: FindOrCreateCustomerInput,
@@ -64,39 +101,27 @@ export async function findOrCreateCustomer(
   const name = input.name?.trim() || null
   const bookingAt = input.bookingAt ?? new Date().toISOString()
 
-  const existing = emailNormalized
-    ? await queryFirst<CustomerRow>(db, `
-        SELECT id, organization_id, site_id, user_id, stripe_customer_id, name, email,
-               email_normalized, email_hash, phone, phone_normalized, source, status
-        FROM customers
-        WHERE site_id = ? AND email_normalized = ? AND status != 'deleted'
-        LIMIT 1
-      `, [input.siteId, emailNormalized])
-    : phoneNormalized
-      ? await queryFirst<CustomerRow>(db, `
-          SELECT id, organization_id, site_id, user_id, stripe_customer_id, name, email,
-                 email_normalized, email_hash, phone, phone_normalized, source, status
-          FROM customers
-          WHERE site_id = ? AND phone_normalized = ? AND status != 'deleted'
-          ORDER BY created_at ASC
-          LIMIT 1
-        `, [input.siteId, phoneNormalized])
-      : null
-
+  const existing = await findExistingCustomer(db, input.siteId, emailNormalized, phoneNormalized)
   if (existing) {
+    return {
+      ...existing,
+      created: false,
+    }
+  }
+
+  const id = crypto.randomUUID()
+  const now = new Date().toISOString()
+  try {
     await execute(db, `
-      UPDATE customers
-      SET name = COALESCE(NULLIF(?, ''), name),
-          email = COALESCE(NULLIF(?, ''), email),
-          email_normalized = COALESCE(?, email_normalized),
-          email_hash = COALESCE(?, email_hash),
-          phone = COALESCE(NULLIF(?, ''), phone),
-          phone_normalized = COALESCE(?, phone_normalized),
-          source = CASE WHEN source = 'manual' THEN source ELSE ? END,
-          last_booking_at = ?,
-          updated_at = ?
-      WHERE id = ?
+      INSERT INTO customers (
+        id, organization_id, site_id, name, email, email_normalized, email_hash,
+        phone, phone_normalized, source, status, last_booking_at, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
     `, [
+      id,
+      input.organizationId,
+      input.siteId,
       name,
       email,
       emailNormalized,
@@ -105,45 +130,15 @@ export async function findOrCreateCustomer(
       phoneNormalized,
       input.source,
       bookingAt,
-      new Date().toISOString(),
-      existing.id,
+      now,
+      now,
     ])
-    return {
-      ...existing,
-      name: name ?? existing.name,
-      email: email ?? existing.email,
-      email_normalized: emailNormalized ?? existing.email_normalized,
-      email_hash: emailHash ?? existing.email_hash,
-      phone: phone ?? existing.phone,
-      phone_normalized: phoneNormalized ?? existing.phone_normalized,
-      source: existing.source === 'manual' ? existing.source : input.source,
-      created: false,
-    }
+  } catch (error) {
+    if (!isUniqueCustomerConflict(error)) throw error
+    const racedCustomer = await findExistingCustomer(db, input.siteId, emailNormalized, phoneNormalized)
+    if (racedCustomer) return { ...racedCustomer, created: false }
+    throw error
   }
-
-  const id = crypto.randomUUID()
-  const now = new Date().toISOString()
-  await execute(db, `
-    INSERT INTO customers (
-      id, organization_id, site_id, name, email, email_normalized, email_hash,
-      phone, phone_normalized, source, status, last_booking_at, created_at, updated_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
-  `, [
-    id,
-    input.organizationId,
-    input.siteId,
-    name,
-    email,
-    emailNormalized,
-    emailHash,
-    phone,
-    phoneNormalized,
-    input.source,
-    bookingAt,
-    now,
-    now,
-  ])
 
   return {
     id,
@@ -161,6 +156,45 @@ export async function findOrCreateCustomer(
     status: 'active',
     created: true,
   }
+}
+
+export async function recordCustomerBooking(
+  db: DbClient,
+  customerId: string,
+  input: FindOrCreateCustomerInput,
+): Promise<void> {
+  const email = input.email?.trim() || null
+  const emailNormalized = normalizeCustomerEmail(email)
+  const phone = input.phone?.trim() || null
+  const phoneNormalized = normalizeCustomerPhone(phone)
+  const emailHash = emailNormalized ? await hashIdentifier(emailNormalized) : null
+  const name = input.name?.trim() || null
+  const bookingAt = input.bookingAt ?? new Date().toISOString()
+
+  await execute(db, `
+    UPDATE customers
+    SET name = COALESCE(NULLIF(?, ''), name),
+        email = COALESCE(NULLIF(?, ''), email),
+        email_normalized = COALESCE(?, email_normalized),
+        email_hash = COALESCE(?, email_hash),
+        phone = COALESCE(NULLIF(?, ''), phone),
+        phone_normalized = COALESCE(?, phone_normalized),
+        source = CASE WHEN source = 'manual' THEN source ELSE ? END,
+        last_booking_at = ?,
+        updated_at = ?
+    WHERE id = ?
+  `, [
+    name,
+    email,
+    emailNormalized,
+    emailHash,
+    phone,
+    phoneNormalized,
+    input.source,
+    bookingAt,
+    new Date().toISOString(),
+    customerId,
+  ])
 }
 
 export async function deleteCustomerIfUnlinked(db: DbClient, customerId: string): Promise<void> {

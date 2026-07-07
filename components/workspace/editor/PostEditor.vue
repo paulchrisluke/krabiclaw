@@ -102,7 +102,7 @@
           <div v-if="galleryMedia.length > 0" class="space-y-2">
             <div
               v-for="(item, index) in galleryMedia"
-              :key="`${item.media_asset_id}-${index}`"
+              :key="item.media_asset_id"
               class="grid gap-2 rounded-md border border-default p-2 sm:grid-cols-[3rem_minmax(0,1fr)_auto]"
             >
               <div class="size-12 overflow-hidden rounded bg-muted">

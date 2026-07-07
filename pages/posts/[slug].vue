@@ -194,9 +194,9 @@ useSeoMeta({
   twitterImage: () => ogImage.value,
 })
 
-useHead({
+useHead(() => ({
   link: [{ rel: 'canonical', href: canonicalUrl.value }],
-})
+}))
 
 useSchemaOrg([
   computed(() => ({
