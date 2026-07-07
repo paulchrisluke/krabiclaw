@@ -535,7 +535,7 @@ export async function executePlatformMcpToolCall(
       const assetId = requiredString(rawArguments, 'asset_id')
       const asset = (await listPlatformMediaAssets(user.db, { id: assetId, limit: 1 }))[0] ?? null
       if (!asset) throw mcpProtocolError(MCP_ERROR.invalidParams, 'Platform media asset not found.')
-      await deleteMediaAsset(user.db, user.env, assetId, PLATFORM_MEDIA_SITE_ID)
+      await deleteMediaAsset(user.db, user.env, assetId, PLATFORM_MEDIA_SITE_ID, user.userId)
       return { success: true }
     }
     case 'get_content_document_outline': {

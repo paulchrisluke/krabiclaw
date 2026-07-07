@@ -22,6 +22,7 @@ import { signOAuthState } from "~/server/utils/encryption";
 import { updateLocation } from "~/server/utils/location-management";
 import { execute, queryAll, queryFirst } from "~/server/db";
 import { revokeReviewRequestForBooking } from "~/server/utils/review-requests";
+import { fireSiteEventSafe } from "~/server/utils/site-events";
 
 export async function listSitesForUser(
   db: D1Database,
@@ -654,6 +655,7 @@ export async function updatePageContent(
     changes: Record<string, unknown>;
     location_id?: string | null;
   },
+  actorId?: string | null,
 ) {
   const locationId = input.location_id ?? undefined;
   const { normalizedFields, heroChange, hasHeroChange } =
@@ -700,6 +702,22 @@ export async function updatePageContent(
       ...(heroChange as Partial<SiteContent>),
     } as Omit<SiteContent, "updated_at">);
   }
+
+  await fireSiteEventSafe({
+    db,
+    organizationId,
+    siteId,
+    locationId: locationId ?? null,
+    actorId,
+    eventType: "content.updated",
+    entityType: "site_content",
+    entityId: `${locationId ?? "site"}:${input.page}`,
+    metadata: {
+      page: input.page,
+      fields: Array.from(normalizedFields.keys()),
+      includes_hero: hasHeroChange,
+    },
+  })
 
   return {
     success: true,
@@ -891,6 +909,7 @@ export async function deleteContentField(
   organizationId: string,
   siteId: string,
   input: { page: string; field: string; location_id?: string | null },
+  actorId?: string | null,
 ) {
   const locationId = input.location_id ?? undefined;
   await deleteSiteContentField(
@@ -901,6 +920,20 @@ export async function deleteContentField(
     input.field,
     locationId,
   );
+  await fireSiteEventSafe({
+    db,
+    organizationId,
+    siteId,
+    locationId: locationId ?? null,
+    actorId,
+    eventType: "content.updated",
+    entityType: "site_content",
+    entityId: `${locationId ?? "site"}:${input.page}`,
+    metadata: {
+      page: input.page,
+      deleted_field: input.field,
+    },
+  })
   return {
     deleted: true,
     page: input.page,

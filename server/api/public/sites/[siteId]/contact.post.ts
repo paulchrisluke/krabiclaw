@@ -1,6 +1,7 @@
 import { execute, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { notifyContactSubmitted } from '~/server/utils/notifications'
+import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
 const VALID_SUBJECTS = ['general', 'press', 'partnerships', 'catering', 'careers']
@@ -60,6 +61,18 @@ export default defineEventHandler(async (event) => {
     INSERT INTO contact_submissions (id, organization_id, site_id, name, email, subject, message, ip_hash)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `, [id, site.organization_id, siteId, name, email, subject || null, message, ipHash])
+
+  await fireSiteEventSafe({
+    db,
+    organizationId: site.organization_id,
+    siteId,
+    eventType: 'contact.created',
+    entityType: 'contact_submission',
+    entityId: id,
+    metadata: {
+      subject: subject || null,
+    },
+  })
 
   try {
     await notifyContactSubmitted(env, db, {

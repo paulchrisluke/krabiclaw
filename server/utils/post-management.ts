@@ -1,4 +1,5 @@
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { normalizePostSlug, postPublicPath } from '~/utils/post-slugs'
 
 export { normalizePostSlug, postPublicPath }
@@ -537,6 +538,36 @@ export async function createPost(
 
   const createdPost = await getPost(db, organizationId, siteId, id)
   if (!createdPost) throw new Error('Post not found after creation')
+  await fireSiteEventSafe({
+    db,
+    organizationId,
+    siteId,
+    locationId: createdPost.location_id,
+    actorId: createdBy,
+    eventType: 'post.created',
+    entityType: 'post',
+    entityId: id,
+    metadata: {
+      post_type: createdPost.post_type,
+      status: createdPost.status,
+    },
+  })
+  if (createdPost.status === 'published') {
+    await fireSiteEventSafe({
+      db,
+      organizationId,
+      siteId,
+      locationId: createdPost.location_id,
+      actorId: createdBy,
+      eventType: 'post.published',
+      entityType: 'post',
+      entityId: id,
+      metadata: {
+        post_type: createdPost.post_type,
+        channels: ['site'],
+      },
+    })
+  }
   return createdPost
 }
 
@@ -669,8 +700,26 @@ export async function publishPost(
   `,
     [now, postId],
   )
+  const publishedChannels = channels.filter(channel => channel === 'site')
 
-  return getPost(db, organizationId, siteId, postId)
+  const post = await getPost(db, organizationId, siteId, postId)
+  if (post) {
+    await fireSiteEventSafe({
+      db,
+      organizationId,
+      siteId,
+      locationId: post.location_id,
+      eventType: 'post.published',
+      entityType: 'post',
+      entityId: postId,
+      metadata: {
+        post_type: post.post_type,
+        channels: publishedChannels,
+      },
+    })
+  }
+
+  return post
 }
 
 export async function deletePost(

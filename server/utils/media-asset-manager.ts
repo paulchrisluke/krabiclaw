@@ -1,6 +1,7 @@
 import { deleteImage } from './cloudflare-images'
 import { deleteFromR2 } from './cloudflare-r2'
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { fireSiteEventSafe } from '~/server/utils/site-events'
 
 type SqlBindValue = string | number | boolean | null
 type MediaProviderEnv = Parameters<typeof deleteImage>[0]
@@ -55,6 +56,23 @@ export async function createMediaAsset(db: DbClient, data: CreateInput): Promise
     data.alt_text ?? null, data.category ?? null, data.status ?? 'active',
     data.created_by_user_id ?? null, now, now,
   ])
+
+  await fireSiteEventSafe({
+    db,
+    organizationId: data.organization_id,
+    siteId: data.site_id,
+    locationId: data.location_id ?? null,
+    actorId: data.created_by_user_id ?? null,
+    eventType: 'media.uploaded',
+    entityType: 'media_asset',
+    entityId: data.id,
+    metadata: {
+      kind: data.kind,
+      provider: data.provider,
+      source: data.source,
+      status: data.status ?? 'active',
+    },
+  })
 }
 
 export async function getMediaAsset(db: DbClient, id: string, siteId: string): Promise<MediaAsset | null> {
@@ -148,18 +166,21 @@ export async function updateMediaAssetMetadata(
  * external delete leaves the asset in a retryable state (status untouched)
  * instead of being marked 'deleted' while the underlying file is still live.
  */
-export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: string, siteId: string): Promise<void> {
+export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: string, siteId: string, deletedByUserId: string | null): Promise<void> {
   const now = new Date().toISOString()
   const pendingAsset = await queryFirst<{
     id: string
     provider: MediaAsset['provider']
     cloudflare_image_id: string | null
     r2_key: string | null
+    organization_id: string
+    location_id: string | null
+    created_by_user_id: string | null
   }>(db, `
     UPDATE media_assets
     SET delete_pending_at = ?, updated_at = ?
     WHERE id = ? AND site_id = ? AND status != 'deleted'
-    RETURNING id, provider, cloudflare_image_id, r2_key
+    RETURNING id, provider, cloudflare_image_id, r2_key, organization_id, location_id, created_by_user_id
   `, [now, now, id, siteId]) ?? null
 
   if (!pendingAsset) return
@@ -211,4 +232,18 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     SET status = 'deleted', delete_pending_at = NULL, updated_at = ?
     WHERE id = ? AND site_id = ?
   `, [new Date().toISOString(), pendingAsset.id, siteId])
+
+  await fireSiteEventSafe({
+    db,
+    organizationId: pendingAsset.organization_id,
+    siteId,
+    locationId: pendingAsset.location_id,
+    actorId: deletedByUserId,
+    eventType: 'media.deleted',
+    entityType: 'media_asset',
+    entityId: pendingAsset.id,
+    metadata: {
+      provider: pendingAsset.provider,
+    },
+  })
 }
