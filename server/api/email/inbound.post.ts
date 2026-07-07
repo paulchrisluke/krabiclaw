@@ -4,6 +4,8 @@
 // a shared secret header, not a dashboard session — the caller is a Worker, not a browser.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { queryFirst } from '~/server/db'
+import { ensureGuestThread, getGuestThreadSource } from '~/server/utils/guest-threads'
+import { notifyGuestThreadReply } from '~/server/utils/notifications'
 import {
   getSubmissionOrgSite,
   insertInboundSubmissionReply,
@@ -55,6 +57,24 @@ export default defineEventHandler(async (event) => {
     metaMessageId: messageIdHeader,
     from,
   })
+
+  const thread = await ensureGuestThread(db, parsed.submissionType, parsed.submissionId)
+  const source = await getGuestThreadSource(db, parsed.submissionType, parsed.submissionId)
+  if (source) {
+    await notifyGuestThreadReply(env, db, {
+      organizationId: orgSite.organizationId,
+      siteId: orgSite.siteId,
+      locationId: source.location_id,
+      threadId: thread.id,
+      submissionType: parsed.submissionType,
+      submissionId: parsed.submissionId,
+      guestName: source.guest_name,
+      guestEmail: source.guest_email,
+      guestPhone: source.guest_phone,
+      inboundChannel: 'email',
+      messagePreview: text,
+    })
+  }
 
   return jsonResponse({ received: true })
 })

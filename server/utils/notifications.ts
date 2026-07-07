@@ -1,6 +1,7 @@
 import { useRender } from 'vue-email'
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { hashEmail, isReservedTestDomain, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
+import { ensureGuestThread } from '~/server/utils/guest-threads'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification, toDashboardButtonPath, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 import { buildReplyToAddress } from '~/server/utils/submission-messages'
 import { getPlatformSupportEmails } from '~/server/utils/platform-support'
@@ -147,6 +148,18 @@ interface EmailTemplate {
   text: string
 }
 
+interface GuestThreadReplyNotificationInput extends SiteContext {
+  locationId?: string | null
+  threadId: string
+  submissionType: 'contact' | 'reservation' | 'experience_booking'
+  submissionId: string
+  guestName: string
+  guestEmail?: string | null
+  guestPhone?: string | null
+  inboundChannel: 'email' | 'whatsapp'
+  messagePreview: string
+}
+
 export interface NotificationCopyPreview {
   id: string
   audience: 'owner' | 'guest'
@@ -259,11 +272,30 @@ async function buildOwnerInboxUrl(
     submissionId: string
   }
 ): Promise<string | null> {
+  const thread = await ensureGuestThread(db, opts.tab === 'contact' ? 'contact' : opts.tab === 'reservations' ? 'reservation' : 'experience_booking', opts.submissionId)
+  return await buildOwnerThreadInboxUrl(env, db, {
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    locationId: opts.locationId,
+    threadId: thread.id,
+  })
+}
+
+async function buildOwnerThreadInboxUrl(
+  env: NotificationEnv,
+  db: DbClient,
+  opts: {
+    organizationId: string
+    siteId: string
+    locationId?: string | null
+    threadId: string
+  }
+): Promise<string | null> {
   const slugs = await resolveSiteLocationSlugs(db, opts)
   if (!slugs) return null
 
   const platformDomain = getPlatformDomain(env)
-  const query = new URLSearchParams({ tab: opts.tab, reply: opts.submissionId })
+  const query = new URLSearchParams({ thread: opts.threadId })
   return `https://${platformDomain}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}/${slugs.locationSlug}/inbox?${query.toString()}`
 }
 
@@ -539,6 +571,41 @@ async function notifyOwner(
         vars: opts.whatsapp!.vars,
       })
     ))
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function buildGuestReplyOwnerEmail(opts: {
+  guestName: string
+  inboundChannel: 'email' | 'whatsapp'
+  messagePreview: string
+  replyUrl: string | null
+}): EmailTemplate {
+  const sourceLabel = opts.inboundChannel === 'whatsapp' ? 'WhatsApp' : 'email'
+  const escapedGuestName = escapeHtml(opts.guestName)
+  const escapedPreview = escapeHtml(opts.messagePreview)
+  const replyLink = opts.replyUrl
+    ? `<p style="margin:16px 0 0;"><a href="${escapeHtml(opts.replyUrl)}" style="display:inline-block;padding:10px 16px;border-radius:8px;background:#fb7461;color:#1a0805;text-decoration:none;font-weight:600;">Open thread in dashboard</a></p>`
+    : ''
+
+  return {
+    subject: `New guest reply from ${opts.guestName}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;">
+        <p style="margin:0 0 12px;">${escapedGuestName} sent a new reply by ${sourceLabel}.</p>
+        <blockquote style="margin:0;padding:12px 14px;border-left:4px solid #fb7461;background:#fff7f4;color:#374151;">${escapedPreview}</blockquote>
+        ${replyLink}
+      </div>
+    `,
+    text: `${opts.guestName} sent a new reply by ${sourceLabel}.\n\n${opts.messagePreview}\n\n${opts.replyUrl ?? ''}`.trim(),
   }
 }
 
@@ -1297,6 +1364,101 @@ export async function notifyExperienceBookingCancelled(
       })
     }
   })
+}
+
+export async function notifyGuestThreadReply(
+  env: NotificationEnv,
+  db: DbClient,
+  opts: GuestThreadReplyNotificationInput,
+) {
+  const replyUrl = await buildOwnerThreadInboxUrl(env, db, {
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    locationId: opts.locationId,
+    threadId: opts.threadId,
+  })
+
+  const payload = {
+    thread_id: opts.threadId,
+    submission_type: opts.submissionType,
+    submission_id: opts.submissionId,
+    guest_name: opts.guestName,
+    inbound_channel: opts.inboundChannel,
+    message_preview: opts.messagePreview.slice(0, 200),
+    deep_link: replyUrl ?? '',
+  }
+
+  const title = `New guest reply from ${opts.guestName}`
+  const email = buildGuestReplyOwnerEmail({
+    guestName: opts.guestName,
+    inboundChannel: opts.inboundChannel,
+    messagePreview: opts.messagePreview,
+    replyUrl,
+  })
+
+  const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
+  const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.siteId) : null
+  const ownerEmail = await getOwnerEmail(db, opts.organizationId)
+  const phones = [...new Set([locationPhone, sitePhone].filter(Boolean))] as string[]
+  const emails = [...new Set([ownerEmail].filter(Boolean))] as string[]
+  const channels = await getOwnerNotificationChannels(db, {
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    siteName: opts.siteName ?? null,
+  }, phones.length > 0)
+
+  if (channels.includes('email') && emails.length > 0) {
+    await Promise.allSettled(emails.map(to => sendEmailNotification(env, db, {
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      siteName: opts.siteName ?? null,
+      locationId: opts.locationId ?? null,
+      to,
+      template: 'guest_thread_reply_email',
+      title,
+      payload,
+      email,
+    })))
+  }
+
+  if (channels.includes('whatsapp') && phones.length > 0) {
+    await Promise.allSettled(phones.map(toPhone => sendWhatsAppNotification(env, db, {
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      locationId: opts.locationId ?? null,
+      toPhone,
+      template: 'guest_thread_reply_whatsapp',
+      vars: {
+        guest_name: opts.guestName,
+        email: opts.guestEmail ?? 'No email provided',
+        subject: opts.inboundChannel === 'whatsapp' ? 'WhatsApp reply' : 'Email reply',
+        message_preview: opts.messagePreview,
+        reply_path: inboxUrlToWhatsAppReplyPath(replyUrl),
+      },
+    })))
+  }
+
+  try {
+    await logNotificationEvent(db, {
+      scopeType: 'site',
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      locationId: opts.locationId ?? null,
+      submissionType: opts.submissionType,
+      submissionId: opts.submissionId,
+      eventType: 'guest_thread_reply',
+      channels: ['dashboard', ...channels],
+      recipients: [...emails, ...phones],
+      payload,
+      status: 'sent',
+    })
+  } catch (error) {
+    console.error('notification_event_log_failed', {
+      submissionType: opts.submissionType,
+      submissionId: opts.submissionId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 }
 
 export async function getNotificationCopyPreviews(): Promise<NotificationCopyPreview[]> {

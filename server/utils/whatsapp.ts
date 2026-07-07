@@ -51,6 +51,7 @@ export type WhatsAppTemplate =
   | 'ai_action_complete'
   | 'low_credits'
   | 'new_contact_msg'
+  | 'guest_thread_reply_whatsapp'
   | 'new_reservation'
   | 'reservation_cancelled'
   | 'domain_update'
@@ -184,6 +185,32 @@ const TEMPLATES: Record<
           { type: 'text', text: cleanTemplateText(v.email, 'No email provided', 120) },
           { type: 'text', text: cleanTemplateText(v.subject, 'General', 40) },
           { type: 'text', text: cleanTemplateText(v.message_preview, 'No message preview', 100) },
+        ],
+      },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.reply_path, '', 300) },
+        ],
+      },
+    ],
+  }),
+  guest_thread_reply_whatsapp: (v) => ({
+    // Reuses the approved owner contact template shape so guest reply alerts
+    // stay within Meta's existing parameter contract while deep-linking into
+    // the exact dashboard thread.
+    name: 'new_contact_msg',
+    language: { code: 'en_US' },
+    components: [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
+          { type: 'text', text: cleanTemplateText(v.email, 'No email provided', 120) },
+          { type: 'text', text: cleanTemplateText(v.subject, 'Guest reply', 40) },
+          { type: 'text', text: cleanTemplateText(v.message_preview, 'Open the dashboard for the full reply.', 100) },
         ],
       },
       {
