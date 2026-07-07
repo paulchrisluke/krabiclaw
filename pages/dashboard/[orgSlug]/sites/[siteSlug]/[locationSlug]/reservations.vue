@@ -136,7 +136,7 @@ async function loadReservations() {
     const locationId = current?.id
     if (!locationId) throw new Error('Location not found')
 
-    const reservationsResult = await $fetch<{ submissions: ReservationSubmission[] }>(`/api/dashboard/editor/reservation-submissions`, {
+    const reservationsResult = await $fetch<{ submissions: ReservationSubmission[] }>(`/api/editor/sites/${siteId}/reservation-submissions`, {
       query: { location_id: locationId }
     })
     reservations.value = reservationsResult.submissions ?? []
@@ -158,7 +158,7 @@ async function loadReservations() {
 
 async function updateReservationStatus(submission: ReservationSubmission, status: 'new' | 'confirmed' | 'cancelled' | 'completed') {
   try {
-    await $fetch(`/api/dashboard/editor/reservation-submissions/${submission.id}`, {
+    await $fetch(`/api/editor/sites/${siteId}/reservation-submissions/${submission.id}`, {
       method: 'PATCH',
       query: { location_id: submission.location_id },
       body: { status }
@@ -176,7 +176,7 @@ async function updateReservationStatus(submission: ReservationSubmission, status
 
 async function sendReviewRequest(submission: ReservationSubmission, kind: 'first' | 'reminder') {
   try {
-    await $fetch(`/api/dashboard/editor/reservation-submissions/${submission.id}/review-request`, {
+    await $fetch(`/api/editor/sites/${siteId}/reservation-submissions/${submission.id}/review-request`, {
       method: 'POST',
       body: { kind }
     })

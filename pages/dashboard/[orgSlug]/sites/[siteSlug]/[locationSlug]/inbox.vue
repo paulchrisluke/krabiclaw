@@ -225,10 +225,10 @@ async function loadInbox() {
     const current = locationsRes.locations.find(location => location.slug === route.params.locationSlug || location.id === route.params.locationSlug)
     if (!current?.id) throw new Error('Location not found')
     const [reservationRes, bookingRes] = await Promise.all([
-      $fetch<{ submissions: ReservationSubmission[] }>(`/api/dashboard/editor/reservation-submissions`, {
+      $fetch<{ submissions: ReservationSubmission[] }>(`/api/editor/sites/${siteId}/reservation-submissions`, {
         query: { location_id: current.id }
       }),
-      $fetch<{ bookings: ExperienceBooking[] }>(`/api/dashboard/editor/experience-bookings`, {
+      $fetch<{ bookings: ExperienceBooking[] }>(`/api/editor/sites/${siteId}/experience-bookings`, {
         query: { location_id: current.id }
       })
     ])
@@ -292,7 +292,7 @@ async function updateContactStatus(submission: ContactSubmission, status: 'new' 
 
 async function updateReservationStatus(submission: ReservationSubmission, status: 'new' | 'confirmed' | 'cancelled' | 'completed') {
   try {
-    await $fetch(`/api/dashboard/editor/reservation-submissions/${submission.id}`, {
+    await $fetch(`/api/editor/sites/${siteId}/reservation-submissions/${submission.id}`, {
       method: 'PATCH',
       query: { location_id: submission.location_id },
       body: { status }
@@ -307,7 +307,7 @@ async function updateReservationStatus(submission: ReservationSubmission, status
 
 async function sendReservationReviewRequest(submission: ReservationSubmission, kind: 'first' | 'reminder') {
   try {
-    await $fetch(`/api/dashboard/editor/reservation-submissions/${submission.id}/review-request`, {
+    await $fetch(`/api/editor/sites/${siteId}/reservation-submissions/${submission.id}/review-request`, {
       method: 'POST',
       body: { kind }
     })
@@ -321,7 +321,7 @@ async function sendReservationReviewRequest(submission: ReservationSubmission, k
 
 async function updateBookingStatus(booking: ExperienceBooking, status: 'pending' | 'confirmed' | 'cancelled') {
   try {
-    await $fetch(`/api/dashboard/editor/experience-bookings/${booking.id}`, {
+    await $fetch(`/api/editor/sites/${siteId}/experience-bookings/${booking.id}`, {
       method: 'PATCH',
       body: { status }
     })
@@ -334,7 +334,7 @@ async function updateBookingStatus(booking: ExperienceBooking, status: 'pending'
 
 async function completeBooking(booking: ExperienceBooking) {
   try {
-    await $fetch(`/api/dashboard/editor/experience-bookings/${booking.id}/complete`, { method: 'POST' })
+    await $fetch(`/api/editor/sites/${siteId}/experience-bookings/${booking.id}/complete`, { method: 'POST' })
     booking.completed_at = new Date().toISOString()
     toast.add({ description: 'Booking completed', color: 'success' })
   } catch (error) {
@@ -344,7 +344,7 @@ async function completeBooking(booking: ExperienceBooking) {
 
 async function sendBookingReviewRequest(booking: ExperienceBooking, kind: 'first' | 'reminder') {
   try {
-    await $fetch(`/api/dashboard/editor/experience-bookings/${booking.id}/review-request`, {
+    await $fetch(`/api/editor/sites/${siteId}/experience-bookings/${booking.id}/review-request`, {
       method: 'POST',
       body: { kind }
     })
