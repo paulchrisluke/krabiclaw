@@ -1613,3 +1613,45 @@ export const platform_content_components = sqliteTable("platform_content_compone
 	render_enabled: integer().default(1).notNull(),
 	schema_enabled: integer().default(1).notNull(),
 });
+
+export const content_documents = sqliteTable("content_documents", {
+	id: text().primaryKey(),
+	owner_type: text().notNull(),
+	owner_id: text().notNull(),
+	draft_revision_id: text(),
+	published_revision_id: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	check("content_documents_owner_type_check", sql`owner_type IN ('platform_blog', 'platform_doc', 'tenant_blog')`),
+	unique("content_documents_owner_unique").on(table.owner_type, table.owner_id),
+	index("content_documents_owner_idx").on(table.owner_type, table.owner_id),
+]);
+
+export const content_blocks = sqliteTable("content_blocks", {
+	id: text().primaryKey(),
+	document_id: text().notNull().references(() => content_documents.id, { onDelete: "cascade" } ),
+	parent_block_id: text(),
+	type: text().notNull(),
+	position: integer().default(0).notNull(),
+	level: integer(),
+	data_json: text().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	check("content_blocks_type_check", sql`type IN ('heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'ai_assistance', 'cta', 'callout')`),
+	index("content_blocks_document_position_idx").on(table.document_id, table.position),
+	index("content_blocks_parent_idx").on(table.parent_block_id),
+]);
+
+export const content_revisions = sqliteTable("content_revisions", {
+	id: text().primaryKey(),
+	document_id: text().notNull().references(() => content_documents.id, { onDelete: "cascade" } ),
+	snapshot_json: text().notNull(),
+	body_markdown: text().notNull(),
+	created_by: text().references(() => user.id, { onDelete: "set null" } ),
+	label: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("content_revisions_document_created_idx").on(table.document_id, table.created_at),
+]);

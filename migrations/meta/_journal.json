@@ -204,6 +204,13 @@
       "when": 1783400001641,
       "tag": "0035_stale_zodiak",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1783400643737,
+      "tag": "0036_lush_network",
+      "breakpoints": true
     }
   ]
 }
