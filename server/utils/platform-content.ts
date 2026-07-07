@@ -72,9 +72,7 @@ async function syncBlogContentDocument(
       label: input.publish ? 'Published markdown body' : 'Draft markdown body',
       publish: Boolean(input.publish),
     })
-    return
-  }
-  if (input.publish) await publishCurrentContentRevision(db, ownerType, postId)
+  } else if (input.publish) await publishCurrentContentRevision(db, ownerType, postId)
   if (input.unpublish) await unpublishContentDocument(db, ownerType, postId)
 }
 
@@ -93,9 +91,7 @@ async function syncDocContentDocument(
       label: input.publish ? 'Published markdown body' : 'Draft markdown body',
       publish: Boolean(input.publish),
     })
-    return
-  }
-  if (input.publish) await publishCurrentContentRevision(db, 'platform_doc', docId)
+  } else if (input.publish) await publishCurrentContentRevision(db, 'platform_doc', docId)
   if (input.unpublish) await unpublishContentDocument(db, 'platform_doc', docId)
 }
 

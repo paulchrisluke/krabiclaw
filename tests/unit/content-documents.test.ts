@@ -51,6 +51,13 @@ async function execute(db: Store, query: string, params: unknown[] = []) {
     return { meta: { changes: 1 } }
   }
 
+  if (query.startsWith('UPDATE content_blocks SET updated_at = ? WHERE id = ? AND updated_at = ?')) {
+    const [updated_at, id, expected_updated_at] = params
+    const block = db.contentBlocks.find(row => row.id === id && row.updated_at === expected_updated_at)
+    if (block) Object.assign(block, { updated_at })
+    return { meta: { changes: block ? 1 : 0 } }
+  }
+
   if (query.startsWith('INSERT INTO content_revisions')) {
     const [id, document_id, snapshot_json, body_markdown, created_by, label, created_at] = params
     db.contentRevisions.push({ id, document_id, snapshot_json, body_markdown, created_by, label, created_at })
@@ -206,6 +213,15 @@ test('block edits produce draft previews and reject stale replacement tokens', a
     }),
     (err: unknown) => typeof err === 'object' && err !== null && (err as { statusCode?: number }).statusCode === 409,
   )
+
+  const replaced = await replaceContentBlock(d1, firstBlock.id, {
+    expected_updated_at: firstBlock.updated_at,
+    data: { text: 'Changed heading' },
+  })
+  assert.equal(replaced.blocks[0]?.id, firstBlock.id)
+
+  const updatedOutline = await getContentOutline(d1, initial.document.id)
+  assert.equal(updatedOutline[0]?.id, firstBlock.id)
 })
 
 test('publishContentDocumentRevision writes the compatibility body field', async () => {

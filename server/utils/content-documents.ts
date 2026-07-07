@@ -52,6 +52,8 @@ export interface ContentBlockInput {
   position?: number | null
 }
 
+type ContentBlockWriteInput = Omit<ContentBlockSnapshot, 'id'> & { id?: string; updated_at?: string | null }
+
 const VALID_BLOCK_TYPES: readonly ContentBlockType[] = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'ai_assistance', 'cta', 'callout']
 const HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/
 
@@ -185,12 +187,18 @@ export async function ensureContentDocument(db: D1Database, ownerType: ContentDo
 
   const now = new Date().toISOString()
   const id = crypto.randomUUID()
-  await execute(
-    db,
-    `INSERT INTO content_documents (id, owner_type, owner_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?)`,
-    [id, ownerType, ownerId, now, now],
-  )
+  try {
+    await execute(
+      db,
+      `INSERT INTO content_documents (id, owner_type, owner_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [id, ownerType, ownerId, now, now],
+    )
+  } catch (error) {
+    const raced = await getContentDocumentByOwner(db, ownerType, ownerId)
+    if (raced) return raced
+    throw error
+  }
 
   return {
     id,
@@ -206,18 +214,25 @@ export async function ensureContentDocument(db: D1Database, ownerType: ContentDo
 async function writeRevisionFromBlocks(
   db: D1Database,
   document: ContentDocumentRow,
-  blocks: Array<Omit<ContentBlockSnapshot, 'id'>>,
-  opts: { bodyMarkdown?: string; createdBy?: string | null; label?: string | null; publish?: boolean } = {},
+  blocks: ContentBlockWriteInput[],
+  opts: {
+    bodyMarkdown?: string
+    createdBy?: string | null
+    label?: string | null
+    publish?: boolean
+    expectedBlock?: { id: string; updatedAt: string }
+  } = {},
 ) {
   const now = new Date().toISOString()
   const revisionId = crypto.randomUUID()
-  const snapshots: ContentBlockSnapshot[] = blocks.map((block, index) => ({
-    id: crypto.randomUUID(),
+  const snapshots: Array<ContentBlockSnapshot & { updated_at: string }> = blocks.map((block, index) => ({
+    id: block.id ?? crypto.randomUUID(),
     parent_block_id: block.parent_block_id ?? null,
     type: assertBlockType(block.type),
     position: typeof block.position === 'number' ? block.position : index,
     level: block.level ?? null,
     data: asObject(block.data, `content block ${index} data`),
+    updated_at: block.updated_at ?? now,
   }))
   const bodyMarkdown = opts.bodyMarkdown ?? renderContentBlocksToMarkdown(snapshots.map(block => ({
     id: block.id,
@@ -226,6 +241,17 @@ async function writeRevisionFromBlocks(
     level: block.level,
     data_json: JSON.stringify(block.data),
   })))
+
+  if (opts.expectedBlock) {
+    const guard = await execute(
+      db,
+      'UPDATE content_blocks SET updated_at = ? WHERE id = ? AND updated_at = ?',
+      [now, opts.expectedBlock.id, opts.expectedBlock.updatedAt],
+    )
+    if (!Number(guard.meta.changes ?? 0)) {
+      throw createError({ statusCode: 409, statusMessage: 'Content block was updated by another writer' })
+    }
+  }
 
   const queries: { query: string; params: unknown[] }[] = [
     {
@@ -244,7 +270,7 @@ async function writeRevisionFromBlocks(
         block.level,
         JSON.stringify(block.data),
         now,
-        now,
+        block.updated_at,
       ],
     })),
     {
@@ -263,7 +289,7 @@ async function writeRevisionFromBlocks(
   ]
 
   await executeBatch(db, queries)
-  return { revision_id: revisionId, body_markdown: bodyMarkdown, blocks: snapshots.map(block => ({ ...block, updated_at: now })) }
+  return { revision_id: revisionId, body_markdown: bodyMarkdown, blocks: snapshots }
 }
 
 export async function syncContentDocumentFromMarkdown(
@@ -413,21 +439,14 @@ export async function appendContentBlock(
   documentId: string,
   input: ContentBlockInput & { after_block_id?: string | null; createdBy?: string | null; label?: string | null },
 ) {
-  const document = await queryFirst<ContentDocumentRow | null>(
-    db,
-    `SELECT id, owner_type, owner_id, draft_revision_id, published_revision_id, created_at, updated_at
-     FROM content_documents
-     WHERE id = ?
-     LIMIT 1`,
-    [documentId],
-  )
+  const document = await getContentDocumentById(db, documentId)
   if (!document) notFound('Content document not found')
 
   const existing = await listBlocksForDocument(db, documentId)
   const afterIndex = input.after_block_id ? existing.findIndex(block => block.id === input.after_block_id) : existing.length - 1
   if (input.after_block_id && afterIndex === -1) badRequest('after_block_id was not found in this document')
 
-  const newBlock: Omit<ContentBlockSnapshot, 'id'> = {
+  const newBlock: ContentBlockWriteInput = {
     parent_block_id: input.parent_block_id ?? null,
     type: assertBlockType(input.type),
     position: afterIndex + 1,
@@ -436,21 +455,25 @@ export async function appendContentBlock(
   }
   const snapshots = [
     ...existing.slice(0, afterIndex + 1).map(block => ({
+      id: block.id,
       parent_block_id: block.parent_block_id,
       type: block.type,
       position: block.position,
       level: block.level,
       data: parseBlockData(block),
+      updated_at: block.updated_at,
     })),
     newBlock,
     ...existing.slice(afterIndex + 1).map(block => ({
+      id: block.id,
       parent_block_id: block.parent_block_id,
       type: block.type,
       position: block.position,
       level: block.level,
       data: parseBlockData(block),
+      updated_at: block.updated_at,
     })),
-  ].map((block, index) => ({ ...block, position: index }))
+  ].map((block, index) => ({ ...block, position: index, updated_at: block.position === index ? block.updated_at : null }))
 
   return await writeRevisionFromBlocks(db, document, snapshots, { createdBy: input.createdBy, label: input.label })
 }
@@ -464,25 +487,24 @@ export async function replaceContentBlock(
   if (current.updated_at !== input.expected_updated_at) {
     throw createError({ statusCode: 409, statusMessage: 'Content block was updated by another writer' })
   }
-  const document = await queryFirst<ContentDocumentRow | null>(
-    db,
-    `SELECT id, owner_type, owner_id, draft_revision_id, published_revision_id, created_at, updated_at
-     FROM content_documents
-     WHERE id = ?
-     LIMIT 1`,
-    [current.document_id],
-  )
+  const document = await getContentDocumentById(db, current.document_id)
   if (!document) notFound('Content document not found')
 
   const snapshots = (await listBlocksForDocument(db, document.id)).map((block) => ({
+    id: block.id,
     parent_block_id: block.parent_block_id,
     type: block.type,
     position: block.position,
     level: block.level,
     data: block.id === blockId ? asObject(input.data, 'content block data') : parseBlockData(block),
+    updated_at: block.id === blockId ? null : block.updated_at,
   }))
 
-  return await writeRevisionFromBlocks(db, document, snapshots, { createdBy: input.createdBy, label: input.label })
+  return await writeRevisionFromBlocks(db, document, snapshots, {
+    createdBy: input.createdBy,
+    label: input.label,
+    expectedBlock: { id: blockId, updatedAt: input.expected_updated_at },
+  })
 }
 
 export async function deleteContentBlock(
@@ -494,27 +516,26 @@ export async function deleteContentBlock(
   if (current.updated_at !== input.expected_updated_at) {
     throw createError({ statusCode: 409, statusMessage: 'Content block was updated by another writer' })
   }
-  const document = await queryFirst<ContentDocumentRow | null>(
-    db,
-    `SELECT id, owner_type, owner_id, draft_revision_id, published_revision_id, created_at, updated_at
-     FROM content_documents
-     WHERE id = ?
-     LIMIT 1`,
-    [current.document_id],
-  )
+  const document = await getContentDocumentById(db, current.document_id)
   if (!document) notFound('Content document not found')
 
   const snapshots = (await listBlocksForDocument(db, document.id))
     .filter(block => block.id !== blockId)
     .map((block, index) => ({
+      id: block.id,
       parent_block_id: block.parent_block_id,
       type: block.type,
       position: index,
       level: block.level,
       data: parseBlockData(block),
+      updated_at: block.updated_at,
     }))
 
-  return await writeRevisionFromBlocks(db, document, snapshots, { createdBy: input.createdBy, label: input.label })
+  return await writeRevisionFromBlocks(db, document, snapshots, {
+    createdBy: input.createdBy,
+    label: input.label,
+    expectedBlock: { id: blockId, updatedAt: input.expected_updated_at },
+  })
 }
 
 export async function renderContentPreview(db: DbClient, documentId: string) {

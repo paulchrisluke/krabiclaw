@@ -107,6 +107,10 @@ function optionalContentDocumentOwnerType(args: Record<string, unknown>, key: st
 
 async function resolveContentDocument(db: D1Database, args: Record<string, unknown>) {
   const documentId = optionalString(args, 'document_id')
+  const hasOwnerLookup = args.owner_type !== undefined || args.owner_id !== undefined
+  if (documentId && hasOwnerLookup) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, 'Provide either document_id, or owner_type and owner_id, not both.')
+  }
   if (documentId) {
     const document = await getContentDocumentById(db, documentId)
     if (!document) throw mcpProtocolError(MCP_ERROR.invalidParams, 'content document not found.')

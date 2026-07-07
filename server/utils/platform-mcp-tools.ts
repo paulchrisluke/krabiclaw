@@ -258,6 +258,24 @@ const CONTENT_DOCUMENT_LOOKUP_SCHEMA = {
   owner_id: { type: 'string' },
 }
 
+const CONTENT_DOCUMENT_LOOKUP_REQUIREMENT = {
+  oneOf: [
+    {
+      required: ['document_id'],
+      not: {
+        anyOf: [
+          { required: ['owner_type'] },
+          { required: ['owner_id'] },
+        ],
+      },
+    },
+    {
+      required: ['owner_type', 'owner_id'],
+      not: { required: ['document_id'] },
+    },
+  ],
+}
+
 const CONTENT_BLOCK_INPUT_PROPERTIES = {
   type: { type: 'string', enum: CONTENT_BLOCK_TYPE_ENUM },
   data: CONTENT_BLOCK_DATA_SCHEMA,
@@ -661,6 +679,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     inputSchema: {
       type: 'object',
       properties: CONTENT_DOCUMENT_LOOKUP_SCHEMA,
+      ...CONTENT_DOCUMENT_LOOKUP_REQUIREMENT,
       additionalProperties: false,
     },
     outputSchema: {
@@ -723,6 +742,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         ...CONTENT_BLOCK_INPUT_PROPERTIES,
       },
       required: ['type', 'data'],
+      ...CONTENT_DOCUMENT_LOOKUP_REQUIREMENT,
       additionalProperties: false,
     },
     outputSchema: CONTENT_BLOCK_WRITE_RESULT_SCHEMA,
@@ -765,6 +785,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     inputSchema: {
       type: 'object',
       properties: CONTENT_DOCUMENT_LOOKUP_SCHEMA,
+      ...CONTENT_DOCUMENT_LOOKUP_REQUIREMENT,
       additionalProperties: false,
     },
     outputSchema: {
@@ -784,6 +805,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     inputSchema: {
       type: 'object',
       properties: CONTENT_DOCUMENT_LOOKUP_SCHEMA,
+      ...CONTENT_DOCUMENT_LOOKUP_REQUIREMENT,
       additionalProperties: false,
     },
     outputSchema: {
