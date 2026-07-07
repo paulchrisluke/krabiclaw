@@ -2,13 +2,24 @@ import type { McpExecutorContext } from './shared'
 import { execute, queryFirst } from '~/server/db'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { createError } from 'h3'
-import { createPost, deletePost, getPost, listPosts, publishPost, updatePost } from '~/server/utils/post-management'
+import { createPost, deletePost, getPost, listPosts, PostValidationError, publishPost, updatePost } from '~/server/utils/post-management'
 import { getFacebookPagesConnection, getLinkedInstagramAccount, publishToInstagram, publishToPage } from '~/server/utils/facebook-pages'
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { isConversationalToolGroupEnabled } from '~/server/utils/conversational-tool-surface'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 import { NOT_HANDLED, mutationContextPayload, normalizeChannelsInput, omit, optionalString, requireActiveImageAsset, requiredString } from './shared'
+
+async function asMcpValidationError<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work()
+  } catch (error) {
+    if (error instanceof PostValidationError) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, error.message)
+    }
+    throw error
+  }
+}
 
 export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
@@ -19,6 +30,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.db,
           site.organizationId,
           site.siteId,
+          site.env,
           optionalString(args, "status") ?? undefined,
           optionalString(args, "location_id") ?? undefined,
         ),
@@ -30,17 +42,19 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.organizationId,
           site.siteId,
           requiredString(args, "post_id"),
+          site.env,
         ),
       };
     case "create_post":
       {
-        const post = await createPost(
+        const post = await asMcpValidationError(() => createPost(
           site.db,
           site.organizationId,
           site.siteId,
           args as never,
           site.userId,
-        );
+          site.env,
+        ));
         return {
           post,
           context: await mutationContextPayload(site, {
@@ -50,14 +64,15 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
       }
     case "update_post":
       {
-        const post = await updatePost(
+        const post = await asMcpValidationError(() => updatePost(
           site.db,
           site.organizationId,
           site.siteId,
           requiredString(args, "post_id"),
           omit(args, ["post_id"]) as never,
           site.userId,
-        );
+          site.env,
+        ));
         return {
           post,
           context: await mutationContextPayload(site, {
@@ -71,14 +86,15 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
     case "set_post_image": {
       const assetId = requiredString(args, "asset_id");
       await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
-      const post = await updatePost(
+      const post = await asMcpValidationError(() => updatePost(
           site.db,
           site.organizationId,
           site.siteId,
           requiredString(args, "post_id"),
           { image_asset_id: assetId },
           site.userId,
-        );
+          site.env,
+        ));
       return {
         post,
         context: await mutationContextPayload(site, {
@@ -142,6 +158,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         site.siteId,
         postId,
         channels,
+        site.env,
       );
       if (!post)
         throw createError({ statusCode: 404, statusMessage: "Post not found" });
@@ -229,7 +246,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
       }
 
       return {
-        post: await getPost(site.db, site.organizationId, site.siteId, postId),
+        post: await getPost(site.db, site.organizationId, site.siteId, postId, site.env),
         context: await mutationContextPayload(site, {
           locationId: post && typeof post.location_id === "string" ? post.location_id : null,
         }),

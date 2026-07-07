@@ -1,6 +1,7 @@
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { normalizePostSlug, postPublicPath } from '~/utils/post-slugs'
+import { platformHostnameFallback, type DomainEnv } from '~/server/utils/domains'
 
 export { normalizePostSlug, postPublicPath }
 
@@ -200,7 +201,7 @@ function absoluteUrl(origin: string | null, path: string) {
   return new URL(path, origin.endsWith('/') ? origin : `${origin}/`).toString()
 }
 
-async function resolveSitePublicOrigin(db: DbClient, siteId: string) {
+async function resolveSitePublicOrigin(db: DbClient, siteId: string, env: DomainEnv) {
   const site = await queryFirst<SiteUrlRow>(
     db,
     `SELECT public_url, subdomain FROM sites WHERE id = ? LIMIT 1`,
@@ -209,7 +210,7 @@ async function resolveSitePublicOrigin(db: DbClient, siteId: string) {
   const publicUrl = site?.public_url?.trim().replace(/\/$/, '')
   if (publicUrl) return publicUrl
   const subdomain = site?.subdomain?.trim()
-  return subdomain ? `https://${subdomain}.krabiclaw.com` : null
+  return subdomain ? `https://${subdomain}.${platformHostnameFallback(env)}` : null
 }
 
 async function allocatePostSlug(db: DbClient, siteId: string, source: string, excludePostId?: string) {
@@ -248,8 +249,9 @@ async function replacePostMedia(
   postId: string,
   coverAssetId: string | null | undefined,
   galleryInput: PostMediaInput[] | undefined,
+  validateCover = true,
 ) {
-  if (coverAssetId) await requireActiveMediaAsset(db, organizationId, siteId, coverAssetId, 'image_asset_id')
+  if (coverAssetId && validateCover) await requireActiveMediaAsset(db, organizationId, siteId, coverAssetId, 'image_asset_id')
   for (const item of galleryInput ?? []) {
     await requireActiveMediaAsset(db, organizationId, siteId, item.media_asset_id, 'gallery media asset')
   }
@@ -263,7 +265,7 @@ async function replacePostMedia(
   const now = new Date().toISOString()
   const rows: PostMediaInput[] = []
   if (coverAssetId) rows.push({ media_asset_id: coverAssetId, role: 'cover', sort_order: 0 })
-  rows.push(...galleryInput)
+  rows.push(...galleryInput.filter(item => !(coverAssetId && item.media_asset_id === coverAssetId && item.role === 'cover')))
 
   const queries = rows.map((item, index) => ({
     query: `
@@ -429,6 +431,7 @@ export async function listPosts(
   db: DbClient,
   organizationId: string,
   siteId: string,
+  env: DomainEnv,
   status?: string,
   locationId?: string,
 ): Promise<Post[]> {
@@ -449,7 +452,7 @@ export async function listPosts(
   }
   query += ` ORDER BY p.updated_at DESC LIMIT 100`
   const results = await queryAll<Post>(db, query, params)
-  const origin = await resolveSitePublicOrigin(db, siteId)
+  const origin = await resolveSitePublicOrigin(db, siteId, env)
   const mediaByPost = await getPostMediaByPostIds(db, (results ?? []).map((post) => post.id))
   return (results ?? []).map((post) => attachPostPublicFields(post, mediaByPost.get(post.id), origin))
 }
@@ -459,6 +462,7 @@ export async function getPost(
   organizationId: string,
   siteId: string,
   postId: string,
+  env: DomainEnv,
 ): Promise<PostWithChannels | null> {
   const post = await queryFirst<Post>(
     db,
@@ -475,7 +479,7 @@ export async function getPost(
 
   const [jobs, origin, mediaByPost] = await Promise.all([
     queryAll<PostChannelJob>(db, `SELECT * FROM post_channel_jobs WHERE post_id = ? ORDER BY channel`, [postId]),
-    resolveSitePublicOrigin(db, siteId),
+    resolveSitePublicOrigin(db, siteId, env),
     getPostMediaByPostIds(db, [postId]),
   ])
 
@@ -497,6 +501,7 @@ export async function createPost(
     gallery_media?: PostMediaInput[] | unknown
   },
   createdBy: string,
+  env: DomainEnv,
 ): Promise<Post> {
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
@@ -536,7 +541,7 @@ export async function createPost(
 
   await replacePostMedia(db, organizationId, siteId, id, imageAssetId, galleryMedia)
 
-  const createdPost = await getPost(db, organizationId, siteId, id)
+  const createdPost = await getPost(db, organizationId, siteId, id, env)
   if (!createdPost) throw new Error('Post not found after creation')
   await fireSiteEventSafe({
     db,
@@ -586,6 +591,7 @@ export async function updatePost(
     gallery_media?: PostMediaInput[] | unknown
   },
   _updatedBy: string,
+  env: DomainEnv,
 ): Promise<Post | null> {
   const existing = await queryFirst<Post>(
     db,
@@ -599,9 +605,11 @@ export async function updatePost(
   const params: SqlBindValue[] = [now]
   const imageAssetId = data.image_asset_id !== undefined ? cleanString(data.image_asset_id) : undefined
   const ogImageAssetId = data.og_image_asset_id !== undefined ? cleanString(data.og_image_asset_id) : undefined
+  const imageAssetChanged = imageAssetId !== undefined && imageAssetId !== existing.image_asset_id
+  const ogImageAssetChanged = ogImageAssetId !== undefined && ogImageAssetId !== existing.og_image_asset_id
 
-  if (imageAssetId) await requireActiveMediaAsset(db, organizationId, siteId, imageAssetId, 'image_asset_id')
-  if (ogImageAssetId) await requireActiveMediaAsset(db, organizationId, siteId, ogImageAssetId, 'og_image_asset_id')
+  if (imageAssetChanged && imageAssetId) await requireActiveMediaAsset(db, organizationId, siteId, imageAssetId, 'image_asset_id')
+  if (ogImageAssetChanged && ogImageAssetId) await requireActiveMediaAsset(db, organizationId, siteId, ogImageAssetId, 'og_image_asset_id')
 
   if (data.slug !== undefined || !existing.slug) {
     const nextSlug = await allocatePostSlug(
@@ -642,12 +650,12 @@ export async function updatePost(
   if (data.gallery_media !== undefined) {
     const galleryMedia = normalizeMediaInputs(data.gallery_media) ?? []
     const coverAssetId = data.image_asset_id !== undefined ? imageAssetId : existing.image_asset_id
-    await replacePostMedia(db, organizationId, siteId, postId, coverAssetId, galleryMedia)
+    await replacePostMedia(db, organizationId, siteId, postId, coverAssetId, galleryMedia, imageAssetChanged)
   } else if (data.image_asset_id !== undefined) {
     await syncPostCoverMedia(db, organizationId, siteId, postId, imageAssetId ?? null)
   }
 
-  return await getPost(db, organizationId, siteId, postId)
+  return await getPost(db, organizationId, siteId, postId, env)
 }
 
 export async function publishPost(
@@ -656,6 +664,7 @@ export async function publishPost(
   siteId: string,
   postId: string,
   channels: Array<'site' | 'gmb' | 'instagram' | 'facebook'>,
+  env: DomainEnv,
 ): Promise<PostWithChannels | null> {
   if (!channels.length) {
     throw new Error('At least one publish channel is required')
@@ -702,7 +711,7 @@ export async function publishPost(
   )
   const publishedChannels = channels.filter(channel => channel === 'site')
 
-  const post = await getPost(db, organizationId, siteId, postId)
+  const post = await getPost(db, organizationId, siteId, postId, env)
   if (post) {
     await fireSiteEventSafe({
       db,
@@ -740,6 +749,7 @@ export async function deletePost(
 export async function getPublishedPosts(
   db: DbClient,
   siteId: string,
+  env: DomainEnv,
   limit = 20,
   locationId?: string,
 ): Promise<PublishedPostSummary[]> {
@@ -764,7 +774,7 @@ export async function getPublishedPosts(
   params.push(limit)
   const rows = await queryAll<PublishedPostRow>(db, query, params)
   const [origin, mediaByPost] = await Promise.all([
-    resolveSitePublicOrigin(db, siteId),
+    resolveSitePublicOrigin(db, siteId, env),
     getPostMediaByPostIds(db, (rows ?? []).map((post) => post.id)),
   ])
 
@@ -775,6 +785,7 @@ export async function getPublishedPostBySlug(
   db: DbClient,
   siteId: string,
   slugOrId: string,
+  env: DomainEnv,
 ) {
   const row = await queryFirst<PublishedPostRow>(
     db,
@@ -795,7 +806,7 @@ export async function getPublishedPostBySlug(
   )
   if (!row) return null
   const [origin, mediaByPost] = await Promise.all([
-    resolveSitePublicOrigin(db, siteId),
+    resolveSitePublicOrigin(db, siteId, env),
     getPostMediaByPostIds(db, [row.id]),
   ])
   const summary = formatPublishedPost(row, mediaByPost.get(row.id), origin)

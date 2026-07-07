@@ -6,6 +6,7 @@ import { oauthProvider } from '@better-auth/oauth-provider'
 import { getHeaders } from 'h3'
 import type { H3Event } from 'h3'
 import { createDb, execute, schema } from '~/server/db'
+import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { normalizePhone, sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { notifyAdminNewUserSignup } from '~/server/utils/admin-notifications'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
@@ -174,16 +175,7 @@ export function createAuth(env: CloudflareEnv) {
         generateRandomEmail: () => `anon-${crypto.randomUUID()}@customers.krabiclaw.local`,
         onLinkAccount: async ({ anonymousUser, newUser }) => {
           const now = new Date().toISOString()
-          await execute(db, `
-            UPDATE customers
-            SET user_id = ?, updated_at = ?
-            WHERE user_id = ?
-               OR id IN (
-                 SELECT customer_id
-                 FROM review_requests
-                 WHERE anonymous_user_id = ?
-               )
-          `, [newUser.user.id, now, anonymousUser.user.id, anonymousUser.user.id])
+          await linkAnonymousCustomerToUser(db, anonymousUser.user.id, newUser.user.id)
           await execute(db, `
             UPDATE review_requests
             SET user_id = ?, updated_at = ?

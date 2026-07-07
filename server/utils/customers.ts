@@ -1,4 +1,4 @@
-import { execute, queryFirst, type DbClient } from '~/server/db'
+import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { hashIdentifier } from '~/server/utils/hourly-rate-limit'
 import { normalizePhone } from '~/server/utils/whatsapp'
 
@@ -204,4 +204,36 @@ export async function deleteCustomerIfUnlinked(db: DbClient, customerId: string)
       AND NOT EXISTS (SELECT 1 FROM reservation_submissions WHERE customer_id = customers.id)
       AND NOT EXISTS (SELECT 1 FROM experience_bookings WHERE customer_id = customers.id)
   `, [customerId])
+}
+
+// Called when a Better Auth anonymous session links to a real user account. Re-points each
+// customer row the anonymous session accrued to the real user — unless that site already has a
+// customer row for the real user, in which case the anonymous row is marked 'merged' instead of
+// repointed, so a site never ends up with two active customer rows sharing the same user_id.
+export async function linkAnonymousCustomerToUser(
+  db: DbClient,
+  anonymousUserId: string,
+  realUserId: string,
+): Promise<void> {
+  const anonymousRows = await queryAll<{ id: string; site_id: string }>(db, `
+    SELECT id, site_id FROM customers WHERE user_id = ? AND status != 'deleted'
+  `, [anonymousUserId])
+  if (!anonymousRows || anonymousRows.length === 0) return
+
+  const now = new Date().toISOString()
+  for (const row of anonymousRows) {
+    const existingForRealUser = await queryFirst<{ id: string }>(db, `
+      SELECT id FROM customers WHERE site_id = ? AND user_id = ? AND id != ? LIMIT 1
+    `, [row.site_id, realUserId, row.id])
+
+    if (existingForRealUser) {
+      await execute(db, `
+        UPDATE customers SET status = 'merged', updated_at = ? WHERE id = ?
+      `, [now, row.id])
+    } else {
+      await execute(db, `
+        UPDATE customers SET user_id = ?, updated_at = ? WHERE id = ?
+      `, [realUserId, now, row.id])
+    }
+  }
 }

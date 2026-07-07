@@ -37,3 +37,59 @@ export function navSectionOrderFor(section: string | null | undefined, explicitO
 export function navTitleFor(title: string, navTitle: string | null | undefined) {
   return navTitle?.trim() || title
 }
+
+interface NavGroupable {
+  title: string
+  nav_title?: string | null
+  nav_order?: number | null
+  nav_section_order?: number | null
+  hide_from_nav?: boolean | number | null
+}
+
+export interface NavGroup<T> {
+  category: string
+  order: number
+  items: Array<T & { label: string; order: number }>
+}
+
+/**
+ * Groups items (blog posts, docs, ...) into nav sections and sorts both the sections and the
+ * items within each section — shared by useBlogNav/useDocsNav so the ordering rules (explicit
+ * order first, then legacy category position, then alpha) only live in one place.
+ */
+export function groupItemsByNavSection<T extends NavGroupable>(
+  items: T[],
+  getSection: (_item: T) => string,
+  legacyOrder: readonly string[],
+): Array<NavGroup<T>> {
+  const byCategory = new Map<string, NavGroup<T>>()
+  for (const item of items) {
+    if (item.hide_from_nav) continue
+    const section = getSection(item)
+    if (!section) continue
+    const sectionOrder = navSectionOrderFor(section, item.nav_section_order)
+    const group = byCategory.get(section) ?? { category: section, order: sectionOrder, items: [] }
+    group.order = Math.min(group.order, sectionOrder)
+    group.items.push({
+      ...item,
+      label: navTitleFor(item.title, item.nav_title),
+      order: item.nav_order ?? 999999,
+    })
+    byCategory.set(section, group)
+  }
+
+  const legacyRank = (category: string) => {
+    const index = legacyOrder.indexOf(category)
+    return index === -1 ? 999 : index
+  }
+  return Array.from(byCategory.values())
+    .sort((a, b) =>
+      a.order - b.order
+      || legacyRank(a.category) - legacyRank(b.category)
+      || a.category.localeCompare(b.category)
+    )
+    .map(group => ({
+      ...group,
+      items: group.items.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title)),
+    }))
+}
