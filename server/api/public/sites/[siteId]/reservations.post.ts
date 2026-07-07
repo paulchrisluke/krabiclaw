@@ -9,7 +9,7 @@ import { generateReservationTimes, isStructuredOpeningHours } from '~/shared/res
 import { getReservationSlotAvailability } from '~/server/utils/reservations'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
-import { deleteCustomerIfUnlinked, findOrCreateCustomer } from '~/server/utils/customers'
+import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking } from '~/server/utils/customers'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
@@ -125,15 +125,6 @@ export default defineEventHandler(async (event) => {
   const emailHash = await hashIdentifier(email)
   const cancellation = createReservationCancelToken()
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
-  const customer = await findOrCreateCustomer(db, {
-    organizationId: site.organization_id,
-    siteId,
-    name,
-    email,
-    phone,
-    source: 'reservation',
-    bookingAt: `${date}T${time}:00`,
-  })
 
   // Rate limiting (skipped in dev so local work and E2E can submit repeatedly)
   const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
@@ -147,6 +138,17 @@ export default defineEventHandler(async (event) => {
     const emailOk = await incrementHourlyRateLimit(db, `rate:reservation:email:${emailHash}:${today}`, EMAIL_DAILY_LIMIT, 86_400_000)
     if (!emailOk) return jsonResponse({ error: 'Too many reservation requests from this email. Please try again tomorrow.' }, { status: 429 })
   }
+
+  const customerInput = {
+    organizationId: site.organization_id,
+    siteId,
+    name,
+    email,
+    phone,
+    source: 'reservation',
+    bookingAt: `${date}T${time}:00`,
+  } as const
+  const customer = await findOrCreateCustomer(db, customerInput)
 
   // Single atomic statement: the capacity re-check and the insert happen in one SQL statement
   // (D1/SQLite guarantees single-statement atomicity even without BEGIN/COMMIT support — see
@@ -194,6 +196,7 @@ export default defineEventHandler(async (event) => {
     if (customer.created) await deleteCustomerIfUnlinked(db, customer.id)
     return jsonResponse({ error: 'This time is no longer available. Please choose another time.' }, { status: 409 })
   }
+  await recordCustomerBooking(db, customer.id, customerInput)
 
   await fireSiteEventSafe({
     db,

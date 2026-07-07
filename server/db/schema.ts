@@ -294,7 +294,9 @@ export const experience_bookings = sqliteTable("experience_bookings", {
 	cancellation_token_used_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	index("idx_experience_bookings_customer_id").on(table.customer_id),
+]);
 
 export const experience_slot_overrides = sqliteTable("experience_slot_overrides", {
 	id: text().primaryKey(),
@@ -933,7 +935,9 @@ export const reservation_submissions = sqliteTable("reservation_submissions", {
 	cancellation_token_expires_at: text(),
 	cancellation_token_used_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	index("idx_reservation_submissions_customer_id").on(table.customer_id),
+]);
 
 export const booking_policies = sqliteTable("booking_policies", {
 	id: text().primaryKey(),

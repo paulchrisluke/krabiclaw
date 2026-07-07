@@ -77,6 +77,27 @@ export function createAuth(env: CloudflareEnv) {
           after: async (user) => {
             if ((user as { isAnonymous?: boolean }).isAnonymous) return
             const now = new Date()
+            const orgId = `org-${user.id}`
+            try {
+              await db.batch([
+                db.insert(schema.organization).values({
+                  id: orgId,
+                  name: user.name ?? user.email ?? 'My Restaurant',
+                  slug: orgId,
+                  createdAt: now,
+                }).onConflictDoNothing(),
+                db.insert(schema.member).values({
+                  id: `member-${orgId}`,
+                  organizationId: orgId,
+                  userId: user.id,
+                  role: 'owner',
+                  createdAt: now,
+                }).onConflictDoNothing(),
+              ])
+            } catch (batchErr) {
+              console.error('Failed to create org/member on signup, batch rolled back for orgId:', orgId, batchErr)
+              throw batchErr
+            }
             // Fire-and-forget — must not block or throw into the auth flow
             notifyAdminNewUserSignup(env, {
               id: user.id,
