@@ -34,7 +34,7 @@ export function useDocsNav() {
   // stable URLs and ordering for older docs that predate nav fields.
   const categories = computed<DocsNavCategory[]>(() => {
     const eligible = docs.value
-      .filter(doc => categoryToSlug(doc.category))
+      .filter(doc => categoryToSlug(doc.category) && !doc.hide_from_nav)
       .map(doc => {
         const categorySlug = categoryToSlug(doc.category)!
         return {

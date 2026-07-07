@@ -265,7 +265,18 @@ async function replacePostMedia(
   const now = new Date().toISOString()
   const rows: PostMediaInput[] = []
   if (coverAssetId) rows.push({ media_asset_id: coverAssetId, role: 'cover', sort_order: 0 })
-  rows.push(...galleryInput.filter(item => !(coverAssetId && item.media_asset_id === coverAssetId && item.role === 'cover')))
+  
+  // Deduplicate gallery input by media_asset_id and filter out cover asset
+  const seenAssetIds = new Set<string>()
+  if (coverAssetId) seenAssetIds.add(coverAssetId)
+  
+  const deduplicatedGallery = galleryInput.filter(item => {
+    if (seenAssetIds.has(item.media_asset_id)) return false
+    seenAssetIds.add(item.media_asset_id)
+    return true
+  })
+  
+  rows.push(...deduplicatedGallery)
 
   const queries = rows.map((item, index) => ({
     query: `
@@ -305,6 +316,14 @@ async function syncPostCoverMedia(
   )
 
   if (!coverAssetId) return
+
+  // Check if cover with same media_asset_id already exists to avoid unique index conflict
+  const existingCover = await queryFirst<{ id: string }>(
+    db,
+    `SELECT id FROM post_media WHERE post_id = ? AND media_asset_id = ? AND role = 'cover' LIMIT 1`,
+    [postId, coverAssetId],
+  )
+  if (existingCover) return
 
   const now = new Date().toISOString()
   await execute(
@@ -509,7 +528,7 @@ export async function createPost(
   const publishedAt = status === 'published' ? now : null
   const title = cleanString(data.title)
   const body = data.body.trim()
-  const slug = await allocatePostSlug(db, siteId, cleanString(data.slug) ?? title ?? body.slice(0, 80) ?? id)
+  let slug = await allocatePostSlug(db, siteId, cleanString(data.slug) ?? title ?? body.slice(0, 80) ?? id)
   const imageAssetId = cleanString(data.image_asset_id)
   const ogImageAssetId = cleanString(data.og_image_asset_id)
   const galleryMedia = normalizeMediaInputs(data.gallery_media) ?? []
@@ -518,26 +537,39 @@ export async function createPost(
   if (ogImageAssetId) await requireActiveMediaAsset(db, organizationId, siteId, ogImageAssetId, 'og_image_asset_id')
   for (const item of galleryMedia) await requireActiveMediaAsset(db, organizationId, siteId, item.media_asset_id, 'gallery media asset')
 
-  await execute(
-    db,
-    `
-    INSERT INTO posts (id, organization_id, site_id, location_id, slug, post_type, title, body, image_asset_id,
-      seo_title, seo_description, og_image_asset_id,
-      cta_type, cta_url, event_title, event_start, event_end, offer_coupon, offer_terms,
-      status, scheduled_for, published_at, created_by, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `,
-    [
-      id, organizationId, siteId,
-      data.location_id ?? null, slug, data.post_type ?? 'standard',
-      title, body, imageAssetId,
-      cleanString(data.seo_title), cleanString(data.seo_description), ogImageAssetId,
-      data.cta_type ?? null, data.cta_url ?? null,
-      data.event_title ?? null, data.event_start ?? null, data.event_end ?? null,
-      data.offer_coupon ?? null, data.offer_terms ?? null,
-      status, data.scheduled_for ?? null, publishedAt, createdBy, now, now,
-    ],
-  )
+  // Retry slug allocation on unique constraint conflict (race condition)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await execute(
+        db,
+        `
+        INSERT INTO posts (id, organization_id, site_id, location_id, slug, post_type, title, body, image_asset_id,
+          seo_title, seo_description, og_image_asset_id,
+          cta_type, cta_url, event_title, event_start, event_end, offer_coupon, offer_terms,
+          status, scheduled_for, published_at, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+        [
+          id, organizationId, siteId,
+          data.location_id ?? null, slug, data.post_type ?? 'standard',
+          title, body, imageAssetId,
+          cleanString(data.seo_title), cleanString(data.seo_description), ogImageAssetId,
+          data.cta_type ?? null, data.cta_url ?? null,
+          data.event_title ?? null, data.event_start ?? null, data.event_end ?? null,
+          data.offer_coupon ?? null, data.offer_terms ?? null,
+          status, data.scheduled_for ?? null, publishedAt, createdBy, now, now,
+        ],
+      )
+      break
+    } catch (err) {
+      const message = String((err as ApiValue)?.message || err || '')
+      if (message.includes('posts_site_slug_idx') || message.includes('UNIQUE constraint failed') && message.includes('slug')) {
+        slug = await allocatePostSlug(db, siteId, cleanString(data.slug) ?? title ?? body.slice(0, 80) ?? id)
+        continue
+      }
+      throw err
+    }
+  }
 
   await replacePostMedia(db, organizationId, siteId, id, imageAssetId, galleryMedia)
 
@@ -645,7 +677,30 @@ export async function updatePost(
   }
 
   params.push(postId, organizationId, siteId)
-  await execute(db, `UPDATE posts SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`, params)
+  
+  // Retry slug update on unique constraint conflict (race condition)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await execute(db, `UPDATE posts SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`, params)
+      break
+    } catch (err) {
+      const message = String((err as ApiValue)?.message || err || '')
+      if (message.includes('posts_site_slug_idx') || message.includes('UNIQUE constraint failed') && message.includes('slug') && (data.slug !== undefined || !existing.slug)) {
+        const slugIndex = sets.findIndex(s => s.startsWith('slug = ?'))
+        if (slugIndex !== -1) {
+          const nextSlug = await allocatePostSlug(
+            db,
+            siteId,
+            cleanString(data.slug) ?? cleanString(data.title) ?? existing.title ?? cleanString(data.body) ?? existing.body.slice(0, 80) ?? postId,
+            postId,
+          )
+          params[slugIndex] = nextSlug
+          continue
+        }
+      }
+      throw err
+    }
+  }
 
   if (data.gallery_media !== undefined) {
     const galleryMedia = normalizeMediaInputs(data.gallery_media) ?? []
