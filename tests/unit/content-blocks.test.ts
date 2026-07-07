@@ -96,3 +96,51 @@ test('buildContentBlocks skips unmatched embeds without appending leftover compo
     ['html', 'html'],
   )
 })
+
+test('buildContentBlocks renders multiple ai assistance embeds in position order', () => {
+  const components: ContentComponent[] = [
+    {
+      type: 'ai_assistance',
+      position: 2,
+      label: 'AI Help',
+      data: {
+        prompts: [
+          { title: 'Second', prompt: 'Use the second prompt.', position: 0 },
+        ],
+      },
+    },
+    {
+      type: 'ai_assistance',
+      position: 1,
+      data: {
+        prompts: [
+          { title: 'First', prompt: 'Use the first prompt.', position: 0 },
+        ],
+      },
+    },
+  ]
+
+  const blocks = buildContentBlocks(
+    [
+      'Before',
+      '',
+      '{{component type="ai_assistance"}}',
+      '',
+      'Middle',
+      '',
+      '{{component type="ai_assistance"}}',
+    ].join('\n'),
+    components,
+    renderMarkdown,
+  )
+
+  assert.deepEqual(
+    blocks.map(block => block.kind === 'html' ? 'html' : `${block.kind}:${block.type}`),
+    ['html', 'component:ai_assistance', 'html', 'component:ai_assistance'],
+  )
+  const first = blocks[1] as { kind: 'component'; type: string; props: { prompts: Array<{ prompt: string }> } }
+  const second = blocks[3] as { kind: 'component'; type: string; props: { prompts: Array<{ prompt: string }> } }
+  assert.equal(first.type, 'ai_assistance')
+  assert.equal(first.props.prompts[0]?.prompt, 'Use the first prompt.')
+  assert.equal(second.props.prompts[0]?.prompt, 'Use the second prompt.')
+})

@@ -35,6 +35,14 @@ export default defineEventHandler(async (event) => {
   params.push(reviewId, siteId)
 
   await execute(db, `UPDATE reviews SET ${sets.join(', ')} WHERE id = ? AND site_id = ?`, params)
+  if (body.status === 'approved' || body.status === 'rejected') {
+    await execute(db, `
+      UPDATE review_media
+      SET status = ?, updated_at = ?
+      WHERE review_id = ?
+        AND status != 'deleted'
+    `, [body.status === 'approved' ? 'approved' : 'rejected', new Date().toISOString(), reviewId])
+  }
 
   return jsonResponse({ updated: true })
 })

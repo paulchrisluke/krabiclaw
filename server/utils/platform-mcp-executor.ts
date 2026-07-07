@@ -82,7 +82,7 @@ function optionalDateParam(args: Record<string, unknown>, key: string): string |
 function structuredContentInput(args: Record<string, unknown>) {
   return {
     components: optionalArray(args, 'components') as Array<{
-      type: 'faq' | 'how_to'
+      type: 'faq' | 'how_to' | 'ai_assistance'
       position?: number
       label?: string
       status?: 'active' | 'inactive'

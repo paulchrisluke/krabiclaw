@@ -153,6 +153,9 @@
               {{ review.title }}
             </div>
             <p class="text-sm leading-relaxed text-default">{{ review.content }}</p>
+            <NuxtLink :to="`/locations/${slug}/reviews/${review.id}`" class="mt-4 inline-flex text-sm font-medium text-primary no-underline hover:underline">
+              Read review
+            </NuxtLink>
 
             <!-- Photos -->
             <div v-if="review.photo_urls?.length" class="mt-5 flex flex-wrap gap-2">

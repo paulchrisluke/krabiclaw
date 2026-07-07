@@ -1,10 +1,13 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
-import { tenantBaseURL } from './helpers'
-import { devLoginHeaders } from './test-env'
+import { collectPageErrors, setupTenantHeaders, tenantBaseURL } from './helpers'
+import { devLoginHeaders, devLoginUrl } from './test-env'
 import { demoFixture } from '../../seed-definitions/demo'
 
 const demoSiteId = demoFixture.siteId
 const demoExperience = demoFixture.experiences[0]!
+const demoOrgSlug = demoFixture.site.slug
+const demoSiteSlug = demoFixture.site.subdomain
+const demoLocationSlug = demoFixture.locations[0]!.slug
 
 const devHeaders = () => devLoginHeaders() ?? {}
 
@@ -225,5 +228,62 @@ test.describe('reply threading', () => {
       'submission_reply_whatsapp',
     )
     expect(notifications[0]?.channel).toBe('dashboard')
+  })
+
+  test('owner can send a reservation email reply from the deep-linked dashboard inbox', async ({ page, request, baseURL }) => {
+    test.setTimeout(60_000)
+
+    const futureDate = new Date(Date.now() + 42 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!
+    const since = new Date().toISOString()
+    const guestEmail = `owner-reply-${Date.now()}@playwright.example`
+    const replyBody = `Thanks for your reservation. We have you down for 7:00 PM. Ref ${Date.now()}`
+
+    const createRes = await request.post(`${tenantBaseURL}/api/public/sites/${demoSiteId}/reservations`, {
+      data: {
+        name: 'Owner Reply Flow Test',
+        email: guestEmail,
+        phone: '+15555550303',
+        date: futureDate,
+        time: '19:00',
+        guests: '2',
+        requests: 'Window seat if possible',
+        location_id: 'loc-demo',
+      },
+    })
+    expect(createRes.status()).toBe(201)
+    const createBody = await createRes.json() as { id: string }
+
+    const errors = collectPageErrors(page)
+    await setupTenantHeaders(page, baseURL!, devHeaders())
+
+    const login = await page.goto(devLoginUrl(baseURL!, 'user-demo'), { waitUntil: 'load' })
+    expect(login?.status()).toBeLessThan(400)
+
+    const inboxUrl = `${baseURL}/dashboard/${demoOrgSlug}/sites/${demoSiteSlug}/${demoLocationSlug}/inbox?tab=reservations&reply=${createBody.id}`
+    const inboxResponse = await page.goto(inboxUrl, { waitUntil: 'load' })
+    expect(inboxResponse?.status()).toBeLessThan(400)
+
+    await expect(page.locator('body')).toContainText('Reservations')
+    await expect(page.getByRole('heading', { name: 'Reply to guest' })).toBeVisible()
+    await expect(page.getByRole('tab', { name: 'Email' })).toBeVisible()
+    await expect(page.getByRole('tab', { name: 'WhatsApp' })).toBeVisible()
+
+    await page.getByPlaceholder('Write your reply...').fill(replyBody)
+    await page.getByRole('button', { name: 'Send reply' }).click()
+
+    await expect(page.locator('body')).toContainText('Reply sent')
+    await expect(page.getByRole('heading', { name: 'Reply to guest' })).toBeHidden()
+
+    const messages = await waitForSubmissionMessages(
+      request,
+      tenantBaseURL,
+      { submission_type: 'reservation', submission_id: createBody.id, direction: 'out', channel: 'email', since },
+      rows => rows.some((row) => row.body.includes(replyBody)),
+      { timeoutMs: 12_000 },
+    )
+    expect(messages.some((row) => row.body === replyBody)).toBe(true)
+
+    const appErrors = errors.filter((error) => !error.includes('Hydration completed but contains mismatches.'))
+    expect(appErrors).toEqual([])
   })
 })

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "cd8ee7ad-0cdc-4f75-a4e8-cfef907e7b78",
+  "id": "c988246a-63b7-4a9a-ae2e-397f43b65469",
   "prevId": "74af1812-9916-46c0-8fba-bcbc6c7cf554",
   "tables": {
     "account": {
@@ -1299,6 +1299,13 @@
         },
         "google_place_id": {
           "name": "google_place_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "google_review_url": {
+          "name": "google_review_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -2655,6 +2662,48 @@
           "notNull": false,
           "autoincrement": false
         },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completion_source": {
+          "name": "completion_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "review_request_sent_at": {
+          "name": "review_request_sent_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "review_reminder_sent_at": {
+          "name": "review_reminder_sent_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "review_submitted_at": {
+          "name": "review_submitted_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "review_id": {
+          "name": "review_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -2673,10 +2722,23 @@
         }
       },
       "indexes": {
-        "idx_experience_bookings_customer_id": {
-          "name": "idx_experience_bookings_customer_id",
+        "idx_experience_bookings_review_request_due": {
+          "name": "idx_experience_bookings_review_request_due",
           "columns": [
-            "customer_id"
+            "site_id",
+            "status",
+            "completed_at",
+            "review_request_sent_at"
+          ],
+          "isUnique": false
+        },
+        "idx_experience_bookings_review_reminder_due": {
+          "name": "idx_experience_bookings_review_reminder_due",
+          "columns": [
+            "site_id",
+            "review_request_sent_at",
+            "review_reminder_sent_at",
+            "review_submitted_at"
           ],
           "isUnique": false
         }
@@ -2746,11 +2808,29 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "experience_bookings_review_id_reviews_id_fk": {
+          "name": "experience_bookings_review_id_reviews_id_fk",
+          "tableFrom": "experience_bookings",
+          "tableTo": "reviews",
+          "columnsFrom": [
+            "review_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "experience_bookings_completion_source_check": {
+          "name": "experience_bookings_completion_source_check",
+          "value": "completion_source IS NULL OR completion_source IN ('manual', 'auto')"
+        }
+      }
     },
     "experience_slot_overrides": {
       "name": "experience_slot_overrides",
@@ -8880,8 +8960,58 @@
           "notNull": false,
           "autoincrement": false
         },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completion_source": {
+          "name": "completion_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "review_request_sent_at": {
+          "name": "review_request_sent_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "review_reminder_sent_at": {
+          "name": "review_reminder_sent_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "review_submitted_at": {
+          "name": "review_submitted_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "review_id": {
+          "name": "review_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -8890,10 +9020,23 @@
         }
       },
       "indexes": {
-        "idx_reservation_submissions_customer_id": {
-          "name": "idx_reservation_submissions_customer_id",
+        "idx_reservation_submissions_review_request_due": {
+          "name": "idx_reservation_submissions_review_request_due",
           "columns": [
-            "customer_id"
+            "site_id",
+            "status",
+            "completed_at",
+            "review_request_sent_at"
+          ],
+          "isUnique": false
+        },
+        "idx_reservation_submissions_review_reminder_due": {
+          "name": "idx_reservation_submissions_review_reminder_due",
+          "columns": [
+            "site_id",
+            "review_request_sent_at",
+            "review_reminder_sent_at",
+            "review_submitted_at"
           ],
           "isUnique": false
         }
@@ -8950,11 +9093,470 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "reservation_submissions_review_id_reviews_id_fk": {
+          "name": "reservation_submissions_review_id_reviews_id_fk",
+          "tableFrom": "reservation_submissions",
+          "tableTo": "reviews",
+          "columnsFrom": [
+            "review_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "reservation_submissions_completion_source_check": {
+          "name": "reservation_submissions_completion_source_check",
+          "value": "completion_source IS NULL OR completion_source IN ('manual', 'auto')"
+        }
+      }
+    },
+    "review_media": {
+      "name": "review_media",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "review_id": {
+          "name": "review_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "review_request_id": {
+          "name": "review_request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "media_asset_id": {
+          "name": "media_asset_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "idx_review_media_review_request_id": {
+          "name": "idx_review_media_review_request_id",
+          "columns": [
+            "review_request_id"
+          ],
+          "isUnique": false
+        },
+        "idx_review_media_review_id": {
+          "name": "idx_review_media_review_id",
+          "columns": [
+            "review_id"
+          ],
+          "isUnique": false
+        },
+        "review_media_media_asset_id_unique": {
+          "name": "review_media_media_asset_id_unique",
+          "columns": [
+            "media_asset_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "review_media_review_id_reviews_id_fk": {
+          "name": "review_media_review_id_reviews_id_fk",
+          "tableFrom": "review_media",
+          "tableTo": "reviews",
+          "columnsFrom": [
+            "review_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "review_media_review_request_id_review_requests_id_fk": {
+          "name": "review_media_review_request_id_review_requests_id_fk",
+          "tableFrom": "review_media",
+          "tableTo": "review_requests",
+          "columnsFrom": [
+            "review_request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "review_media_customer_id_customers_id_fk": {
+          "name": "review_media_customer_id_customers_id_fk",
+          "tableFrom": "review_media",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "review_media_media_asset_id_media_assets_id_fk": {
+          "name": "review_media_media_asset_id_media_assets_id_fk",
+          "tableFrom": "review_media",
+          "tableTo": "media_assets",
+          "columnsFrom": [
+            "media_asset_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "review_media_kind_check": {
+          "name": "review_media_kind_check",
+          "value": "kind IN ('image', 'video')"
+        },
+        "review_media_status_check": {
+          "name": "review_media_status_check",
+          "value": "status IN ('pending', 'approved', 'rejected', 'deleted')"
+        }
+      }
+    },
+    "review_requests": {
+      "name": "review_requests",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "location_id": {
+          "name": "location_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "booking_type": {
+          "name": "booking_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "booking_id": {
+          "name": "booking_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "first_sent_at": {
+          "name": "first_sent_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reminder_sent_at": {
+          "name": "reminder_sent_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "clicked_at": {
+          "name": "clicked_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "send_count": {
+          "name": "send_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "anonymous_user_id": {
+          "name": "anonymous_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "review_requests_token_hash_unique": {
+          "name": "review_requests_token_hash_unique",
+          "columns": [
+            "token_hash"
+          ],
+          "isUnique": true
+        },
+        "idx_review_requests_active_booking_unique": {
+          "name": "idx_review_requests_active_booking_unique",
+          "columns": [
+            "site_id",
+            "booking_type",
+            "booking_id"
+          ],
+          "isUnique": true,
+          "where": "revoked_at IS NULL AND submitted_at IS NULL"
+        },
+        "idx_review_requests_token_hash": {
+          "name": "idx_review_requests_token_hash",
+          "columns": [
+            "token_hash"
+          ],
+          "isUnique": false
+        },
+        "idx_review_requests_send_due": {
+          "name": "idx_review_requests_send_due",
+          "columns": [
+            "site_id",
+            "first_sent_at",
+            "reminder_sent_at",
+            "submitted_at",
+            "expires_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "review_requests_organization_id_organization_id_fk": {
+          "name": "review_requests_organization_id_organization_id_fk",
+          "tableFrom": "review_requests",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "review_requests_site_id_sites_id_fk": {
+          "name": "review_requests_site_id_sites_id_fk",
+          "tableFrom": "review_requests",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "review_requests_location_id_business_locations_id_fk": {
+          "name": "review_requests_location_id_business_locations_id_fk",
+          "tableFrom": "review_requests",
+          "tableTo": "business_locations",
+          "columnsFrom": [
+            "location_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "review_requests_customer_id_customers_id_fk": {
+          "name": "review_requests_customer_id_customers_id_fk",
+          "tableFrom": "review_requests",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "review_requests_anonymous_user_id_user_id_fk": {
+          "name": "review_requests_anonymous_user_id_user_id_fk",
+          "tableFrom": "review_requests",
+          "tableTo": "user",
+          "columnsFrom": [
+            "anonymous_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "review_requests_user_id_user_id_fk": {
+          "name": "review_requests_user_id_user_id_fk",
+          "tableFrom": "review_requests",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "review_requests_booking_type_check": {
+          "name": "review_requests_booking_type_check",
+          "value": "booking_type IN ('reservation', 'experience_booking')"
+        }
+      }
     },
     "reviews": {
       "name": "reviews",
@@ -8982,6 +9584,41 @@
         },
         "location_id": {
           "name": "location_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "booking_id": {
+          "name": "booking_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "booking_type": {
+          "name": "booking_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "review_request_id": {
+          "name": "review_request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -9112,7 +9749,31 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "idx_reviews_request_id": {
+          "name": "idx_reviews_request_id",
+          "columns": [
+            "review_request_id"
+          ],
+          "isUnique": false
+        },
+        "idx_reviews_customer_id": {
+          "name": "idx_reviews_customer_id",
+          "columns": [
+            "customer_id"
+          ],
+          "isUnique": false
+        },
+        "idx_reviews_location_status": {
+          "name": "idx_reviews_location_status",
+          "columns": [
+            "location_id",
+            "status",
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "reviews_organization_id_organization_id_fk": {
           "name": "reviews_organization_id_organization_id_fk",
@@ -9152,11 +9813,55 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "reviews_customer_id_customers_id_fk": {
+          "name": "reviews_customer_id_customers_id_fk",
+          "tableFrom": "reviews",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "reviews_review_request_id_review_requests_id_fk": {
+          "name": "reviews_review_request_id_review_requests_id_fk",
+          "tableFrom": "reviews",
+          "tableTo": "review_requests",
+          "columnsFrom": [
+            "review_request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "reviews_user_id_user_id_fk": {
+          "name": "reviews_user_id_user_id_fk",
+          "tableFrom": "reviews",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "reviews_booking_type_check": {
+          "name": "reviews_booking_type_check",
+          "value": "booking_type IS NULL OR booking_type IN ('reservation', 'experience_booking')"
+        }
+      }
     },
     "service_addon_purchases": {
       "name": "service_addon_purchases",

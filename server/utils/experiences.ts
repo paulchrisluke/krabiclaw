@@ -3,6 +3,7 @@ import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { assertValidSaleWindow } from '~/shared/money'
+import { revokeReviewRequestForBooking } from '~/server/utils/review-requests'
 
 export const WEEKDAY_NAMES = [
   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
@@ -578,6 +579,12 @@ export interface ExperienceBooking {
   notes: string | null
   cancellation_token_hash?: string | null
   cancellation_token_expires_at?: string | null
+  completed_at?: string | null
+  completion_source?: 'manual' | 'auto' | null
+  review_request_sent_at?: string | null
+  review_reminder_sent_at?: string | null
+  review_submitted_at?: string | null
+  review_id?: string | null
   created_at: string
   updated_at: string
 }
@@ -695,7 +702,9 @@ export async function listExperienceBookings(
               bl.title AS location_title,
               eb.guest_name, eb.guest_email,
               eb.guest_phone, eb.party_size, eb.booking_date, eb.time_slot,
-              eb.status, eb.notes, eb.created_at, eb.updated_at
+              eb.status, eb.notes, eb.completed_at, eb.completion_source,
+              eb.review_request_sent_at, eb.review_reminder_sent_at,
+              eb.review_submitted_at, eb.review_id, eb.created_at, eb.updated_at
 	       FROM experience_bookings eb
 	       LEFT JOIN business_locations bl ON bl.id = eb.location_id
 	       WHERE ${where}
@@ -729,7 +738,9 @@ export async function listExperienceBookingsForSite(
               e.title AS experience_title,
               eb.guest_name, eb.guest_email,
               eb.guest_phone, eb.party_size, eb.booking_date, eb.time_slot,
-              eb.status, eb.notes, eb.created_at, eb.updated_at
+              eb.status, eb.notes, eb.completed_at, eb.completion_source,
+              eb.review_request_sent_at, eb.review_reminder_sent_at,
+              eb.review_submitted_at, eb.review_id, eb.created_at, eb.updated_at
 	       FROM experience_bookings eb
 	       LEFT JOIN business_locations bl ON bl.id = eb.location_id
 	       LEFT JOIN experiences e ON e.id = eb.experience_id
@@ -830,6 +841,9 @@ export async function updateBookingStatus(
        WHERE site_id = ? AND experience_id = ? AND id = ?`,
     [status, new Date().toISOString(), siteId, experienceId, bookingId],
   )
+  if (status === 'cancelled' && result.meta.changes) {
+    await revokeReviewRequestForBooking(db, 'experience_booking', bookingId)
+  }
   return Boolean(result.meta.changes)
 }
 
@@ -845,6 +859,9 @@ export async function updateBookingStatusForSite(
        WHERE site_id = ? AND id = ?`,
     [status, new Date().toISOString(), siteId, bookingId],
   )
+  if (status === 'cancelled' && result.meta.changes) {
+    await revokeReviewRequestForBooking(db, 'experience_booking', bookingId)
+  }
   return Boolean(result.meta.changes)
 }
 

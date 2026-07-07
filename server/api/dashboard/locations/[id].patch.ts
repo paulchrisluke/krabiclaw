@@ -73,6 +73,7 @@ export default defineEventHandler(async (event) => {
       hero_video_asset_id: typeof body.hero_video_asset_id === 'string' ? body.hero_video_asset_id : body.hero_video_asset_id === null ? null : undefined,
       website_url: typeof body.website_url === 'string' ? body.website_url : body.website_url === null ? null : undefined,
       maps_url: typeof body.maps_url === 'string' ? body.maps_url : body.maps_url === null ? null : undefined,
+      google_review_url: typeof body.google_review_url === 'string' ? body.google_review_url : body.google_review_url === null ? null : undefined,
       opening_hours: body.opening_hours === undefined
         ? undefined
         : body.opening_hours === null

@@ -30,6 +30,7 @@
                   {{ review.status }}
                 </UBadge>
                 <UBadge color="neutral" variant="subtle">{{ review.locationTitle }}</UBadge>
+                <UBadge color="neutral" variant="subtle">{{ review.helpful_count ?? 0 }} helpful</UBadge>
                 <span class="text-xs text-muted">{{ formatDate(review.created_at) }}</span>
               </div>
               <p v-if="review.title" class="mt-3 text-sm font-medium text-highlighted">{{ review.title }}</p>
@@ -41,6 +42,8 @@
             </div>
 
             <div class="flex shrink-0 flex-wrap gap-2">
+              <UButton v-if="review.status === 'approved'" :to="publicReviewUrl(review)" target="_blank" size="sm" color="neutral" variant="soft" icon="i-lucide-external-link">Public URL</UButton>
+              <UButton v-if="review.customer_id" size="sm" color="neutral" variant="soft" icon="i-lucide-user-round" @click="openCustomer(review.customer_id)">Customer</UButton>
               <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-messages-square" @click="startReply(review)">Reply</UButton>
               <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-square-pen" @click="startEdit(review)">Edit</UButton>
               <UButton size="sm" color="success" variant="ghost" icon="i-lucide-check" @click="setStatus(review, 'approved')">Approve</UButton>
@@ -99,6 +102,47 @@
           </div>
         </template>
       </UModal>
+
+      <UModal v-model:open="customerOpen" :ui="{ content: 'max-w-3xl' }">
+        <template #content>
+          <div class="p-6">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <h2 class="text-lg font-semibold text-highlighted">{{ customerPanel?.customer.name || customerPanel?.customer.email || 'Customer' }}</h2>
+                <p class="mt-1 text-sm text-muted">{{ customerPanel?.customer.email || 'No email' }}<span v-if="customerPanel?.customer.phone"> / {{ customerPanel.customer.phone }}</span></p>
+              </div>
+              <UBadge v-if="customerPanel?.customer.review_request_opted_out_at" color="warning" variant="soft">Opted out</UBadge>
+            </div>
+
+            <div v-if="customerLoading" class="mt-6 space-y-3">
+              <USkeleton v-for="i in 3" :key="i" class="h-16 rounded-lg" />
+            </div>
+            <div v-else-if="customerPanel" class="mt-6 grid gap-4 md:grid-cols-2">
+              <UCard :ui="{ body: 'p-4 sm:p-4' }">
+                <p class="text-xs font-medium uppercase tracking-wide text-muted">Account</p>
+                <p class="mt-2 text-sm text-default">Auth user: {{ customerPanel.customer.user_id || 'Not linked' }}</p>
+                <p class="mt-1 text-sm text-default">Stripe: {{ customerPanel.customer.stripe_customer_id || 'None' }}</p>
+                <p class="mt-1 text-sm text-default">Source: {{ customerPanel.customer.source }}</p>
+              </UCard>
+              <UCard :ui="{ body: 'p-4 sm:p-4' }">
+                <p class="text-xs font-medium uppercase tracking-wide text-muted">Review requests</p>
+                <p class="mt-2 text-sm text-default">{{ customerPanel.reviewRequests.length }} total</p>
+                <p class="mt-1 text-sm text-default">{{ customerPanel.reviewRequests.filter(request => request.submitted_at).length }} submitted</p>
+              </UCard>
+              <UCard :ui="{ body: 'p-4 sm:p-4' }">
+                <p class="text-xs font-medium uppercase tracking-wide text-muted">Bookings</p>
+                <p class="mt-2 text-sm text-default">{{ customerPanel.reservations.length }} reservations</p>
+                <p class="mt-1 text-sm text-default">{{ customerPanel.experienceBookings.length }} experience bookings</p>
+              </UCard>
+              <UCard :ui="{ body: 'p-4 sm:p-4' }">
+                <p class="text-xs font-medium uppercase tracking-wide text-muted">Reviews</p>
+                <p class="mt-2 text-sm text-default">{{ customerPanel.reviews.length }} reviews</p>
+                <p class="mt-1 text-sm text-default">{{ customerPanel.reviews.filter(review => review.status === 'approved').length }} approved</p>
+              </UCard>
+            </div>
+          </div>
+        </template>
+      </UModal>
     </UPageBody>
   </UPage>
 </template>
@@ -109,6 +153,7 @@ definePageMeta({ layout: 'dashboard' })
 interface LocationRow {
   id: string
   title: string
+  slug?: string
 }
 
 interface ReviewRow {
@@ -122,7 +167,29 @@ interface ReviewRow {
   owner_reply: string | null
   status: string
   source: string
+  helpful_count: number | null
+  customer_id: string | null
+  booking_id: string | null
+  booking_type: string | null
+  review_request_id: string | null
   created_at: string
+}
+
+interface CustomerPanel {
+  customer: {
+    id: string
+    name: string | null
+    email: string | null
+    phone: string | null
+    source: string
+    user_id: string | null
+    stripe_customer_id: string | null
+    review_request_opted_out_at: string | null
+  }
+  reservations: ApiRecord[]
+  experienceBookings: ApiRecord[]
+  reviews: ApiRecord[]
+  reviewRequests: ApiRecord[]
 }
 
 const siteId = await useDashboardSiteId()
@@ -136,8 +203,11 @@ const selectedLocationId = ref('all')
 const statusFilter = ref('all')
 const replyOpen = ref(false)
 const reviewOpen = ref(false)
+const customerOpen = ref(false)
+const customerLoading = ref(false)
 const replyText = ref('')
 const activeReview = ref<ReviewRow | null>(null)
+const customerPanel = ref<CustomerPanel | null>(null)
 const editingReviewId = ref<string | null>(null)
 const reviewForm = reactive({
   location_id: '',
@@ -184,6 +254,12 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value))
 }
 
+function publicReviewUrl(review: ReviewRow) {
+  const location = locations.value.find(item => item.id === review.location_id)
+  const slug = (location as { slug?: string } | undefined)?.slug || ''
+  return slug ? `/locations/${slug}/reviews/${review.id}` : `/reviews`
+}
+
 async function loadReviews() {
   loading.value = true
   try {
@@ -210,6 +286,20 @@ function startReply(review: ReviewRow) {
   activeReview.value = review
   replyText.value = review.owner_reply ?? ''
   replyOpen.value = true
+}
+
+async function openCustomer(customerId: string) {
+  customerOpen.value = true
+  customerLoading.value = true
+  customerPanel.value = null
+  try {
+    customerPanel.value = await $fetch<CustomerPanel>(`/api/editor/sites/${siteId}/customers/${customerId}`)
+  } catch (error) {
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to load customer', color: 'error' })
+    customerOpen.value = false
+  } finally {
+    customerLoading.value = false
+  }
 }
 
 function resetReviewForm(locationId = selectedLocationId.value === 'all' ? locations.value[0]?.id ?? '' : selectedLocationId.value) {

@@ -250,7 +250,7 @@ import { PLATFORM_DOC_NAV_SECTION_LABELS } from '~/utils/platform-content-nav'
 import { parseOptionalNumber } from '~/utils/optional-number'
 
 interface DocComponent {
-  type: 'faq' | 'how_to'
+  type: 'faq' | 'how_to' | 'ai_assistance'
   label?: string | null
   status?: 'active' | 'inactive' | null
   render_enabled?: boolean | null
@@ -258,6 +258,7 @@ interface DocComponent {
   data?: {
     items?: Array<{ question?: string | null; answer?: string | null }>
     steps?: Array<{ name?: string | null; text?: string | null; image_asset_id?: string | null; url?: string | null }>
+    prompts?: Array<{ title?: string | null; prompt?: string | null; description?: string | null; copy_label?: string | null }>
   } | null
 }
 

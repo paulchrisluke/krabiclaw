@@ -17,6 +17,14 @@ export interface ContentHowToStep {
   position?: number | null
 }
 
+export interface ContentAiAssistancePrompt {
+  title?: string | null
+  prompt?: string | null
+  description?: string | null
+  copy_label?: string | null
+  position?: number | null
+}
+
 interface ContentComponentBase {
   type: ContentComponentType
   label?: string | null
@@ -43,7 +51,17 @@ export interface ContentHowToComponent extends ContentComponentBase {
   } | null
 }
 
-export type ContentComponent = ContentFaqComponent | ContentHowToComponent
+export interface ContentAiAssistanceComponent extends ContentComponentBase {
+  type: 'ai_assistance'
+  data?: {
+    intro?: string | null
+    collapsed?: boolean | null
+    max_visible_lines?: number | null
+    prompts?: ContentAiAssistancePrompt[] | null
+  } | null
+}
+
+export type ContentComponent = ContentFaqComponent | ContentHowToComponent | ContentAiAssistanceComponent
 
 export interface ContentFaqSectionProps {
   label?: string | null
@@ -68,13 +86,27 @@ export interface ContentHowToSectionProps {
   }>
 }
 
+export interface ContentAiAssistanceSectionProps {
+  label?: string | null
+  intro?: string | null
+  collapsed?: boolean | null
+  maxVisibleLines?: number | null
+  prompts: Array<{
+    title: string | null
+    prompt: string
+    description: string | null
+    copyLabel: string
+  }>
+}
+
 export type NormalizedContentComponent =
   | { type: 'faq'; position: number; props: ContentFaqSectionProps; source: ContentComponent }
   | { type: 'how_to'; position: number; props: ContentHowToSectionProps; source: ContentComponent }
+  | { type: 'ai_assistance'; position: number; props: ContentAiAssistanceSectionProps; source: ContentComponent }
 
 export type ContentBlock =
   | { kind: 'html'; html: string }
-  | { kind: 'component'; type: ContentComponentType; props: ContentFaqSectionProps | ContentHowToSectionProps; component: ContentComponent }
+  | { kind: 'component'; type: ContentComponentType; props: ContentFaqSectionProps | ContentHowToSectionProps | ContentAiAssistanceSectionProps; component: ContentComponent }
 
 const COMPONENT_EMBED_REGEX = /\{\{\s*component\s+type\s*=\s*(?:"([^"]+)"|'([^']+)'|([a-zA-Z0-9_-]+))\s*\}\}/g
 
@@ -106,6 +138,32 @@ export function normalizeContentComponent(
       props: {
         label: component.label,
         items,
+      },
+    }
+  }
+
+  if (component.type === 'ai_assistance') {
+    const prompts = sortByPosition(component.data?.prompts ?? [])
+      .filter(item => item.prompt?.trim())
+      .map(item => ({
+        title: item.title?.trim() || null,
+        prompt: item.prompt!.trim(),
+        description: item.description?.trim() || null,
+        copyLabel: item.copy_label?.trim() || 'Copy prompt',
+      }))
+
+    if (!prompts.length) return null
+
+    return {
+      type: 'ai_assistance',
+      position: component.position ?? 0,
+      source: component,
+      props: {
+        label: component.label || 'AI Assistance',
+        intro: component.data?.intro ?? null,
+        collapsed: component.data?.collapsed ?? null,
+        maxVisibleLines: component.data?.max_visible_lines ?? null,
+        prompts,
       },
     }
   }
@@ -149,6 +207,7 @@ export function buildContentBlocks(
   const componentQueues = {
     faq: normalized.filter(component => component.type === 'faq').sort((a, b) => a.position - b.position),
     how_to: normalized.filter(component => component.type === 'how_to').sort((a, b) => a.position - b.position),
+    ai_assistance: normalized.filter(component => component.type === 'ai_assistance').sort((a, b) => a.position - b.position),
   }
 
   const blocks: ContentBlock[] = []
@@ -164,7 +223,7 @@ export function buildContentBlocks(
     }
 
     const rawType = (match[1] ?? match[2] ?? match[3] ?? '').trim()
-    const type = rawType === 'faq' || rawType === 'how_to' ? rawType : null
+    const type = rawType === 'faq' || rawType === 'how_to' || rawType === 'ai_assistance' ? rawType : null
     if (type) {
       const nextComponent = componentQueues[type].shift()
       if (nextComponent) {

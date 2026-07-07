@@ -21,6 +21,7 @@ import type { CloudflareEnv } from "~/server/utils/auth";
 import { signOAuthState } from "~/server/utils/encryption";
 import { updateLocation } from "~/server/utils/location-management";
 import { execute, queryAll, queryFirst } from "~/server/db";
+import { revokeReviewRequestForBooking } from "~/server/utils/review-requests";
 import { fireSiteEventSafe } from "~/server/utils/site-events";
 
 export async function listSitesForUser(
@@ -428,7 +429,14 @@ export async function updateReservationSubmissionStatus(
     throw new Error("Invalid reservation submission status");
   }
 
-  const params = [status, submissionId, siteId]
+  const now = new Date().toISOString()
+  const params = [status, now]
+  const sets = [`status = ?`, `updated_at = ?`]
+  if (status === 'completed') {
+    sets.push(`completed_at = COALESCE(completed_at, ?)`, `completion_source = COALESCE(completion_source, 'manual')`)
+    params.push(now)
+  }
+  params.push(submissionId, siteId)
   let where = `id = ? AND site_id = ?`
   if (opts.locationId) {
     where += ` AND location_id = ?`
@@ -436,11 +444,14 @@ export async function updateReservationSubmissionStatus(
   }
   const result = await execute(db, `
     UPDATE reservation_submissions
-    SET status = ?
+    SET ${sets.join(', ')}
     WHERE ${where}
   `, params);
 
   if (!result.meta.changes) throw new Error("Reservation not found");
+  if (status === 'cancelled') {
+    await revokeReviewRequestForBooking(db, 'reservation', submissionId)
+  }
   return {
     updated: true,
     submission_id: submissionId,

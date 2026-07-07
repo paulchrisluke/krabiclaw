@@ -1,7 +1,8 @@
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { slugifyTitle } from '~/utils/post-slugs'
 import { PLATFORM_MEDIA_SITE_ID } from '~/server/utils/platform-media'
-import { BLOG_CATEGORY_LABELS } from '~/utils/blog-categories'
+import { BLOG_CATEGORY_LABELS, blogCategoryToSlug } from '~/utils/blog-categories'
+import { categoryToSlug } from '~/utils/docs-categories'
 
 const BLOG_TITLE_MAX = 200
 const BLOG_BODY_MAX = 100000
@@ -21,6 +22,12 @@ const FAQ_ANSWER_MAX = 1000
 const HOW_TO_MIN_STEPS = 2
 const HOW_TO_MAX_STEPS = 30
 const HOW_TO_ESTIMATED_TIME_MAX = 200
+const AI_ASSISTANCE_MAX_PROMPTS = 10
+const AI_ASSISTANCE_INTRO_MAX = 500
+const AI_ASSISTANCE_PROMPT_MAX = 8000
+const AI_ASSISTANCE_PROMPT_TITLE_MAX = 160
+const AI_ASSISTANCE_PROMPT_DESCRIPTION_MAX = 500
+const AI_ASSISTANCE_PROMPT_COPY_LABEL_MAX = 80
 const COMPONENT_LABEL_MAX = 200
 const MAX_SLUG_ATTEMPTS = 8
 
@@ -29,11 +36,11 @@ export const PLATFORM_BLOG_CATEGORIES = BLOG_CATEGORY_LABELS
 export const PLATFORM_DOC_DIFFICULTIES = ['Beginner', 'Intermediate', 'Advanced'] as const
 
 export type PlatformContentType = 'blog_post' | 'doc'
-export type PlatformContentComponentType = 'faq' | 'how_to'
+export type PlatformContentComponentType = 'faq' | 'how_to' | 'ai_assistance'
 export type PlatformContentComponentStatus = 'active' | 'inactive'
 export type PlatformRobotsDirective = 'index,follow' | 'noindex,follow' | 'index,nofollow' | 'noindex,nofollow'
 
-export const PLATFORM_CONTENT_COMPONENT_TYPES: readonly PlatformContentComponentType[] = ['faq', 'how_to']
+export const PLATFORM_CONTENT_COMPONENT_TYPES: readonly PlatformContentComponentType[] = ['faq', 'how_to', 'ai_assistance']
 export const PLATFORM_COMPONENT_STATUSES: readonly PlatformContentComponentStatus[] = ['active', 'inactive']
 export const PLATFORM_ROBOTS_DIRECTIVES: readonly PlatformRobotsDirective[] = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow']
 
@@ -78,6 +85,26 @@ export interface PlatformHowToComponentData {
   supply_items?: string[]
 }
 
+export interface PlatformAiAssistancePromptInput {
+  title?: string | null
+  prompt: string
+  description?: string | null
+  copy_label?: string | null
+  position?: number | null
+}
+
+export interface PlatformAiAssistanceComponentData {
+  intro?: string | null
+  collapsed?: boolean | null
+  max_visible_lines?: number | null
+  prompts: Array<Required<Pick<PlatformAiAssistancePromptInput, 'prompt'>> & {
+    title?: string | null
+    description?: string | null
+    copy_label?: string | null
+    position: number
+  }>
+}
+
 export interface PlatformContentComponent extends Required<Pick<PlatformComponentMetadataInput, 'position'>> {
   id: string
   content_type: PlatformContentType
@@ -87,7 +114,7 @@ export interface PlatformContentComponent extends Required<Pick<PlatformComponen
   status: PlatformContentComponentStatus
   render_enabled: boolean
   schema_enabled: boolean
-  data: PlatformFaqComponentData | PlatformHowToComponentData
+  data: PlatformFaqComponentData | PlatformHowToComponentData | PlatformAiAssistanceComponentData
   created_at: string
   updated_at: string
 }
@@ -213,7 +240,7 @@ interface PlatformMediaAssetRow {
 
 interface PlatformComponentReplacement extends PlatformComponentMetadataInput {
   type: PlatformContentComponentType
-  data: PlatformFaqComponentData | PlatformHowToComponentData
+  data: PlatformFaqComponentData | PlatformHowToComponentData | PlatformAiAssistanceComponentData
 }
 
 function badRequest(message: string): never {
@@ -493,9 +520,70 @@ function validateHowToComponent(value: unknown): PlatformHowToComponentData {
   }
 }
 
+function validateAiAssistanceComponent(value: unknown): PlatformAiAssistanceComponentData {
+  const record = asRecord(value, 'ai_assistance component data')
+  const rawPrompts = record.prompts
+  if (!Array.isArray(rawPrompts)) badRequest('ai_assistance component data.prompts must be an array')
+  if (rawPrompts.length === 0) badRequest('ai_assistance component must include at least one prompt')
+  if (rawPrompts.length > AI_ASSISTANCE_MAX_PROMPTS) {
+    badRequest(`ai_assistance component cannot exceed ${AI_ASSISTANCE_MAX_PROMPTS} prompts`)
+  }
+
+  const prompts = rawPrompts.map((prompt, index) => {
+    const entry = asRecord(prompt, `ai_assistance prompt ${index}`)
+    const promptText = asString(entry.prompt, `ai_assistance prompt ${index} prompt`).trim()
+    if (!promptText) badRequest(`ai_assistance prompt ${index}.prompt is required`)
+    assertStringLength(promptText, AI_ASSISTANCE_PROMPT_MAX, `ai_assistance prompt ${index}.prompt`)
+
+    const title = typeof entry.title === 'string' ? entry.title.trim() || null : null
+    const description = typeof entry.description === 'string' ? entry.description.trim() || null : null
+    const copyLabel = typeof entry.copy_label === 'string' ? entry.copy_label.trim() || null : null
+    assertStringLength(title, AI_ASSISTANCE_PROMPT_TITLE_MAX, `ai_assistance prompt ${index}.title`)
+    assertStringLength(description, AI_ASSISTANCE_PROMPT_DESCRIPTION_MAX, `ai_assistance prompt ${index}.description`)
+    assertStringLength(copyLabel, AI_ASSISTANCE_PROMPT_COPY_LABEL_MAX, `ai_assistance prompt ${index}.copy_label`)
+
+    return {
+      title,
+      prompt: promptText,
+      description,
+      copy_label: copyLabel,
+      position: typeof entry.position === 'number' ? entry.position : index,
+    }
+  })
+
+  const intro = typeof record.intro === 'string' ? record.intro.trim() || null : null
+  assertStringLength(intro, AI_ASSISTANCE_INTRO_MAX, 'ai_assistance intro')
+  const maxVisibleLines = typeof record.max_visible_lines === 'number'
+    ? Math.max(1, Math.min(12, Math.round(record.max_visible_lines)))
+    : null
+
+  return {
+    intro,
+    collapsed: typeof record.collapsed === 'boolean' ? record.collapsed : null,
+    max_visible_lines: maxVisibleLines,
+    prompts: sortByPosition(prompts),
+  }
+}
+
 function parsePlatformComponent(row: PlatformContentComponentRow): PlatformContentComponent {
-  const parsed = JSON.parse(row.data_json) as unknown
-  const data = row.type === 'faq' ? validateFaqComponent(parsed) : validateHowToComponent(parsed)
+  let data: PlatformFaqComponentData | PlatformHowToComponentData | PlatformAiAssistanceComponentData
+  let valid = true
+  try {
+    const parsed = JSON.parse(row.data_json) as unknown
+    data = row.type === 'faq'
+      ? validateFaqComponent(parsed)
+      : row.type === 'how_to'
+        ? validateHowToComponent(parsed)
+        : validateAiAssistanceComponent(parsed)
+  } catch (err) {
+    valid = false
+    console.error('Failed to parse platform content component:', { id: row.id, type: row.type, err })
+    data = row.type === 'faq'
+      ? { items: [] }
+      : row.type === 'how_to'
+        ? { steps: [] }
+        : { prompts: [] }
+  }
   return {
     id: row.id,
     content_type: row.content_type,
@@ -503,9 +591,9 @@ function parsePlatformComponent(row: PlatformContentComponentRow): PlatformConte
     type: row.type,
     position: row.position,
     label: row.label,
-    status: row.status,
-    render_enabled: Boolean(row.render_enabled),
-    schema_enabled: Boolean(row.schema_enabled),
+    status: valid ? row.status : 'inactive',
+    render_enabled: valid ? Boolean(row.render_enabled) : false,
+    schema_enabled: valid ? Boolean(row.schema_enabled) : false,
     data,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -518,7 +606,9 @@ function normalizeComponentMetadata(
   previous?: PlatformContentComponent | null,
 ): PlatformComponentMetadataInput {
   const fieldPrefix = `${type} component`
-  const label = metadata.label !== undefined ? (metadata.label?.trim() || null) : previous?.label
+  const label = metadata.label !== undefined
+    ? (metadata.label?.trim() || null)
+    : previous?.label ?? (type === 'ai_assistance' ? 'AI Assistance' : undefined)
   assertStringLength(label, COMPONENT_LABEL_MAX, `${fieldPrefix} label`)
 
   return {
@@ -527,7 +617,7 @@ function normalizeComponentMetadata(
       ? assertValidComponentStatus(metadata.status, `${fieldPrefix} status`)
       : previous?.status,
     render_enabled: metadata.render_enabled !== undefined ? metadata.render_enabled : previous?.render_enabled,
-    schema_enabled: metadata.schema_enabled !== undefined ? metadata.schema_enabled : previous?.schema_enabled,
+    schema_enabled: metadata.schema_enabled !== undefined ? metadata.schema_enabled : previous?.schema_enabled ?? (type === 'ai_assistance' ? false : undefined),
     position: metadata.position !== undefined ? metadata.position : previous?.position,
   }
 }
@@ -543,8 +633,10 @@ async function normalizeFullComponents(
 
   for (const [index, component] of components.entries()) {
     const type = assertValidComponentType(component.type)
-    if (seen.has(type)) badRequest(`components cannot include duplicate ${type} entries`)
-    seen.add(type)
+    if (type !== 'ai_assistance') {
+      if (seen.has(type)) badRequest(`components cannot include duplicate ${type} entries`)
+      seen.add(type)
+    }
 
     const metadata = normalizeComponentMetadata(type, component)
     const position = typeof metadata.position === 'number' ? metadata.position : index
@@ -555,10 +647,16 @@ async function normalizeFullComponents(
       continue
     }
 
-    const data = validateHowToComponent(component.data)
-    for (const [stepIndex, step] of data.steps.entries()) {
-      if (step.image_asset_id) await ensureMediaAssetExists(db, step.image_asset_id, `components[${index}].data.steps[${stepIndex}].image_asset_id`)
+    if (type === 'how_to') {
+      const data = validateHowToComponent(component.data)
+      for (const [stepIndex, step] of data.steps.entries()) {
+        if (step.image_asset_id) await ensureMediaAssetExists(db, step.image_asset_id, `components[${index}].data.steps[${stepIndex}].image_asset_id`)
+      }
+      normalized.push({ type, data, ...metadata, position })
+      continue
     }
+
+    const data = validateAiAssistanceComponent(component.data)
     normalized.push({ type, data, ...metadata, position })
   }
 
@@ -635,6 +733,7 @@ async function syncStructuredContent(
 
   const existingFaq = byType.get('faq') ?? null
   const existingHowTo = byType.get('how_to') ?? null
+  const existingAiAssistance = existing.filter(component => component.type === 'ai_assistance')
 
   if (faqTouched) {
     if (input.faq_items !== undefined && input.faq_items.length === 0) {
@@ -712,6 +811,14 @@ async function syncStructuredContent(
     })
   }
 
+  for (const component of existingAiAssistance) {
+    replacements.push({
+      type: 'ai_assistance',
+      data: component.data as PlatformAiAssistanceComponentData,
+      ...normalizeComponentMetadata('ai_assistance', {}, component),
+    })
+  }
+
   await replaceContentComponents(db, contentType, contentId, replacements)
 }
 
@@ -783,6 +890,26 @@ export function attachFeaturedImageFromBareJoin(record: ApiRecord) {
       width: width ?? null,
       height: height ?? null,
     },
+  }
+}
+
+function contentReviewUrls(record: ApiRecord, kind: 'blog' | 'doc') {
+  const id = String(record.id ?? '')
+  const adminEditUrl = kind === 'blog' ? `/admin/blog/${id}` : `/admin/docs/${id}`
+  const isPublished = record.status === 'published' || Boolean(record.published_at)
+  const category = typeof record.category === 'string' ? record.category : null
+  const slug = typeof record.slug === 'string' ? record.slug : null
+  const categorySlug = kind === 'blog' ? blogCategoryToSlug(category) : categoryToSlug(category)
+  const publicPath = isPublished && categorySlug && slug
+    ? (kind === 'blog' ? `/blog/${categorySlug}/${slug}` : `/docs/${categorySlug}/${slug}`)
+    : null
+
+  return {
+    ...record,
+    admin_edit_url: adminEditUrl,
+    public_path: publicPath,
+    public_url: publicPath,
+    preview_url: null,
   }
 }
 
@@ -1046,7 +1173,7 @@ export async function listPlatformBlogPosts(db: DbClient, status?: string | null
   else if (status === 'draft') sql += " AND p.status = 'draft'"
   sql += ' ORDER BY COALESCE(p.featured_order, 999999), COALESCE(p.nav_section_order, 999999), COALESCE(p.nav_section, p.category), COALESCE(p.nav_order, 999999), p.created_at DESC'
   const results = await queryAll<ApiRecord>(db, sql, params)
-  return (results ?? []).map(record => attachFeaturedImage(attachPublished(record, Boolean(record.published_at))))
+  return (results ?? []).map(record => contentReviewUrls(attachFeaturedImage(attachPublished(record, Boolean(record.published_at))), 'blog'))
 }
 
 export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, siteId: string | null = null) {
@@ -1066,7 +1193,7 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
   )
   if (!post) notFound('Post not found')
   const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'blog_post', postId))
-  return attachComponents(attachFeaturedImage(attachPublished(post, Boolean(post.published_at))), components)
+  return attachComponents(contentReviewUrls(attachFeaturedImage(attachPublished(post, Boolean(post.published_at))), 'blog'), components)
 }
 
 export async function createPlatformBlogPost(
@@ -1133,7 +1260,17 @@ export async function createPlatformBlogPost(
         throw err
       }
       const post = await getPlatformBlogPost(db, id, siteId)
-      return { success: true, id, slug, published_at: publishedAt, post }
+      return {
+        success: true,
+        id,
+        slug,
+        published_at: publishedAt,
+        admin_edit_url: post.admin_edit_url,
+        public_path: post.public_path,
+        public_url: post.public_url,
+        preview_url: post.preview_url,
+        post,
+      }
     } catch (err) {
       if (isUniqueConstraintError(err, 'blog_posts') && attempt < MAX_SLUG_ATTEMPTS - 1) continue
       throw err
@@ -1258,7 +1395,14 @@ export async function updatePlatformBlogPost(
       throw err
     }
     const updatedPost = await getPlatformBlogPost(db, postId, siteId)
-    return { success: true, post: updatedPost }
+    return {
+      success: true,
+      admin_edit_url: updatedPost.admin_edit_url,
+      public_path: updatedPost.public_path,
+      public_url: updatedPost.public_url,
+      preview_url: updatedPost.preview_url,
+      post: updatedPost,
+    }
   } catch (err) {
     if (isUniqueConstraintError(err, 'blog_posts')) badRequest('Slug already in use')
     throw err
@@ -1335,7 +1479,7 @@ export async function listPlatformDocs(db: DbClient, status?: string | null) {
   else if (status === 'draft') sql += " WHERE d.status = 'draft'"
   sql += ' ORDER BY COALESCE(d.featured_order, 999999), COALESCE(d.nav_section_order, 999999), COALESCE(d.nav_section, d.category), COALESCE(d.nav_order, d.sort_order, 999999), d.created_at DESC'
   const results = await queryAll<ApiRecord>(db, sql)
-  return (results ?? []).map(record => attachFeaturedImage(attachPublished(record, record.status === 'published')))
+  return (results ?? []).map(record => contentReviewUrls(attachFeaturedImage(attachPublished(record, record.status === 'published')), 'doc'))
 }
 
 export async function getPlatformDoc(db: DbClient, docIdOrSlug: string) {
@@ -1356,7 +1500,7 @@ export async function getPlatformDoc(db: DbClient, docIdOrSlug: string) {
   )
   if (!doc) notFound('Doc not found')
   const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'doc', docId))
-  return attachComponents(attachFeaturedImage(attachPublished(doc, doc.status === 'published')), components)
+  return attachComponents(contentReviewUrls(attachFeaturedImage(attachPublished(doc, doc.status === 'published')), 'doc'), components)
 }
 
 export async function createPlatformDoc(
@@ -1416,7 +1560,18 @@ export async function createPlatformDoc(
       }
 
       const doc = await getPlatformDoc(db, id)
-      return { success: true, id, slug, status, published_at: publishedAt, doc }
+      return {
+        success: true,
+        id,
+        slug,
+        status,
+        published_at: publishedAt,
+        admin_edit_url: doc.admin_edit_url,
+        public_path: doc.public_path,
+        public_url: doc.public_url,
+        preview_url: doc.preview_url,
+        doc,
+      }
     } catch (err) {
       if (isUniqueConstraintError(err, 'platform_docs') && attempt < MAX_SLUG_ATTEMPTS - 1) continue
       throw err
@@ -1524,7 +1679,15 @@ export async function updatePlatformDoc(
     if (!doc) notFound('Doc not found')
 
     await syncStructuredContent(db, 'doc', docId, input)
-    return { success: true, doc: await getPlatformDoc(db, docId) }
+    const updatedDoc = await getPlatformDoc(db, docId)
+    return {
+      success: true,
+      admin_edit_url: updatedDoc.admin_edit_url,
+      public_path: updatedDoc.public_path,
+      public_url: updatedDoc.public_url,
+      preview_url: updatedDoc.preview_url,
+      doc: updatedDoc,
+    }
   } catch (err) {
     if (isUniqueConstraintError(err, 'platform_docs')) badRequest('Slug already in use')
     throw err
