@@ -190,14 +190,15 @@ SET
 		WHERE sm.thread_id = guest_threads.id AND sm.direction = 'out'
 		ORDER BY sm.created_at DESC LIMIT 1
 	),
-	unread_count = CASE
-		WHEN (
-			SELECT sm.direction FROM submission_messages sm
-			WHERE sm.thread_id = guest_threads.id
-			ORDER BY sm.created_at DESC LIMIT 1
-		) = 'in' THEN 1
-		ELSE 0
-	END,
+	unread_count = (
+		SELECT COUNT(*) FROM submission_messages sm
+		WHERE sm.thread_id = guest_threads.id
+		  AND sm.direction = 'in'
+		  AND sm.created_at > COALESCE((
+			SELECT MAX(sm2.created_at) FROM submission_messages sm2
+			WHERE sm2.thread_id = guest_threads.id AND sm2.direction = 'out'
+		  ), '')
+	),
 	inbox_status = CASE
 		WHEN (
 			SELECT sm.direction FROM submission_messages sm

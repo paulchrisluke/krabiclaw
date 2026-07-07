@@ -9,6 +9,7 @@
     :show-default-empty-icon="false"
     :empty-title="emptyTitle"
     :empty-description="emptyDescription"
+    :cancelable="false"
     submit-label="Send reply"
     @submit="$emit('submit')"
   >
@@ -34,8 +35,8 @@
 
           <div class="min-w-0 space-y-1">
             <div class="flex flex-wrap items-center gap-2 text-[11px] text-muted" :class="message.role === 'owner' ? 'justify-end' : ''">
-              <span class="font-semibold text-highlighted">{{ message.role === 'owner' ? 'Owner' : 'Guest' }}</span>
-              <span>{{ message.channel === 'email' ? 'Email' : message.channel === 'whatsapp' ? 'WhatsApp' : 'System' }}</span>
+              <span class="font-semibold text-highlighted">{{ roleLabel(message.role) }}</span>
+              <span>{{ channelLabel(message.channel) }}</span>
               <span>{{ formatTimestamp(message.createdAt) }}</span>
             </div>
             <div
@@ -91,6 +92,19 @@ withDefaults(defineProps<{
 defineEmits<{
   submit: []
 }>()
+
+function roleLabel(role: GuestThreadTimelineMessage['role']) {
+  if (role === 'owner') return 'Owner'
+  if (role === 'guest') return 'Guest'
+  return 'System'
+}
+
+function channelLabel(channel: GuestThreadTimelineMessage['channel']) {
+  if (channel === 'email') return 'Email'
+  if (channel === 'whatsapp') return 'WhatsApp'
+  if (channel === 'web') return 'Website'
+  return 'System'
+}
 
 function formatTimestamp(value: string) {
   return new Intl.DateTimeFormat(undefined, {

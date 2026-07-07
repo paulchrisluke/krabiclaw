@@ -238,10 +238,16 @@ export async function ensureGuestThread(
       now,
       now,
     ])
-  } catch {
-    const concurrent = await getGuestThreadBySubmission(db, submissionType, submissionId)
-    if (concurrent) return concurrent
-    throw new Error('Failed to create guest thread')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    // Only the expected concurrent-insert race (unique submission_type+submission_id)
+    // should fall back to the now-existing row — anything else (FK violation, connectivity)
+    // should surface as a real failure instead of being silently swallowed.
+    if (/UNIQUE constraint failed/i.test(message)) {
+      const concurrent = await getGuestThreadBySubmission(db, submissionType, submissionId)
+      if (concurrent) return concurrent
+    }
+    throw error instanceof Error ? error : new Error(message)
   }
 
   const created = await getGuestThreadById(db, id)
@@ -274,12 +280,15 @@ export async function syncGuestThreadAfterMessage(
 ): Promise<void> {
   const at = opts.createdAt ?? new Date().toISOString()
   const preview = normalizePreview(opts.body)
+  // An owner reply implies the owner has seen the thread, so clear unread_count too.
   const fields = opts.direction === 'in'
     ? ['last_inbound_at = ?', 'unread_count = unread_count + ?']
-    : ['last_outbound_at = ?']
+    : ['last_outbound_at = ?', 'unread_count = 0']
   const params: Array<string | number | null> = [at]
   if (opts.direction === 'in') params.push(opts.incrementUnread === false ? 0 : 1)
 
+  // Guard against out-of-order writes (e.g. a delayed webhook retry) clobbering summary
+  // fields with stale data — only apply this update if it's not older than what's stored.
   await execute(db, `
     UPDATE guest_threads
     SET
@@ -289,6 +298,7 @@ export async function syncGuestThreadAfterMessage(
       last_message_preview = ?,
       updated_at = ?
     WHERE id = ?
+      AND (last_message_at IS NULL OR last_message_at <= ?)
   `, [
     ...params,
     inferInboxStatusFromMessage(opts.direction),
@@ -296,6 +306,7 @@ export async function syncGuestThreadAfterMessage(
     preview,
     at,
     opts.threadId,
+    at,
   ])
 }
 

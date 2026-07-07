@@ -584,6 +584,12 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;')
 }
 
+// Email subjects go into a header context, not HTML — strip CR/LF so a guest name can't
+// inject additional headers, independent of the HTML-body escaping used elsewhere.
+function sanitizeEmailHeaderValue(value: string): string {
+  return value.replace(/[\r\n]+/g, ' ').trim()
+}
+
 function buildGuestReplyOwnerEmail(opts: {
   guestName: string
   inboundChannel: 'email' | 'whatsapp'
@@ -598,7 +604,7 @@ function buildGuestReplyOwnerEmail(opts: {
     : ''
 
   return {
-    subject: `New guest reply from ${opts.guestName}`,
+    subject: `New guest reply from ${sanitizeEmailHeaderValue(opts.guestName)}`,
     html: `
       <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;">
         <p style="margin:0 0 12px;">${escapedGuestName} sent a new reply by ${sourceLabel}.</p>
@@ -1369,6 +1375,23 @@ export async function notifyExperienceBookingCancelled(
 }
 
 export async function notifyGuestThreadReply(
+  env: NotificationEnv,
+  db: DbClient,
+  opts: GuestThreadReplyNotificationInput,
+) {
+  try {
+    await notifyGuestThreadReplyInner(env, db, opts)
+  } catch (error) {
+    console.error('notifyGuestThreadReply_failed', {
+      threadId: opts.threadId,
+      submissionType: opts.submissionType,
+      submissionId: opts.submissionId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+async function notifyGuestThreadReplyInner(
   env: NotificationEnv,
   db: DbClient,
   opts: GuestThreadReplyNotificationInput,

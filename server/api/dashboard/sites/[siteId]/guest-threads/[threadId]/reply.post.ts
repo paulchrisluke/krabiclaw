@@ -10,9 +10,9 @@ export default defineEventHandler(async (event) => {
   if (!siteId || !threadId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
   const { env, db, session, site } = await requireSiteAccess(event, siteId, ['owner', 'admin'])
-  const body = await readBody(event) as { channel?: unknown; body?: unknown }
-  const channel = body.channel
-  const replyBody = typeof body.body === 'string' ? body.body.trim() : ''
+  const body = (await readBody(event).catch(() => null)) as { channel?: unknown; body?: unknown } | null
+  const channel = body?.channel
+  const replyBody = typeof body?.body === 'string' ? body.body.trim() : ''
   if (channel !== 'email') {
     return jsonResponse({ error: 'Guest thread replies are email-only in v1' }, { status: 400 })
   }
@@ -24,6 +24,19 @@ export default defineEventHandler(async (event) => {
   if (!detail) return jsonResponse({ error: 'Thread not found' }, { status: 404 })
   if (!detail.source.guest_email) {
     return jsonResponse({ error: 'This guest has no email on file' }, { status: 400 })
+  }
+
+  // Guards against duplicate sends when a client retries after a network error or a
+  // 207 (email sent, DB write failed) response — same thread + identical body within a
+  // short window is treated as the same submission rather than sent again.
+  const dedupeWindowStart = new Date(Date.now() - 30_000).toISOString()
+  const recentDuplicate = await queryFirst<{ id: string }>(db, `
+    SELECT id FROM submission_messages
+    WHERE thread_id = ? AND direction = 'out' AND body = ? AND created_at > ?
+    ORDER BY created_at DESC LIMIT 1
+  `, [detail.thread.id, replyBody, dedupeWindowStart])
+  if (recentDuplicate) {
+    return jsonResponse({ sent: true, persisted: true, duplicate: true })
   }
 
   const siteRow = await queryFirst<{ brand_name: string | null }>(db, `SELECT brand_name FROM sites WHERE id = ? LIMIT 1`, [siteId])

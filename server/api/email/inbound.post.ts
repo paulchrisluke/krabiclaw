@@ -58,21 +58,29 @@ export default defineEventHandler(async (event) => {
     from,
   })
 
-  const thread = await ensureGuestThread(db, parsed.submissionType, parsed.submissionId)
-  const source = await getGuestThreadSource(db, parsed.submissionType, parsed.submissionId)
-  if (source) {
-    await notifyGuestThreadReply(env, db, {
-      organizationId: orgSite.organizationId,
-      siteId: orgSite.siteId,
-      locationId: source.location_id,
-      threadId: thread.id,
+  try {
+    const thread = await ensureGuestThread(db, parsed.submissionType, parsed.submissionId)
+    const source = await getGuestThreadSource(db, parsed.submissionType, parsed.submissionId)
+    if (source) {
+      await notifyGuestThreadReply(env, db, {
+        organizationId: orgSite.organizationId,
+        siteId: orgSite.siteId,
+        locationId: source.location_id,
+        threadId: thread.id,
+        submissionType: parsed.submissionType,
+        submissionId: parsed.submissionId,
+        guestName: source.guest_name,
+        guestEmail: source.guest_email,
+        guestPhone: source.guest_phone,
+        inboundChannel: 'email',
+        messagePreview: text,
+      })
+    }
+  } catch (err) {
+    console.error('[email-inbound] Failed to notify owner of guest reply:', {
       submissionType: parsed.submissionType,
       submissionId: parsed.submissionId,
-      guestName: source.guest_name,
-      guestEmail: source.guest_email,
-      guestPhone: source.guest_phone,
-      inboundChannel: 'email',
-      messagePreview: text,
+      error: err instanceof Error ? err.message : String(err),
     })
   }
 

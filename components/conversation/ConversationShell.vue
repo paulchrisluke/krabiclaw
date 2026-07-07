@@ -112,13 +112,14 @@
         <template #trailing>
           <slot name="prompt-trailing">
             <UChatPromptSubmit
-              :status="loading ? 'streaming' : 'ready'"
+              :status="cancelable && loading ? 'streaming' : 'ready'"
+              :loading="!cancelable && loading"
               color="primary"
               variant="solid"
               size="xs"
               :aria-label="submitLabel"
               :title="submitLabel"
-              :disabled="!loading && !input.trim()"
+              :disabled="disabled || (loading ? !cancelable : !input.trim())"
               @stop="$emit('stop')"
             />
           </slot>
@@ -158,6 +159,10 @@ withDefaults(defineProps<{
   toolLabel?: (_name: string) => string
   quickReplies?: ConversationQuickReplyOption[]
   submitLabel?: string
+  // Whether `loading` represents a cancelable stream (shows a stop button the parent
+  // must handle via @stop). Set to false for non-streaming submits (e.g. a plain save
+  // request) so the submit button just shows a loading spinner instead of a dead stop control.
+  cancelable?: boolean
 }>(), {
   loading: false,
   disabled: false,
@@ -173,6 +178,7 @@ withDefaults(defineProps<{
   submitLabel: 'Send message',
   renderMarkdown: (text: string) => text,
   toolLabel: (name: string) => name,
+  cancelable: true,
 })
 
 defineEmits<{

@@ -51,7 +51,14 @@ export default defineEventHandler(async (event) => {
     })),
   ]
 
-  await markGuestThreadSeen(db, threadId)
+  try {
+    await markGuestThreadSeen(db, threadId)
+  } catch (error) {
+    console.error('mark_guest_thread_seen_failed', {
+      threadId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 
   return jsonResponse({
     thread: {
