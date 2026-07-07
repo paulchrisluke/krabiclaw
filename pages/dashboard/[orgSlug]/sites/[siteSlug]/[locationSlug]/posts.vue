@@ -116,9 +116,13 @@
           <PostEditor
             v-model:title="editForm.title"
             v-model:body="editForm.body"
+            v-model:slug="editForm.slug"
+            v-model:seo-title="editForm.seo_title"
+            v-model:seo-description="editForm.seo_description"
             v-model:image-asset-id="editForm.image_asset_id"
             v-model:image-preview-url="editForm.imagePreviewUrl"
             v-model:image-kind="editForm.imageKind"
+            v-model:gallery-media="editForm.gallery_media"
             v-model:selected-channels="selectedChannels"
             v-model:location-id="editForm.location_id"
             :eyebrow="composing ? 'New post' : 'Site post'"
@@ -141,6 +145,28 @@
             @delete="handleDelete"
             @close="closeEditor"
           />
+          <div v-if="selectedPost?.public_path || selectedPost?.canonical_url" class="flex flex-wrap items-center gap-2">
+            <UButton
+              v-if="selectedPost?.public_path"
+              :to="String(selectedPost.public_path)"
+              target="_blank"
+              size="sm"
+              color="neutral"
+              variant="soft"
+              icon="i-lucide-external-link"
+            >
+              View public post
+            </UButton>
+            <UButton
+              size="sm"
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-copy"
+              @click="copyPublicLink"
+            >
+              Copy public link
+            </UButton>
+          </div>
         </div>
 
         <!-- Right: empty state -->
@@ -192,7 +218,7 @@ const loadPosts = async () => {
     const query: Record<string, string> = {}
     if (activeTab.value !== 'all') query.status = activeTab.value
     if (selectedLocationId.value !== 'all') query.location_id = selectedLocationId.value
-    const res = await $fetch<{ posts: ApiRecord[] }>(`/api/dashboard/editor/posts`, { query })
+    const res = await $fetch<{ posts: ApiRecord[] }>(`/api/editor/sites/${siteId}/posts`, { query })
     posts.value = res.posts ?? []
   } catch { toast.add({ description: 'Failed to load posts', color: 'error' }) } finally { loading.value = false }
 }
@@ -231,7 +257,28 @@ onMounted(async () => {
 // Selection / compose
 const selectedPost = ref<ApiRecord | null>(null)
 const composing = ref(false)
-const editForm = reactive({ title: '', body: '', image_asset_id: '' as string | null, imagePreviewUrl: '' as string | null, imageKind: 'image' as string | null, location_id: '' })
+interface GalleryFormItem {
+  media_asset_id: string
+  caption: string
+  alt_text: string
+  public_url?: string | null
+  thumbnail_url?: string | null
+  kind?: string | null
+  role?: string | null
+}
+
+const editForm = reactive({
+  title: '',
+  body: '',
+  slug: '',
+  seo_title: '',
+  seo_description: '',
+  image_asset_id: '' as string | null,
+  imagePreviewUrl: '' as string | null,
+  imageKind: 'image' as string | null,
+  gallery_media: [] as GalleryFormItem[],
+  location_id: ''
+})
 const selectedChannels = ref<string[]>(['site'])
 
 const facebookConnected = ref(false)
@@ -248,9 +295,13 @@ const openCompose = () => {
   composing.value = true
   editForm.title = ''
   editForm.body = ''
+  editForm.slug = ''
+  editForm.seo_title = ''
+  editForm.seo_description = ''
   editForm.image_asset_id = null
   editForm.imagePreviewUrl = null
   editForm.imageKind = 'image'
+  editForm.gallery_media = []
   editForm.location_id = selectedLocationId.value !== 'all' ? selectedLocationId.value : ''
   selectedChannels.value = ['site']
 }
@@ -260,9 +311,13 @@ const closeEditor = () => {
   composing.value = false
   editForm.title = ''
   editForm.body = ''
+  editForm.slug = ''
+  editForm.seo_title = ''
+  editForm.seo_description = ''
   editForm.image_asset_id = null
   editForm.imagePreviewUrl = null
   editForm.imageKind = 'image'
+  editForm.gallery_media = []
   editForm.location_id = ''
   selectedChannels.value = []
 }
@@ -272,9 +327,13 @@ const selectPost = (post: ApiRecord) => {
   selectedPost.value = post
   editForm.title = post.title ?? ''
   editForm.body = post.body ?? ''
+  editForm.slug = post.slug ?? ''
+  editForm.seo_title = post.seo_title ?? ''
+  editForm.seo_description = post.seo_description ?? ''
   editForm.image_asset_id = post.image_asset_id ?? null
   editForm.imagePreviewUrl = post.public_url ?? null
   editForm.imageKind = post.kind ?? 'image'
+  editForm.gallery_media = normalizeGalleryForForm(post.gallery_media ?? post.gallery ?? [])
   editForm.location_id = post.location_id ?? ''
   selectedChannels.value = ['site']
 }
@@ -283,18 +342,62 @@ const selectPost = (post: ApiRecord) => {
 const saving = ref(false)
 const publishing = ref(false)
 
+function normalizeGalleryForForm(items: unknown): GalleryFormItem[] {
+  if (!Array.isArray(items)) return []
+  const gallery: GalleryFormItem[] = []
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue
+    const record = item as Record<string, unknown>
+    if (record.role === 'cover') continue
+    const mediaAssetId = typeof record.mediaAssetId === 'string'
+      ? record.mediaAssetId
+      : typeof record.media_asset_id === 'string'
+        ? record.media_asset_id
+        : ''
+    if (!mediaAssetId) continue
+    gallery.push({
+      media_asset_id: mediaAssetId,
+      caption: typeof record.caption === 'string' ? record.caption : '',
+      alt_text: typeof record.altText === 'string' ? record.altText : typeof record.alt_text === 'string' ? record.alt_text : '',
+      public_url: typeof record.url === 'string' ? record.url : typeof record.public_url === 'string' ? record.public_url : null,
+      thumbnail_url: typeof record.thumbnailUrl === 'string' ? record.thumbnailUrl : typeof record.thumbnail_url === 'string' ? record.thumbnail_url : null,
+      kind: typeof record.kind === 'string' ? record.kind : null,
+    })
+  }
+  return gallery
+}
+
+function buildPostPayload(postId?: string) {
+  return {
+    title: editForm.title,
+    body: editForm.body,
+    slug: editForm.slug || undefined,
+    seo_title: editForm.seo_title || null,
+    seo_description: editForm.seo_description || null,
+    image_asset_id: editForm.image_asset_id,
+    location_id: editForm.location_id || (postId ? null : undefined),
+    gallery_media: editForm.gallery_media.map((item, index) => ({
+      media_asset_id: item.media_asset_id,
+      role: 'gallery',
+      sort_order: index,
+      caption: item.caption || null,
+      alt_text: item.alt_text || null,
+    })),
+  }
+}
+
 const handleSave = async () => {
   if (!editForm.body.trim()) return
   saving.value = true
   try {
     if (selectedPost.value) {
-      const res = await $fetch<ApiRecord>(`/api/dashboard/editor/posts/${selectedPost.value.id}`, {
-        method: 'PATCH', body: { title: editForm.title, body: editForm.body, image_asset_id: editForm.image_asset_id, location_id: editForm.location_id || null },
+      const res = await $fetch<ApiRecord>(`/api/editor/sites/${siteId}/posts/${selectedPost.value.id}`, {
+        method: 'PATCH', body: buildPostPayload(String(selectedPost.value.id)),
       })
       selectedPost.value = res.post
     } else {
-      const res = await $fetch<ApiRecord>(`/api/dashboard/editor/posts`, {
-        method: 'POST', body: { title: editForm.title, body: editForm.body, image_asset_id: editForm.image_asset_id, location_id: editForm.location_id || undefined },
+      const res = await $fetch<ApiRecord>(`/api/editor/sites/${siteId}/posts`, {
+        method: 'POST', body: buildPostPayload(),
       })
       selectedPost.value = res.post
       composing.value = false
@@ -311,14 +414,14 @@ const handlePublish = async () => {
   try {
     // Save any edits first
     let postId = selectedPost.value?.id
-    if (!postId || editForm.body !== selectedPost.value?.body || editForm.title !== (selectedPost.value?.title ?? '') || editForm.image_asset_id !== selectedPost.value?.image_asset_id || editForm.location_id !== (selectedPost.value?.location_id ?? '')) {
+    if (!postId || selectedPost.value) {
       const method = postId ? 'PATCH' : 'POST'
-      const url = postId ? `/api/dashboard/editor/posts/${postId}` : `/api/dashboard/editor/posts`
-      const res = await $fetch<ApiRecord>(url, { method, body: { title: editForm.title, body: editForm.body, image_asset_id: editForm.image_asset_id, location_id: editForm.location_id || (postId ? null : undefined) } })
+      const url = postId ? `/api/editor/sites/${siteId}/posts/${postId}` : `/api/editor/sites/${siteId}/posts`
+      const res = await $fetch<ApiRecord>(url, { method, body: buildPostPayload(postId ? String(postId) : undefined) })
       postId = res.post.id
       selectedPost.value = res.post
     }
-    const res = await $fetch<ApiRecord>(`/api/dashboard/editor/posts/${postId}/publish`, {
+    const res = await $fetch<ApiRecord>(`/api/editor/sites/${siteId}/posts/${postId}/publish`, {
       method: 'POST', body: { channels: selectedChannels.value },
     })
     selectedPost.value = res.post
@@ -338,11 +441,19 @@ const handlePublish = async () => {
 const handleDelete = async () => {
   if (!selectedPost.value) return
   try {
-    await $fetch(`/api/dashboard/editor/posts/${selectedPost.value.id}`, { method: 'DELETE' })
+    await $fetch(`/api/editor/sites/${siteId}/posts/${selectedPost.value.id}`, { method: 'DELETE' })
     selectedPost.value = null
     toast.add({ description: 'Post deleted', color: 'neutral' })
     await loadPosts()
   } catch { toast.add({ description: 'Failed to delete', color: 'error' }) }
+}
+
+async function copyPublicLink() {
+  const path = selectedPost.value?.canonical_url || selectedPost.value?.public_path
+  if (!path || !import.meta.client) return
+  const url = String(path).startsWith('http') ? String(path) : new URL(String(path), window.location.origin).toString()
+  await navigator.clipboard?.writeText(url)
+  toast.add({ description: 'Public link copied', color: 'success' })
 }
 
 // AI composer

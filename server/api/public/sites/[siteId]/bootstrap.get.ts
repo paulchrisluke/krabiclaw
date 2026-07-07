@@ -36,6 +36,7 @@ import {
 import { getCloudflareWaitUntil } from "~/server/utils/mcp-route-helpers";
 import { isPreviewContext } from "~/server/utils/tenant-hosts";
 import { getOwnerEmail } from "~/server/utils/notifications";
+import { getPublishedPosts } from "~/server/utils/post-management";
 
 function groupContentBlocks(rows: SiteContent[]): Array<SiteContent & { _section: string }> {
   const groups: Record<string, SiteContent & { _section: string }> = {}
@@ -726,6 +727,8 @@ export default defineEventHandler(async (event) => {
     idxLocPosts >= 0
       ? (batchResults[idxLocPosts] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
+  void postRows;
+  void locPostRows;
   const localeRows = batchResults[idxLocale] as {
     results: {
       locale: string;
@@ -925,6 +928,12 @@ export default defineEventHandler(async (event) => {
   const fallbackEmail =
     site.contact_email ??
     (anyLocationMissingEmail ? await getOwnerEmail(db, site.organization_id) : null);
+  const globalPublishedPosts = needsGlobalPosts
+    ? await getPublishedPosts(db, siteId, page === "posts" ? 50 : 6)
+    : [];
+  const locationPublishedPosts = locationId && dataType === "posts"
+    ? await getPublishedPosts(db, siteId, 50, locationId)
+    : [];
 
   // Shape locations
   const locations = (locRows.results ?? []).map((loc) => {
@@ -1015,13 +1024,7 @@ export default defineEventHandler(async (event) => {
       : null,
     reviews: reviewRows.results ?? [],
     media: [],
-    posts: (postRows.results ?? []).map((p) => ({
-      name: `posts/${p.id}`,
-      summary: p.body,
-      title: p.title ?? "",
-      createTime: p.published_at ?? "",
-      media: p.public_url ? [{ googleUrl: p.public_url, mediaFormat: p.kind === "video" ? "VIDEO" : "IMAGE" }] : [],
-    })),
+    posts: globalPublishedPosts,
     syncedAt: primary?.last_synced_at ?? null,
   };
 
@@ -1182,13 +1185,7 @@ export default defineEventHandler(async (event) => {
     // Type G — posts for /locations/[slug]/posts
     ...(dataType === "posts"
       ? {
-          postsList: (locPostRows?.results ?? []).map((p) => ({
-            name: `posts/${p.id}`,
-            summary: p.body,
-            title: p.title ?? "",
-            createTime: p.published_at ?? p.created_at ?? "",
-            media: p.public_url ? [{ googleUrl: p.public_url, mediaFormat: p.kind === "video" ? "VIDEO" : "IMAGE" }] : [],
-          })),
+          postsList: locationPublishedPosts,
         }
       : {}),
     // Site locales + experiences — always included for header/nav

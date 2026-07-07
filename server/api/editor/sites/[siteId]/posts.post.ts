@@ -1,6 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { createPost } from '~/server/utils/post-management'
+import { createPost, PostValidationError } from '~/server/utils/post-management'
 import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -47,21 +47,34 @@ export default defineEventHandler(async (event) => {
     if (asset.organization_id !== site.organization_id) return jsonResponse({ error: 'Forbidden image asset' }, { status: 403 })
   }
 
-  const post = await createPost(db, site.organization_id, siteId, {
-    title: body.title?.trim() || undefined,
-    body: body.body.trim(),
-    image_asset_id: imageAssetId || undefined,
-    scheduled_for: body.scheduled_for || undefined,
-    location_id: body.location_id || undefined,
-    post_type: body.post_type || undefined,
-    cta_type: body.cta_type || undefined,
-    cta_url: body.cta_url || undefined,
-    event_title: body.event_title || undefined,
-    event_start: body.event_start || undefined,
-    event_end: body.event_end || undefined,
-    offer_coupon: body.offer_coupon || undefined,
-    offer_terms: body.offer_terms || undefined,
-  }, session.user.id)
+  let post
+  try {
+    post = await createPost(db, site.organization_id, siteId, {
+      title: body.title?.trim() || undefined,
+      body: body.body.trim(),
+      image_asset_id: imageAssetId || undefined,
+      slug: body.slug || undefined,
+      seo_title: body.seo_title || undefined,
+      seo_description: body.seo_description || undefined,
+      og_image_asset_id: body.og_image_asset_id || undefined,
+      gallery_media: body.gallery_media,
+      scheduled_for: body.scheduled_for || undefined,
+      location_id: body.location_id || undefined,
+      post_type: body.post_type || undefined,
+      cta_type: body.cta_type || undefined,
+      cta_url: body.cta_url || undefined,
+      event_title: body.event_title || undefined,
+      event_start: body.event_start || undefined,
+      event_end: body.event_end || undefined,
+      offer_coupon: body.offer_coupon || undefined,
+      offer_terms: body.offer_terms || undefined,
+    }, session.user.id)
+  } catch (error) {
+    if (error instanceof PostValidationError) {
+      return jsonResponse({ error: error.message }, { status: error.statusCode })
+    }
+    throw error
+  }
 
   return jsonResponse({ success: true, post }, { status: 201 })
 })

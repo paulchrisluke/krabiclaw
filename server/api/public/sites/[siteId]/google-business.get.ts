@@ -1,6 +1,7 @@
 // Get tenant-scoped Google Business data from audited schema
 import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { getPublishedPosts } from '~/server/utils/post-management'
 
 type JsonPrimitive = string | number | boolean | null
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[]
@@ -30,14 +31,6 @@ interface ReviewRow {
   rating: number | null
   content: string | null
   date: string | null
-}
-
-interface PostRow {
-  id: string
-  title: string | null
-  body: string
-  public_url: string | null
-  published_at: string | null
 }
 
 const parseJson = (raw: string | null): JsonValue => {
@@ -121,25 +114,7 @@ export default defineEventHandler(async (event) => {
           : null
     }
     
-    // Get published posts for this site (used for homepage highlights + /posts feed)
-    const postRows = await queryAll<PostRow & { kind: string | null }>(db, `
-      SELECT p.id, p.title, p.body, p.published_at,
-             ma.public_url, ma.kind
-      FROM posts p
-      LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
-      WHERE p.site_id = ? AND p.status = 'published'
-      ORDER BY p.published_at DESC
-      LIMIT 6
-    `, [siteId])
-
-    // Shape posts to match the GMB post format the frontend expects
-    const posts = postRows.map(p => ({
-      name: `posts/${p.id}`,
-      summary: p.body,
-      title: p.title ?? '',
-      createTime: p.published_at ?? '',
-      media: p.public_url ? [{ googleUrl: p.public_url, kind: p.kind }] : []
-    }))
+    const posts = await getPublishedPosts(db, siteId, 6)
 
     return jsonResponse({
       business,
