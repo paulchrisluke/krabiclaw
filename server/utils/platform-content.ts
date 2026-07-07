@@ -1,5 +1,5 @@
-import slugify from 'slugify'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { slugifyTitle } from '~/utils/post-slugs'
 import { PLATFORM_MEDIA_SITE_ID } from '~/server/utils/platform-media'
 import { BLOG_CATEGORY_LABELS } from '~/utils/blog-categories'
 
@@ -251,7 +251,7 @@ function randomSlugSuffix(): string {
 }
 
 function normalizeSlugFromTitle(title: string, fallbackPrefix: 'post' | 'doc') {
-  const slug = slugify(title, { lower: true, strict: true, trim: true })
+  const slug = slugifyTitle(title)
   return slug || `${fallbackPrefix}-${Date.now()}`
 }
 
@@ -858,8 +858,17 @@ function validateNavMetadata(input: Partial<PlatformContentNavInput>) {
   if (input.nav_section !== undefined) assertStringLength(input.nav_section ?? null, CONTENT_NAV_LABEL_MAX, 'nav_section')
   if (input.nav_title !== undefined) assertStringLength(input.nav_title ?? null, CONTENT_NAV_TITLE_MAX, 'nav_title')
   for (const field of ['nav_order', 'nav_section_order', 'featured_order'] as const) {
-    if (input[field] !== undefined && input[field] !== null && !Number.isInteger(Number(input[field]))) {
-      badRequest(`${field} must be an integer`)
+    if (input[field] !== undefined && input[field] !== null) {
+      const value = input[field]
+      if (typeof value !== 'string' && typeof value !== 'number') {
+        badRequest(`${field} must be a number or numeric string`)
+      }
+      if (typeof value === 'string' && !/^-?\d+$/.test(value)) {
+        badRequest(`${field} must be a number or numeric string`)
+      }
+      if (typeof value === 'number' && !Number.isInteger(value)) {
+        badRequest(`${field} must be an integer`)
+      }
     }
   }
 }

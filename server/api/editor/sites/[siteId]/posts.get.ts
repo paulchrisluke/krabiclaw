@@ -25,6 +25,6 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const status = typeof query.status === 'string' ? query.status : undefined
   const locationId = typeof query.location_id === 'string' ? query.location_id : undefined
-  const posts = await listPosts(db, site.organization_id, siteId, status, locationId)
+  const posts = await listPosts(db, site.organization_id, siteId, env, status, locationId)
   return jsonResponse({ success: true, posts })
 })

@@ -25,9 +25,9 @@
             />
           </div>
 
-          <div v-if="galleryMedia.length > 1" class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div v-if="galleryMedia.length > 0" class="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div
-              v-for="item in galleryMedia.slice(1)"
+              v-for="item in galleryMedia"
               :key="item.id || item.url"
               class="overflow-hidden rounded-xl bg-muted"
             >
@@ -107,6 +107,7 @@ definePageMeta({ layout: 'saya' })
 
 interface PublicPostMedia {
   id?: string
+  mediaAssetId?: string
   url: string
   kind: 'image' | 'video'
   alt?: string | null
@@ -152,9 +153,10 @@ const { data, error } = await useAsyncData(
         import('~/server/utils/api-response'),
         import('~/server/utils/post-management'),
       ])
-      const db = cloudflareEnv(requestEvent).db
+      const env = cloudflareEnv(requestEvent)
+      const db = env.DB
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      post = await getPublishedPostBySlug(db, siteId, slug.value) as PublicPost | null
+      post = await getPublishedPostBySlug(db, siteId, slug.value, env) as PublicPost | null
     } else {
       const payload = await $fetch<{ post?: PublicPost }>(`/api/public/sites/${siteId}/posts/${encodeURIComponent(slug.value)}`)
       post = payload.post
@@ -168,7 +170,13 @@ if (error.value) throw error.value
 
 const post = computed(() => data.value?.post ?? null)
 const coverMedia = computed(() => post.value?.cover || post.value?.media?.[0] || null)
-const galleryMedia = computed(() => post.value?.gallery?.length ? post.value.gallery : post.value?.media ?? [])
+const galleryMedia = computed(() => {
+  const gallery = post.value?.gallery ?? []
+  const media = post.value?.media ?? []
+  const coverId = coverMedia.value?.id || coverMedia.value?.mediaAssetId
+  if (gallery.length) return gallery
+  return media.filter(item => item.id !== coverId && item.mediaAssetId !== coverId)
+})
 const pagePath = computed(() => post.value?.public_path || post.value?.publicPath || `/posts/${slug.value}`)
 const canonicalUrl = useSeoUrl(() => post.value?.canonical_url || post.value?.canonicalUrl || pagePath.value)
 const seoTitle = computed(() => post.value?.seo_title || post.value?.title || `Update from ${siteName.value}`)

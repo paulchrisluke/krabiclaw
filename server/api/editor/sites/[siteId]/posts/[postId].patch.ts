@@ -46,7 +46,7 @@ export default defineEventHandler(async (event) => {
       event_end: body.event_end,
       offer_coupon: body.offer_coupon,
       offer_terms: body.offer_terms,
-    }, session.user.id)
+    }, session.user.id, env)
   } catch (error) {
     if (error instanceof PostValidationError) {
       return jsonResponse({ error: error.message }, { status: error.statusCode })

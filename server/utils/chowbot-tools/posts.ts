@@ -157,6 +157,7 @@ export const POSTS_CHOWBOT_TOOLS: AiTool[] = [
           },
           seo_title: { type: ["string", "null"] },
           seo_description: { type: ["string", "null"] },
+          og_image_asset_id: { type: ["string", "null"] },
           body: {
             type: "string",
             description:
@@ -182,7 +183,6 @@ export const POSTS_CHOWBOT_TOOLS: AiTool[] = [
             type: "string",
             description: "New media asset ID. Omit to leave unchanged.",
           },
-          og_image_asset_id: { type: ["string", "null"] },
           gallery_media: {
             type: "array",
             description: "Replace the ordered public post gallery. Omit to leave unchanged.",

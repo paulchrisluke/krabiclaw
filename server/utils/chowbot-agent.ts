@@ -10,6 +10,7 @@ import {
   updatePost,
   deletePost,
   publishPost,
+  PostValidationError,
 } from "~/server/utils/post-management";
 import {
   listPlatformBlogPosts,
@@ -580,7 +581,7 @@ async function executeTool(
 
   switch (name) {
     case "list_posts": {
-      const posts = await listPosts(db, orgId, siteId, input.status);
+      const posts = await listPosts(db, orgId, siteId, env, input.status);
       const filtered = input.location_id
         ? posts.filter((p) => p.location_id === input.location_id)
         : posts;
@@ -596,31 +597,38 @@ async function executeTool(
     }
 
     case "create_post": {
-      const post = await createPost(
-        db,
-        orgId,
-        siteId,
-        {
-          title: input.title,
-          body: input.body,
-          image_asset_id: input.image_asset_id,
-          slug: input.slug,
-          seo_title: input.seo_title,
-          seo_description: input.seo_description,
-          og_image_asset_id: input.og_image_asset_id,
-          gallery_media: input.gallery_media,
-          location_id: input.location_id,
-          post_type: input.post_type,
-          cta_type: input.cta_type,
-          cta_url: input.cta_url,
-          event_title: input.event_title,
-          event_start: input.event_start,
-          event_end: input.event_end,
-          offer_coupon: input.offer_coupon,
-          offer_terms: input.offer_terms,
-        },
-        userId,
-      );
+      let post;
+      try {
+        post = await createPost(
+          db,
+          orgId,
+          siteId,
+          {
+            title: input.title,
+            body: input.body,
+            image_asset_id: input.image_asset_id,
+            slug: input.slug,
+            seo_title: input.seo_title,
+            seo_description: input.seo_description,
+            og_image_asset_id: input.og_image_asset_id,
+            gallery_media: input.gallery_media,
+            location_id: input.location_id,
+            post_type: input.post_type,
+            cta_type: input.cta_type,
+            cta_url: input.cta_url,
+            event_title: input.event_title,
+            event_start: input.event_start,
+            event_end: input.event_end,
+            offer_coupon: input.offer_coupon,
+            offer_terms: input.offer_terms,
+          },
+          userId,
+          env,
+        );
+      } catch (error) {
+        if (error instanceof PostValidationError) return { error: error.message };
+        throw error;
+      }
       return {
         id: post.id,
         title: post.title,
@@ -635,7 +643,7 @@ async function executeTool(
     case "publish_post": {
       const result = await publishPost(db, orgId, siteId, input.post_id, [
         "site",
-      ]);
+      ], env);
       if (!result) return { error: "Post not found or already published." };
       return {
         id: result.id,
@@ -648,32 +656,39 @@ async function executeTool(
     }
 
     case "update_post": {
-      const post = await updatePost(
-        db,
-        orgId,
-        siteId,
-        input.post_id,
-        {
-          title: input.title,
-          body: input.body,
-          image_asset_id: input.image_asset_id,
-          slug: input.slug,
-          seo_title: input.seo_title,
-          seo_description: input.seo_description,
-          og_image_asset_id: input.og_image_asset_id,
-          gallery_media: input.gallery_media,
-          location_id: input.location_id,
-          post_type: input.post_type,
-          cta_type: input.cta_type,
-          cta_url: input.cta_url,
-          event_title: input.event_title,
-          event_start: input.event_start,
-          event_end: input.event_end,
-          offer_coupon: input.offer_coupon,
-          offer_terms: input.offer_terms,
-        },
-        userId,
-      );
+      let post;
+      try {
+        post = await updatePost(
+          db,
+          orgId,
+          siteId,
+          input.post_id,
+          {
+            title: input.title,
+            body: input.body,
+            image_asset_id: input.image_asset_id,
+            slug: input.slug,
+            seo_title: input.seo_title,
+            seo_description: input.seo_description,
+            og_image_asset_id: input.og_image_asset_id,
+            gallery_media: input.gallery_media,
+            location_id: input.location_id,
+            post_type: input.post_type,
+            cta_type: input.cta_type,
+            cta_url: input.cta_url,
+            event_title: input.event_title,
+            event_start: input.event_start,
+            event_end: input.event_end,
+            offer_coupon: input.offer_coupon,
+            offer_terms: input.offer_terms,
+          },
+          userId,
+          env,
+        );
+      } catch (error) {
+        if (error instanceof PostValidationError) return { error: error.message };
+        throw error;
+      }
       if (!post) return { error: "Post not found." };
       return {
         id: post.id,
@@ -2591,7 +2606,7 @@ async function executeTool(
     case "get_post": {
       const postId = toSqlText(input.post_id);
       if (!postId) return { error: "post_id is required." };
-      const post = await getPost(db, orgId, siteId, postId);
+      const post = await getPost(db, orgId, siteId, postId, env);
       if (!post) return { error: "Post not found." };
       return { post };
     }
@@ -2600,7 +2615,13 @@ async function executeTool(
       const postId = toSqlText(input.post_id);
       const assetId = toSqlText(input.asset_id);
       if (!postId || !assetId) return { error: "post_id and asset_id required." };
-      const result = await updatePost(db, orgId, siteId, postId, { image_asset_id: assetId }, userId);
+      let result;
+      try {
+        result = await updatePost(db, orgId, siteId, postId, { image_asset_id: assetId }, userId, env);
+      } catch (error) {
+        if (error instanceof PostValidationError) return { error: error.message };
+        throw error;
+      }
       if (!result) return { error: "Failed to update post image." };
       return { updated: true, post_id: postId, asset_id: assetId };
     }

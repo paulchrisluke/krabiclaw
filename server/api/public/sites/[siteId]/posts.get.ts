@@ -13,6 +13,6 @@ export default defineEventHandler(async (event) => {
   const parsedLimit = Number(query.limit ?? 20)
   const limit = Math.min(Number.isInteger(parsedLimit) && parsedLimit > 0 ? parsedLimit : 1, 50)
   const locationId = typeof query.location_id === 'string' ? query.location_id : undefined
-  const posts = await getPublishedPosts(db, siteId, limit, locationId)
+  const posts = await getPublishedPosts(db, siteId, env, limit, locationId)
   return jsonResponse({ success: true, posts })
 })

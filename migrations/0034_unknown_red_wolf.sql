@@ -18,6 +18,8 @@ CREATE TABLE `post_media` (
 );
 --> statement-breakpoint
 CREATE INDEX `post_media_post_idx` ON `post_media` (`post_id`,`sort_order`);--> statement-breakpoint
+CREATE UNIQUE INDEX `post_media_post_asset_unique` ON `post_media` (`post_id`,`media_asset_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `post_media_cover_unique` ON `post_media` (`post_id`) WHERE role = 'cover';--> statement-breakpoint
 ALTER TABLE `posts` ADD `slug` text;--> statement-breakpoint
 ALTER TABLE `posts` ADD `seo_title` text;--> statement-breakpoint
 ALTER TABLE `posts` ADD `seo_description` text;--> statement-breakpoint
