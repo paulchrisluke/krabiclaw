@@ -1,7 +1,7 @@
 import { useRender } from 'vue-email'
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { hashEmail, isReservedTestDomain, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
-import { getOrgWhatsAppPhone, sendWhatsAppNotification, type WhatsAppTemplate } from '~/server/utils/whatsapp'
+import { getOrgWhatsAppPhone, sendWhatsAppNotification, toDashboardButtonPath, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 import { buildReplyToAddress } from '~/server/utils/submission-messages'
 import { getPlatformSupportEmails } from '~/server/utils/platform-support'
 import ReservationOwnerNew from '~/server/emails/templates/ReservationOwnerNew'
@@ -177,6 +177,13 @@ function formatTimeHuman(timeValue: string): string {
   }).format(dt)
 }
 
+// The WhatsApp "Reply in dashboard" button URL is declared in the approved Meta
+// template as a fixed prefix + single {{1}} variable, so only the path/query
+// suffix after that prefix can be sent per-message.
+function inboxUrlToWhatsAppReplyPath(inboxUrl: string | null): string {
+  return toDashboardButtonPath(inboxUrl ?? undefined, '')
+}
+
 function buildReservationWhatsAppContext(locationName?: string | null): string {
   return locationName?.trim() ? `Location: ${locationName.trim()}` : 'Location not provided'
 }
@@ -186,9 +193,45 @@ function buildExperienceWhatsAppContext(experienceTitle: string, siteName?: stri
   return `Business: ${business} · Experience: ${experienceTitle}`
 }
 
-// Deep-links an owner notification email straight to the dashboard inbox thread for that
-// submission. The inbox route always requires a locationSlug segment even for contact
-// submissions (which aren't location-scoped), so we fall back to the site's primary location.
+// Shared by buildOwnerInboxUrl/buildOwnerReviewsUrl. Every dashboard deep-link route
+// requires a locationSlug segment even for org/site-scoped content (e.g. contact
+// submissions aren't location-scoped), so we fall back to the site's primary location.
+async function resolveSiteLocationSlugs(
+  db: DbClient,
+  opts: { organizationId: string; siteId: string; locationId?: string | null }
+): Promise<{ orgSlug: string; siteSlug: string; locationSlug: string } | null> {
+  try {
+    const site = await queryFirst<{ org_slug: string | null; site_slug: string | null }>(db, `
+      SELECT o.slug AS org_slug, s.subdomain AS site_slug
+      FROM organization o
+      JOIN sites s ON s.organization_id = o.id
+      WHERE o.id = ? AND s.id = ?
+      LIMIT 1
+    `, [opts.organizationId, opts.siteId])
+    if (!site?.org_slug || !site?.site_slug) return null
+
+    let locationSlug: string | null = null
+    if (opts.locationId) {
+      const location = await queryFirst<{ slug: string }>(db, `
+        SELECT slug FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1
+      `, [opts.locationId, opts.siteId])
+      locationSlug = location?.slug ?? null
+    }
+    if (!locationSlug) {
+      const fallback = await queryFirst<{ slug: string }>(db, `
+        SELECT slug FROM business_locations WHERE site_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1
+      `, [opts.siteId])
+      locationSlug = fallback?.slug ?? null
+    }
+    if (!locationSlug) return null
+
+    return { orgSlug: site.org_slug, siteSlug: site.site_slug, locationSlug }
+  } catch {
+    return null
+  }
+}
+
+// Deep-links an owner notification straight to the dashboard inbox thread for that submission.
 async function buildOwnerInboxUrl(
   env: NotificationEnv,
   db: DbClient,
@@ -200,33 +243,27 @@ async function buildOwnerInboxUrl(
     submissionId: string
   }
 ): Promise<string | null> {
-  const site = await queryFirst<{ org_slug: string | null; site_slug: string | null }>(db, `
-    SELECT o.slug AS org_slug, s.subdomain AS site_slug
-    FROM organization o
-    JOIN sites s ON s.organization_id = o.id
-    WHERE o.id = ? AND s.id = ?
-    LIMIT 1
-  `, [opts.organizationId, opts.siteId])
-  if (!site?.org_slug || !site?.site_slug) return null
-
-  let locationSlug: string | null = null
-  if (opts.locationId) {
-    const location = await queryFirst<{ slug: string }>(db, `
-      SELECT slug FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1
-    `, [opts.locationId, opts.siteId])
-    locationSlug = location?.slug ?? null
-  }
-  if (!locationSlug) {
-    const fallback = await queryFirst<{ slug: string }>(db, `
-      SELECT slug FROM business_locations WHERE site_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1
-    `, [opts.siteId])
-    locationSlug = fallback?.slug ?? null
-  }
-  if (!locationSlug) return null
+  const slugs = await resolveSiteLocationSlugs(db, opts)
+  if (!slugs) return null
 
   const platformDomain = getPlatformDomain(env)
   const query = new URLSearchParams({ tab: opts.tab, reply: opts.submissionId })
-  return `https://${platformDomain}/dashboard/${site.org_slug}/sites/${site.site_slug}/${locationSlug}/inbox?${query.toString()}`
+  return `https://${platformDomain}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}/${slugs.locationSlug}/inbox?${query.toString()}`
+}
+
+// Deep-links an owner notification straight to the dashboard reviews page for that location.
+// The reviews page doesn't yet support scrolling to/highlighting a single review (no query
+// param handling there), so this lands on the reviews list rather than the specific review.
+async function buildOwnerReviewsUrl(
+  env: NotificationEnv,
+  db: DbClient,
+  opts: { organizationId: string; siteId: string; locationId?: string | null }
+): Promise<string | null> {
+  const slugs = await resolveSiteLocationSlugs(db, opts)
+  if (!slugs) return null
+
+  const platformDomain = getPlatformDomain(env)
+  return `https://${platformDomain}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}/${slugs.locationSlug}/reviews`
 }
 
 function ownerEmailQuery() {
@@ -680,6 +717,7 @@ export async function notifyReservationCreated(
           email: opts.email,
           context: buildReservationWhatsAppContext(opts.locationName),
           requests: opts.requests ?? '',
+          reply_path: inboxUrlToWhatsAppReplyPath(inboxUrl),
         },
       },
     }),
@@ -715,6 +753,13 @@ export async function notifyReservationCancelled(
   const prettyDate = formatDateHuman(opts.date)
   const prettyTime = formatTimeHuman(opts.time)
   const platformDomain = getPlatformDomain(env)
+  const inboxUrl = await buildOwnerInboxUrl(env, db, {
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    locationId: opts.locationId,
+    tab: 'reservations',
+    submissionId: opts.reservationId,
+  })
   const ownerCancelTitle = confirmed
     ? `Reservation cancelled for ${opts.guestName}`
     : `Reservation request cancelled by ${opts.guestName}`
@@ -734,7 +779,7 @@ export async function notifyReservationCancelled(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(ReservationOwnerCancelled, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, email: opts.email, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain } }),
+    useRender(ReservationOwnerCancelled, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, email: opts.email, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain, replyUrl: inboxUrl } }),
     useRender(ReservationGuestCancelled, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain } }),
   ])
 
@@ -822,6 +867,7 @@ export async function notifyContactSubmitted(
           email: opts.email,
           subject: opts.subject ? SUBJECT_LABELS[opts.subject] ?? opts.subject : '',
           message_preview: opts.message,
+          reply_path: inboxUrlToWhatsAppReplyPath(inboxUrl),
         },
       },
     }),
@@ -984,6 +1030,11 @@ export async function notifyReviewReceived(
 ) {
   const restaurant = siteName(opts)
   const platformDomain = getPlatformDomain(env)
+  const reviewsUrl = await buildOwnerReviewsUrl(env, db, {
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    locationId: opts.locationId,
+  })
 
   try {
     const ownerEmail = await useRender(ReviewOwnerNew, {
@@ -993,6 +1044,7 @@ export async function notifyReviewReceived(
         content: opts.content ?? '',
         siteName: restaurant,
         platformDomain,
+        reviewsUrl,
       },
     })
 
@@ -1010,7 +1062,7 @@ export async function notifyReviewReceived(
       email: { subject: `New review from ${opts.authorName}`, html: ownerEmail.html, text: ownerEmail.text },
       whatsapp: {
         template: 'new_review',
-        vars: { rating: String(opts.rating), site_name: restaurant, excerpt: opts.content ?? '' },
+        vars: { rating: String(opts.rating), site_name: restaurant, excerpt: opts.content ?? '', reviews_url: reviewsUrl ?? '' },
       },
     })
   } catch (error) {
@@ -1074,6 +1126,7 @@ export async function notifyExperienceBookingCreated(
           email: opts.email,
           context: buildExperienceWhatsAppContext(opts.experienceTitle, opts.siteName),
           requests: opts.notes ?? '',
+          reply_path: inboxUrlToWhatsAppReplyPath(inboxUrl),
         },
       },
     }),
@@ -1109,6 +1162,13 @@ export async function notifyExperienceBookingCancelled(
   const prettyDate = formatDateHuman(opts.bookingDate)
   const prettyTime = formatTimeHuman(opts.timeSlot)
   const platformDomain = getPlatformDomain(env)
+  const inboxUrl = await buildOwnerInboxUrl(env, db, {
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    locationId: opts.locationId,
+    tab: 'bookings',
+    submissionId: opts.bookingId,
+  })
   const ownerCancelTitle = confirmed
     ? `Booking cancelled for ${opts.guestName}`
     : `Booking request cancelled by ${opts.guestName}`
@@ -1127,7 +1187,7 @@ export async function notifyExperienceBookingCancelled(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(BookingOwnerCancelled, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone, notes: opts.notes, wasConfirmed: confirmed, platformDomain } }),
+    useRender(BookingOwnerCancelled, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone, notes: opts.notes, wasConfirmed: confirmed, platformDomain, replyUrl: inboxUrl } }),
     useRender(BookingGuestCancelled, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, notes: opts.notes, wasConfirmed: confirmed, platformDomain } }),
   ])
 

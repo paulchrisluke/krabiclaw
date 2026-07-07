@@ -190,6 +190,17 @@ test.describe('public tenant site', () => {
     await expect(page.locator('body')).toContainText('Error 404')
     await expect(page.locator('body')).toContainText('Page not found')
   })
+
+  test('tenant page does not inherit platform analytics globals', async ({ page }) => {
+    const response = await page.goto(`${tenantBaseURL}/`, { waitUntil: 'load' })
+    expect(response?.status()).toBeLessThan(400)
+
+    const globals = await page.evaluate(() => ({
+      hasKrabiLayer: typeof (window as Window & { krabiLayer?: unknown }).krabiLayer !== 'undefined',
+    }))
+
+    expect(globals.hasKrabiLayer).toBe(false)
+  })
 })
 
 test.describe('platform public site', () => {
@@ -201,6 +212,8 @@ test.describe('platform public site', () => {
     await page.waitForLoadState('load')
     await expect(page.getByRole('link', { name: /krabiclaw/i }).first()).toBeVisible()
     await expect(page.getByRole('heading', { name: /your local business, managed through chatgpt/i })).toBeVisible()
+    const hasKrabiLayer = await page.evaluate(() => typeof (window as Window & { krabiLayer?: unknown }).krabiLayer !== 'undefined')
+    expect(hasKrabiLayer).toBe(false)
 
     const blog = await page.goto(`${baseURL}/blog`, { waitUntil: 'domcontentloaded' })
     expect(blog?.status()).toBeLessThan(400)

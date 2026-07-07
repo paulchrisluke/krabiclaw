@@ -1,6 +1,7 @@
-import { createError, getHeader, type H3Event } from 'h3'
+import { createError, getHeader, getRequestHost, type H3Event } from 'h3'
 import { createDb, type AppDb } from '~/server/db'
 import type { CloudflareEnv } from './auth'
+import { isPreviewContext } from '~/server/utils/tenant-hosts'
 
 export const jsonResponse = (body: ApiValue, init: ResponseInit = {}) => {
   const mergedHeaders = new Headers(init.headers)
@@ -74,9 +75,38 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
   const d1 = runtimeEnv.DB as D1Database | undefined
   const db = d1 ? createDb(d1) : undefined
 
+  // Apply E2E delivery-mode overrides only for approved dev/E2E requests
+  const devMode = import.meta.dev
+  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  const allowDevRoute = devMode || e2eOverride
+  let e2eDeliveryOverrides: Record<string, string> = {}
+
+  if (allowDevRoute && !devMode && e2eOverride) {
+    const expectedSecret = process.env.E2E_DEV_ROUTE_SECRET || ''
+    const providedSecret = getHeader(event, 'x-dev-route-secret') || ''
+    const secretValid = expectedSecret && providedSecret && expectedSecret === providedSecret
+    const hostname = (getRequestHost(event, { xForwardedHost: true }) || '').split(':')[0] || ''
+    const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1'
+    const isPreview = isPreviewContext(hostname)
+    const hostAllowed = isLocalHost || isPreview
+
+    if (secretValid && hostAllowed) {
+      e2eDeliveryOverrides = {
+        ...(process.env.EMAIL_DELIVERY_MODE !== undefined && { EMAIL_DELIVERY_MODE: process.env.EMAIL_DELIVERY_MODE }),
+        ...(process.env.WHATSAPP_DELIVERY_MODE !== undefined && { WHATSAPP_DELIVERY_MODE: process.env.WHATSAPP_DELIVERY_MODE }),
+      }
+    }
+  } else if (devMode) {
+    e2eDeliveryOverrides = {
+      ...(process.env.EMAIL_DELIVERY_MODE !== undefined && { EMAIL_DELIVERY_MODE: process.env.EMAIL_DELIVERY_MODE }),
+      ...(process.env.WHATSAPP_DELIVERY_MODE !== undefined && { WHATSAPP_DELIVERY_MODE: process.env.WHATSAPP_DELIVERY_MODE }),
+    }
+  }
+
   return {
     ...process.env,
     ...runtimeEnv,
+    ...e2eDeliveryOverrides,
     db,
   } as CloudflareEnv
 }

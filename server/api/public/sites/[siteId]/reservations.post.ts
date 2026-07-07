@@ -1,5 +1,6 @@
 import { execute, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { notifyReservationCreated } from '~/server/utils/notifications'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
@@ -8,6 +9,7 @@ import { generateReservationTimes, isStructuredOpeningHours } from '~/shared/res
 import { getReservationSlotAvailability } from '~/server/utils/reservations'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
+import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
 // Fallback used only when a location has no structured opening_hours (e.g. Google Places imports,
@@ -47,6 +49,10 @@ export default defineEventHandler(async (event) => {
   if (!name) return jsonResponse({ error: 'Please enter your name.' }, { status: 400 })
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     return jsonResponse({ error: 'Please enter a valid email address.' }, { status: 400 })
+  // Reserved test domains (example.com, wa-verify@example.com, etc.) are guaranteed to
+  // hard-bounce and must never be accepted where the environment sends real email.
+  if (shouldSendRealEmail(env) && isReservedTestDomain(email))
+    return jsonResponse({ error: 'Please enter a real email address.' }, { status: 422 })
   if (!phone) return jsonResponse({ error: 'Please enter your phone number.' }, { status: 400 })
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
     return jsonResponse({ error: 'Please choose a valid future date.' }, { status: 400 })
@@ -176,6 +182,21 @@ export default defineEventHandler(async (event) => {
   if (!insertResult?.meta?.changes) {
     return jsonResponse({ error: 'This time is no longer available. Please choose another time.' }, { status: 409 })
   }
+
+  await fireSiteEventSafe({
+    db,
+    organizationId: site.organization_id,
+    siteId,
+    locationId: resolvedLocationId,
+    eventType: 'reservation.created',
+    entityType: 'reservation_submission',
+    entityId: id,
+    metadata: {
+      date,
+      time,
+      guests,
+    },
+  })
 
   // Build absolute cancel URL for the confirmation email
   const siteBaseUrl = site.public_url?.replace(/\/$/, '') || (site.subdomain ? `https://${site.subdomain}.krabiclaw.com` : null)

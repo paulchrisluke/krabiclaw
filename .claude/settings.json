@@ -66,6 +66,19 @@
       "/Users/paulchrisluke/Repos 2026/kikuzuki-thailand-marketing/server/api/ai/[siteId]/menu"
     ]
   },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command // empty'); CMD=\"$cmd\" python3 -c 'import json, os, re; cmd = os.environ.get(\"CMD\", \"\"); lower = cmd.lower(); blocked = {\"preview.krabiclaw.com\", \"staging.krabiclaw.com\"}; uses_http = re.search(r\"\\b(curl|wget|http|httpie|xh)\\b\", cmd, re.I); hosts = re.findall(r\"\\b(?:[a-z0-9_-]+\\.)*krabiclaw\\.com\\b\", lower); live_hosts = [host for host in hosts if host not in blocked]; deny = bool(uses_http and live_hosts and \"graph.facebook.com\" not in lower); print(json.dumps({\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"Blocked: this command targets production krabiclaw.com (or a live client subdomain). Public form endpoints there send real Resend/WhatsApp notifications. Use preview.krabiclaw.com, staging.krabiclaw.com, or localhost for testing instead.\"}}) if deny else \"{}\")'"
+          }
+        ]
+      }
+    ]
+  },
   "enabledMcpjsonServers": [
     "nuxt-ui"
   ],

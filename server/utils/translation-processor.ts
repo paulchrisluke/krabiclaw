@@ -3,6 +3,7 @@ import { chargeCredits, hasCredits } from '~/server/utils/ai-credits'
 import { CHOWBOT_MODEL } from '~/server/utils/ai-models'
 import { buildTranslationInventory, type TranslationInventoryItem } from '~/server/utils/translation-inventory'
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { fireSiteEventSafe } from '~/server/utils/site-events'
 
 const TRANSLATION_BATCH_SIZE = 12
 
@@ -410,11 +411,40 @@ async function updateJobProgress(db: DbClient, jobId: string) {
   const status = remaining === 0 ? (failed > 0 ? 'failed' : 'succeeded') : 'running'
   const now = new Date().toISOString()
 
-  await execute(db, `
+  const previousJob = await queryFirst<{ status: string | null }>(
+    db,
+    `SELECT status FROM translation_jobs WHERE id = ? LIMIT 1`,
+    [jobId],
+  )
+
+  const updateResult = await execute(db, `
     UPDATE translation_jobs
     SET processed_items = ?, failed_items = ?, status = ?, finished_at = CASE WHEN ? = 0 THEN ? ELSE finished_at END, updated_at = ?
     WHERE id = ?
   `, [processed, failed, status, remaining, now, now, jobId])
+
+  if (status === 'succeeded' && previousJob?.status !== 'succeeded' && updateResult?.meta?.changes > 0) {
+    const job = await queryFirst<{ organization_id: string; site_id: string; target_locale: string; scope: string }>(
+      db,
+      `SELECT organization_id, site_id, target_locale, scope FROM translation_jobs WHERE id = ? LIMIT 1`,
+      [jobId],
+    )
+    if (job) {
+      await fireSiteEventSafe({
+        db,
+        organizationId: job.organization_id,
+        siteId: job.site_id,
+        eventType: 'translation.job_completed',
+        entityType: 'translation_job',
+        entityId: jobId,
+        metadata: {
+          target_locale: job.target_locale,
+          scope: job.scope,
+          processed_items: processed,
+        },
+      })
+    }
+  }
 
   return status
 }
