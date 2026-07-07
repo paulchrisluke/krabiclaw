@@ -62,5 +62,10 @@ export function isReservedTestDomain(email: string): boolean {
   if (!domain) return false
   if (RESERVED_TEST_DOMAINS.has(domain)) return true
   const tld = domain.split('.').pop() ?? ''
-  return RESERVED_TEST_TLDS.has(tld)
+  if (RESERVED_TEST_TLDS.has(tld)) return true
+  // Check for subdomains under reserved roots (e.g., mail.example.com, wa-verify.example.com)
+  for (const reservedDomain of RESERVED_TEST_DOMAINS) {
+    if (domain === reservedDomain || domain.endsWith(`.${reservedDomain}`)) return true
+  }
+  return false
 }

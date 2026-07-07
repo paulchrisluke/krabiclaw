@@ -207,6 +207,51 @@ async function main() {
 
   const cancelEmailQuotaBlocked = !cancelEmailRow && cancelQuotaBlockedEmailRows.length > 0
 
+  const runId = `canary-notify-${crypto.randomUUID()}`
+
+  // Write canary_runs audit for successful contact/reservation checks before
+  // asserting on cancellation, so a reservation_cancelled regression doesn't
+  // prevent any run record from being persisted.
+  d1Raw(`
+    INSERT INTO canary_runs (id, run_type, environment, status, organization_id, site_id, details_json, created_at)
+    VALUES (
+      '${sqlEscape(runId)}',
+      'notifications',
+      'production',
+      'pass',
+      '${sqlEscape(orgId)}',
+      '${sqlEscape(siteId)}',
+      '${sqlEscape(JSON.stringify({
+        started_at: since,
+        completed_at: nowIso(),
+        base_url: baseUrl,
+        triggers: {
+          contact_status: contact.res.status,
+          reservation_status: reservation.res.status,
+          reservation_id: reservationId,
+          reservation_cancel_status: cancelRes.status,
+        },
+        notification_ids: {
+          email: emailRow?.id ?? null,
+          whatsapp: whatsappRow.id,
+          cancellation_email: cancelEmailRow?.id ?? null,
+          cancellation_whatsapp: cancelWhatsappRow.id,
+        },
+        provider_message_ids: {
+          email: emailRow?.provider_message_id ?? null,
+          whatsapp: whatsappRow.provider_message_id,
+          cancellation_email: cancelEmailRow?.provider_message_id ?? null,
+          cancellation_whatsapp: cancelWhatsappRow.provider_message_id,
+        },
+        provider_degraded: (emailQuotaBlocked || cancelEmailQuotaBlocked) ? {
+          email_daily_quota_exceeded: true,
+          affected_notification_ids: [...quotaBlockedEmailRows, ...cancelQuotaBlockedEmailRows].map((row) => row.id),
+        } : null,
+      }))}',
+      '${sqlEscape(nowIso())}'
+    )
+  `, 'canary success audit')
+
   if ((!cancelEmailRow && !cancelEmailQuotaBlocked) || !cancelWhatsappRow) {
     const rows = d1Query(`
       SELECT id, channel, template, status, provider_message_id, error, created_at
@@ -219,8 +264,6 @@ async function main() {
     `, 'cancellation notification final read')
     throw new Error(`Provider-level cancellation canary assertions failed. email_sent=${Boolean(cancelEmailRow)} whatsapp_sent=${Boolean(cancelWhatsappRow)} rows=${JSON.stringify(rows)}`)
   }
-
-  const runId = `canary-notify-${crypto.randomUUID()}`
   const details = {
     started_at: since,
     completed_at: nowIso(),

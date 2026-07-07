@@ -644,6 +644,7 @@ export async function updatePageContent(
     changes: Record<string, unknown>;
     location_id?: string | null;
   },
+  actorId?: string | null,
 ) {
   const locationId = input.location_id ?? undefined;
   const { normalizedFields, heroChange, hasHeroChange } =
@@ -696,6 +697,7 @@ export async function updatePageContent(
     organizationId,
     siteId,
     locationId: locationId ?? null,
+    actorId,
     eventType: "content.updated",
     entityType: "site_content",
     entityId: `${locationId ?? "site"}:${input.page}`,
@@ -896,6 +898,7 @@ export async function deleteContentField(
   organizationId: string,
   siteId: string,
   input: { page: string; field: string; location_id?: string | null },
+  actorId?: string | null,
 ) {
   const locationId = input.location_id ?? undefined;
   await deleteSiteContentField(
@@ -911,6 +914,7 @@ export async function deleteContentField(
     organizationId,
     siteId,
     locationId: locationId ?? null,
+    actorId,
     eventType: "content.updated",
     entityType: "site_content",
     entityId: `${locationId ?? "site"}:${input.page}`,

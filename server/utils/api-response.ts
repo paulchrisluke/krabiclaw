@@ -76,8 +76,8 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
   const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
   const e2eDeliveryOverrides = e2eOverride
     ? {
-        EMAIL_DELIVERY_MODE: process.env.EMAIL_DELIVERY_MODE,
-        WHATSAPP_DELIVERY_MODE: process.env.WHATSAPP_DELIVERY_MODE,
+        ...(process.env.EMAIL_DELIVERY_MODE !== undefined && { EMAIL_DELIVERY_MODE: process.env.EMAIL_DELIVERY_MODE }),
+        ...(process.env.WHATSAPP_DELIVERY_MODE !== undefined && { WHATSAPP_DELIVERY_MODE: process.env.WHATSAPP_DELIVERY_MODE }),
       }
     : {}
 

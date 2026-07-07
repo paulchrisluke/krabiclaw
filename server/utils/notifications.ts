@@ -181,10 +181,7 @@ function formatTimeHuman(timeValue: string): string {
 // template as a fixed prefix + single {{1}} variable, so only the path/query
 // suffix after that prefix can be sent per-message.
 function inboxUrlToWhatsAppReplyPath(inboxUrl: string | null): string {
-  if (!inboxUrl) return ''
-  const marker = '/dashboard/'
-  const idx = inboxUrl.indexOf(marker)
-  return idx >= 0 ? inboxUrl.slice(idx + marker.length) : ''
+  return toDashboardButtonPath(inboxUrl, '')
 }
 
 function buildReservationWhatsAppContext(locationName?: string | null): string {
@@ -203,31 +200,35 @@ async function resolveSiteLocationSlugs(
   db: DbClient,
   opts: { organizationId: string; siteId: string; locationId?: string | null }
 ): Promise<{ orgSlug: string; siteSlug: string; locationSlug: string } | null> {
-  const site = await queryFirst<{ org_slug: string | null; site_slug: string | null }>(db, `
-    SELECT o.slug AS org_slug, s.subdomain AS site_slug
-    FROM organization o
-    JOIN sites s ON s.organization_id = o.id
-    WHERE o.id = ? AND s.id = ?
-    LIMIT 1
-  `, [opts.organizationId, opts.siteId])
-  if (!site?.org_slug || !site?.site_slug) return null
+  try {
+    const site = await queryFirst<{ org_slug: string | null; site_slug: string | null }>(db, `
+      SELECT o.slug AS org_slug, s.subdomain AS site_slug
+      FROM organization o
+      JOIN sites s ON s.organization_id = o.id
+      WHERE o.id = ? AND s.id = ?
+      LIMIT 1
+    `, [opts.organizationId, opts.siteId])
+    if (!site?.org_slug || !site?.site_slug) return null
 
-  let locationSlug: string | null = null
-  if (opts.locationId) {
-    const location = await queryFirst<{ slug: string }>(db, `
-      SELECT slug FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1
-    `, [opts.locationId, opts.siteId])
-    locationSlug = location?.slug ?? null
-  }
-  if (!locationSlug) {
-    const fallback = await queryFirst<{ slug: string }>(db, `
-      SELECT slug FROM business_locations WHERE site_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1
-    `, [opts.siteId])
-    locationSlug = fallback?.slug ?? null
-  }
-  if (!locationSlug) return null
+    let locationSlug: string | null = null
+    if (opts.locationId) {
+      const location = await queryFirst<{ slug: string }>(db, `
+        SELECT slug FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1
+      `, [opts.locationId, opts.siteId])
+      locationSlug = location?.slug ?? null
+    }
+    if (!locationSlug) {
+      const fallback = await queryFirst<{ slug: string }>(db, `
+        SELECT slug FROM business_locations WHERE site_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1
+      `, [opts.siteId])
+      locationSlug = fallback?.slug ?? null
+    }
+    if (!locationSlug) return null
 
-  return { orgSlug: site.org_slug, siteSlug: site.site_slug, locationSlug }
+    return { orgSlug: site.org_slug, siteSlug: site.site_slug, locationSlug }
+  } catch {
+    return null
+  }
 }
 
 // Deep-links an owner notification straight to the dashboard inbox thread for that submission.
@@ -1061,7 +1062,7 @@ export async function notifyReviewReceived(
       email: { subject: `New review from ${opts.authorName}`, html: ownerEmail.html, text: ownerEmail.text },
       whatsapp: {
         template: 'new_review',
-        vars: { rating: String(opts.rating), site_name: restaurant, excerpt: opts.content ?? '', reviews_url: reviewsUrl ?? '' },
+        vars: { rating: String(opts.rating), site_name: restaurant, excerpt: opts.content ?? '', reviews_url: reviewsUrl ?? toDashboardButtonPath(undefined, 'settings') },
       },
     })
   } catch (error) {

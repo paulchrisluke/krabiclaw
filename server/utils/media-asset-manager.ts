@@ -173,11 +173,14 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     provider: MediaAsset['provider']
     cloudflare_image_id: string | null
     r2_key: string | null
+    organization_id: string
+    location_id: string | null
+    created_by_user_id: string | null
   }>(db, `
     UPDATE media_assets
     SET delete_pending_at = ?, updated_at = ?
     WHERE id = ? AND site_id = ? AND status != 'deleted'
-    RETURNING id, provider, cloudflare_image_id, r2_key
+    RETURNING id, provider, cloudflare_image_id, r2_key, organization_id, location_id, created_by_user_id
   `, [now, now, id, siteId]) ?? null
 
   if (!pendingAsset) return
@@ -230,28 +233,17 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     WHERE id = ? AND site_id = ?
   `, [new Date().toISOString(), pendingAsset.id, siteId])
 
-  const deletedAsset = await queryFirst<{
-    organization_id: string
-    location_id: string | null
-    created_by_user_id: string | null
-  }>(
+  await fireSiteEventSafe({
     db,
-    `SELECT organization_id, location_id, created_by_user_id FROM media_assets WHERE id = ? AND site_id = ? LIMIT 1`,
-    [pendingAsset.id, siteId],
-  )
-  if (deletedAsset) {
-    await fireSiteEventSafe({
-      db,
-      organizationId: deletedAsset.organization_id,
-      siteId,
-      locationId: deletedAsset.location_id,
-      actorId: deletedAsset.created_by_user_id,
-      eventType: 'media.deleted',
-      entityType: 'media_asset',
-      entityId: pendingAsset.id,
-      metadata: {
-        provider: pendingAsset.provider,
-      },
-    })
-  }
+    organizationId: pendingAsset.organization_id,
+    siteId,
+    locationId: pendingAsset.location_id,
+    actorId: pendingAsset.created_by_user_id,
+    eventType: 'media.deleted',
+    entityType: 'media_asset',
+    entityId: pendingAsset.id,
+    metadata: {
+      provider: pendingAsset.provider,
+    },
+  })
 }

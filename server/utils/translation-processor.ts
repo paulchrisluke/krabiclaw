@@ -410,19 +410,20 @@ async function updateJobProgress(db: DbClient, jobId: string) {
   const remaining = counts?.remaining_items ?? 0
   const status = remaining === 0 ? (failed > 0 ? 'failed' : 'succeeded') : 'running'
   const now = new Date().toISOString()
+
   const previousJob = await queryFirst<{ status: string | null }>(
     db,
     `SELECT status FROM translation_jobs WHERE id = ? LIMIT 1`,
     [jobId],
   )
 
-  await execute(db, `
+  const updateResult = await execute(db, `
     UPDATE translation_jobs
     SET processed_items = ?, failed_items = ?, status = ?, finished_at = CASE WHEN ? = 0 THEN ? ELSE finished_at END, updated_at = ?
     WHERE id = ?
   `, [processed, failed, status, remaining, now, now, jobId])
 
-  if (status === 'succeeded' && previousJob?.status !== 'succeeded') {
+  if (status === 'succeeded' && previousJob?.status !== 'succeeded' && updateResult?.meta?.changes > 0) {
     const job = await queryFirst<{ organization_id: string; site_id: string; target_locale: string; scope: string }>(
       db,
       `SELECT organization_id, site_id, target_locale, scope FROM translation_jobs WHERE id = ? LIMIT 1`,
