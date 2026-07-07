@@ -11,6 +11,7 @@ import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils
 import { getSourceLocale } from '~/server/utils/site-locales'
 import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking } from '~/server/utils/customers'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
+import { getAuthSession } from '~/server/utils/auth'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
 // Fallback used only when a location has no structured opening_hours (e.g. Google Places imports,
@@ -140,6 +141,9 @@ export default defineEventHandler(async (event) => {
     if (!emailOk) return jsonResponse({ error: 'Too many reservation requests from this email. Please try again tomorrow.' }, { status: 429 })
   }
 
+  const session = await getAuthSession(event, env)
+  const userId = session?.user?.id || null
+
   const customerInput = {
     organizationId: site.organization_id,
     siteId,
@@ -148,6 +152,7 @@ export default defineEventHandler(async (event) => {
     phone,
     source: 'reservation',
     bookingAt: `${date}T${time}:00`,
+    userId,
   } as const
   const customer = await findOrCreateCustomer(db, customerInput)
 
