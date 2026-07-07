@@ -265,10 +265,9 @@ test.describe('reply threading', () => {
 
     await expect(page.locator('body')).toContainText('Reservations')
     await expect(page.getByRole('heading', { name: 'Reply to guest' })).toBeVisible()
-    await expect(page.getByRole('tab', { name: 'Email' })).toBeVisible()
-    await expect(page.getByRole('tab', { name: 'WhatsApp' })).toBeVisible()
+    await expect(page.locator('body')).toContainText('Replies from this inbox are sent by email.')
 
-    await page.getByPlaceholder('Write your reply...').fill(replyBody)
+    await page.getByPlaceholder('Write your email reply...').fill(replyBody)
     await page.getByRole('button', { name: 'Send reply' }).click()
 
     await expect(page.locator('body')).toContainText('Reply sent')

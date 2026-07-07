@@ -107,16 +107,8 @@
         <template #content>
           <div class="p-6">
             <h2 class="text-lg font-semibold text-highlighted">Reply to guest</h2>
-            <UTabs
-              v-if="replyTarget?.phone"
-              v-model="replyChannel"
-              class="mt-4"
-              :items="[
-                { label: 'Email', value: 'email', icon: 'i-lucide-mail' },
-                { label: 'WhatsApp', value: 'whatsapp', icon: 'i-simple-icons-whatsapp' },
-              ]"
-            />
-            <UTextarea v-model="replyText" class="mt-5" :rows="5" placeholder="Write your reply..." />
+            <p class="mt-4 text-sm text-muted">Replies from this inbox are sent by email.</p>
+            <UTextarea v-model="replyText" class="mt-5" :rows="5" placeholder="Write your email reply..." />
             <div class="mt-5 flex justify-end gap-2">
               <UButton color="neutral" variant="ghost" @click="replyOpen = false">Cancel</UButton>
               <UButton :loading="replySaving" @click="saveReply">Send reply</UButton>
@@ -358,13 +350,11 @@ async function sendBookingReviewRequest(booking: ExperienceBooking, kind: 'first
 
 const replyOpen = ref(false)
 const replyText = ref('')
-const replyChannel = ref<'email' | 'whatsapp'>('email')
 const replySaving = ref(false)
 const replyTarget = ref<{ kind: SubmissionKind; id: string; email: string; phone: string | null; locationId?: string } | null>(null)
 
 function startReply(kind: SubmissionKind, item: { id: string; email: string; phone?: string | null; location_id?: string }) {
   replyTarget.value = { kind, id: item.id, email: item.email, phone: item.phone ?? null, locationId: item.location_id }
-  replyChannel.value = 'email'
   replyText.value = ''
   replyOpen.value = true
 }
@@ -375,7 +365,7 @@ async function saveReply() {
   try {
     const segment = REPLY_ENDPOINT_SEGMENT[replyTarget.value.kind]
     const url: string = `/api/dashboard/editor/${segment}/${replyTarget.value.id}/reply`
-    const body: { channel: string; body: string; location_id?: string } = { channel: replyChannel.value, body: replyText.value }
+    const body: { channel: string; body: string; location_id?: string } = { channel: 'email', body: replyText.value }
     if (replyTarget.value.kind === 'reservation' && replyTarget.value.locationId) {
       body.location_id = replyTarget.value.locationId
     }
