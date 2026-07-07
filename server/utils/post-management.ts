@@ -286,6 +286,34 @@ async function replacePostMedia(
   if (queries.length > 0) await executeBatch(db, queries)
 }
 
+async function syncPostCoverMedia(
+  db: DbClient,
+  organizationId: string,
+  siteId: string,
+  postId: string,
+  coverAssetId: string | null,
+) {
+  if (coverAssetId) await requireActiveMediaAsset(db, organizationId, siteId, coverAssetId, 'image_asset_id')
+
+  await execute(
+    db,
+    `DELETE FROM post_media WHERE post_id = ? AND organization_id = ? AND site_id = ? AND role = 'cover'`,
+    [postId, organizationId, siteId],
+  )
+
+  if (!coverAssetId) return
+
+  const now = new Date().toISOString()
+  await execute(
+    db,
+    `
+      INSERT INTO post_media (id, organization_id, site_id, post_id, media_asset_id, role, sort_order, caption, alt_text, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'cover', 0, NULL, NULL, ?, ?)
+    `,
+    [crypto.randomUUID(), organizationId, siteId, postId, coverAssetId, now, now],
+  )
+}
+
 async function getPostMediaByPostIds(db: DbClient, postIds: string[]) {
   if (postIds.length === 0) return new Map<string, PostMediaItem[]>()
   const placeholders = postIds.map(() => '?').join(', ')
@@ -584,6 +612,8 @@ export async function updatePost(
     const galleryMedia = normalizeMediaInputs(data.gallery_media) ?? []
     const coverAssetId = data.image_asset_id !== undefined ? imageAssetId : existing.image_asset_id
     await replacePostMedia(db, organizationId, siteId, postId, coverAssetId, galleryMedia)
+  } else if (data.image_asset_id !== undefined) {
+    await syncPostCoverMedia(db, organizationId, siteId, postId, imageAssetId ?? null)
   }
 
   return await getPost(db, organizationId, siteId, postId)
