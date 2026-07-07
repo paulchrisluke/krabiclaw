@@ -1767,10 +1767,24 @@ export async function updatePlatformDoc(
 
 export async function deletePlatformDoc(db: D1Database, docIdOrSlug: string) {
   const docId = await resolvePlatformContentId(db, 'platform_docs', docIdOrSlug, 'Doc not found')
-  await replaceContentComponents(db, 'doc', docId, [])
-  const result = await execute(db, 'DELETE FROM platform_docs WHERE id = ?', [docId])
-  if (!result.meta.changes || result.meta.changes === 0) notFound('Doc not found')
-  await deleteContentDocumentForOwner(db, 'platform_doc', docId)
+  const priorComponents = await listContentComponents(db, 'doc', docId)
+  try {
+    await replaceContentComponents(db, 'doc', docId, [])
+    const result = await execute(db, 'DELETE FROM platform_docs WHERE id = ?', [docId])
+    if (!result.meta.changes || result.meta.changes === 0) notFound('Doc not found')
+    await deleteContentDocumentForOwner(db, 'platform_doc', docId)
+  } catch (err) {
+    await replaceContentComponents(db, 'doc', docId, priorComponents.map(c => ({
+      type: c.type,
+      data: c.data,
+      label: c.label,
+      status: c.status,
+      render_enabled: c.render_enabled,
+      schema_enabled: c.schema_enabled,
+      position: c.position,
+    })))
+    throw err
+  }
   return { success: true }
 }
 

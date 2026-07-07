@@ -211,6 +211,14 @@ export async function ensureContentDocument(db: D1Database, ownerType: ContentDo
   }
 }
 
+// Every call rewrites the document's entire content_blocks set and stores a
+// full block snapshot on content_revisions, even for a single-block edit.
+// That's O(n) per write in a document's block count and revision history
+// size; intentional for now since documents are short-form (blog/doc posts,
+// not full books) and it keeps the optimistic-concurrency story in this file
+// simple (one guarded delete+reinsert instead of per-block diffing). Revisit
+// with per-block writes/diffed revisions if documents grow large enough for
+// this to matter.
 async function writeRevisionFromBlocks(
   db: D1Database,
   document: ContentDocumentRow,
@@ -259,6 +267,24 @@ async function writeRevisionFromBlocks(
         params: [document.id],
       }
 
+  // When the guarded block is being removed entirely (deleteContentBlock),
+  // it has no corresponding INSERT below to collide on if the guard's DELETE
+  // above failed to match, so nothing would abort the batch. Force a PK
+  // collision to detect that case too: insert a throwaway row under the
+  // guarded id (this only succeeds if the guard really did clear the old
+  // row) and remove it again immediately after, all inside the same batch.
+  const guardBlockPersists = !opts.expectedBlock || snapshots.some(block => block.id === opts.expectedBlock!.id)
+  const guardCollisionQueries = opts.expectedBlock && !guardBlockPersists
+    ? [
+        {
+          query: `INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
+            VALUES (?, ?, NULL, 'markdown', 0, NULL, '{}', ?, ?)`,
+          params: [opts.expectedBlock.id, document.id, now, opts.expectedBlock.updatedAt],
+        },
+        { query: 'DELETE FROM content_blocks WHERE id = ?', params: [opts.expectedBlock.id] },
+      ]
+    : []
+
   const queries: { query: string; params: unknown[] }[] = [
     deleteBlocksQuery,
     ...snapshots.map(block => ({
@@ -276,6 +302,7 @@ async function writeRevisionFromBlocks(
         block.updated_at,
       ],
     })),
+    ...guardCollisionQueries,
     {
       query: `INSERT INTO content_revisions (id, document_id, snapshot_json, body_markdown, created_by, label, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -291,30 +318,13 @@ async function writeRevisionFromBlocks(
     },
   ]
 
-  let results: Awaited<ReturnType<typeof executeBatch>>
   try {
-    results = await executeBatch(db, queries)
+    await executeBatch(db, queries)
   } catch (error) {
     if (opts.expectedBlock) {
       throw createError({ statusCode: 409, statusMessage: 'Content block was updated by another writer', cause: error })
     }
     throw error
-  }
-
-  if (opts.expectedBlock && !Number(results[0]?.meta?.changes ?? 0)) {
-    // The guard blocked the delete but the insert list happened to be empty
-    // (e.g. deleting a document's last remaining block), so nothing collided
-    // on a primary key to abort the batch above. The revision/document rows
-    // still went in, so compensate by putting content_documents back and
-    // discarding the bad revision before reporting the conflict.
-    await executeBatch(db, [
-      { query: 'DELETE FROM content_revisions WHERE id = ?', params: [revisionId] },
-      {
-        query: 'UPDATE content_documents SET draft_revision_id = ?, published_revision_id = ?, updated_at = ? WHERE id = ?',
-        params: [document.draft_revision_id, document.published_revision_id, now, document.id],
-      },
-    ])
-    throw createError({ statusCode: 409, statusMessage: 'Content block was updated by another writer' })
   }
 
   return { revision_id: revisionId, body_markdown: bodyMarkdown, blocks: snapshots }
@@ -436,17 +446,8 @@ export async function deleteContentDocumentForOwner(db: D1Database, ownerType: C
   )
 }
 
-export async function getContentOutline(db: DbClient, documentId: string) {
-  const blocks = await queryAll<ContentBlockRow>(
-    db,
-    `SELECT id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at
-     FROM content_blocks
-     WHERE document_id = ?
-     ORDER BY position ASC, created_at ASC`,
-    [documentId],
-  )
-
-  return (blocks ?? []).map(block => ({
+function formatBlockOutline(block: ContentBlockRow) {
+  return {
     id: block.id,
     parent_block_id: block.parent_block_id,
     type: block.type,
@@ -454,7 +455,12 @@ export async function getContentOutline(db: DbClient, documentId: string) {
     level: block.level,
     updated_at: block.updated_at,
     data: parseBlockData(block),
-  }))
+  }
+}
+
+export async function getContentOutline(db: DbClient, documentId: string) {
+  const blocks = await listBlocksForDocument(db, documentId)
+  return blocks.map(formatBlockOutline)
 }
 
 export async function getContentBlock(db: DbClient, blockId: string) {
@@ -612,5 +618,5 @@ export async function deleteContentBlock(
 
 export async function renderContentPreview(db: DbClient, documentId: string) {
   const blocks = await listBlocksForDocument(db, documentId)
-  return { body_markdown: renderContentBlocksToMarkdown(blocks), blocks: await getContentOutline(db, documentId) }
+  return { body_markdown: renderContentBlocksToMarkdown(blocks), blocks: blocks.map(formatBlockOutline) }
 }
