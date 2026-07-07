@@ -123,6 +123,19 @@ const HOW_TO_STEP_OUTPUT_SCHEMA = {
   additionalProperties: false,
 }
 
+const AI_ASSISTANCE_PROMPT_SCHEMA = {
+  type: 'object',
+  properties: {
+    title: NULLABLE_STRING,
+    prompt: { type: 'string' },
+    description: NULLABLE_STRING,
+    copy_label: NULLABLE_STRING,
+    position: { type: 'number' },
+  },
+  required: ['prompt'],
+  additionalProperties: false,
+}
+
 const FAQ_COMPONENT_SCHEMA = {
   type: 'object',
   properties: {
@@ -172,10 +185,36 @@ const HOW_TO_COMPONENT_SCHEMA = {
   additionalProperties: false,
 }
 
+const AI_ASSISTANCE_COMPONENT_SCHEMA = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    content_type: { type: 'string', enum: ['blog_post', 'doc'] },
+    content_id: { type: 'string' },
+    type: { type: 'string', enum: ['ai_assistance'] },
+    ...COMPONENT_METADATA_SCHEMA,
+    data: {
+      type: 'object',
+      properties: {
+        intro: NULLABLE_STRING,
+        collapsed: NULLABLE_BOOLEAN,
+        max_visible_lines: NULLABLE_NUMBER,
+        prompts: { type: 'array', items: AI_ASSISTANCE_PROMPT_SCHEMA },
+      },
+      required: ['prompts'],
+      additionalProperties: false,
+    },
+    created_at: { type: 'string' },
+    updated_at: { type: 'string' },
+  },
+  required: ['id', 'content_type', 'content_id', 'type', 'position', 'label', 'status', 'render_enabled', 'schema_enabled', 'data', 'created_at', 'updated_at'],
+  additionalProperties: false,
+}
+
 const COMPONENT_INPUT_SCHEMA = {
   type: 'object',
   properties: {
-    type: { type: 'string', enum: ['faq', 'how_to'] },
+    type: { type: 'string', enum: ['faq', 'how_to', 'ai_assistance'] },
     ...COMPONENT_METADATA_SCHEMA,
     data: { type: 'object' },
   },
@@ -199,6 +238,10 @@ const BLOG_SUMMARY_SCHEMA = {
     updated_at: { type: 'string' },
     ...SEO_FIELDS_SCHEMA,
     featured_image: FEATURED_IMAGE_SCHEMA,
+    admin_edit_url: { type: 'string' },
+    public_path: NULLABLE_STRING,
+    public_url: NULLABLE_STRING,
+    preview_url: NULLABLE_STRING,
   },
   required: [
     'id',
@@ -222,6 +265,10 @@ const BLOG_SUMMARY_SCHEMA = {
     'robots',
     'featured_image_asset_id',
     'featured_image',
+    'admin_edit_url',
+    'public_path',
+    'public_url',
+    'preview_url',
   ],
   additionalProperties: false,
 }
@@ -233,7 +280,7 @@ const BLOG_RECORD_SCHEMA = {
     components: {
       type: 'array',
       items: {
-        oneOf: [FAQ_COMPONENT_SCHEMA, HOW_TO_COMPONENT_SCHEMA],
+        oneOf: [FAQ_COMPONENT_SCHEMA, HOW_TO_COMPONENT_SCHEMA, AI_ASSISTANCE_COMPONENT_SCHEMA],
       },
     },
   },
@@ -261,6 +308,10 @@ const DOC_SUMMARY_SCHEMA = {
     updated_at: { type: 'string' },
     ...SEO_FIELDS_SCHEMA,
     featured_image: FEATURED_IMAGE_SCHEMA,
+    admin_edit_url: { type: 'string' },
+    public_path: NULLABLE_STRING,
+    public_url: NULLABLE_STRING,
+    preview_url: NULLABLE_STRING,
   },
   required: [
     'id',
@@ -288,6 +339,10 @@ const DOC_SUMMARY_SCHEMA = {
     'robots',
     'featured_image_asset_id',
     'featured_image',
+    'admin_edit_url',
+    'public_path',
+    'public_url',
+    'preview_url',
   ],
   additionalProperties: false,
 }
@@ -299,7 +354,7 @@ const DOC_RECORD_SCHEMA = {
     components: {
       type: 'array',
       items: {
-        oneOf: [FAQ_COMPONENT_SCHEMA, HOW_TO_COMPONENT_SCHEMA],
+        oneOf: [FAQ_COMPONENT_SCHEMA, HOW_TO_COMPONENT_SCHEMA, AI_ASSISTANCE_COMPONENT_SCHEMA],
       },
     },
   },
@@ -314,9 +369,13 @@ const BLOG_WRITE_RESPONSE_SCHEMA = {
     id: { type: 'string' },
     slug: { type: 'string' },
     published_at: NULLABLE_STRING,
+    admin_edit_url: { type: 'string' },
+    public_path: NULLABLE_STRING,
+    public_url: NULLABLE_STRING,
+    preview_url: NULLABLE_STRING,
     post: BLOG_RECORD_SCHEMA,
   },
-  required: ['success', 'id', 'slug', 'published_at', 'post'],
+  required: ['success', 'id', 'slug', 'published_at', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'post'],
   additionalProperties: false,
 }
 
@@ -328,9 +387,13 @@ const DOC_WRITE_RESPONSE_SCHEMA = {
     slug: { type: 'string' },
     status: { type: 'string' },
     published_at: NULLABLE_STRING,
+    admin_edit_url: { type: 'string' },
+    public_path: NULLABLE_STRING,
+    public_url: NULLABLE_STRING,
+    preview_url: NULLABLE_STRING,
     doc: DOC_RECORD_SCHEMA,
   },
-  required: ['success', 'id', 'slug', 'status', 'published_at', 'doc'],
+  required: ['success', 'id', 'slug', 'status', 'published_at', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'doc'],
   additionalProperties: false,
 }
 
@@ -345,10 +408,11 @@ const DELETE_RESPONSE_SCHEMA = {
 
 const SHARED_TOOL_DESCRIPTION_LINES = [
   'Set seo_description explicitly for the intended search snippet. Use canonical_url only for deliberate canonical consolidation. Use robots only for non-default index behavior. Set featured_image_asset_id only when the user has selected or uploaded a real platform media asset; otherwise leave it null.',
-  'Use components[] as the only structured-content authoring shape. FAQ components contain data.items[]. How-To components contain data.steps[] and may also include data.estimated_time, data.tool_items, and data.supply_items.',
-  'To place a visual component inside the article body, insert a component embed tag directly into body markdown, for example {{component type="faq"}} or {{component type="how_to"}}. A component only renders where its matching embed appears; there is no auto-append fallback.',
-  'Use render_enabled to control whether a component appears on the page. Use schema_enabled to control whether it emits structured data. Use status to disable a component without deleting it.',
+  'Use components[] as the only structured-content authoring shape. FAQ components contain data.items[]. How-To components contain data.steps[] and may also include data.estimated_time, data.tool_items, and data.supply_items. AI Assistance components use type="ai_assistance" and contain data.prompts[]; each prompt is a writer-authored suggested prompt, not a generated answer.',
+  'To place a visual component inside the article body, insert a component embed tag directly into body markdown, for example {{component type="faq"}}, {{component type="how_to"}}, or {{component type="ai_assistance"}}. Keep AI Assistance prompts specific, actionable, page-aware, and rare enough to help the reader act.',
+  'Use render_enabled to control whether a component appears on the page. Use schema_enabled to control whether it emits structured data; leave schema_enabled false for ai_assistance unless a future schema representation exists. Use status to disable a component without deleting it.',
   'On update: omitting components preserves existing components; sending components: [] deletes them; sending a non-empty components[] array replaces the full component set for that page.',
+  'Default writer workflow is draft first: create or update the draft, then report admin_edit_url so the writer can review it. If published, also report public_url or public_path. preview_url is null until draft previews are supported.',
   'Once the user has supplied or approved final body text and you have computed the SEO fields, call this tool directly with those values — do not respond with a description of the call you would make instead of making it. If the user also asked to publish, follow this call with the corresponding publish tool in the same turn rather than waiting for a second request.',
 ]
 
@@ -627,9 +691,13 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         success: { type: 'boolean' },
+        admin_edit_url: { type: 'string' },
+        public_path: NULLABLE_STRING,
+        public_url: NULLABLE_STRING,
+        preview_url: NULLABLE_STRING,
         post: BLOG_RECORD_SCHEMA,
       },
-      required: ['success', 'post'],
+      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'post'],
       additionalProperties: false,
     },
   }),
@@ -647,9 +715,13 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         success: { type: 'boolean' },
+        admin_edit_url: { type: 'string' },
+        public_path: NULLABLE_STRING,
+        public_url: NULLABLE_STRING,
+        preview_url: NULLABLE_STRING,
         post: BLOG_RECORD_SCHEMA,
       },
-      required: ['success', 'post'],
+      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'post'],
       additionalProperties: false,
     },
   }),
@@ -667,9 +739,13 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         success: { type: 'boolean' },
+        admin_edit_url: { type: 'string' },
+        public_path: NULLABLE_STRING,
+        public_url: NULLABLE_STRING,
+        preview_url: NULLABLE_STRING,
         post: BLOG_RECORD_SCHEMA,
       },
-      required: ['success', 'post'],
+      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'post'],
       additionalProperties: false,
     },
   }),
@@ -806,9 +882,13 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         success: { type: 'boolean' },
+        admin_edit_url: { type: 'string' },
+        public_path: NULLABLE_STRING,
+        public_url: NULLABLE_STRING,
+        preview_url: NULLABLE_STRING,
         doc: DOC_RECORD_SCHEMA,
       },
-      required: ['success', 'doc'],
+      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'doc'],
       additionalProperties: false,
     },
   }),
@@ -826,9 +906,13 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         success: { type: 'boolean' },
+        admin_edit_url: { type: 'string' },
+        public_path: NULLABLE_STRING,
+        public_url: NULLABLE_STRING,
+        preview_url: NULLABLE_STRING,
         doc: DOC_RECORD_SCHEMA,
       },
-      required: ['success', 'doc'],
+      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'doc'],
       additionalProperties: false,
     },
   }),
@@ -846,9 +930,13 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         success: { type: 'boolean' },
+        admin_edit_url: { type: 'string' },
+        public_path: NULLABLE_STRING,
+        public_url: NULLABLE_STRING,
+        preview_url: NULLABLE_STRING,
         doc: DOC_RECORD_SCHEMA,
       },
-      required: ['success', 'doc'],
+      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'doc'],
       additionalProperties: false,
     },
   }),
