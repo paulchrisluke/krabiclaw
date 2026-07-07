@@ -1,5 +1,7 @@
 // Analytics event tracking composable
-// Uses @nuxt/scripts Google Analytics integration (GA4)
+// Product analytics writes into the app-owned krabiLayer. A platform-only
+// bridge in app.vue forwards those events into KrabiClaw's GA property once
+// GA is ready.
 
 declare global {
   interface Window {
@@ -9,6 +11,7 @@ declare global {
     // (`gtag('js', new Date())`), which is equally legitimate usage of the same global.
     gtag?: (..._args: unknown[]) => void
     dataLayer?: unknown[]
+    krabiLayer?: KrabiAnalyticsEvent[]
   }
 }
 
@@ -98,6 +101,12 @@ export interface AnalyticsEventParams {
   status_code?: number
 }
 
+export interface KrabiAnalyticsEvent {
+  name: AnalyticsEventName
+  params: AnalyticsEventParams
+  timestamp: string
+}
+
 // Reads the GA4 client_id out of the `_ga` cookie GA4's own gtag.js sets
 // (format `GA1.1.<random>.<timestamp>`; client_id is the last two segments).
 // Used to stitch server-side Stripe webhook events back to the browsing
@@ -112,12 +121,20 @@ export const getGaClientId = (): string | null => {
 }
 
 export const useAnalytics = () => {
+  const { isPlatform } = useTenantSite()
+
   const trackEvent = (eventName: AnalyticsEventName, params: AnalyticsEventParams = {}) => {
     if (import.meta.client) {
-      // @nuxt/scripts injects gtag globally
-      if (typeof window !== 'undefined' && window.gtag) {
-        window.gtag('event', eventName, params)
+      if (typeof window === 'undefined') return
+      if (!isPlatform) return
+      const queue = window.krabiLayer || []
+      const event: KrabiAnalyticsEvent = {
+        name: eventName,
+        params,
+        timestamp: new Date().toISOString(),
       }
+      queue.push(event)
+      window.krabiLayer = queue
     }
   }
 
@@ -214,10 +231,6 @@ export const useAnalytics = () => {
   }
 
   // Feature Usage
-  const trackChowbotInteraction = (siteId: string) => {
-    trackEvent('chowbot_interaction', { site_id: siteId })
-  }
-
   const trackMcpToolUsed = (toolName: string, siteId?: string) => {
     trackEvent('mcp_tool_used', { tool_name: toolName, site_id: siteId })
   }
@@ -280,7 +293,6 @@ export const useAnalytics = () => {
     trackVideoUploaded,
     trackMediaGenerated,
     trackMediaLibraryViewed,
-    trackChowbotInteraction,
     trackMcpToolUsed,
     trackDashboardVisited,
     trackEditorSessionStarted,

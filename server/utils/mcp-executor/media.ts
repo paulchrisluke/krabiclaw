@@ -126,6 +126,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         site.env,
         requiredString(args, "asset_id"),
         site.siteId,
+        site.userId,
       );
       return { deleted: true, context: await mutationContextPayload(site) };
     case "import_menu_from_media": {

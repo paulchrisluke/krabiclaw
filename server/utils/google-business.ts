@@ -2,6 +2,7 @@ import type { D1Database } from '@cloudflare/workers-types'
 import { execute, queryFirst } from '~/server/db'
 import { encryptSecret, decryptSecret, encryptionEnv } from './encryption'
 import { notifyReviewReceived } from './notifications'
+import { fireSiteEventSafe } from './site-events'
 
 type JsonPrimitive = string | number | boolean | null
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[]
@@ -468,6 +469,22 @@ export const syncGoogleLocations = async (
         siteId,
         googleLocationId
       ])
+      notificationPromises.push(
+        fireSiteEventSafe({
+          db: env.DB,
+          organizationId,
+          siteId,
+          locationId: localLocationId,
+          eventType: 'location.updated',
+          entityType: 'business_location',
+          entityId: localLocationId,
+          metadata: {
+            source: 'google_business_sync',
+            google_location_id: googleLocationId,
+            title: location.title,
+          },
+        })
+      )
     } else {
       localLocationId = `location-${organizationId}-${siteId}-${googleLocationId}`
       await execute(env.DB, `
@@ -496,6 +513,37 @@ export const syncGoogleLocations = async (
         now,
         now
       ])
+      notificationPromises.push(
+        fireSiteEventSafe({
+          db: env.DB,
+          organizationId,
+          siteId,
+          locationId: localLocationId,
+          eventType: 'location.created',
+          entityType: 'business_location',
+          entityId: localLocationId,
+          metadata: {
+            source: 'google_business_sync',
+            google_location_id: googleLocationId,
+            title: location.title,
+          },
+        })
+      )
+      notificationPromises.push(
+        fireSiteEventSafe({
+          db: env.DB,
+          organizationId,
+          siteId,
+          locationId: localLocationId,
+          eventType: 'location.gmb_connected',
+          entityType: 'business_location',
+          entityId: localLocationId,
+          metadata: {
+            google_location_id: googleLocationId,
+            title: location.title,
+          },
+        })
+      )
     }
 
     // Sync reviews from GBP if we have an access token
