@@ -8023,6 +8023,22 @@
             "sort_order"
           ],
           "isUnique": false
+        },
+        "post_media_post_asset_unique": {
+          "name": "post_media_post_asset_unique",
+          "columns": [
+            "post_id",
+            "media_asset_id"
+          ],
+          "isUnique": true
+        },
+        "post_media_cover_unique": {
+          "name": "post_media_cover_unique",
+          "columns": [
+            "post_id"
+          ],
+          "isUnique": true,
+          "where": "role = 'cover'"
         }
       },
       "foreignKeys": {

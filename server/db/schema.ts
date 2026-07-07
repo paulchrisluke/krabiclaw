@@ -888,6 +888,8 @@ export const post_media = sqliteTable("post_media", {
 }, (table) => [
 	index("post_media_post_idx").on(table.post_id, table.sort_order),
 	check("post_media_role_check", sql`role IN ('cover', 'gallery')`),
+	uniqueIndex("post_media_post_asset_unique").on(table.post_id, table.media_asset_id),
+	uniqueIndex("post_media_cover_unique").on(table.post_id).where(sql`role = 'cover'`),
 ]);
 
 export const rate_limits = sqliteTable("rate_limits", {
