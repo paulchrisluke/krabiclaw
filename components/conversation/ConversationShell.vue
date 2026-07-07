@@ -79,7 +79,7 @@
         <button
           v-for="(reply, index) in quickReplies"
           :key="index"
-          data-testid="conversation-quick-reply"
+          data-testid="chowbot-quick-reply"
           :data-reply-action="reply.action"
           :class="[
             'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12.5px] font-semibold transition-colors',

@@ -299,19 +299,20 @@ async function buildOwnerThreadInboxUrl(
   return `https://${platformDomain}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}/${slugs.locationSlug}/inbox?${query.toString()}`
 }
 
-// Deep-links an owner notification straight to the dashboard reviews page for that location.
-// The reviews page doesn't yet support scrolling to/highlighting a single review (no query
-// param handling there), so this lands on the reviews list rather than the specific review.
+// Deep-links an owner notification straight to the dashboard reviews page for that location,
+// optionally scrolling to/highlighting a single review via the `reply` query param.
 async function buildOwnerReviewsUrl(
   env: NotificationEnv,
   db: DbClient,
-  opts: { organizationId: string; siteId: string; locationId?: string | null }
+  opts: { organizationId: string; siteId: string; locationId?: string | null; reviewId?: string | null }
 ): Promise<string | null> {
   const slugs = await resolveSiteLocationSlugs(db, opts)
   if (!slugs) return null
 
   const platformDomain = getPlatformDomain(env)
-  return `https://${platformDomain}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}/${slugs.locationSlug}/reviews`
+  const base = `https://${platformDomain}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}/${slugs.locationSlug}/reviews`
+  if (!opts.reviewId) return base
+  return `${base}?${new URLSearchParams({ reply: opts.reviewId }).toString()}`
 }
 
 function ownerEmailQuery() {
@@ -1118,6 +1119,7 @@ export async function notifyReviewReceived(
     organizationId: opts.organizationId,
     siteId: opts.siteId,
     locationId: opts.locationId,
+    reviewId: opts.reviewId,
   })
 
   try {
@@ -1407,8 +1409,11 @@ export async function notifyGuestThreadReply(
     siteName: opts.siteName ?? null,
   }, phones.length > 0)
 
+  let emailOutcomes: boolean[] = []
+  let whatsappOutcomes: boolean[] = []
+
   if (channels.includes('email') && emails.length > 0) {
-    await Promise.allSettled(emails.map(to => sendEmailNotification(env, db, {
+    const results = await Promise.allSettled(emails.map(to => sendEmailNotification(env, db, {
       organizationId: opts.organizationId,
       siteId: opts.siteId,
       siteName: opts.siteName ?? null,
@@ -1419,10 +1424,11 @@ export async function notifyGuestThreadReply(
       payload,
       email,
     })))
+    emailOutcomes = results.map(result => result.status === 'fulfilled' && result.value === true)
   }
 
   if (channels.includes('whatsapp') && phones.length > 0) {
-    await Promise.allSettled(phones.map(toPhone => sendWhatsAppNotification(env, db, {
+    const results = await Promise.allSettled(phones.map(toPhone => sendWhatsAppNotification(env, db, {
       organizationId: opts.organizationId,
       siteId: opts.siteId,
       locationId: opts.locationId ?? null,
@@ -1436,7 +1442,20 @@ export async function notifyGuestThreadReply(
         reply_path: inboxUrlToWhatsAppReplyPath(replyUrl),
       },
     })))
+    whatsappOutcomes = results.map(result => result.status === 'fulfilled' && result.value.success === true)
   }
+
+  const attempted = [...emailOutcomes, ...whatsappOutcomes]
+  const deliveryStatus: 'sent' | 'partial' | 'failed' = attempted.length === 0 || attempted.every(succeeded => !succeeded)
+    ? 'failed'
+    : attempted.every(succeeded => succeeded)
+      ? 'sent'
+      : 'partial'
+  const deliveryError = deliveryStatus === 'sent'
+    ? undefined
+    : attempted.length === 0
+      ? 'No notification channels or recipients available'
+      : 'One or more delivery attempts failed'
 
   try {
     await logNotificationEvent(db, {
@@ -1450,7 +1469,8 @@ export async function notifyGuestThreadReply(
       channels: ['dashboard', ...channels],
       recipients: [...emails, ...phones],
       payload,
-      status: 'sent',
+      status: deliveryStatus,
+      error: deliveryError,
     })
   } catch (error) {
     console.error('notification_event_log_failed', {

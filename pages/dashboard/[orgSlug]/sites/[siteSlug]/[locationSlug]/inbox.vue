@@ -363,6 +363,8 @@ async function loadThreadDetail(threadId: string) {
     selectedDetail.value = res
     selectedInboxStatus.value = res.thread.inbox_status
     replyDraft.value = ''
+  } catch (error) {
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to load thread', color: 'error' })
   } finally {
     loadingDetail.value = false
   }
@@ -387,7 +389,7 @@ async function applyRouteSelection() {
           : null
     const match = threads.value.find(thread => thread.submission_id === legacyReply && (!mappedType || thread.submission_type === mappedType))
     if (match) {
-      await selectThread(match.id, true)
+      await selectThread(match.id)
       return
     }
   }
@@ -397,10 +399,9 @@ async function applyRouteSelection() {
   }
 }
 
-async function selectThread(threadId: string, replaceLegacy = false) {
+async function selectThread(threadId: string) {
   await loadThreadDetail(threadId)
   mobileTab.value = 'conversation'
-  void replaceLegacy
   const query: Record<string, string> = {
     ...Object.fromEntries(
       Object.entries(route.query)
