@@ -2,7 +2,6 @@ export function useDashboardLocation() {
   const dashboard = useDashboardSite()
   const route = useRoute()
   const router = useRouter()
-  const canonicalizingLegacyRoute = useState<boolean>('dashboard:location:canonicalizing-legacy-route', () => false)
 
   const routeLocationSlug = computed(() => {
     const slug = route.params.locationSlug
@@ -75,23 +74,6 @@ export function useDashboardLocation() {
     if (options.persistPreference !== false && dashboard.selectedLocation.value?.id !== target.id) {
       await dashboard.selectLocation(target.id)
     }
-  }
-
-  if (import.meta.client) {
-    watch(legacyRouteLocation, async (legacyLocation) => {
-      if (!legacyLocation || canonicalizingLegacyRoute.value) return
-      canonicalizingLegacyRoute.value = true
-      try {
-        const query = { ...route.query }
-        delete query.locationId
-        await router.replace({
-          path: buildLocationWorkspacePath(legacyLocation.slug),
-          query,
-        })
-      } finally {
-        canonicalizingLegacyRoute.value = false
-      }
-    }, { immediate: true })
   }
 
   return {
