@@ -11,6 +11,11 @@ import { normalizePhone, sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { notifyAdminNewUserSignup } from '~/server/utils/admin-notifications'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
 import { validatePassword } from '~/utils/password-validation'
+import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/site-events'
+import type { InferSelectModel } from 'drizzle-orm'
+
+type MemberRow = InferSelectModel<typeof schema.member>
+type InvitationRow = InferSelectModel<typeof schema.invitation>
 
 export interface CloudflareEnv {
   DB: D1Database
@@ -106,6 +111,58 @@ export function createAuth(env: CloudflareEnv) {
               email: user.email,
               createdAt: now.toISOString(),
             }).catch((err) => console.error('admin_signup_notify_failed', err))
+          }
+        }
+      },
+      // Better Auth's org-plugin after-hooks only pass the affected row, not the
+      // acting session, so member.update/delete events are attributed to no actor.
+      member: {
+        update: {
+          after: async (member: MemberRow) => {
+            const siteId = await resolvePrimarySiteForEvent(db, member.organizationId)
+            if (!siteId) return
+            await fireSiteEventSafe({
+              db,
+              organizationId: member.organizationId,
+              siteId,
+              eventType: 'member.role_changed',
+              entityType: 'member',
+              entityId: member.id,
+              metadata: { userId: member.userId, role: member.role },
+            })
+          }
+        },
+        delete: {
+          after: async (member: MemberRow) => {
+            const siteId = await resolvePrimarySiteForEvent(db, member.organizationId)
+            if (!siteId) return
+            await fireSiteEventSafe({
+              db,
+              organizationId: member.organizationId,
+              siteId,
+              eventType: 'member.removed',
+              entityType: 'member',
+              entityId: member.id,
+              metadata: { userId: member.userId },
+            })
+          }
+        }
+      },
+      invitation: {
+        create: {
+          after: async (invitation: InvitationRow) => {
+            const siteId = await resolvePrimarySiteForEvent(db, invitation.organizationId)
+            if (!siteId) return
+            await fireSiteEventSafe({
+              db,
+              organizationId: invitation.organizationId,
+              siteId,
+              actorId: invitation.inviterId,
+              eventType: 'member.invited',
+              entityType: 'invitation',
+              entityId: invitation.id,
+              metadata: { email: invitation.email, role: invitation.role ?? null },
+            })
           }
         }
       }

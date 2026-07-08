@@ -2,6 +2,7 @@
 
 import { execute, queryAll, queryFirst } from '~/server/db'
 import { hasSiteEntitlement } from '~/server/utils/billing'
+import { fireSiteEventSafe } from '~/server/utils/site-events'
 
 export interface DomainEnv {
   CF_ZONE_ID?: string
@@ -491,6 +492,19 @@ async function persistCloudflareState(
       beforeState: before,
       afterState: after
     })
+
+    if (before.status !== after.status && (after.status === 'active' || after.status === 'failed' || after.status === 'blocked')) {
+      await fireSiteEventSafe({
+        db,
+        organizationId: after.organization_id,
+        siteId: after.site_id,
+        actorId: options.actorId ?? null,
+        eventType: after.status === 'active' ? 'domain.verified' : 'domain.failed',
+        entityType: 'domain',
+        entityId: domainId,
+        metadata: { domain: after.domain, status: after.status },
+      })
+    }
   }
 
   // promoteCanonicalIfReady can call setCanonicalDomain, which reads/writes
@@ -555,6 +569,17 @@ export async function createCustomDomainPair(
         actorType: opts.actorType ?? 'owner',
         actorId: opts.actorId ?? null,
         message: `${entry.domain} added`
+      })
+
+      await fireSiteEventSafe({
+        db,
+        organizationId: opts.organizationId,
+        siteId: opts.siteId,
+        actorId: opts.actorId ?? null,
+        eventType: 'domain.connected',
+        entityType: 'domain',
+        entityId: entry.id,
+        metadata: { domain: entry.domain, role: entry.role },
       })
     }
 
