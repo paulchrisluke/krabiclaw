@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { locationListItemObject, locationMutationResultObject, locationObject, openingHoursInputSchema, siteTool, specialHoursInputSchema } from './shared'
+import { locationListItemObject, locationMutationSummaryObject, locationObject, openingHoursInputSchema, siteTool, specialHoursInputSchema } from './shared'
 import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const LOCATIONS_TOOLS: McpToolDefinition[] = [
@@ -50,14 +50,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         special_hours: specialHoursInputSchema,
       },
       required: ['title'],
-      outputSchema: {
-        ...locationMutationResultObject,
-        properties: {
-          ...locationMutationResultObject.properties,
-          hydrated_seed_location: { type: 'boolean' },
-          previous_slug: { type: ['string', 'null'] },
-        },
-      },
+      outputSchema: locationMutationSummaryObject,
     }),
   siteTool({
       name: 'update_location',
@@ -83,9 +76,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         special_hours: specialHoursInputSchema,
       },
       required: ['location_id'],
-      outputSchema: {
-        ...locationMutationResultObject,
-      },
+      outputSchema: locationMutationSummaryObject,
     }),
   siteTool({
       name: 'copy_location_batch',
@@ -113,12 +104,14 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
       outputSchema: {
         type: 'object',
         properties: {
-          manifest: {
-            type: 'object',
-            description: 'Per-entity counts of what was copied and the resulting location id/slug.',
-          },
+          ok: { type: 'boolean' },
+          entity: { type: 'string', enum: ['location'] },
+          id: { type: 'string' },
+          slug: { type: 'string' },
+          copied: { type: 'object', description: 'Per-entity-type counts of what was copied.' },
+          context: { type: 'object' },
         },
-        required: ['manifest'],
+        required: ['ok', 'entity', 'id'],
       },
     }),
   siteTool({
@@ -133,9 +126,9 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
       },
       required: ['location_id', 'asset_id'],
       outputSchema: {
-        ...locationMutationResultObject,
+        ...locationMutationSummaryObject,
         properties: {
-          ...locationMutationResultObject.properties,
+          ...locationMutationSummaryObject.properties,
           warning: { type: 'string' },
         },
       },
@@ -152,9 +145,9 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
       },
       required: ['location_id', 'asset_id'],
       outputSchema: {
-        ...locationMutationResultObject,
+        ...locationMutationSummaryObject,
         properties: {
-          ...locationMutationResultObject.properties,
+          ...locationMutationSummaryObject.properties,
           warning: { type: 'string' },
         },
       },
@@ -169,9 +162,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         location_id: { type: 'string' },
       },
       required: ['location_id'],
-      outputSchema: {
-        ...locationMutationResultObject,
-      },
+      outputSchema: locationMutationSummaryObject,
     }),
   siteTool({
       name: 'clear_location_hero_video',
@@ -183,9 +174,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         location_id: { type: 'string' },
       },
       required: ['location_id'],
-      outputSchema: {
-        ...locationMutationResultObject,
-      },
+      outputSchema: locationMutationSummaryObject,
     }),
   siteTool({
       name: 'open_location_media_upload',

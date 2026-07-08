@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { blogPostObject, siteTool } from './shared'
+import { blogPostMutationResultObject, blogPostObject, siteTool } from './shared'
 
 export const BLOG_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -63,11 +63,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         publish: { type: 'boolean', description: 'Publish immediately. Defaults to false (draft).' },
       },
       required: ['title', 'body'],
-      outputSchema: {
-        type: 'object',
-        properties: { post: blogPostObject },
-        required: ['post'],
-      },
+      outputSchema: blogPostMutationResultObject,
     }),
   siteTool({
       name: 'update_blog_post',
@@ -105,11 +101,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         unpublish: { type: 'boolean' },
       },
       required: ['post_id'],
-      outputSchema: {
-        type: 'object',
-        properties: { post: blogPostObject },
-        required: ['post'],
-      },
+      outputSchema: blogPostMutationResultObject,
     }),
   siteTool({
       name: 'set_blog_post_image',
@@ -122,11 +114,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
       },
       required: ['post_id', 'asset_id'],
-      outputSchema: {
-        type: 'object',
-        properties: { post: blogPostObject },
-        required: ['post'],
-      },
+      outputSchema: blogPostMutationResultObject,
     }),
   siteTool({
       name: 'delete_blog_post',

@@ -1,7 +1,7 @@
 import type { McpExecutorContext } from './shared'
 import { copyLocationBatch, type CopyEntityType } from '~/server/utils/copy-paste'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
-import { createLocation, deleteLocation, updateLocation } from '~/server/utils/location-management'
+import { createLocation, deleteLocation, updateLocation, type LocationRecord } from '~/server/utils/location-management'
 import { getLocationForMcp, hydrateSeededLocationForOnboarding } from '~/server/utils/mcp-workflows'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
@@ -65,15 +65,20 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         );
       }
       assertDomainSuccess(result);
-      return {
-        ...result.data,
-        context: await mutationContextPayload(site, {
-          locationId:
-            typeof (result.data as { location?: { id?: string } }).location?.id === "string"
-              ? (result.data as { location: { id: string } }).location.id
-              : null,
-        }),
-      };
+      const createdLocation = (result.data as { location: LocationRecord }).location;
+      const createContext = await mutationContextPayload(site, { locationId: createdLocation.id });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "location",
+          id: createdLocation.id,
+          slug: createdLocation.slug,
+          updated_at: createdLocation.updated_at,
+          context: createContext,
+        },
+        `Created location "${createdLocation.title}".`,
+        { ...result.data, context: createContext },
+      );
     }
     case "update_location": {
       const locationId = requiredString(args, "location_id");
@@ -86,10 +91,21 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         site.userId,
       );
       assertDomainSuccess(result);
-      return {
-        ...result.data,
-        context: await mutationContextPayload(site, { locationId }),
-      };
+      const updatedLocation = (result.data as { location: LocationRecord }).location;
+      const updateContext = await mutationContextPayload(site, { locationId });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "location",
+          id: updatedLocation.id,
+          slug: updatedLocation.slug,
+          changed_fields: Object.keys(omit(args, ["location_id"])),
+          updated_at: updatedLocation.updated_at,
+          context: updateContext,
+        },
+        `Updated "${updatedLocation.title}".`,
+        { ...result.data, context: updateContext },
+      );
     }
     case "copy_location_batch": {
       const VALID_ENTITY_TYPES: CopyEntityType[] = [
@@ -139,10 +155,23 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         throw mcpProtocolError(MCP_ERROR.invalidParams, result.error ?? "Failed to copy location data");
       }
 
-      return {
-        manifest: result.manifest,
-        context: await mutationContextPayload(site, { locationId: result.manifest?.target_location_id ?? null }),
-      };
+      const manifest = result.manifest!;
+      const copyContext = await mutationContextPayload(site, { locationId: manifest.target_location_id });
+      const copiedCounts = Object.fromEntries(
+        Object.entries(manifest.entities).map(([type, entity]) => [type, entity.copied]),
+      );
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "location",
+          id: manifest.target_location_id,
+          slug: manifest.target_location_slug,
+          copied: copiedCounts,
+          context: copyContext,
+        },
+        `Copied ${entityTypes.join(", ")} into "${manifest.target_location_slug}".`,
+        { manifest },
+      );
     }
     case "set_location_hero_image": {
       const locationId = requiredString(args, "location_id");
@@ -163,16 +192,25 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         site.userId,
       );
       assertDomainSuccess(result);
-      return {
-        ...result.data,
-        ...(currentLocation.hero_video_asset_id
-          ? {
-              warning:
-                "This location already has a hero video, which takes display priority over a hero image. The video will keep showing. Call clear_location_hero_video first if you want this image to display instead.",
-            }
-          : {}),
-        context: await mutationContextPayload(site, { locationId }),
-      };
+      const heroImageLocation = (result.data as { location: LocationRecord }).location;
+      const heroImageContext = await mutationContextPayload(site, { locationId });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "location",
+          id: heroImageLocation.id,
+          updated_at: heroImageLocation.updated_at,
+          context: heroImageContext,
+          ...(currentLocation.hero_video_asset_id
+            ? {
+                warning:
+                  "This location already has a hero video, which takes display priority over a hero image. The video will keep showing. Call clear_location_hero_video first if you want this image to display instead.",
+              }
+            : {}),
+        },
+        `Updated hero image for "${heroImageLocation.title}".`,
+        { location: heroImageLocation },
+      );
     }
     case "set_location_hero_video": {
       const locationId = requiredString(args, "location_id");
@@ -193,16 +231,25 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         site.userId,
       );
       assertDomainSuccess(result);
-      return {
-        ...result.data,
-        ...(currentLocation.hero_image_asset_id
-          ? {
-              warning:
-                "This location already has a hero image, but the new hero video will take display priority over it.",
-            }
-          : {}),
-        context: await mutationContextPayload(site, { locationId }),
-      };
+      const heroVideoLocation = (result.data as { location: LocationRecord }).location;
+      const heroVideoContext = await mutationContextPayload(site, { locationId });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "location",
+          id: heroVideoLocation.id,
+          updated_at: heroVideoLocation.updated_at,
+          context: heroVideoContext,
+          ...(currentLocation.hero_image_asset_id
+            ? {
+                warning:
+                  "This location already has a hero image, but the new hero video will take display priority over it.",
+              }
+            : {}),
+        },
+        `Updated hero video for "${heroVideoLocation.title}".`,
+        { location: heroVideoLocation },
+      );
     }
     case "clear_location_hero_image": {
       const locationId = requiredString(args, "location_id");
@@ -215,10 +262,19 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         site.userId,
       );
       assertDomainSuccess(result);
-      return {
-        ...result.data,
-        context: await mutationContextPayload(site, { locationId }),
-      };
+      const clearedImageLocation = (result.data as { location: LocationRecord }).location;
+      const clearImageContext = await mutationContextPayload(site, { locationId });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "location",
+          id: clearedImageLocation.id,
+          updated_at: clearedImageLocation.updated_at,
+          context: clearImageContext,
+        },
+        `Cleared hero image for "${clearedImageLocation.title}".`,
+        { location: clearedImageLocation },
+      );
     }
     case "clear_location_hero_video": {
       const locationId = requiredString(args, "location_id");
@@ -231,10 +287,19 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         site.userId,
       );
       assertDomainSuccess(result);
-      return {
-        ...result.data,
-        context: await mutationContextPayload(site, { locationId }),
-      };
+      const clearedVideoLocation = (result.data as { location: LocationRecord }).location;
+      const clearVideoContext = await mutationContextPayload(site, { locationId });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "location",
+          id: clearedVideoLocation.id,
+          updated_at: clearedVideoLocation.updated_at,
+          context: clearVideoContext,
+        },
+        `Cleared hero video for "${clearedVideoLocation.title}".`,
+        { location: clearedVideoLocation },
+      );
     }
     case "open_location_media_upload": {
       const locationId = requiredString(args, "location_id");

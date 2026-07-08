@@ -1,0 +1,27 @@
+# Cloudflare tunnel source of truth for the local ChatGPT MCP harness.
+#
+# This repo uses the existing Cloudflare tunnel:
+#   name: krabiclaw-local
+#   id:   ba36c78c-9e7d-4312-be92-63a58d96baba
+#
+# Before first local use, download the tunnel credentials JSON from Cloudflare
+# Zero Trust and place it at the path below, then run:
+#
+#   yarn dev:tunnel
+#   yarn tunnel
+#
+# The hostname here must stay in lockstep with:
+# - BETTER_AUTH_URL
+# - NUXT_PUBLIC_PLATFORM_DOMAIN
+# - MCP_BASE_URL
+#
+# Recommended default:
+#   https://local.krabiclaw.com
+
+tunnel: ba36c78c-9e7d-4312-be92-63a58d96baba
+credentials-file: /Users/you/.cloudflared/ba36c78c-9e7d-4312-be92-63a58d96baba.json
+
+ingress:
+  - hostname: local.krabiclaw.com
+    service: http://localhost:3000
+  - service: http_status:404

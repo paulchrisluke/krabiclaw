@@ -122,10 +122,14 @@ watch(() => filters.siteId, async (siteId) => {
   if (!siteId) return
   const site = dashboard.sites.value.find(s => s.id === siteId)
   if (!site?.subdomain) return
-  const res = await $fetch<{ locations: Location[] }>('/api/dashboard/locations', {
-    headers: { ...requestHeaders, 'x-dashboard-site-slug': site.subdomain },
-  })
-  locationsForSite.value = res.locations
+  try {
+    const res = await $fetch<{ locations: Location[] }>('/api/dashboard/locations', {
+      headers: { ...requestHeaders, 'x-dashboard-site-slug': site.subdomain },
+    })
+    locationsForSite.value = res.locations
+  } catch (err) {
+    toast.add({ title: 'Failed to load locations', description: err instanceof Error ? err.message : 'Please try again.', color: 'error' })
+  }
 })
 const locationOptions = computed(() => [
   { label: 'All locations', value: '' },

@@ -1,4 +1,5 @@
 import { createError, getHeader } from 'h3'
+import type { H3Event } from 'h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import {
   asMcpError,
@@ -17,6 +18,7 @@ import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-s
 import {
   buildMcpAuthChallengeForError,
   buildMcpOAuthChallenge,
+  describeMcpAuthTelemetryError,
   getCloudflareWaitUntil,
   isMcpMutatingTool,
   mcpAuthRequiredResult,
@@ -41,6 +43,11 @@ const PLATFORM_KNOWLEDGE_MUTATION_TOOLS = new Set([
   'unpublish_platform_doc',
   'delete_platform_doc',
 ])
+
+function shouldUseLeanToolCatalog(event: H3Event) {
+  const userAgent = (getHeader(event, 'user-agent') || '').toLowerCase()
+  return userAgent.includes('openai-mcp/')
+}
 
 function resourceMetadataUrl(baseUrl: string) {
   return `${baseUrl}/.well-known/oauth-protected-resource/platform-mcp`
@@ -112,7 +119,7 @@ export default defineEventHandler(async (event) => {
           toolName: requestToolName ?? null,
           toolDomain: requestToolName ? PLATFORM_MCP_TOOL_DOMAIN : null,
           status: 'auth_required',
-          errorMessage: 'Missing bearer token or cookie',
+          errorMessage: 'credential_missing: missing bearer token or cookie',
         })
         return mcpSuccess(requestId ?? null, mcpAuthRequiredResult({ challenge: authChallenge, message: PLATFORM_AUTH_REQUIRED_TEXT }))
       }
@@ -218,14 +225,19 @@ export default defineEventHandler(async (event) => {
 
     if (request.method === 'tools/list') {
       await requireMcpUser(event, platformAdminAuthOptions)
+      const leanToolCatalog = shouldUseLeanToolCatalog(event)
       return mcpSuccess(request.id, {
         tools: PLATFORM_MCP_TOOLS.map(tool => ({
           name: tool.name,
           description: tool.description,
           inputSchema: tool.inputSchema,
-          outputSchema: tool.outputSchema,
-          annotations: tool.annotations,
-          securitySchemes: tool.securitySchemes,
+          ...(leanToolCatalog
+            ? {}
+            : {
+                outputSchema: tool.outputSchema,
+                annotations: tool.annotations,
+                securitySchemes: tool.securitySchemes,
+              }),
           _meta: {
             securitySchemes: tool.securitySchemes,
             'krabiclaw/toolSurface': 'platform_admin',
@@ -302,7 +314,9 @@ export default defineEventHandler(async (event) => {
         isMutating: isMcpMutatingTool(PLATFORM_MCP_TOOLS.find((t) => t.name === requestToolName)),
         status: error instanceof Error && /Authentication required/i.test(error.message) ? 'auth_required' : 'error',
         errorCode: asMcpError(error).code,
-        errorMessage: error instanceof Error ? error.message : String(error),
+        errorMessage: error instanceof Error && /Authentication required/i.test(error.message)
+          ? describeMcpAuthTelemetryError(error)
+          : error instanceof Error ? error.message : String(error),
       })
     }
     const mcpError = asMcpError(error)

@@ -134,7 +134,7 @@ async function main() {
     title: `MCP Ops Location ${Date.now()}`,
   })
   expectStatus('create_location succeeds', location)
-  const locationId = data(location.body)?.location?.id
+  const locationId = data(location.body)?.id
   expectValue('create_location returns location id', Boolean(locationId), location.body)
 
   const menu = await mcp(headers, 'create_menu', {
@@ -144,10 +144,8 @@ async function main() {
     location_id: locationId,
   })
   expectStatus('create_menu succeeds', menu)
-  const createdMenu = data(menu.body)?.menu
-  const menuId = createdMenu?.id
+  const menuId = data(menu.body)?.id
   expectValue('create_menu returns menu id', Boolean(menuId), menu.body)
-  expectValue('create_menu preserves location_id', createdMenu?.location_id === locationId, createdMenu)
 
   const menuItem = await mcp(headers, 'create_menu_item', {
     site_id: siteId,
@@ -157,10 +155,14 @@ async function main() {
     price_amount: '12.50',
   })
   expectStatus('create_menu_item with price succeeds', menuItem)
-  const menuItemData = data(menuItem.body)?.item
-  const menuItemId = menuItemData?.id
+  const menuItemId = data(menuItem.body)?.id
   expectValue('create_menu_item returns item id', Boolean(menuItemId), menuItem.body)
-  expectValue('created menu item keeps price amount', moneyEquals(menuItemData?.price_amount, 12.5), menuItemData)
+
+  const initialMenuRead = await mcp(headers, 'get_menu', { site_id: siteId, menu_id: menuId })
+  expectStatus('get_menu succeeds after create', initialMenuRead)
+  const initialReadItems = data(initialMenuRead.body)?.menu?.items ?? []
+  const initialPricedItem = initialReadItems.find(item => item.id === menuItemId)
+  expectValue('created menu item has initial price amount', moneyEquals(initialPricedItem?.price_amount, 12.50), initialPricedItem)
 
   const aliasedMenuItem = await mcp(headers, 'create_menu_item', {
     site_id: siteId,
@@ -170,8 +172,8 @@ async function main() {
     price: '14.25',
   })
   expectStatus('create_menu_item with legacy price alias succeeds', aliasedMenuItem)
-  const aliasedMenuItemData = data(aliasedMenuItem.body)?.item
-  expectValue('legacy price alias is normalized to price_amount', moneyEquals(aliasedMenuItemData?.price_amount, 14.25), aliasedMenuItemData)
+  const aliasedMenuItemId = data(aliasedMenuItem.body)?.id
+  expectValue('create_menu_item with legacy price alias returns item id', Boolean(aliasedMenuItemId), aliasedMenuItem.body)
 
   const batchedMenuItems = await mcp(headers, 'add_menu_items_batch', {
     site_id: siteId,
@@ -194,13 +196,17 @@ async function main() {
     price_amount: '13.00',
   })
   expectStatus('update_menu_item price succeeds', itemUpdate)
-  const updatedItem = data(itemUpdate.body)?.item
-  expectValue('updated menu item keeps new price amount', moneyEquals(updatedItem?.price_amount, 13), updatedItem)
+  expectValue('update_menu_item returns changed_fields', Array.isArray(data(itemUpdate.body)?.changed_fields), itemUpdate.body)
 
   const menuRead = await mcp(headers, 'get_menu', { site_id: siteId, menu_id: menuId })
   expectStatus('get_menu succeeds', menuRead)
   const readItems = data(menuRead.body)?.menu?.items ?? []
   expectValue('get_menu includes updated item', readItems.some(item => item.id === menuItemId && item.name === 'MCP Ops Green Curry'), readItems)
+  expectValue('get_menu preserves location_id', data(menuRead.body)?.menu?.location_id === locationId, data(menuRead.body))
+  const pricedItem = readItems.find(item => item.id === menuItemId)
+  expectValue('updated menu item has new price amount', moneyEquals(pricedItem?.price_amount, 13), pricedItem)
+  const aliasedItem = readItems.find(item => item.id === aliasedMenuItemId)
+  expectValue('legacy price alias is normalized to price_amount', moneyEquals(aliasedItem?.price_amount, 14.25), aliasedItem)
 
   const menuDelete = await mcp(headers, 'delete_menu', { site_id: siteId, menu_id: menuId })
   expectStatus('delete_menu succeeds', menuDelete)
@@ -212,7 +218,7 @@ async function main() {
     body: 'Post created by MCP ops checker',
   })
   expectStatus('create_post succeeds', post)
-  const postId = data(post.body)?.post?.id
+  const postId = data(post.body)?.id
   expectValue('create_post returns post id', Boolean(postId), post.body)
 
   const postUpdate = await mcp(headers, 'update_post', {
@@ -222,7 +228,7 @@ async function main() {
     body: 'Post updated by MCP ops checker',
   })
   expectStatus('update_post succeeds', postUpdate)
-  expectValue('update_post keeps updated title', data(postUpdate.body)?.post?.title === 'MCP Ops Post Updated', postUpdate.body)
+  expectValue('update_post returns changed_fields', Array.isArray(data(postUpdate.body)?.changed_fields), postUpdate.body)
 
   const postPublish = await mcp(headers, 'publish_post', {
     site_id: siteId,
@@ -230,7 +236,7 @@ async function main() {
     channels: ['site'],
   })
   expectStatus('publish_post succeeds', postPublish)
-  expectValue('publish_post returns published post', Boolean(data(postPublish.body)?.post?.id), postPublish.body)
+  expectValue('publish_post returns published post id', Boolean(data(postPublish.body)?.id), postPublish.body)
 
   const socialOnlyPublish = await mcp(headers, 'publish_post', {
     site_id: siteId,
@@ -242,6 +248,8 @@ async function main() {
   const posts = await mcp(headers, 'list_posts', { site_id: siteId })
   expectStatus('list_posts succeeds', posts)
   expectValue('list_posts includes published post', (data(posts.body)?.posts ?? []).some(post => post.id === postId), posts.body)
+  const publishedPost = (data(posts.body)?.posts ?? []).find(post => post.id === postId)
+  expectValue('update_post keeps updated title', publishedPost?.title === 'MCP Ops Post Updated', publishedPost)
 
   const experience = await mcp(headers, 'create_experience', {
     site_id: siteId,
@@ -253,7 +261,7 @@ async function main() {
     max_capacity: 6,
   })
   expectStatus('create_experience succeeds', experience)
-  const experienceId = data(experience.body)?.experience?.id
+  const experienceId = data(experience.body)?.id
   expectValue('create_experience returns experience id', Boolean(experienceId), experience.body)
 
   const invalidExperience = await mcp(headers, 'create_experience', {
@@ -271,12 +279,13 @@ async function main() {
     max_capacity: 8,
   })
   expectStatus('update_experience succeeds', experienceUpdate)
-  const updatedExperience = data(experienceUpdate.body)?.experience
-  expectValue('update_experience keeps updated tagline', updatedExperience?.tagline === 'Updated through MCP ops checker', updatedExperience)
+  expectValue('update_experience returns changed_fields', Array.isArray(data(experienceUpdate.body)?.changed_fields), experienceUpdate.body)
 
   const experiences = await mcp(headers, 'list_experiences', { site_id: siteId })
   expectStatus('list_experiences succeeds', experiences)
   expectValue('list_experiences includes created experience', (data(experiences.body)?.experiences ?? []).some(item => item.id === experienceId), experiences.body)
+  const listedExperience = (data(experiences.body)?.experiences ?? []).find(item => item.id === experienceId)
+  expectValue('update_experience keeps updated tagline', listedExperience?.tagline === 'Updated through MCP ops checker', listedExperience)
 
   process.exit(failed ? 1 : 0)
 }
