@@ -65,6 +65,7 @@
     "client:verify": "node scripts/client-verify.mjs",
     "client:deploy": "node scripts/client-deploy.mjs",
     "test:mcp": "node scripts/test-mcp-oauth.mjs",
+    "test:mcp:local": "node scripts/check-local-mcp-harness.mjs",
     "test:mcp:auth-registration": "node scripts/check-mcp-auth-registration.mjs",
     "test:mcp:app": "node scripts/check-mcp-app-contract.mjs",
     "test:mcp:platform": "node scripts/check-platform-mcp-app-contract.mjs",

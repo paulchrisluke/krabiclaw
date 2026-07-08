@@ -1,0 +1,23 @@
+# Cloudflare tunnel source of truth for the local ChatGPT MCP harness.
+#
+# Replace the placeholder tunnel UUID and credentials path with your local
+# tunnel details, then run:
+#
+#   yarn dev:tunnel
+#   yarn tunnel
+#
+# The hostname here must stay in lockstep with:
+# - BETTER_AUTH_URL
+# - NUXT_PUBLIC_PLATFORM_DOMAIN
+# - MCP_BASE_URL
+#
+# Recommended default:
+#   https://local.krabiclaw.com
+
+tunnel: REPLACE_WITH_TUNNEL_UUID
+credentials-file: /Users/you/.cloudflared/REPLACE_WITH_TUNNEL_NAME.json
+
+ingress:
+  - hostname: local.krabiclaw.com
+    service: http://127.0.0.1:3000
+  - service: http_status:404
