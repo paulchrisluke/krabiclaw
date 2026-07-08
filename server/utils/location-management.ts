@@ -43,6 +43,7 @@ export interface CreateLocationInput {
   hero_video_asset_id?: string | null;
   notification_phone?: string | null;
   timezone?: string | null;
+  max_capacity?: number | null;
   is_primary?: boolean;
 }
 
@@ -82,6 +83,7 @@ export interface LocationRecord {
   foodpanda_url?: string | null;
   notification_phone?: string | null;
   timezone?: string | null;
+  max_capacity?: number | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -275,7 +277,7 @@ async function loadLocation(
            rating, review_count, description, short_description, status, is_primary,
            address, opening_hours, special_hours, hero_image_asset_id, hero_video_asset_id, price_level,
            facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
-           notification_phone, timezone, created_at, updated_at`;
+           notification_phone, timezone, max_capacity, created_at, updated_at`;
   // Check id first so a slug that happens to collide with another row's id can
   // never shadow the row actually addressed by that id.
   const byId = await queryFirst<LocationRecord>(
@@ -321,6 +323,19 @@ export async function createLocation(
       data: {
         error:
           "review_count must be a whole number greater than or equal to 0.",
+      },
+    };
+  }
+  if (
+    input.max_capacity !== undefined &&
+    input.max_capacity !== null &&
+    (!Number.isInteger(input.max_capacity) || input.max_capacity < 0)
+  ) {
+    return {
+      status: 400,
+      data: {
+        error:
+          "max_capacity must be a whole number greater than or equal to 0.",
       },
     };
   }
@@ -406,9 +421,9 @@ export async function createLocation(
             id, organization_id, site_id, title, slug, city, neighborhood, phone, email, website_url, maps_url,
             google_review_url, google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
             price_level, facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
-            hero_image_asset_id, hero_video_asset_id, notification_phone, timezone, is_primary, status, created_at, updated_at
+            hero_image_asset_id, hero_video_asset_id, notification_phone, timezone, max_capacity, is_primary, status, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
         `,
         params: [
           id,
@@ -442,6 +457,7 @@ export async function createLocation(
           input.hero_video_asset_id ?? null,
           input.notification_phone ?? null,
           normalizedTimezone ?? null,
+          input.max_capacity ?? null,
           isPrimary ? 1 : 0,
           now,
           now,
@@ -545,6 +561,19 @@ export async function updateLocation(
       },
     };
   }
+  if (
+    input.max_capacity !== undefined &&
+    input.max_capacity !== null &&
+    (!Number.isInteger(input.max_capacity) || input.max_capacity < 0)
+  ) {
+    return {
+      status: 400,
+      data: {
+        error:
+          "max_capacity must be a whole number greater than or equal to 0.",
+      },
+    };
+  }
   const normalizedTimezone = input.timezone === undefined
     ? undefined
     : normalizeTimezone(input.timezone);
@@ -619,6 +648,7 @@ export async function updateLocation(
     "hero_video_asset_id",
     "notification_phone",
     "timezone",
+    "max_capacity",
     "status",
   ] as const;
 
