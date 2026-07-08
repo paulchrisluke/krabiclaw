@@ -392,7 +392,9 @@ async function loadSitePublicUrl() {
   }
 }
 
-await Promise.all([loadExperiences(), loadLocations(), loadSitePublicUrl()])
+onMounted(() => {
+  Promise.all([loadExperiences(), loadLocations(), loadSitePublicUrl()])
+})
 
 // ── Form ──────────────────────────────────────────────────
 const sliderOpen = ref(false)

@@ -16,9 +16,12 @@
         class="group block overflow-hidden border border-default text-default no-underline transition hover:border-muted"
       >
         <div class="aspect-video overflow-hidden bg-muted">
-          <!-- Poster image: always present for LCP. Video swaps in when card scrolls into view. -->
-          <template v-if="loc.kind === 'video' && loc.public_url">
-            <ClientOnly v-if="visibleLocCards.has(locIdx)">
+          <!-- Poster image: always present for LCP. Video swaps in when card scrolls into view.
+               Branches are flattened (not nested inside the video template) so a video-kind
+               location with no thumbnail_url and not yet scrolled into view still falls through
+               to the icon placeholder below instead of rendering nothing. -->
+          <template v-if="loc.kind === 'video' && loc.public_url && visibleLocCards.has(locIdx)">
+            <ClientOnly>
               <video
                 :src="loc.public_url"
                 :poster="loc.thumbnail_url || undefined"
@@ -26,17 +29,17 @@
                 class="aspect-video w-full object-contain"
               />
             </ClientOnly>
-            <UImage
-              v-else-if="loc.thumbnail_url"
-              :src="loc.thumbnail_url"
-              :alt="loc.title"
-              :loading="locIdx === 0 ? 'eager' : 'lazy'"
-              :fetchpriority="locIdx === 0 ? 'high' : undefined"
-              class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
-            />
           </template>
           <UImage
-            v-else-if="loc.public_url"
+            v-else-if="loc.thumbnail_url"
+            :src="loc.thumbnail_url"
+            :alt="loc.title"
+            :loading="locIdx === 0 ? 'eager' : 'lazy'"
+            :fetchpriority="locIdx === 0 ? 'high' : undefined"
+            class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
+          />
+          <UImage
+            v-else-if="loc.kind !== 'video' && loc.public_url"
             :src="loc.public_url"
             :alt="loc.title"
             :loading="locIdx === 0 ? 'eager' : 'lazy'"
