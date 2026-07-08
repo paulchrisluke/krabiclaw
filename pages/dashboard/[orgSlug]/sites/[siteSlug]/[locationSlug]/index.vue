@@ -487,13 +487,10 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const dashboard = useDashboardSite()
+const dashboardLocation = useDashboardLocation()
 if (!dashboard.state.value) await dashboard.refresh()
 const siteId = await useDashboardSiteId()
-const routeLocation = String(route.params.locationSlug || '')
-const resolvedLocation = computed(() =>
-  dashboard.locations.value.find(location => location.slug === routeLocation || location.id === routeLocation)
-)
-const locationId = computed(() => resolvedLocation.value?.id ?? routeLocation)
+const locationId = computed(() => dashboardLocation.currentLocationId.value ?? '')
 
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -501,6 +498,7 @@ const site = ref<ApiRecord | null>(null)
 const location = ref<BusinessLocation | null>(null)
 const menus = ref<ApiRecord[]>([])
 const gbConnection = ref<GbConnection | null>(null)
+let locationLoadToken = 0
 const connectingGoogle = ref(false)
 const syncingPlace = ref(false)
 const placeSyncResult = ref('')
@@ -1000,10 +998,13 @@ const loadLocationWorkspace = async () => {
 const { evaluateAndSuggest } = useUpsellTriggers()
 
 onMounted(async () => {
+  const currentToken = ++locationLoadToken
   const workspaceLoaded = await loadLocationWorkspace()
-  await loadAnalyticsSummary()
-  await loadGbConnection()
+  if (currentToken !== locationLoadToken) return
+  await Promise.all([loadAnalyticsSummary(), loadGbConnection()])
+  if (currentToken !== locationLoadToken) return
   if (workspaceLoaded) await loadManualReviews()
+  if (currentToken !== locationLoadToken) return
 
   if (route.query.gb === 'connected') {
     toast.add({ description: 'Google Business connected successfully', color: 'success' })
@@ -1012,6 +1013,15 @@ onMounted(async () => {
   }
 
   evaluateAndSuggest()
+})
+
+watch(() => dashboardLocation.currentLocationId.value, async () => {
+  const currentToken = ++locationLoadToken
+  const workspaceLoaded = await loadLocationWorkspace()
+  if (currentToken !== locationLoadToken) return
+  await Promise.all([loadAnalyticsSummary(), loadGbConnection()])
+  if (currentToken !== locationLoadToken) return
+  if (workspaceLoaded) await loadManualReviews()
 })
 
 useSeoMeta({ title: 'Location Workspace | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

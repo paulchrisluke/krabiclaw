@@ -67,12 +67,34 @@ const slug = computed(() => String(route.params.slug))
 const reviewId = computed(() => String(route.params.reviewId))
 const { formatDate } = useLocaleDate()
 
-const { data, pending } = await useFetch<{ review: ApiRecord }>(
-  () => `/api/public/sites/${siteId}/locations/${slug.value}/reviews/${reviewId.value}`,
-  { server: true },
-)
+const { data: review, pending } = await useAsyncData<ApiRecord | null>(
+  () => `review-${slug.value}-${reviewId.value}`,
+  async () => {
+    // Fetch directly against the real request's D1 binding instead of doing a nested
+    // self-fetch back to our own API — Nitro's internal dispatch doesn't reliably
+    // reproduce the same route-param/binding resolution as a real external request,
+    // which caused pages/blog/[category]/[slug].vue and pages/docs/[...segments].vue
+    // to 404/500 on records their own API served correctly. Same fix applied here.
+    if (import.meta.server) {
+      const requestEvent = useRequestEvent()
+      if (!requestEvent) return null
 
-const review = computed(() => data.value?.review ?? null)
+      const [{ cloudflareEnv }, { getPublicReview }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/review-management'),
+      ])
+      const db = cloudflareEnv(requestEvent).db
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+
+      return await getPublicReview(db, String(siteId), slug.value, reviewId.value) as ApiRecord | null
+    }
+
+    const endpoint = `/api/public/sites/${siteId}/locations/${slug.value}/reviews/${reviewId.value}`
+    const response = await $fetch<{ review?: ApiRecord }>(endpoint)
+    return response?.review ?? null
+  },
+  { watch: [slug, reviewId] },
+)
 const helpfulCount = ref(0)
 watchEffect(() => {
   helpfulCount.value = Number(review.value?.helpful_count ?? 0)

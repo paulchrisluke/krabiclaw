@@ -3,9 +3,8 @@
 
     <UPageBody>
       <div class="mb-4 flex flex-wrap items-center gap-2">
-        <USelect v-model="selectedLocationId" :items="locationItems" value-key="id" label-key="label" class="w-64" />
         <USelect v-model="statusFilter" :items="statusItems" value-key="id" label-key="label" class="w-44" />
-        <UButton icon="i-lucide-plus" color="primary" variant="soft" :disabled="locations.length === 0" @click="startCreate">Add review</UButton>
+        <UButton icon="i-lucide-plus" color="primary" variant="soft" :disabled="!currentLocation" @click="startCreate">Add review</UButton>
         <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadReviews">Refresh</UButton>
       </div>
 
@@ -79,9 +78,6 @@
           <div class="p-6">
             <h2 class="text-lg font-semibold text-highlighted">{{ editingReviewId ? 'Edit review' : 'Add review' }}</h2>
             <div class="mt-5 grid gap-4 md:grid-cols-2">
-              <UFormField label="Location">
-                <USelect v-model="reviewForm.location_id" :items="locationItemsWithoutAll" value-key="id" label-key="label" :disabled="Boolean(editingReviewId)" />
-              </UFormField>
               <UFormField label="Rating">
                 <UInput v-model="reviewForm.rating" type="number" min="1" max="5" step="1" />
               </UFormField>
@@ -156,12 +152,6 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
 
-interface LocationRow {
-  id: string
-  title: string
-  slug?: string
-}
-
 interface ReviewRow {
   id: string
   location_id: string
@@ -201,12 +191,11 @@ interface CustomerPanel {
 const siteId = await useDashboardSiteId()
 const toast = useToast()
 const route = useRoute()
+const dashboardLocation = useDashboardLocation()
 const sitePublicUrl = ref<string | null>(null)
-const locations = ref<LocationRow[]>([])
 const reviews = ref<ReviewRow[]>([])
 const loading = ref(true)
 const saving = ref(false)
-const selectedLocationId = ref('all')
 const statusFilter = ref('all')
 const replyOpen = ref(false)
 const reviewOpen = ref(false)
@@ -226,17 +215,11 @@ const reviewForm = reactive({
   created_at: new Date().toISOString().slice(0, 10)
 })
 const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
+const currentLocation = computed(() => dashboardLocation.currentLocation.value)
 
 const _headerLinks = computed(() => buildHeaderLinks([
   { label: 'Location details', icon: 'i-lucide-map-pin', to: paths.value.locations, color: 'neutral' as const, variant: 'soft' as const }
 ]))
-
-const locationItems = computed(() => [
-  { id: 'all', label: 'All locations' },
-  ...locations.value.map(location => ({ id: location.id, label: location.title }))
-])
-
-const locationItemsWithoutAll = computed(() => locations.value.map(location => ({ id: location.id, label: location.title })))
 
 const statusItems = [
   { id: 'all', label: 'All statuses' },
@@ -248,13 +231,12 @@ const statusItems = [
 const statusItemsWithoutAll = statusItems.filter(item => item.id !== 'all')
 
 const canSaveReview = computed(() =>
-  Boolean(reviewForm.location_id && reviewForm.author_name.trim() && reviewForm.content.trim() && Number(reviewForm.rating) >= 1 && Number(reviewForm.rating) <= 5)
+  Boolean(currentLocation.value?.id && reviewForm.author_name.trim() && reviewForm.content.trim() && Number(reviewForm.rating) >= 1 && Number(reviewForm.rating) <= 5)
 )
 
 const filteredReviews = computed(() => reviews.value.filter((review) => {
-  const locationMatches = selectedLocationId.value === 'all' || review.location_id === selectedLocationId.value
   const statusMatches = statusFilter.value === 'all' || review.status === statusFilter.value
-  return locationMatches && statusMatches
+  return statusMatches
 }))
 
 const highlightedReviewId = computed(() => typeof route.query.reply === 'string' ? route.query.reply : null)
@@ -272,31 +254,34 @@ function formatDate(value: string) {
 }
 
 function publicReviewUrl(review: ReviewRow) {
-  const location = locations.value.find(item => item.id === review.location_id)
-  const slug = (location as { slug?: string } | undefined)?.slug || ''
+  const slug = currentLocation.value?.slug || ''
   return slug ? `/locations/${slug}/reviews/${review.id}` : `/reviews`
 }
 
 async function loadReviews() {
+  if (!currentLocation.value?.id) {
+    reviews.value = []
+    loading.value = false
+    return
+  }
   loading.value = true
   try {
-    const [settingsRes, locationsRes] = await Promise.all([
-      $fetch<{ settings: { public_url: string | null } }>(`/api/dashboard/settings`),
-      $fetch<{ locations: LocationRow[] }>(`/api/dashboard/locations`)
-    ])
-    sitePublicUrl.value = settingsRes.settings.public_url
-    locations.value = locationsRes.locations ?? []
-
-    const batches = await Promise.all(locations.value.map(async (location) => {
-      const res = await $fetch<{ reviews: Omit<ReviewRow, 'locationTitle'>[] }>(`/api/dashboard/locations/${location.id}/reviews`)
-      return (res.reviews ?? []).map(review => ({ ...review, locationTitle: location.title }))
-    }))
-    reviews.value = batches.flat()
+    const res = await $fetch<{ reviews: Omit<ReviewRow, 'locationTitle'>[] }>(`/api/dashboard/locations/${currentLocation.value.id}/reviews`)
+    reviews.value = (res.reviews ?? []).map(review => ({ ...review, locationTitle: currentLocation.value?.title ?? 'Location' }))
     scrollToHighlightedReview()
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load reviews', color: 'error' })
   } finally {
     loading.value = false
+  }
+}
+
+async function loadReviewContext() {
+  try {
+    const settingsRes = await $fetch<{ settings: { public_url: string | null } }>(`/api/dashboard/settings`)
+    sitePublicUrl.value = settingsRes.settings.public_url
+  } catch {
+    sitePublicUrl.value = null
   }
 }
 
@@ -320,7 +305,7 @@ async function openCustomer(customerId: string) {
   }
 }
 
-function resetReviewForm(locationId = selectedLocationId.value === 'all' ? locations.value[0]?.id ?? '' : selectedLocationId.value) {
+function resetReviewForm(locationId = currentLocation.value?.id ?? '') {
   editingReviewId.value = null
   reviewForm.location_id = locationId
   reviewForm.author_name = ''
@@ -380,7 +365,7 @@ async function setStatus(review: ReviewRow, status: 'approved' | 'rejected') {
 }
 
 async function saveReview() {
-  if (!canSaveReview.value) return
+  if (!canSaveReview.value || !currentLocation.value?.id) return
   saving.value = true
   try {
     const body = {
@@ -393,13 +378,13 @@ async function saveReview() {
     }
 
     if (editingReviewId.value) {
-      await $fetch(`/api/dashboard/locations/${reviewForm.location_id}/reviews/${editingReviewId.value}`, {
+      await $fetch(`/api/dashboard/locations/${currentLocation.value.id}/reviews/${editingReviewId.value}`, {
         method: 'PATCH',
         body
       })
       toast.add({ description: 'Review updated', color: 'success' })
     } else {
-      await $fetch(`/api/dashboard/locations/${reviewForm.location_id}/reviews`, {
+      await $fetch(`/api/dashboard/locations/${currentLocation.value.id}/reviews`, {
         method: 'POST',
         body
       })
@@ -425,6 +410,15 @@ async function deleteReview(review: ReviewRow) {
   }
 }
 
-onMounted(loadReviews)
+onMounted(async () => {
+  await loadReviewContext()
+  await loadReviews()
+})
+watch(() => currentLocation.value?.id, () => {
+  reviewOpen.value = false
+  replyOpen.value = false
+  editingReviewId.value = null
+  void loadReviews()
+})
 useSeoMeta({ title: 'Reviews | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

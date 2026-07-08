@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   if (!siteId || !slug || !reviewId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const review = await queryFirst<{ id: string; helpful_count: number | null }>(db, `

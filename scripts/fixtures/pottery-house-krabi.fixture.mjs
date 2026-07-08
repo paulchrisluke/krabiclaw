@@ -50,10 +50,20 @@ if (!args.url) {
   process.exit(1)
 }
 
-const BASE    = args.url.replace(/\/$/, '')
+const inputBase = args.url.replace(/\/$/, '')
 const SITE_ID = args['site-id']
 const SLUG    = args.slug
 const BLOG_SLUG = 'group-bookings-create-a-unique-pottery-experience-in-krabi'
+
+function normalizeFixtureBaseUrl(rawUrl, slug) {
+  const url = new URL(rawUrl)
+  if (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
+    url.hostname = `${slug}.localhost`
+  }
+  return url.toString().replace(/\/$/, '')
+}
+
+const BASE = normalizeFixtureBaseUrl(inputBase, SLUG)
 
 // Mirrors isPreviewContext in server/utils/tenant-hosts.ts: on workers.dev,
 // staging.*, and preview.* hosts, the wildcard TLS cert only covers one
@@ -133,6 +143,7 @@ async function get(path, opts = {}) {
 
 console.log(`\n┌─ Pottery House Krabi — Regression Fixture ${'─'.repeat(20)}`)
 console.log(`│  URL:      ${BASE}`)
+if (BASE !== inputBase) console.log(`│  Input:    ${inputBase}`)
 console.log(`│  Site ID:  ${SITE_ID}`)
 console.log(`│  Vertical: experience`)
 console.log(`└${'─'.repeat(63)}`)
@@ -345,13 +356,14 @@ if (bootstrapData) {
     if (loc.hero_image_public_url) imageUrls.push(loc.hero_image_public_url)
     if (loc.public_url) imageUrls.push(loc.public_url)
   }
+  const uniqueImageUrls = [...new Set(imageUrls)]
 
-  if (imageUrls.length === 0) {
+  if (uniqueImageUrls.length === 0) {
     console.error('  ✗ No image URLs in bootstrap — cannot verify image 404 detection')
     failed++
     issues.push('No image URLs in bootstrap response')
   } else {
-    for (const url of imageUrls.slice(0, 3)) {
+    for (const url of uniqueImageUrls.slice(0, 3)) {
       const r = await get(url, { method: 'HEAD' })
       assert(`Image resolves: ${url.slice(0, 60)}`, r.ok, true)
     }
