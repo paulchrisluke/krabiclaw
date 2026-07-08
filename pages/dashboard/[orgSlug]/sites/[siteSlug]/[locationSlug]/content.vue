@@ -550,8 +550,8 @@ const onPageChange = async (oldPageId?: string) => {
 
 watch(selectedPageId, (newVal, oldVal) => {
   if (newVal !== oldVal) {
-    const query = { ...route.query, page: newVal }
-    delete query.locationId
+    const { locationId: _locationId, ...restQuery } = route.query
+    const query = { ...restQuery, page: newVal }
     router.replace({
       path: route.path,
       query

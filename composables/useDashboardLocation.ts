@@ -14,10 +14,6 @@ export function useDashboardLocation() {
     if (!routeLocationSlug.value) return null
     return dashboard.locations.value.find(location => location.slug === routeLocationSlug.value) ?? null
   })
-  const legacyRouteLocation = computed(() => {
-    if (!routeLocationSlug.value || routeLocation.value) return null
-    return dashboard.locations.value.find(location => location.id === routeLocationSlug.value) ?? null
-  })
 
   const preferredLocation = computed(() => dashboard.selectedLocation.value)
 
@@ -80,7 +76,6 @@ export function useDashboardLocation() {
     routeLocationSlug,
     inLocationWorkspace,
     routeLocation,
-    legacyRouteLocation,
     preferredLocation,
     currentLocation,
     currentLocationId,
