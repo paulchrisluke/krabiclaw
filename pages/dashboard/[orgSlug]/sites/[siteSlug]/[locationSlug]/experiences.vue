@@ -325,6 +325,7 @@
 // -nocheck
 import type { Experience, SlotAvailability, SlotOverride, WeekdayName } from '~/server/utils/experiences'
 import type { BookingPolicyPatch, RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
+import BookingPolicyForm from '~/components/dashboard/BookingPolicyForm.vue'
 
 const weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const satisfies WeekdayName[]
 

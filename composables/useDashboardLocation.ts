@@ -2,6 +2,7 @@ export function useDashboardLocation() {
   const dashboard = useDashboardSite()
   const route = useRoute()
   const router = useRouter()
+  const canonicalizingLegacyRoute = useState<boolean>('dashboard:location:canonicalizing-legacy-route', () => false)
 
   const routeLocationSlug = computed(() => {
     const slug = route.params.locationSlug
@@ -12,9 +13,11 @@ export function useDashboardLocation() {
 
   const routeLocation = computed(() => {
     if (!routeLocationSlug.value) return null
-    return dashboard.locations.value.find((location) =>
-      location.slug === routeLocationSlug.value || location.id === routeLocationSlug.value
-    ) ?? null
+    return dashboard.locations.value.find(location => location.slug === routeLocationSlug.value) ?? null
+  })
+  const legacyRouteLocation = computed(() => {
+    if (!routeLocationSlug.value || routeLocation.value) return null
+    return dashboard.locations.value.find(location => location.id === routeLocationSlug.value) ?? null
   })
 
   const preferredLocation = computed(() => dashboard.selectedLocation.value)
@@ -31,16 +34,21 @@ export function useDashboardLocation() {
       location.id === locationIdOrSlug || location.slug === locationIdOrSlug
     )
     const targetSlug = target?.slug ?? locationIdOrSlug
+    const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
+    const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
+
     const parts = route.path.split('/').filter(Boolean)
-    const sitesIndex = parts.findIndex((part) => part === 'sites')
+    const sitesIndex = parts.findIndex((part, i) => 
+      part === 'sites' && 
+      (orgSlug ? parts[i - 1] === orgSlug : true) && 
+      (siteSlug ? parts[i + 1] === siteSlug : true)
+    )
 
     if (sitesIndex !== -1 && parts.length > sitesIndex + 2) {
       parts[sitesIndex + 2] = targetSlug
       return `/${parts.join('/')}`
     }
 
-    const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
-    const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
     if (orgSlug && siteSlug) return `/dashboard/${orgSlug}/sites/${siteSlug}/${targetSlug}`
     return route.path
   }
@@ -59,7 +67,7 @@ export function useDashboardLocation() {
       else await router.push(to)
 
       if (options.persistPreference !== false && dashboard.selectedLocation.value?.id !== target.id) {
-        void dashboard.selectLocation(target.id).catch(console.error)
+        await dashboard.selectLocation(target.id)
       }
       return
     }
@@ -69,10 +77,28 @@ export function useDashboardLocation() {
     }
   }
 
+  if (import.meta.client) {
+    watch(legacyRouteLocation, async (legacyLocation) => {
+      if (!legacyLocation || canonicalizingLegacyRoute.value) return
+      canonicalizingLegacyRoute.value = true
+      try {
+        const query = { ...route.query }
+        delete query.locationId
+        await router.replace({
+          path: buildLocationWorkspacePath(legacyLocation.slug),
+          query,
+        })
+      } finally {
+        canonicalizingLegacyRoute.value = false
+      }
+    }, { immediate: true })
+  }
+
   return {
     routeLocationSlug,
     inLocationWorkspace,
     routeLocation,
+    legacyRouteLocation,
     preferredLocation,
     currentLocation,
     currentLocationId,

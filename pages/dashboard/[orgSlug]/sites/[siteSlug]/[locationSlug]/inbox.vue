@@ -564,6 +564,8 @@ watch(search, () => {
 })
 
 watch(() => dashboardLocation.currentLocationId.value, async () => {
+  selectedThreadId.value = null
+  selectedDetail.value = null
   await loadThreads()
 })
 

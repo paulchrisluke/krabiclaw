@@ -196,11 +196,16 @@ function locationTitle(locationId: string | null) {
 }
 
 const loadPosts = async () => {
+  if (!currentLocationId.value) {
+    posts.value = []
+    loading.value = false
+    return
+  }
   loading.value = true
   try {
     const query: Record<string, string> = {}
     if (activeTab.value !== 'all') query.status = activeTab.value
-    if (currentLocationId.value) query.location_id = currentLocationId.value
+    query.location_id = currentLocationId.value
     const res = await $fetch<{ posts: ApiRecord[] }>(`/api/editor/sites/${siteId}/posts`, { query })
     posts.value = res.posts ?? []
   } catch { toast.add({ description: 'Failed to load posts', color: 'error' }) } finally { loading.value = false }
@@ -528,6 +533,10 @@ const formatDate = (iso: string) => {
 useSeoMeta({ title: 'Posts | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 watch(currentLocationId, () => {
+  selectedPost.value = null
+  composing.value = false
+  resetEditForm()
+  selectedChannels.value = []
   void loadPosts()
 })
 </script>

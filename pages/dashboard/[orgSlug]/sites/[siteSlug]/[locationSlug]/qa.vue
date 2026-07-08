@@ -231,6 +231,9 @@ onMounted(async () => {
 })
 
 watch(locationId, () => {
+  editingId.value = null
+  form.question = ''
+  form.answer = ''
   void loadQa()
 })
 

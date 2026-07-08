@@ -32,16 +32,11 @@ export const useChowBot = () => {
 
   // Defer dashboard context access to avoid hydration issues
   const dashboard = useDashboardSite()
+  const dashboardLocation = useDashboardLocation()
   const siteId = computed(() => import.meta.server ? null : dashboard.siteId.value)
-  const selectedLocation = computed(() => import.meta.server ? null : dashboard.selectedLocation.value)
-
-  const locationId = computed(() => {
-    const param = route.query.locationId
-    return typeof param === 'string' ? param : null
-  })
+  const selectedLocation = computed(() => import.meta.server ? null : dashboardLocation.currentLocation.value)
   const isConversationsWorkspace = computed(() => /^\/dashboard\/[^/]+\/conversations(?:\/|$)/.test(route.path))
   const agentLocationId = computed(() => {
-    if (locationId.value) return locationId.value
     if (isConversationsWorkspace.value) return null
     return selectedLocation.value?.id ?? null
   })
@@ -101,7 +96,7 @@ export const useChowBot = () => {
     } else if (names.has('create_location') || names.has('update_location')) {
       target = paths.org
     } else if ([...names].some(n => MENU_TOOLS.has(n))) {
-      const locId = locationId.value
+      const locId = selectedLocation.value?.id ?? null
       target = locId ? dashboardLinks.locationMenuPath(locId) : paths.menu
     }
 

@@ -120,10 +120,20 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
   const locationMenuPath = (locationId: string) => `${locationPath(locationId)}/menu`
   const locationContentPath = (locationId: string) => appendQuery(`${locationPath(locationId)}/content`, { page: 'location' })
 
-  const menuPath = (_locationId?: string | null) => ({
-    path: paths.value.menu,
-    query: {}
-  })
+  const menuPath = (locationId?: string | null) => {
+    if (locationId) {
+      const location = dashboard.locations.value.find(candidate => candidate.id === locationId || candidate.slug === locationId)
+      const locationSlug = location?.slug ?? locationId
+      return {
+        path: `${paths.value.site}/${locationSlug}/menu`,
+        query: {}
+      }
+    }
+    return {
+      path: paths.value.menu,
+      query: {}
+    }
+  }
 
   const contentPath = (page?: string) => ({
     path: paths.value.content,

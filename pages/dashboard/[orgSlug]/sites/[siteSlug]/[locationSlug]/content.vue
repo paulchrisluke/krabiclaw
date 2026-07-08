@@ -391,6 +391,7 @@ const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).de
 
 import { contentRegistry, editablePages, getFieldDef } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
+import BookingPolicyForm from '~/components/dashboard/BookingPolicyForm.vue'
 
 definePageMeta({ layout: 'editor', ssr: false })
 
@@ -438,9 +439,12 @@ const loadEditorContext = async () => {
 
 // ─── Location Scope ───────────────────────────────────────────────────
 const selectedLocationId = ref<string | null>(dashboardLocation.currentLocationId.value)
+const effectiveLocationId = computed(() =>
+  currentPageIsLocationScoped.value ? selectedLocationId.value : null
+)
 
 const selectedLocation = computed(() =>
-  siteLocations.value.find(location => location.id === selectedLocationId.value) || null
+  siteLocations.value.find(location => location.id === effectiveLocationId.value) || null
 )
 const selectedLocationLabel = computed(() => selectedLocation.value?.title || 'All Locations')
 
@@ -456,7 +460,7 @@ const requiresLocationSelection = computed(() =>
 
 const contentQuery = computed(() => {
   const params = new URLSearchParams()
-  if (currentPageIsLocationScoped.value && selectedLocationId.value) params.set('locationId', selectedLocationId.value)
+  if (effectiveLocationId.value) params.set('locationId', effectiveLocationId.value)
   return params.toString()
 })
 const endpointWithContentScope = (path: string) =>
@@ -473,7 +477,15 @@ const pages = editablePages.map(p => ({
   path: p.path
 }))
 
-const selectedPageId = ref('home')
+function resolveInitialPageId() {
+  const queryPage = route.query.page
+  if (typeof queryPage === 'string' && pages.some(page => page.id === queryPage)) {
+    return queryPage
+  }
+  return 'home'
+}
+
+const selectedPageId = ref(resolveInitialPageId())
 const currentPagePath = computed(() => pages.find(p => p.id === selectedPageId.value)?.path || '/')
 const selectedPageLabel = computed(() => pages.find(p => p.id === selectedPageId.value)?.label || '')
 
@@ -538,12 +550,11 @@ const onPageChange = async (oldPageId?: string) => {
 
 watch(selectedPageId, (newVal, oldVal) => {
   if (newVal !== oldVal) {
+    const query = { ...route.query, page: newVal }
+    delete query.locationId
     router.replace({
       path: route.path,
-      query: {
-        ...route.query,
-        page: newVal
-      }
+      query
     })
     onPageChange(oldVal)
   }
@@ -754,7 +765,7 @@ const applyField = async () => {
   if (activeFieldDef.value.type === 'booking_policy') {
     saving.value = true
     try {
-      const res = await $fetch<{ summary: ApiRecord | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
+    const res = await $fetch<{ summary: ApiRecord | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
         method: 'PATCH',
         body: {
           ...bookingPolicyDraft.value,
@@ -874,7 +885,7 @@ const handleSaveContent = async () => {
     await $fetch(`/api/dashboard/editor/content/save`, {
       method: 'POST',
       body: { page: selectedPageId.value, changes: currentValues.value },
-      query: selectedLocationId.value ? { locationId: selectedLocationId.value } : {},
+      query: effectiveLocationId.value ? { locationId: effectiveLocationId.value } : {},
       credentials: 'include'
     })
     localHasChanges.value = false

@@ -266,8 +266,6 @@ async function loadReviews() {
   }
   loading.value = true
   try {
-    const settingsRes = await $fetch<{ settings: { public_url: string | null } }>(`/api/dashboard/settings`)
-    sitePublicUrl.value = settingsRes.settings.public_url
     const res = await $fetch<{ reviews: Omit<ReviewRow, 'locationTitle'>[] }>(`/api/dashboard/locations/${currentLocation.value.id}/reviews`)
     reviews.value = (res.reviews ?? []).map(review => ({ ...review, locationTitle: currentLocation.value?.title ?? 'Location' }))
     scrollToHighlightedReview()
@@ -275,6 +273,15 @@ async function loadReviews() {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load reviews', color: 'error' })
   } finally {
     loading.value = false
+  }
+}
+
+async function loadReviewContext() {
+  try {
+    const settingsRes = await $fetch<{ settings: { public_url: string | null } }>(`/api/dashboard/settings`)
+    sitePublicUrl.value = settingsRes.settings.public_url
+  } catch {
+    sitePublicUrl.value = null
   }
 }
 
@@ -403,8 +410,14 @@ async function deleteReview(review: ReviewRow) {
   }
 }
 
-onMounted(loadReviews)
+onMounted(async () => {
+  await loadReviewContext()
+  await loadReviews()
+})
 watch(() => currentLocation.value?.id, () => {
+  reviewOpen.value = false
+  replyOpen.value = false
+  editingReviewId.value = null
   void loadReviews()
 })
 useSeoMeta({ title: 'Reviews | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

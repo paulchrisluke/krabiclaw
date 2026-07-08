@@ -98,15 +98,20 @@ interface ReservationSubmission {
 const siteId = await useDashboardSiteId()
 const toast = useToast()
 const route = useRoute()
+const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
+if (!dashboard.state.value) await dashboard.refresh()
 const sitePublicUrl = ref<string | null>(null)
 const reservations = ref<ReservationSubmission[]>([])
 const loading = ref(true)
 const notificationPhoneMissing = ref(false)
 const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
+const currentLocationSlug = computed(() => dashboardLocation.currentLocationSlug.value)
 
-const locationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/${route.params.locationSlug}`)
+const locationSettingsPath = computed(() =>
+  `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/${currentLocationSlug.value ?? route.params.locationSlug}`
+)
 
 const _headerLinks = computed(() => buildHeaderLinks([
   { label: 'Edit reservation page', icon: 'i-lucide-file-text', to: `${paths.value.content}?page=reservations`, color: 'primary' as const, variant: 'soft' as const },
@@ -121,6 +126,14 @@ function formatDateTime(value: string) {
 }
 
 async function loadReservations() {
+  const locationId = currentLocationId.value
+  if (!locationId) {
+    reservations.value = []
+    notificationPhoneMissing.value = false
+    loading.value = false
+    return
+  }
+
   loading.value = true
   try {
     const [settingsResult, locationsResult, notificationsResult] = await Promise.allSettled([
@@ -134,9 +147,7 @@ async function loadReservations() {
       console.warn('reservation_settings_load_failed', settingsResult.reason)
     }
     if (locationsResult.status !== 'fulfilled') throw locationsResult.reason
-    const current = locationsResult.value.locations.find(loc => loc.id === currentLocationId.value) ?? null
-    const locationId = currentLocationId.value
-    if (!locationId) throw new Error('Location not found')
+    const current = locationsResult.value.locations.find(loc => loc.id === locationId) ?? null
 
     const reservationsResult = await $fetch<{ submissions: ReservationSubmission[] }>(`/api/editor/sites/${siteId}/reservation-submissions`, {
       query: { location_id: locationId }

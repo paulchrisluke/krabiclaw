@@ -1011,5 +1011,12 @@ onMounted(async () => {
   evaluateAndSuggest()
 })
 
+watch(() => dashboardLocation.currentLocationId.value, async () => {
+  const workspaceLoaded = await loadLocationWorkspace()
+  await loadAnalyticsSummary()
+  await loadGbConnection()
+  if (workspaceLoaded) await loadManualReviews()
+})
+
 useSeoMeta({ title: 'Location Workspace | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

@@ -185,6 +185,8 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
 
+import DashboardAnalyticsRow from '~/components/workspace/dashboard/AnalyticsRow.vue'
+
 type PresetKey = 'last_52_weeks' | 'last_30_days' | 'last_7_days' | 'current_month' | 'custom'
 
 interface AnalyticsResponse {
