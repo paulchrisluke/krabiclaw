@@ -17,6 +17,7 @@ import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-s
 import {
   buildMcpAuthChallengeForError,
   buildMcpOAuthChallenge,
+  describeMcpAuthTelemetryError,
   getCloudflareWaitUntil,
   isMcpMutatingTool,
   mcpAuthRequiredResult,
@@ -112,7 +113,7 @@ export default defineEventHandler(async (event) => {
           toolName: requestToolName ?? null,
           toolDomain: requestToolName ? PLATFORM_MCP_TOOL_DOMAIN : null,
           status: 'auth_required',
-          errorMessage: 'Missing bearer token or cookie',
+          errorMessage: 'credential_missing: missing bearer token or cookie',
         })
         return mcpSuccess(requestId ?? null, mcpAuthRequiredResult({ challenge: authChallenge, message: PLATFORM_AUTH_REQUIRED_TEXT }))
       }
@@ -302,7 +303,9 @@ export default defineEventHandler(async (event) => {
         isMutating: isMcpMutatingTool(PLATFORM_MCP_TOOLS.find((t) => t.name === requestToolName)),
         status: error instanceof Error && /Authentication required/i.test(error.message) ? 'auth_required' : 'error',
         errorCode: asMcpError(error).code,
-        errorMessage: error instanceof Error ? error.message : String(error),
+        errorMessage: error instanceof Error && /Authentication required/i.test(error.message)
+          ? describeMcpAuthTelemetryError(error)
+          : error instanceof Error ? error.message : String(error),
       })
     }
     const mcpError = asMcpError(error)

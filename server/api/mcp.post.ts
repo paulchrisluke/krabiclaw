@@ -30,6 +30,7 @@ import {
 import {
   buildMcpAuthChallengeForError,
   buildMcpOAuthChallenge,
+  describeMcpAuthTelemetryError,
   getCloudflareWaitUntil,
   isMcpMutatingTool,
   mcpAuthRequiredResult,
@@ -108,7 +109,7 @@ export default defineEventHandler(async (event) => {
           toolName: requestToolName ?? null,
           toolDomain: MCP_TOOLS.find((t) => t.name === requestToolName)?.domain ?? null,
           status: "auth_required",
-          errorMessage: "Missing bearer token or cookie",
+          errorMessage: "credential_missing: missing bearer token or cookie",
         });
         return mcpSuccess(requestId ?? null, mcpAuthRequiredResult({ challenge: authChallenge, message: TENANT_AUTH_REQUIRED_TEXT }));
       }
@@ -417,7 +418,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
           isMutating: isMcpMutatingTool(toolDef),
           arguments: rawArgs,
           status: "auth_required",
-          errorMessage: authError instanceof Error ? authError.message : String(authError),
+          errorMessage: describeMcpAuthTelemetryError(authError),
           durationMs: Date.now() - toolStartedAt,
         });
         throw authError;

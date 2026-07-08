@@ -80,6 +80,19 @@ export function buildMcpAuthChallengeForError(
   })
 }
 
+export function describeMcpAuthTelemetryError(
+  error: unknown,
+  options?: { fallback?: string; prefix?: string },
+) {
+  const details = mcpAuthChallengeDetailsFromError(error)
+  const prefix = options?.prefix ?? 'credential_rejected'
+  if (details) {
+    return `${prefix}: ${details.error}: ${details.description}${details.scope ? ` (scope=${details.scope})` : ''}`
+  }
+  const fallback = options?.fallback ?? (error instanceof Error ? error.message : String(error))
+  return `${prefix}: ${fallback}`
+}
+
 export function getCloudflareWaitUntil(event: H3Event): ((_promise: Promise<unknown>) => void) | undefined {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ctx = (event.context.cloudflare as any)?.context as { waitUntil?: (_p: Promise<unknown>) => void } | undefined
