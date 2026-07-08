@@ -23,38 +23,46 @@
             </UFormField>
           </div>
 
-          <div v-if="pending && groups.length === 0" class="space-y-3">
-            <USkeleton v-for="i in 5" :key="i" class="h-12 w-full" />
-          </div>
+          <ClientOnly>
+            <template #fallback>
+              <div v-if="pending" class="space-y-3">
+                <USkeleton v-for="i in 5" :key="i" class="h-12 w-full" />
+              </div>
+            </template>
 
-          <div v-else-if="groups.length === 0" class="py-16 text-center">
-            <UIcon name="i-lucide-activity" class="size-8 text-muted mx-auto mb-3" />
-            <p class="text-sm font-medium text-highlighted">No activity yet</p>
-            <p class="mt-1 text-xs text-muted">Actions across your sites will show up here.</p>
-          </div>
-
-          <div v-else class="space-y-6">
-            <div v-for="group in groups" :key="group.label">
-              <p class="text-xs font-semibold text-muted uppercase tracking-wide mb-2">{{ group.label }}</p>
-              <ul class="-mx-4">
-                <li v-for="ev in group.events" :key="ev.id" class="flex items-start gap-3 px-4 py-3 border-b border-default last:border-0">
-                  <UAvatar :src="ev.actor_image ?? undefined" :alt="ev.actor_name ?? 'System'" size="2xs" class="mt-0.5 shrink-0" />
-                  <div class="min-w-0 flex-1">
-                    <p class="text-sm text-highlighted leading-snug">
-                      <span class="font-medium">{{ ev.actor_name ?? 'System' }}</span>
-                      {{ eventLabel(ev.event_type) }}
-                      <span v-if="ev.location_title" class="text-muted"> · {{ ev.location_title }}</span>
-                    </p>
-                    <p class="text-xs text-muted mt-0.5">{{ timeAgo(ev.created_at) }}</p>
-                  </div>
-                </li>
-              </ul>
+            <div v-if="pending && groups.length === 0" class="space-y-3">
+              <USkeleton v-for="i in 5" :key="i" class="h-12 w-full" />
             </div>
 
-            <div v-if="nextCursor" class="text-center">
-              <UButton label="Load more" color="neutral" variant="soft" :loading="loadingMore" @click="loadMore" />
+            <div v-else-if="groups.length === 0" class="py-16 text-center">
+              <UIcon name="i-lucide-activity" class="size-8 text-muted mx-auto mb-3" />
+              <p class="text-sm font-medium text-highlighted">No activity yet</p>
+              <p class="mt-1 text-xs text-muted">Actions across your sites will show up here.</p>
             </div>
-          </div>
+
+            <div v-else class="space-y-6">
+              <div v-for="group in groups" :key="group.label">
+                <p class="text-xs font-semibold text-muted uppercase tracking-wide mb-2">{{ group.label }}</p>
+                <ul class="-mx-4">
+                  <li v-for="ev in group.events" :key="ev.id" class="flex items-start gap-3 px-4 py-3 border-b border-default last:border-0">
+                    <UAvatar :src="ev.actor_image ?? undefined" :alt="ev.actor_name ?? 'System'" size="2xs" class="mt-0.5 shrink-0" />
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm text-highlighted leading-snug">
+                        <span class="font-medium">{{ ev.actor_name ?? 'System' }}</span>
+                        {{ eventLabel(ev.event_type) }}
+                        <span v-if="ev.location_title" class="text-muted"> · {{ ev.location_title }}</span>
+                      </p>
+                      <p class="text-xs text-muted mt-0.5">{{ timeAgo(ev.created_at) }}</p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+
+              <div v-if="nextCursor" class="text-center">
+                <UButton label="Load more" color="neutral" variant="soft" :loading="loadingMore" @click="loadMore" />
+              </div>
+            </div>
+          </ClientOnly>
         </UCard>
 
       </div>
@@ -128,6 +136,7 @@ const events = ref<SiteEvent[]>([])
 const nextCursor = ref<string | null>(null)
 const pending = ref(false)
 const loadingMore = ref(false)
+const requestToken = ref(0)
 
 async function fetchEvents(before?: string) {
   const query: Record<string, string> = { limit: '20' }
@@ -141,29 +150,35 @@ async function fetchEvents(before?: string) {
 }
 
 async function reload() {
+  const currentToken = ++requestToken.value
   pending.value = true
   try {
     const res = await fetchEvents()
+    if (currentToken !== requestToken.value) return
     events.value = res.events
     nextCursor.value = res.nextCursor
   } catch (err) {
+    if (currentToken !== requestToken.value) return
     toast.add({ title: 'Failed to load activity', description: err instanceof Error ? err.message : 'Please try again.', color: 'error' })
   } finally {
-    pending.value = false
+    if (currentToken === requestToken.value) pending.value = false
   }
 }
 
 async function loadMore() {
   if (!nextCursor.value) return
+  const currentToken = ++requestToken.value
   loadingMore.value = true
   try {
     const res = await fetchEvents(nextCursor.value)
+    if (currentToken !== requestToken.value) return
     events.value = [...events.value, ...res.events]
     nextCursor.value = res.nextCursor
   } catch (err) {
+    if (currentToken !== requestToken.value) return
     toast.add({ title: 'Failed to load more activity', description: err instanceof Error ? err.message : 'Please try again.', color: 'error' })
   } finally {
-    loadingMore.value = false
+    if (currentToken === requestToken.value) loadingMore.value = false
   }
 }
 

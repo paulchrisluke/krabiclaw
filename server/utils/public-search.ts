@@ -70,7 +70,7 @@ interface PlatformBlogSearchRow {
   seo_keywords: string | null
 }
 
-interface TenantBlogSearchRow extends PlatformBlogSearchRow {}
+type TenantBlogSearchRow = PlatformBlogSearchRow
 
 interface PlatformKnowledgeDocument {
   id: string
@@ -521,8 +521,12 @@ export async function searchPublicResources(
         },
       },
     }),
-    (options.siteId && env.db && (!typeFilter || typeFilter === 'blog'))
-      ? queryAll<TenantBlogSearchRow>(
+    (async () => {
+      if (!options.siteId || !env.db || (typeFilter && typeFilter !== 'blog')) {
+        return [] as TenantBlogSearchRow[]
+      }
+      try {
+        return await queryAll<TenantBlogSearchRow>(
           env.db,
           `SELECT id, title, slug, body, excerpt, category, seo_description, seo_keywords
            FROM blog_posts
@@ -549,7 +553,10 @@ export async function searchPublicResources(
             limit,
           ],
         )
-      : Promise.resolve([] as TenantBlogSearchRow[]),
+      } catch {
+        return [] as TenantBlogSearchRow[]
+      }
+    })(),
   ])
 
   const platformResults = normalizeSearchResults(response.chunks ?? [], {

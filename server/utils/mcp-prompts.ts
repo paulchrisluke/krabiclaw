@@ -134,7 +134,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           channels
             ? `Immediately after create_post succeeds, call publish_post with channels [${channels}] — do not stop to describe the publish step instead of executing it.`
             : "Immediately after create_post succeeds, call publish_post (defaults to the site channel) — do not stop to describe the publish step instead of executing it.",
-          "Report back the post id, public URL/path, and which channels it published to.",
+          "Report back the post id, the live view URL, and which channels it published to.",
         ].filter(Boolean).join(" "),
       };
     }
@@ -146,7 +146,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           `Based on this description, call create_experience with a sensible title, tagline, body, and any of price_amount/duration_minutes/max_capacity/time_slots that are implied or stated: ${description}`,
           "Use a status appropriate to whether this should go live immediately or stay as a draft — ask the user if it's not obvious.",
           "If the user has an image ready, call set_experience_image after creation.",
-          "Report back what was created and its current status.",
+          "Report back what was created, its current status, and the live URL when one is available.",
         ].join(" "),
       };
     }

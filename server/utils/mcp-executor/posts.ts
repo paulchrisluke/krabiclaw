@@ -8,7 +8,7 @@ import { hasSiteEntitlement } from '~/server/utils/billing'
 import { isConversationalToolGroupEnabled } from '~/server/utils/conversational-tool-surface'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
-import { NOT_HANDLED, mutationContextPayload, normalizeChannelsInput, omit, optionalString, requireActiveImageAsset, requiredString } from './shared'
+import { attachViewUrlToRecord, NOT_HANDLED, mutationContextPayload, normalizeChannelsInput, omit, optionalString, requireActiveImageAsset, requiredString } from './shared'
 
 async function asMcpValidationError<T>(work: () => Promise<T>): Promise<T> {
   try {
@@ -26,25 +26,28 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
   switch (toolName) {
     case "list_posts":
       return {
-        posts: await listPosts(
+        posts: (await listPosts(
           site.db,
           site.organizationId,
           site.siteId,
           site.env,
           optionalString(args, "status") ?? undefined,
           optionalString(args, "location_id") ?? undefined,
-        ),
+        )).map((post) => attachViewUrlToRecord(post, site)),
       };
     case "get_post":
-      return {
-        post: await getPost(
+      {
+        const post = await getPost(
           site.db,
           site.organizationId,
           site.siteId,
           requiredString(args, "post_id"),
           site.env,
-        ),
-      };
+        );
+        return {
+          post: post ? attachViewUrlToRecord(post, site) : null,
+        };
+      }
     case "create_post":
       {
         const post = await asMcpValidationError(() => createPost(
@@ -56,7 +59,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.env,
         ));
         return {
-          post,
+          post: attachViewUrlToRecord(post, site),
           context: await mutationContextPayload(site, {
             locationId: post && typeof post.location_id === "string" ? post.location_id : null,
           }),
@@ -74,7 +77,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.env,
         ));
         return {
-          post,
+          post: post ? attachViewUrlToRecord(post, site) : null,
           context: await mutationContextPayload(site, {
             locationId:
               post && typeof post.location_id === "string"
@@ -96,7 +99,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.env,
         ));
       return {
-        post,
+        post: post ? attachViewUrlToRecord(post, site) : null,
         context: await mutationContextPayload(site, {
           locationId: post && typeof post.location_id === "string" ? post.location_id : null,
         }),
@@ -245,8 +248,9 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         }
       }
 
+      const publishedPost = await getPost(site.db, site.organizationId, site.siteId, postId, site.env);
       return {
-        post: await getPost(site.db, site.organizationId, site.siteId, postId, site.env),
+        post: publishedPost ? attachViewUrlToRecord(publishedPost, site) : null,
         context: await mutationContextPayload(site, {
           locationId: post && typeof post.location_id === "string" ? post.location_id : null,
         }),

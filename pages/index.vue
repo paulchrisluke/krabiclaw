@@ -670,14 +670,17 @@ const recentPosts = computed(() => {
 })
 
 const recentBlogPosts = computed(() =>
-  (blogList.value || []).slice(0, 3).map((post) => ({
-    slug: String(post.slug || ''),
-    title: String(post.title || 'Untitled'),
-    excerpt: typeof post.excerpt === 'string' ? post.excerpt : '',
-    category: typeof post.category === 'string' ? post.category : '',
-    publishedAt: typeof post.published_at === 'string' ? post.published_at : null,
-    image: resolveMedia(post.featured_image).url,
-  })).filter(post => post.slug)
+  (blogList.value || [])
+    .filter(post => post.slug)
+    .slice(0, 3)
+    .map((post) => ({
+      slug: String(post.slug || ''),
+      title: String(post.title || 'Untitled'),
+      excerpt: typeof post.excerpt === 'string' ? post.excerpt : '',
+      category: typeof post.category === 'string' ? post.category : '',
+      publishedAt: typeof post.published_at === 'string' ? post.published_at : null,
+      image: resolveMedia(post.featured_image).url,
+    }))
 )
 
 const selectedPostId = ref(null)

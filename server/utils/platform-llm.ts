@@ -49,9 +49,9 @@ interface PlatformLlmBlogDetail extends PlatformLlmBlogSummary {
   components: PlatformContentComponent[]
 }
 
-interface TenantLlmBlogSummary extends PlatformLlmBlogSummary {}
+type TenantLlmBlogSummary = PlatformLlmBlogSummary
 
-interface TenantLlmBlogDetail extends PlatformLlmBlogDetail {}
+type TenantLlmBlogDetail = PlatformLlmBlogDetail
 
 export interface PlatformLlmLinkEntry {
   title: string
@@ -506,7 +506,7 @@ interface LlmsFullTxtOptions {
   title?: string
   intro?: string
   includeDocs?: boolean
-  renderBlog?: (post: PlatformLlmBlogDetail, origin: string) => string
+  renderBlog?: (_post: PlatformLlmBlogDetail, _origin: string) => string
 }
 
 export function buildLlmsFullTxt(

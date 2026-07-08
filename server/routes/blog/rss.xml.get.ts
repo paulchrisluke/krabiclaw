@@ -16,18 +16,25 @@ export default defineEventHandler(async (event) => {
   const origin = resolvePublicOrigin(event)
   const isTenant = event.context.tenantType === 'tenant'
   const siteId = isTenant ? String(event.context.siteId || '') : ''
-  const siteName = String(event.context.site?.brand_name || 'Site')
-  const posts = isTenant && siteId
-    ? await listPublishedTenantBlogPostsForLlm(db, siteId)
-    : await listPublishedPlatformBlogPostsForLlm(db)
-  const entries = isTenant && siteId
-    ? buildTenantBlogLinkEntries(posts ?? [], origin)
-    : buildPlatformBlogLinkEntries(posts ?? [], origin)
+
+  if (isTenant && siteId) {
+    const siteName = String(event.context.site?.brand_name || 'Site')
+    const posts = await listPublishedTenantBlogPostsForLlm(db, siteId)
+    const entries = buildTenantBlogLinkEntries(posts ?? [], origin)
+    return textResponse(
+      buildNamedBlogRss(origin, entries, {
+        title: `${siteName} Blog`,
+        description: `Published blog feed for ${siteName}.`,
+      }),
+      {},
+      'application/rss+xml; charset=utf-8',
+    )
+  }
+
+  const posts = await listPublishedPlatformBlogPostsForLlm(db)
+  const entries = buildPlatformBlogLinkEntries(posts ?? [], origin)
   return textResponse(
-    buildNamedBlogRss(origin, entries, isTenant ? {
-      title: `${siteName} Blog`,
-      description: `Published blog feed for ${siteName}.`,
-    } : {}),
+    buildNamedBlogRss(origin, entries, {}),
     {},
     'application/rss+xml; charset=utf-8',
   )
