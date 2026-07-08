@@ -240,18 +240,28 @@ const TEMPLATES: Record<
   reservation_cancelled: (v) => ({
     name: 'reservation_cancelled',
     language: { code: 'en_US' },
-    components: [{
-      type: 'body',
-      parameters: [
-        { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
-        { type: 'text', text: cleanTemplateText(v.date, 'Date pending', 40) },
-        { type: 'text', text: cleanTemplateText(v.time, 'Time pending', 40) },
-        { type: 'text', text: cleanTemplateText(v.guests, 'Unknown', 24) },
-        { type: 'text', text: cleanTemplateText(v.phone, 'No phone provided', 40) },
-        { type: 'text', text: cleanTemplateText(v.context, 'Context not provided', 100) },
-        { type: 'text', text: cleanTemplateText(v.requests, 'None', 100) },
-      ],
-    }],
+    components: [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
+          { type: 'text', text: cleanTemplateText(v.date, 'Date pending', 40) },
+          { type: 'text', text: cleanTemplateText(v.time, 'Time pending', 40) },
+          { type: 'text', text: cleanTemplateText(v.guests, 'Unknown', 24) },
+          { type: 'text', text: cleanTemplateText(v.phone, 'No phone provided', 40) },
+          { type: 'text', text: cleanTemplateText(v.context, 'Context not provided', 100) },
+          { type: 'text', text: cleanTemplateText(v.requests, 'None', 100) },
+        ],
+      },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.reply_path, '', 300) },
+        ],
+      },
+    ],
   }),
   domain_update: (v) => ({
     name: 'domain_update',
