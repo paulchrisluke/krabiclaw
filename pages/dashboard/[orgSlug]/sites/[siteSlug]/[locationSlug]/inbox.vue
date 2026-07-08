@@ -169,6 +169,7 @@
               <div class="mt-3 space-y-2 text-sm">
                 <template v-if="selectedDetail.source.submission_type === 'contact'">
                   <p v-if="selectedDetail.source.subject"><span class="text-muted">Subject:</span> {{ selectedDetail.source.subject }}</p>
+                  <p v-if="selectedDetail.source.experience_title"><span class="text-muted">Regarding:</span> {{ selectedDetail.source.experience_title }}</p>
                   <p><span class="text-muted">Submitted:</span> {{ formatDate(selectedDetail.source.created_at) }}</p>
                   <p class="whitespace-pre-wrap"><span class="text-muted">Message:</span> {{ selectedDetail.source.message }}</p>
                 </template>
@@ -263,6 +264,7 @@ type ThreadSource =
     operational_status: string
     subject: string | null
     message: string
+    experience_title: string | null
   }
   | {
     submission_type: 'reservation'
@@ -531,7 +533,7 @@ function threadStateLabel(status: InboxStatus) {
 }
 
 function threadSecondaryLine(thread: ThreadSummary) {
-  if (thread.submission_type === 'contact') return thread.subject || 'Website message'
+  if (thread.submission_type === 'contact') return thread.experience_title || thread.subject || 'Website message'
   if (thread.submission_type === 'reservation') return thread.last_message_preview || 'Reservation thread'
   return thread.experience_title || 'Experience booking'
 }

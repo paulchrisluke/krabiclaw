@@ -241,49 +241,6 @@
         </div>
       </section>
 
-      <section v-if="recentBlogPosts.length" class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-        <div class="mb-16 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div class="max-w-2xl">
-            <p class="saya-kicker mb-6">From the blog</p>
-            <h2 class="saya-display-md text-default">Planning ideas, updates, and stories from the studio.</h2>
-          </div>
-          <NuxtLink to="/blog" class="inline-flex text-sm font-medium text-default no-underline hover:underline">
-            Visit the blog
-          </NuxtLink>
-        </div>
-
-        <div class="grid gap-6 lg:grid-cols-3">
-          <NuxtLink
-            v-for="post in recentBlogPosts"
-            :key="post.slug"
-            :to="`/blog/${post.slug}`"
-            class="group block overflow-hidden border border-default bg-default no-underline transition hover:-translate-y-0.5 hover:shadow-lg"
-          >
-            <div v-if="post.image" class="aspect-[4/3] overflow-hidden bg-muted">
-              <img
-                :src="post.image"
-                :alt="post.title"
-                class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              >
-            </div>
-            <div v-else class="aspect-[4/3] bg-linear-to-br from-stone-50 to-stone-100 dark:from-stone-900/20 dark:to-stone-800/20" />
-            <div class="p-6">
-              <div class="mb-3 flex flex-wrap items-center gap-3">
-                <span v-if="post.category" class="rounded bg-muted px-2 py-1 text-xs font-medium text-muted">
-                  {{ post.category }}
-                </span>
-                <span v-if="post.publishedAt" class="text-sm text-dimmed">
-                  <NuxtTime :datetime="post.publishedAt" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
-                </span>
-              </div>
-              <h3 class="text-2xl font-semibold leading-tight text-default">{{ post.title }}</h3>
-              <p v-if="post.excerpt" class="mt-3 text-sm leading-relaxed text-muted">{{ post.excerpt }}</p>
-              <p class="mt-4 text-sm font-medium text-default">Read article</p>
-            </div>
-          </NuxtLink>
-        </div>
-      </section>
-
       <!-- Modal: full post (Teleported) -->
       <Teleport to="body">
         <div v-if="selectedPost" class="fixed inset-0 z-[100] flex flex-col bg-black" role="dialog" aria-modal="true" aria-label="Post details">
@@ -422,6 +379,50 @@
           </div>
         </div>
       </section>
+
+      <!-- ── Blog highlights ──────────────────────────────────── -->
+      <AppSection v-if="recentBlogPosts.length" bg="black" padding="xl">
+        <div class="mb-16 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div class="max-w-2xl">
+            <p class="saya-kicker mb-6 text-inverted/60">From the blog</p>
+            <h2 class="saya-display-md text-inverted">Planning ideas, updates, and stories from the studio.</h2>
+          </div>
+          <NuxtLink to="/blog" class="inline-flex text-sm font-medium text-inverted no-underline hover:underline">
+            Visit the blog
+          </NuxtLink>
+        </div>
+
+        <div class="grid gap-6 lg:grid-cols-3">
+          <NuxtLink
+            v-for="post in recentBlogPosts"
+            :key="post.slug"
+            :to="`/blog/${post.slug}`"
+            class="group block overflow-hidden rounded-xl border border-inverted/10 bg-inverted/5 no-underline transition hover:-translate-y-0.5 hover:border-inverted/20"
+          >
+            <div v-if="post.image" class="aspect-4/3 overflow-hidden bg-inverted/10">
+              <img
+                :src="post.image"
+                :alt="post.title"
+                class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              >
+            </div>
+            <div v-else class="aspect-4/3 bg-inverted/10" />
+            <div class="p-6">
+              <div class="mb-3 flex flex-wrap items-center gap-3">
+                <span v-if="post.category" class="rounded bg-inverted/10 px-2 py-1 text-xs font-medium text-inverted/70">
+                  {{ post.category }}
+                </span>
+                <span v-if="post.publishedAt" class="text-sm text-inverted/40">
+                  <NuxtTime :datetime="post.publishedAt" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
+                </span>
+              </div>
+              <h3 class="text-2xl font-semibold leading-tight text-inverted">{{ post.title }}</h3>
+              <p v-if="post.excerpt" class="mt-3 text-sm leading-relaxed text-inverted/60">{{ post.excerpt }}</p>
+              <p class="mt-4 text-sm font-medium text-inverted">Read article</p>
+            </div>
+          </NuxtLink>
+        </div>
+      </AppSection>
 
       <!-- ── CTA strip (strict component) ───────────────────── -->
       <LazySayaCTA

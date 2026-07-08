@@ -35,7 +35,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'create_post',
-      description: 'Create and publish a post. Use post_type to create a promotion or event instead of a standard update: "offer" for a discount/special (pair with offer_coupon/offer_terms), "event" for a scheduled happening (pair with event_title/event_start/event_end), or "update" for general news. Defaults to "standard".',
+      description: 'Create and publish a post. Use post_type to create a promotion or event instead of a standard update: "offer" for a discount/special (pair with offer_coupon/offer_terms), "event" for a scheduled happening (pair with event_title/event_start/event_end), or "update" for general news. Defaults to "standard". Use this for time-boxed announcements that fan out to Facebook/Instagram/GMB, not evergreen content — for the site\'s own long-form articles use create_blog_post, and for a permanent bookable offering with its own page/pricing/availability (e.g. a new class, package, or group-booking option) use create_experience instead.',
       domain: 'posts',
       minimumRole: 'editor',
       confirmRequired: false,

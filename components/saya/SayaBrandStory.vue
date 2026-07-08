@@ -4,6 +4,14 @@
       <!-- Filled state -->
       <template v-if="headline || body">
         <div :class="image ? 'grid gap-16 lg:grid-cols-2 lg:items-center' : ''">
+          <div v-if="image" class="overflow-hidden">
+            <img
+              :src="image"
+              alt=""
+              aria-hidden="true"
+              class="h-full w-full object-cover aspect-4/3"
+            />
+          </div>
           <div>
             <p class="saya-eyebrow mb-8 text-inverted/60">{{ ourStoryKicker }}</p>
             <h2 class="saya-display-md text-inverted" :class="image ? '' : 'max-w-3xl'">
@@ -18,14 +26,6 @@
             >
               {{ readMoreCta }}
             </NuxtLink>
-          </div>
-          <div v-if="image" class="overflow-hidden">
-            <img
-              :src="image"
-              alt=""
-              aria-hidden="true"
-              class="h-full w-full object-cover aspect-4/3"
-            />
           </div>
         </div>
       </template>

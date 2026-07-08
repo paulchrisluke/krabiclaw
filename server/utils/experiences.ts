@@ -1132,7 +1132,8 @@ export async function computeExperienceAvailabilitySummary(
   if (opts.locationClosed) return { availability_state: 'temporarily_unavailable', ...none }
 
   const hasSchedule = Boolean(experience.recurring_slots) || Boolean(experience.time_slots?.length)
-  if (!hasSchedule) return { availability_state: 'inquiry_only', ...none }
+  const hasPrice = Boolean(experience.price) || experience.price_amount != null
+  if (!hasSchedule || !hasPrice) return { availability_state: 'inquiry_only', ...none }
 
   const today = new Date()
   const fromDate = today.toISOString().slice(0, 10)

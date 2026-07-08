@@ -39,6 +39,7 @@ interface ContactThreadSource extends GuestThreadSourceBase {
   submission_type: 'contact'
   subject: string | null
   message: string
+  experience_title: string | null
 }
 
 interface ReservationThreadSource extends GuestThreadSourceBase {
@@ -97,7 +98,9 @@ function inferInboxStatusFromMessage(direction: 'in' | 'out'): GuestThreadInboxS
 }
 
 function buildOpeningPreview(source: GuestThreadSource): string | null {
-  if (source.submission_type === 'contact') return normalizePreview(source.message)
+  if (source.submission_type === 'contact') {
+    return normalizePreview(source.experience_title ? `Re: ${source.experience_title} · ${source.message}` : source.message)
+  }
   if (source.submission_type === 'reservation') {
     return normalizePreview(`${source.date} ${source.time} · ${source.guests} guests${source.requests ? ` · ${source.requests}` : ''}`)
   }
@@ -112,19 +115,21 @@ export async function getGuestThreadSource(
   if (submissionType === 'contact') {
     return await queryFirst<ContactThreadSource>(db, `
       SELECT
-        organization_id,
-        site_id,
+        ct.organization_id,
+        ct.site_id,
         NULL AS location_id,
-        name AS guest_name,
-        email AS guest_email,
+        ct.name AS guest_name,
+        ct.email AS guest_email,
         NULL AS guest_phone,
-        created_at,
-        status AS operational_status,
-        subject,
-        message,
+        ct.created_at,
+        ct.status AS operational_status,
+        ct.subject,
+        ct.message,
+        e.title AS experience_title,
         'contact' AS submission_type
-      FROM contact_submissions
-      WHERE id = ?
+      FROM contact_submissions ct
+      LEFT JOIN experiences e ON e.id = ct.experience_id
+      WHERE ct.id = ?
       LIMIT 1
     `, [submissionId])
   }
@@ -341,7 +346,7 @@ export async function listGuestThreads(
   }
   if (opts.search?.trim()) {
     const like = `%${opts.search.trim().toLowerCase()}%`
-    where += ' AND (LOWER(gt.guest_name) LIKE ? OR LOWER(COALESCE(gt.guest_email, \'\')) LIKE ? OR LOWER(COALESCE(gt.guest_phone, \'\')) LIKE ? OR LOWER(COALESCE(ct.subject, \'\')) LIKE ? OR LOWER(COALESCE(e.title, \'\')) LIKE ?)'
+    where += ' AND (LOWER(gt.guest_name) LIKE ? OR LOWER(COALESCE(gt.guest_email, \'\')) LIKE ? OR LOWER(COALESCE(gt.guest_phone, \'\')) LIKE ? OR LOWER(COALESCE(ct.subject, \'\')) LIKE ? OR LOWER(COALESCE(e.title, ce.title, \'\')) LIKE ?)'
     params.push(like, like, like, like, like)
   }
   const limit = Math.max(1, Math.min(opts.limit ?? 100, 200))
@@ -351,7 +356,7 @@ export async function listGuestThreads(
       gt.*,
       bl.title AS location_title,
       ct.subject AS subject,
-      e.title AS experience_title,
+      COALESCE(e.title, ce.title) AS experience_title,
       COALESCE(ct.status, rs.status, eb.status) AS operational_status
     FROM guest_threads gt
     LEFT JOIN business_locations bl ON bl.id = gt.location_id
@@ -359,6 +364,7 @@ export async function listGuestThreads(
     LEFT JOIN reservation_submissions rs ON gt.submission_type = 'reservation' AND rs.id = gt.submission_id
     LEFT JOIN experience_bookings eb ON gt.submission_type = 'experience_booking' AND eb.id = gt.submission_id
     LEFT JOIN experiences e ON gt.submission_type = 'experience_booking' AND e.id = eb.experience_id
+    LEFT JOIN experiences ce ON gt.submission_type = 'contact' AND ce.id = ct.experience_id
     WHERE ${where}
     ORDER BY COALESCE(gt.last_message_at, gt.created_at) DESC
     LIMIT ?

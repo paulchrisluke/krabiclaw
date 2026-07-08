@@ -207,6 +207,7 @@ export const contact_submissions = sqliteTable("contact_submissions", {
 	message: text().notNull(),
 	status: text().default("new").notNull(),
 	ip_hash: text(),
+	experience_id: text().references(() => experiences.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 

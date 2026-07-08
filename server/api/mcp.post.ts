@@ -179,6 +179,13 @@ This entire flow runs within the current conversation — do not tell the user t
 - If you already have a resolved ChatGPT file reference for a video (or an image), you can call upload_user_media directly instead of opening the widget.
 - The dashboard media library remains a fallback only for chat clients that do not support inline widgets.
 
+## Choosing a content type
+KrabiClaw has three distinct content-creation tools — do not default to whichever one comes to mind first. Ask yourself whether the request is time-boxed, narrative, or a permanent offering:
+- **create_post** — a time-boxed announcement, offer, or event that should fan out to Facebook/Instagram/GMB. Use for "we're running a sale this week" or "come to our event Saturday."
+- **create_blog_post** — long-form narrative/story content on the site's own blog. Use for "write about our history" or "announce our new location" as a story, not an action.
+- **create_experience** — a permanent, bookable offering with its own page: a class, package, tour, or group/custom-booking option that needs pricing/availability and a Reserve Now (or Contact Us, if left priceless) CTA. Use for "we want a dedicated page for X" when X is something people book or inquire about, even if there's no fixed price yet — leave price/price_amount unset for a "contact us for pricing" experience rather than writing a post or blog entry about it.
+If a request is ambiguous, ask a brief clarifying question rather than guessing.
+
 ## Session start
 Start every conversation by calling get_workspace_context. If no active site is set yet, call list_sites to discover the user's sites and present them clearly.
 - If they have 0 sites, start the Onboarding Flow:

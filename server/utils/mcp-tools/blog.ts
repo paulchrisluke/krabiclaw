@@ -31,7 +31,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'create_blog_post',
-      description: 'Create a blog post for this site. Set publish=true to publish immediately, or omit/false to save as a draft. category is free text for tenant blogs (no fixed taxonomy).',
+      description: 'Create a blog post for this site. Set publish=true to publish immediately, or omit/false to save as a draft. category is free text for tenant blogs (no fixed taxonomy). Use this for long-form narrative/story content, not a time-boxed announcement (use create_post for that) or a permanent bookable offering with its own pricing/availability page (use create_experience for that instead).',
       domain: 'blog',
       minimumRole: 'editor',
       confirmRequired: false,

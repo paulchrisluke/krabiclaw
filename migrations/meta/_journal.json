@@ -225,6 +225,13 @@
       "when": 1783436491858,
       "tag": "0038_plain_purple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1783502138471,
+      "tag": "0039_outgoing_nitro",
+      "breakpoints": true
     }
   ]
 }

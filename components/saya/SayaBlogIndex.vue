@@ -39,7 +39,6 @@
                 class="h-full w-full object-cover"
               />
             </div>
-            <div v-else class="h-48 bg-linear-to-br from-stone-50 to-stone-100 dark:from-stone-900/20 dark:to-stone-800/20" />
             <div class="p-6">
               <div class="mb-3 flex items-center gap-3">
                 <span v-if="post.category" class="rounded bg-muted px-2 py-1 text-xs font-medium text-muted">

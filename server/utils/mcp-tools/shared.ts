@@ -505,7 +505,7 @@ export const experienceWriteSchema = {
       required: ['url', 'kind'],
     },
   },
-  price: { type: ['string', 'null'], description: 'Optional display override for pricing text, e.g. "Ask us" or "Free".' },
+  price: { type: ['string', 'null'], description: 'Optional display override for pricing text, e.g. "Ask us" or "Free". Leave both price and price_amount unset entirely (not "Ask us") for group/custom-quote experiences — that triggers the public page\'s "Contact us" inquiry flow instead of a Reserve Now button; setting price to text like "Ask us" instead just shows that text as the price label with normal booking still enabled.' },
   price_amount: { type: ['number', 'null'], description: 'Numeric price amount when the experience has a concrete price.' },
   compare_at_price_amount: { type: ['number', 'null'], description: 'Regular/pre-sale price. Set alongside price_amount to run a sale.' },
   sale_starts_at: { type: ['string', 'null'], description: 'ISO 8601 date/time the sale becomes active. Optional.' },

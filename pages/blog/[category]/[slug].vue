@@ -62,7 +62,6 @@
           class="h-full w-full object-cover"
         />
       </div>
-      <div v-else class="mb-10 h-64 rounded-2xl bg-muted" aria-hidden="true" />
 
       <div ref="articleBodyRef" class="space-y-14">
         <template v-for="(block, blockIndex) in renderedBlocks" :key="`block-${blockIndex}`">

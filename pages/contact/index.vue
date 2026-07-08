@@ -299,7 +299,17 @@ const subjectOptions = computed(() => [
   { key: 'careers', label: t('saya.contact_page.careers') }
 ])
 
-const tenantForm = ref({ name: '', email: '', subject: 'general', message: '' })
+const inquiryExperienceId = typeof route.query.experienceId === 'string' ? route.query.experienceId : null
+const inquiryExperienceTitle = typeof route.query.experienceTitle === 'string' ? route.query.experienceTitle : null
+
+const tenantForm = ref({
+  name: '',
+  email: '',
+  subject: 'general',
+  message: inquiryExperienceTitle
+    ? `Interested in a group booking for "${inquiryExperienceTitle}". Please send me pricing and availability.`
+    : '',
+})
 const tenantSubmitting = ref(false)
 const tenantErrors = ref([])
 const tenantSubmitError = ref(null)
@@ -327,7 +337,7 @@ const handleTenantContact = async () => {
   try {
     await $fetch(`/api/public/sites/${siteId}/contact`, {
       method: 'POST',
-      body: tenantForm.value
+      body: { ...tenantForm.value, experienceId: inquiryExperienceId }
     })
   } catch {
     tenantSubmitError.value = t('saya.contact_page.message_failed')

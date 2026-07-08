@@ -75,6 +75,8 @@ interface ContactNotificationInput extends SiteContext {
   email: string
   subject?: string | null
   message: string
+  experienceId?: string | null
+  experienceTitle?: string | null
 }
 
 interface PlatformContactNotificationInput {
@@ -938,11 +940,12 @@ export async function notifyContactSubmitted(
     subject: opts.subject ?? '',
     message_preview: opts.message.slice(0, 200),
     site_name: restaurant,
+    experience_title: opts.experienceTitle ?? '',
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(ContactOwnerNew, { props: { guestName: opts.guestName, email: opts.email, subject: opts.subject, message: opts.message, siteName: restaurant, platformDomain, replyUrl: inboxUrl } }),
-    useRender(ContactGuestReceived, { props: { guestName: opts.guestName, siteName: restaurant, subject: opts.subject, message: opts.message, platformDomain } }),
+    useRender(ContactOwnerNew, { props: { guestName: opts.guestName, email: opts.email, subject: opts.subject, message: opts.message, siteName: restaurant, platformDomain, replyUrl: inboxUrl, experienceTitle: opts.experienceTitle } }),
+    useRender(ContactGuestReceived, { props: { guestName: opts.guestName, siteName: restaurant, subject: opts.subject, message: opts.message, platformDomain, experienceTitle: opts.experienceTitle } }),
   ])
 
   const results = await Promise.allSettled([

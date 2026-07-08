@@ -1,0 +1,1 @@
+ALTER TABLE `contact_submissions` ADD `experience_id` text REFERENCES experiences(id) ON DELETE set null;

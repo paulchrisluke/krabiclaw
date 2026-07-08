@@ -350,6 +350,14 @@
                 {{ experienceLocationClosureMessage }}
               </div>
 
+              <!-- Inquiry-only (no price and/or no schedule) — links to /contact
+                   with the experience pre-filled, instead of a dead-end message. -->
+              <div v-else-if="isInquiryOnly" class="pt-2">
+                <SayaButton block :to="contactUrl">
+                  Contact Us
+                </SayaButton>
+              </div>
+
               <!-- No bookable slots — never shows a misleading free-text time
                    field; only a clear "not currently bookable" message. -->
               <div
@@ -470,6 +478,15 @@ const noBookableSlotsMessage = computed(() => {
     case 'inquiry_only': return 'Contact us to arrange a booking for this experience.'
     default: return null
   }
+})
+
+const isInquiryOnly = computed(() => (experience.value as ApiValue)?.availability_state === 'inquiry_only')
+
+const contactUrl = computed(() => {
+  const exp = experience.value as ApiValue
+  if (!exp?.id) return '/contact'
+  const params = new URLSearchParams({ experienceId: exp.id, experienceTitle: exp.title ?? '' })
+  return `/contact?${params.toString()}`
 })
 
 const experiencePolicySummary = computed(() => {

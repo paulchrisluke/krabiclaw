@@ -29,7 +29,7 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'create_experience',
-      description: `Create an experience. Use the dedicated fields below (see their individual descriptions) rather than collapsing everything into body. Use update_booking_policy after creation for cancellation/refund rules — status must be one of: ${EXPERIENCE_STATUSES.join(', ')}. Every experience must belong to a location; omit location_id only if the site already has a primary location, otherwise call list_locations or create_location first.`,
+      description: `Create an experience. Use this — not create_post or create_blog_post — whenever the request is for a permanent, bookable offering with its own page: a new class, package, tour, or group/custom-booking option that needs pricing/availability and a Reserve Now (or Contact Us, if priceless) CTA. Use the dedicated fields below (see their individual descriptions) rather than collapsing everything into body. Use update_booking_policy after creation for cancellation/refund rules — status must be one of: ${EXPERIENCE_STATUSES.join(', ')}. Every experience must belong to a location; omit location_id only if the site already has a primary location, otherwise call list_locations or create_location first.`,
       domain: 'experiences',
       minimumRole: 'editor',
       confirmRequired: false,
