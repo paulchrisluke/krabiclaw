@@ -424,9 +424,10 @@ async function checkPlatformStatus() {
 const organization = dashboard.organization
 const site = dashboard.site
 const sites = dashboard.sites
-const selectedLocation = dashboard.selectedLocation
 const locations = dashboard.locations
 const activeSiteId = dashboard.siteId
+const dashboardLocation = useDashboardLocation()
+const selectedLocation = dashboardLocation.currentLocation
 
 const toggleChowbot = () => chowBot.toggle()
 const newChowBotChat = () => chowBot.startNewConversation()
@@ -451,18 +452,9 @@ const siteSlugFromRoute = computed(() => {
 // site dashboard-context.ts resolved (e.g. org root pages with no sites/ segment yet).
 const activeSiteSlug = computed(() => siteSlugFromRoute.value ?? site.value?.subdomain ?? null)
 const siteBase = computed(() => orgBase.value && activeSiteSlug.value ? `${orgBase.value}/sites/${activeSiteSlug.value}` : null)
-const projectBase = computed(() => siteBase.value && selectedLocation.value?.slug ? `${siteBase.value}/${selectedLocation.value.slug}` : siteBase.value)
-
-const locationSlugFromRoute = computed(() => {
-  const slug = route.params.locationSlug
-  return typeof slug === 'string' ? slug : null
-})
-
-const currentLocation = computed(() =>
-  locations.value.find(l => l.slug === locationSlugFromRoute.value || l.id === locationSlugFromRoute.value) ?? selectedLocation.value
-)
-
-const inLocationWorkspace = computed(() => Boolean(locationSlugFromRoute.value))
+const projectBase = computed(() => siteBase.value && dashboardLocation.currentLocationSlug.value ? `${siteBase.value}/${dashboardLocation.currentLocationSlug.value}` : siteBase.value)
+const currentLocation = dashboardLocation.currentLocation
+const inLocationWorkspace = dashboardLocation.inLocationWorkspace
 
 const inSettingsWorkspace = computed(() => {
   if (route.path.startsWith('/dashboard/account')) return true
@@ -515,8 +507,8 @@ const organizationMenuItems = computed(() => [
 const locationMenuItems = computed(() => [
   locations.value.map((location) => ({
     label: location.title,
-    icon: location.id === selectedLocation.value?.id ? 'i-lucide-check' : 'i-lucide-map-pin',
-    onSelect: () => dashboard.selectLocation(location.id)
+    icon: location.id === currentLocation.value?.id ? 'i-lucide-check' : 'i-lucide-map-pin',
+    onSelect: () => dashboardLocation.selectLocation(location.id)
   })),
   [
     {

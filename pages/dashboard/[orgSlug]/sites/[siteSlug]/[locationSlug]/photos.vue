@@ -3,10 +3,9 @@
 
     <UPageBody>
       <div class="mb-4 flex flex-wrap items-center gap-2">
-        <USelect v-model="selectedLocationId" :items="locationItems" value-key="id" label-key="label" class="w-64" @update:model-value="loadPhotos" />
         <USelect v-model="categoryFilter" :items="categoryItems" value-key="id" label-key="label" class="w-44" />
-        <UButton icon="i-lucide-upload" color="primary" variant="soft" :loading="uploading" :disabled="!selectedLocationId" @click="openUploadPicker">Upload</UButton>
-        <UButton icon="i-lucide-paperclip" color="neutral" variant="soft" :disabled="!selectedLocationId" @click="openAttachModal">Attach existing</UButton>
+        <UButton icon="i-lucide-upload" color="primary" variant="soft" :loading="uploading" :disabled="!locationId" @click="openUploadPicker">Upload</UButton>
+        <UButton icon="i-lucide-paperclip" color="neutral" variant="soft" :disabled="!locationId" @click="openAttachModal">Attach existing</UButton>
         <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadPhotos">Refresh</UButton>
         <input ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploading" @change="onFileSelect" />
       </div>
@@ -109,11 +108,6 @@ definePageMeta({ layout: 'dashboard' })
 
 import VideoPosterPrompt from '~/components/workspace/media/VideoPosterPrompt.vue'
 
-interface LocationRow {
-  id: string
-  title: string
-}
-
 interface MediaAsset {
   id: string
   kind: string
@@ -126,10 +120,10 @@ interface MediaAsset {
 }
 
 const siteId = await useDashboardSiteId()
+const dashboardLocation = useDashboardLocation()
 const toast = useToast()
 const sitePublicUrl = ref<string | null>(null)
-const locations = ref<LocationRow[]>([])
-const selectedLocationId = ref('')
+const locationId = computed(() => dashboardLocation.currentLocationId.value)
 const assets = ref<MediaAsset[]>([])
 const attachableAssets = ref<MediaAsset[]>([])
 const loading = ref(true)
@@ -147,7 +141,6 @@ const _headerLinks = computed(() => buildHeaderLinks([
   { label: 'Edit photo page', icon: 'i-lucide-file-text', to: `${paths.value.content}?page=location`, color: 'neutral' as const, variant: 'ghost' as const }
 ]))
 
-const locationItems = computed(() => locations.value.map(location => ({ id: location.id, label: location.title })))
 const categoryItems = [
   { id: 'all', label: 'All categories' },
   { id: 'exterior', label: 'Exterior' },
@@ -168,24 +161,19 @@ function categoryLabel(category: string | null) {
 }
 
 async function loadContext() {
-  const [settingsRes, locationsRes] = await Promise.all([
-    $fetch<{ settings: { public_url: string | null } }>(`/api/dashboard/settings`),
-    $fetch<{ locations: LocationRow[] }>(`/api/dashboard/locations`)
-  ])
+  const settingsRes = await $fetch<{ settings: { public_url: string | null } }>(`/api/dashboard/settings`)
   sitePublicUrl.value = settingsRes.settings.public_url
-  locations.value = locationsRes.locations ?? []
-  selectedLocationId.value ||= locations.value[0]?.id ?? ''
 }
 
 async function loadPhotos() {
-  if (!selectedLocationId.value) {
+  if (!locationId.value) {
     assets.value = []
     loading.value = false
     return
   }
   loading.value = true
   try {
-    const params = new URLSearchParams({ locationId: selectedLocationId.value, limit: '100' })
+    const params = new URLSearchParams({ locationId: locationId.value, limit: '100' })
     const res = await $fetch<{ media: MediaAsset[] }>(`/api/dashboard/editor/media?${params}`)
     assets.value = res.media ?? []
   } catch (error) {
@@ -196,7 +184,7 @@ async function loadPhotos() {
 }
 
 function openUploadPicker() {
-  if (!selectedLocationId.value || uploading.value) return
+  if (!locationId.value || uploading.value) return
   fileInput.value?.click()
 }
 
@@ -233,7 +221,7 @@ async function retryPendingUpload() {
 async function uploadSelectedFile(file: File, poster: File | null = null, existingOptions?: { category?: string | null, locationId?: string | null }) {
   try {
     const options = existingOptions ?? {
-      locationId: selectedLocationId.value,
+      locationId: locationId.value,
       category: categoryFilter.value === 'all' ? 'other' : categoryFilter.value,
     }
     const result = await upload(file, {
@@ -269,7 +257,7 @@ async function loadAttachableMedia() {
   try {
     const params = new URLSearchParams({ limit: '100' })
     const res = await $fetch<{ media: MediaAsset[] }>(`/api/dashboard/editor/media?${params}`)
-    attachableAssets.value = (res.media ?? []).filter(asset => asset.location_id !== selectedLocationId.value)
+    attachableAssets.value = (res.media ?? []).filter(asset => asset.location_id !== locationId.value)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load media library', color: 'error' })
   } finally {
@@ -296,7 +284,7 @@ async function patchAsset(asset: MediaAsset, body: ApiRecord, successMessage: st
 
 async function attachPhoto(asset: MediaAsset) {
   const updated = await patchAsset(asset, {
-    location_id: selectedLocationId.value,
+    location_id: locationId.value,
     category: categoryFilter.value === 'all' ? (asset.category || 'other') : categoryFilter.value
   }, 'Photo attached')
   if (updated) {
@@ -324,6 +312,10 @@ onMounted(async () => {
     loading.value = false
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load photos page', color: 'error' })
   }
+})
+
+watch(locationId, () => {
+  void loadPhotos()
 })
 
 useSeoMeta({ title: 'Photos | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

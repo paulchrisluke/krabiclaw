@@ -28,9 +28,10 @@ definePageMeta({ layout: 'dashboard' })
 const route = useRoute()
 
 const siteId = await useDashboardSiteId()
+const dashboardLocation = useDashboardLocation()
 const itemId = typeof route.params.itemId === 'string' ? route.params.itemId : ''
 const menuId = computed(() => typeof route.query.menuId === 'string' ? route.query.menuId : '')
-const locationId = computed(() => typeof route.query.locationId === 'string' ? route.query.locationId : null)
+const locationId = computed(() => dashboardLocation.currentLocationId.value)
 const defaultCurrency = ref('THB')
 const itemName = ref('')
 
@@ -39,7 +40,7 @@ if (!siteId || !itemId) {
 }
 
 const { menuPath } = useDashboardSiteLinks(siteId)
-const _backPath = computed(() => menuPath(locationId.value))
+const _backPath = computed(() => menuPath())
 
 const pageError = computed(() => menuId.value ? null : 'Menu ID is required to edit an item')
 

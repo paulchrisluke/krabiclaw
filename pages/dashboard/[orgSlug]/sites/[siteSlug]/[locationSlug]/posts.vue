@@ -52,16 +52,6 @@
                 >{{ tab }}</button>
               </div>
               <div class="flex items-center gap-2">
-                <USelect
-                  v-if="locations.length > 1"
-                  v-model="selectedLocationId"
-                  :items="locationFilterItems"
-                  value-key="value"
-                  label-key="label"
-                  size="xs"
-                  class="w-44"
-                  @update:model-value="loadPosts"
-                />
                 <UButton v-if="loading" size="xs" color="neutral" variant="ghost" loading />
               </div>
             </div>
@@ -184,28 +174,20 @@ definePageMeta({ layout: 'dashboard' })
 const siteId = await useDashboardSiteId()
 const toast = useToast()
 const { trackPostCreated, trackPostPublished } = useAnalytics()
+const dashboard = useDashboardSite()
+const dashboardLocation = useDashboardLocation()
 const sitePublicUrl = ref<string | null>(null)
 const { buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 const _headerLinks = computed(() => buildHeaderLinks([
   { label: 'New post', icon: 'i-lucide-plus', color: 'primary' as const, onClick: openCompose }
 ]))
 
-interface LocationRow {
-  id: string
-  title: string
-}
-
 // Posts list
 const posts = ref<ApiRecord[]>([])
-const locations = ref<LocationRow[]>([])
+const locations = computed(() => dashboard.locations.value)
 const loading = ref(false)
 const activeTab = ref('all')
-const selectedLocationId = ref('all')
-
-const locationFilterItems = computed(() => [
-  { value: 'all', label: 'All locations' },
-  ...locations.value.map(location => ({ value: location.id, label: location.title }))
-])
+const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
 const locationItemsWithoutAll = computed(() => locations.value.map(location => ({ value: location.id, label: location.title })))
 
 function locationTitle(locationId: string | null) {
@@ -218,19 +200,10 @@ const loadPosts = async () => {
   try {
     const query: Record<string, string> = {}
     if (activeTab.value !== 'all') query.status = activeTab.value
-    if (selectedLocationId.value !== 'all') query.location_id = selectedLocationId.value
+    if (currentLocationId.value) query.location_id = currentLocationId.value
     const res = await $fetch<{ posts: ApiRecord[] }>(`/api/editor/sites/${siteId}/posts`, { query })
     posts.value = res.posts ?? []
   } catch { toast.add({ description: 'Failed to load posts', color: 'error' }) } finally { loading.value = false }
-}
-
-async function loadLocations() {
-  try {
-    const res = await $fetch<{ locations: LocationRow[] }>(`/api/dashboard/locations`)
-    locations.value = res.locations ?? []
-  } catch {
-    locations.value = []
-  }
 }
 
 async function loadSitePublicUrl() {
@@ -252,7 +225,7 @@ async function loadFacebookConnection() {
 }
 
 onMounted(async () => {
-  await Promise.all([loadPosts(), loadLocations(), loadSitePublicUrl(), loadFacebookConnection()])
+  await Promise.all([loadPosts(), loadSitePublicUrl(), loadFacebookConnection()])
 })
 
 // Selection / compose
@@ -307,7 +280,7 @@ function resetEditForm(locationId = '') {
 const openCompose = () => {
   selectedPost.value = null
   composing.value = true
-  resetEditForm(selectedLocationId.value !== 'all' ? selectedLocationId.value : '')
+  resetEditForm(currentLocationId.value ?? '')
   selectedChannels.value = ['site']
 }
 
@@ -553,4 +526,8 @@ const formatDate = (iso: string) => {
 }
 
 useSeoMeta({ title: 'Posts | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+
+watch(currentLocationId, () => {
+  void loadPosts()
+})
 </script>

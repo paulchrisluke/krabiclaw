@@ -29,7 +29,7 @@
 
       <div v-else-if="selectedLocation">
         <MenuEditor
-          :key="`${selectedLocation.id}-${locationId}`"
+          :key="selectedLocation.id"
           :site-id="siteId"
           :location-id="selectedLocation.id"
           :default-currency="defaultCurrency"
@@ -46,15 +46,12 @@ interface BusinessLocation {
   id: string
   slug: string
   title: string
-  address: { addressLines?: string[] } | null
-  city: string | null
   is_primary: boolean
 }
 
-const route = useRoute()
-const router = useRouter()
 const siteId = await useDashboardSiteId()
-const locationId = computed(() => typeof route.query.locationId === 'string' ? route.query.locationId : null)
+const dashboard = useDashboardSite()
+const dashboardLocation = useDashboardLocation()
 
 if (!siteId) {
   throw createError({
@@ -65,23 +62,12 @@ if (!siteId) {
 
 const loading = ref(true)
 const error = ref<string | null>(null)
-const locations = ref<BusinessLocation[]>([])
 const defaultCurrency = ref('THB')
 const sitePublicUrl = ref<string | null>(null)
 const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
+const locations = computed(() => dashboard.locations.value as BusinessLocation[])
 
-const selectedLocation = computed(() => locations.value.find((location: BusinessLocation) => location.id === locationId.value) || null)
-
-const _locationSelectItems = computed(() =>
-  locations.value.map((location: BusinessLocation) => ({
-    value: location.id,
-    label: location.is_primary ? `${location.title} (Primary)` : location.title
-  }))
-)
-
-const _handleLocationChange = (value: string) => {
-  router.replace({ query: { locationId: value } })
-}
+const selectedLocation = computed(() => dashboardLocation.currentLocation.value)
 
 const _headerLinks = computed(() => buildHeaderLinks([
   { label: 'Locations', icon: 'i-lucide-map-pin', to: paths.value.locations, color: 'neutral' as const, variant: 'soft' as const }
@@ -91,13 +77,8 @@ const loadMenuWorkspace = async () => {
   loading.value = true
   error.value = null
   try {
-    const [locationsResponse, settingsResponse] = await Promise.all([
-      $fetch<{ success: boolean; locations: BusinessLocation[] }>(`/api/dashboard/locations`),
-      $fetch<{ success: boolean; settings: { default_currency?: string; public_url?: string | null } }>(`/api/dashboard/settings`)
-    ])
-    if (!locationsResponse.success) throw new Error('Failed to load locations')
+    const settingsResponse = await $fetch<{ success: boolean; settings: { default_currency?: string; public_url?: string | null } }>(`/api/dashboard/settings`)
     if (!settingsResponse.success) throw new Error('Failed to load settings')
-    locations.value = locationsResponse.locations
     defaultCurrency.value = settingsResponse.settings?.default_currency || 'THB'
     sitePublicUrl.value = settingsResponse.settings?.public_url || null
   } catch (err) {
@@ -108,16 +89,6 @@ const loadMenuWorkspace = async () => {
 }
 
 onMounted(loadMenuWorkspace)
-
-// Auto-select primary location on load
-watch(locations, (locs: BusinessLocation[]) => {
-  if (locs.length > 0 && !locationId.value) {
-    const primary = locs.find((l: BusinessLocation) => l.is_primary) || locs[0]
-    if (primary) {
-      router.replace({ query: { locationId: primary.id } })
-    }
-  }
-}, { immediate: true })
 
 useSeoMeta({ title: 'Menu | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

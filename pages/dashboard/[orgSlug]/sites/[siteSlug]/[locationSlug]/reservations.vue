@@ -98,11 +98,13 @@ interface ReservationSubmission {
 const siteId = await useDashboardSiteId()
 const toast = useToast()
 const route = useRoute()
+const dashboardLocation = useDashboardLocation()
 const sitePublicUrl = ref<string | null>(null)
 const reservations = ref<ReservationSubmission[]>([])
 const loading = ref(true)
 const notificationPhoneMissing = ref(false)
 const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
+const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
 
 const locationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/${route.params.locationSlug}`)
 
@@ -132,8 +134,8 @@ async function loadReservations() {
       console.warn('reservation_settings_load_failed', settingsResult.reason)
     }
     if (locationsResult.status !== 'fulfilled') throw locationsResult.reason
-    const current = locationsResult.value.locations.find(loc => loc.slug === route.params.locationSlug || loc.id === route.params.locationSlug)
-    const locationId = current?.id
+    const current = locationsResult.value.locations.find(loc => loc.id === currentLocationId.value) ?? null
+    const locationId = currentLocationId.value
     if (!locationId) throw new Error('Location not found')
 
     const reservationsResult = await $fetch<{ submissions: ReservationSubmission[] }>(`/api/editor/sites/${siteId}/reservation-submissions`, {
@@ -190,7 +192,7 @@ async function sendReviewRequest(submission: ReservationSubmission, kind: 'first
 }
 
 onMounted(loadReservations)
-watch(() => route.params.locationSlug, () => {
+watch(() => currentLocationId.value, () => {
   void loadReservations()
 })
 useSeoMeta({ title: 'Reservations | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

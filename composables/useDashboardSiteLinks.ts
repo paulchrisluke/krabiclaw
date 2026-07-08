@@ -24,13 +24,14 @@ function appendQuery(path: string, query: Record<string, string | null | undefin
 export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: MaybeRef<string | null | undefined>, orgSlug?: MaybeRef<string | null | undefined>) {
   void siteId
   const dashboard = useDashboardSite()
+  const dashboardLocation = useDashboardLocation()
   const route = useRoute()
 
   const paths = computed(() => {
     const base = '/dashboard'
     const slug = orgSlug ? unref(orgSlug) : dashboard.organization.value?.slug
     const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : dashboard.site.value?.subdomain
-    const locationSlug = dashboard.selectedLocation.value?.slug
+    const locationSlug = dashboardLocation.currentLocationSlug.value
     const orgBase = slug ? `${base}/${slug}` : base
     const siteBase = slug && siteSlug ? `${orgBase}/sites/${siteSlug}` : orgBase
     const projectBase = siteSlug && locationSlug ? `${siteBase}/${locationSlug}` : siteBase
@@ -116,12 +117,12 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
     const location = dashboard.locations.value.find(candidate => candidate.id === locationId || candidate.slug === locationId)
     return `${paths.value.site}/${location?.slug ?? locationId}`
   }
-  const locationMenuPath = (locationId: string) => appendQuery(paths.value.menu, { locationId })
-  const locationContentPath = (locationId: string) => appendQuery(paths.value.content, { locationId, page: 'location' })
+  const locationMenuPath = (locationId: string) => `${locationPath(locationId)}/menu`
+  const locationContentPath = (locationId: string) => appendQuery(`${locationPath(locationId)}/content`, { page: 'location' })
 
-  const menuPath = (locationId?: string | null) => ({
+  const menuPath = (_locationId?: string | null) => ({
     path: paths.value.menu,
-    query: locationId ? { locationId } : {}
+    query: {}
   })
 
   const contentPath = (page?: string) => ({

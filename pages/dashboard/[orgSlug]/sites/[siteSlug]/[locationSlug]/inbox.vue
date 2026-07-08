@@ -306,8 +306,9 @@ const siteId = await useDashboardSiteId()
 const toast = useToast()
 const route = useRoute()
 const router = useRouter()
+const dashboardLocation = useDashboardLocation()
 const sitePublicUrl = ref<string | null>(null)
-const selectedLocationId = ref<string | null>(null)
+const selectedLocationId = computed(() => dashboardLocation.currentLocationId.value)
 const loadingThreads = ref(false)
 const loadingDetail = ref(false)
 const threads = ref<ThreadSummary[]>([])
@@ -327,14 +328,8 @@ const _headerLinks = computed(() => buildHeaderLinks())
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 async function loadBaseContext() {
-  const [settingsRes, locationsRes] = await Promise.all([
-    $fetch<{ settings: { public_url: string | null } }>('/api/dashboard/settings'),
-    $fetch<{ locations: Array<{ id: string; slug: string }> }>('/api/dashboard/locations'),
-  ])
+  const settingsRes = await $fetch<{ settings: { public_url: string | null } }>('/api/dashboard/settings')
   sitePublicUrl.value = settingsRes.settings.public_url
-  const location = locationsRes.locations.find(item => item.slug === route.params.locationSlug || item.id === route.params.locationSlug)
-  if (!location) throw new Error('Location not found')
-  selectedLocationId.value = location.id
 }
 
 async function loadThreads() {
@@ -568,8 +563,7 @@ watch(search, () => {
   }, 250)
 })
 
-watch(() => route.params.locationSlug, async () => {
-  await loadBaseContext()
+watch(() => dashboardLocation.currentLocationId.value, async () => {
   await loadThreads()
 })
 

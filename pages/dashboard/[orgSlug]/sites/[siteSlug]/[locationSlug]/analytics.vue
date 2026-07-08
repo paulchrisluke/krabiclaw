@@ -206,17 +206,13 @@ interface AnalyticsResponse {
   period: { startDate: string; endDate: string }
 }
 
-const route = useRoute()
 const toast = useToast()
 const dashboard = useDashboardSite()
+const dashboardLocation = useDashboardLocation()
 if (!dashboard.state.value) await dashboard.refresh()
 const siteId = await useDashboardSiteId()
 
-const routeLocation = String(route.params.locationSlug || '')
-const resolvedLocation = computed(() =>
-  dashboard.locations.value.find(location => location.slug === routeLocation || location.id === routeLocation)
-)
-const locationId = computed(() => resolvedLocation.value?.id ?? routeLocation)
+const locationId = computed(() => dashboardLocation.currentLocationId.value ?? '')
 const { locationPath, locationMenuPath, locationContentPath, paths } = useDashboardSiteLinks(siteId)
 
 const locationTabs = computed(() => [
