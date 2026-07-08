@@ -663,6 +663,7 @@ export async function updatePageContent(
 
   for (const [field, value] of normalizedFields.entries()) {
     const fieldDef = getFieldDef(input.page, field);
+    const isMediaField = fieldDef?.type === "media";
     await upsertSiteContent(db, {
       id: buildContentId(organizationId, siteId, input.page, field, locationId),
       organization_id: organizationId,
@@ -676,8 +677,10 @@ export async function updatePageContent(
       content: value,
       hero_title: undefined,
       hero_subtitle: undefined,
-      hero_image_asset_id: undefined,
-      hero_video_asset_id: undefined,
+      // Clear stale hero_image_asset_id/hero_video_asset_id so a leftover seed-time
+      // reference doesn't win over this field's new content value on read.
+      hero_image_asset_id: isMediaField ? null : undefined,
+      hero_video_asset_id: isMediaField ? null : undefined,
     });
   }
 
