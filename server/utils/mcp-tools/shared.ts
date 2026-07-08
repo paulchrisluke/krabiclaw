@@ -181,10 +181,25 @@ export const blogPostObject = {
     seo_keywords: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
     robots: { type: ['string', 'null'] },
+    author_name: { type: ['string', 'null'] },
     published: { type: 'boolean' },
     published_at: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
+    featured_image: {
+      type: ['object', 'null'],
+      properties: {
+        asset_id: { type: ['string', 'null'] },
+        public_url: { type: ['string', 'null'] },
+        kind: { type: ['string', 'null'] },
+        width: { type: ['number', 'null'] },
+        height: { type: ['number', 'null'] },
+      },
+    },
+    admin_edit_url: { type: ['string', 'null'] },
+    public_path: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    preview_url: { type: ['string', 'null'] },
   },
 }
 

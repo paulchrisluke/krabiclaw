@@ -48,9 +48,11 @@
                 <span v-if="post.published_at" class="text-sm text-dimmed">
                   <NuxtTime :datetime="post.published_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
                 </span>
+                <span class="text-sm text-dimmed">{{ estimateReadTime(post) }} min read</span>
               </div>
               <h3 class="mb-3 text-xl font-bold text-default">{{ post.title }}</h3>
               <p v-if="post.excerpt" class="mb-4 text-muted">{{ post.excerpt }}</p>
+              <p class="mb-4 text-sm text-dimmed">By {{ post.author_name || siteName }}</p>
               <span class="text-sm font-semibold text-primary">Read More →</span>
             </div>
           </div>
@@ -67,6 +69,9 @@ interface TenantBlogPost {
   title: string
   excerpt?: string | null
   category?: string | null
+  author_name?: string | null
+  updated_at?: string | null
+  body?: string | null
   published_at?: string | null
   featured_image?: { public_url: string | null; kind: string | null } | null
 }
@@ -79,6 +84,12 @@ const siteName = computed(() => site?.brand_name || 'Our Site')
 
 const { blogList, error, pending } = useBootstrap()
 const posts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
+
+function estimateReadTime(post: TenantBlogPost) {
+  const text = `${post.excerpt ?? ''} ${post.body ?? ''}`.trim()
+  const words = text.split(/\s+/).filter(Boolean).length
+  return Math.max(1, Math.ceil(words / 160))
+}
 
 const currentPageUrl = useSeoUrl('/blog')
 useSeoMeta({

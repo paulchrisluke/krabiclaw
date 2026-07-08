@@ -53,6 +53,7 @@ if (!args.url) {
 const BASE    = args.url.replace(/\/$/, '')
 const SITE_ID = args['site-id']
 const SLUG    = args.slug
+const BLOG_SLUG = 'group-bookings-create-a-unique-pottery-experience-in-krabi'
 
 // Mirrors isPreviewContext in server/utils/tenant-hosts.ts: on workers.dev,
 // staging.*, and preview.* hosts, the wildcard TLS cert only covers one
@@ -142,7 +143,7 @@ section('Route availability (all must 200)')
 
 const REQUIRED_ROUTES = [
   '/', '/locations', '/reviews', '/qa', '/posts', '/about', '/contact',
-  '/experiences',
+  '/experiences', '/blog',
 ]
 
 const pageHtml = {}
@@ -199,7 +200,61 @@ if (expRes.ok) {
   issues.push('Experiences bootstrap unavailable')
 }
 
-// ── 4. No restaurant copy anywhere ───────────────────────────────────────────
+// ── 4. Blog deep links + exports ──────────────────────────────────────────────
+
+section('Blog deep links and machine-readable exports')
+
+const blogDetailRes = await get(`/blog/${BLOG_SLUG}`)
+assert(`Blog detail routes: GET /blog/${BLOG_SLUG} → 200`, blogDetailRes.ok, true)
+if (blogDetailRes.ok) {
+  pageHtml[`/blog/${BLOG_SLUG}`] = await blogDetailRes.text()
+}
+
+const blogIndexJsonRes = await get('/blog/index.json')
+assert('GET /blog/index.json → 200', blogIndexJsonRes.ok, true)
+if (blogIndexJsonRes.ok) {
+  const payload = await blogIndexJsonRes.json()
+  const posts = Array.isArray(payload.posts) ? payload.posts : []
+  assert('Blog index JSON includes seeded blog slug', posts.some(post => post.url === `/blog/${BLOG_SLUG}`), true)
+}
+
+const blogRssRes = await get('/blog/rss.xml')
+assert('GET /blog/rss.xml → 200', blogRssRes.ok, true)
+if (blogRssRes.ok) {
+  const rss = await blogRssRes.text()
+  assertContains('RSS includes seeded blog slug', rss, `/blog/${BLOG_SLUG}`)
+}
+
+const blogFeedRes = await get('/blog/feed.json')
+assert('GET /blog/feed.json → 200', blogFeedRes.ok, true)
+if (blogFeedRes.ok) {
+  const feed = await blogFeedRes.json()
+  const items = Array.isArray(feed.items) ? feed.items : []
+  assert('JSON Feed includes seeded blog slug', items.some(item => item.url?.includes(`/blog/${BLOG_SLUG}`)), true)
+}
+
+const blogMarkdownRes = await get(`/blog-md/${BLOG_SLUG}.md`)
+assert(`GET /blog-md/${BLOG_SLUG}.md → 200`, blogMarkdownRes.ok, true)
+if (blogMarkdownRes.ok) {
+  const markdown = await blogMarkdownRes.text()
+  assertContains('Blog markdown mirror includes front matter title', markdown, 'title: "Group Bookings Create a Unique Pottery Experience in Krabi"')
+}
+
+const llmsRes = await get('/llms.txt')
+assert('GET /llms.txt → 200', llmsRes.ok, true)
+if (llmsRes.ok) {
+  const llms = await llmsRes.text()
+  assertContains('llms.txt includes tenant markdown mirror', llms, `/blog-md/${BLOG_SLUG}.md`)
+}
+
+const llmsFullRes = await get('/llms-full.txt')
+assert('GET /llms-full.txt → 200', llmsFullRes.ok, true)
+if (llmsFullRes.ok) {
+  const llmsFull = await llmsFullRes.text()
+  assertContains('llms-full.txt includes seeded blog heading', llmsFull, '# Group Bookings Create a Unique Pottery Experience in Krabi')
+}
+
+// ── 5. No restaurant copy anywhere ───────────────────────────────────────────
 
 section('No restaurant copy (experience vertical must not bleed restaurant strings)')
 
@@ -220,14 +275,14 @@ for (const str of FORBIDDEN) {
   assertNotContains(`No "${str}" in any page`, allHtml, str)
 }
 
-// ── 5. Required experience copy ───────────────────────────────────────────────
+// ── 6. Required experience copy ───────────────────────────────────────────────
 
 section('Required experience copy present')
 
 assertContains('CTA "Book a class" present', allHtml, 'book a class')
 assertContains('"From the studio" posts eyebrow present', allHtml, 'from the studio')
 
-// ── 6. No demo/fallback data ─────────────────────────────────────────────────
+// ── 7. No demo/fallback data ─────────────────────────────────────────────────
 
 section('No demo or Saya fallback data')
 
@@ -241,7 +296,7 @@ if (bootstrapData) {
   assertNotContains('No Ember & Slice in bootstrap JSON', allJson, 'Ember & Slice')
 }
 
-// ── 7. Contact data ───────────────────────────────────────────────────────────
+// ── 8. Contact data ───────────────────────────────────────────────────────────
 
 section('Contact data (phone and email)')
 

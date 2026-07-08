@@ -241,6 +241,49 @@
         </div>
       </section>
 
+      <section v-if="recentBlogPosts.length" class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+        <div class="mb-16 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div class="max-w-2xl">
+            <p class="saya-kicker mb-6">From the blog</p>
+            <h2 class="saya-display-md text-default">Planning ideas, updates, and stories from the studio.</h2>
+          </div>
+          <NuxtLink to="/blog" class="inline-flex text-sm font-medium text-default no-underline hover:underline">
+            Visit the blog
+          </NuxtLink>
+        </div>
+
+        <div class="grid gap-6 lg:grid-cols-3">
+          <NuxtLink
+            v-for="post in recentBlogPosts"
+            :key="post.slug"
+            :to="`/blog/${post.slug}`"
+            class="group block overflow-hidden border border-default bg-default no-underline transition hover:-translate-y-0.5 hover:shadow-lg"
+          >
+            <div v-if="post.image" class="aspect-[4/3] overflow-hidden bg-muted">
+              <img
+                :src="post.image"
+                :alt="post.title"
+                class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              >
+            </div>
+            <div v-else class="aspect-[4/3] bg-linear-to-br from-stone-50 to-stone-100 dark:from-stone-900/20 dark:to-stone-800/20" />
+            <div class="p-6">
+              <div class="mb-3 flex flex-wrap items-center gap-3">
+                <span v-if="post.category" class="rounded bg-muted px-2 py-1 text-xs font-medium text-muted">
+                  {{ post.category }}
+                </span>
+                <span v-if="post.publishedAt" class="text-sm text-dimmed">
+                  <NuxtTime :datetime="post.publishedAt" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
+                </span>
+              </div>
+              <h3 class="text-2xl font-semibold leading-tight text-default">{{ post.title }}</h3>
+              <p v-if="post.excerpt" class="mt-3 text-sm leading-relaxed text-muted">{{ post.excerpt }}</p>
+              <p class="mt-4 text-sm font-medium text-default">Read article</p>
+            </div>
+          </NuxtLink>
+        </div>
+      </section>
+
       <!-- Modal: full post (Teleported) -->
       <Teleport to="body">
         <div v-if="selectedPost" class="fixed inset-0 z-[100] flex flex-col bg-black" role="dialog" aria-modal="true" aria-label="Post details">
@@ -421,6 +464,7 @@ const plans = computed(() => isPlatform ? platformPlans.value : null)
 
 const { isAuthenticated } = useAuth()
 const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
+const { resolveMedia } = useMedia()
 
 const { resolveComponent } = useDynamicComponent()
 
@@ -459,6 +503,7 @@ const {
   menuItemsBySection,
   experiencesList,
   contentBlocks,
+  blogList,
 } = useBootstrap()
 
 const locations = computed(() => bootstrapLocations.value)
@@ -623,6 +668,17 @@ const recentPosts = computed(() => {
     wide: i === 0,
   }))
 })
+
+const recentBlogPosts = computed(() =>
+  (blogList.value || []).slice(0, 3).map((post) => ({
+    slug: String(post.slug || ''),
+    title: String(post.title || 'Untitled'),
+    excerpt: typeof post.excerpt === 'string' ? post.excerpt : '',
+    category: typeof post.category === 'string' ? post.category : '',
+    publishedAt: typeof post.published_at === 'string' ? post.published_at : null,
+    image: resolveMedia(post.featured_image).url,
+  })).filter(post => post.slug)
+)
 
 const selectedPostId = ref(null)
 const selectedPost = computed(() => selectedPostId.value ? recentPosts.value.find(p => p.id === selectedPostId.value) : null)

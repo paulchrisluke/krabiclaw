@@ -129,6 +129,7 @@ export default defineEventHandler(async (event) => {
     const results = await searchPublicResources(env, `${topic ? `${topic} ` : ''}${message}`, {
       limit: 6,
       surface: 'help',
+      siteId: event.context.tenantType === 'tenant' ? String(event.context.siteId || '') : null,
     })
     const promptResults = formatPublicSearchResultsForPrompt(results)
     let parsed = {

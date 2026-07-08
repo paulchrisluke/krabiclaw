@@ -4,9 +4,11 @@ import { createRouter } from 'radix3'
 
 test('blog markdown route does not intercept platform blog HTML pages', () => {
   const router = createRouter()
+  router.insert('/blog-md/:slug', { name: 'tenant-markdown' })
   router.insert('/blog-md/:category/:slug', { name: 'markdown' })
   router.insert('/**', { name: 'renderer' })
 
   assert.equal(router.lookup('/blog/marketing/debug-slug')?.name, 'renderer')
+  assert.equal(router.lookup('/blog-md/debug-slug.md')?.name, 'tenant-markdown')
   assert.equal(router.lookup('/blog-md/marketing/debug-slug.md')?.name, 'markdown')
 })

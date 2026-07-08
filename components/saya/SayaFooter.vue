@@ -82,6 +82,7 @@
         <div>
           <h4 class="saya-eyebrow mb-5 text-inverted/50">{{ t('saya.footer.heading_discover') }}</h4>
           <ul class="space-y-3 text-sm">
+            <li><NuxtLink to="/blog" class="text-inverted/60 no-underline transition hover:text-inverted">Blog</NuxtLink></li>
             <li><NuxtLink to="/reviews" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.reviews') }}</NuxtLink></li>
             <li><NuxtLink to="/posts" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.latest_updates') }}</NuxtLink></li>
             <li><NuxtLink to="/qa" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.qa') }}</NuxtLink></li>

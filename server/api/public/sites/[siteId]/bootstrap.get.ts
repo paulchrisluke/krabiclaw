@@ -628,17 +628,18 @@ export default defineEventHandler(async (event) => {
       locationId ? [siteId, locationId] : [siteId],
     );
 
-  if (dataType === "blog")
+  if (dataType === "blog" || page === "home")
     idxBlogList = push(
       `SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords,
-              p.canonical_url, p.robots, p.published_at, p.featured_image_asset_id,
+              p.canonical_url, p.robots, p.published_at, p.updated_at, u.name AS author_name, p.featured_image_asset_id,
               ma.public_url, ma.kind, ma.width, ma.height
        FROM blog_posts p
+       LEFT JOIN user u ON u.id = p.author_id
        LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
        WHERE p.status = 'published' AND p.site_id = ?
        ORDER BY p.published_at IS NULL, p.published_at DESC, p.id DESC
-       LIMIT 50`,
-      [siteId],
+       LIMIT ?`,
+      [siteId, page === "home" ? 3 : 50],
     );
 
   if (dataType === "blogPost" && blogSlug)
@@ -1140,8 +1141,8 @@ export default defineEventHandler(async (event) => {
     ...(dataType === "photos" ? { photosList: photos } : {}),
     // Type F — Q&A for /locations/[slug]/qa
     ...(dataType === "qa" ? { qaList: qaRows?.results ?? [] } : {}),
-    // Blog list for /blog
-    ...(dataType === "blog" ? { blogList } : {}),
+    // Blog list for /blog and homepage highlights
+    ...((dataType === "blog" || page === "home") ? { blogList } : {}),
     // Blog post detail for /blog/[slug]
     ...(dataType === "blogPost" ? { blogPost } : {}),
     // Type G — posts for /locations/[slug]/posts

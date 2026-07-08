@@ -45,6 +45,7 @@ interface SearchOptions {
   type?: PublicSearchTypeFilter
   surface?: PlatformKnowledgeSurface
   dashboardContext?: DashboardRouteContext
+  siteId?: string | null
 }
 
 interface PlatformDocSearchRow {
@@ -68,6 +69,8 @@ interface PlatformBlogSearchRow {
   seo_description: string | null
   seo_keywords: string | null
 }
+
+interface TenantBlogSearchRow extends PlatformBlogSearchRow {}
 
 interface PlatformKnowledgeDocument {
   id: string
@@ -221,6 +224,25 @@ function normalizeSearchResults(
   return [...deduped.values()]
     .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
     .slice(0, options.limit)
+}
+
+function normalizeTenantBlogSearchResults(
+  rows: TenantBlogSearchRow[],
+  options: Required<Pick<SearchOptions, 'limit' | 'surface'>>,
+) {
+  return rows
+    .slice(0, options.limit)
+    .map((post, index) => ({
+      id: `tenant-blog:${post.id}`,
+      type: 'blog' as const,
+      title: post.title,
+      path: `/blog/${post.slug}`,
+      snippet: truncateSnippet(post.excerpt || post.seo_description || post.body || post.title),
+      surface: options.surface,
+      section: post.category || 'Blog',
+      icon: 'newspaper',
+      score: Math.max(0.25, 0.95 - (index * 0.05)),
+    }))
 }
 
 function platformKnowledgeInstanceConfig(): Omit<AiSearchConfig, 'metadata'> {
@@ -479,31 +501,77 @@ export async function searchPublicResources(
   const typeFilter = resultTypeFilter(options.type ?? 'all')
   const instance = searchNamespace(env).get(platformKnowledgeInstanceId(env))
 
-  const response = await instance.search({
-    query: normalized,
-    ai_search_options: {
-      retrieval: {
-        retrieval_type: 'hybrid',
-        match_threshold: 0,
-        max_num_results: Math.min(50, limit * 5),
-        keyword_match_mode: 'or',
-        return_on_failure: true,
-        filters: buildSearchFilters(surface, typeFilter),
+  const [response, tenantBlogRows] = await Promise.all([
+    instance.search({
+      query: normalized,
+      ai_search_options: {
+        retrieval: {
+          retrieval_type: 'hybrid',
+          match_threshold: 0,
+          max_num_results: Math.min(50, limit * 5),
+          keyword_match_mode: 'or',
+          return_on_failure: true,
+          filters: buildSearchFilters(surface, typeFilter),
+        },
+        query_rewrite: {
+          enabled: false,
+        },
+        reranking: {
+          enabled: false,
+        },
       },
-      query_rewrite: {
-        enabled: false,
-      },
-      reranking: {
-        enabled: false,
-      },
-    },
-  })
+    }),
+    (options.siteId && env.db && (!typeFilter || typeFilter === 'blog'))
+      ? queryAll<TenantBlogSearchRow>(
+          env.db,
+          `SELECT id, title, slug, body, excerpt, category, seo_description, seo_keywords
+           FROM blog_posts
+           WHERE status = 'published'
+             AND site_id = ?
+             AND (
+               lower(title) LIKE lower(?)
+               OR lower(body) LIKE lower(?)
+               OR lower(COALESCE(excerpt, '')) LIKE lower(?)
+               OR lower(COALESCE(category, '')) LIKE lower(?)
+               OR lower(COALESCE(seo_description, '')) LIKE lower(?)
+               OR lower(COALESCE(seo_keywords, '')) LIKE lower(?)
+             )
+           ORDER BY published_at DESC, updated_at DESC
+           LIMIT ?`,
+          [
+            options.siteId,
+            `%${normalized}%`,
+            `%${normalized}%`,
+            `%${normalized}%`,
+            `%${normalized}%`,
+            `%${normalized}%`,
+            `%${normalized}%`,
+            limit,
+          ],
+        )
+      : Promise.resolve([] as TenantBlogSearchRow[]),
+  ])
 
-  return normalizeSearchResults(response.chunks ?? [], {
+  const platformResults = normalizeSearchResults(response.chunks ?? [], {
     limit,
     surface,
     dashboardContext: options.dashboardContext,
   })
+  const tenantResults = normalizeTenantBlogSearchResults(tenantBlogRows ?? [], {
+    limit,
+    surface,
+  })
+
+  const merged = new Map<string, PublicSearchResult>()
+  for (const result of [...tenantResults, ...platformResults]) {
+    const key = `${result.type}:${result.path}`
+    const current = merged.get(key)
+    if (!current || current.score < result.score) merged.set(key, result)
+  }
+
+  return [...merged.values()]
+    .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
+    .slice(0, limit)
 }
 
 export function formatPublicSearchResultsForPrompt(results: PublicSearchResult[]) {
