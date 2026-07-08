@@ -47,13 +47,20 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
           },
           site.userId,
         );
-        return {
-          menu,
-          context: await mutationContextPayload(site, {
-            locationId:
-              typeof menu.location_id === "string" ? menu.location_id : null,
-          }),
-        };
+        const createMenuContext = await mutationContextPayload(site, {
+          locationId: typeof menu.location_id === "string" ? menu.location_id : null,
+        });
+        return renderStructuredResponse(
+          {
+            ok: true,
+            entity: "menu",
+            id: menu.id,
+            updated_at: menu.updated_at,
+            context: createMenuContext,
+          },
+          `Created menu "${menu.name}".`,
+          { menu },
+        );
       }
     case "update_menu":
       {
@@ -65,12 +72,21 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
           omit(args, ["menu_id"]) as never,
           site.userId,
         );
-        return {
-          menu,
-          context: await mutationContextPayload(site, {
-            locationId: typeof menu.location_id === "string" ? menu.location_id : null,
-          }),
-        };
+        const updateMenuContext = await mutationContextPayload(site, {
+          locationId: typeof menu.location_id === "string" ? menu.location_id : null,
+        });
+        return renderStructuredResponse(
+          {
+            ok: true,
+            entity: "menu",
+            id: menu.id,
+            changed_fields: Object.keys(omit(args, ["menu_id"])),
+            updated_at: menu.updated_at,
+            context: updateMenuContext,
+          },
+          `Updated menu "${menu.name}".`,
+          { menu },
+        );
       }
     case "delete_menu":
       {
@@ -91,17 +107,26 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
           omit(createMenuItemArgs, ["menu_id", "price"]) as never,
           site.userId,
         );
-      return {
-        item,
-        context: await mutationContextPayload(site, {
-          locationId: await resolveMenuLocationId(
-            site.db,
-            site.organizationId,
-            site.siteId,
-            item.menu_id,
-          ),
-        }),
-      };
+      const createItemContext = await mutationContextPayload(site, {
+        locationId: await resolveMenuLocationId(
+          site.db,
+          site.organizationId,
+          site.siteId,
+          item.menu_id,
+        ),
+      });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "menu_item",
+          id: item.id,
+          slug: item.slug,
+          updated_at: item.updated_at,
+          context: createItemContext,
+        },
+        `Added "${item.name}" to the menu.`,
+        { item },
+      );
     }
     case "add_menu_items_batch": {
       const menuId = requiredString(args, "menu_id");
@@ -227,12 +252,22 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
           omit(updateMenuItemArgs, ["menu_item_id", "price"]) as never,
           site.userId,
         );
-      return {
-        item,
-        context: await mutationContextPayload(site, {
-          locationId: await resolveMenuLocationId(site.db, site.organizationId, site.siteId, item.menu_id),
-        }),
-      };
+      const updateItemContext = await mutationContextPayload(site, {
+        locationId: await resolveMenuLocationId(site.db, site.organizationId, site.siteId, item.menu_id),
+      });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "menu_item",
+          id: item.id,
+          slug: item.slug,
+          changed_fields: Object.keys(omit(updateMenuItemArgs, ["menu_item_id"])),
+          updated_at: item.updated_at,
+          context: updateItemContext,
+        },
+        `Updated "${item.name}".`,
+        { item },
+      );
     }
     case "set_menu_item_image": {
       const assetId = requiredString(args, "asset_id");
@@ -245,17 +280,25 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
           { image_asset_id: assetId } as never,
           site.userId,
         );
-      return {
-        item,
-        context: await mutationContextPayload(site, {
-          locationId: await resolveMenuLocationId(
-            site.db,
-            site.organizationId,
-            site.siteId,
-            item.menu_id,
-          ),
-        }),
-      };
+      const setImageContext = await mutationContextPayload(site, {
+        locationId: await resolveMenuLocationId(
+          site.db,
+          site.organizationId,
+          site.siteId,
+          item.menu_id,
+        ),
+      });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "menu_item",
+          id: item.id,
+          updated_at: item.updated_at,
+          context: setImageContext,
+        },
+        `Updated image for "${item.name}".`,
+        { item },
+      );
     }
     case "open_menu_item_media_upload": {
       const menuItemId = requiredString(args, "menu_item_id");

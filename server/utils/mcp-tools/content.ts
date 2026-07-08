@@ -116,11 +116,17 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       outputSchema: {
         type: 'object',
         properties: {
-          policy: bookingPolicyObject,
-          resolved_policy: bookingPolicyObject,
+          ok: { type: 'boolean' },
+          entity: { type: 'string', enum: ['booking_policy'] },
+          id: { type: 'string' },
+          policy_type: { type: 'string' },
+          scope_type: { type: 'string' },
+          changed_fields: { type: 'array', items: { type: 'string' } },
+          updated_at: { type: 'string' },
+          context: { type: 'object' },
           summary: renderedBookingPolicySummaryObject,
         },
-        required: ['policy', 'resolved_policy', 'summary'],
+        required: ['ok', 'entity', 'id'],
       },
     }),
   siteTool({

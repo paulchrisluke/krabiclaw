@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { menuItemObject, menuObject, siteTool } from './shared'
+import { menuItemMutationResultObject, menuMutationResultObject, menuObject, siteTool } from './shared'
 import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const MENUS_TOOLS: McpToolDefinition[] = [
@@ -52,22 +52,7 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
       confirmRequired: false,
       inputSchema: { name: { type: 'string' }, location_id: { type: 'string' }, description: { type: 'string' } },
       required: ['name'],
-      outputSchema: {
-        type: 'object',
-        properties: {
-          menu: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              name: { type: 'string' },
-              description: { type: ['string', 'null'] },
-              location_id: { type: ['string', 'null'] },
-            },
-            required: ['id', 'name'],
-          },
-        },
-        required: ['menu'],
-      },
+      outputSchema: menuMutationResultObject,
     }),
   siteTool({
       name: 'update_menu',
@@ -83,22 +68,7 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         section_order: { type: 'array', items: { type: 'string' }, description: 'Section names in display order.' },
       },
       required: ['menu_id'],
-      outputSchema: {
-        type: 'object',
-        properties: {
-          menu: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              name: { type: 'string' },
-              description: { type: ['string', 'null'] },
-              status: { type: 'string' },
-            },
-            required: ['id'],
-          },
-        },
-        required: ['menu'],
-      },
+      outputSchema: menuMutationResultObject,
     }),
   siteTool({
       name: 'delete_menu',
@@ -142,11 +112,7 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         serving_note: { type: ['string', 'null'] },
       },
       required: ['menu_id', 'section', 'name'],
-      outputSchema: {
-        type: 'object',
-        properties: { item: menuItemObject },
-        required: ['item'],
-      },
+      outputSchema: menuItemMutationResultObject,
     }),
   siteTool({
       name: 'add_menu_items_batch',
@@ -249,11 +215,7 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         serving_note: { type: ['string', 'null'] },
       },
       required: ['menu_item_id'],
-      outputSchema: {
-        type: 'object',
-        properties: { item: menuItemObject },
-        required: ['item'],
-      },
+      outputSchema: menuItemMutationResultObject,
     }),
   siteTool({
       name: 'set_menu_item_image',
@@ -266,11 +228,7 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
       },
       required: ['menu_item_id', 'asset_id'],
-      outputSchema: {
-        type: 'object',
-        properties: { item: menuItemObject },
-        required: ['item'],
-      },
+      outputSchema: menuItemMutationResultObject,
     }),
   siteTool({
       name: 'open_menu_item_media_upload',

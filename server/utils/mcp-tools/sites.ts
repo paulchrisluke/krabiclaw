@@ -139,10 +139,14 @@ export const SITES_TOOLS: McpToolDefinition[] = [
       outputSchema: {
         type: 'object',
         properties: {
+          ok: { type: 'boolean' },
+          entity: { type: 'string', enum: ['site_settings'] },
           id: { type: 'string' },
-          updated: { type: 'boolean' },
+          changed_fields: { type: 'array', items: { type: 'string' } },
+          updated_at: { type: 'string' },
+          context: { type: 'object' },
         },
-        required: ['id'],
+        required: ['ok', 'entity', 'id'],
       },
     }),
   siteTool({

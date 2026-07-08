@@ -58,12 +58,23 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.userId,
           site.env,
         ));
-        return {
-          post: attachViewUrlToRecord(post, site, {}, site.env),
-          context: await mutationContextPayload(site, {
-            locationId: post && typeof post.location_id === "string" ? post.location_id : null,
-          }),
-        };
+        const hydratedPost = attachViewUrlToRecord(post, site, {}, site.env);
+        const createPostContext = await mutationContextPayload(site, {
+          locationId: post && typeof post.location_id === "string" ? post.location_id : null,
+        });
+        return renderStructuredResponse(
+          {
+            ok: true,
+            entity: "post",
+            id: post.id,
+            slug: post.slug,
+            public_url: hydratedPost.public_url,
+            updated_at: post.updated_at,
+            context: createPostContext,
+          },
+          `Created post "${post.title ?? post.id}".`,
+          { post: hydratedPost },
+        );
       }
     case "update_post":
       {
@@ -76,15 +87,29 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.userId,
           site.env,
         ));
-        return {
-          post: post ? attachViewUrlToRecord(post, site, {}, site.env) : null,
-          context: await mutationContextPayload(site, {
-            locationId:
-              post && typeof post.location_id === "string"
-                ? post.location_id
-                : null,
-          }),
-        };
+        if (!post) {
+          return renderStructuredResponse(
+            { ok: false, entity: "post", id: requiredString(args, "post_id") },
+            "No post found with that id — nothing was changed.",
+          );
+        }
+        const hydratedPost = attachViewUrlToRecord(post, site, {}, site.env);
+        const updatePostContext = await mutationContextPayload(site, {
+          locationId: typeof post.location_id === "string" ? post.location_id : null,
+        });
+        return renderStructuredResponse(
+          {
+            ok: true,
+            entity: "post",
+            id: post.id,
+            slug: post.slug,
+            changed_fields: Object.keys(omit(args, ["post_id"])),
+            updated_at: post.updated_at,
+            context: updatePostContext,
+          },
+          `Updated post "${post.title ?? post.id}".`,
+          { post: hydratedPost },
+        );
       }
     case "set_post_image": {
       const assetId = requiredString(args, "asset_id");
@@ -98,12 +123,28 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.userId,
           site.env,
         ));
-      return {
-        post: post ? attachViewUrlToRecord(post, site, {}, site.env) : null,
-        context: await mutationContextPayload(site, {
-          locationId: post && typeof post.location_id === "string" ? post.location_id : null,
-        }),
-      };
+      if (!post) {
+        return renderStructuredResponse(
+          { ok: false, entity: "post", id: requiredString(args, "post_id") },
+          "No post found with that id — nothing was changed.",
+        );
+      }
+      const hydratedSetImagePost = attachViewUrlToRecord(post, site, {}, site.env);
+      const setImagePostContext = await mutationContextPayload(site, {
+        locationId: typeof post.location_id === "string" ? post.location_id : null,
+      });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "post",
+          id: post.id,
+          slug: post.slug,
+          updated_at: post.updated_at,
+          context: setImagePostContext,
+        },
+        `Updated image for "${post.title ?? post.id}".`,
+        { post: hydratedSetImagePost },
+      );
     }
     case "open_post_media_upload": {
       const postId = requiredString(args, "post_id");
@@ -249,12 +290,29 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
       }
 
       const publishedPost = await getPost(site.db, site.organizationId, site.siteId, postId, site.env);
-      return {
-        post: publishedPost ? attachViewUrlToRecord(publishedPost, site, {}, site.env) : null,
-        context: await mutationContextPayload(site, {
-          locationId: post && typeof post.location_id === "string" ? post.location_id : null,
-        }),
-      };
+      const publishContext = await mutationContextPayload(site, {
+        locationId: post && typeof post.location_id === "string" ? post.location_id : null,
+      });
+      if (!publishedPost) {
+        return renderStructuredResponse(
+          { ok: false, entity: "post", id: postId },
+          "Post could not be found after publishing.",
+        );
+      }
+      const hydratedPublishedPost = attachViewUrlToRecord(publishedPost, site, {}, site.env);
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "post",
+          id: publishedPost.id,
+          slug: publishedPost.slug,
+          public_url: hydratedPublishedPost.public_url,
+          channels,
+          context: publishContext,
+        },
+        `Published "${publishedPost.title ?? publishedPost.id}" to ${channels.join(", ")}.`,
+        { post: hydratedPublishedPost },
+      );
     }
     case "delete_post": {
       const postId = requiredString(args, "post_id");

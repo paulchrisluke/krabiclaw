@@ -99,6 +99,20 @@ export const locationMutationResultObject = {
   required: ['success', 'location'],
 }
 
+export const locationMutationSummaryObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['location'] },
+    id: { type: 'string' },
+    slug: { type: 'string' },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
+}
+
 export const menuItemObject = {
   type: 'object',
   properties: {
@@ -133,6 +147,33 @@ export const menuItemObject = {
   required: ['id', 'menu_id', 'section', 'name', 'slug', 'available', 'featured', 'featured_sort_order', 'sort_order', 'created_at', 'updated_at'],
 }
 
+export const menuMutationResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['menu'] },
+    id: { type: 'string' },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
+}
+
+export const menuItemMutationResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['menu_item'] },
+    id: { type: 'string' },
+    slug: { type: 'string' },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
+}
+
 export const menuObject = {
   type: 'object',
   properties: {
@@ -152,6 +193,21 @@ export const menuObject = {
       },
     },
   },
+}
+
+export const blogPostMutationResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['blog_post'] },
+    id: { type: 'string' },
+    slug: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
 }
 
 export const blogPostObject = {
@@ -203,6 +259,35 @@ export const blogPostObject = {
     preview_url: { type: ['string', 'null'] },
     view_url: { type: ['string', 'null'] },
   },
+}
+
+export const postMutationResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['post'] },
+    id: { type: 'string' },
+    slug: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
+}
+
+export const postPublishResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['post'] },
+    id: { type: 'string' },
+    slug: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    channels: { type: 'array', items: { type: 'string' } },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
 }
 
 export const postObject = {
@@ -383,6 +468,21 @@ export const experienceObject = {
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
   },
+}
+
+export const experienceMutationResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['experience'] },
+    id: { type: 'string' },
+    slug: { type: 'string' },
+    public_url: { type: ['string', 'null'] },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
 }
 
 export const experienceStatusSchema = { type: 'string', enum: [...EXPERIENCE_STATUSES] }

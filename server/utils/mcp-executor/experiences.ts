@@ -137,15 +137,25 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
           requiredString(args, "experience_id"),
           { image_asset_id: assetId },
         );
-      return {
-        experience: experience ? attachExperienceViewUrl(experience, site) : null,
-        context: await mutationContextPayload(site, {
-          locationId:
-            experience && typeof experience.location_id === "string"
-              ? experience.location_id
-              : null,
-        }),
-      };
+      if (!experience) {
+        return renderStructuredResponse(
+          { ok: false, entity: "experience", id: requiredString(args, "experience_id") },
+          "No experience found with that id or slug — nothing was changed.",
+        );
+      }
+      const hydratedImageExperience = attachExperienceViewUrl(experience, site);
+      const setImageExperienceContext = await mutationContextPayload(site, { locationId: experience.location_id });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "experience",
+          id: experience.id,
+          updated_at: experience.updated_at,
+          context: setImageExperienceContext,
+        },
+        `Updated image for "${experience.title}".`,
+        { experience: hydratedImageExperience },
+      );
     }
     case "set_experience_video": {
       const assetId = requiredString(args, "asset_id");
@@ -156,12 +166,25 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
           requiredString(args, "experience_id"),
           { video_asset_id: assetId },
         );
-      return {
-        experience: experience ? attachExperienceViewUrl(experience, site) : null,
-        context: await mutationContextPayload(site, {
-          locationId: experience && typeof experience.location_id === "string" ? experience.location_id : null,
-        }),
-      };
+      if (!experience) {
+        return renderStructuredResponse(
+          { ok: false, entity: "experience", id: requiredString(args, "experience_id") },
+          "No experience found with that id or slug — nothing was changed.",
+        );
+      }
+      const hydratedVideoExperience = attachExperienceViewUrl(experience, site);
+      const setVideoExperienceContext = await mutationContextPayload(site, { locationId: experience.location_id });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "experience",
+          id: experience.id,
+          updated_at: experience.updated_at,
+          context: setVideoExperienceContext,
+        },
+        `Updated video for "${experience.title}".`,
+        { experience: hydratedVideoExperience },
+      );
     }
     case "open_experience_media_upload": {
       const experienceId = requiredString(args, "experience_id");
@@ -204,12 +227,25 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
         );
       }
       const experience = await updateExperience(site.db, site.siteId, experienceId, { images });
-      return {
-        experience: experience ? attachExperienceViewUrl(experience, site) : null,
-        context: await mutationContextPayload(site, {
-          locationId: experience && typeof experience.location_id === "string" ? experience.location_id : null,
-        }),
-      };
+      if (!experience) {
+        return renderStructuredResponse(
+          { ok: false, entity: "experience", id: experienceId },
+          "No experience found with that id or slug — nothing was changed.",
+        );
+      }
+      const hydratedGalleryExperience = attachExperienceViewUrl(experience, site);
+      const reorderGalleryContext = await mutationContextPayload(site, { locationId: experience.location_id });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "experience",
+          id: experience.id,
+          updated_at: experience.updated_at,
+          context: reorderGalleryContext,
+        },
+        `Reordered gallery for "${experience.title}".`,
+        { experience: hydratedGalleryExperience },
+      );
     }
     case "delete_experience":
       return {
