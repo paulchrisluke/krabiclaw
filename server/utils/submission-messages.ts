@@ -8,19 +8,13 @@ import {
   verifyReplyTokenValue,
   type ReplySubmissionType,
 } from '~/server/utils/reply-address'
+import { getReplyDomain } from '~/server/utils/reply-domain'
 
 export type SubmissionType = ReplySubmissionType
 
 interface ReplyAddressEnv {
   EMAIL_REPLY_SECRET?: string
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
-}
-
-// reply.<platform-domain>, e.g. reply.krabiclaw.com — no separate env var needed since it's
-// derived from the same NUXT_PUBLIC_PLATFORM_DOMAIN every other outbound link already uses.
-function getReplyDomain(env: ReplyAddressEnv): string {
-  const platformDomain = (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com').replace(/^https?:\/\//, '').replace(/\/$/, '')
-  return `reply.${platformDomain}`
 }
 
 interface ReplyEmailEnv extends ReplyAddressEnv {
