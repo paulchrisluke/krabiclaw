@@ -1241,6 +1241,11 @@ async function executeTool(
       const reviewCountCreate = getToolInteger(input, "review_count");
       if (reviewCountCreate !== undefined && reviewCountCreate !== null && reviewCountCreate < 0)
         return { error: "review_count must be non-negative." };
+      if (input.max_capacity !== undefined && getToolInteger(input, "max_capacity") === undefined)
+        return { error: "max_capacity must be a valid integer." };
+      const maxCapacityCreate = getToolInteger(input, "max_capacity");
+      if (maxCapacityCreate !== undefined && maxCapacityCreate !== null && maxCapacityCreate < 0)
+        return { error: "max_capacity must be non-negative." };
       const result = await createLocation(
         env,
         db,
@@ -1260,6 +1265,7 @@ async function executeTool(
           address: toSqlText(input.address) ?? null,
           opening_hours: toSqlText(input.opening_hours) ?? null,
           timezone: toSqlText(input.timezone) ?? null,
+          max_capacity: getToolInteger(input, "max_capacity") ?? null,
           rating: getToolNumber(input, "rating") ?? null,
           review_count: getToolInteger(input, "review_count") ?? null,
           price_level: toSqlText(input.price_level) ?? null,
@@ -1304,6 +1310,11 @@ async function executeTool(
       const reviewCountUpdate = getToolInteger(input, "review_count");
       if (reviewCountUpdate !== undefined && reviewCountUpdate !== null && reviewCountUpdate < 0)
         return { error: "review_count must be non-negative." };
+      if (input.max_capacity !== undefined && getToolInteger(input, "max_capacity") === undefined)
+        return { error: "max_capacity must be a valid integer." };
+      const maxCapacityUpdate = getToolInteger(input, "max_capacity");
+      if (maxCapacityUpdate !== undefined && maxCapacityUpdate !== null && maxCapacityUpdate < 0)
+        return { error: "max_capacity must be non-negative." };
       const result = await updateLocation(
         db,
         orgId,
@@ -1336,6 +1347,10 @@ async function executeTool(
           address: toSqlText(input.address) ?? undefined,
           opening_hours: toSqlText(input.opening_hours) ?? undefined,
           timezone: toSqlText(input.timezone) ?? undefined,
+          max_capacity:
+            input.max_capacity !== undefined
+              ? (getToolInteger(input, "max_capacity") ?? null)
+              : undefined,
           rating:
             input.rating !== undefined
               ? (getToolNumber(input, "rating") ?? null)

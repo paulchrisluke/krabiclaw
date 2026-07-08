@@ -5,7 +5,7 @@
       <template v-if="headline || body">
         <div :class="image ? 'grid gap-16 lg:grid-cols-2 lg:items-center' : ''">
           <div v-if="image" class="overflow-hidden">
-            <img
+            <UImage
               :src="image"
               alt=""
               aria-hidden="true"

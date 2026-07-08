@@ -40,6 +40,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         title: { type: 'string' },
         timezone: { type: 'string', description: 'IANA time zone identifier for this location, e.g. Asia/Bangkok. Used to interpret opening hours and booking slots.' },
+        max_capacity: { type: 'number', description: 'Maximum total guests this location can seat per reservation time slot. Reservation slots are still generated and bookable when this is left unset (no cap enforced) — set it to actually limit how many guests can book the same time slot.' },
         facebook_url: { type: 'string', description: 'Full Facebook page URL for this location, e.g. https://facebook.com/yourpage. Include the https:// scheme.' },
         instagram_url: { type: 'string', description: 'Full Instagram profile URL for this location, e.g. https://instagram.com/yourhandle. Include the https:// scheme.' },
         tiktok_url: { type: 'string', description: 'Full TikTok profile URL for this location, e.g. https://tiktok.com/@yourhandle. Include the https:// scheme.' },
@@ -64,6 +65,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         email: { type: ['string', 'null'], description: 'Public email shown to guests on the website and in booking/reservation confirmation emails. Pass null to clear it.' },
         notification_phone: { type: 'string', description: 'WhatsApp number for internal booking/reservation alerts to this location\'s manager. Not shown to guests. Falls back to the site-level whatsapp_phone if null. International format: +66812345678' },
         timezone: { type: 'string', description: 'IANA time zone identifier for this location, e.g. Asia/Bangkok. Used to interpret opening hours and booking slots.' },
+        max_capacity: { type: ['number', 'null'], description: 'Maximum total guests this location can seat per reservation time slot. Reservation slots are still generated and bookable when this is left unset (no cap enforced) — set it to actually limit how many guests can book the same time slot. Pass null to clear it.' },
         hero_image_asset_id: { type: 'string', description: 'Asset ID from get_site_media_assets. Assigns the hero image for this location.' },
         hero_video_asset_id: { type: 'string', description: 'Asset ID from get_site_media_assets. Assigns the hero video for this location.' },
         facebook_url: { type: 'string', description: 'Full Facebook page URL for this location, e.g. https://facebook.com/yourpage. Include the https:// scheme.' },

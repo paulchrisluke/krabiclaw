@@ -15,7 +15,11 @@ Recommended default: **hybrid local mode**
 ## Environment contract
 
 Copy the MCP-specific values from [.env.mcp.local.example](../.env.mcp.local.example)
-into your real `.env`.
+into `.dev.vars` — **not** `.env`. `BETTER_AUTH_URL`, `NUXT_PUBLIC_PLATFORM_DOMAIN`,
+and `MCP_BASE_URL` are read from the Cloudflare-bound env (`server/utils/auth.ts`'s
+`CloudflareEnv`, sourced from wrangler's `getPlatformProxy` in
+`build/runtime/cloudflare-bindings-dev.ts`), which only ever loads `.dev.vars`.
+Putting them in `.env` silently does nothing for Better Auth's origin check.
 
 Required values:
 
@@ -38,6 +42,36 @@ These three must match exactly:
 
 If they drift, ChatGPT connector auth will look like a reconnect or issuer/resource
 problem even when the app itself is healthy.
+
+### Switching back to plain local dev
+
+`.dev.vars` is shared — plain `yarn dev` and `yarn dev:tunnel` both read the same
+file, and `yarn dev:tunnel`'s inline `BETTER_AUTH_URL=... NUXT_PUBLIC_PLATFORM_DOMAIN=...`
+prefix only sets `process.env` for the Nuxt/Node process; it does **not** reach
+the Cloudflare-bound `env` object the origin check reads, so it can't override
+`.dev.vars` for you.
+
+Plain dashboard/CMS local dev (`yarn dev` against `http://localhost:3000`, no
+tunnel) requires these three set back to the localhost origin:
+
+```env
+BETTER_AUTH_URL=http://localhost:3000
+NUXT_PUBLIC_PLATFORM_DOMAIN=http://localhost:3000
+MCP_BASE_URL=http://localhost:3000
+```
+
+If you leave the tunnel origin (`https://local.krabiclaw.com` or a
+`trycloudflare.com` URL) in `.dev.vars` after an MCP session, plain `yarn dev`
+login breaks with `403 Invalid origin` on `POST /api/auth/sign-in/email` — the
+request's actual origin (`http://localhost:3000`) no longer matches
+`BETTER_AUTH_URL`. Restart `yarn dev` after editing `.dev.vars`; the wrangler
+platform proxy only reads it at boot.
+
+The MCP harness (`yarn dev:tunnel` + `yarn tunnel` + `yarn test:mcp:local`) is
+for MCP/connector testing specifically, and its OAuth-true path always needs a
+human in the loop for the ChatGPT consent screen (see "Human + LLM handoff"
+below) — it is not a substitute for day-to-day dashboard/CMS dev, which should
+stay on plain `yarn dev` at `http://localhost:3000`.
 
 ## Tunnel contract
 
