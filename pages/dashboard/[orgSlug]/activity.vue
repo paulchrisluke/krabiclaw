@@ -69,6 +69,7 @@ useSeoMeta({ title: 'Activity | KrabiClaw Dashboard', robots: 'noindex, nofollow
 const { eventLabel, timeAgo } = useSiteEventLabels()
 const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
+const toast = useToast()
 
 // Bare $fetch (globalThis override in dashboard-site-header.client.ts) does not
 // forward cookies during SSR — must attach them explicitly, same as useDashboardSite.ts.
@@ -95,20 +96,8 @@ const siteOptions = computed(() => [
 
 const eventTypeOptions = computed(() => [
   { label: 'All types', value: '' },
-  ...EVENT_TYPES.map(type => ({ label: eventLabel(type), value: type })),
+  ...SITE_EVENT_TYPES.map(type => ({ label: eventLabel(type), value: type })),
 ])
-
-const EVENT_TYPES = [
-  'contact.created', 'post.created', 'post.published', 'post.archived',
-  'menu.created', 'menu.item_added', 'menu.item_updated', 'menu.item_deleted',
-  'content.updated', 'content.published', 'media.uploaded', 'media.deleted',
-  'review.received', 'review.replied', 'reservation.created', 'reservation.confirmed',
-  'reservation.cancelled', 'location.created', 'location.updated', 'location.gmb_connected',
-  'translation.job_completed', 'experience.created', 'experience.booking_received',
-  'work_request.created', 'work_request.status_changed',
-  'domain.connected', 'domain.verified', 'domain.failed',
-  'member.invited', 'member.role_changed', 'member.removed',
-]
 
 interface Member { userId: string; name: string }
 const { data: membersData } = await useFetch<{ members: Member[] }>('/api/dashboard/members')
@@ -157,6 +146,8 @@ async function reload() {
     const res = await fetchEvents()
     events.value = res.events
     nextCursor.value = res.nextCursor
+  } catch (err) {
+    toast.add({ title: 'Failed to load activity', description: err instanceof Error ? err.message : 'Please try again.', color: 'error' })
   } finally {
     pending.value = false
   }
@@ -169,6 +160,8 @@ async function loadMore() {
     const res = await fetchEvents(nextCursor.value)
     events.value = [...events.value, ...res.events]
     nextCursor.value = res.nextCursor
+  } catch (err) {
+    toast.add({ title: 'Failed to load more activity', description: err instanceof Error ? err.message : 'Please try again.', color: 'error' })
   } finally {
     loadingMore.value = false
   }

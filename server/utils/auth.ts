@@ -161,7 +161,7 @@ export function createAuth(env: CloudflareEnv) {
               eventType: 'member.invited',
               entityType: 'invitation',
               entityId: invitation.id,
-              metadata: { email: invitation.email, role: invitation.role ?? null },
+              metadata: { role: invitation.role ?? null },
             })
           }
         }

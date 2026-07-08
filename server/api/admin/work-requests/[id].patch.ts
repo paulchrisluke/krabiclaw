@@ -66,6 +66,10 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: "Invalid priority" }, { status: 400 });
   }
 
+  const existing = await queryFirst<{ status: string; organization_id: string; site_id: string | null }>(db, `
+    SELECT status, organization_id, site_id FROM work_requests WHERE id = ?
+  `, [id]);
+
   const now = new Date().toISOString();
   const completedAt =
     body.status === "done" ? now : body.status ? null : undefined;
@@ -100,24 +104,19 @@ export default defineEventHandler(async (event) => {
   if (result.meta.changes === 0)
     return jsonResponse({ error: "Request not found" }, { status: 404 });
 
-  if ("status" in body && body.status) {
-    const row = await queryFirst<{ organization_id: string; site_id: string | null }>(db, `
-      SELECT organization_id, site_id FROM work_requests WHERE id = ?
-    `, [id]);
-    if (row) {
-      const eventSiteId = row.site_id ?? (await resolvePrimarySiteForEvent(db, row.organization_id));
-      if (eventSiteId) {
-        await fireSiteEventSafe({
-          db,
-          organizationId: row.organization_id,
-          siteId: eventSiteId,
-          actorId: session.user.id,
-          eventType: "work_request.status_changed",
-          entityType: "work_request",
-          entityId: id,
-          metadata: { status: body.status },
-        });
-      }
+  if ("status" in body && body.status && existing && existing.status !== body.status) {
+    const eventSiteId = existing.site_id ?? (await resolvePrimarySiteForEvent(db, existing.organization_id));
+    if (eventSiteId) {
+      await fireSiteEventSafe({
+        db,
+        organizationId: existing.organization_id,
+        siteId: eventSiteId,
+        actorId: session.user.id,
+        eventType: "work_request.status_changed",
+        entityType: "work_request",
+        entityId: id,
+        metadata: { status: body.status },
+      });
     }
   }
 

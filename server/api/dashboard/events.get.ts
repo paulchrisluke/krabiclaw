@@ -18,7 +18,19 @@ export default defineEventHandler(async (event) => {
   if (locationId) { conditions.push('e.location_id = ?'); params.push(locationId) }
   if (eventType) { conditions.push('e.event_type = ?'); params.push(eventType) }
   if (actorId) { conditions.push('e.actor_id = ?'); params.push(actorId) }
-  if (before) { conditions.push('e.created_at < ?'); params.push(before) }
+  if (before) {
+    // Cursor is "<created_at>|<id>" so rows sharing a millisecond-precision
+    // timestamp within the same batch aren't skipped/duplicated across pages.
+    // Falls back to a date-only comparison for older cursors without an id part.
+    const sepIndex = before.lastIndexOf('|')
+    if (sepIndex === -1) {
+      conditions.push('e.created_at < ?')
+      params.push(before)
+    } else {
+      conditions.push('(e.created_at < ? OR (e.created_at = ? AND e.id < ?))')
+      params.push(before.slice(0, sepIndex), before.slice(0, sepIndex), before.slice(sepIndex + 1))
+    }
+  }
   params.push(limit)
 
   const events = await queryAll<{
@@ -44,15 +56,17 @@ export default defineEventHandler(async (event) => {
     LEFT JOIN user u ON u.id = e.actor_id
     LEFT JOIN business_locations l ON l.id = e.location_id
     WHERE ${conditions.join(' AND ')}
-    ORDER BY e.created_at DESC
+    ORDER BY e.created_at DESC, e.id DESC
     LIMIT ?
   `, params)
+
+  const last = events[events.length - 1]
 
   return jsonResponse({
     events: events.map(e => ({
       ...e,
       metadata: e.metadata ? JSON.parse(e.metadata) : null
     })),
-    nextCursor: events.length === limit ? events[events.length - 1]!.created_at : null
+    nextCursor: events.length === limit && last ? `${last.created_at}|${last.id}` : null
   })
 })

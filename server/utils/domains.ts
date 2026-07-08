@@ -570,17 +570,6 @@ export async function createCustomDomainPair(
         actorId: opts.actorId ?? null,
         message: `${entry.domain} added`
       })
-
-      await fireSiteEventSafe({
-        db,
-        organizationId: opts.organizationId,
-        siteId: opts.siteId,
-        actorId: opts.actorId ?? null,
-        eventType: 'domain.connected',
-        entityType: 'domain',
-        entityId: entry.id,
-        metadata: { domain: entry.domain, role: entry.role },
-      })
     }
 
     for (const entry of entries) {
@@ -595,6 +584,23 @@ export async function createCustomDomainPair(
     for (const record of records) {
       if (record.status === 'active') await promoteCanonicalIfReady(db, record.site_id)
       else await queueReconciliation(db, record.id, record.next_check_at || undefined)
+    }
+
+    // Fired only once the whole pairing flow (Cloudflare provisioning, DB
+    // inserts, state sync, promotion/reconciliation) has succeeded — the catch
+    // block below rolls back site_domains rows on failure, so firing earlier
+    // could record a domain.connected event for a domain that never existed.
+    for (const entry of entries) {
+      await fireSiteEventSafe({
+        db,
+        organizationId: opts.organizationId,
+        siteId: opts.siteId,
+        actorId: opts.actorId ?? null,
+        eventType: 'domain.connected',
+        entityType: 'domain',
+        entityId: entry.id,
+        metadata: { domain: entry.domain, role: entry.role },
+      })
     }
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Cloudflare hostname creation failed')

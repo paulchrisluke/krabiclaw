@@ -32,6 +32,8 @@ const SITE_EVENT_LABELS: Record<string, string> = {
   'member.removed': 'Removed a member',
 }
 
+export const SITE_EVENT_TYPES = Object.keys(SITE_EVENT_LABELS)
+
 export function useSiteEventLabels() {
   function eventLabel(type: string) {
     return SITE_EVENT_LABELS[type] ?? type.replace('.', ' ')
