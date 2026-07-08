@@ -289,29 +289,27 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         }
       }
 
-      const publishedPost = await getPost(site.db, site.organizationId, site.siteId, postId, site.env);
       const publishContext = await mutationContextPayload(site, {
         locationId: post && typeof post.location_id === "string" ? post.location_id : null,
       });
-      if (!publishedPost) {
-        return renderStructuredResponse(
-          { ok: false, entity: "post", id: postId },
-          "Post could not be found after publishing.",
-        );
-      }
-      const hydratedPublishedPost = attachViewUrlToRecord(publishedPost, site, {}, site.env);
+
+      // Attempt to re-fetch the post for the response, but don't fail if it's missing
+      const publishedPost = await getPost(site.db, site.organizationId, site.siteId, postId, site.env);
+      const hydratedPublishedPost = publishedPost ? attachViewUrlToRecord(publishedPost, site, {}, site.env) : null;
+
       return renderStructuredResponse(
         {
           ok: true,
           entity: "post",
-          id: publishedPost.id,
-          slug: publishedPost.slug,
-          public_url: hydratedPublishedPost.public_url,
+          id: post.id,
+          slug: post.slug,
+          public_url: hydratedPublishedPost?.public_url ?? null,
           channels,
           context: publishContext,
+          ...(publishedPost ? {} : { warning: "Post data unavailable after publish, but operation succeeded" }),
         },
-        `Published "${publishedPost.title ?? publishedPost.id}" to ${channels.join(", ")}.`,
-        { post: hydratedPublishedPost },
+        `Published "${post.title ?? post.id}" to ${channels.join(", ")}.`,
+        hydratedPublishedPost ? { post: hydratedPublishedPost } : undefined,
       );
     }
     case "delete_post": {

@@ -56,7 +56,7 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
         },
       );
       assertDomainSuccess(result);
-      const settingsResult = result.data as { settings: { updated_at: string } };
+      const settingsResult = result.data as { updated_at: string };
       const updateSettingsContext = await mutationContextPayload(site);
       return renderStructuredResponse(
         {
@@ -64,11 +64,11 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
           entity: "site_settings",
           id: site.siteId,
           changed_fields: Object.keys(updates),
-          updated_at: settingsResult.settings.updated_at,
+          updated_at: settingsResult.updated_at,
           context: updateSettingsContext,
         },
         "Updated site settings.",
-        { settings: settingsResult.settings },
+        { settings: settingsResult },
       );
     }
     case "set_default_currency": {
