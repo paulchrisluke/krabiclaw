@@ -289,12 +289,19 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         }
       }
 
-      // Query actual channel job outcomes to report accurate results
-      const channelJobs = await queryAll<{ channel: string; status: string; error: string | null }>(
-        site.db,
-        `SELECT channel, status, error FROM post_channel_jobs WHERE post_id = ?`,
-        [postId],
-      );
+      // Query actual channel job outcomes to report accurate results. Best-effort:
+      // the publish (and any social writes) already succeeded above, so a failure
+      // here must not turn a successful publish into a reported failure.
+      let channelJobs: Array<{ channel: string; status: string; error: string | null }> = [];
+      try {
+        channelJobs = await queryAll<{ channel: string; status: string; error: string | null }>(
+          site.db,
+          `SELECT channel, status, error FROM post_channel_jobs WHERE post_id = ?`,
+          [postId],
+        );
+      } catch (err) {
+        console.warn('[publish_post] Failed to read channel job outcomes:', err);
+      }
 
       const publishedChannels = channelJobs.filter(j => j.status === 'published').map(j => j.channel);
       const failedChannels = channelJobs.filter(j => j.status === 'failed').map(j => ({ channel: j.channel, error: j.error }));
