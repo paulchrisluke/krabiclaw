@@ -24,6 +24,23 @@ function isLocalHost(hostname: string) {
     || hostname === '::1'
 }
 
+function normalizeHostname(host: string): string {
+  // Handle bracketed IPv6 addresses like [::1]:3000
+  if (host.startsWith('[') && host.includes(']')) {
+    const endBracket = host.indexOf(']')
+    return host.slice(1, endBracket)
+  }
+  // Handle IPv6 addresses without brackets (split on : would break them)
+  if (host.includes(':') && !host.startsWith('[')) {
+    // If it looks like an IPv6 address, return it as-is
+    if (host.split(':').length >= 2) {
+      return host
+    }
+  }
+  // For IPv4 with port or regular hostnames, split on :
+  return host.split(':')[0] || ''
+}
+
 export function assertDevRouteAllowed(event: H3Event) {
   const devMode = import.meta.dev
   const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
@@ -32,7 +49,7 @@ export function assertDevRouteAllowed(event: H3Event) {
     throw createError({ statusCode: 404, statusMessage: 'Not found' })
   }
 
-  const hostname = (getRequestHost(event) || '').split(':')[0] || ''
+  const hostname = normalizeHostname(getRequestHost(event) || '')
   const expectedSecret = process.env.E2E_DEV_ROUTE_SECRET || ''
   const providedSecret = getHeader(event, 'x-dev-route-secret') || ''
 

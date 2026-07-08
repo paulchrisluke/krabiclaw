@@ -1,5 +1,5 @@
 import type { McpExecutorContext } from './shared'
-import { execute, queryFirst } from '~/server/db'
+import { execute, queryAll, queryFirst } from '~/server/db'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { createError } from 'h3'
 import { createPost, deletePost, getPost, listPosts, PostValidationError, publishPost, updatePost } from '~/server/utils/post-management'
@@ -289,13 +289,37 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         }
       }
 
+      // Query actual channel job outcomes to report accurate results
+      const channelJobs = await queryAll<{ channel: string; status: string; error: string | null }>(
+        site.db,
+        `SELECT channel, status, error FROM post_channel_jobs WHERE post_id = ?`,
+        [postId],
+      );
+
+      const publishedChannels = channelJobs.filter(j => j.status === 'published').map(j => j.channel);
+      const failedChannels = channelJobs.filter(j => j.status === 'failed').map(j => ({ channel: j.channel, error: j.error }));
+      const skippedChannels = channelJobs.filter(j => j.status === 'skipped').map(j => ({ channel: j.channel, error: j.error }));
+
       const publishContext = await mutationContextPayload(site, {
         locationId: post && typeof post.location_id === "string" ? post.location_id : null,
       });
 
-      // Attempt to re-fetch the post for the response, but don't fail if it's missing
-      const publishedPost = await getPost(site.db, site.organizationId, site.siteId, postId, site.env);
-      const hydratedPublishedPost = publishedPost ? attachViewUrlToRecord(publishedPost, site, {}, site.env) : null;
+      // Attempt to re-fetch the post for the response, but don't fail if it's missing or errors
+      let hydratedPublishedPost = null;
+      try {
+        const publishedPost = await getPost(site.db, site.organizationId, site.siteId, postId, site.env);
+        if (publishedPost) {
+          hydratedPublishedPost = attachViewUrlToRecord(publishedPost, site, {}, site.env);
+        }
+      } catch (err) {
+        // Refetch failed, but publish succeeded - continue with available post data
+        console.warn('[publish_post] Failed to refetch post after publish:', err);
+      }
+
+      const hasFailures = failedChannels.length > 0 || skippedChannels.length > 0;
+      const successMessage = hasFailures
+        ? `Published "${post.title ?? post.id}" to ${publishedChannels.join(", ") || 'no channels'}${failedChannels.length > 0 ? `; failed: ${failedChannels.map(f => f.channel).join(", ")}` : ''}${skippedChannels.length > 0 ? `; skipped: ${skippedChannels.map(s => s.channel).join(", ")}` : ''}.`
+        : `Published "${post.title ?? post.id}" to ${publishedChannels.join(", ")}.`;
 
       return renderStructuredResponse(
         {
@@ -304,11 +328,15 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           id: post.id,
           slug: post.slug,
           public_url: hydratedPublishedPost?.public_url ?? null,
-          channels,
+          channels: publishedChannels,
           context: publishContext,
-          ...(publishedPost ? {} : { warning: "Post data unavailable after publish, but operation succeeded" }),
+          ...(hasFailures ? {
+            failed_channels: failedChannels,
+            skipped_channels: skippedChannels,
+          } : {}),
+          ...(hydratedPublishedPost ? {} : { warning: "Post data unavailable after publish, but operation succeeded" }),
         },
-        `Published "${post.title ?? post.id}" to ${channels.join(", ")}.`,
+        successMessage,
         hydratedPublishedPost ? { post: hydratedPublishedPost } : undefined,
       );
     }

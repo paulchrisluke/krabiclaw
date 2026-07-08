@@ -127,6 +127,34 @@ That runs:
 
 If you do not pass `MCP_SITE_ID`, the write-smoke scripts may create scratch data.
 
+## Reusable test login for the ChatGPT consent screen
+
+`MCP_DEV_LOGIN`/`MCP_BEARER_TOKEN` bypass login entirely for the headless smoke
+scripts. They do not help with the one step that still requires a human: the
+real Better Auth OAuth consent screen ChatGPT shows during connector setup and
+on reconnect.
+
+To avoid re-signing-up every time, add a standing test account's credentials
+to your local `.env` as `LOCAL_MCP_TEST_EMAIL` / `LOCAL_MCP_TEST_PASSWORD`
+(see [.env.mcp.local.example](../.env.mcp.local.example)) and reuse it at the
+real `/login` page when ChatGPT redirects there. Never commit real values for
+these — they stay local-only, same as any other `.env` secret.
+
+## Tool catalog size and `tools/list`
+
+`/api/mcp` and `/api/mcp/platform` detect the ChatGPT connector's user agent
+(`openai-mcp/...`) and send a leaner `tools/list` payload to it — dropping
+`outputSchema`, `annotations`, and the duplicate top-level `securitySchemes`
+per tool, since those aren't needed for tool selection and materially bloat
+the catalog. Everything else (`inspector`, curl, the local harness scripts)
+still gets the full catalog for debugging.
+
+If a connector shows a stream/connection error right after auth succeeds
+(bearer token accepted, `tools/list` telemetry present) rather than during
+OAuth itself, suspect catalog size before suspecting auth — compare the
+`tools/list` response size for a real `openai-mcp/` user agent against a
+manual request without that header.
+
 ## Human + LLM handoff
 
 The LLM can fully drive:

@@ -397,7 +397,9 @@ const handleSave = async () => {
       })
       selectedPost.value = res.post
       composing.value = false
-      trackPostCreated(String(res.post.id), siteId)
+      if (res.post?.id) {
+        trackPostCreated(String(res.post.id), siteId)
+      }
     }
     toast.add({ description: 'Saved', color: 'success' })
     await loadPosts()

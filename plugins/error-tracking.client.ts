@@ -18,11 +18,13 @@ export default defineNuxtPlugin((nuxtApp) => {
       .slice(0, 200) // Limit length
   }
 
-  nuxtApp.vueApp.config.errorHandler = (err, _instance, info) => {
+  // Use Nuxt's vue:error hook instead of overriding vueApp.config.errorHandler
+  // to avoid bypassing Nuxt's built-in error pipeline
+  nuxtApp.hook('vue:error', (err, _instance, info) => {
     const message = sanitizeMessage(err instanceof Error ? err.message : err)
     trackError('vue_error', message, info)
     console.error(err)
-  }
+  })
 
   if (import.meta.client) {
     window.addEventListener('unhandledrejection', (event) => {

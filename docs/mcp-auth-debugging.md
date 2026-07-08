@@ -103,6 +103,28 @@ Likely cause:
 
 - token was minted without the required MCP scope for that surface
 
+### Connected, but tools/list or the first tool call breaks the stream
+
+Signals:
+
+- D1 telemetry shows a successful, authenticated `tools/list` (or `tools/call`)
+- token exchange and bearer-token acceptance both look normal in logs
+- ChatGPT still shows a generic connection/stream error to the user
+
+Likely cause:
+
+- not an auth problem — the `tools/list` response is large enough that
+  ChatGPT's client-side handling of it fails after a real 200. See
+  [local-mcp-harness.md](./local-mcp-harness.md#tool-catalog-size-and-toolslist)
+  for the lean-catalog behavior already in place for `openai-mcp/` user agents.
+
+Check:
+
+- compare `tools/list` payload size for the real ChatGPT user agent vs. a
+  manual request without it
+- confirm the lean-catalog path in `server/api/mcp.post.ts` /
+  `server/api/mcp/platform.post.ts` is actually matching that user agent
+
 ### Host mismatch
 
 Signals:

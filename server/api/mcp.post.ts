@@ -1,4 +1,5 @@
 import { createError, getHeader } from "h3";
+import type { H3Event } from "h3";
 import {
   asMcpError,
   mcpFailure,
@@ -56,6 +57,11 @@ const TENANT_AUTH_REQUIRED_TEXT = "Authentication required: connect KrabiClaw to
 
 function resourceMetadataUrl(baseUrl: string) {
   return `${baseUrl}/.well-known/oauth-protected-resource`;
+}
+
+function shouldUseLeanToolCatalog(event: H3Event) {
+  const userAgent = (getHeader(event, "user-agent") || "").toLowerCase()
+  return userAgent.includes("openai-mcp/")
 }
 
 export default defineEventHandler(async (event) => {
@@ -329,6 +335,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
           )
         : new Set<string>();
 
+      const leanToolCatalog = shouldUseLeanToolCatalog(event)
       const tools = visibleSurfaceTools.filter((tool) => {
         // Without a site_id, return all tools so AI clients (e.g. ChatGPT) can discover
         // the full capability set on first connection. Security is enforced at execution time.
@@ -340,31 +347,39 @@ Common workflows: update menus and items, create and publish site posts, triage 
         )
           return false;
         return true;
-      }).map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        inputSchema: tool.inputSchema,
-        outputSchema: tool.outputSchema,
-        annotations: tool.annotations,
-        securitySchemes: tool.securitySchemes,
-        _meta: {
-          securitySchemes: tool.securitySchemes,
-          "krabiclaw/toolInfo": {
-            domain: tool.domain,
-            minimumRole: tool.minimumRole,
-            confirmRequired: tool.confirmRequired,
+      }).map((tool) => {
+        const baseTool = {
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+          _meta: {
+            securitySchemes: tool.securitySchemes,
+            "krabiclaw/toolInfo": {
+              domain: tool.domain,
+              minimumRole: tool.minimumRole,
+              confirmRequired: tool.confirmRequired,
+            },
+            ...(tool.fileParams?.length
+              ? { "openai/fileParams": tool.fileParams }
+              : {}),
+            ...(tool.uiResourceUri
+              ? {
+                  ui: { resourceUri: tool.uiResourceUri },
+                  "openai/outputTemplate": tool.uiResourceUri,
+                }
+              : {}),
           },
-          ...(tool.fileParams?.length
-            ? { "openai/fileParams": tool.fileParams }
-            : {}),
-          ...(tool.uiResourceUri
-            ? {
-                ui: { resourceUri: tool.uiResourceUri },
-                "openai/outputTemplate": tool.uiResourceUri,
-              }
-            : {}),
-        },
-      }));
+        }
+
+        if (leanToolCatalog) return baseTool
+
+        return {
+          ...baseTool,
+          outputSchema: tool.outputSchema,
+          annotations: tool.annotations,
+          securitySchemes: tool.securitySchemes,
+        }
+      });
 
       const domains = (() => {
         try {

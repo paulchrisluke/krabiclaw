@@ -17,7 +17,7 @@ const CANONICAL_LOCAL_ORIGIN = 'https://local.krabiclaw.com'
 const TUNNEL_CONFIG_PATH = 'tunnel.yml'
 const CANONICAL_TUNNEL_ID = 'ba36c78c-9e7d-4312-be92-63a58d96baba'
 const CANONICAL_TUNNEL_NAME = 'krabiclaw-local'
-const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2026-07-28'
+const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2025-11-25'
 
 let failed = false
 
@@ -62,7 +62,7 @@ function parseOrigin(value, label) {
 function extractTunnelHostname() {
   if (!existsSync(TUNNEL_CONFIG_PATH)) return null
   const source = readFileSync(TUNNEL_CONFIG_PATH, 'utf8')
-  const match = source.match(/^\s*hostname:\s*("?)([^"\n#]+)\1\s*$/m)
+  const match = source.match(/^\s*-?\s*hostname:\s*("?)([^"\n#]+)\1\s*$/m)
   return match ? `https://${match[2].trim()}` : null
 }
 

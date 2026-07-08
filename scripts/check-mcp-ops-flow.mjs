@@ -158,6 +158,12 @@ async function main() {
   const menuItemId = data(menuItem.body)?.id
   expectValue('create_menu_item returns item id', Boolean(menuItemId), menuItem.body)
 
+  const initialMenuRead = await mcp(headers, 'get_menu', { site_id: siteId, menu_id: menuId })
+  expectStatus('get_menu succeeds after create', initialMenuRead)
+  const initialReadItems = data(initialMenuRead.body)?.menu?.items ?? []
+  const initialPricedItem = initialReadItems.find(item => item.id === menuItemId)
+  expectValue('created menu item has initial price amount', moneyEquals(initialPricedItem?.price_amount, 12.50), initialPricedItem)
+
   const aliasedMenuItem = await mcp(headers, 'create_menu_item', {
     site_id: siteId,
     menu_id: menuId,
@@ -198,7 +204,7 @@ async function main() {
   expectValue('get_menu includes updated item', readItems.some(item => item.id === menuItemId && item.name === 'MCP Ops Green Curry'), readItems)
   expectValue('get_menu preserves location_id', data(menuRead.body)?.menu?.location_id === locationId, data(menuRead.body))
   const pricedItem = readItems.find(item => item.id === menuItemId)
-  expectValue('created menu item keeps price amount', moneyEquals(pricedItem?.price_amount, 13), pricedItem)
+  expectValue('updated menu item has new price amount', moneyEquals(pricedItem?.price_amount, 13), pricedItem)
   const aliasedItem = readItems.find(item => item.id === aliasedMenuItemId)
   expectValue('legacy price alias is normalized to price_amount', moneyEquals(aliasedItem?.price_amount, 14.25), aliasedItem)
 
