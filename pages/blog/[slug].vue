@@ -7,7 +7,7 @@
     </div>
   </div>
 
-  <article v-else-if="post" class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
+  <article v-else-if="post" class="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
     <div class="mb-6 flex flex-wrap items-center gap-3">
       <span v-if="post.category" class="rounded bg-muted px-2 py-1 text-xs font-medium text-muted">
         {{ post.category }}
@@ -15,10 +15,27 @@
       <span v-if="post.published_at" class="text-sm text-dimmed">
         <NuxtTime :datetime="post.published_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
       </span>
+      <span class="text-sm text-dimmed">{{ readTime }} min read</span>
+      <span v-if="wasUpdated && post.updated_at" class="text-sm text-dimmed">
+        Updated <NuxtTime :datetime="post.updated_at" locale="en-US" month="long" day="numeric" time-zone="UTC" />
+      </span>
     </div>
 
     <h1 class="mb-5 text-4xl font-bold leading-tight text-default">{{ post.title }}</h1>
     <p v-if="post.excerpt" class="mb-8 text-xl leading-relaxed text-muted">{{ post.excerpt }}</p>
+
+    <div class="mb-8 flex items-center gap-4 border-y border-default py-4">
+      <div
+        class="flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold text-white"
+        style="background-color: var(--ui-primary)"
+      >
+        {{ authorInitial }}
+      </div>
+      <div>
+        <p class="font-semibold text-default">{{ authorName }}</p>
+        <p class="text-sm text-dimmed">Published from {{ siteName }}</p>
+      </div>
+    </div>
 
     <div v-if="postMedia.url" class="relative mb-10 h-64 w-full overflow-hidden rounded-2xl md:h-96">
       <video
@@ -56,7 +73,11 @@
       </template>
     </div>
 
-    <div class="mt-16 border-t border-default pt-8">
+    <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
+      <div>
+        <p class="text-sm font-semibold text-default">{{ authorName }}</p>
+        <p class="text-sm text-dimmed">More stories and updates from {{ siteName }}</p>
+      </div>
       <PlatformButton to="/blog" variant="outline" size="sm">More Posts</PlatformButton>
     </div>
   </article>
@@ -94,35 +115,57 @@ interface TenantBlogPost {
   canonical_url?: string | null
   robots?: string | null
   published_at?: string | null
+  author_name?: string | null
   updated_at?: string | null
   featured_image?: { public_url: string | null; kind: string | null; width: number | null; height: number | null } | null
   components?: ContentComponent[]
 }
 
-// Post ships in the layout's single bootstrap payload (page=blog, blogSlug=slug) —
-// no separate fetch. useBootstrap() itself is lazy/non-blocking (fine for the
-// layout's header/footer), but a missing post here must produce a real HTTP 404
-// for search engines, which requires blocking on the fetch during SSR — so this
-// page awaits its own useAsyncData call against the exact same key/URL the
-// layout uses, and Nuxt's key-based dedup collapses both to one request.
-const params = useBootstrapParams()
-const bootstrapKey = computed(() => useBootstrapKey(siteId, params.value))
-const bootstrapUrl = computed(() => useBootstrapUrl(siteId, params.value))
-const requestFetch = useRequestFetch()
+const route = useRoute()
+const postEndpoint = computed(() => `/api/public/sites/${siteId}/blog/${String(route.params.slug)}`)
 
 interface BootstrapBlogResponse {
-  blogPost: TenantBlogPost | null
+  post: TenantBlogPost | null
 }
 
-const { data, pending, error } = await useAsyncData<BootstrapBlogResponse>(
-  bootstrapKey,
-  () => (import.meta.server
-    ? requestFetch<BootstrapBlogResponse>(bootstrapUrl.value)
-    : $fetch<BootstrapBlogResponse>(bootstrapUrl.value)),
-  {
-    getCachedData(k, nuxtApp) {
-      return nuxtApp.payload.data[k] as BootstrapBlogResponse | undefined
-    },
+const { data, pending, error } = await useAsyncData(
+  () => `tenant-blog-post-${siteId}-${String(route.params.slug)}`,
+  async () => {
+    let post: TenantBlogPost | null | undefined
+
+    if (import.meta.server) {
+      const requestEvent = useRequestEvent()
+      if (!requestEvent) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
+
+      const [{ cloudflareEnv }, { getPublishedSiteBlogPost }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/platform-content'),
+      ])
+      const db = cloudflareEnv(requestEvent).db
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+
+      post = await getPublishedSiteBlogPost(db, siteId, String(route.params.slug)) as TenantBlogPost | null
+    } else {
+      let payload: BootstrapBlogResponse
+      try {
+        payload = await $fetch<BootstrapBlogResponse>(postEndpoint.value)
+      } catch (err) {
+        const statusCode = typeof err === 'object' && err !== null
+          ? Number((err as { statusCode?: unknown; status?: unknown }).statusCode ?? (err as { status?: unknown }).status)
+          : undefined
+        if (statusCode === 404) {
+          throw createError({ statusCode: 404, statusMessage: 'Post not found' })
+        }
+        throw err
+      }
+      post = payload.post
+    }
+
+    if (!post) {
+      throw createError({ statusCode: 404, statusMessage: 'Post not found' })
+    }
+
+    return { post }
   },
 )
 
@@ -132,12 +175,28 @@ if (error.value) {
   throw error.value
 }
 
-if (!data.value?.blogPost) {
+if (!data.value?.post) {
   throw createError({ statusCode: 404, statusMessage: 'Post not found', fatal: true })
 }
 
-const post = computed(() => data.value?.blogPost ?? null)
+const post = computed(() => data.value?.post ?? null)
 const siteName = computed(() => site?.brand_name || 'Our Site')
+const authorName = computed(() => post.value?.author_name?.trim() || siteName.value)
+const authorInitial = computed(() => authorName.value.charAt(0).toUpperCase())
+const readTime = computed(() => {
+  const words = (post.value?.body ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length
+  return Math.max(1, Math.ceil(words / 200))
+})
+const wasUpdated = computed(() => {
+  if (!post.value?.updated_at || !post.value?.published_at) return false
+  const updatedDate = new Date(post.value.updated_at)
+  const publishedDate = new Date(post.value.published_at)
+  if (Number.isNaN(updatedDate.getTime()) || Number.isNaN(publishedDate.getTime())) return false
+  return Math.abs(updatedDate.getTime() - publishedDate.getTime()) > 60_000
+})
 
 function renderMarkdown(markdown: string) {
   return DOMPurify.sanitize(renderMarkdownToHtml(markdown || ''))
@@ -207,7 +266,7 @@ useContentPageSchema(computed(() => {
     imageHeight: post.value.featured_image?.height ?? undefined,
     datePublished: post.value.published_at,
     dateModified: post.value.updated_at,
-    authorName: siteName.value,
+    authorName: authorName.value,
     articleSection: post.value.category || undefined,
     keywords: post.value.seo_keywords || undefined,
     inLanguage: 'en-US',

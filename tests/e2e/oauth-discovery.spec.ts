@@ -198,12 +198,12 @@ test.describe('OAuth discovery endpoints', () => {
       )
       expect(res.status()).toBe(200)
       const body = await res.json() as {
-        events: Array<{ mcp_surface: string; tool_name: string; status: string }>
+        events: Array<{ mcp_surface: string; tool_name: string; status: string; error_message: string | null }>
       }
-      return body.events.map((event) => `${event.mcp_surface}:${event.tool_name}:${event.status}`)
+      return body.events.map((event) => `${event.mcp_surface}:${event.tool_name}:${event.status}:${event.error_message ?? ''}`)
     }).toEqual(expect.arrayContaining([
-      'client:list_sites:auth_required',
-      'platform:get_platform_context:auth_required',
+      'client:list_sites:auth_required:credential_missing: missing bearer token or cookie',
+      'platform:get_platform_context:auth_required:credential_missing: missing bearer token or cookie',
     ]))
   })
 })

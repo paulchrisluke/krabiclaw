@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { postObject, siteTool } from './shared'
+import { postMutationResultObject, postObject, postPublishResultObject, siteTool } from './shared'
 import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const POSTS_TOOLS: McpToolDefinition[] = [
@@ -72,11 +72,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
         scheduled_for: { type: 'string', description: 'If set, the post is scheduled to publish at this datetime (ISO 8601) instead of immediately.' },
       },
       required: ['body'],
-      outputSchema: {
-        type: 'object',
-        properties: { post: postObject },
-        required: ['post'],
-      },
+      outputSchema: postMutationResultObject,
     }),
   siteTool({
       name: 'update_post',
@@ -118,11 +114,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
         scheduled_for: { type: 'string', description: 'If set, the post is scheduled to publish at this datetime (ISO 8601) instead of immediately.' },
       },
       required: ['post_id'],
-      outputSchema: {
-        type: 'object',
-        properties: { post: postObject },
-        required: ['post'],
-      },
+      outputSchema: postMutationResultObject,
     }),
   siteTool({
       name: 'set_post_image',
@@ -135,11 +127,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
         asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
       },
       required: ['post_id', 'asset_id'],
-      outputSchema: {
-        type: 'object',
-        properties: { post: postObject },
-        required: ['post'],
-      },
+      outputSchema: postMutationResultObject,
     }),
   siteTool({
       name: 'open_post_media_upload',
@@ -174,11 +162,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
         targets: { type: 'array', items: { type: 'string', enum: ['site', 'facebook', 'instagram', 'gmb'] }, description: 'Deprecated alias for channels. Prefer channels.' },
       },
       required: ['post_id'],
-      outputSchema: {
-        type: 'object',
-        properties: { post: postObject },
-        required: ['post'],
-      },
+      outputSchema: postPublishResultObject,
     }),
   siteTool({
       name: 'delete_post',

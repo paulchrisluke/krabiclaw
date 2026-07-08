@@ -1,4 +1,5 @@
 import { createError, getHeader } from "h3";
+import type { H3Event } from "h3";
 import {
   asMcpError,
   mcpFailure,
@@ -30,6 +31,7 @@ import {
 import {
   buildMcpAuthChallengeForError,
   buildMcpOAuthChallenge,
+  describeMcpAuthTelemetryError,
   getCloudflareWaitUntil,
   isMcpMutatingTool,
   mcpAuthRequiredResult,
@@ -55,6 +57,11 @@ const TENANT_AUTH_REQUIRED_TEXT = "Authentication required: connect KrabiClaw to
 
 function resourceMetadataUrl(baseUrl: string) {
   return `${baseUrl}/.well-known/oauth-protected-resource`;
+}
+
+function shouldUseLeanToolCatalog(event: H3Event) {
+  const userAgent = (getHeader(event, "user-agent") || "").toLowerCase()
+  return userAgent.includes("openai-mcp/")
 }
 
 export default defineEventHandler(async (event) => {
@@ -108,7 +115,7 @@ export default defineEventHandler(async (event) => {
           toolName: requestToolName ?? null,
           toolDomain: MCP_TOOLS.find((t) => t.name === requestToolName)?.domain ?? null,
           status: "auth_required",
-          errorMessage: "Missing bearer token or cookie",
+          errorMessage: "credential_missing: missing bearer token or cookie",
         });
         return mcpSuccess(requestId ?? null, mcpAuthRequiredResult({ challenge: authChallenge, message: TENANT_AUTH_REQUIRED_TEXT }));
       }
@@ -209,6 +216,8 @@ When calling show_generated_images after native image_generation, always include
 - use_label: "Use as homepage hero for [site name]"  (or the appropriate placement)
 - subtitle: can reference the site name to make the target obvious
 After applying, always confirm: "[Placement] updated for [site name]." — never leave the target ambiguous.
+
+When a public-facing tool result includes \`view_url\` or \`public_url\`, include that URL in your reply so the user can open the live page immediately. Prefer \`view_url\` when both are present.
 
 All other tools require a site_id obtained from list_sites. Never guess or invent site IDs. Use get_current_user when the user asks which account is connected.
 
@@ -326,6 +335,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
           )
         : new Set<string>();
 
+      const leanToolCatalog = shouldUseLeanToolCatalog(event)
       const tools = visibleSurfaceTools.filter((tool) => {
         // Without a site_id, return all tools so AI clients (e.g. ChatGPT) can discover
         // the full capability set on first connection. Security is enforced at execution time.
@@ -337,31 +347,39 @@ Common workflows: update menus and items, create and publish site posts, triage 
         )
           return false;
         return true;
-      }).map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        inputSchema: tool.inputSchema,
-        outputSchema: tool.outputSchema,
-        annotations: tool.annotations,
-        securitySchemes: tool.securitySchemes,
-        _meta: {
-          securitySchemes: tool.securitySchemes,
-          "krabiclaw/toolInfo": {
-            domain: tool.domain,
-            minimumRole: tool.minimumRole,
-            confirmRequired: tool.confirmRequired,
+      }).map((tool) => {
+        const baseTool = {
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+          _meta: {
+            securitySchemes: tool.securitySchemes,
+            "krabiclaw/toolInfo": {
+              domain: tool.domain,
+              minimumRole: tool.minimumRole,
+              confirmRequired: tool.confirmRequired,
+            },
+            ...(tool.fileParams?.length
+              ? { "openai/fileParams": tool.fileParams }
+              : {}),
+            ...(tool.uiResourceUri
+              ? {
+                  ui: { resourceUri: tool.uiResourceUri },
+                  "openai/outputTemplate": tool.uiResourceUri,
+                }
+              : {}),
           },
-          ...(tool.fileParams?.length
-            ? { "openai/fileParams": tool.fileParams }
-            : {}),
-          ...(tool.uiResourceUri
-            ? {
-                ui: { resourceUri: tool.uiResourceUri },
-                "openai/outputTemplate": tool.uiResourceUri,
-              }
-            : {}),
-        },
-      }));
+        }
+
+        if (leanToolCatalog) return baseTool
+
+        return {
+          ...baseTool,
+          outputSchema: tool.outputSchema,
+          annotations: tool.annotations,
+          securitySchemes: tool.securitySchemes,
+        }
+      });
 
       const domains = (() => {
         try {
@@ -415,7 +433,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
           isMutating: isMcpMutatingTool(toolDef),
           arguments: rawArgs,
           status: "auth_required",
-          errorMessage: authError instanceof Error ? authError.message : String(authError),
+          errorMessage: describeMcpAuthTelemetryError(authError),
           durationMs: Date.now() - toolStartedAt,
         });
         throw authError;

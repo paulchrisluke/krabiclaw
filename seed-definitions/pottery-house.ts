@@ -1208,6 +1208,49 @@ ${channelJobRows};
 -- END GENERATED: pottery_posts`
 }
 
+export function renderCompiledPotteryHouseBlogBlock(): string {
+  const publishedAt = '2026-07-08T00:00:00.000Z'
+
+  return `-- BEGIN GENERATED: pottery_blog
+-- Tenant blog coverage for Pottery House Krabi parity checks.
+INSERT OR IGNORE INTO blog_posts
+  (id, organization_id, site_id, title, slug, body, excerpt, category, status,
+   author_id, featured_image_asset_id, published_at, created_at, updated_at,
+   seo_description, seo_keywords, canonical_url, robots, hide_from_nav)
+VALUES (
+  ${sqlValue('blog-pottery-group-bookings')},
+  ${sqlValue('org-pottery-house')},
+  ${sqlValue('site-pottery-house')},
+  ${sqlValue('Group Bookings Create a Unique Pottery Experience in Krabi')},
+  ${sqlValue('group-bookings-create-a-unique-pottery-experience-in-krabi')},
+  ${sqlValue(`# Group Bookings Create a Unique Pottery Experience in Krabi
+
+Private pottery sessions work especially well for retreat organisers, schools, family celebrations, and company offsites looking for something genuinely local.
+
+## What groups can expect
+
+We can shape sessions around wheel throwing, handbuilding, glazing, or a slower creative itinerary that fits the rest of the day in Krabi.
+
+## Ideal for teams and retreat hosts
+
+Our team can help organise group timing, capacity, and the right workshop format for your guests.`)},
+  ${sqlValue('A practical guide to private pottery sessions in Krabi for retreats, schools, and team events.')},
+  ${sqlValue('Group bookings')},
+  'published',
+  ${sqlValue('user-pottery-house')},
+  ${sqlValue('media-ph-homepage-custom')},
+  ${sqlValue(publishedAt)},
+  ${sqlValue(publishedAt)},
+  ${sqlValue(publishedAt)},
+  ${sqlValue('Plan a group pottery workshop in Krabi for retreats, schools, and company events with Pottery House Krabi.')},
+  ${sqlValue('pottery workshop krabi, group booking krabi, retreat activity krabi, team building pottery')},
+  NULL,
+  ${sqlValue('index,follow')},
+  0
+);
+-- END GENERATED: pottery_blog`
+}
+
 export function renderCompiledPotteryHouseContentBlock(): string {
   const contentRows = compiledPotteryHouseSeed.siteContent
     .map((entry) => `  (${[

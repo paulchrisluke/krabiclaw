@@ -1,4 +1,4 @@
-import { createError, type H3Event } from 'h3'
+import { createError, getHeader, getRequestHost, type H3Event } from 'h3'
 import { queryAll, queryFirst, type DbClient } from '../db/index.ts'
 import {
   listContentComponents,
@@ -48,6 +48,10 @@ interface PlatformLlmBlogDetail extends PlatformLlmBlogSummary {
   body: string
   components: PlatformContentComponent[]
 }
+
+type TenantLlmBlogSummary = PlatformLlmBlogSummary
+
+type TenantLlmBlogDetail = PlatformLlmBlogDetail
 
 export interface PlatformLlmLinkEntry {
   title: string
@@ -252,11 +256,12 @@ export function renderPlatformDocMarkdown(doc: PlatformLlmDocDetail, origin: str
   ].join('\n')
 }
 
-export function renderPlatformBlogMarkdown(post: PlatformLlmBlogDetail, origin: string, categoryOverride?: string) {
-  const categorySlug = categoryOverride || blogCategoryToSlug(post.category)
-  if (!categorySlug) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
-  const path = `/blog/${categorySlug}/${post.slug}`
-  const markdownPath = `/blog-md/${categorySlug}/${post.slug}.md`
+function renderBlogMarkdown(
+  post: PlatformLlmBlogDetail,
+  origin: string,
+  paths: { path: string; markdownPath: string },
+) {
+  const { path, markdownPath } = paths
   const canonicalUrl = post.canonical_url?.trim() || absoluteUrl(origin, path)
   const body = renderContentMarkdownWithComponents(post.body, post.components)
 
@@ -280,6 +285,20 @@ export function renderPlatformBlogMarkdown(post: PlatformLlmBlogDetail, origin: 
   ].join('\n')
 }
 
+export function renderPlatformBlogMarkdown(post: PlatformLlmBlogDetail, origin: string, categoryOverride?: string) {
+  const categorySlug = categoryOverride || blogCategoryToSlug(post.category)
+  if (!categorySlug) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
+  const path = `/blog/${categorySlug}/${post.slug}`
+  const markdownPath = `/blog-md/${categorySlug}/${post.slug}.md`
+  return renderBlogMarkdown(post, origin, { path, markdownPath })
+}
+
+export function renderTenantBlogMarkdown(post: TenantLlmBlogDetail, origin: string) {
+  const path = `/blog/${post.slug}`
+  const markdownPath = `/blog-md/${post.slug}.md`
+  return renderBlogMarkdown(post, origin, { path, markdownPath })
+}
+
 export async function listPublishedPlatformDocsForLlm(db: DbClient) {
   return await queryAll<PlatformLlmDocSummary>(
     db,
@@ -301,6 +320,20 @@ export async function listPublishedPlatformBlogPostsForLlm(db: DbClient) {
      LEFT JOIN user u ON u.id = p.author_id
      WHERE p.status = 'published' AND p.site_id IS NULL
      ORDER BY p.category, p.published_at DESC`,
+  )
+}
+
+export async function listPublishedTenantBlogPostsForLlm(db: DbClient, siteId: string) {
+  return await queryAll<TenantLlmBlogSummary>(
+    db,
+    `SELECT
+      p.id, p.title, p.slug, p.excerpt, p.category, p.canonical_url, p.seo_description, p.published_at, p.updated_at,
+      u.name AS author_name
+     FROM blog_posts p
+     LEFT JOIN user u ON u.id = p.author_id
+     WHERE p.status = 'published' AND p.site_id = ?
+     ORDER BY p.published_at DESC, p.updated_at DESC`,
+    [siteId],
   )
 }
 
@@ -332,6 +365,22 @@ export async function getPublishedPlatformBlogPostBySlug(db: DbClient, categoryS
      LEFT JOIN user u ON u.id = p.author_id
      WHERE p.slug = ? AND p.category = ? AND p.status = 'published' AND p.site_id IS NULL`,
     [slug, category],
+  )
+  if (!detail) return null
+  const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'blog_post', detail.id, { activeOnly: true }))
+  return { ...detail, components }
+}
+
+export async function getPublishedTenantBlogPostBySlug(db: DbClient, siteId: string, slug: string) {
+  const detail = await queryFirst<TenantLlmBlogDetail>(
+    db,
+    `SELECT
+      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.canonical_url, p.seo_description, p.published_at, p.updated_at,
+      u.name AS author_name
+     FROM blog_posts p
+     LEFT JOIN user u ON u.id = p.author_id
+     WHERE p.slug = ? AND p.status = 'published' AND p.site_id = ?`,
+    [slug, siteId],
   )
   if (!detail) return null
   const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'blog_post', detail.id, { activeOnly: true }))
@@ -382,54 +431,111 @@ export function buildPlatformBlogLinkEntries(posts: PlatformLlmBlogSummary[], or
   })
 }
 
-export function buildLlmsTxt(origin: string, docs: PlatformLlmLinkEntry[], posts: PlatformLlmLinkEntry[]) {
+export function buildTenantBlogLinkEntries(posts: TenantLlmBlogSummary[], origin: string): PlatformLlmLinkEntry[] {
+  const sortedPosts = [...posts].sort((a, b) => {
+    const aDate = a.published_at ? new Date(a.published_at).getTime() : 0
+    const bDate = b.published_at ? new Date(b.published_at).getTime() : 0
+    return bDate - aDate
+  })
+  return sortedPosts.map((post) => {
+    const path = `/blog/${post.slug}`
+    return {
+      title: post.title,
+      path,
+      markdownPath: `/blog-md/${post.slug}.md`,
+      canonicalUrl: post.canonical_url?.trim() || absoluteUrl(origin, path),
+      summary: safeSummary(post.seo_description || post.excerpt, 'Published blog article.'),
+      category: post.category,
+      publishedAt: post.published_at,
+      updatedAt: post.updated_at,
+      authorName: post.author_name,
+    }
+  })
+}
+
+interface LlmsTxtOptions {
+  title?: string
+  intro?: string
+  docsHeading?: string
+  blogHeading?: string
+  includeDocsOptionalLinks?: boolean
+  blogIndexDescription?: string
+  blogRssDescription?: string
+  blogJsonFeedDescription?: string
+  fullContextDescription?: string
+}
+
+export function buildLlmsTxt(
+  origin: string,
+  docs: PlatformLlmLinkEntry[],
+  posts: PlatformLlmLinkEntry[],
+  options: LlmsTxtOptions = {},
+) {
+  const includeDocsSection = docs.length > 0
   const lines = [
-    '# KrabiClaw',
+    `# ${options.title || 'KrabiClaw'}`,
     '',
-    '> KrabiClaw is an AI website builder for restaurants and local businesses, with public docs and a platform blog available as HTML and Markdown mirrors.',
+    `> ${options.intro || 'KrabiClaw is an AI website builder for restaurants and local businesses, with public docs and a platform blog available as HTML and Markdown mirrors.'}`,
     '',
     'Prefer the Markdown URLs below when you need compact machine-readable context. Canonical HTML URLs remain the source for public citation and browsing.',
     '',
-    '## Docs',
-    ...docs.map(doc => `- [${doc.title}](${absoluteUrl(origin, doc.markdownPath)}): ${doc.summary}`),
-    '',
-    '## Blog',
+    ...(includeDocsSection
+      ? [
+          `## ${options.docsHeading || 'Docs'}`,
+          ...docs.map(doc => `- [${doc.title}](${absoluteUrl(origin, doc.markdownPath)}): ${doc.summary}`),
+          '',
+        ]
+      : []),
+    `## ${options.blogHeading || 'Blog'}`,
     ...posts.map(post => `- [${post.title}](${absoluteUrl(origin, post.markdownPath)}): ${post.summary}`),
     '',
     '## Optional',
-    `- [Full LLM context](${absoluteUrl(origin, '/llms-full.txt')}): Aggregated export of published docs and blog posts.`,
-    `- [Docs index JSON](${absoluteUrl(origin, '/docs/index.json')}): Machine-readable manifest of published docs.`,
-    `- [Blog index JSON](${absoluteUrl(origin, '/blog/index.json')}): Machine-readable manifest of published platform blog posts.`,
-    `- [Blog RSS feed](${absoluteUrl(origin, '/blog/rss.xml')}): Chronological feed for published platform posts.`,
-    `- [Blog JSON feed](${absoluteUrl(origin, '/blog/feed.json')}): JSON Feed export for published platform posts.`,
+    `- [Full LLM context](${absoluteUrl(origin, '/llms-full.txt')}): ${options.fullContextDescription || 'Aggregated export of published docs and blog posts.'}`,
+    ...(options.includeDocsOptionalLinks === false || !includeDocsSection
+      ? []
+      : [`- [Docs index JSON](${absoluteUrl(origin, '/docs/index.json')}): Machine-readable manifest of published docs.`]),
+    `- [Blog index JSON](${absoluteUrl(origin, '/blog/index.json')}): ${options.blogIndexDescription || 'Machine-readable manifest of published platform blog posts.'}`,
+    `- [Blog RSS feed](${absoluteUrl(origin, '/blog/rss.xml')}): ${options.blogRssDescription || 'Chronological feed for published platform posts.'}`,
+    `- [Blog JSON feed](${absoluteUrl(origin, '/blog/feed.json')}): ${options.blogJsonFeedDescription || 'JSON Feed export for published platform posts.'}`,
   ]
 
   return `${lines.join('\n').trim()}\n`
+}
+
+interface LlmsFullTxtOptions {
+  title?: string
+  intro?: string
+  includeDocs?: boolean
+  renderBlog?: (_post: PlatformLlmBlogDetail, _origin: string) => string
 }
 
 export function buildLlmsFullTxt(
   origin: string,
   docs: Array<PlatformLlmDocDetail>,
   posts: Array<PlatformLlmBlogDetail>,
+  options: LlmsFullTxtOptions = {},
 ) {
+  const includeDocs = options.includeDocs !== false
   const lines: string[] = [
-    '# KrabiClaw Full LLM Context',
+    `# ${options.title || 'KrabiClaw Full LLM Context'}`,
     '',
-    '> Full machine-readable export of KrabiClaw\'s published platform docs and platform blog.',
+    `> ${options.intro || 'Full machine-readable export of KrabiClaw\'s published platform docs and platform blog.'}`,
     '',
     `Source site: ${origin}`,
-    '',
-    '## Docs',
   ]
 
-  for (const doc of docs) {
-    lines.push('', renderPlatformDocMarkdown(doc, origin), '')
+  if (includeDocs) {
+    lines.push('', '## Docs')
+    for (const doc of docs) {
+      lines.push('', renderPlatformDocMarkdown(doc, origin), '')
+    }
   }
 
   lines.push('## Blog')
+  const renderBlog = options.renderBlog || renderPlatformBlogMarkdown
 
   for (const post of posts) {
-    lines.push('', renderPlatformBlogMarkdown(post, origin), '')
+    lines.push('', renderBlog(post, origin), '')
   }
 
   return `${normalizeWhitespace(lines.join('\n'))}\n`
@@ -477,6 +583,18 @@ function escapeXml(value: string) {
 }
 
 export function buildBlogRss(origin: string, posts: PlatformLlmLinkEntry[]) {
+  const title = 'KrabiClaw Blog'
+  const description = 'KrabiClaw platform blog feed.'
+  return buildNamedBlogRss(origin, posts, { title, description })
+}
+
+interface BlogFeedOptions {
+  title?: string
+  description?: string
+  authorName?: string
+}
+
+export function buildNamedBlogRss(origin: string, posts: PlatformLlmLinkEntry[], options: BlogFeedOptions = {}) {
   const latestPostDate = posts
     .map(post => post.updatedAt ?? post.publishedAt)
     .filter(Boolean)
@@ -500,9 +618,9 @@ export function buildBlogRss(origin: string, posts: PlatformLlmLinkEntry[]) {
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<rss version="2.0">',
     '<channel>',
-    '<title>KrabiClaw Blog</title>',
+    `<title>${escapeXml(options.title || 'KrabiClaw Blog')}</title>`,
     `<link>${escapeXml(absoluteUrl(origin, '/blog'))}</link>`,
-    '<description>KrabiClaw platform blog feed.</description>',
+    `<description>${escapeXml(options.description || 'KrabiClaw platform blog feed.')}</description>`,
     latestPostDate ? `<lastBuildDate>${escapeXml(new Date(latestPostDate).toUTCString())}</lastBuildDate>` : '',
     items,
     '</channel>',
@@ -511,12 +629,16 @@ export function buildBlogRss(origin: string, posts: PlatformLlmLinkEntry[]) {
 }
 
 export function buildBlogJsonFeed(origin: string, posts: PlatformLlmLinkEntry[]) {
+  return buildNamedBlogJsonFeed(origin, posts)
+}
+
+export function buildNamedBlogJsonFeed(origin: string, posts: PlatformLlmLinkEntry[], options: BlogFeedOptions = {}) {
   return {
     version: 'https://jsonfeed.org/version/1.1',
-    title: 'KrabiClaw Blog',
+    title: options.title || 'KrabiClaw Blog',
     home_page_url: absoluteUrl(origin, '/blog'),
     feed_url: absoluteUrl(origin, '/blog/feed.json'),
-    description: 'KrabiClaw platform blog feed.',
+    description: options.description || 'KrabiClaw platform blog feed.',
     items: posts.map(post => ({
       id: post.canonicalUrl,
       url: post.canonicalUrl,
@@ -524,15 +646,30 @@ export function buildBlogJsonFeed(origin: string, posts: PlatformLlmLinkEntry[])
       summary: post.summary,
       date_published: post.publishedAt ?? null,
       date_modified: post.updatedAt ?? post.publishedAt ?? null,
-      authors: post.authorName ? [{ name: post.authorName }] : [{ name: 'KrabiClaw' }],
+      authors: post.authorName ? [{ name: post.authorName }] : [{ name: options.authorName || 'KrabiClaw' }],
       tags: post.category ? [post.category] : [],
     })),
   }
 }
 
-export function resolvePublicOrigin(_event: H3Event) {
+export function resolvePublicOrigin(event: H3Event) {
+  if (event.context.tenantType === 'tenant') {
+    const tenantHost = String(
+      event.context.tenantHost
+      || getRequestHost(event, { xForwardedHost: true })
+      || getHeader(event, 'host')
+      || ''
+    ).split(':')[0]
+    if (!tenantHost) {
+      throw createError({ statusCode: 500, statusMessage: 'Tenant host not resolved' })
+    }
+    const forwardedProto = getHeader(event, 'x-forwarded-proto')
+    const protocol = forwardedProto?.split(',')[0]?.trim()
+      || (tenantHost.endsWith('.localhost') || tenantHost === 'localhost' ? 'http' : 'https')
+    return `${protocol}://${tenantHost}`
+  }
+
   const runtimeConfig = useRuntimeConfig()
-  // Only trust runtime-configured siteUrl; avoid untrusted Host header from getRequestURL
   const origin = runtimeConfig.public.siteUrl
   if (!origin) {
     throw createError({ statusCode: 500, statusMessage: 'siteUrl not configured' })

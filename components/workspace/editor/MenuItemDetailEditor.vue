@@ -165,6 +165,11 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const toast = useToast()
+const { trackMenuItemCreated, trackEditorSessionStarted } = useAnalytics()
+
+onMounted(() => {
+  if (props.siteId) trackEditorSessionStarted(props.siteId)
+})
 
 const loading = ref(true)
 const saving = ref(false)
@@ -319,11 +324,18 @@ const handleSave = async () => {
       })
       toast.addToast('Item saved', 'success')
     } else {
-      await $fetch(`/api/editor/sites/${props.siteId}/menus/${props.menuId}/items`, {
+      const res = await $fetch<{ menuItem: MenuItem }>(`/api/editor/sites/${props.siteId}/menus/${props.menuId}/items`, {
         method: 'POST',
         body: payload.value
       })
-      toast.addToast('Item created', 'success')
+      if (res?.menuItem?.id) {
+        trackMenuItemCreated(String(res.menuItem.id), props.siteId)
+        toast.addToast('Item created', 'success')
+      } else {
+        error.value = 'Invalid response: missing menuItem or id'
+        toast.addToast('Failed to create item', 'error')
+        return
+      }
     }
     await router.push(backPath.value)
   } catch (err) {

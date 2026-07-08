@@ -1636,6 +1636,53 @@ ${channelJobRows};
 -- END GENERATED: demo_posts`
 }
 
+export function renderCompiledDemoBlogBlock(): string {
+  const publishedAt = '2026-07-08T00:00:00.000Z'
+
+  return `-- BEGIN GENERATED: demo_blog
+-- Tenant blog post for local demo verification.
+INSERT OR IGNORE INTO blog_posts
+  (id, organization_id, site_id, title, slug, body, excerpt, category, status,
+   author_id, featured_image_asset_id, published_at, created_at, updated_at,
+   seo_description, seo_keywords, canonical_url, robots, hide_from_nav)
+VALUES (
+  ${sqlValue('blog-demo-wood-fired-guide')},
+  ${sqlValue('org-demo')},
+  ${sqlValue('site-demo')},
+  ${sqlValue('How We Build a Wood-Fired Pizza Night')},
+  ${sqlValue('how-we-build-a-wood-fired-pizza-night')},
+  ${sqlValue(`# How We Build a Wood-Fired Pizza Night
+
+At Ember & Slice, a great pizza night starts long before the oven is lit.
+
+## Start with the dough
+
+We cold-ferment our dough so it bakes with a light, airy rim and a crisp base.
+
+## Build the room around the oven
+
+The menu, music, and pacing of service all revolve around the heat and rhythm of the oven.
+
+## Finish with neighborhood hospitality
+
+We want the room to feel energetic but never rushed, whether you come in for one pie or settle in for the evening.`)},
+  ${sqlValue('A quick behind-the-scenes look at how Ember & Slice builds its signature wood-fired dinner service.')},
+  ${sqlValue('Behind the scenes')},
+  'published',
+  ${sqlValue('user-demo')},
+  ${sqlValue('media-demo-hero')},
+  ${sqlValue(publishedAt)},
+  ${sqlValue(publishedAt)},
+  ${sqlValue(publishedAt)},
+  ${sqlValue('Behind the scenes at Ember & Slice: dough, oven rhythm, and the service details that shape our wood-fired pizza nights.')},
+  ${sqlValue('wood-fired pizza, restaurant blog, brooklyn pizza, behind the scenes')},
+  NULL,
+  ${sqlValue('index,follow')},
+  0
+);
+-- END GENERATED: demo_blog`
+}
+
 export function renderCompiledDemoExperienceSeedBlock(): string {
   const experienceRows = compiledDemoSeed.experiences
     .map((experience) => `  (${[

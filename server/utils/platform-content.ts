@@ -944,16 +944,21 @@ export function attachFeaturedImageFromBareJoin(record: ApiRecord) {
   }
 }
 
-function contentReviewUrls(record: ApiRecord, kind: 'blog' | 'doc') {
+function contentReviewUrls(record: ApiRecord, kind: 'blog' | 'doc', siteId: string | null = null) {
   const id = String(record.id ?? '')
   const adminEditUrl = kind === 'blog' ? `/admin/blog/${id}` : `/admin/docs/${id}`
   const isPublished = record.status === 'published' || Boolean(record.published_at)
   const category = typeof record.category === 'string' ? record.category : null
   const slug = typeof record.slug === 'string' ? record.slug : null
   const categorySlug = kind === 'blog' ? blogCategoryToSlug(category) : categoryToSlug(category)
-  const publicPath = isPublished && categorySlug && slug
-    ? (kind === 'blog' ? `/blog/${categorySlug}/${slug}` : `/docs/${categorySlug}/${slug}`)
-    : null
+  const publicPath = (() => {
+    if (!isPublished || !slug) return null
+    if (kind === 'blog') {
+      if (siteId) return `/blog/${slug}`
+      return categorySlug ? `/blog/${categorySlug}/${slug}` : null
+    }
+    return categorySlug ? `/docs/${categorySlug}/${slug}` : null
+  })()
 
   return {
     ...record,
@@ -1224,7 +1229,7 @@ export async function listPlatformBlogPosts(db: DbClient, status?: string | null
   else if (status === 'draft') sql += " AND p.status = 'draft'"
   sql += ' ORDER BY COALESCE(p.featured_order, 999999), COALESCE(p.nav_section_order, 999999), COALESCE(p.nav_section, p.category), COALESCE(p.nav_order, 999999), p.created_at DESC'
   const results = await queryAll<ApiRecord>(db, sql, params)
-  return (results ?? []).map(record => contentReviewUrls(attachFeaturedImage(attachPublished(record, Boolean(record.published_at))), 'blog'))
+  return (results ?? []).map(record => contentReviewUrls(attachFeaturedImage(attachPublished(record, Boolean(record.published_at))), 'blog', siteId))
 }
 
 export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, siteId: string | null = null) {
@@ -1244,7 +1249,37 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
   )
   if (!post) notFound('Post not found')
   const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'blog_post', postId))
-  return attachComponents(contentReviewUrls(attachFeaturedImage(attachPublished(post, Boolean(post.published_at))), 'blog'), components)
+  return attachComponents(contentReviewUrls(attachFeaturedImage(attachPublished(post, Boolean(post.published_at))), 'blog', siteId), components)
+}
+
+export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slug: string) {
+  const post = await queryFirst<ApiRecord>(db, `
+    SELECT
+      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_description, p.seo_keywords,
+      p.canonical_url, p.robots,
+      p.published_at, p.created_at, p.updated_at,
+      p.featured_image_asset_id,
+      u.name AS author_name,
+      u.image AS author_image,
+      ma.public_url,
+      ma.kind,
+      ma.width,
+      ma.height
+    FROM blog_posts p
+    LEFT JOIN user u ON u.id = p.author_id
+    LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
+    WHERE p.slug = ? AND p.site_id = ? AND p.status = 'published'
+    LIMIT 1
+  `, [slug, siteId])
+
+  if (!post) return null
+
+  const components = await resolveContentComponentsMedia(
+    db,
+    await listContentComponents(db, 'blog_post', String(post.id), { activeOnly: true }),
+  )
+
+  return attachFeaturedImageFromBareJoin({ ...post, components })
 }
 
 export async function createPlatformBlogPost(

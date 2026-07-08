@@ -78,6 +78,7 @@ export const locationObject = {
     hero_image_asset_id: { type: ['string', 'null'] },
     hero_video_asset_id: { type: ['string', 'null'] },
     notification_phone: { type: ['string', 'null'], description: 'WhatsApp number for internal booking/reservation alerts to this location\'s manager. Not shown to guests. Falls back to the site-level whatsapp_phone if null.' },
+    timezone: { type: ['string', 'null'], description: 'IANA time zone identifier for this location, e.g. Asia/Bangkok. Used to interpret opening hours and booking slots.' },
     facebook_url: { type: ['string', 'null'] },
     instagram_url: { type: ['string', 'null'] },
     tiktok_url: { type: ['string', 'null'] },
@@ -96,6 +97,20 @@ export const locationMutationResultObject = {
     location: locationObject,
   },
   required: ['success', 'location'],
+}
+
+export const locationMutationSummaryObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['location'] },
+    id: { type: 'string' },
+    slug: { type: 'string' },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
 }
 
 export const menuItemObject = {
@@ -132,6 +147,33 @@ export const menuItemObject = {
   required: ['id', 'menu_id', 'section', 'name', 'slug', 'available', 'featured', 'featured_sort_order', 'sort_order', 'created_at', 'updated_at'],
 }
 
+export const menuMutationResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['menu'] },
+    id: { type: 'string' },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
+}
+
+export const menuItemMutationResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['menu_item'] },
+    id: { type: 'string' },
+    slug: { type: 'string' },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
+}
+
 export const menuObject = {
   type: 'object',
   properties: {
@@ -151,6 +193,21 @@ export const menuObject = {
       },
     },
   },
+}
+
+export const blogPostMutationResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['blog_post'] },
+    id: { type: 'string' },
+    slug: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
 }
 
 export const blogPostObject = {
@@ -181,11 +238,56 @@ export const blogPostObject = {
     seo_keywords: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
     robots: { type: ['string', 'null'] },
+    author_name: { type: ['string', 'null'] },
     published: { type: 'boolean' },
     published_at: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
+    featured_image: {
+      type: ['object', 'null'],
+      properties: {
+        asset_id: { type: ['string', 'null'] },
+        public_url: { type: ['string', 'null'] },
+        kind: { type: ['string', 'null'] },
+        width: { type: ['number', 'null'] },
+        height: { type: ['number', 'null'] },
+      },
+    },
+    admin_edit_url: { type: ['string', 'null'] },
+    public_path: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    preview_url: { type: ['string', 'null'] },
+    view_url: { type: ['string', 'null'] },
   },
+}
+
+export const postMutationResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['post'] },
+    id: { type: 'string' },
+    slug: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
+}
+
+export const postPublishResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['post'] },
+    id: { type: 'string' },
+    slug: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    channels: { type: 'array', items: { type: 'string' } },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
 }
 
 export const postObject = {
@@ -208,7 +310,9 @@ export const postObject = {
     scheduled_for: { type: ['string', 'null'] },
     published_at: { type: ['string', 'null'] },
     public_path: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
+    view_url: { type: ['string', 'null'] },
     seo_title: { type: ['string', 'null'] },
     seo_description: { type: ['string', 'null'] },
     og_image_asset_id: { type: ['string', 'null'] },
@@ -358,9 +462,27 @@ export const experienceObject = {
     featured_sort_order: { type: 'number' },
     seo_title: { type: ['string', 'null'] },
     seo_description: { type: ['string', 'null'] },
+    public_path: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    view_url: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
   },
+}
+
+export const experienceMutationResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['experience'] },
+    id: { type: 'string' },
+    slug: { type: 'string' },
+    public_url: { type: ['string', 'null'] },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
 }
 
 export const experienceStatusSchema = { type: 'string', enum: [...EXPERIENCE_STATUSES] }
@@ -656,6 +778,7 @@ export const workspaceContextObject = {
     site_id: { type: ['string', 'null'] },
     site_name: { type: ['string', 'null'] },
     site_subdomain: { type: ['string', 'null'] },
+    site_public_url: { type: ['string', 'null'] },
     location_id: { type: ['string', 'null'] },
     location_slug: { type: ['string', 'null'] },
     location_title: { type: ['string', 'null'] },

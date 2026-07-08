@@ -5,6 +5,9 @@ Notes from live-debugging the MCP OAuth "session terminated" incident
 exact account/zone identifiers so the next debugging session doesn't have to
 rediscover them.
 
+For the compact reconnect triage flow, start with
+[docs/mcp-auth-debugging.md](./mcp-auth-debugging.md).
+
 ## Credentials
 
 `CLOUDFLARE_API_TOKEN` is in `.env` (not `CLOUDFLARE_ACCOUNT_ID` — that var is
@@ -152,3 +155,8 @@ and unverified `claimed_aud`/`claimed_iss`/`claimed_exp_iso`/etc. decoded
 straight from a rejected JWT's payload — added specifically so an
 audience/expiry/issuer mismatch is visible in the log line itself instead of
 requiring a second round of guessing.
+
+In parallel, `mcp_tool_call_events.error_message` now carries coarse auth
+reason strings such as `credential_missing`, `credential_rejected:
+invalid_token`, and `credential_rejected: insufficient_scope`, which makes D1
+useful as the first-stop history before escalating to Logs UI.

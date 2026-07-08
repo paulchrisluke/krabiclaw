@@ -173,22 +173,5 @@ const avgRating = computed(() => {
   return (rated.reduce((s, l) => s + (l.rating ?? 0), 0) / rated.length).toFixed(1)
 })
 
-const EVENT_LABELS: Record<string, string> = {
-  'post.published': 'Published a post', 'menu.item_added': 'Added a menu item',
-  'menu.item_updated': 'Updated a menu item', 'content.updated': 'Updated content',
-  'media.uploaded': 'Uploaded media', 'review.received': 'New review received',
-  'reservation.created': 'New reservation', 'location.created': 'Added a location',
-  'location.gmb_connected': 'Connected Google Business',
-}
-function eventLabel(type: string) { return EVENT_LABELS[type] ?? type.replace('.', ' ') }
-function timeAgo(dateStr: string) {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  return days < 30 ? `${days}d ago` : new Date(dateStr).toLocaleDateString()
-}
+const { eventLabel, timeAgo } = useSiteEventLabels()
 </script>

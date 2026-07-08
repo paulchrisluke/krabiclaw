@@ -3,25 +3,36 @@ import { createExperience, deleteExperience, getExperienceBookingsSummary, getEx
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
-import { NOT_HANDLED, expandSlotGeneratorArgs, loadSiteSettings, mutationContextPayload, objectArray, omit, optionalDaysWindow, optionalString, requireActiveImageAsset, requireActiveVideoAsset, requiredString } from './shared'
+import { attachViewUrlToRecord, NOT_HANDLED, expandSlotGeneratorArgs, loadSiteSettings, mutationContextPayload, objectArray, omit, optionalDaysWindow, optionalString, requireActiveImageAsset, requireActiveVideoAsset, requiredString } from './shared'
+
+function attachExperienceViewUrl(experience: object, site: McpExecutorContext["site"]) {
+  const experienceRecord = experience as Record<string, unknown>;
+  const slug = typeof experienceRecord.slug === "string" ? experienceRecord.slug.trim() : "";
+  return attachViewUrlToRecord(experience, site, {
+    publicPath: slug ? `/experiences/${slug}` : null,
+  }, site.env);
+}
 
 export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
   switch (toolName) {
     case "list_experiences":
       return {
-        experiences: await listExperiences(site.db, site.siteId, {
+        experiences: (await listExperiences(site.db, site.siteId, {
           locationId: optionalString(args, "location_id") ?? undefined,
-        }),
+        })).map((experience) => attachExperienceViewUrl(experience, site)),
       };
     case "get_experience":
-      return {
-        experience: await getExperienceById(
+      {
+        const experience = await getExperienceById(
           site.db,
           site.siteId,
           requiredString(args, "experience_id"),
-        ),
-      };
+        );
+        return {
+          experience: experience ? attachExperienceViewUrl(experience, site) : null,
+        };
+      }
     case "create_experience": {
       const ceArgs = expandSlotGeneratorArgs(args as Record<string, unknown>);
       const priceAmountRaw = ceArgs.price_amount;
@@ -55,10 +66,21 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
           },
           site.userId,
         );
-      return {
-        experience,
-        context: await mutationContextPayload(site, { locationId }),
-      };
+      const hydrated = attachExperienceViewUrl(experience, site);
+      const context = await mutationContextPayload(site, { locationId });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "experience",
+          id: experience.id,
+          slug: experience.slug,
+          public_url: hydrated.public_url,
+          updated_at: experience.updated_at,
+          context,
+        },
+        `Created experience "${experience.title}".`,
+        { experience: hydrated },
+      );
     }
     case "update_experience": {
       const ueArgs = expandSlotGeneratorArgs(omit(args, ["experience_id"]) as Record<string, unknown>);
@@ -84,15 +106,27 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
               : {}),
           },
         );
-      return {
-        experience,
-        context: await mutationContextPayload(site, {
-          locationId:
-            experience && typeof experience.location_id === "string"
-              ? experience.location_id
-              : null,
-        }),
-      };
+      if (!experience) {
+        return renderStructuredResponse(
+          { ok: false, entity: "experience", id: requiredString(args, "experience_id") },
+          "No experience found with that id or slug — nothing was changed.",
+        );
+      }
+      const hydrated = attachExperienceViewUrl(experience, site);
+      const context = await mutationContextPayload(site, { locationId: experience.location_id });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "experience",
+          id: experience.id,
+          slug: experience.slug,
+          changed_fields: Object.keys(omit(args, ["experience_id"])),
+          updated_at: experience.updated_at,
+          context,
+        },
+        `Updated "${experience.title}".`,
+        { experience: hydrated },
+      );
     }
     case "set_experience_image": {
       const assetId = requiredString(args, "asset_id");
@@ -103,15 +137,25 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
           requiredString(args, "experience_id"),
           { image_asset_id: assetId },
         );
-      return {
-        experience,
-        context: await mutationContextPayload(site, {
-          locationId:
-            experience && typeof experience.location_id === "string"
-              ? experience.location_id
-              : null,
-        }),
-      };
+      if (!experience) {
+        return renderStructuredResponse(
+          { ok: false, entity: "experience", id: requiredString(args, "experience_id") },
+          "No experience found with that id or slug — nothing was changed.",
+        );
+      }
+      const hydratedImageExperience = attachExperienceViewUrl(experience, site);
+      const setImageExperienceContext = await mutationContextPayload(site, { locationId: experience.location_id });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "experience",
+          id: experience.id,
+          updated_at: experience.updated_at,
+          context: setImageExperienceContext,
+        },
+        `Updated image for "${experience.title}".`,
+        { experience: hydratedImageExperience },
+      );
     }
     case "set_experience_video": {
       const assetId = requiredString(args, "asset_id");
@@ -122,12 +166,25 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
           requiredString(args, "experience_id"),
           { video_asset_id: assetId },
         );
-      return {
-        experience,
-        context: await mutationContextPayload(site, {
-          locationId: experience && typeof experience.location_id === "string" ? experience.location_id : null,
-        }),
-      };
+      if (!experience) {
+        return renderStructuredResponse(
+          { ok: false, entity: "experience", id: requiredString(args, "experience_id") },
+          "No experience found with that id or slug — nothing was changed.",
+        );
+      }
+      const hydratedVideoExperience = attachExperienceViewUrl(experience, site);
+      const setVideoExperienceContext = await mutationContextPayload(site, { locationId: experience.location_id });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "experience",
+          id: experience.id,
+          updated_at: experience.updated_at,
+          context: setVideoExperienceContext,
+        },
+        `Updated video for "${experience.title}".`,
+        { experience: hydratedVideoExperience },
+      );
     }
     case "open_experience_media_upload": {
       const experienceId = requiredString(args, "experience_id");
@@ -170,12 +227,25 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
         );
       }
       const experience = await updateExperience(site.db, site.siteId, experienceId, { images });
-      return {
-        experience,
-        context: await mutationContextPayload(site, {
-          locationId: experience && typeof experience.location_id === "string" ? experience.location_id : null,
-        }),
-      };
+      if (!experience) {
+        return renderStructuredResponse(
+          { ok: false, entity: "experience", id: experienceId },
+          "No experience found with that id or slug — nothing was changed.",
+        );
+      }
+      const hydratedGalleryExperience = attachExperienceViewUrl(experience, site);
+      const reorderGalleryContext = await mutationContextPayload(site, { locationId: experience.location_id });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "experience",
+          id: experience.id,
+          updated_at: experience.updated_at,
+          context: reorderGalleryContext,
+        },
+        `Reordered gallery for "${experience.title}".`,
+        { experience: hydratedGalleryExperience },
+      );
     }
     case "delete_experience":
       return {

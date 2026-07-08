@@ -170,7 +170,7 @@ async function createLocation(headers, siteId) {
     title: `MCP Image Check Location ${Date.now()}`,
   })
   expectStatus('create_location succeeds', response)
-  const locationId = data(response.body)?.location?.id
+  const locationId = data(response.body)?.id
   expectValue('create_location returns location id', Boolean(locationId), response.body)
   return locationId
 }
@@ -181,7 +181,7 @@ async function createMenuAndItem(headers, siteId) {
     name: `MCP Image Menu ${Date.now()}`,
   })
   expectStatus('create_menu succeeds', menu)
-  const menuId = data(menu.body)?.menu?.id
+  const menuId = data(menu.body)?.id
   expectValue('create_menu returns menu id', Boolean(menuId), menu.body)
 
   const item = await mcp(headers, 'create_menu_item', {
@@ -193,9 +193,9 @@ async function createMenuAndItem(headers, siteId) {
     price_amount: '12.00',
   })
   expectStatus('create_menu_item succeeds', item)
-  const itemId = data(item.body)?.item?.id
+  const itemId = data(item.body)?.id
   expectValue('create_menu_item returns item id', Boolean(itemId), item.body)
-  return { itemId }
+  return { menuId, itemId }
 }
 
 async function createPost(headers, siteId) {
@@ -205,7 +205,7 @@ async function createPost(headers, siteId) {
     body: 'Post used for image tool coverage',
   })
   expectStatus('create_post succeeds', response)
-  const postId = data(response.body)?.post?.id
+  const postId = data(response.body)?.id
   expectValue('create_post returns post id', Boolean(postId), response.body)
   return postId
 }
@@ -218,7 +218,7 @@ async function createExperience(headers, siteId) {
     status: 'active',
   })
   expectStatus('create_experience succeeds', response)
-  const experienceId = data(response.body)?.experience?.id
+  const experienceId = data(response.body)?.id
   expectValue('create_experience returns experience id', Boolean(experienceId), response.body)
   return experienceId
 }
@@ -250,7 +250,7 @@ async function main() {
   expectStatus('set_workspace_context with location succeeds', workspaceSet)
   const workspacePayload = data(workspaceSet.body)
   expectValue('workspace context stores active location', workspacePayload?.context?.location_id === locationId, workspacePayload)
-  const { itemId } = await createMenuAndItem(headers, siteId)
+  const { menuId, itemId } = await createMenuAndItem(headers, siteId)
   const postId = await createPost(headers, siteId)
   const experienceId = await createExperience(headers, siteId)
 
@@ -291,7 +291,7 @@ async function main() {
     location_id: locationId,
     asset_id: assetId,
   }, (payload) => {
-    expectValue('set_location_hero_image updates location hero', payload?.location?.hero_image_asset_id === assetId, payload)
+    expectValue('set_location_hero_image returns location id', payload?.id === locationId, payload)
     expectValue('set_location_hero_image returns location context', payload?.context?.location_id === locationId, payload)
   })
 
@@ -300,7 +300,7 @@ async function main() {
     menu_item_id: itemId,
     asset_id: assetId,
   }, (payload) => {
-    expectValue('set_menu_item_image updates menu item image', payload?.item?.image_asset_id === assetId, payload)
+    expectValue('set_menu_item_image returns item id', payload?.id === itemId, payload)
     expectValue('set_menu_item_image returns site context', payload?.context?.site_id === siteId, payload)
   })
 
@@ -309,7 +309,7 @@ async function main() {
     post_id: postId,
     asset_id: assetId,
   }, (payload) => {
-    expectValue('set_post_image updates post image', payload?.post?.image_asset_id === assetId, payload)
+    expectValue('set_post_image returns post id', payload?.id === postId, payload)
     expectValue('set_post_image returns site context', payload?.context?.site_id === siteId, payload)
   })
 
@@ -318,9 +318,39 @@ async function main() {
     experience_id: experienceId,
     asset_id: assetId,
   }, (payload) => {
-    expectValue('set_experience_image updates experience image', payload?.experience?.image_asset_id === assetId, payload)
+    expectValue('set_experience_image returns experience id', payload?.id === experienceId, payload)
     expectValue('set_experience_image returns site context', payload?.context?.site_id === siteId, payload)
   })
+
+  const locationRead = await mcp(headers, 'get_location', {
+    site_id: siteId,
+    location_id: locationId,
+  })
+  expectStatus('get_location succeeds', locationRead)
+  expectValue('set_location_hero_image updates location hero', data(locationRead.body)?.location?.hero_image_asset_id === assetId, data(locationRead.body))
+
+  const menuRead = await mcp(headers, 'get_menu', {
+    site_id: siteId,
+    menu_id: menuId,
+  })
+  const menuReadPayload = data(menuRead.body)?.menu
+  const menuItem = menuReadPayload?.items?.find((item) => item.id === itemId)
+  expectStatus('get_menu for image verification succeeds', menuRead)
+  expectValue('set_menu_item_image updates menu item image', menuItem?.image_asset_id === assetId, menuItem)
+
+  const postRead = await mcp(headers, 'get_post', {
+    site_id: siteId,
+    post_id: postId,
+  })
+  expectStatus('get_post succeeds', postRead)
+  expectValue('set_post_image updates post image', data(postRead.body)?.post?.image_asset_id === assetId, data(postRead.body))
+
+  const experienceRead = await mcp(headers, 'get_experience', {
+    site_id: siteId,
+    experience_id: experienceId,
+  })
+  expectStatus('get_experience succeeds', experienceRead)
+  expectValue('set_experience_image updates experience image', data(experienceRead.body)?.experience?.image_asset_id === assetId, data(experienceRead.body))
 
   process.exit(failed ? 1 : 0)
 }

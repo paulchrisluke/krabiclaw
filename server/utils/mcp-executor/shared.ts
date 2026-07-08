@@ -785,6 +785,7 @@ export function workspaceContextPayload(
   organization: Awaited<ReturnType<typeof resolveMcpWorkspace>>["organization"],
   site: McpSiteSummary | null,
   location: McpLocationSummary | null,
+  env?: { NUXT_PUBLIC_FREE_SITE_DOMAIN?: string },
 ) {
   return {
     organization_id: organization?.id ?? site?.organization_id ?? null,
@@ -793,9 +794,113 @@ export function workspaceContextPayload(
     site_id: site?.id ?? null,
     site_name: site?.brand_name ?? site?.subdomain ?? null,
     site_subdomain: site?.subdomain ?? null,
+    site_public_url: resolveSitePublicOrigin(site, env),
     location_id: location?.id ?? null,
     location_slug: location?.slug ?? null,
     location_title: location?.title ?? null,
+  };
+}
+
+function normalizeAbsoluteUrl(value: string | null | undefined): string | null {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (!trimmed) return null;
+  if (!/^https?:\/\//i.test(trimmed)) return null;
+  return trimmed.replace(/\/$/, "");
+}
+
+function normalizeHostname(value: string | null | undefined): string | null {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (!trimmed) return null;
+  return trimmed.replace(/^https?:\/\//i, "").replace(/\/$/, "");
+}
+
+export function resolveSitePublicOrigin(
+  site:
+    | Pick<McpSiteSummary, "public_url" | "custom_domain" | "subdomain">
+    | { publicUrl?: string | null; customDomain?: string | null; subdomain?: string | null }
+    | null
+    | undefined,
+  env?: { NUXT_PUBLIC_FREE_SITE_DOMAIN?: string },
+): string | null {
+  const siteRecord = (site ?? {}) as {
+    public_url?: string | null;
+    custom_domain?: string | null;
+    publicUrl?: string | null;
+    customDomain?: string | null;
+    subdomain?: string | null;
+  };
+  const explicitPublicUrl = normalizeAbsoluteUrl(
+    siteRecord.public_url ?? siteRecord.publicUrl,
+  );
+  if (explicitPublicUrl) return explicitPublicUrl;
+
+  const customDomain = normalizeHostname(
+    siteRecord.custom_domain ?? siteRecord.customDomain,
+  );
+  if (customDomain) return `https://${customDomain}`;
+
+  const subdomain = typeof siteRecord.subdomain === "string" ? siteRecord.subdomain.trim() : "";
+  if (subdomain) {
+    const baseDomain = env?.NUXT_PUBLIC_FREE_SITE_DOMAIN
+      ? env.NUXT_PUBLIC_FREE_SITE_DOMAIN.replace(/^https?:\/\//, '').replace(/\/$/, '')
+      : 'krabiclaw.com';
+    return `https://${subdomain}.${baseDomain}`;
+  }
+
+  return null;
+}
+
+export function absolutizeSiteUrl(
+  site:
+    | Pick<McpSiteSummary, "public_url" | "custom_domain" | "subdomain">
+    | { publicUrl?: string | null; customDomain?: string | null; subdomain?: string | null }
+    | null
+    | undefined,
+  value: string | null | undefined,
+  env?: { NUXT_PUBLIC_FREE_SITE_DOMAIN?: string },
+): string | null {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+
+  const origin = resolveSitePublicOrigin(site, env);
+  if (!origin) return null;
+
+  if (trimmed.startsWith("/")) return `${origin}${trimmed}`;
+  return `${origin}/${trimmed.replace(/^\/+/, "")}`;
+}
+
+export function attachViewUrlToRecord<T extends object>(
+  record: T,
+  site:
+    | Pick<McpSiteSummary, "public_url" | "custom_domain" | "subdomain">
+    | { publicUrl?: string | null; customDomain?: string | null; subdomain?: string | null }
+    | null
+    | undefined,
+  options: {
+    publicPath?: string | null;
+  } = {},
+  env?: { NUXT_PUBLIC_FREE_SITE_DOMAIN?: string },
+): T & { public_path?: string | null; public_url: string | null; view_url: string | null } {
+  const recordShape = record as Record<string, unknown>;
+  const explicitPublicPath =
+    options.publicPath !== undefined
+      ? options.publicPath
+      : (typeof recordShape.public_path === "string" ? recordShape.public_path : null);
+  const canonicalUrl =
+    typeof recordShape.canonical_url === "string" ? recordShape.canonical_url : null;
+  const existingPublicUrl =
+    typeof recordShape.public_url === "string" ? recordShape.public_url : null;
+  const viewUrl =
+    canonicalUrl && /^https?:\/\//i.test(canonicalUrl)
+      ? canonicalUrl
+      : absolutizeSiteUrl(site, explicitPublicPath ?? existingPublicUrl, env);
+
+  return {
+    ...record,
+    ...(options.publicPath !== undefined ? { public_path: explicitPublicPath } : {}),
+    public_url: viewUrl,
+    view_url: viewUrl,
   };
 }
 
@@ -810,6 +915,7 @@ export function workspaceOrganizationsPayload(
 
 export function workspaceSitesPayload(
   workspace: Awaited<ReturnType<typeof resolveMcpWorkspace>>,
+  env?: { NUXT_PUBLIC_FREE_SITE_DOMAIN?: string },
 ) {
   return workspace.sites.map((site) => ({
     id: site.id,
@@ -818,9 +924,7 @@ export function workspaceSitesPayload(
     name: site.brand_name ?? site.subdomain ?? site.id,
     subdomain: site.subdomain ?? "",
     orgSlug: site.organization_slug ?? "",
-    publicUrl:
-      site.public_url ??
-      (site.subdomain ? `https://${site.subdomain}.krabiclaw.com` : null),
+    publicUrl: resolveSitePublicOrigin(site, env),
     status: site.status ?? "draft",
     active: site.id === workspace.site?.id,
   }));
