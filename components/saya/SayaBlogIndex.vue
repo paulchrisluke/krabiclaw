@@ -71,8 +71,8 @@ interface TenantBlogPost {
   category?: string | null
   author_name?: string | null
   updated_at?: string | null
-  body?: string | null
   published_at?: string | null
+  read_time_minutes?: number | null
   featured_image?: { public_url: string | null; kind: string | null } | null
 }
 
@@ -86,8 +86,12 @@ const { blogList, error, pending } = useBootstrap()
 const posts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 
 function estimateReadTime(post: TenantBlogPost) {
-  const text = `${post.excerpt ?? ''} ${post.body ?? ''}`.trim()
-  const words = text.split(/\s+/).filter(Boolean).length
+  if (typeof post.read_time_minutes === 'number' && post.read_time_minutes > 0) {
+    return post.read_time_minutes
+  }
+  // Fallback for payloads that predate read_time_minutes — still an
+  // underestimate since only the excerpt is available here, not the full body.
+  const words = (post.excerpt ?? '').trim().split(/\s+/).filter(Boolean).length
   return Math.max(1, Math.ceil(words / 160))
 }
 

@@ -96,6 +96,13 @@ function normalizeQuery(query: string) {
   return query.trim()
 }
 
+// SQLite LIKE treats '%' and '_' as wildcards even inside a bound parameter, so a
+// literal search term containing them (e.g. "50% off") must have those escaped —
+// paired with `ESCAPE '\'` on every LIKE predicate that uses this.
+function escapeLikePattern(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
+}
+
 function searchNamespace(env: CloudflareEnv) {
   const binding = env.AI_SEARCH as AiSearchNamespace | undefined
   if (!binding) {
@@ -241,7 +248,10 @@ function normalizeTenantBlogSearchResults(
       surface: options.surface,
       section: post.category || 'Blog',
       icon: 'newspaper',
-      score: Math.max(0.25, 0.95 - (index * 0.05)),
+      // These are plain SQL LIKE substring matches, not relevance-ranked — keep the
+      // synthetic score modest (well under the platform instance's AI Search scores)
+      // so keyword-only blog matches don't crowd out genuinely reranked results.
+      score: Math.max(0.15, 0.5 - (index * 0.03)),
     }))
 }
 
@@ -526,6 +536,7 @@ export async function searchPublicResources(
         return [] as TenantBlogSearchRow[]
       }
       try {
+        const likePattern = `%${escapeLikePattern(normalized)}%`
         return await queryAll<TenantBlogSearchRow>(
           env.db,
           `SELECT id, title, slug, body, excerpt, category, seo_description, seo_keywords
@@ -533,23 +544,23 @@ export async function searchPublicResources(
            WHERE status = 'published'
              AND site_id = ?
              AND (
-               lower(title) LIKE lower(?)
-               OR lower(body) LIKE lower(?)
-               OR lower(COALESCE(excerpt, '')) LIKE lower(?)
-               OR lower(COALESCE(category, '')) LIKE lower(?)
-               OR lower(COALESCE(seo_description, '')) LIKE lower(?)
-               OR lower(COALESCE(seo_keywords, '')) LIKE lower(?)
+               lower(title) LIKE lower(?) ESCAPE '\\'
+               OR lower(body) LIKE lower(?) ESCAPE '\\'
+               OR lower(COALESCE(excerpt, '')) LIKE lower(?) ESCAPE '\\'
+               OR lower(COALESCE(category, '')) LIKE lower(?) ESCAPE '\\'
+               OR lower(COALESCE(seo_description, '')) LIKE lower(?) ESCAPE '\\'
+               OR lower(COALESCE(seo_keywords, '')) LIKE lower(?) ESCAPE '\\'
              )
            ORDER BY published_at DESC, updated_at DESC
            LIMIT ?`,
           [
             options.siteId,
-            `%${normalized}%`,
-            `%${normalized}%`,
-            `%${normalized}%`,
-            `%${normalized}%`,
-            `%${normalized}%`,
-            `%${normalized}%`,
+            likePattern,
+            likePattern,
+            likePattern,
+            likePattern,
+            likePattern,
+            likePattern,
             limit,
           ],
         )

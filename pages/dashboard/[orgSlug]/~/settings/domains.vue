@@ -164,6 +164,7 @@ interface Domain {
 
 const toast = useToast()
 const dashboard = useDashboardSite()
+const { trackDomainConnected } = useAnalytics()
 
 const loading = ref(true)
 const domains = ref<Domain[]>([])
@@ -198,6 +199,7 @@ async function addDomain() {
       body: { domain: newDomain.value.trim(), include_www: true }
     })
     domains.value.push(...res.domains)
+    trackDomainConnected(newDomain.value.trim(), siteId.value)
     newDomain.value = ''
     toast.add({ description: 'Domain added — add the DNS records below to complete setup', color: 'success' })
   } catch (err: unknown) {

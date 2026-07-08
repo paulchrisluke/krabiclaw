@@ -1,4 +1,5 @@
 import { useChowBotHistory, type ChowBotConv } from './useChowBotHistory'
+import { useAnalytics } from './useAnalytics'
 
 const MENU_TOOLS = new Set(['create_menu', 'rename_menu', 'rename_menu_section', 'delete_menu_section', 'add_menu_item', 'update_menu_item', 'delete_menu_item', 'sync_menu_items', 'publish_menu', 'add_menu_items_batch', 'delete_menu', 'set_default_currency'])
 
@@ -46,6 +47,7 @@ export const useChowBot = () => {
   })
 
   const { update: updateCredits } = useAiCredits(siteId)
+  const { trackChowbotInteraction } = useAnalytics()
 
   const toggle = () => { isOpen.value = !isOpen.value }
   const open = () => { isOpen.value = true }
@@ -159,6 +161,8 @@ export const useChowBot = () => {
       }]
       return
     }
+
+    trackChowbotInteraction(siteId.value)
 
     // Add user message + streaming placeholder first, then build history
     // (history must include the current user message or the first request sends an empty array)

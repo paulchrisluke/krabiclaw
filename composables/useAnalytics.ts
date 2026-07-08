@@ -18,21 +18,19 @@ declare global {
 export type AnalyticsEventName =
   // User Acquisition & Onboarding
   | 'sign_up'
-  | 'org_created'
   | 'site_created'
   | 'onboarding_completed'
   | 'domain_connected'
   // Billing & Subscription
+  // subscription_created/plan_upgraded/plan_downgraded/subscription_cancelled
+  // fire server-side from server/api/billing/webhook.post.ts via
+  // sendGa4Event (Stripe webhook -> GA4 Measurement Protocol), not from here
+  // — client-side tracking can't see plan changes made through the Stripe
+  // customer portal, or a checkout that completes after the tab closes.
   | 'plan_viewed'
   | 'checkout_started'
-  | 'subscription_created'
-  | 'plan_upgraded'
-  | 'plan_downgraded'
-  | 'subscription_cancelled'
   | 'payment_method_added'
   // Content Creation
-  | 'page_created'
-  | 'page_published'
   | 'menu_item_created'
   | 'menu_imported'
   | 'post_created'
@@ -44,10 +42,8 @@ export type AnalyticsEventName =
   | 'media_library_viewed'
   // Feature Usage
   | 'chowbot_interaction'
-  | 'mcp_tool_used'
   | 'dashboard_visited'
   | 'editor_session_started'
-  | 'ai_feature_used'
   // Engagement
   | 'session_start'
   | 'page_view'
@@ -62,7 +58,6 @@ export interface AnalyticsEventParams {
 
   // User Acquisition
   method?: string // 'oauth_google', 'oauth_github', 'email'
-  org_id?: string
   site_id?: string
   domain?: string
 
@@ -70,7 +65,6 @@ export interface AnalyticsEventParams {
   plan?: string // 'free', 'growth', 'managed', 'seo_accelerator'
   value?: number // monetary value in cents
   currency?: string
-  previous_plan?: string
 
   // Content
   content_type?: string // 'page', 'menu_item', 'post'
@@ -84,9 +78,7 @@ export interface AnalyticsEventParams {
   generation_prompt?: string
 
   // Feature Usage
-  tool_name?: string // MCP tool name
   dashboard_section?: string // 'billing', 'content', 'settings', etc.
-  ai_feature?: string // 'menu_import', 'image_generation', etc.
 
   // Engagement
   page_path?: string
@@ -143,10 +135,6 @@ export const useAnalytics = () => {
     trackEvent('sign_up', { method })
   }
 
-  const trackOrgCreated = (orgId: string) => {
-    trackEvent('org_created', { org_id: orgId })
-  }
-
   const trackSiteCreated = (siteId: string) => {
     trackEvent('site_created', { site_id: siteId })
   }
@@ -168,35 +156,11 @@ export const useAnalytics = () => {
     trackEvent('checkout_started', { plan, value, currency: 'USD' })
   }
 
-  const trackSubscriptionCreated = (plan: string, value: number) => {
-    trackEvent('subscription_created', { plan, value, currency: 'USD' })
-  }
-
-  const trackPlanUpgraded = (plan: string, previousPlan: string, value: number) => {
-    trackEvent('plan_upgraded', { plan, previous_plan: previousPlan, value, currency: 'USD' })
-  }
-
-  const trackPlanDowngraded = (plan: string, previousPlan: string) => {
-    trackEvent('plan_downgraded', { plan, previous_plan: previousPlan })
-  }
-
-  const trackSubscriptionCancelled = (plan: string) => {
-    trackEvent('subscription_cancelled', { plan })
-  }
-
   const trackPaymentMethodAdded = () => {
     trackEvent('payment_method_added', {})
   }
 
   // Content Creation
-  const trackPageCreated = (contentId: string, siteId: string) => {
-    trackEvent('page_created', { content_id: contentId, site_id: siteId, content_type: 'page' })
-  }
-
-  const trackPagePublished = (contentId: string, siteId: string) => {
-    trackEvent('page_published', { content_id: contentId, site_id: siteId, content_type: 'page' })
-  }
-
   const trackMenuItemCreated = (contentId: string, siteId: string) => {
     trackEvent('menu_item_created', { content_id: contentId, site_id: siteId, content_type: 'menu_item' })
   }
@@ -231,20 +195,16 @@ export const useAnalytics = () => {
   }
 
   // Feature Usage
-  const trackMcpToolUsed = (toolName: string, siteId?: string) => {
-    trackEvent('mcp_tool_used', { tool_name: toolName, site_id: siteId })
-  }
-
   const trackDashboardVisited = (section: string, siteId?: string) => {
     trackEvent('dashboard_visited', { dashboard_section: section, site_id: siteId })
   }
 
-  const trackEditorSessionStarted = (siteId: string) => {
-    trackEvent('editor_session_started', { site_id: siteId })
+  const trackChowbotInteraction = (siteId?: string) => {
+    trackEvent('chowbot_interaction', { site_id: siteId })
   }
 
-  const trackAiFeatureUsed = (feature: string, siteId: string) => {
-    trackEvent('ai_feature_used', { ai_feature: feature, site_id: siteId })
+  const trackEditorSessionStarted = (siteId: string) => {
+    trackEvent('editor_session_started', { site_id: siteId })
   }
 
   // Engagement
@@ -272,19 +232,12 @@ export const useAnalytics = () => {
   return {
     trackEvent,
     trackSignUp,
-    trackOrgCreated,
     trackSiteCreated,
     trackOnboardingCompleted,
     trackDomainConnected,
     trackPlanViewed,
     trackCheckoutStarted,
-    trackSubscriptionCreated,
-    trackPlanUpgraded,
-    trackPlanDowngraded,
-    trackSubscriptionCancelled,
     trackPaymentMethodAdded,
-    trackPageCreated,
-    trackPagePublished,
     trackMenuItemCreated,
     trackMenuImported,
     trackPostCreated,
@@ -293,10 +246,9 @@ export const useAnalytics = () => {
     trackVideoUploaded,
     trackMediaGenerated,
     trackMediaLibraryViewed,
-    trackMcpToolUsed,
     trackDashboardVisited,
+    trackChowbotInteraction,
     trackEditorSessionStarted,
-    trackAiFeatureUsed,
     trackSessionStart,
     trackPageView,
     trackTimeOnPage,

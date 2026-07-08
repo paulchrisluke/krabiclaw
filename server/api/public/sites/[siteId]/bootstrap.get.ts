@@ -630,9 +630,12 @@ export default defineEventHandler(async (event) => {
 
   if (dataType === "blog" || page === "home")
     idxBlogList = push(
+      // read_time_minutes approximates words as body length / 5 chars at 200wpm —
+      // avoids shipping the full post body to list views just to estimate read time.
       `SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords,
               p.canonical_url, p.robots, p.published_at, p.updated_at, u.name AS author_name, p.featured_image_asset_id,
-              ma.public_url, ma.kind, ma.width, ma.height
+              ma.public_url, ma.kind, ma.width, ma.height,
+              CAST(MAX(1, ROUND((LENGTH(p.body) / 5.0) / 200.0)) AS INTEGER) AS read_time_minutes
        FROM blog_posts p
        LEFT JOIN user u ON u.id = p.author_id
        LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'

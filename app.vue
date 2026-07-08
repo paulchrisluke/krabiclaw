@@ -68,6 +68,12 @@ declare global {
 // passive fallback) to avoid blocking LCP/FCP/TTI. See the note below for why
 // requestIdleCallback was removed.
 if (import.meta.client) {
+  // Declared synchronously, before anything else runs, so any consumer can
+  // safely read/push into window.krabiLayer from the first tick — the same
+  // guarantee GTM's own dataLayer snippet makes. Events queued here are
+  // forwarded to GA4 once installKrabiLayerBridge runs (see flushKrabiLayer).
+  window.krabiLayer = window.krabiLayer || []
+
   const installKrabiLayerBridge = () => {
     const queue = window.krabiLayer || []
     const currentPush = queue.push.bind(queue)

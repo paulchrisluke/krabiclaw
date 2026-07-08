@@ -19,13 +19,19 @@
 // entirely on the single-site auto-resolve fallback in dashboard-context.ts.)
 export default defineNuxtPlugin(() => {
   const route = useRoute()
-  
+
   // Only run on dashboard routes — early exit for platform/tenant pages
   if (!route.path.startsWith('/dashboard')) return
 
   // Captured once, synchronously, while still inside the Nuxt app context for this
   // request/app instance — `route` stays a live reactive ref we can read later from
   // inside onRequest, where calling useRoute() again would be outside that context.
+
+  // api_error tracking is bundled into this same override rather than a second
+  // plugin overriding globalThis.$fetch — stacking two independent `.create()`
+  // overrides here is fragile (composition depends on plugin load order), so
+  // every dashboard-wide $fetch concern lives in this one place.
+  const { trackApiError } = useAnalytics()
 
   globalThis.$fetch = $fetch.create({
     onRequest({ request, options }) {
@@ -35,6 +41,15 @@ export default defineNuxtPlugin(() => {
       const headers = new Headers(options.headers as HeadersInit)
       headers.set('x-dashboard-site-slug', siteSlug)
       options.headers = headers
+    },
+    onResponseError({ request, response }) {
+      const endpoint = typeof request === 'string' ? request : String(request)
+      const message = typeof response._data?.message === 'string'
+        ? response._data.message
+        : typeof response._data?.error === 'string'
+          ? response._data.error
+          : undefined
+      trackApiError(endpoint, response.status, message)
     },
   })
 })
