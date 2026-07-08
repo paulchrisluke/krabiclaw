@@ -1241,6 +1241,11 @@ async function executeTool(
       const reviewCountCreate = getToolInteger(input, "review_count");
       if (reviewCountCreate !== undefined && reviewCountCreate !== null && reviewCountCreate < 0)
         return { error: "review_count must be non-negative." };
+      if (input.max_capacity !== undefined && getToolInteger(input, "max_capacity") === undefined)
+        return { error: "max_capacity must be a valid integer." };
+      const maxCapacityCreate = getToolInteger(input, "max_capacity");
+      if (maxCapacityCreate !== undefined && maxCapacityCreate !== null && maxCapacityCreate < 0)
+        return { error: "max_capacity must be non-negative." };
       const result = await createLocation(
         env,
         db,
@@ -1305,6 +1310,11 @@ async function executeTool(
       const reviewCountUpdate = getToolInteger(input, "review_count");
       if (reviewCountUpdate !== undefined && reviewCountUpdate !== null && reviewCountUpdate < 0)
         return { error: "review_count must be non-negative." };
+      if (input.max_capacity !== undefined && getToolInteger(input, "max_capacity") === undefined)
+        return { error: "max_capacity must be a valid integer." };
+      const maxCapacityUpdate = getToolInteger(input, "max_capacity");
+      if (maxCapacityUpdate !== undefined && maxCapacityUpdate !== null && maxCapacityUpdate < 0)
+        return { error: "max_capacity must be non-negative." };
       const result = await updateLocation(
         db,
         orgId,

@@ -121,8 +121,8 @@ export const LOCATIONS_CHOWBOT_TOOLS: AiTool[] = [
             description: "IANA time zone identifier for this location, e.g. Asia/Bangkok. Used to interpret opening hours and booking slots.",
           },
           max_capacity: {
-            type: "number",
-            description: "Maximum total guests this location can seat per reservation time slot. Reservation slots remain bookable when left unset (no cap enforced) — set it to actually limit how many guests can book the same time slot.",
+            type: ["number", "null"],
+            description: "Maximum total guests this location can seat per reservation time slot. Reservation slots remain bookable when left unset (no cap enforced) — set it to actually limit how many guests can book the same time slot. Pass null to clear it.",
           },
           rating: {
             type: "number",
