@@ -19,7 +19,7 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         { siteId: site.siteId },
       );
       return {
-        context: workspaceContextPayload(workspace.organization, workspace.site, workspace.location),
+        context: workspaceContextPayload(workspace.organization, workspace.site, workspace.location, site.env),
         locations: workspaceLocationsPayload(workspace),
       };
     }
@@ -39,7 +39,7 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
           site.siteId,
             locationId,
           ),
-          context: workspaceContextPayload(workspace.organization, workspace.site, workspace.location),
+          context: workspaceContextPayload(workspace.organization, workspace.site, workspace.location, site.env),
         };
       }
     case "create_location": {

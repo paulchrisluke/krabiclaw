@@ -33,7 +33,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.env,
           optionalString(args, "status") ?? undefined,
           optionalString(args, "location_id") ?? undefined,
-        )).map((post) => attachViewUrlToRecord(post, site)),
+        )).map((post) => attachViewUrlToRecord(post, site, {}, site.env)),
       };
     case "get_post":
       {
@@ -45,7 +45,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.env,
         );
         return {
-          post: post ? attachViewUrlToRecord(post, site) : null,
+          post: post ? attachViewUrlToRecord(post, site, {}, site.env) : null,
         };
       }
     case "create_post":
@@ -59,7 +59,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.env,
         ));
         return {
-          post: attachViewUrlToRecord(post, site),
+          post: attachViewUrlToRecord(post, site, {}, site.env),
           context: await mutationContextPayload(site, {
             locationId: post && typeof post.location_id === "string" ? post.location_id : null,
           }),
@@ -77,7 +77,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.env,
         ));
         return {
-          post: post ? attachViewUrlToRecord(post, site) : null,
+          post: post ? attachViewUrlToRecord(post, site, {}, site.env) : null,
           context: await mutationContextPayload(site, {
             locationId:
               post && typeof post.location_id === "string"
@@ -99,7 +99,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.env,
         ));
       return {
-        post: post ? attachViewUrlToRecord(post, site) : null,
+        post: post ? attachViewUrlToRecord(post, site, {}, site.env) : null,
         context: await mutationContextPayload(site, {
           locationId: post && typeof post.location_id === "string" ? post.location_id : null,
         }),
@@ -250,7 +250,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
 
       const publishedPost = await getPost(site.db, site.organizationId, site.siteId, postId, site.env);
       return {
-        post: publishedPost ? attachViewUrlToRecord(publishedPost, site) : null,
+        post: publishedPost ? attachViewUrlToRecord(publishedPost, site, {}, site.env) : null,
         context: await mutationContextPayload(site, {
           locationId: post && typeof post.location_id === "string" ? post.location_id : null,
         }),

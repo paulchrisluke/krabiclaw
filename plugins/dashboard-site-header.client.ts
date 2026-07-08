@@ -45,12 +45,7 @@ export default defineNuxtPlugin(() => {
     onResponseError({ request, response }) {
       if (typeof request !== 'string' || !request.startsWith('/api/dashboard')) return
       const endpoint = typeof request === 'string' ? request : String(request)
-      const message = typeof response._data?.message === 'string'
-        ? response._data.message
-        : typeof response._data?.error === 'string'
-          ? response._data.error
-          : undefined
-      trackApiError(endpoint, response.status, message)
+      trackApiError(endpoint, response.status, undefined)
     },
   })
 })

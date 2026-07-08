@@ -9,8 +9,17 @@
 export default defineNuxtPlugin((nuxtApp) => {
   const { trackError } = useAnalytics()
 
+  const sanitizeMessage = (raw: unknown): string => {
+    const str = typeof raw === 'string' ? raw : String(raw)
+    // Remove potential sensitive patterns: emails, UUIDs, long tokens
+    return str
+      .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[REDACTED_EMAIL]')
+      .replace(/[a-f0-9]{32,}/g, '[REDACTED_ID]')
+      .slice(0, 200) // Limit length
+  }
+
   nuxtApp.vueApp.config.errorHandler = (err, _instance, info) => {
-    const message = err instanceof Error ? err.message : String(err)
+    const message = sanitizeMessage(err instanceof Error ? err.message : err)
     trackError('vue_error', message, info)
     console.error(err)
   }
@@ -18,7 +27,7 @@ export default defineNuxtPlugin((nuxtApp) => {
   if (import.meta.client) {
     window.addEventListener('unhandledrejection', (event) => {
       const reason = event.reason
-      const message = reason instanceof Error ? reason.message : String(reason)
+      const message = sanitizeMessage(reason instanceof Error ? reason.message : reason)
       trackError('unhandled_rejection', message)
     })
   }

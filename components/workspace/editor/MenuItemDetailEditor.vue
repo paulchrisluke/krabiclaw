@@ -328,8 +328,14 @@ const handleSave = async () => {
         method: 'POST',
         body: payload.value
       })
-      trackMenuItemCreated(String(res.menuItem.id), props.siteId)
-      toast.addToast('Item created', 'success')
+      if (res?.menuItem?.id) {
+        trackMenuItemCreated(String(res.menuItem.id), props.siteId)
+        toast.addToast('Item created', 'success')
+      } else {
+        error.value = 'Invalid response: missing menuItem or id'
+        toast.addToast('Failed to create item', 'error')
+        return
+      }
     }
     await router.push(backPath.value)
   } catch (err) {

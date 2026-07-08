@@ -582,7 +582,7 @@ export async function searchPublicResources(
 
   const merged = new Map<string, PublicSearchResult>()
   for (const result of [...tenantResults, ...platformResults]) {
-    const key = `${result.type}:${result.path}`
+    const key = `${result.type}:${result.id}:${result.path}`
     const current = merged.get(key)
     if (!current || current.score < result.score) merged.set(key, result)
   }

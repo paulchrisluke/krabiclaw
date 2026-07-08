@@ -10,7 +10,7 @@ function attachExperienceViewUrl(experience: object, site: McpExecutorContext["s
   const slug = typeof experienceRecord.slug === "string" ? experienceRecord.slug.trim() : "";
   return attachViewUrlToRecord(experience, site, {
     publicPath: slug ? `/experiences/${slug}` : null,
-  });
+  }, site.env);
 }
 
 export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<unknown> {
@@ -66,10 +66,21 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
           },
           site.userId,
         );
-      return {
-        experience: attachExperienceViewUrl(experience, site),
-        context: await mutationContextPayload(site, { locationId }),
-      };
+      const hydrated = attachExperienceViewUrl(experience, site);
+      const context = await mutationContextPayload(site, { locationId });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "experience",
+          id: experience.id,
+          slug: experience.slug,
+          public_url: hydrated.public_url,
+          updated_at: experience.updated_at,
+          context,
+        },
+        `Created experience "${experience.title}".`,
+        { experience: hydrated },
+      );
     }
     case "update_experience": {
       const ueArgs = expandSlotGeneratorArgs(omit(args, ["experience_id"]) as Record<string, unknown>);
@@ -95,15 +106,27 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
               : {}),
           },
         );
-      return {
-        experience: experience ? attachExperienceViewUrl(experience, site) : null,
-        context: await mutationContextPayload(site, {
-          locationId:
-            experience && typeof experience.location_id === "string"
-              ? experience.location_id
-              : null,
-        }),
-      };
+      if (!experience) {
+        return renderStructuredResponse(
+          { ok: false, entity: "experience", id: requiredString(args, "experience_id") },
+          "No experience found with that id or slug — nothing was changed.",
+        );
+      }
+      const hydrated = attachExperienceViewUrl(experience, site);
+      const context = await mutationContextPayload(site, { locationId: experience.location_id });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "experience",
+          id: experience.id,
+          slug: experience.slug,
+          changed_fields: Object.keys(omit(args, ["experience_id"])),
+          updated_at: experience.updated_at,
+          context,
+        },
+        `Updated "${experience.title}".`,
+        { experience: hydrated },
+      );
     }
     case "set_experience_image": {
       const assetId = requiredString(args, "asset_id");

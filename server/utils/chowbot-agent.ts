@@ -1259,6 +1259,7 @@ async function executeTool(
           short_description: toSqlText(input.short_description) ?? null,
           address: toSqlText(input.address) ?? null,
           opening_hours: toSqlText(input.opening_hours) ?? null,
+          timezone: toSqlText(input.timezone) ?? null,
           rating: getToolNumber(input, "rating") ?? null,
           review_count: getToolInteger(input, "review_count") ?? null,
           price_level: toSqlText(input.price_level) ?? null,
@@ -1334,6 +1335,7 @@ async function executeTool(
             toSqlText(input.hero_video_asset_id) ?? undefined,
           address: toSqlText(input.address) ?? undefined,
           opening_hours: toSqlText(input.opening_hours) ?? undefined,
+          timezone: toSqlText(input.timezone) ?? undefined,
           rating:
             input.rating !== undefined
               ? (getToolNumber(input, "rating") ?? null)

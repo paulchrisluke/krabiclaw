@@ -78,6 +78,7 @@ export const locationObject = {
     hero_image_asset_id: { type: ['string', 'null'] },
     hero_video_asset_id: { type: ['string', 'null'] },
     notification_phone: { type: ['string', 'null'], description: 'WhatsApp number for internal booking/reservation alerts to this location\'s manager. Not shown to guests. Falls back to the site-level whatsapp_phone if null.' },
+    timezone: { type: ['string', 'null'], description: 'IANA time zone identifier for this location, e.g. Asia/Bangkok. Used to interpret opening hours and booking slots.' },
     facebook_url: { type: ['string', 'null'] },
     instagram_url: { type: ['string', 'null'] },
     tiktok_url: { type: ['string', 'null'] },

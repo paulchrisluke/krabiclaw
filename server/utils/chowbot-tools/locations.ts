@@ -27,6 +27,10 @@ export const LOCATIONS_CHOWBOT_TOOLS: AiTool[] = [
             type: "string",
             description: "Opening hours, one line per day.",
           },
+          timezone: {
+            type: "string",
+            description: "IANA time zone identifier for this location, e.g. Asia/Bangkok. Used to interpret opening hours and booking slots.",
+          },
           rating: {
             type: "number",
             description: "Manual review rating from 0 to 5.",
@@ -107,6 +111,10 @@ export const LOCATIONS_CHOWBOT_TOOLS: AiTool[] = [
           opening_hours: {
             type: "string",
             description: "Opening hours, one line per day.",
+          },
+          timezone: {
+            type: "string",
+            description: "IANA time zone identifier for this location, e.g. Asia/Bangkok. Used to interpret opening hours and booking slots.",
           },
           rating: {
             type: "number",

@@ -54,8 +54,12 @@ export default defineNuxtPlugin(() => {
       // sessionStorage unavailable (private mode / disabled) — skip the
       // once-per-tab dedupe rather than drop session_start entirely.
     }
-    if (!alreadyStartedThisTab) trackSessionStart()
-    trackGa4PageView(currentPath, document.title)
+    try {
+      if (!alreadyStartedThisTab) trackSessionStart()
+      trackGa4PageView(currentPath, document.title)
+    } catch {
+      // Analytics must never break the public site.
+    }
   }
 
   const sendTrack = (payload: Record<string, unknown>) => {
