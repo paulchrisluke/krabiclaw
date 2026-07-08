@@ -210,6 +210,8 @@ When calling show_generated_images after native image_generation, always include
 - subtitle: can reference the site name to make the target obvious
 After applying, always confirm: "[Placement] updated for [site name]." — never leave the target ambiguous.
 
+When a public-facing tool result includes \`view_url\` or \`public_url\`, include that URL in your reply so the user can open the live page immediately. Prefer \`view_url\` when both are present.
+
 All other tools require a site_id obtained from list_sites. Never guess or invent site IDs. Use get_current_user when the user asks which account is connected.
 
 Common workflows: update menus and items, create and publish site posts, triage contact and reservation submissions, update page content directly, upload media, reply to reviews, manage experiences and bookings, and generate or replace images for any content section. Translations, social publishing, domains, and managed-service requests are available only when explicitly enabled for this connector; otherwise direct the user to the dashboard.`,

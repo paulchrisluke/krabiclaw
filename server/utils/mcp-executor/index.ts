@@ -153,10 +153,11 @@ export async function executeMcpToolCall(
       user.userId,
       user.isPlatformAdmin,
     );
+    const env = cloudflareEnv(event) as { NUXT_PUBLIC_FREE_SITE_DOMAIN?: string };
     return {
-      context: workspaceContextPayload(workspace.organization, workspace.site, workspace.location),
+      context: workspaceContextPayload(workspace.organization, workspace.site, workspace.location, env),
       organizations: workspaceOrganizationsPayload(workspace),
-      sites: workspaceSitesPayload(workspace),
+      sites: workspaceSitesPayload(workspace, env),
       locations: workspaceLocationsPayload(workspace),
     };
   }
@@ -204,12 +205,13 @@ export async function executeMcpToolCall(
         locationId: workspace.location?.id ?? null,
       },
     );
+    const env = cloudflareEnv(event) as { NUXT_PUBLIC_FREE_SITE_DOMAIN?: string };
 
     return {
       success: true,
-      context: workspaceContextPayload(refreshed.organization, refreshed.site, refreshed.location),
+      context: workspaceContextPayload(refreshed.organization, refreshed.site, refreshed.location, env),
       organizations: workspaceOrganizationsPayload(refreshed),
-      sites: workspaceSitesPayload(refreshed),
+      sites: workspaceSitesPayload(refreshed, env),
       locations: workspaceLocationsPayload(refreshed),
     };
   }

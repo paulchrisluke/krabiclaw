@@ -535,6 +535,7 @@ const mainNavigation = computed(() => [
   [
     { label: 'Blog', icon: 'i-lucide-newspaper', to: siteBase.value ? `${siteBase.value}/blog` : '/dashboard' },
     { label: 'Translations', icon: 'i-lucide-languages', to: siteBase.value ? `${siteBase.value}/translations` : '/dashboard' },
+    { label: 'Activity', icon: 'i-lucide-activity', to: orgBase.value ? `${orgBase.value}/activity` : '/dashboard' },
     { label: 'Support', icon: 'i-lucide-life-buoy', to: orgBase.value ? `${orgBase.value}/support` : '/dashboard' },
   ],
   [
@@ -640,6 +641,7 @@ const navbarTitle = computed(() => {
   if (!segment) return 'Overview'
   const labels: Record<string, string> = {
     account: 'Account',
+    activity: 'Activity',
     analytics: 'Analytics',
     billing: 'Billing',
     blog: 'Blog',

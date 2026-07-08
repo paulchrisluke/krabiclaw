@@ -300,6 +300,11 @@ const emit = defineEmits<{
   imageChange: [asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null]
 }>()
 
+const { trackEditorSessionStarted } = useAnalytics()
+onMounted(() => {
+  if (props.siteId) trackEditorSessionStarted(props.siteId)
+})
+
 const categoryItems = computed(() => props.categories.map((item) => ({ label: item, value: item })))
 const canSave = computed(() => Boolean(title.value.trim() || body.value.trim()))
 const canPublish = computed(() => {

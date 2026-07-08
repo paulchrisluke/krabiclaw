@@ -4,7 +4,7 @@ import { deleteContentField, getEditorContent, updateHomeHero, updatePageContent
 import { getMediaAsset } from '~/server/utils/media-asset-manager'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
-import { NOT_HANDLED, getCurrentHomeHeroState, mutationContextPayload, objectRecord, optionalString, requireActiveImageAsset, requireActiveVideoAsset, requiredString, rethrowAsInvalidParams } from './shared'
+import { attachViewUrlToRecord, NOT_HANDLED, getCurrentHomeHeroState, mutationContextPayload, objectRecord, optionalString, requireActiveImageAsset, requireActiveVideoAsset, requiredString, rethrowAsInvalidParams } from './shared'
 
 export async function handleContentTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
@@ -15,13 +15,13 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         args.page,
         site.siteId,
       );
-      return await getEditorContent(
+      return attachViewUrlToRecord(await getEditorContent(
         site.db,
         site.organizationId,
         site.siteId,
         requiredString(args, "page"),
         optionalString(args, "location_id") ?? undefined,
-      );
+      ), site, {}, site.env);
     case "update_page_content":
       try {
         const locationId = optionalString(args, "location_id");
@@ -36,7 +36,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           },
         );
         return {
-          ...updated,
+          ...attachViewUrlToRecord(updated, site, {}, site.env),
           context: await mutationContextPayload(site, { locationId }),
         };
       } catch (error) {
@@ -126,7 +126,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           location_id: locationId,
         });
         return {
-          ...updated,
+          ...attachViewUrlToRecord(updated, site, {}, site.env),
           context: await mutationContextPayload(site, { locationId }),
         };
       } catch (error) {
@@ -149,9 +149,9 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         });
         const asset = await getMediaAsset(site.db, assetId, site.siteId);
         return {
-          ...update,
+          ...attachViewUrlToRecord(update, site, {}, site.env),
           asset_id: assetId,
-          public_url: asset?.public_url ?? null,
+          asset_public_url: asset?.public_url ?? null,
           ...(currentHero.hero_video_asset_id
             ? {
                 warning:
@@ -179,7 +179,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           location_id: locationId,
         });
         return {
-          ...updated,
+          ...attachViewUrlToRecord(updated, site, {}, site.env),
           ...(currentHero.hero_image_asset_id
             ? {
                 warning:
@@ -199,7 +199,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           location_id: locationId,
         });
         return {
-          ...updated,
+          ...attachViewUrlToRecord(updated, site, {}, site.env),
           context: await mutationContextPayload(site, { locationId }),
         };
       } catch (error) {
@@ -213,7 +213,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           location_id: locationId,
         });
         return {
-          ...updated,
+          ...attachViewUrlToRecord(updated, site, {}, site.env),
           context: await mutationContextPayload(site, { locationId }),
         };
       } catch (error) {
@@ -246,7 +246,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           },
         );
         return {
-          ...updated,
+          ...attachViewUrlToRecord(updated, site, {}, site.env),
           context: await mutationContextPayload(site),
         };
       } catch (error) {
@@ -267,7 +267,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           },
         );
         return {
-          ...updated,
+          ...attachViewUrlToRecord(updated, site, {}, site.env),
           context: await mutationContextPayload(site),
         };
       } catch (error) {
@@ -287,7 +287,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         },
         );
         return {
-          ...result,
+          ...attachViewUrlToRecord(result, site, {}, site.env),
           context: await mutationContextPayload(site, { locationId }),
         };
       }

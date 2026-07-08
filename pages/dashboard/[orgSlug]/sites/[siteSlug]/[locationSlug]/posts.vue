@@ -183,6 +183,7 @@ definePageMeta({ layout: 'dashboard' })
 
 const siteId = await useDashboardSiteId()
 const toast = useToast()
+const { trackPostCreated, trackPostPublished } = useAnalytics()
 const sitePublicUrl = ref<string | null>(null)
 const { buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 const _headerLinks = computed(() => buildHeaderLinks([
@@ -396,6 +397,7 @@ const handleSave = async () => {
       })
       selectedPost.value = res.post
       composing.value = false
+      trackPostCreated(String(res.post.id), siteId)
     }
     toast.add({ description: 'Saved', color: 'success' })
     await loadPosts()
@@ -436,6 +438,7 @@ const handlePublish = async () => {
     })
     selectedPost.value = res.post
     composing.value = false
+    trackPostPublished(String(postId), siteId)
     if (res.socialErrors && Object.keys(res.socialErrors).length > 0) {
       const errLines = Object.entries(res.socialErrors as Record<string, string>)
         .map(([ch, msg]) => `${ch}: ${msg}`).join(' · ')

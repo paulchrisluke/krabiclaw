@@ -180,7 +180,7 @@ export async function listOrganizationSites(db: DbClient, organizationId: string
     SELECT id, brand_name, subdomain, plan
     FROM sites
     WHERE organization_id = ?
-    ORDER BY created_at ASC
+    ORDER BY created_at ASC, id ASC
   `, [organizationId])
 }
 

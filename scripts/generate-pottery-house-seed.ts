@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { execWithRetry } from './wrangler-retry.ts'
 import {
   renderCompiledPotteryHouseBillingBlock,
+  renderCompiledPotteryHouseBlogBlock,
   renderCompiledPotteryHouseContentBlock,
   renderCompiledPotteryHouseCoreSeedBlock,
   renderCompiledPotteryHouseExperiencesBlock,
@@ -67,6 +68,8 @@ ${renderCompiledPotteryHouseReviewsBlock()}
 ${renderCompiledPotteryHouseQaBlock()}
 
 ${renderCompiledPotteryHousePostsBlock()}
+
+${renderCompiledPotteryHouseBlogBlock()}
 
 ${renderCompiledPotteryHouseContentBlock()}
 
