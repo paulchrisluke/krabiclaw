@@ -43,11 +43,18 @@ problem even when the app itself is healthy.
 
 `yarn tunnel` reads [tunnel.yml](../tunnel.yml). Before first use:
 
-1. replace `REPLACE_WITH_TUNNEL_UUID`
-2. replace `credentials-file`
+1. download the `krabiclaw-local` tunnel credentials JSON from Cloudflare Zero Trust
+2. place it at the `credentials-file` path in [tunnel.yml](../tunnel.yml), or update that path for your machine
 3. keep `hostname: local.krabiclaw.com` unless you are intentionally using a different local harness host
 
 The tunnel hostname is part of the auth contract, not just a convenience URL.
+
+Current Cloudflare-side source of truth:
+
+- tunnel name: `krabiclaw-local`
+- tunnel id: `ba36c78c-9e7d-4312-be92-63a58d96baba`
+- hostname: `local.krabiclaw.com`
+- origin service: `http://localhost:3000`
 
 ## Dependency policy
 
@@ -97,10 +104,12 @@ What it checks:
 1. required env vars are present
 2. `BETTER_AUTH_URL`, `NUXT_PUBLIC_PLATFORM_DOMAIN`, and `MCP_BASE_URL` match
 3. `tunnel.yml` hostname matches the auth origin
-4. `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server` are healthy
-5. unauthenticated `server/discover` and `tools/call` behave correctly
-6. `/api/dev/login` and `/api/dev/mcp-telemetry` are reachable with the dev secret
-7. `scripts/check-mcp-app-contract.mjs` passes
+4. `tunnel.yml` tunnel id matches the canonical `krabiclaw-local` tunnel
+5. remote Cloudflare tunnel config still matches the checked-in local contract when `CF_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` are available
+6. `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server` are healthy
+7. unauthenticated `server/discover` and `tools/call` behave correctly
+8. `/api/dev/login` and `/api/dev/mcp-telemetry` are reachable with the dev secret
+9. `scripts/check-mcp-app-contract.mjs` passes
 
 By default this is **non-destructive**.
 
@@ -127,6 +136,7 @@ The LLM can fully drive:
 - D1 telemetry reads
 - Cloudflare GraphQL status inspection
 - local tunnel preflight verification
+- Cloudflare tunnel contract verification against the real `krabiclaw-local` tunnel
 
 The human is still required for the ChatGPT-hosted part:
 
