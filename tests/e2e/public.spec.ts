@@ -195,11 +195,16 @@ test.describe('public tenant site', () => {
     const response = await page.goto(`${tenantBaseURL}/`, { waitUntil: 'load' })
     expect(response?.status()).toBeLessThan(400)
 
+    // window.krabiLayer is now declared eagerly on every client boot (app.vue), tenant
+    // pages included, so its mere presence no longer signals platform-bridge inheritance.
+    // The demo tenant fixture has no GA measurement ID configured, so the real signal —
+    // whether any gtag (platform's or a tenant's own) ended up installed — stays reliably
+    // unset here.
     const globals = await page.evaluate(() => ({
-      hasKrabiLayer: typeof (window as Window & { krabiLayer?: unknown }).krabiLayer !== 'undefined',
+      hasGtag: typeof (window as Window & { gtag?: unknown }).gtag !== 'undefined',
     }))
 
-    expect(globals.hasKrabiLayer).toBe(false)
+    expect(globals.hasGtag).toBe(false)
   })
 })
 
@@ -212,8 +217,14 @@ test.describe('platform public site', () => {
     await page.waitForLoadState('load')
     await expect(page.getByRole('link', { name: /krabiclaw/i }).first()).toBeVisible()
     await expect(page.getByRole('heading', { name: /your local business, managed through chatgpt/i })).toBeVisible()
-    const hasKrabiLayer = await page.evaluate(() => typeof (window as Window & { krabiLayer?: unknown }).krabiLayer !== 'undefined')
-    expect(hasKrabiLayer).toBe(false)
+    // window.krabiLayer is now declared eagerly on every client boot (app.vue) so any
+    // consumer can safely push into it from the first tick — same guarantee GTM's own
+    // dataLayer snippet makes — and gets its first session_start/page_view entries queued
+    // asynchronously shortly after 'load', so asserting its absence here is inherently
+    // racy. The actual privacy/perf-relevant invariant is that the real GA4 script/gtag
+    // hasn't loaded yet (deferred to first interaction — see app.vue's loadOnInteraction).
+    const hasGtag = await page.evaluate(() => typeof (window as Window & { gtag?: unknown }).gtag !== 'undefined')
+    expect(hasGtag).toBe(false)
 
     const blog = await page.goto(`${baseURL}/blog`, { waitUntil: 'domcontentloaded' })
     expect(blog?.status()).toBeLessThan(400)
