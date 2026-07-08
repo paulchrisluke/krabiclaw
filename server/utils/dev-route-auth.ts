@@ -26,18 +26,17 @@ function isLocalHost(hostname: string) {
 
 function normalizeHostname(host: string): string {
   // Handle bracketed IPv6 addresses like [::1]:3000
-  if (host.startsWith('[') && host.includes(']')) {
+  if (host.startsWith('[')) {
     const endBracket = host.indexOf(']')
-    return host.slice(1, endBracket)
+    return endBracket === -1 ? host : host.slice(1, endBracket)
   }
-  // Handle IPv6 addresses without brackets (split on : would break them)
-  if (host.includes(':') && !host.startsWith('[')) {
-    // If it looks like an IPv6 address, return it as-is
-    if (host.split(':').length >= 2) {
-      return host
-    }
+  // A bare IPv6 address (e.g. "::1", "fe80::1") has 2+ colons and no port to
+  // strip. A regular "hostname:port" or "ipv4:port" has exactly one colon —
+  // splitting on it and taking the first part is correct for those.
+  const colonCount = (host.match(/:/g) ?? []).length
+  if (colonCount >= 2) {
+    return host
   }
-  // For IPv4 with port or regular hostnames, split on :
   return host.split(':')[0] || ''
 }
 
