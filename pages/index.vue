@@ -406,7 +406,6 @@
                 class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
               >
             </div>
-            <div v-else class="aspect-4/3 bg-inverted/10" />
             <div class="p-6">
               <div class="mb-3 flex flex-wrap items-center gap-3">
                 <span v-if="post.category" class="rounded bg-inverted/10 px-2 py-1 text-xs font-medium text-inverted/70">

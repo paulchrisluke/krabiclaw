@@ -27,8 +27,27 @@
         <section
           v-for="(item, i) in items"
           :key="`${item.url}-${i}`"
-          class="relative h-dvh w-full snap-start snap-always"
+          class="relative h-dvh w-full snap-start snap-always overflow-hidden bg-black"
         >
+          <!-- Blurred fill behind letterboxed media, TikTok-style -->
+          <video
+            v-if="item.kind === 'video'"
+            :src="item.url"
+            muted
+            playsinline
+            preload="metadata"
+            aria-hidden="true"
+            tabindex="-1"
+            class="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl select-none"
+          />
+          <img
+            v-else
+            :src="item.url"
+            alt=""
+            aria-hidden="true"
+            class="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl select-none"
+          >
+
           <video
             v-if="item.kind === 'video'"
             :ref="el => setVideoRef(el, i)"
@@ -37,13 +56,13 @@
             loop
             playsinline
             preload="metadata"
-            class="h-full w-full object-cover"
+            class="relative z-10 h-full w-full object-contain"
           />
           <img
             v-else
             :src="item.url"
             :alt="item.alt || ''"
-            class="h-full w-full object-cover"
+            class="relative z-10 h-full w-full object-contain"
           >
 
           <!-- Bottom caption gradient -->
