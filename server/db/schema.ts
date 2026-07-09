@@ -1668,7 +1668,7 @@ export const sites = sqliteTable("sites", {
 	check("sites_plan_check", sql`${table.plan} IN ('free', 'growth', 'managed', 'seo_accelerator')`),
 	check("sites_onboarding_status_check", sql`${table.onboarding_status} IN ('pending', 'active', 'failed')`),
 	check("sites_url_structure_check", sql`${table.url_structure} IN ('location_subdirectories', 'brand_pages')`),
-	check("sites_vertical_check", sql`${table.vertical} IN ('restaurant', 'experience', 'retail', 'wellness', 'service', 'professional_service')`),
+	check("sites_vertical_check", sql`${table.vertical} IN ('restaurant', 'experience', 'retail', 'wellness', 'service')`),
 	check("sites_content_source_check", sql`${table.content_source} IN ('google_maps', 'client_supplied', 'generated')`),
 	check("sites_media_source_check", sql`${table.media_source} IN ('client_photos', 'stock', 'mixed')`),
 ]);

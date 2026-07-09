@@ -246,13 +246,6 @@
       "when": 1783632562618,
       "tag": "0041_youthful_blizzard",
       "breakpoints": true
-    },
-    {
-      "idx": 42,
-      "version": "6",
-      "when": 1783639000000,
-      "tag": "0042_blawby_tables",
-      "breakpoints": true
     }
   ]
 }

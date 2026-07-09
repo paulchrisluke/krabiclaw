@@ -1,30 +1,30 @@
 # Blawby Cutover Evidence
 
-- Checked: 2026-07-09T21:45:59.864Z
+- Checked: 2026-07-09T22:26:07.008Z
 - Base URL: http://ncls.localhost:3000
 - Result: PASS
 
 ## Routes
 
-- /: 200 (128138 bytes)
-- /services: 200 (121427 bytes)
-- /pricing: 200 (123914 bytes)
-- /donate: 200 (119470 bytes)
-- /schedule: 200 (119058 bytes)
-- /contact: 200 (120718 bytes)
-- /blog: 200 (122458 bytes)
-- /policies/privacy: 200 (135857 bytes)
-- /policies/terms: 200 (139663 bytes)
-- /third-party-notices: 200 (119675 bytes)
-- /services/family: 200 (131759 bytes)
-- /services/small-business-and-nonprofits: 200 (131352 bytes)
-- /services/employment: 200 (132017 bytes)
-- /services/tenant-rights: 200 (125846 bytes)
-- /services/probate-and-estate: 200 (129811 bytes)
-- /services/special-education-and-iep-advocacy: 200 (124439 bytes)
-- /about: 200 (119988 bytes)
-- /article/getting-a-divorce-in-north-carolina: 200 (146071 bytes)
-- /article/equitable-distribution-in-north-carolina-divorces: 200 (140145 bytes)
+- /: 200 (127901 bytes)
+- /services: 200 (121190 bytes)
+- /pricing: 200 (123677 bytes)
+- /donate: 200 (119233 bytes)
+- /schedule: 200 (118821 bytes)
+- /contact: 200 (120481 bytes)
+- /blog: 200 (122221 bytes)
+- /policies/privacy: 200 (135620 bytes)
+- /policies/terms: 200 (139426 bytes)
+- /third-party-notices: 200 (119438 bytes)
+- /services/family: 200 (131522 bytes)
+- /services/small-business-and-nonprofits: 200 (131115 bytes)
+- /services/employment: 200 (131780 bytes)
+- /services/tenant-rights: 200 (125609 bytes)
+- /services/probate-and-estate: 200 (129574 bytes)
+- /services/special-education-and-iep-advocacy: 200 (124202 bytes)
+- /about: 200 (119751 bytes)
+- /article/getting-a-divorce-in-north-carolina: 200 (145834 bytes)
+- /article/equitable-distribution-in-north-carolina-divorces: 200 (139908 bytes)
 
 ## Checks
 
@@ -382,50 +382,6 @@
 - PASS: Sitemap includes article /article/getting-a-divorce-in-north-carolina
 - PASS: Sitemap includes article /article/equitable-distribution-in-north-carolina-divorces
 - PASS: Sitemap excludes Saya restaurant routes
-- PASS: Screenshot artifact exists: reference/home-desktop
-- PASS: Screenshot artifact exists: reference/home-mobile
-- PASS: Screenshot artifact exists: reference/services-desktop
-- PASS: Screenshot artifact exists: reference/services-mobile
-- PASS: Screenshot artifact exists: reference/service-detail-desktop
-- PASS: Screenshot artifact exists: reference/service-detail-mobile
-- PASS: Screenshot artifact exists: reference/pricing-desktop
-- PASS: Screenshot artifact exists: reference/pricing-mobile
-- PASS: Screenshot artifact exists: reference/about-desktop
-- PASS: Screenshot artifact exists: reference/about-mobile
-- PASS: Screenshot artifact exists: reference/contact-desktop
-- PASS: Screenshot artifact exists: reference/contact-mobile
-- PASS: Screenshot artifact exists: reference/schedule-desktop
-- PASS: Screenshot artifact exists: reference/schedule-mobile
-- PASS: Screenshot artifact exists: reference/blog-desktop
-- PASS: Screenshot artifact exists: reference/blog-mobile
-- PASS: Screenshot artifact exists: reference/article-desktop
-- PASS: Screenshot artifact exists: reference/article-mobile
-- PASS: Screenshot artifact exists: reference/donate-desktop
-- PASS: Screenshot artifact exists: reference/donate-mobile
-- PASS: Screenshot artifact exists: reference/policy-desktop
-- PASS: Screenshot artifact exists: reference/policy-mobile
-- PASS: Screenshot artifact exists: blawby/home-desktop
-- PASS: Screenshot artifact exists: blawby/home-mobile
-- PASS: Screenshot artifact exists: blawby/services-desktop
-- PASS: Screenshot artifact exists: blawby/services-mobile
-- PASS: Screenshot artifact exists: blawby/service-detail-desktop
-- PASS: Screenshot artifact exists: blawby/service-detail-mobile
-- PASS: Screenshot artifact exists: blawby/pricing-desktop
-- PASS: Screenshot artifact exists: blawby/pricing-mobile
-- PASS: Screenshot artifact exists: blawby/about-desktop
-- PASS: Screenshot artifact exists: blawby/about-mobile
-- PASS: Screenshot artifact exists: blawby/contact-desktop
-- PASS: Screenshot artifact exists: blawby/contact-mobile
-- PASS: Screenshot artifact exists: blawby/schedule-desktop
-- PASS: Screenshot artifact exists: blawby/schedule-mobile
-- PASS: Screenshot artifact exists: blawby/blog-desktop
-- PASS: Screenshot artifact exists: blawby/blog-mobile
-- PASS: Screenshot artifact exists: blawby/article-desktop
-- PASS: Screenshot artifact exists: blawby/article-mobile
-- PASS: Screenshot artifact exists: blawby/donate-desktop
-- PASS: Screenshot artifact exists: blawby/donate-mobile
-- PASS: Screenshot artifact exists: blawby/policy-desktop
-- PASS: Screenshot artifact exists: blawby/policy-mobile
 
 ## Intentional Differences
 

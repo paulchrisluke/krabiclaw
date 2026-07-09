@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-07-09T21:45:59.864Z",
+  "checked_at": "2026-07-09T22:26:07.008Z",
   "base_url": "http://ncls.localhost:3000",
   "site_id": "site-ncls-blawby",
   "ok": true,
@@ -8,134 +8,134 @@
       "route": "/",
       "url": "http://ncls.localhost:3000/",
       "status": 200,
-      "duration_ms": 132,
-      "bytes": 128138
+      "duration_ms": 161,
+      "bytes": 127901
     },
     {
       "route": "/services",
       "url": "http://ncls.localhost:3000/services",
       "status": 200,
       "duration_ms": 20,
-      "bytes": 121427
+      "bytes": 121190
     },
     {
       "route": "/pricing",
       "url": "http://ncls.localhost:3000/pricing",
       "status": 200,
-      "duration_ms": 22,
-      "bytes": 123914
+      "duration_ms": 21,
+      "bytes": 123677
     },
     {
       "route": "/donate",
       "url": "http://ncls.localhost:3000/donate",
       "status": 200,
-      "duration_ms": 17,
-      "bytes": 119470
+      "duration_ms": 38,
+      "bytes": 119233
     },
     {
       "route": "/schedule",
       "url": "http://ncls.localhost:3000/schedule",
       "status": 200,
-      "duration_ms": 35,
-      "bytes": 119058
+      "duration_ms": 19,
+      "bytes": 118821
     },
     {
       "route": "/contact",
       "url": "http://ncls.localhost:3000/contact",
       "status": 200,
-      "duration_ms": 16,
-      "bytes": 120718
+      "duration_ms": 33,
+      "bytes": 120481
     },
     {
       "route": "/blog",
       "url": "http://ncls.localhost:3000/blog",
       "status": 200,
-      "duration_ms": 31,
-      "bytes": 122458
+      "duration_ms": 15,
+      "bytes": 122221
     },
     {
       "route": "/policies/privacy",
       "url": "http://ncls.localhost:3000/policies/privacy",
       "status": 200,
-      "duration_ms": 19,
-      "bytes": 135857
+      "duration_ms": 13,
+      "bytes": 135620
     },
     {
       "route": "/policies/terms",
       "url": "http://ncls.localhost:3000/policies/terms",
       "status": 200,
-      "duration_ms": 35,
-      "bytes": 139663
+      "duration_ms": 25,
+      "bytes": 139426
     },
     {
       "route": "/third-party-notices",
       "url": "http://ncls.localhost:3000/third-party-notices",
       "status": 200,
-      "duration_ms": 15,
-      "bytes": 119675
+      "duration_ms": 42,
+      "bytes": 119438
     },
     {
       "route": "/services/family",
       "url": "http://ncls.localhost:3000/services/family",
       "status": 200,
-      "duration_ms": 20,
-      "bytes": 131759
+      "duration_ms": 17,
+      "bytes": 131522
     },
     {
       "route": "/services/small-business-and-nonprofits",
       "url": "http://ncls.localhost:3000/services/small-business-and-nonprofits",
       "status": 200,
       "duration_ms": 21,
-      "bytes": 131352
+      "bytes": 131115
     },
     {
       "route": "/services/employment",
       "url": "http://ncls.localhost:3000/services/employment",
       "status": 200,
-      "duration_ms": 14,
-      "bytes": 132017
+      "duration_ms": 28,
+      "bytes": 131780
     },
     {
       "route": "/services/tenant-rights",
       "url": "http://ncls.localhost:3000/services/tenant-rights",
       "status": 200,
-      "duration_ms": 25,
-      "bytes": 125846
+      "duration_ms": 20,
+      "bytes": 125609
     },
     {
       "route": "/services/probate-and-estate",
       "url": "http://ncls.localhost:3000/services/probate-and-estate",
       "status": 200,
-      "duration_ms": 25,
-      "bytes": 129811
+      "duration_ms": 23,
+      "bytes": 129574
     },
     {
       "route": "/services/special-education-and-iep-advocacy",
       "url": "http://ncls.localhost:3000/services/special-education-and-iep-advocacy",
       "status": 200,
-      "duration_ms": 20,
-      "bytes": 124439
+      "duration_ms": 43,
+      "bytes": 124202
     },
     {
       "route": "/about",
       "url": "http://ncls.localhost:3000/about",
       "status": 200,
-      "duration_ms": 29,
-      "bytes": 119988
+      "duration_ms": 19,
+      "bytes": 119751
     },
     {
       "route": "/article/getting-a-divorce-in-north-carolina",
       "url": "http://ncls.localhost:3000/article/getting-a-divorce-in-north-carolina",
       "status": 200,
       "duration_ms": 21,
-      "bytes": 146071
+      "bytes": 145834
     },
     {
       "route": "/article/equitable-distribution-in-north-carolina-divorces",
       "url": "http://ncls.localhost:3000/article/equitable-distribution-in-north-carolina-divorces",
       "status": 200,
-      "duration_ms": 14,
-      "bytes": 140145
+      "duration_ms": 21,
+      "bytes": 139908
     }
   ],
   "checks": [
@@ -1704,226 +1704,6 @@
     {
       "ok": true,
       "label": "Sitemap excludes Saya restaurant routes"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/home-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\home-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/home-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\home-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/services-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\services-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/services-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\services-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/service-detail-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\service-detail-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/service-detail-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\service-detail-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/pricing-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\pricing-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/pricing-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\pricing-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/about-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\about-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/about-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\about-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/contact-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\contact-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/contact-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\contact-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/schedule-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\schedule-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/schedule-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\schedule-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/blog-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\blog-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/blog-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\blog-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/article-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\article-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/article-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\article-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/donate-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\donate-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/donate-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\donate-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/policy-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\policy-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: reference/policy-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\policy-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/home-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\home-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/home-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\home-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/services-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\services-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/services-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\services-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/service-detail-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\service-detail-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/service-detail-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\service-detail-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/pricing-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\pricing-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/pricing-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\pricing-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/about-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\about-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/about-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\about-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/contact-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\contact-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/contact-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\contact-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/schedule-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\schedule-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/schedule-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\schedule-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/blog-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\blog-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/blog-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\blog-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/article-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\article-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/article-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\article-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/donate-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\donate-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/donate-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\donate-mobile.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/policy-desktop",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\policy-desktop.png"
-    },
-    {
-      "ok": true,
-      "label": "Screenshot artifact exists: blawby/policy-mobile",
-      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\policy-mobile.png"
     }
   ]
 }

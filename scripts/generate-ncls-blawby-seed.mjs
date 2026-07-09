@@ -145,7 +145,7 @@ INSERT INTO sites (
   ${sqlValue(site.brand_name)}, ${sqlValue(site.brand_description)},
   ${sqlValue(site.email)}, ${sqlValue(site.phone)},
   'en', 'USD', 'active', 'managed', 'active',
-  'brand_pages', 'professional_service', 'client_supplied', 'client_photos', ${now}, ${now}
+  'brand_pages', 'service', 'client_supplied', 'client_photos', ${now}, ${now}
 );
 
 INSERT INTO site_domains (id, organization_id, site_id, domain, type, role, status, dns_status, activated_at, created_at, updated_at)
