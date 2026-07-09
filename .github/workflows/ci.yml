@@ -167,7 +167,7 @@ jobs:
 
   e2e-smoke:
     name: E2E smoke
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     needs: [changes]
     runs-on: ubuntu-latest
     env:
@@ -269,7 +269,7 @@ jobs:
   pottery-house-fixture:
     name: Pottery House regression fixture
     needs: [changes, e2e-smoke]
-    if: github.event_name == 'pull_request' && needs.changes.outputs.pottery_house == 'true'
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && needs.changes.outputs.pottery_house == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -290,7 +290,7 @@ jobs:
   blawby-fixture:
     name: Blawby NCLS regression fixture
     needs: [changes, e2e-smoke]
-    if: github.event_name == 'pull_request' && needs.changes.outputs.blawby == 'true'
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && needs.changes.outputs.blawby == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
