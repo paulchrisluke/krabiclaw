@@ -11,12 +11,100 @@
       </div>
 
       <div v-else class="space-y-6">
-        <!-- AI Assistance - single canonical prompt section -->
-        <ContentAiAssistanceSection
-          label="Ask ChatGPT"
-          intro="Copy this prompt to ChatGPT to get started with your site"
-          :prompts="aiPrompts"
-        />
+        <!-- Ask ChowBot anything -->
+        <UChatPrompt
+          v-model="homeInput"
+          placeholder="Ask ChowBot anything..."
+          :disabled="chowBot.isLoading.value"
+          :loading="chowBot.isLoading.value"
+          @submit="submitHomeInput"
+        >
+          <template #trailing>
+            <UChatPromptSubmit
+              :status="chowBot.isLoading.value ? 'streaming' : 'ready'"
+              color="primary"
+              variant="solid"
+              size="xs"
+              :disabled="!homeInput.trim()"
+            />
+          </template>
+        </UChatPrompt>
+
+        <!-- Getting started task list -->
+        <UCard v-if="!checklistDismissed && !checklistAllDone && checklistItems.length" class="border-primary/20">
+          <div class="space-y-4">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-primary mb-1">Getting started</p>
+                <h3 class="text-base font-semibold text-highlighted">Finish setting up with ChowBot</h3>
+                <p class="text-sm text-muted mt-0.5">
+                  Ask ChowBot to complete these — your site gets better with each one.
+                </p>
+              </div>
+              <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" square aria-label="Dismiss" @click="dismissChecklist" />
+            </div>
+
+            <div class="space-y-1">
+              <div class="flex items-center justify-between text-xs text-muted">
+                <span>{{ checklistCompletedCount }} of {{ checklistItems.length }} complete</span>
+              </div>
+              <UProgress :value="(checklistCompletedCount / checklistItems.length) * 100" class="h-1.5" />
+            </div>
+
+            <div class="space-y-2">
+              <div class="flex items-center justify-between gap-3">
+                <p class="text-xs font-semibold uppercase tracking-wider text-dimmed">Start here</p>
+                <ChowBotPromptTrigger :prompt="checklistStarterPrompt" auto-send>
+                  <template #default="{ trigger }">
+                    <UButton icon="i-lucide-sparkles" color="primary" variant="soft" size="xs" @click="trigger">
+                      Start
+                    </UButton>
+                  </template>
+                </ChowBotPromptTrigger>
+              </div>
+              <div class="rounded-xl border border-default bg-elevated px-3 py-3 text-sm leading-relaxed text-highlighted">
+                {{ checklistStarterPrompt }}
+              </div>
+            </div>
+
+            <ul class="space-y-2.5">
+              <li v-for="item in checklistItems" :key="item.key" class="flex items-start gap-3">
+                <div :class="[
+                  'flex size-5 shrink-0 items-center justify-center rounded-full mt-0.5 transition-colors',
+                  item.complete ? 'bg-(--kc-teal)' : 'border-2 border-muted bg-transparent',
+                ]">
+                  <UIcon v-if="item.complete" name="i-lucide-check" class="size-3 text-white" />
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p :class="['text-sm font-medium', item.complete ? 'text-muted line-through' : 'text-highlighted']">
+                    {{ item.label }}
+                  </p>
+                  <div v-if="!item.complete" class="mt-1.5">
+                    <ChowBotPromptTrigger :prompt="item.prompt" auto-send>
+                      <template #default="{ trigger }">
+                        <UButton size="xs" color="neutral" variant="outline" @click="trigger">
+                          Start
+                        </UButton>
+                      </template>
+                    </ChowBotPromptTrigger>
+                  </div>
+                </div>
+              </li>
+            </ul>
+
+            <div class="pt-1 flex items-center gap-3">
+              <UButton to="/docs/integrations/mcp-setup" size="sm">
+                Open setup docs
+              </UButton>
+              <UButton :to="`/dashboard/${route.params.orgSlug}/~/settings/chatgpt`" variant="outline" color="neutral" size="sm">
+                Open ChatGPT settings
+              </UButton>
+              <UButton variant="ghost" color="neutral" size="sm" @click="dismissChecklist">
+                Dismiss
+              </UButton>
+            </div>
+          </div>
+        </UCard>
 
         <!-- Usage strip -->
         <div v-if="credits" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -128,7 +216,8 @@
 </template>
 
 <script setup lang="ts">
-import { buildOnboardingStarterPrompt, getQuickActionPrompts, type OnboardingChecklistResponse } from '~/composables/useOnboardingPrompts'
+import { buildOnboardingChecklistItems, buildOnboardingStarterPrompt, type OnboardingChecklistResponse } from '~/composables/useOnboardingPrompts'
+import ChowBotPromptTrigger from '~/components/chowbot/ChowBotPromptTrigger.vue'
 
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Dashboard | KrabiClaw', robots: 'noindex, nofollow' })
@@ -169,33 +258,38 @@ const locations = computed(() => data.value?.locations ?? [])
 const credits = computed(() => data.value?.credits ?? null)
 const events = computed(() => data.value?.events ?? [])
 
-// AI Prompts for ContentAiAssistanceSection
+// Getting-started task list — data source for both the checklist card and its
+// per-item ChowBotPromptTrigger auto-send prompts.
 const { data: onboardingData } = await useFetch<OnboardingChecklistResponse>('/api/dashboard/onboarding/checklist', {
   server: false,
   lazy: true,
 })
 
-const aiPrompts = computed(() => {
-  const starterPrompt = buildOnboardingStarterPrompt(onboardingData.value)
-  const quickPrompts = getQuickActionPrompts(onboardingData.value?.vertical)
+const checklistItems = computed(() => buildOnboardingChecklistItems(onboardingData.value))
+const checklistStarterPrompt = computed(() => buildOnboardingStarterPrompt(onboardingData.value, checklistItems.value))
+const checklistCompletedCount = computed(() => checklistItems.value.filter(i => i.complete).length)
+const checklistAllDone = computed(() => checklistItems.value.length > 0 && checklistCompletedCount.value === checklistItems.value.length)
 
-  const prompts = [
-    {
-      title: 'Getting started',
-      prompt: starterPrompt,
-      description: 'Start with this comprehensive prompt to set up your site',
-      copyLabel: 'Copy prompt',
-    },
-    ...quickPrompts.map((prompt) => ({
-      title: null,
-      prompt,
-      description: null,
-      copyLabel: 'Copy',
-    })),
-  ]
+const checklistDismissKey = computed(() => `kc_checklist_dismissed_${route.params.orgSlug}`)
+const checklistDismissed = ref(false)
+watch(checklistDismissKey, (key) => {
+  if (!import.meta.client) return
+  checklistDismissed.value = localStorage.getItem(key) === '1'
+}, { immediate: true })
+function dismissChecklist() {
+  localStorage.setItem(checklistDismissKey.value, '1')
+  checklistDismissed.value = true
+}
 
-  return prompts
-})
+const chowBot = useChowBot()
+const homeInput = ref('')
+async function submitHomeInput() {
+  const text = homeInput.value.trim()
+  if (!text) return
+  homeInput.value = ''
+  chowBot.open()
+  await chowBot.sendMessage(text)
+}
 
 const avgRating = computed(() => {
   const rated = locations.value.filter(l => l.rating != null)
