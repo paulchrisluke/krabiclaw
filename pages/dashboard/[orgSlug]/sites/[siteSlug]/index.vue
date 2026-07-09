@@ -272,9 +272,10 @@ const checklistAllDone = computed(() => checklistItems.value.length > 0 && check
 
 const checklistDismissKey = computed(() => `kc_checklist_dismissed_${route.params.orgSlug}`)
 const checklistDismissed = ref(false)
-onMounted(() => {
-  checklistDismissed.value = localStorage.getItem(checklistDismissKey.value) === '1'
-})
+watch(checklistDismissKey, (key) => {
+  if (!import.meta.client) return
+  checklistDismissed.value = localStorage.getItem(key) === '1'
+}, { immediate: true })
 function dismissChecklist() {
   localStorage.setItem(checklistDismissKey.value, '1')
   checklistDismissed.value = true
