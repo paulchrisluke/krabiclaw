@@ -69,14 +69,22 @@ const themeStyles = computed(() => {
 const googleAnalyticsId = computed(() => config.value?.google_analytics_measurement_id || null)
 const googleSiteVerification = computed(() => config.value?.google_site_verification || null)
 
-const ogTitle = computed(() => config.value?.brand_name || null)
-const ogDescription = computed(() => truncateForSeo(config.value?.brand_description, 160) || null)
+const ogTitle = computed(() => config.value?.seo_title || config.value?.brand_name || null)
+const ogDescription = computed(() => truncateForSeo(config.value?.seo_description || config.value?.brand_description, 160) || null)
 const ogImage = computed(() =>
   config.value?.og_image_url ||
   locations.value[0]?.hero_image_public_url ||
   config.value?.logo_url ||
   null
 )
+// Site-wide default only — individual pages set their own robots directive
+// when they have one; this is the fallback for pages that don't.
+const siteRobots = computed(() => {
+  if (useRequestURL().hostname.startsWith('demo.')) {
+    return 'noindex, nofollow'
+  }
+  return config.value?.robots || null
+})
 
 function isValidGoogleAnalyticsId(id) {
   if (!id || typeof id !== 'string') return false
@@ -105,6 +113,7 @@ useHead(() => {
     meta.push({ name: 'twitter:description', content: ogDescription.value })
   }
   if (ogImage.value) meta.push({ property: 'og:image', content: ogImage.value })
+  if (siteRobots.value) meta.push({ name: 'robots', content: siteRobots.value })
 
   if (googleSiteVerification.value) {
     meta.push({
