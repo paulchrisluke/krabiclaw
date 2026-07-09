@@ -3,19 +3,15 @@
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--blawby-accent-strong)]">Estimate</p>
-        <h2 class="mt-3 font-display text-3xl text-[var(--blawby-primary)]">{{ title }}</h2>
+        <h2 class="mt-3 blawby-display text-3xl text-[var(--blawby-primary)]">{{ title }}</h2>
       </div>
-      <p class="font-display text-4xl text-[var(--blawby-primary)]">{{ formatCurrency(estimatedTotal) }}</p>
+      <p class="blawby-display text-4xl text-[var(--blawby-primary)]">{{ formatCurrency(estimatedTotal) }}</p>
     </div>
 
-    <div class="mt-8 grid gap-6 md:grid-cols-3">
+    <div class="mt-8 grid gap-6 md:grid-cols-2">
       <label class="block">
         <span class="text-sm font-semibold text-[var(--blawby-primary)]">Household size</span>
         <input v-model.number="householdSize" type="number" min="1" max="12" class="mt-2 w-full border border-[var(--blawby-border)] px-3 py-2">
-      </label>
-      <label class="block">
-        <span class="text-sm font-semibold text-[var(--blawby-primary)]">Monthly income</span>
-        <input v-model.number="monthlyIncome" type="number" min="0" step="100" class="mt-2 w-full border border-[var(--blawby-border)] px-3 py-2">
       </label>
       <label class="block">
         <span class="text-sm font-semibold text-[var(--blawby-primary)]">Case complexity</span>
@@ -49,11 +45,10 @@ const props = withDefaults(defineProps<{
 })
 
 const householdSize = ref(1)
-const monthlyIncome = ref(0)
 const complexity = ref(0)
 
 const estimatedTotal = computed(() =>
-  Math.max(0, props.baseAmount + householdSize.value * props.perPersonAmount + complexity.value * props.complexityStep + monthlyIncome.value * 0),
+  Math.max(0, props.baseAmount + householdSize.value * props.perPersonAmount + complexity.value * props.complexityStep),
 )
 
 function formatCurrency(value: number) {

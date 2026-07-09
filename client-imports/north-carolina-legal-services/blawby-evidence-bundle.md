@@ -1,30 +1,30 @@
 # Blawby Cutover Evidence
 
-- Checked: 2026-07-09T22:26:07.008Z
+- Checked: 2026-07-09T23:39:28.814Z
 - Base URL: http://ncls.localhost:3000
 - Result: PASS
 
 ## Routes
 
-- /: 200 (127901 bytes)
-- /services: 200 (121190 bytes)
-- /pricing: 200 (123677 bytes)
-- /donate: 200 (119233 bytes)
-- /schedule: 200 (118821 bytes)
-- /contact: 200 (120481 bytes)
-- /blog: 200 (122221 bytes)
-- /policies/privacy: 200 (135620 bytes)
-- /policies/terms: 200 (139426 bytes)
-- /third-party-notices: 200 (119438 bytes)
-- /services/family: 200 (131522 bytes)
-- /services/small-business-and-nonprofits: 200 (131115 bytes)
-- /services/employment: 200 (131780 bytes)
-- /services/tenant-rights: 200 (125609 bytes)
-- /services/probate-and-estate: 200 (129574 bytes)
-- /services/special-education-and-iep-advocacy: 200 (124202 bytes)
-- /about: 200 (119751 bytes)
-- /article/getting-a-divorce-in-north-carolina: 200 (145834 bytes)
-- /article/equitable-distribution-in-north-carolina-divorces: 200 (139908 bytes)
+- /: 200 (129755 bytes)
+- /services: 200 (122739 bytes)
+- /pricing: 200 (124958 bytes)
+- /donate: 200 (120861 bytes)
+- /schedule: 200 (120415 bytes)
+- /contact: 200 (122567 bytes)
+- /blog: 200 (123762 bytes)
+- /policies/privacy: 200 (137065 bytes)
+- /policies/terms: 200 (140871 bytes)
+- /third-party-notices: 200 (120883 bytes)
+- /services/family: 200 (133211 bytes)
+- /services/small-business-and-nonprofits: 200 (132804 bytes)
+- /services/employment: 200 (133469 bytes)
+- /services/tenant-rights: 200 (127296 bytes)
+- /services/probate-and-estate: 200 (131263 bytes)
+- /services/special-education-and-iep-advocacy: 200 (125889 bytes)
+- /about: 200 (121196 bytes)
+- /article/getting-a-divorce-in-north-carolina: 200 (146612 bytes)
+- /article/equitable-distribution-in-north-carolina-divorces: 200 (140700 bytes)
 
 ## Checks
 
@@ -122,7 +122,7 @@
 - PASS: GET /article/equitable-distribution-in-north-carolina-divorces has no forbidden restaurant copy
 - PASS: /conference is intentionally excluded, redirected, or noindexed
 - PASS: /thank-you is intentionally excluded, redirected, or noindexed
-- PASS: Import manifest vertical is professional_service
+- PASS: Import manifest uses DB-supported service vertical
 - PASS: Import manifest selects Blawby
 - PASS: Import manifest contains offerings
 - PASS: Import manifest contains /pricing tenant page
@@ -345,6 +345,7 @@
 - PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/special-education.webp
 - PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/getting_a_divorce_in_north_carolina.webp
 - PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/equitable_distribution_in_north_carolina_divorces.webp
+- PASS: Public Blawby API data is fetchable and valid
 - PASS: Public Blawby API returns offerings
 - PASS: Public Blawby API returns /pricing
 - PASS: Public consultation tracking is enabled

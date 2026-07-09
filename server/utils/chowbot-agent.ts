@@ -87,6 +87,7 @@ import {
 } from "~/server/utils/mcp-workflows";
 import {
   getProfessionalServiceContent,
+  ProfessionalServiceValidationError,
   upsertProfessionalServiceContent,
 } from "~/server/utils/professional-services-editor";
 import {
@@ -1836,7 +1837,10 @@ async function executeTool(
           updatedBy: userId,
         });
       } catch (error) {
-        return { error: error instanceof Error ? error.message : "Invalid professional-service content." };
+        if (error instanceof ProfessionalServiceValidationError) {
+          return { error: error.message };
+        }
+        throw error;
       }
     }
 

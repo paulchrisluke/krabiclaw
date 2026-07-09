@@ -1,6 +1,14 @@
-import { executeBatch, type BatchQuery, type DbClient } from '~/server/db'
+import { executeBatch, queryAll, type BatchQuery, type DbClient } from '~/server/db'
 import { cleanString } from '~/server/utils/api-response'
 import { getPublicBlawbyData } from '~/server/utils/professional-services'
+import { sanitizeUrl } from '~/utils/sanitize'
+
+export class ProfessionalServiceValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ProfessionalServiceValidationError'
+  }
+}
 
 function json(value: unknown) {
   return JSON.stringify(value ?? null)
@@ -8,6 +16,14 @@ function json(value: unknown) {
 
 function idWith(prefix: string) {
   return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`
+}
+
+function validationError(message: string): never {
+  throw new ProfessionalServiceValidationError(message)
+}
+
+function safeStoredUrl(value: unknown, maxLength: number) {
+  return sanitizeUrl(cleanString(value, maxLength)) || null
 }
 
 function recordArray(value: unknown): ApiRecord[] {
@@ -18,7 +34,7 @@ function assertNoArbitraryCalculatorLogic(value: unknown, path = 'calculator') {
   if (value == null) return
   if (typeof value === 'string') {
     if (/\b(function|eval|new Function|script|formula|expression|javascript:)\b|=>/i.test(value)) {
-      throw new Error(`${path} contains arbitrary calculator logic. Use structured ranges, fees, and source metadata.`)
+      validationError(`${path} contains arbitrary calculator logic. Use structured ranges, fees, and source metadata.`)
     }
     return
   }
@@ -29,7 +45,7 @@ function assertNoArbitraryCalculatorLogic(value: unknown, path = 'calculator') {
   }
   for (const [key, nested] of Object.entries(value)) {
     if (/^(formula|expression|script|function|code|javascript)$/i.test(key)) {
-      throw new Error(`${path}.${key} is not allowed. Calculator components must be structured data, not executable logic.`)
+      validationError(`${path}.${key} is not allowed. Calculator components must be structured data, not executable logic.`)
     }
     assertNoArbitraryCalculatorLogic(nested, `${path}.${key}`)
   }
@@ -48,7 +64,7 @@ export function validateProfessionalServicePayload(body: ApiRecord) {
         cleanString((component.table as ApiRecord | undefined)?.effectiveDate, 80),
       )
       if (!hasSource) {
-        throw new Error('pricing_calculator needs source or effective date metadata.')
+        validationError('pricing_calculator needs source or effective date metadata.')
       }
     }
   }
@@ -71,12 +87,30 @@ export async function upsertProfessionalServiceContent(
   const { organizationId, siteId, data, updatedBy = null } = input
   const written: Record<string, number> = {}
   const statements: BatchQuery[] = []
+  const navigationItems = recordArray(data.navigation)
+  const providedNavigationIds = Array.from(new Set(
+    navigationItems
+      .map(item => cleanString(item.id, 80))
+      .filter(Boolean),
+  ))
+
+  if (providedNavigationIds.length) {
+    const foreignNavigation = await queryAll<{ id: string }>(db, `
+      SELECT id
+        FROM tenant_navigation_items
+       WHERE id IN (${providedNavigationIds.map(() => '?').join(',')})
+         AND (organization_id <> ? OR site_id <> ?)
+    `, [...providedNavigationIds, organizationId, siteId])
+    if (foreignNavigation.length) {
+      validationError('Navigation item ids must belong to the current site.')
+    }
+  }
 
   for (const item of recordArray(data.offerings)) {
     const id = cleanString(item.id, 80) || idWith('offering')
     const name = cleanString(item.name, 200)
     const slug = cleanString(item.slug, 180)
-    if (!name || !slug) throw new Error('Each offering needs name and slug.')
+    if (!name || !slug) validationError('Each offering needs name and slug.')
     statements.push({
       query: `
       INSERT INTO offerings
@@ -111,7 +145,7 @@ export async function upsertProfessionalServiceContent(
         json(Array.isArray(item.features) ? item.features : []),
         json(Array.isArray(item.faqs) ? item.faqs : []),
         cleanString(item.cta_label, 120) || null,
-        cleanString(item.cta_url, 500) || null,
+        safeStoredUrl(item.cta_url, 500),
         cleanString(item.thumbnail_asset_id, 120) || null,
         cleanString(item.hero_image_asset_id, 120) || null,
         json(Array.isArray(item.media_asset_ids) ? item.media_asset_ids : []),
@@ -134,7 +168,7 @@ export async function upsertProfessionalServiceContent(
     const id = cleanString(item.id, 80) || idWith('page')
     const pagePath = cleanString(item.path, 300)
     const title = cleanString(item.title, 200)
-    if (!pagePath || !title || !pagePath.startsWith('/')) throw new Error('Each tenant page needs a rooted path and title.')
+    if (!pagePath || !title || !pagePath.startsWith('/')) validationError('Each tenant page needs a rooted path and title.')
     statements.push({
       query: `
       INSERT INTO tenant_pages
@@ -163,10 +197,10 @@ export async function upsertProfessionalServiceContent(
         typeof item.body === 'string' ? item.body : null,
         json(Array.isArray(item.components) ? item.components : []),
         cleanString(item.cta_label, 120) || null,
-        cleanString(item.cta_url, 500) || null,
+        safeStoredUrl(item.cta_url, 500),
         cleanString(item.seo_title, 200) || null,
         cleanString(item.seo_description, 500) || null,
-        cleanString(item.canonical_url, 500) || null,
+        safeStoredUrl(item.canonical_url, 500),
         cleanString(item.robots, 120) || null,
         cleanString(item.status, 30) || 'published',
         Number(item.sort_order ?? 0),
@@ -234,9 +268,9 @@ export async function upsertProfessionalServiceContent(
         siteId,
         item.mode === 'native_disabled' ? 'native_disabled' : 'external_url',
         cleanString(item.cta_label, 120) || 'Book a consultation',
-        cleanString(item.external_url, 500) || null,
-        cleanString(item.schedule_path, 300) || '/schedule',
-        cleanString(item.confirmation_path, 300) || '/contact/confirmed',
+        safeStoredUrl(item.external_url, 500),
+        safeStoredUrl(item.schedule_path, 300) || '/schedule',
+        safeStoredUrl(item.confirmation_path, 300) || '/contact/confirmed',
         item.tracking_enabled === false ? 0 : 1,
         json(typeof item.metadata === 'object' ? item.metadata : {}),
         updatedBy,
@@ -260,7 +294,7 @@ export async function upsertProfessionalServiceContent(
     written.themeTokens = 1
   }
 
-  for (const item of recordArray(data.navigation)) {
+  for (const item of navigationItems) {
     const id = cleanString(item.id, 80) || idWith('nav')
     statements.push({
       query: `
@@ -278,7 +312,7 @@ export async function upsertProfessionalServiceContent(
         siteId,
         cleanString(item.area, 30) || 'header',
         cleanString(item.label, 120) || 'Link',
-        cleanString(item.url, 500) || '/',
+        safeStoredUrl(item.url, 500) || '/',
         cleanString(item.item_type, 40) || 'internal',
         Number(item.sort_order ?? 0),
         cleanString(item.status, 30) || 'active',

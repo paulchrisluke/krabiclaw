@@ -33,14 +33,14 @@ type TenantPageRow = ApiRecord & {
   components_json: string | null
 }
 
-async function loadMediaById(db: DbClient, mediaIds: string[]) {
+async function loadMediaById(db: DbClient, siteId: string, mediaIds: string[]) {
   const uniqueIds = Array.from(new Set(mediaIds)).filter(Boolean)
   const mediaRows = uniqueIds.length
     ? await queryAll<ApiRecord>(db, `
         SELECT id, public_url, kind, alt_text
           FROM media_assets
-         WHERE id IN (${uniqueIds.map(() => '?').join(',')}) AND status = 'active'
-      `, uniqueIds)
+         WHERE site_id = ? AND id IN (${uniqueIds.map(() => '?').join(',')}) AND status = 'active'
+      `, [siteId, ...uniqueIds])
     : []
   return new Map(mediaRows.map(row => [String(row.id), row]))
 }
@@ -109,7 +109,7 @@ export async function listPublicOfferings(db: DbClient, siteId: string): Promise
   `, [siteId])
 
   const mediaIds = rows.flatMap(row => parseJson<string[]>(row.media_asset_ids, []))
-  const mediaById = await loadMediaById(db, mediaIds)
+  const mediaById = await loadMediaById(db, siteId, mediaIds)
   return rows.map(row => mapOfferingRow(row, mediaById))
 }
 
@@ -125,7 +125,7 @@ export async function getPublicOfferingBySlug(db: DbClient, siteId: string, slug
      LIMIT 1
   `, [siteId, slug])
   if (!row) return null
-  const mediaById = await loadMediaById(db, parseJson<string[]>(row.media_asset_ids, []))
+  const mediaById = await loadMediaById(db, siteId, parseJson<string[]>(row.media_asset_ids, []))
   return mapOfferingRow(row, mediaById)
 }
 

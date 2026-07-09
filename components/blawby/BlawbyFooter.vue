@@ -2,7 +2,7 @@
   <footer class="border-t border-[var(--blawby-border)] bg-[var(--blawby-primary)] text-white">
     <div class="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.4fr_1fr_1fr] lg:px-8">
       <div>
-        <p class="font-display text-2xl">{{ brandName }}</p>
+        <p class="blawby-display text-2xl">{{ brandName }}</p>
         <p v-if="description" class="mt-4 max-w-xl text-sm leading-7 text-white/75">{{ description }}</p>
         <p v-if="compliance?.footer_disclaimer" class="mt-5 max-w-xl text-xs leading-6 text-white/60">
           {{ stripHtml(compliance.footer_disclaimer) }}

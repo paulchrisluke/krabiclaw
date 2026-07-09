@@ -57,6 +57,10 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         return rethrowAsInvalidParams(error);
       }
     case "get_professional_service_content":
+      console.info(
+        "[MCP] get_professional_service_content invoked site=%s",
+        site.siteId,
+      );
       return await getProfessionalServiceContent(site.db, site.siteId);
     case "update_professional_service_content":
       try {
@@ -66,10 +70,15 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           data: objectRecord(args, "content"),
           updatedBy: site.userId,
         });
-        return {
-          ...updated,
-          context: await mutationContextPayload(site),
-        };
+        const context = await mutationContextPayload(site);
+        return renderStructuredResponse(
+          {
+            ...updated,
+            context,
+          },
+          "Updated professional-service content.",
+          { professional_service_content: updated, context },
+        );
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }

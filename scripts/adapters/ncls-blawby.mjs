@@ -424,7 +424,7 @@ function buildPayload(config) {
     site: {
       brand_name: tenant.name,
       brand_description: tenant.description,
-      vertical: 'professional_service',
+      vertical: 'service',
       theme_id: 'blawby-theme-v1',
       domain: tenant.domain,
       email: tenant.email,
@@ -530,6 +530,9 @@ function generateSeedPreview(outDir) {
     cwd: repoRoot,
     encoding: 'utf8',
   })
+  if (result.error) {
+    throw new Error(`Failed to generate NCLS Blawby seed preview: ${result.error.message}`)
+  }
   if (result.status !== 0) {
     throw new Error(`Failed to generate NCLS Blawby seed preview:\n${result.stderr || result.stdout}`)
   }
@@ -568,7 +571,7 @@ function approveClientImport(outDir) {
     approved_at: new Date().toISOString(),
     manifest_hash: approvalHash(outDir),
     slug: 'north-carolina-legal-services',
-    vertical: 'professional_service',
+    vertical: 'service',
     adapter: 'ncls-blawby',
   })
 }

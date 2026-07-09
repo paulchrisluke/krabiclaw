@@ -2,7 +2,7 @@
   <NuxtLayout name="blawby">
     <article v-if="post" class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
       <p v-if="post.category" class="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--blawby-accent-strong)]">{{ post.category }}</p>
-      <h1 class="mt-4 font-display text-5xl leading-tight text-[var(--blawby-primary)]">{{ post.title }}</h1>
+      <h1 class="mt-4 blawby-display text-5xl leading-tight text-[var(--blawby-primary)]">{{ post.title }}</h1>
       <p v-if="post.excerpt" class="mt-5 text-lg leading-8 text-slate-600">{{ post.excerpt }}</p>
       <img v-if="postMedia.url" :src="postMedia.url" :alt="post.title" class="mt-10 aspect-[16/9] w-full object-cover">
       <BlawbyRichText class="mt-10" :content="body" />
@@ -37,16 +37,27 @@ interface TenantBlogPost {
   featured_image?: { public_url: string | null; kind: string | null; width: number | null; height: number | null } | null
 }
 
-const params = useBootstrapParams()
-const bootstrapKey = computed(() => useBootstrapKey(siteId, params.value))
-const bootstrapUrl = computed(() => useBootstrapUrl(siteId, params.value))
-const requestFetch = useRequestFetch()
+const route = useRoute()
+const articleEndpoint = computed(() => `/api/public/sites/${siteId}/blog/${String(route.params.slug)}`)
 
 const { data, error } = await useAsyncData<{ blogPost: TenantBlogPost | null }>(
-  bootstrapKey,
-  () => (import.meta.server
-    ? requestFetch<{ blogPost: TenantBlogPost | null }>(bootstrapUrl.value)
-    : $fetch<{ blogPost: TenantBlogPost | null }>(bootstrapUrl.value)),
+  () => `blawby-article-${siteId}-${String(route.params.slug)}`,
+  async () => {
+    if (import.meta.server) {
+      const requestEvent = useRequestEvent()
+      if (!requestEvent) throw createError({ statusCode: 404, statusMessage: 'Article not found' })
+      const [{ cloudflareEnv }, { getPublishedSiteBlogPost }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/platform-content'),
+      ])
+      const db = cloudflareEnv(requestEvent).db
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+      const blogPost = await getPublishedSiteBlogPost(db, siteId, String(route.params.slug)) as TenantBlogPost | null
+      return { blogPost }
+    }
+    const payload = await $fetch<{ post: TenantBlogPost | null }>(articleEndpoint.value)
+    return { blogPost: payload.post }
+  },
   {
     getCachedData(k, nuxtApp) {
       return nuxtApp.payload.data[k] as { blogPost: TenantBlogPost | null } | undefined

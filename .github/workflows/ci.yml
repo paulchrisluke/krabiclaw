@@ -196,6 +196,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
         run: |
           yarn migrate:preview
           node --experimental-strip-types scripts/generate-demo-bundle.ts
@@ -204,7 +205,7 @@ jobs:
           node --experimental-strip-types scripts/generate-pottery-house-seed.ts --preview
           sleep 5
           node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview
-          if [ "${{ needs.changes.outputs.blawby }}" = "true" ]; then
+          if [ "$BLAWBY_CHANGED" = "true" ]; then
             node scripts/generate-ncls-blawby-seed.mjs --preview
           fi
       - name: Deploy preview Worker

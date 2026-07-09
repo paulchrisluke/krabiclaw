@@ -595,7 +595,7 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
 }
 
 registry.en.professional_service = {
-  ...registry.en.experience!,
+  ...(registry.en.experience ?? registry.en.restaurant!),
   poweredByTagline: "professional-service sites that stay current",
   aboutImageAlt: "About our organization",
   ctaTitle: "Talk with our team.",

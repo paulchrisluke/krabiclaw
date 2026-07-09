@@ -5,8 +5,8 @@ KrabiClaw is a multi-tenant platform for local business websites managed through
 ## Language
 
 **Professional-service tenant**:
-A tenant whose public site sells expertise, consultation, representation, care, or advisory work rather than food, hospitality, retail inventory, or bookable activities. The canonical vertical value is `professional_service`; legal-services tenants are one kind of professional-service tenant.
-_Avoid_: service tenant, legal_service vertical, generic service vertical
+A tenant whose public site sells expertise, consultation, representation, care, or advisory work rather than food, hospitality, retail inventory, or bookable activities. Legal-services tenants are one kind of professional-service tenant. In the current DB schema, Blawby tenants store the existing `service` vertical and select professional-service rendering with `theme_id = 'blawby-theme-v1'`; do not rebuild the historical `sites` table just to add a narrower vertical string.
+_Avoid_: legal_service vertical, fake professional_service DB migration, restaurant/experience wording
 
 **Professional-service empty state**:
 Fallback or edit-mode copy shown when professional-service tenant content is missing. It may use neutral professional examples in owner-facing edit mode, but public production pages must not leak restaurant, hospitality, retail, or experience wording.

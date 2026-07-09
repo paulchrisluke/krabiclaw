@@ -88,7 +88,7 @@ export const northcarolinalegalservices: ISeedTenant = {
 test('NCLS Blawby adapter normalizes source data into cutover artifacts', () => {
   const payload = runAdapter(sourceFixture)
 
-  assert.equal(payload.site.vertical, 'professional_service')
+  assert.equal(payload.site.vertical, 'service')
   assert.equal(payload.site.theme_id, 'blawby-theme-v1')
   assert.equal(payload.consultation.external_url, 'https://ncls.cliogrow.com/book')
   assert.equal(payload.consultation.legacy_source_calendly_url_ignored, 'https://calendly.com/old-link')

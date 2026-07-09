@@ -18,24 +18,9 @@ import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawnYarn } from './utils/spawn-yarn.mjs'
 
 const args = process.argv.slice(2)
-
-function shellQuote(value) {
-  const text = String(value)
-  return /\s/.test(text) ? `"${text.replace(/"/g, '\\"')}"` : text
-}
-
-function spawnYarn(args) {
-  if (process.platform === 'win32') {
-    return spawnSync('cmd.exe', ['/d', '/s', '/c', `corepack yarn ${args.map(shellQuote).join(' ')}`], {
-      stdio: 'inherit',
-      cwd: process.cwd(),
-    })
-  }
-  return spawnSync('corepack', ['yarn', ...args], { stdio: 'inherit', cwd: process.cwd() })
-}
 
 function arg(name) {
   const idx = args.indexOf(name)

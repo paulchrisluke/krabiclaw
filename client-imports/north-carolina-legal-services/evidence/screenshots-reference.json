@@ -8,154 +8,154 @@
       "route": "/",
       "viewport": "desktop",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\home-desktop.png"
+      "file": "screenshots/reference/home-desktop.png"
     },
     {
       "route_name": "services",
       "route": "/services",
       "viewport": "desktop",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\services-desktop.png"
+      "file": "screenshots/reference/services-desktop.png"
     },
     {
       "route_name": "service-detail",
       "route": "/services/family",
       "viewport": "desktop",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\service-detail-desktop.png"
+      "file": "screenshots/reference/service-detail-desktop.png"
     },
     {
       "route_name": "pricing",
       "route": "/pricing",
       "viewport": "desktop",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\pricing-desktop.png"
+      "file": "screenshots/reference/pricing-desktop.png"
     },
     {
       "route_name": "about",
       "route": "/about",
       "viewport": "desktop",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\about-desktop.png"
+      "file": "screenshots/reference/about-desktop.png"
     },
     {
       "route_name": "contact",
       "route": "/contact",
       "viewport": "desktop",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\contact-desktop.png"
+      "file": "screenshots/reference/contact-desktop.png"
     },
     {
       "route_name": "schedule",
       "route": "/schedule",
       "viewport": "desktop",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\schedule-desktop.png"
+      "file": "screenshots/reference/schedule-desktop.png"
     },
     {
       "route_name": "blog",
       "route": "/blog",
       "viewport": "desktop",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\blog-desktop.png"
+      "file": "screenshots/reference/blog-desktop.png"
     },
     {
       "route_name": "article",
       "route": "/article/getting-a-divorce-in-north-carolina",
       "viewport": "desktop",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\article-desktop.png"
+      "file": "screenshots/reference/article-desktop.png"
     },
     {
       "route_name": "donate",
       "route": "/donate",
       "viewport": "desktop",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\donate-desktop.png"
+      "file": "screenshots/reference/donate-desktop.png"
     },
     {
       "route_name": "policy",
       "route": "/policies/privacy",
       "viewport": "desktop",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\policy-desktop.png"
+      "file": "screenshots/reference/policy-desktop.png"
     },
     {
       "route_name": "home",
       "route": "/",
       "viewport": "mobile",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\home-mobile.png"
+      "file": "screenshots/reference/home-mobile.png"
     },
     {
       "route_name": "services",
       "route": "/services",
       "viewport": "mobile",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\services-mobile.png"
+      "file": "screenshots/reference/services-mobile.png"
     },
     {
       "route_name": "service-detail",
       "route": "/services/family",
       "viewport": "mobile",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\service-detail-mobile.png"
+      "file": "screenshots/reference/service-detail-mobile.png"
     },
     {
       "route_name": "pricing",
       "route": "/pricing",
       "viewport": "mobile",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\pricing-mobile.png"
+      "file": "screenshots/reference/pricing-mobile.png"
     },
     {
       "route_name": "about",
       "route": "/about",
       "viewport": "mobile",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\about-mobile.png"
+      "file": "screenshots/reference/about-mobile.png"
     },
     {
       "route_name": "contact",
       "route": "/contact",
       "viewport": "mobile",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\contact-mobile.png"
+      "file": "screenshots/reference/contact-mobile.png"
     },
     {
       "route_name": "schedule",
       "route": "/schedule",
       "viewport": "mobile",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\schedule-mobile.png"
+      "file": "screenshots/reference/schedule-mobile.png"
     },
     {
       "route_name": "blog",
       "route": "/blog",
       "viewport": "mobile",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\blog-mobile.png"
+      "file": "screenshots/reference/blog-mobile.png"
     },
     {
       "route_name": "article",
       "route": "/article/getting-a-divorce-in-north-carolina",
       "viewport": "mobile",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\article-mobile.png"
+      "file": "screenshots/reference/article-mobile.png"
     },
     {
       "route_name": "donate",
       "route": "/donate",
       "viewport": "mobile",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\donate-mobile.png"
+      "file": "screenshots/reference/donate-mobile.png"
     },
     {
       "route_name": "policy",
       "route": "/policies/privacy",
       "viewport": "mobile",
       "status": 200,
-      "file": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\policy-mobile.png"
+      "file": "screenshots/reference/policy-mobile.png"
     }
   ]
 }

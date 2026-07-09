@@ -103,7 +103,7 @@ const blogRows = values((manifest.articles ?? []).map((article, index) => `(
   ${sqlValue(article.title)}, ${sqlValue(article.slug)}, ${sqlValue(article.body || article.excerpt || '')},
   ${sqlValue(article.excerpt)}, ${sqlValue(article.category || 'Legal Services')}, 'published',
   ${sqlValue(USER_ID)}, NULL,
-  ${sqlValue(`2026-01-${String(index + 1).padStart(2, '0')}T12:00:00.000Z`)},
+  ${sqlValue(new Date(Date.UTC(2026, 0, 1, 12) + index * 86400000).toISOString())},
   ${now}, ${now}, ${sqlValue(article.seo_description)}, ${sqlValue(article.seo_keywords)},
   ${sqlValue(article.canonical_url || `/article/${article.slug}`)}, NULL
 )`))

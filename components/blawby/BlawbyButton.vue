@@ -6,7 +6,7 @@
     :type="isButton ? type : undefined"
     :target="isExternal ? '_blank' : undefined"
     :rel="isExternal ? 'noopener noreferrer' : undefined"
-    class="inline-flex min-h-11 items-center justify-center border px-5 py-3 text-sm font-semibold no-underline transition"
+    class="inline-flex min-h-11 items-center justify-center border px-5 py-3 text-sm font-semibold no-underline transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-primary)] focus-visible:ring-offset-2"
     :class="variant === 'outline'
       ? 'border-[var(--blawby-primary)] text-[var(--blawby-primary)] hover:bg-[var(--blawby-primary)] hover:text-white'
       : 'border-[var(--blawby-accent)] bg-[var(--blawby-accent)] text-[var(--blawby-primary)] hover:brightness-95'"

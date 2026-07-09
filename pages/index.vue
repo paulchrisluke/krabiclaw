@@ -445,15 +445,11 @@ import { getActiveSpecialClosure } from '~/utils/formatters'
 
 definePageMeta({ layout: false })
 
-const { isPlatform, siteId, site, themeId } = useTenantSite()
+const { isPlatform, siteId, site } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
 const { locale } = useI18n()
-const isBlawbyPage = computed(() =>
-  isBlawby.value ||
-  themeId === 'blawby-theme-v1' ||
-  site?.vertical === 'professional_service'
-)
-const useSayaBootstrap = computed(() => !isBlawbyPage.value)
+const isBlawbyPage = computed(() => isBlawby.value)
+const shouldUseSayaBootstrap = computed(() => !isBlawbyPage.value)
 
 const platformPlans = isPlatform ? usePlans().plans : ref(null)
 const plans = computed(() => isPlatform ? platformPlans.value : null)
@@ -500,7 +496,7 @@ const {
   experiencesList,
   contentBlocks,
   blogList,
-} = useBootstrap({ enabled: useSayaBootstrap })
+} = useBootstrap({ enabled: shouldUseSayaBootstrap })
 
 const locations = computed(() => bootstrapLocations.value)
 const hasOrderLinks = computed(() =>

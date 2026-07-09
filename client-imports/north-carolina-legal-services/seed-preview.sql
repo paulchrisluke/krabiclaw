@@ -32,7 +32,7 @@ INSERT INTO sites (
   'North Carolina Legal Services', 'Access to Justice for All. North Carolina''s affordable legal services. We believe that access to the Justice System is a fundamental right. At North Carolina Legal Services we are committed to removing financial barriers that prevent many in our community from obtaining high-quality legal assistance.',
   'contact@northcarolinalegalservices.org', '(919) 886-4134',
   'en', 'USD', 'active', 'managed', 'active',
-  'brand_pages', 'professional_service', 'client_supplied', 'client_photos', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+  'brand_pages', 'service', 'client_supplied', 'client_photos', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 );
 
 INSERT INTO site_domains (id, organization_id, site_id, domain, type, role, status, dns_status, activated_at, created_at, updated_at)

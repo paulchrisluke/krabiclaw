@@ -135,7 +135,6 @@ const planList = computed(() => props.plans ?? [])
 const MAIN_PLAN_IDS = ['free', 'growth', 'managed']
 const mainPlans = computed(() => planList.value.filter(p => MAIN_PLAN_IDS.includes(p.id)))
 const seoAcceleratorPlan = computed(() => planList.value.find(p => p.id === 'seo_accelerator') ?? null)
-const hasManagedTier = computed(() => mainPlans.value.some(p => p.id === 'managed') || Boolean(seoAcceleratorPlan.value))
 const seoAcceleratorMonthlyPrice = computed(() => {
   const plan = seoAcceleratorPlan.value
   if (!plan) return null

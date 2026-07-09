@@ -5,7 +5,7 @@
       <div class="relative mx-auto grid max-w-7xl gap-10 px-4 py-20 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8 lg:py-28">
         <div>
           <p class="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--blawby-accent)]">{{ compliance?.nonprofit_status || 'Professional services' }}</p>
-          <h1 class="mt-5 max-w-4xl font-display text-5xl leading-tight sm:text-6xl lg:text-7xl">
+          <h1 class="mt-5 max-w-4xl blawby-display text-5xl leading-tight sm:text-6xl lg:text-7xl">
             {{ site?.brand_name || 'Professional guidance with care.' }}
           </h1>
           <p class="mt-6 max-w-2xl text-lg leading-8 text-white/80">
@@ -29,7 +29,7 @@
               :to="`/services/${offering.slug}`"
               class="group block border-t border-white/15 pt-5 text-white no-underline"
             >
-              <span class="font-display text-2xl">{{ offering.name }}</span>
+              <span class="blawby-display text-2xl">{{ offering.name }}</span>
               <p class="mt-2 text-sm leading-6 text-white/70">{{ offering.summary || offering.short_description }}</p>
             </NuxtLink>
           </div>
@@ -40,7 +40,7 @@
     <section class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
       <div class="mb-12 max-w-3xl">
         <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--blawby-accent-strong)]">Services</p>
-        <h2 class="mt-4 font-display text-4xl text-[var(--blawby-primary)]">How we can help</h2>
+        <h2 class="mt-4 blawby-display text-4xl text-[var(--blawby-primary)]">How we can help</h2>
       </div>
       <div v-if="offerings.length" class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
         <NuxtLink
@@ -50,7 +50,7 @@
           class="group border border-[var(--blawby-border)] bg-white p-7 no-underline transition hover:-translate-y-0.5 hover:border-[var(--blawby-accent)]"
         >
           <img v-if="offering.thumbnail_url" :src="offering.thumbnail_url" :alt="offering.name" class="mb-5 aspect-[4/3] w-full object-cover">
-          <h3 class="font-display text-2xl text-[var(--blawby-primary)]">{{ offering.name }}</h3>
+          <h3 class="blawby-display text-2xl text-[var(--blawby-primary)]">{{ offering.name }}</h3>
           <p class="mt-3 text-sm leading-7 text-slate-600">{{ offering.summary || offering.short_description }}</p>
           <span class="mt-5 inline-block text-sm font-semibold text-[var(--blawby-accent-strong)]">Learn more</span>
         </NuxtLink>
@@ -64,12 +64,12 @@
       <div class="mx-auto grid max-w-7xl gap-10 px-4 py-20 sm:px-6 lg:grid-cols-3 lg:px-8">
         <div class="lg:col-span-2">
           <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--blawby-accent-strong)]">Mission</p>
-          <h2 class="mt-4 font-display text-4xl text-[var(--blawby-primary)]">{{ compliance?.entity_name || site?.brand_name || 'Our work' }}</h2>
+          <h2 class="mt-4 blawby-display text-4xl text-[var(--blawby-primary)]">{{ compliance?.entity_name || site?.brand_name || 'Our work' }}</h2>
           <p class="mt-5 text-base leading-8 text-slate-600">{{ compliance?.disclaimer || site?.brand_description }}</p>
         </div>
         <div class="border-l border-[var(--blawby-border)] pl-8">
           <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--blawby-accent-strong)]">Contact</p>
-          <p class="mt-4 font-display text-2xl text-[var(--blawby-primary)]">{{ consultation.cta_label }}</p>
+          <p class="mt-4 blawby-display text-2xl text-[var(--blawby-primary)]">{{ consultation.cta_label }}</p>
           <BlawbyButton class="mt-6" :to="consultation.external_url || consultation.schedule_path" @click="trackConsultation">
             Get started
           </BlawbyButton>

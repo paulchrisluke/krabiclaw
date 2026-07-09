@@ -1,7 +1,7 @@
 <template>
   <article class="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
     <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--blawby-accent-strong)]">{{ eyebrow }}</p>
-    <h1 class="mt-4 font-display text-5xl leading-tight text-[var(--blawby-primary)]">{{ pageTitle }}</h1>
+    <h1 class="mt-4 blawby-display text-5xl leading-tight text-[var(--blawby-primary)]">{{ pageTitle }}</h1>
     <p v-if="pageSummary" class="mt-5 text-lg leading-8 text-slate-600">{{ pageSummary }}</p>
 
     <BlawbyRichText v-if="pageBody" class="mt-10" :content="pageBody" />

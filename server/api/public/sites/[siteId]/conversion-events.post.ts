@@ -1,9 +1,16 @@
 import { queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getClientIp, hashClientIp } from '~/server/utils/hourly-rate-limit'
+import { HOUR_MS, getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { recordSiteConversionEvent } from '~/server/utils/professional-services'
 
 const VALID_EVENTS = new Set(['page_view', 'book_consultation_click', 'contact_submit'])
+const CONVERSION_IP_HOURLY_LIMIT = 120
+
+function boundedMetadata(value: unknown): ApiRecord | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  const serialized = JSON.stringify(value)
+  return serialized.length <= 4000 ? value as ApiRecord : null
+}
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -26,7 +33,7 @@ export default defineEventHandler(async (event) => {
   const site = await queryFirst<{ id: string; organization_id: string; vertical: string | null; theme_id: string | null }>(db, `
     SELECT id, organization_id, vertical, theme_id
       FROM sites
-     WHERE id = ? AND status = 'active'
+     WHERE id = ? AND status = 'active' AND onboarding_status = 'active'
      LIMIT 1
   `, [siteId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
@@ -36,6 +43,15 @@ export default defineEventHandler(async (event) => {
 
   const clientIp = getClientIp(event)
   const ipHash = clientIp ? await hashClientIp(clientIp) : null
+  const hourWindow = new Date().toISOString().slice(0, 13)
+  const rateLimitOk = await incrementHourlyRateLimit(
+    db,
+    `rate:conversion:${siteId}:ip:${ipHash ?? 'unknown'}:${hourWindow}`,
+    import.meta.dev ? 1000 : CONVERSION_IP_HOURLY_LIMIT,
+    HOUR_MS,
+  )
+  if (!rateLimitOk) return jsonResponse({ error: 'Too many events. Please try again later.' }, { status: 429 })
+
   const result = await recordSiteConversionEvent(db, {
     organizationId: site.organization_id,
     siteId,
@@ -45,7 +61,7 @@ export default defineEventHandler(async (event) => {
     pageLocation: cleanString(body.page_location, 500) || null,
     ctaDestination: cleanString(body.cta_destination, 500) || null,
     tenant: cleanString(body.tenant, 200) || null,
-    metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata : null,
+    metadata: boundedMetadata(body.metadata),
     ipHash,
     userAgent: cleanString(getHeader(event, 'user-agent'), 500) || null,
   })

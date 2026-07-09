@@ -30,21 +30,7 @@ import { join, extname, basename, relative } from "node:path";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-
-function shellQuote(value) {
-  const text = String(value);
-  return /\s/.test(text) ? `"${text.replace(/"/g, '\\"')}"` : text;
-}
-
-function spawnYarn(args) {
-  if (process.platform === "win32") {
-    return spawnSync("cmd.exe", ["/d", "/s", "/c", `corepack yarn ${args.map(shellQuote).join(" ")}`], {
-      stdio: "inherit",
-      cwd: process.cwd(),
-    });
-  }
-  return spawnSync("corepack", ["yarn", ...args], { stdio: "inherit", cwd: process.cwd() });
-}
+import { spawnYarn } from "./utils/spawn-yarn.mjs";
 
 // ── Args ─────────────────────────────────────────────────────────────────────
 

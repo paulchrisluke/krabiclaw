@@ -89,7 +89,12 @@ function readJson(filePath) {
 }
 
 function resolveUrl(base, route) {
-  return new URL(route, base.endsWith('/') ? base : `${base}/`).toString()
+  const baseUrl = new URL(base)
+  const resolved = new URL(route, `${baseUrl.origin}/`)
+  if (resolved.origin !== baseUrl.origin) {
+    throw new Error(`Route escapes verification origin: ${route}`)
+  }
+  return resolved.toString()
 }
 
 function isPreviewContext(hostname) {
@@ -131,7 +136,17 @@ function collectRoutes(manifest, explicitRoutes) {
   for (const route of manifest?.routeInventory?.preservedRoutes ?? []) {
     routes.add(route)
   }
-  return Array.from(routes).filter(Boolean)
+  return Array.from(routes).filter(Boolean).map((route) => {
+    try {
+      const parsed = new URL(route, 'https://verify-blawby.invalid/')
+      if (parsed.origin !== 'https://verify-blawby.invalid') {
+        throw new Error(`Route escapes verification origin: ${route}`)
+      }
+      return `${parsed.pathname}${parsed.search}${parsed.hash}`
+    } catch {
+      throw new Error(`Invalid local route: ${route}`)
+    }
+  })
 }
 
 function collectArtifactMediaUrls(value, urls = new Set()) {
@@ -155,12 +170,15 @@ function collectArtifactMediaUrls(value, urls = new Set()) {
 }
 
 function checkMediaUrl(url) {
-  if (url.startsWith('/')) return { ok: true, reason: 'relative route' }
+  if (url.startsWith('/') && !url.startsWith('//')) return { ok: true, reason: 'relative route' }
   let parsed
   try {
     parsed = new URL(url)
   } catch {
     return { ok: false, reason: 'invalid URL' }
+  }
+  if (parsed.protocol !== 'https:') {
+    return { ok: false, reason: 'media URL must use HTTPS' }
   }
   const host = parsed.hostname.toLowerCase()
   if (DISALLOWED_MEDIA_HOSTS.some((blocked) => host === blocked || host.endsWith(`.${blocked}`))) {
@@ -174,7 +192,7 @@ function checkMediaUrl(url) {
 
 let FETCH_HEADERS = {}
 
-async function fetchWithTimeout(url, options = {}) {
+async function fetchResponseWithTimeout(url, options = {}) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 10_000)
   try {
@@ -183,25 +201,29 @@ async function fetchWithTimeout(url, options = {}) {
       headers: { ...FETCH_HEADERS, ...(options.headers ?? {}) },
       signal: controller.signal,
     })
-    clearTimeout(timer)
-    return response
+    return { response, timer }
   } catch (error) {
     clearTimeout(timer)
-    return {
+    return { response: {
       ok: false,
       status: 0,
       statusText: error instanceof Error ? error.message : 'request failed',
       text: async () => '',
       json: async () => null,
-    }
+    }, timer: null }
   }
 }
 
-async function checkRoute(base, route) {
+async function checkRoute(base, route, options = {}) {
   const url = resolveUrl(base, route)
   const started = Date.now()
-  const response = await fetchWithTimeout(url, { redirect: 'follow' })
-  const html = await response.text().catch(() => '')
+  const { response, timer } = await fetchResponseWithTimeout(url, { redirect: options.redirect || 'follow' })
+  let html = ''
+  try {
+    html = await response.text().catch(() => '')
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
   const lower = html.toLowerCase()
   return {
     route,
@@ -221,16 +243,26 @@ async function checkRoute(base, route) {
 
 async function fetchBlawbyData(base, siteId) {
   if (!base || !siteId) return null
-  const response = await fetchWithTimeout(resolveUrl(base, `/api/public/sites/${siteId}/blawby`))
-  if (!response.ok) return null
-  return await response.json()
+  const { response, timer } = await fetchResponseWithTimeout(resolveUrl(base, `/api/public/sites/${siteId}/blawby`))
+  try {
+    if (!response.ok) return null
+    return await response.json()
+  } catch {
+    return null
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 async function fetchSitemap(base) {
   if (!base) return ''
-  const response = await fetchWithTimeout(resolveUrl(base, '/sitemap.xml'))
-  if (!response.ok) return ''
-  return await response.text().catch(() => '')
+  const { response, timer } = await fetchResponseWithTimeout(resolveUrl(base, '/sitemap.xml'))
+  try {
+    if (!response.ok) return ''
+    return await response.text().catch(() => '')
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 function validateCalculator(component) {
@@ -249,7 +281,7 @@ function validateCalculator(component) {
 
 function validateArtifacts(checks, manifest) {
   if (!manifest) return
-  pushCheck(checks, manifest.site?.vertical === 'professional_service', 'Import manifest vertical is professional_service')
+  pushCheck(checks, manifest.site?.vertical === 'service', 'Import manifest uses DB-supported service vertical')
   pushCheck(checks, manifest.site?.theme_id === 'blawby-theme-v1', 'Import manifest selects Blawby')
   pushCheck(checks, (manifest.offerings ?? []).length > 0, 'Import manifest contains offerings')
   pushCheck(checks, (manifest.tenantPages ?? []).some((page) => page.path === '/pricing'), 'Import manifest contains /pricing tenant page')
@@ -306,8 +338,12 @@ function validateArtifacts(checks, manifest) {
   }
 }
 
-function validatePublicData(checks, data) {
-  if (!data) return
+function validatePublicData(checks, data, required) {
+  if (!data) {
+    if (required) pushCheck(checks, false, 'Public Blawby API data is fetchable and valid')
+    return
+  }
+  pushCheck(checks, true, 'Public Blawby API data is fetchable and valid')
   pushCheck(checks, Array.isArray(data.offerings) && data.offerings.length > 0, 'Public Blawby API returns offerings')
   pushCheck(checks, Array.isArray(data.tenantPages) && data.tenantPages.some((page) => page.path === '/pricing'), 'Public Blawby API returns /pricing')
   pushCheck(checks, data.consultation?.tracking_enabled === true, 'Public consultation tracking is enabled')
@@ -384,7 +420,7 @@ function writeEvidenceBundle(outPath, report, manifest) {
   fs.mkdirSync(path.dirname(absolute), { recursive: true })
   fs.writeFileSync(absolute, `${JSON.stringify(report, null, 2)}\n`)
 
-  const mdPath = absolute.replace(/\.json$/i, '.md')
+  const mdPath = /\.json$/i.test(absolute) ? absolute.replace(/\.json$/i, '.md') : `${absolute}.md`
   const lines = [
     '# Blawby Cutover Evidence',
     '',
@@ -437,7 +473,7 @@ for (const route of routes) {
 
 if (baseUrl) {
   for (const excluded of ['/conference', '/thank-you']) {
-    const result = await checkRoute(baseUrl, excluded)
+    const result = await checkRoute(baseUrl, excluded, { redirect: 'manual' })
     const ok = result.status === 404 || result.status === 410 || result.status === 301 || result.status === 302 || result.has_noindex
     pushCheck(checks, ok, `${excluded} is intentionally excluded, redirected, or noindexed`, {
       status: result.status,
@@ -447,7 +483,7 @@ if (baseUrl) {
 }
 
 validateArtifacts(checks, manifest)
-validatePublicData(checks, await fetchBlawbyData(baseUrl, args.siteId))
+validatePublicData(checks, await fetchBlawbyData(baseUrl, args.siteId), Boolean(args.siteId))
 if (baseUrl) validateSitemap(checks, await fetchSitemap(baseUrl), manifest)
 validateScreenshots(checks, args.evidenceDir, args.requireScreenshots)
 

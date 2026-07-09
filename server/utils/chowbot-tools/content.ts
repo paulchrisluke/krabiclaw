@@ -68,6 +68,7 @@ export const CONTENT_CHOWBOT_TOOLS: AiTool[] = [
           navigation: { type: "array", items: { type: "object" } },
           themeTokens: { type: "object" },
         },
+        required: ["offerings"],
       },
     },
   {

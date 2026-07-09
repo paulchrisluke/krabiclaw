@@ -52,8 +52,11 @@ useHead(() => ({
   font-family: Poppins, ui-sans-serif, system-ui, sans-serif;
 }
 
-.font-display,
 .blawby-display {
+  font-family: Marcellus, Georgia, serif;
+}
+
+.blawby-shell .prose :where(h1, h2, h3, h4) {
   font-family: Marcellus, Georgia, serif;
 }
 </style>

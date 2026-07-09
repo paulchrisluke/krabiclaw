@@ -1,9 +1,9 @@
 {
   "approved": true,
   "approved_by": "Admin",
-  "approved_at": "2026-07-09T06:06:11.261Z",
-  "manifest_hash": "67443903c1295853b0584592f63d5a22088bf8c7960c593d0919300545ad38d0",
+  "approved_at": "2026-07-09T23:32:18.330Z",
+  "manifest_hash": "08a8bcd9b467fa388f48fcd54bcc1827cbe2fc883b311eab06fb2376b18dcf3e",
   "slug": "north-carolina-legal-services",
-  "vertical": "professional_service",
+  "vertical": "service",
   "adapter": "ncls-blawby"
 }

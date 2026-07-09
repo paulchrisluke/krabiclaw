@@ -7,3 +7,7 @@ Professional-service tenants need durable public content for services, practice 
 - Generic `offerings`: reusable across legal and adjacent professional-service tenants.
 - Dedicated `practice_areas`: clearer for legal but too narrow for the chosen `professional_service` vertical.
 - Reuse `experiences`: faster, but carries booking/activity fields and violates the platform boundary.
+
+## Decision
+
+Use generic `offerings` as the professional-service content model. Templates and API surfaces label offerings in tenant-appropriate language, such as "Practice Areas" for legal tenants.

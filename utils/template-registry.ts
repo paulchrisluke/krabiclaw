@@ -38,7 +38,7 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
     slug: 'blawby',
     themeId: 'blawby-theme-v1',
     layout: 'blawby',
-    verticals: ['professional_service'],
+    verticals: ['service'],
     serviceRoutes: {
       offeringsIndex: '/services',
       offeringDetailPrefix: '/services',
