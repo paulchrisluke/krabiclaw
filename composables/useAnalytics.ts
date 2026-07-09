@@ -52,13 +52,13 @@ export type AnalyticsEventName =
   | 'error_encountered'
   | 'api_error'
 
-export interface AnalyticsEventParams {
-  // Common params
+// Event-specific fields that don't belong to the structured page/location/
+// metadata groups below — everything here rides along under `properties`.
+export interface AnalyticsEventProperties {
   [key: string]: string | number | boolean | undefined
 
   // User Acquisition
   method?: string // 'oauth_google', 'oauth_github', 'email'
-  site_id?: string
   domain?: string
 
   // Billing
@@ -81,8 +81,6 @@ export interface AnalyticsEventParams {
   dashboard_section?: string // 'billing', 'content', 'settings', etc.
 
   // Engagement
-  page_path?: string
-  page_title?: string
   duration_seconds?: number
 
   // Error
@@ -91,6 +89,18 @@ export interface AnalyticsEventParams {
   error_context?: string
   api_endpoint?: string
   status_code?: number
+}
+
+// trackEvent()'s input: AnalyticsEventProperties plus the handful of fields
+// that get lifted into their own page/location/metadata groups instead of
+// staying in the flat properties bag — see trackEvent() below.
+export interface AnalyticsEventInput extends AnalyticsEventProperties {
+  site_id?: string
+  template?: string
+  page_path?: string
+  page_title?: string
+  page_language?: string
+  location_id?: string
 }
 
 // Reads the GA4 client_id out of the `_ga` cookie Zaraz's GA4 tool sets
@@ -110,12 +120,40 @@ export const getGaClientId = (): string | null => {
 export const useAnalytics = () => {
   const { isPlatform } = useTenantSite()
 
-  const trackEvent = (eventName: AnalyticsEventName, params: AnalyticsEventParams = {}) => {
-    if (import.meta.client) {
-      if (typeof window === 'undefined') return
-      if (!isPlatform) return
-      window.zaraz?.track(eventName, params)
-    }
+  // Builds a structured payload instead of one flat params bag, so it reads
+  // the same way it's queried later: page/location/metadata are recognizable
+  // groups, not properties mixed in with everything else. `event` itself
+  // isn't duplicated inside the payload — it's already `zaraz.track()`'s
+  // first argument, unlike the old krabiLayer array where every queued item
+  // needed its own `name` field to stay identifiable once flattened into one
+  // list. `metadata` is for values that are essentially constant for a given
+  // request (environment, site, device language) — event-specific data goes
+  // in `properties`. Extend with `transaction`/`products` groups the same
+  // way if/when e-commerce events are added.
+  const trackEvent = (eventName: AnalyticsEventName, input: AnalyticsEventInput = {}) => {
+    if (!import.meta.client) return
+    if (typeof window === 'undefined') return
+    if (!isPlatform) return
+
+    const { site_id, template, page_path, page_title, page_language, location_id, ...properties } = input
+
+    const page = (page_path || page_title || page_language)
+      ? { path: page_path, title: page_title, language: page_language }
+      : undefined
+
+    const location = location_id ? { id: location_id } : undefined
+
+    window.zaraz?.track(eventName, {
+      ...(page ? { page } : {}),
+      ...(location ? { location } : {}),
+      metadata: {
+        is_prod: import.meta.env.PROD,
+        site_id,
+        template,
+        device_language: navigator.language,
+      },
+      ...(Object.keys(properties).length ? { properties } : {}),
+    })
   }
 
   // User Acquisition & Onboarding
