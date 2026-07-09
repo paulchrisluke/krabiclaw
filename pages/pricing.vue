@@ -86,7 +86,7 @@ const { managedPlan, seoAcceleratorPlan } = usePlans()
 const faqs = [
   {
     q: 'What does "Managed" actually mean?',
-    a: "On the Managed plan, Paul & Julia handle your business's online presence entirely. Content changes, seasonal updates, translations, Google Business management — send us a WhatsApp voice note and we take care of it. You focus on your business.",
+    a: "On the Managed plan, our experts handle your business's online presence entirely.",
     requires: 'managed' as const,
   },
   {
@@ -99,12 +99,8 @@ const faqs = [
     requires: 'seo_accelerator' as const,
   },
   {
-    q: 'What are the one-time add-ons?',
-    a: 'You can purchase individual services without a monthly plan: a seasonal relaunch package ($99) or a Google Business optimization ($49). These are fulfilled by Paul & Julia within 3–5 business days.',
-  },
-  {
     q: 'Do you offer refunds?',
-    a: 'We offer a 30-day money-back guarantee on all paid plans. Email hello@krabiclaw.com within 30 days of your first payment.',
+    a: 'You can cancel your plan at any time through the dashboard. We use Stripe for secure billing and follow their standard cancellation policies.',
   },
   {
     q: 'What payment methods do you accept?',

@@ -466,7 +466,7 @@ const features = [
   { icon: 'sparkles', title: 'Beautiful themes', body: 'Conversion-optimized themes for local businesses. Pick one, swap a color, you\'re live.' },
   { icon: 'globe', title: 'Google Business sync', body: 'Hours, photos, offerings — pushed to Google so guests find the right info every time.' },
   { icon: 'calendar', title: 'Bookings + waitlist', body: 'Take bookings 24/7 with WhatsApp confirmations. Walk-ins go on the waitlist automatically.' },
-  { icon: 'shopping-bag', title: 'Online ordering', body: 'Pickup & delivery with no commission. Stripe payouts straight to your bank.' },
+  { icon: 'inbox', title: 'Full Inbox', body: 'Manage all your reservations, bookings, and contact inquiries from a single, unified inbox.' },
   { icon: 'bar-chart', title: 'Real-time insights', body: 'See visits, top pages, and busy hours — ask ChatGPT or check the analytics tab.' },
 ]
 // Validate tenant context ONLY for tenant sites
