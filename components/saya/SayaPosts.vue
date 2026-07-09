@@ -85,7 +85,7 @@
       </div>
       <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ t('saya.posts.empty_title') }}</h3>
       <p class="mt-2 max-w-sm text-sm text-muted">{{ t('saya.posts.empty_desc') }}</p>
-      <SayaMcpHint :hint="sayaEmptyStates.posts.hint" />
+      <ChowBotPromptTrigger :prompt="sayaEmptyStates.posts.hint" />
     </div>
 
     <div v-if="showViewMore && limit && posts.length > 0" class="mt-12 text-center">
@@ -143,7 +143,7 @@
 </template>
 
 <script setup>
-import SayaMcpHint from '~/components/saya/SayaMcpHint.vue'
+import ChowBotPromptTrigger from '~/components/chowbot/ChowBotPromptTrigger.vue'
 import { sayaEmptyStates } from '~/config/saya-empty-states'
 
 const props = defineProps({

@@ -62,7 +62,7 @@
       <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <SayaEmptyExample v-for="(example, i) in emptyState.examples" :key="i" :item="example" aspect="square" />
       </div>
-      <SayaMcpHint :hint="emptyState.hint" />
+      <ChowBotPromptTrigger :prompt="emptyState.hint" />
     </template>
   </AppSection>
 </template>
@@ -70,7 +70,7 @@
 <script setup lang="ts">
 import AppSection from '~/components/ui/AppSection.vue'
 import SayaEmptyExample from '~/components/saya/SayaEmptyExample.vue'
-import SayaMcpHint from '~/components/saya/SayaMcpHint.vue'
+import ChowBotPromptTrigger from '~/components/chowbot/ChowBotPromptTrigger.vue'
 import { sayaEmptyStates } from '~/config/saya-empty-states'
 
 interface Props {
