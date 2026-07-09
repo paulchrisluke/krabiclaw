@@ -55,7 +55,7 @@ import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
 import { extractMenuFromMediaAsset } from "~/server/utils/chowbot-media";
 import { upsertChannelState } from "~/server/utils/chowbot-conversations";
 import { CHOWBOT_MODEL } from "~/server/utils/ai-models";
-import { loadSettingsPayload, updateSiteSettingsFields } from "~/server/utils/site-settings";
+import { loadSettingsPayload, updateSiteSettingsFields, SiteNotFoundError } from "~/server/utils/site-settings";
 import {
   createLocation,
   updateLocation,
@@ -2774,8 +2774,11 @@ async function executeTool(
     case "get_site_settings": {
       try {
         return { settings: await loadSettingsPayload(db, orgId, siteId) };
-      } catch {
-        return { error: "Site not found." };
+      } catch (err) {
+        if (err instanceof SiteNotFoundError) {
+          return { error: "Site not found." };
+        }
+        throw err;
       }
     }
 

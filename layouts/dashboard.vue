@@ -239,7 +239,7 @@
 
                     <!-- Help -->
                     <NuxtLink
-                      to="https://krabiclaw.com/help"
+                      :to="config.public.helpUrl"
                       target="_blank"
                       rel="noopener noreferrer"
                       class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg text-default hover:text-highlighted hover:bg-muted transition-colors text-left"
@@ -378,6 +378,7 @@ interface AuthOrganization {
 }
 
 const route = useRoute()
+const config = useRuntimeConfig()
 const { data: sessionData, signOut, refreshSession } = useAuth()
 const { trackDashboardVisited } = useAnalytics()
 const toast = useToast()
@@ -627,7 +628,6 @@ const navbarTitle = computed(() => {
     conversations: 'Conversations',
     content: 'Content',
     experiences: 'Experiences',
-    help: 'Help',
     inbox: 'Inbox',
     locations: 'Locations',
     media: 'Media',

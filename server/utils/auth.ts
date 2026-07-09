@@ -82,28 +82,12 @@ export function createAuth(env: CloudflareEnv) {
         create: {
           after: async (user) => {
             if ((user as { isAnonymous?: boolean }).isAnonymous) return
+            // Organizations are created on demand — either by site-creation.ts
+            // (first site) or by an admin/invitation flow the user is joining.
+            // Signup itself must not assume why the user is here: they may be
+            // accepting an invitation into an existing org, in which case a
+            // personal org here would just be an orphaned, siteless duplicate.
             const now = new Date()
-            const orgId = `org-${user.id}`
-            try {
-              await db.batch([
-                db.insert(schema.organization).values({
-                  id: orgId,
-                  name: user.name ?? user.email ?? 'My Restaurant',
-                  slug: orgId,
-                  createdAt: now,
-                }).onConflictDoNothing(),
-                db.insert(schema.member).values({
-                  id: `member-${orgId}`,
-                  organizationId: orgId,
-                  userId: user.id,
-                  role: 'owner',
-                  createdAt: now,
-                }).onConflictDoNothing(),
-              ])
-            } catch (batchErr) {
-              console.error('Failed to create org/member on signup, batch rolled back for orgId:', orgId, batchErr)
-              throw batchErr
-            }
             // Fire-and-forget — must not block or throw into the auth flow
             notifyAdminNewUserSignup(env, {
               id: user.id,

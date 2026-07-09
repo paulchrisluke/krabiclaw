@@ -34,7 +34,7 @@
                 <UButton color="primary" size="lg" @click="openUpsell('growth', 'translations-page')">
                   Get Growth — $49/mo
                 </UButton>
-                <UButton color="neutral" variant="soft" size="lg" to="https://krabiclaw.com/help" target="_blank" rel="noopener noreferrer">
+                <UButton color="neutral" variant="soft" size="lg" :to="config.public.helpUrl" target="_blank" rel="noopener noreferrer">
                   Visit help page
                 </UButton>
               </div>
@@ -55,7 +55,7 @@
                   We're not taking translation requests right now. For anything urgent, visit our help page.
                 </p>
               </div>
-              <UButton color="neutral" variant="soft" size="lg" to="https://krabiclaw.com/help" target="_blank" rel="noopener noreferrer">
+              <UButton color="neutral" variant="soft" size="lg" :to="config.public.helpUrl" target="_blank" rel="noopener noreferrer">
                 Visit help page
               </UButton>
             </div>
@@ -87,7 +87,7 @@
                       {{ locale.status }}
                     </UBadge>
                   </div>
-                  <UButton size="xs" color="neutral" variant="soft" to="https://krabiclaw.com/help" target="_blank" rel="noopener noreferrer">
+                  <UButton size="xs" color="neutral" variant="soft" :to="config.public.helpUrl" target="_blank" rel="noopener noreferrer">
                     Request update
                   </UButton>
                 </div>
@@ -101,7 +101,7 @@
                     :key="option.value"
                     color="neutral"
                     variant="outline"
-                    to="https://krabiclaw.com/help"
+                    :to="config.public.helpUrl"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="justify-start"
@@ -109,7 +109,7 @@
                     {{ option.label }}
                   </UButton>
                 </div>
-                <p class="mt-3 text-xs text-muted">Need a different language? <a href="https://krabiclaw.com/help" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">Visit our help page</a></p>
+                <p class="mt-3 text-xs text-muted">Need a different language? <a :href="config.public.helpUrl" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">Visit our help page</a></p>
               </div>
             </UCard>
 
@@ -152,7 +152,7 @@
                     {{ locale.status }}
                   </UBadge>
                 </div>
-                <UButton size="xs" color="neutral" variant="soft" to="https://krabiclaw.com/help" target="_blank" rel="noopener noreferrer">
+                <UButton size="xs" color="neutral" variant="soft" :to="config.public.helpUrl" target="_blank" rel="noopener noreferrer">
                   Request update
                 </UButton>
               </div>
@@ -164,7 +164,7 @@
               color="primary"
               variant="soft"
               icon="i-lucide-plus"
-              to="https://krabiclaw.com/help"
+              :to="config.public.helpUrl"
               target="_blank"
               rel="noopener noreferrer"
               >
@@ -181,6 +181,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
 
+const config = useRuntimeConfig()
 const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 

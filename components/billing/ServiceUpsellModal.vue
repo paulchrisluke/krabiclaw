@@ -68,7 +68,7 @@
             {{ content.cta }}
           </UButton>
           <a
-            href="https://krabiclaw.com/help"
+            :href="config.public.helpUrl"
             target="_blank"
             rel="noopener noreferrer"
             class="text-center text-sm text-muted hover:text-default transition-colors py-1"
@@ -83,6 +83,8 @@
 
 <script setup lang="ts">
 import type { UpsellType } from '~/composables/useServiceUpsell'
+
+const config = useRuntimeConfig()
 
 // --- Team photo URLs ---
 const PAUL_PHOTO_URL = 'https://res.cloudinary.com/pcl-labs/image/upload/v1714697364/PCL-Labs/1_qjKv1vv3WC6ckf3eTM0hZQ_1_nf3uuk.png'
@@ -226,7 +228,7 @@ async function handleCta() {
     }
   } catch (err) {
     console.error('Checkout error:', err)
-    toast.add({ title: 'Something went wrong', description: 'Please try WhatsApp instead.', color: 'error' })
+    toast.add({ title: 'Something went wrong', description: 'Please visit our help page instead.', color: 'error' })
   } finally {
     loading.value = false
   }
