@@ -2,14 +2,6 @@ import { expect, test } from '@playwright/test'
 import { collectPageErrors, setupTenantHeaders } from './helpers'
 import { devLoginHeaders, devLoginUrl } from './test-env'
 
-function extractOrgSlug(url: string) {
-  const pathname = new URL(url).pathname
-  const match = pathname.match(/^\/dashboard\/([^/]+)/)
-  if (!match) return null
-  const slug = decodeURIComponent(match[1] ?? '')
-  return slug && slug !== '~' ? slug : null
-}
-
 test.describe('dashboard functional smoke', () => {
   test('dev login opens the owner dashboard', async ({ page, baseURL }) => {
     const errors = collectPageErrors(page)
@@ -29,12 +21,32 @@ test.describe('dashboard functional smoke', () => {
   test('owner can open core dashboard pages for their org', async ({ page, baseURL }) => {
     const errors = collectPageErrors(page)
     await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    const userId = `e2e-dashboard-org-pages-${Date.now()}`
+    const suffix = Date.now()
+    const userId = `e2e-dashboard-org-pages-${suffix}`
     const login = await page.goto(devLoginUrl(baseURL!, userId), { waitUntil: 'load' })
     expect(login?.status()).toBeLessThan(400)
     await expect(page).toHaveURL(/\/dashboard/)
 
-    const orgSlug = extractOrgSlug(page.url())
+    // Signup no longer auto-creates an org (see server/utils/auth.ts), so a
+    // brand-new user lands on /dashboard/onboarding, not their own org's
+    // dashboard. Create a real site/org on demand — the same on-demand path
+    // any first-time owner actually goes through — before exercising the
+    // org-scoped settings/billing/support pages below.
+    const createSiteRes = await page.request.post(`${baseURL}/api/sites`, {
+      data: {
+        name: `Dashboard Pages Test ${suffix}`,
+        subdomain: `e2e-dashboard-pages-${suffix}`,
+        vertical: 'restaurant',
+      },
+    })
+    expect(createSiteRes.status()).toBe(200)
+
+    // /dashboard itself never redirects to /dashboard/{orgSlug} (it's a real
+    // page, not a redirect) — get the slug from the API instead of the URL.
+    const contextRes = await page.request.get(`${baseURL}/api/dashboard/context`)
+    expect(contextRes.status()).toBe(200)
+    const context = await contextRes.json() as { organization?: { slug?: string } }
+    const orgSlug = context.organization?.slug
     expect(orgSlug).toBeTruthy()
 
     const pages = [
