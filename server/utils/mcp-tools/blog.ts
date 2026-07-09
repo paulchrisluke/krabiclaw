@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { blogComponentInputSchema, blogPostMutationResultObject, blogPostObject, siteTool } from './shared'
+import { BLOG_NAV_FIELDS_SCHEMA, ROBOTS_DIRECTIVE_ENUM, blogComponentInputSchema, blogPostMutationResultObject, blogPostObject, siteTool } from './shared'
 
 export const BLOG_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -45,10 +45,12 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
           description: 'Optional structured content components. Use faq or how_to components only. FAQ: data.items[] of { question, answer, position? }. How-To: data.steps[] of { name, text, image_asset_id?, url?, position? } (name and text are both required strings; a missing name or text is the most common cause of a rejected update), plus optional data.estimated_time/tool_items/supply_items.',
           items: blogComponentInputSchema,
         },
+        ...BLOG_NAV_FIELDS_SCHEMA,
+        seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         seo_description: { type: 'string' },
         seo_keywords: { type: 'string' },
         canonical_url: { type: 'string' },
-        robots: { type: 'string', enum: ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow'] },
+        robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null] },
         publish: { type: 'boolean', description: 'Publish immediately. Defaults to false (draft).' },
       },
       required: ['title', 'body'],
@@ -71,10 +73,12 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
           description: 'Updated structured content components. Use faq or how_to components only. FAQ: data.items[] of { question, answer, position? }. How-To: data.steps[] of { name, text, image_asset_id?, url?, position? } (name and text are both required strings; a missing name or text is the most common cause of a rejected update), plus optional data.estimated_time/tool_items/supply_items.',
           items: blogComponentInputSchema,
         },
+        ...BLOG_NAV_FIELDS_SCHEMA,
+        seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         seo_description: { type: 'string' },
         seo_keywords: { type: 'string' },
         canonical_url: { type: 'string' },
-        robots: { type: 'string', enum: ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow'] },
+        robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null] },
         publish: { type: 'boolean' },
         unpublish: { type: 'boolean' },
       },
@@ -93,6 +97,36 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       },
       required: ['post_id', 'asset_id'],
       outputSchema: blogPostMutationResultObject,
+    }),
+  siteTool({
+      name: 'reorder_blog_posts',
+      description: 'Set editorial navigation (section, title, order, visibility) for this site\'s blog posts without changing their taxonomy category or public URL. Blog posts do not support nav_group subgrouping (docs-only feature) — only nav_section.',
+      domain: 'blog',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              post_id: { type: 'string', description: 'Post id or slug.' },
+              nav_section: BLOG_NAV_FIELDS_SCHEMA.nav_section,
+              nav_title: BLOG_NAV_FIELDS_SCHEMA.nav_title,
+              nav_order: { type: 'number' },
+              nav_section_order: BLOG_NAV_FIELDS_SCHEMA.nav_section_order,
+              hide_from_nav: BLOG_NAV_FIELDS_SCHEMA.hide_from_nav,
+            },
+            required: ['post_id', 'nav_order'],
+          },
+        },
+      },
+      required: ['items'],
+      outputSchema: {
+        type: 'object',
+        properties: { success: { type: 'boolean' }, posts: { type: 'array', items: blogPostObject } },
+        required: ['success', 'posts'],
+      },
     }),
   siteTool({
       name: 'delete_blog_post',

@@ -1,7 +1,8 @@
 import type { McpExecutorContext } from './shared'
-import { createPlatformBlogPost, deletePlatformBlogPost, getPlatformBlogPost, listPlatformBlogPosts, updatePlatformBlogPost } from '~/server/utils/platform-content'
+import { createPlatformBlogPost, deletePlatformBlogPost, getPlatformBlogPost, listPlatformBlogPosts, reorderPlatformBlogPosts, updatePlatformBlogPost } from '~/server/utils/platform-content'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { attachViewUrlToRecord, NOT_HANDLED, mutationContextPayload, omit, optionalString, requireActiveImageAsset, requiredString } from './shared'
+import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
+import { attachViewUrlToRecord, NOT_HANDLED, mutationContextPayload, objectArray, omit, optionalString, requireActiveImageAsset, requiredString } from './shared'
 
 export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
@@ -94,6 +95,53 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         `Updated image for "${result.post.title ?? result.post.id}".`,
         { post: hydratedImageBlogPost },
       );
+    }
+    case "reorder_blog_posts": {
+      const items = objectArray(args.items, "items").map((item) => {
+        const navOrder = item.nav_order
+        if (typeof navOrder !== "number" || !Number.isInteger(navOrder)) {
+          throw mcpProtocolError(MCP_ERROR.invalidParams, "Each item must have an integer nav_order.")
+        }
+        const result: Record<string, string | number | boolean | null> = {
+          post_id: requiredString(item, "post_id"),
+          nav_order: navOrder,
+        }
+        if (Object.prototype.hasOwnProperty.call(item, "nav_section")) {
+          const value = item.nav_section
+          if (value !== null && typeof value !== "string") {
+            throw mcpProtocolError(MCP_ERROR.invalidParams, "nav_section must be a string or null when provided.")
+          }
+          result.nav_section = value ?? null
+        }
+        if (Object.prototype.hasOwnProperty.call(item, "nav_title")) {
+          const value = item.nav_title
+          if (value !== null && typeof value !== "string") {
+            throw mcpProtocolError(MCP_ERROR.invalidParams, "nav_title must be a string or null when provided.")
+          }
+          result.nav_title = value ?? null
+        }
+        if (Object.prototype.hasOwnProperty.call(item, "nav_section_order")) {
+          const value = item.nav_section_order
+          if (value !== null && (typeof value !== "number" || !Number.isInteger(value))) {
+            throw mcpProtocolError(MCP_ERROR.invalidParams, "nav_section_order must be an integer or null when provided.")
+          }
+          result.nav_section_order = value ?? null
+        }
+        if (Object.prototype.hasOwnProperty.call(item, "hide_from_nav")) {
+          const value = item.hide_from_nav
+          if (value !== null && typeof value !== "boolean") {
+            throw mcpProtocolError(MCP_ERROR.invalidParams, "hide_from_nav must be a boolean or null when provided.")
+          }
+          result.hide_from_nav = value === null ? null : Boolean(value)
+        }
+        return result as { post_id: string; nav_section?: string | null; nav_title?: string | null; nav_order: number; nav_section_order?: number | null; hide_from_nav?: boolean | null }
+      })
+      const result = await reorderPlatformBlogPosts(site.db, items, site.siteId)
+      return {
+        success: result.success,
+        posts: result.posts.map((post) => attachViewUrlToRecord(post, site, {}, site.env)),
+        context: await mutationContextPayload(site),
+      }
     }
     case "delete_blog_post": {
       const postId = requiredString(args, "post_id");

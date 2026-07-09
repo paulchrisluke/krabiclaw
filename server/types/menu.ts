@@ -38,6 +38,11 @@ export interface MenuItem {
   dietary_notes?: string[] | null
   preparation?: string | null
   serving_note?: string | null
+  seo_title?: string | null
+  seo_description?: string | null
+  canonical_url?: string | null
+  robots?: string | null
+  og_image_asset_id?: string | null
   created_at: string
   updated_at: string
   created_by: string
@@ -80,6 +85,11 @@ export interface CreateMenuItemRequest {
   dietary_notes?: string[]
   preparation?: string
   serving_note?: string
+  seo_title?: string | null
+  seo_description?: string | null
+  canonical_url?: string | null
+  robots?: string | null
+  og_image_asset_id?: string | null
 }
 
 export interface UpdateMenuItemRequest {
@@ -101,6 +111,11 @@ export interface UpdateMenuItemRequest {
   dietary_notes?: string[]
   preparation?: string
   serving_note?: string
+  seo_title?: string | null
+  seo_description?: string | null
+  canonical_url?: string | null
+  robots?: string | null
+  og_image_asset_id?: string | null
 }
 
 export interface ReorderMenuItemsRequest {

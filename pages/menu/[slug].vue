@@ -330,6 +330,11 @@ interface MenuItemType {
   dietary_notes?: string[]
   serving_note?: string
   reviews?: Review[]
+  seo_title?: string | null
+  seo_description?: string | null
+  canonical_url?: string | null
+  robots?: string | null
+  og_image_public_url?: string | null
 }
 
 interface ReviewsResponse {
@@ -494,7 +499,8 @@ const schemaImage = computed(() =>
   mainMedia.value.url ?? undefined
 )
 const currentPageUrl = useSeoUrl(() => item.value ? `/menu/${item.value.slug}` : '/menu')
-const ogImage = useSharedOgImage(() => mainMedia.value.thumb)
+const canonicalUrl = useSeoUrl(() => item.value?.canonical_url || (item.value ? `/menu/${item.value.slug}` : '/menu'))
+const ogImage = useSharedOgImage(() => item.value?.og_image_public_url || mainMedia.value.thumb)
 
 const loadReviews = async () => {
   if (!item.value?.slug) return
@@ -565,8 +571,8 @@ watch(() => item.value?.slug, async () => {
 })
 
 // SEO Meta
-const seoTitle = () => item.value ? `${item.value.name} | Menu | ${siteName.value}` : `Menu Item Not Found | ${siteName.value}`
-const seoDescription = () => truncateForSeo(item.value ? item.value.description : 'The menu item you\'re looking for doesn\'t exist.', 160)
+const seoTitle = () => item.value?.seo_title || (item.value ? `${item.value.name} | Menu | ${siteName.value}` : `Menu Item Not Found | ${siteName.value}`)
+const seoDescription = () => truncateForSeo(item.value?.seo_description || (item.value ? item.value.description : 'The menu item you\'re looking for doesn\'t exist.'), 160)
 
 useSeoMeta({
   title: seoTitle,
@@ -580,7 +586,12 @@ useSeoMeta({
   twitterCard: 'summary_large_image',
   twitterTitle: seoTitle,
   twitterDescription: seoDescription,
-  twitterImage: ogImage
+  twitterImage: ogImage,
+  robots: () => item.value?.robots || undefined,
+})
+
+useHead({
+  link: [{ rel: 'canonical', href: canonicalUrl }],
 })
 
 const schemaGraph = computed(() => {

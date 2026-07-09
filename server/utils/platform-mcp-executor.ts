@@ -189,7 +189,11 @@ function navMetadataInput(args: Record<string, unknown>) {
   }
 }
 
-function reorderItems(args: Record<string, unknown>, idKey: 'doc_id' | 'post_id') {
+function reorderItems(
+  args: Record<string, unknown>,
+  idKey: 'doc_id' | 'post_id',
+  options: { navGroup?: boolean } = {},
+) {
   const items = optionalArray(args, 'items')
   if (!items?.length) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, 'items must be a non-empty array.')
@@ -207,15 +211,33 @@ function reorderItems(args: Record<string, unknown>, idKey: 'doc_id' | 'post_id'
     if (navSectionOrder !== undefined && navSectionOrder !== null && (typeof navSectionOrder !== 'number' || !Number.isInteger(navSectionOrder))) {
       throw mcpProtocolError(MCP_ERROR.invalidParams, 'nav_section_order must be an integer when provided.')
     }
-    const result: Record<string, string | number | null> = {
+    const navGroupOrder = record.nav_group_order
+    if (options.navGroup && navGroupOrder !== undefined && navGroupOrder !== null && (typeof navGroupOrder !== 'number' || !Number.isInteger(navGroupOrder))) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, 'nav_group_order must be an integer when provided.')
+    }
+    const result: Record<string, string | number | boolean | null> = {
       [idKey]: requiredString(record, idKey),
       nav_order: navOrder,
     }
     if (Object.prototype.hasOwnProperty.call(record, 'nav_section')) {
       result.nav_section = optionalNullableString(record, 'nav_section') ?? null
     }
+    if (Object.prototype.hasOwnProperty.call(record, 'nav_title')) {
+      result.nav_title = optionalNullableString(record, 'nav_title') ?? null
+    }
     if (Object.prototype.hasOwnProperty.call(record, 'nav_section_order')) {
       result.nav_section_order = navSectionOrder === null ? null : (typeof navSectionOrder === 'number' ? navSectionOrder : undefined) ?? null
+    }
+    if (Object.prototype.hasOwnProperty.call(record, 'hide_from_nav')) {
+      result.hide_from_nav = record.hide_from_nav === null ? null : Boolean(record.hide_from_nav)
+    }
+    if (options.navGroup) {
+      if (Object.prototype.hasOwnProperty.call(record, 'nav_group')) {
+        result.nav_group = optionalNullableString(record, 'nav_group') ?? null
+      }
+      if (Object.prototype.hasOwnProperty.call(record, 'nav_group_order')) {
+        result.nav_group_order = navGroupOrder === null ? null : (typeof navGroupOrder === 'number' ? navGroupOrder : undefined) ?? null
+      }
     }
     return result
   })
@@ -618,6 +640,7 @@ export async function executePlatformMcpToolCall(
         excerpt: optionalString(rawArguments, 'excerpt') ?? null,
         category: optionalString(rawArguments, 'category') ?? null,
         ...navMetadataInput(rawArguments),
+        seo_title: optionalString(rawArguments, 'seo_title') ?? null,
         seo_description: optionalString(rawArguments, 'seo_description') ?? null,
         seo_keywords: optionalString(rawArguments, 'seo_keywords') ?? null,
         canonical_url: optionalString(rawArguments, 'canonical_url') ?? null,
@@ -633,6 +656,7 @@ export async function executePlatformMcpToolCall(
         excerpt: optionalString(rawArguments, 'excerpt'),
         category: optionalString(rawArguments, 'category'),
         ...navMetadataInput(rawArguments),
+        seo_title: optionalString(rawArguments, 'seo_title'),
         seo_description: optionalString(rawArguments, 'seo_description'),
         seo_keywords: optionalString(rawArguments, 'seo_keywords'),
         canonical_url: optionalString(rawArguments, 'canonical_url'),
@@ -647,7 +671,7 @@ export async function executePlatformMcpToolCall(
     case 'unpublish_platform_blog_post':
       return await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), { unpublish: true })
     case 'reorder_platform_blog_posts':
-      return await reorderPlatformBlogPosts(user.db, reorderItems(rawArguments, 'post_id') as Array<{ post_id: string; nav_section?: string | null; nav_order: number; nav_section_order?: number | null }>)
+      return await reorderPlatformBlogPosts(user.db, reorderItems(rawArguments, 'post_id') as Array<{ post_id: string; nav_section?: string | null; nav_title?: string | null; nav_order: number; nav_section_order?: number | null; hide_from_nav?: boolean | null }>)
     case 'delete_platform_blog_post':
       return await deletePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'))
     case 'list_platform_docs':
@@ -661,6 +685,8 @@ export async function executePlatformMcpToolCall(
         excerpt: optionalString(rawArguments, 'excerpt') ?? null,
         category: optionalString(rawArguments, 'category') ?? null,
         ...navMetadataInput(rawArguments),
+        nav_group: rawArguments.nav_group === null ? null : optionalString(rawArguments, 'nav_group') ?? null,
+        nav_group_order: optionalNullableNumber(rawArguments, 'nav_group_order') ?? null,
         seo_description: optionalString(rawArguments, 'seo_description') ?? null,
         seo_keywords: optionalString(rawArguments, 'seo_keywords') ?? null,
         canonical_url: optionalString(rawArguments, 'canonical_url') ?? null,
@@ -679,6 +705,8 @@ export async function executePlatformMcpToolCall(
         excerpt: optionalString(rawArguments, 'excerpt'),
         category: optionalString(rawArguments, 'category'),
         ...navMetadataInput(rawArguments),
+        nav_group: rawArguments.nav_group === null ? null : optionalString(rawArguments, 'nav_group'),
+        nav_group_order: optionalNullableNumber(rawArguments, 'nav_group_order'),
         seo_description: optionalString(rawArguments, 'seo_description'),
         seo_keywords: optionalString(rawArguments, 'seo_keywords'),
         canonical_url: optionalString(rawArguments, 'canonical_url'),
@@ -696,7 +724,7 @@ export async function executePlatformMcpToolCall(
     case 'unpublish_platform_doc':
       return await updatePlatformDoc(user.db, requiredString(rawArguments, 'doc_id'), { unpublish: true })
     case 'reorder_platform_docs':
-      return await reorderPlatformDocs(user.db, reorderItems(rawArguments, 'doc_id') as Array<{ doc_id: string; nav_section?: string | null; nav_order: number; nav_section_order?: number | null }>)
+      return await reorderPlatformDocs(user.db, reorderItems(rawArguments, 'doc_id', { navGroup: true }) as Array<{ doc_id: string; nav_section?: string | null; nav_title?: string | null; nav_order: number; nav_section_order?: number | null; nav_group?: string | null; nav_group_order?: number | null; hide_from_nav?: boolean | null }>)
     case 'delete_platform_doc':
       return await deletePlatformDoc(user.db, requiredString(rawArguments, 'doc_id'))
     default:
