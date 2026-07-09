@@ -85,6 +85,10 @@ import {
   updateHomeHero,
 } from "~/server/utils/mcp-workflows";
 import {
+  getProfessionalServiceContent,
+  upsertProfessionalServiceContent,
+} from "~/server/utils/professional-services-editor";
+import {
   listTranslationReviewItems,
   saveTranslationReviewItem,
 } from "~/server/utils/translation-review";
@@ -1770,6 +1774,22 @@ async function executeTool(
         location_id: targetLocationId ?? null,
         saved: true,
       };
+    }
+
+    case "get_professional_service_content":
+      return await getProfessionalServiceContent(db, siteId);
+
+    case "update_professional_service_content": {
+      try {
+        return await upsertProfessionalServiceContent(db, {
+          organizationId: orgId,
+          siteId,
+          data: input,
+          updatedBy: userId,
+        });
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : "Invalid professional-service content." };
+      }
     }
 
     case "delete_content_field": {

@@ -1,0 +1,1929 @@
+{
+  "checked_at": "2026-07-09T06:06:24.392Z",
+  "base_url": "http://ncls.localhost:3000",
+  "site_id": "site-ncls-blawby",
+  "ok": true,
+  "routes": [
+    {
+      "route": "/",
+      "url": "http://ncls.localhost:3000/",
+      "status": 200,
+      "duration_ms": 176,
+      "bytes": 126153
+    },
+    {
+      "route": "/services",
+      "url": "http://ncls.localhost:3000/services",
+      "status": 200,
+      "duration_ms": 21,
+      "bytes": 121090
+    },
+    {
+      "route": "/pricing",
+      "url": "http://ncls.localhost:3000/pricing",
+      "status": 200,
+      "duration_ms": 32,
+      "bytes": 125769
+    },
+    {
+      "route": "/donate",
+      "url": "http://ncls.localhost:3000/donate",
+      "status": 200,
+      "duration_ms": 20,
+      "bytes": 119133
+    },
+    {
+      "route": "/schedule",
+      "url": "http://ncls.localhost:3000/schedule",
+      "status": 200,
+      "duration_ms": 20,
+      "bytes": 118721
+    },
+    {
+      "route": "/contact",
+      "url": "http://ncls.localhost:3000/contact",
+      "status": 200,
+      "duration_ms": 42,
+      "bytes": 120381
+    },
+    {
+      "route": "/blog",
+      "url": "http://ncls.localhost:3000/blog",
+      "status": 200,
+      "duration_ms": 34,
+      "bytes": 121958
+    },
+    {
+      "route": "/policies/privacy",
+      "url": "http://ncls.localhost:3000/policies/privacy",
+      "status": 200,
+      "duration_ms": 18,
+      "bytes": 135520
+    },
+    {
+      "route": "/policies/terms",
+      "url": "http://ncls.localhost:3000/policies/terms",
+      "status": 200,
+      "duration_ms": 22,
+      "bytes": 139326
+    },
+    {
+      "route": "/third-party-notices",
+      "url": "http://ncls.localhost:3000/third-party-notices",
+      "status": 200,
+      "duration_ms": 19,
+      "bytes": 119338
+    },
+    {
+      "route": "/services/family",
+      "url": "http://ncls.localhost:3000/services/family",
+      "status": 200,
+      "duration_ms": 36,
+      "bytes": 131422
+    },
+    {
+      "route": "/services/small-business-and-nonprofits",
+      "url": "http://ncls.localhost:3000/services/small-business-and-nonprofits",
+      "status": 200,
+      "duration_ms": 25,
+      "bytes": 131015
+    },
+    {
+      "route": "/services/employment",
+      "url": "http://ncls.localhost:3000/services/employment",
+      "status": 200,
+      "duration_ms": 20,
+      "bytes": 131680
+    },
+    {
+      "route": "/services/tenant-rights",
+      "url": "http://ncls.localhost:3000/services/tenant-rights",
+      "status": 200,
+      "duration_ms": 24,
+      "bytes": 125509
+    },
+    {
+      "route": "/services/probate-and-estate",
+      "url": "http://ncls.localhost:3000/services/probate-and-estate",
+      "status": 200,
+      "duration_ms": 32,
+      "bytes": 129474
+    },
+    {
+      "route": "/services/special-education-and-iep-advocacy",
+      "url": "http://ncls.localhost:3000/services/special-education-and-iep-advocacy",
+      "status": 200,
+      "duration_ms": 22,
+      "bytes": 124102
+    },
+    {
+      "route": "/about",
+      "url": "http://ncls.localhost:3000/about",
+      "status": 200,
+      "duration_ms": 19,
+      "bytes": 119651
+    },
+    {
+      "route": "/article/getting-a-divorce-in-north-carolina",
+      "url": "http://ncls.localhost:3000/article/getting-a-divorce-in-north-carolina",
+      "status": 200,
+      "duration_ms": 48,
+      "bytes": 145734
+    },
+    {
+      "route": "/article/equitable-distribution-in-north-carolina-divorces",
+      "url": "http://ncls.localhost:3000/article/equitable-distribution-in-north-carolina-divorces",
+      "status": 200,
+      "duration_ms": 26,
+      "bytes": 139808
+    }
+  ],
+  "checks": [
+    {
+      "ok": true,
+      "label": "GET / returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET / renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET / does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET / has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET / has professional-service schema signal"
+    },
+    {
+      "ok": true,
+      "label": "GET / has no restaurant schema signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /services renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET /services has professional-service schema signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services has no restaurant schema signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /pricing returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /pricing renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /pricing does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /pricing has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET /donate returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /donate renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /donate does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /donate has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET /schedule returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /schedule renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /schedule does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /schedule has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET /contact returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /contact renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /contact does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /contact has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET /blog returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /blog renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /blog does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /blog has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET /policies/privacy returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /policies/privacy renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /policies/privacy does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /policies/privacy has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET /policies/terms returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /policies/terms renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /policies/terms does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /policies/terms has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET /third-party-notices returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /third-party-notices renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /third-party-notices does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /third-party-notices has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET /services/family returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /services/family renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/family does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/family has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET /services/family has professional-service schema signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/family has no restaurant schema signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/small-business-and-nonprofits returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /services/small-business-and-nonprofits renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/small-business-and-nonprofits does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/small-business-and-nonprofits has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET /services/small-business-and-nonprofits has professional-service schema signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/small-business-and-nonprofits has no restaurant schema signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/employment returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /services/employment renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/employment does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/employment has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET /services/employment has professional-service schema signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/employment has no restaurant schema signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/tenant-rights returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /services/tenant-rights renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/tenant-rights does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/tenant-rights has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET /services/tenant-rights has professional-service schema signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/tenant-rights has no restaurant schema signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/probate-and-estate returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /services/probate-and-estate renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/probate-and-estate does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/probate-and-estate has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET /services/probate-and-estate has professional-service schema signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/probate-and-estate has no restaurant schema signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/special-education-and-iep-advocacy returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /services/special-education-and-iep-advocacy renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/special-education-and-iep-advocacy does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/special-education-and-iep-advocacy has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET /services/special-education-and-iep-advocacy has professional-service schema signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /services/special-education-and-iep-advocacy has no restaurant schema signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /about returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /about renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /about does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /about has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET /article/getting-a-divorce-in-north-carolina returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /article/getting-a-divorce-in-north-carolina renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /article/getting-a-divorce-in-north-carolina does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /article/getting-a-divorce-in-north-carolina has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "GET /article/equitable-distribution-in-north-carolina-divorces returns success",
+      "status": 200
+    },
+    {
+      "ok": true,
+      "label": "GET /article/equitable-distribution-in-north-carolina-divorces renders Blawby/professional signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /article/equitable-distribution-in-north-carolina-divorces does not render Saya restaurant signal"
+    },
+    {
+      "ok": true,
+      "label": "GET /article/equitable-distribution-in-north-carolina-divorces has no forbidden restaurant copy",
+      "forbiddenCopy": []
+    },
+    {
+      "ok": true,
+      "label": "/conference is intentionally excluded, redirected, or noindexed",
+      "status": 404,
+      "hasNoindex": false
+    },
+    {
+      "ok": true,
+      "label": "/thank-you is intentionally excluded, redirected, or noindexed",
+      "status": 404,
+      "hasNoindex": false
+    },
+    {
+      "ok": true,
+      "label": "Import manifest vertical is professional_service"
+    },
+    {
+      "ok": true,
+      "label": "Import manifest selects Blawby"
+    },
+    {
+      "ok": true,
+      "label": "Import manifest contains offerings"
+    },
+    {
+      "ok": true,
+      "label": "Import manifest contains /pricing tenant page"
+    },
+    {
+      "ok": true,
+      "label": "Import manifest contains /donate tenant page"
+    },
+    {
+      "ok": true,
+      "label": "Import manifest contains articles"
+    },
+    {
+      "ok": true,
+      "label": "Import manifest contains route inventory"
+    },
+    {
+      "ok": true,
+      "label": "Import manifest contains media inventory"
+    },
+    {
+      "ok": true,
+      "label": "Import manifest contains edit-surface matrix"
+    },
+    {
+      "ok": true,
+      "label": "Import manifest contains intentional differences"
+    },
+    {
+      "ok": true,
+      "label": "Import manifest inventories legal files"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: /logo.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: mission.svg"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: people.svg"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: vision.svg"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: family-law.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: divorce-in-nc-01.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: divorce-in-nc-02.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: divorce-in-nc-03.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: divorce-in-nc-04.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: divorce-in-nc-05.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: divorce-in-nc-06.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: divorce-in-nc-07.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: alimony.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: childcustody.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: childsupport.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: custodial-power-of-attorney.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: divorce.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: custody-evaluations.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: prenuptialagreement.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: separationagreement.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: equitabledistribution.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: domesticviolenceprotectiveorder.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: visitation.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: enforcementofcourtorders.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: mediationservices.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: small-business.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: small-business-01.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: small-business-02.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: small-business-03.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: small-business-04.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: small-business-05.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: small-business-06.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: small-business-07.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: small-business-08.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: small-business-09.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: Arbitration_mediation.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: businessentityformation.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: compliance.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: commercial-litigation.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: contracts.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: employment-law.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: nonprofit-formation-and-governance.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: partnership-agreements.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: real-estate-transactions.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: risk-management.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: shareholder-agreements.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: child-support-modification.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: taxation.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: employment.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: Breach-of-Employment-Contract.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: Civil-Rights-Violations.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: contract-and-agreement-disputes.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: defamation.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: employee-benefits-and-rights.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: FMLA-violations.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: harassment.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: military-leave.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: privacy-rights-at-the-workplace.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: retaliation-and-whistleblower-claims.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: union-rights-and-collective-bargining.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: wage-and-hour-disputes.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: workers-compensation-claims.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: workplace-safety-and-OSHA-violations.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: wrongful-termination.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: tenant-rights.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: eviction-defense.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: housing-discrimination.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: illegal-landlord-practices.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: lease-review.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: lease-termination.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: Maintenance-and-Repair-Advocacy.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: quiet-enjoyment-violations.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: rent-overcharge-and-deposit-disputes.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: retaliatory-eviction.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: roommate-disputes.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: tenant-harassment.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: tenant-union-support.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: unlawful-rent-increases.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: utility-shutof-protection.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: probate.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: wills-01.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: wills-02.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: wills-03.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: wills-04.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: wills-05.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: wills-06.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: asset-protection.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: elder-law.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: estate-planning.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: financial-power-of-attorney.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: guardianships.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: living-will.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: medical-power-of-attorney.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: probate-feature.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: trusts.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: wills.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: special-education.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: getting_a_divorce_in_north_carolina.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: equitable_distribution_in_north_carolina_divorces.webp"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: /files/NorthCarolinaLegalServices_DBA__Redacted.pdf"
+    },
+    {
+      "ok": true,
+      "label": "Required media/file has approved asset URL: /files/FinalLetter_88-0565637_BULLCITYLEGALSERVICESINC_Redacted.pdf"
+    },
+    {
+      "ok": true,
+      "label": "Compliance document asset ids include all legal files"
+    },
+    {
+      "ok": true,
+      "label": "Consultation destination is the approved external booking URL",
+      "consultationUrl": "https://ncls.cliogrow.com/book"
+    },
+    {
+      "ok": true,
+      "label": "Donation CTA is external",
+      "donationUrl": "https://app.blawby.com/northcarolinalegalservices/pay/donate"
+    },
+    {
+      "ok": true,
+      "label": "Tenant page /about does not reference legacy /files assets"
+    },
+    {
+      "ok": true,
+      "label": "Tenant page /pricing does not reference legacy /files assets"
+    },
+    {
+      "ok": true,
+      "label": "Pricing calculator config: structured calculator has source/effective metadata",
+      "page": "/pricing"
+    },
+    {
+      "ok": true,
+      "label": "Tenant page /donate does not reference legacy /files assets"
+    },
+    {
+      "ok": true,
+      "label": "Tenant page /policies/privacy does not reference legacy /files assets"
+    },
+    {
+      "ok": true,
+      "label": "Tenant page /policies/terms does not reference legacy /files assets"
+    },
+    {
+      "ok": true,
+      "label": "Tenant page /third-party-notices does not reference legacy /files assets"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/legal/NorthCarolinaLegalServices_DBA__Redacted.pdf",
+      "reason": "approved host media.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/legal/FinalLetter_88-0565637_BULLCITYLEGALSERVICESINC_Redacted.pdf",
+      "reason": "approved host media.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/logo.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/files/mission.svg",
+      "reason": "approved host media.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/files/people.svg",
+      "reason": "approved host media.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/files/vision.svg",
+      "reason": "approved host media.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/family-law.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/divorce-in-nc-01.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/divorce-in-nc-02.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/divorce-in-nc-03.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/divorce-in-nc-04.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/divorce-in-nc-05.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/divorce-in-nc-06.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/divorce-in-nc-07.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/alimony.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/childcustody.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/childsupport.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/custodial-power-of-attorney.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/divorce.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/custody-evaluations.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/prenuptialagreement.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/separationagreement.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/equitabledistribution.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/domesticviolenceprotectiveorder.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/visitation.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/enforcementofcourtorders.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/mediationservices.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-01.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-02.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-03.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-04.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-05.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-06.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-07.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-08.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-09.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/Arbitration_mediation.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/businessentityformation.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/compliance.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/commercial-litigation.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/contracts.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/employment-law.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/nonprofit-formation-and-governance.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/partnership-agreements.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/real-estate-transactions.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/risk-management.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/shareholder-agreements.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/child-support-modification.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/taxation.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/employment.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/Breach-of-Employment-Contract.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/Civil-Rights-Violations.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/contract-and-agreement-disputes.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/defamation.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/employee-benefits-and-rights.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/FMLA-violations.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/harassment.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/military-leave.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/privacy-rights-at-the-workplace.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/retaliation-and-whistleblower-claims.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/union-rights-and-collective-bargining.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wage-and-hour-disputes.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/workers-compensation-claims.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/workplace-safety-and-OSHA-violations.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wrongful-termination.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/tenant-rights.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/eviction-defense.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/housing-discrimination.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/illegal-landlord-practices.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/lease-review.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/lease-termination.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/Maintenance-and-Repair-Advocacy.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/quiet-enjoyment-violations.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/rent-overcharge-and-deposit-disputes.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/retaliatory-eviction.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/roommate-disputes.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/tenant-harassment.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/tenant-union-support.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/unlawful-rent-increases.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/utility-shutof-protection.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/probate.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wills-01.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wills-02.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wills-03.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wills-04.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wills-05.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wills-06.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/asset-protection.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/elder-law.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/estate-planning.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/financial-power-of-attorney.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/guardianships.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/living-will.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/medical-power-of-attorney.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/probate-feature.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/trusts.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wills.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/special-education.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/getting_a_divorce_in_north_carolina.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/equitable_distribution_in_north_carolina_divorces.webp",
+      "reason": "approved host images.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Public Blawby API returns offerings"
+    },
+    {
+      "ok": true,
+      "label": "Public Blawby API returns /pricing"
+    },
+    {
+      "ok": true,
+      "label": "Public consultation tracking is enabled"
+    },
+    {
+      "ok": true,
+      "label": "Public compliance metadata is present"
+    },
+    {
+      "ok": true,
+      "label": "Public compliance exposes legal document assets"
+    },
+    {
+      "ok": true,
+      "label": "Public compliance document URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/legal/FinalLetter_88-0565637_BULLCITYLEGALSERVICESINC_Redacted.pdf",
+      "reason": "approved host media.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Public compliance document URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/legal/NorthCarolinaLegalServices_DBA__Redacted.pdf",
+      "reason": "approved host media.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Public tenant page /about does not reference legacy /files assets"
+    },
+    {
+      "ok": true,
+      "label": "Public tenant page /pricing does not reference legacy /files assets"
+    },
+    {
+      "ok": true,
+      "label": "Public tenant page /policies/privacy does not reference legacy /files assets"
+    },
+    {
+      "ok": true,
+      "label": "Public tenant page /donate does not reference legacy /files assets"
+    },
+    {
+      "ok": true,
+      "label": "Public tenant page /policies/terms does not reference legacy /files assets"
+    },
+    {
+      "ok": true,
+      "label": "Public tenant page /third-party-notices does not reference legacy /files assets"
+    },
+    {
+      "ok": true,
+      "label": "Analytics bridge uses sanctioned GTM provider"
+    },
+    {
+      "ok": true,
+      "label": "Analytics bridge has a valid GTM container id"
+    },
+    {
+      "ok": true,
+      "label": "Analytics bridge allowlists consultation clicks"
+    },
+    {
+      "ok": true,
+      "label": "Analytics bridge allowlists only expected conversion properties"
+    },
+    {
+      "ok": true,
+      "label": "Analytics bridge does not rely on custom head code"
+    },
+    {
+      "ok": true,
+      "label": "Public media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/legal/FinalLetter_88-0565637_BULLCITYLEGALSERVICESINC_Redacted.pdf",
+      "reason": "approved host media.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Public media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/legal/NorthCarolinaLegalServices_DBA__Redacted.pdf",
+      "reason": "approved host media.krabiclaw.com"
+    },
+    {
+      "ok": true,
+      "label": "Sitemap is fetchable"
+    },
+    {
+      "ok": true,
+      "label": "Sitemap includes /"
+    },
+    {
+      "ok": true,
+      "label": "Sitemap includes /services"
+    },
+    {
+      "ok": true,
+      "label": "Sitemap includes /pricing"
+    },
+    {
+      "ok": true,
+      "label": "Sitemap includes /donate"
+    },
+    {
+      "ok": true,
+      "label": "Sitemap includes /schedule"
+    },
+    {
+      "ok": true,
+      "label": "Sitemap includes /contact"
+    },
+    {
+      "ok": true,
+      "label": "Sitemap includes /blog"
+    },
+    {
+      "ok": true,
+      "label": "Sitemap includes offering /services/family"
+    },
+    {
+      "ok": true,
+      "label": "Sitemap includes offering /services/small-business-and-nonprofits"
+    },
+    {
+      "ok": true,
+      "label": "Sitemap includes offering /services/employment"
+    },
+    {
+      "ok": true,
+      "label": "Sitemap includes offering /services/tenant-rights"
+    },
+    {
+      "ok": true,
+      "label": "Sitemap includes offering /services/probate-and-estate"
+    },
+    {
+      "ok": true,
+      "label": "Sitemap includes offering /services/special-education-and-iep-advocacy"
+    },
+    {
+      "ok": true,
+      "label": "Sitemap includes article /article/getting-a-divorce-in-north-carolina"
+    },
+    {
+      "ok": true,
+      "label": "Sitemap includes article /article/equitable-distribution-in-north-carolina-divorces"
+    },
+    {
+      "ok": true,
+      "label": "Sitemap excludes Saya restaurant routes"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/home-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\home-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/home-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\home-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/services-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\services-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/services-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\services-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/service-detail-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\service-detail-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/service-detail-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\service-detail-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/pricing-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\pricing-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/pricing-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\pricing-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/about-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\about-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/about-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\about-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/contact-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\contact-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/contact-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\contact-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/schedule-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\schedule-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/schedule-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\schedule-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/blog-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\blog-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/blog-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\blog-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/article-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\article-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/article-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\article-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/donate-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\donate-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/donate-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\donate-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/policy-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\policy-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: reference/policy-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\reference\\policy-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/home-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\home-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/home-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\home-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/services-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\services-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/services-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\services-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/service-detail-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\service-detail-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/service-detail-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\service-detail-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/pricing-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\pricing-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/pricing-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\pricing-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/about-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\about-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/about-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\about-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/contact-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\contact-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/contact-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\contact-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/schedule-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\schedule-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/schedule-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\schedule-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/blog-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\blog-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/blog-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\blog-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/article-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\article-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/article-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\article-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/donate-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\donate-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/donate-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\donate-mobile.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/policy-desktop",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\policy-desktop.png"
+    },
+    {
+      "ok": true,
+      "label": "Screenshot artifact exists: blawby/policy-mobile",
+      "path": "F:\\My Github Repos\\Closed Source Repos\\krabiclaw\\client-imports\\north-carolina-legal-services\\evidence\\screenshots\\blawby\\policy-mobile.png"
+    }
+  ]
+}

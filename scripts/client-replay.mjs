@@ -17,10 +17,25 @@
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
 const args = process.argv.slice(2)
+
+function shellQuote(value) {
+  const text = String(value)
+  return /\s/.test(text) ? `"${text.replace(/"/g, '\\"')}"` : text
+}
+
+function spawnYarn(args) {
+  if (process.platform === 'win32') {
+    return spawnSync('cmd.exe', ['/d', '/s', '/c', `corepack yarn ${args.map(shellQuote).join(' ')}`], {
+      stdio: 'inherit',
+      cwd: process.cwd(),
+    })
+  }
+  return spawnSync('corepack', ['yarn', ...args], { stdio: 'inherit', cwd: process.cwd() })
+}
 
 function arg(name) {
   const idx = args.indexOf(name)
@@ -105,9 +120,9 @@ if (ENV) {
 } else {
   d1Args.push('--local')
 }
-d1Args.push('--file', seedPath)
+d1Args.push('--file', relative(process.cwd(), seedPath))
 
-const result = spawnSync('yarn', d1Args, { stdio: 'inherit', cwd: process.cwd() })
+const result = spawnYarn(d1Args)
 
 if (result.status !== 0) {
   console.error('\n✗ Seed replay failed — check wrangler output above.')

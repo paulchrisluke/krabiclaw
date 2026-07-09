@@ -1,6 +1,7 @@
 export type SiteVertical =
   | "restaurant"
-  | "experience";
+  | "experience"
+  | "professional_service";
 
 type LocaleCode = "en" | "th";
 
@@ -114,7 +115,7 @@ type VerticalCopy = {
   cancelLabel: (_word: string) => string
 }
 
-const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
+const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> = {
   en: {
     restaurant: {
       poweredByTagline: "restaurant sites that run themselves",
@@ -593,18 +594,121 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
   },
 }
 
-export function getVerticalCopy(vertical: string | null | undefined, locale: string | null | undefined = "en") {
+registry.en.professional_service = {
+  ...registry.en.experience!,
+  poweredByTagline: "professional-service sites that stay current",
+  aboutImageAlt: "About our organization",
+  ctaTitle: "Talk with our team.",
+  ctaRoute: "/schedule",
+  contactSubtitle:
+    "For a consultation or service question, use the form below or choose a direct contact option.",
+  contactSubjectCatering: "Services",
+  reserveCta: "Book a consultation",
+  reservationPageKicker: "Consultations",
+  reservationFormTitle: "Request a Consultation",
+  reservationRequestButton: "Request Consultation",
+  reservationWord: "consultation",
+  reservationExploreLabel: "View Services",
+  reservationExploreRoute: "/services",
+  experiencesPageTitle: "Services",
+  experiencesPageSubtitle:
+    "Professional services and practice areas you can explore before getting in touch.",
+  locationGroupLine: (_count: number) => {
+    const count = _count
+    return `${count} service presence${count === 1 ? "" : "s"}, one team.`
+  },
+  postsEyebrow: "Updates",
+  bookingNotesPlaceholder:
+    "Tell us what kind of help you need, preferred contact times, or accessibility notes.",
+  contactLocationsByHeading: "Contact details and service-area information.",
+  contactLocationsByNote:
+    "Some professional-service locations may represent a service area or remote contact point rather than a public office.",
+  otherLocationsHeading: "Other service areas",
+  highlightsSectionHeading: "Services, articles, and updates from the organization.",
+  seoReservationDescription: (_name: string) => `Request a consultation with ${_name}.`,
+  seoExperiencesDescription: (_name: string) =>
+    `Explore professional services from ${_name}.`,
+  orderNowCta: "Book Now",
+  viewMenuCta: "View Services",
+  viewMenuRoute: "/services",
+  findUsKicker: "Contact",
+  visitLocationCta: "View contact details",
+  mainLocationLabel: "Primary contact",
+  secondLocationLabel: "Additional contact",
+  connectGoogleAddressNote: "Optionally connect Google Business to sync public office details, hours, photos, and reviews.",
+  addSecondLocationNote: "Add another office or service-area presence when needed.",
+  connectGoogleCta: "Connect Google Business",
+  latelyKicker: "Latest",
+  ourStoryKicker: "About",
+  readMoreCta: "Read more",
+  brandStoryPlaceholder: "Your organization story goes here.",
+  brandStoryDescription: "Two or three sentences about the people you serve, what you do, and why it matters.",
+  addStoryCta: "Add your story in the dashboard",
+  reviewsKicker: "Reviews",
+  guestReviewsLabel: "Client reviews and ratings.",
+  whatGuestsSayLabel: "What clients say.",
+  noReviewsLabel: "No reviews yet.",
+  connectGoogleReviewsCta: "Connect Google Business",
+  allLocationsFilter: "All",
+  aboutHeroTitle: "About us",
+  aboutHeroSubtitle: "",
+  ourStoryTitle: "Our Story",
+  ourJourneyKicker: "Our work",
+  ourJourneyTitle: "How We Help",
+  onlineOrderingNotAvailable: "Online booking not available",
+  wedLoveToSeeYou: "We would be glad to hear from you.",
+  orderKicker: "Consultation",
+  orderHeroTitle: "Book a consultation",
+  preferReservation: "Prefer to",
+  grabLabel: "External booking",
+  uberEatsLabel: "External booking",
+  foodpandaLabel: "External booking",
+  openNowLabel: "Open now",
+  closedLabel: "Closed",
+  mainDiningRoomLabel: "Primary office",
+  connectGoogleLocationsCta: "Connect Google Business to sync public office details",
+  additionalLocationsNote: "Additional offices or service areas appear here when added.",
+  noExperiencesLabel: "No services are published yet.",
+  soldOutLabel: "Unavailable",
+  temporarilyUnavailableLabel: "Temporarily unavailable",
+  fullyBookedLabel: "Fully booked",
+  notScheduledLabel: "Not currently scheduled",
+  viewExperienceCta: "View service",
+  guestsMaxLabel: "people max",
+  specialRequestsLabel: "How can we help?",
+  specialRequestsPlaceholder: "Tell us what kind of help you need.",
+  guestLabel: "person",
+  guestsLabelPlural: "people",
+  reservationPoliciesHeading: "Consultation Details",
+  goodToKnowKicker: "Good to know",
+  locationLabel: "Office",
+  selectLocationLabel: "Select an office",
+  chooseLocationLabel: "Please choose an office or contact point.",
+  oneGuestLabel: "1 person",
+  seoOrderDescription: (_name: string) => `Book a consultation with ${_name}.`,
+  confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
+    `We have received your consultation request for ${_guests} ${_guestLabel} on ${_date} at ${_time}.`,
+  confirmSoonLabel: (_word: string) => `Our team will follow up about your ${_word} shortly.`,
+  callUsLabel: (_phone: string) => `Call: ${_phone}`,
+}
+
+registry.th.professional_service = registry.en.professional_service!
+
+export function getVerticalCopy(vertical: string | null | undefined, locale: string | null | undefined = "en"): VerticalCopy {
   const v = String(vertical ?? "restaurant")
   const l = String(locale ?? "en") as LocaleCode
   const byLocale = Object.prototype.hasOwnProperty.call(registry, l) ? registry[l]! : registry.en
-  if (Object.prototype.hasOwnProperty.call(byLocale, v)) {
-    return byLocale[v as SiteVertical]
-  }
-  return byLocale.restaurant
+  const localized = byLocale[v as SiteVertical]
+  if (localized) return localized
+  const english = registry.en[v as SiteVertical]
+  if (english) return english
+  return byLocale.restaurant ?? registry.en.restaurant!
 }
 
 // schema.org has a dedicated "Restaurant" subtype but no "Experience" equivalent,
 // so non-restaurant verticals fall back to the generic LocalBusiness type.
 export function getBusinessSchemaTypes(vertical: string | null | undefined): string[] {
-  return vertical === "restaurant" ? ["Restaurant", "LocalBusiness"] : ["LocalBusiness"]
+  if (vertical === "restaurant") return ["Restaurant", "LocalBusiness"]
+  if (vertical === "professional_service") return ["ProfessionalService", "LocalBusiness"]
+  return ["LocalBusiness"]
 }

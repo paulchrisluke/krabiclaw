@@ -1,8 +1,9 @@
 <template>
-  <NuxtLayout name="saya">
+  <NuxtLayout :name="isBlawby ? 'blawby' : 'saya'">
+    <BlawbyContact v-if="isBlawby" />
 
     <!-- Brand contact page (tenant sites only — the platform marketing contact page was retired in favor of /help) -->
-    <div>
+    <div v-else>
 
       <!-- Brand contact layout — shows for all tenant shapes -->
       <div>
@@ -244,6 +245,7 @@ import { setContactConfirmation } from '~/composables/useContactHandoff'
 definePageMeta({ layout: false })
 
 const { isPlatform, siteId, site } = useTenantSite()
+const { isBlawby } = usePublicTemplate()
 if (isPlatform) throw createError({ statusCode: 404 })
 
 const { locale } = useI18n()

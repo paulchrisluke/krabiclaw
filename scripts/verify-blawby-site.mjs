@@ -1,0 +1,439 @@
+#!/usr/bin/env node
+import fs from 'node:fs'
+import path from 'node:path'
+
+const DEFAULT_ROUTES = [
+  '/',
+  '/services',
+  '/pricing',
+  '/donate',
+  '/schedule',
+  '/contact',
+  '/blog',
+  '/policies/privacy',
+  '/policies/terms',
+  '/third-party-notices',
+]
+
+const FORBIDDEN_COPY = [
+  'Come dine with us',
+  'Reserve a table',
+  'From the kitchen',
+  'one kitchen philosophy',
+  'Catering & events',
+  "chef's table",
+  'tasting menu',
+  'Also part of Saya',
+]
+
+const DISALLOWED_MEDIA_HOSTS = [
+  'vercel.app',
+  'vercel-storage.com',
+  'blob.vercel-storage.com',
+  'localhost',
+  '127.0.0.1',
+]
+
+const APPROVED_MEDIA_HOSTS = [
+  'media.krabiclaw.com',
+  'images.krabiclaw.com',
+  'imagedelivery.net',
+  'krabiclaw.com',
+  'customers.krabiclaw.com',
+]
+
+const SCREENSHOT_ROUTES = [
+  'home',
+  'services',
+  'service-detail',
+  'pricing',
+  'about',
+  'contact',
+  'schedule',
+  'blog',
+  'article',
+  'donate',
+  'policy',
+]
+
+const SCREENSHOT_VIEWPORTS = ['desktop', 'mobile']
+
+function parseArgs(argv) {
+  const args = {
+    url: '',
+    out: '',
+    siteId: '',
+    importManifest: '',
+    evidenceDir: '',
+    requireScreenshots: false,
+    routes: [...DEFAULT_ROUTES],
+  }
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i]
+    if (arg === '--url') args.url = argv[++i]
+    else if (arg === '--out') args.out = argv[++i]
+    else if (arg === '--site-id') args.siteId = argv[++i]
+    else if (arg === '--import-manifest') args.importManifest = argv[++i]
+    else if (arg === '--evidence-dir') args.evidenceDir = argv[++i]
+    else if (arg === '--require-screenshots') args.requireScreenshots = true
+    else if (arg === '--route') args.routes.push(argv[++i])
+  }
+  return args
+}
+
+function readJson(filePath) {
+  if (!filePath) return null
+  return JSON.parse(fs.readFileSync(path.resolve(filePath), 'utf8'))
+}
+
+function resolveUrl(base, route) {
+  return new URL(route, base.endsWith('/') ? base : `${base}/`).toString()
+}
+
+function pushCheck(checks, ok, label, details = {}) {
+  checks.push({ ok, label, ...details })
+}
+
+function collectRoutes(manifest, explicitRoutes) {
+  const routes = new Set(explicitRoutes)
+  for (const offering of manifest?.offerings ?? []) {
+    routes.add(offering.canonical_path || `/services/${offering.slug}`)
+  }
+  for (const page of manifest?.tenantPages ?? []) {
+    routes.add(page.path)
+  }
+  for (const article of manifest?.articles ?? []) {
+    routes.add(article.canonical_url || `/article/${article.slug}`)
+  }
+  for (const route of manifest?.routeInventory?.preservedRoutes ?? []) {
+    routes.add(route)
+  }
+  return Array.from(routes).filter(Boolean)
+}
+
+function collectArtifactMediaUrls(value, urls = new Set()) {
+  if (!value || typeof value !== 'object') return urls
+  if (Array.isArray(value)) {
+    for (const item of value) collectArtifactMediaUrls(item, urls)
+    return urls
+  }
+  for (const [key, nested] of Object.entries(value)) {
+    if (typeof nested === 'string') {
+      const isMediaField = ['public_url', 'thumbnail_url', 'hero_image_url', 'source_path'].includes(key)
+      const hasMediaExtension = /\.(?:avif|gif|jpe?g|pdf|png|svg|webp)(?:[?#].*)?$/i.test(nested)
+      if (/^(https?:)?\/\//.test(nested) && (isMediaField || hasMediaExtension)) {
+        urls.add(nested)
+      }
+    } else {
+      collectArtifactMediaUrls(nested, urls)
+    }
+  }
+  return urls
+}
+
+function checkMediaUrl(url) {
+  if (url.startsWith('/')) return { ok: true, reason: 'relative route' }
+  let parsed
+  try {
+    parsed = new URL(url)
+  } catch {
+    return { ok: false, reason: 'invalid URL' }
+  }
+  const host = parsed.hostname.toLowerCase()
+  if (DISALLOWED_MEDIA_HOSTS.some((blocked) => host === blocked || host.endsWith(`.${blocked}`))) {
+    return { ok: false, reason: `disallowed host ${host}` }
+  }
+  if (APPROVED_MEDIA_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`))) {
+    return { ok: true, reason: `approved host ${host}` }
+  }
+  return { ok: false, reason: `unknown host ${host}` }
+}
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 10_000)
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal })
+    clearTimeout(timer)
+    return response
+  } catch (error) {
+    clearTimeout(timer)
+    return {
+      ok: false,
+      status: 0,
+      statusText: error instanceof Error ? error.message : 'request failed',
+      text: async () => '',
+      json: async () => null,
+    }
+  }
+}
+
+async function checkRoute(base, route) {
+  const url = resolveUrl(base, route)
+  const started = Date.now()
+  const response = await fetchWithTimeout(url, { redirect: 'follow' })
+  const html = await response.text().catch(() => '')
+  const lower = html.toLowerCase()
+  return {
+    route,
+    url,
+    status: response.status,
+    duration_ms: Date.now() - started,
+    ok: response.status >= 200 && response.status < 400,
+    has_blawby_signal: /Blawby|Legal Services|consultation|--blawby-primary|ProfessionalService|LegalService/.test(html),
+    has_saya_signal: /saya-restaurant-theme|Reserve a table|From the kitchen/.test(html),
+    has_professional_schema: lower.includes('professionalservice') || lower.includes('legalservice'),
+    has_restaurant_schema: lower.includes('restaurant') || lower.includes('foodestablishment'),
+    has_noindex: /name=["']robots["'][^>]+noindex/i.test(html),
+    forbidden_copy: FORBIDDEN_COPY.filter((copy) => lower.includes(copy.toLowerCase())),
+    bytes: html.length,
+  }
+}
+
+async function fetchBlawbyData(base, siteId) {
+  if (!base || !siteId) return null
+  const response = await fetchWithTimeout(resolveUrl(base, `/api/public/sites/${siteId}/blawby`))
+  if (!response.ok) return null
+  return await response.json()
+}
+
+async function fetchSitemap(base) {
+  if (!base) return ''
+  const response = await fetchWithTimeout(resolveUrl(base, '/sitemap.xml'))
+  if (!response.ok) return ''
+  return await response.text().catch(() => '')
+}
+
+function validateCalculator(component) {
+  const raw = JSON.stringify(component)
+  if (/\b(function|eval|=>|new Function|script|formula|expression|javascript:)\b/i.test(raw)) {
+    return { ok: false, reason: 'calculator contains arbitrary code/formula markers' }
+  }
+  const hasReviewedSource =
+    Boolean(component.table?.source || component.source || component.source_url) ||
+    Boolean(component.table?.effectiveDate || component.effective_date)
+  return {
+    ok: hasReviewedSource,
+    reason: hasReviewedSource ? 'structured calculator has source/effective metadata' : 'missing source/effective metadata',
+  }
+}
+
+function validateArtifacts(checks, manifest) {
+  if (!manifest) return
+  pushCheck(checks, manifest.site?.vertical === 'professional_service', 'Import manifest vertical is professional_service')
+  pushCheck(checks, manifest.site?.theme_id === 'blawby-theme-v1', 'Import manifest selects Blawby')
+  pushCheck(checks, (manifest.offerings ?? []).length > 0, 'Import manifest contains offerings')
+  pushCheck(checks, (manifest.tenantPages ?? []).some((page) => page.path === '/pricing'), 'Import manifest contains /pricing tenant page')
+  pushCheck(checks, (manifest.tenantPages ?? []).some((page) => page.path === '/donate'), 'Import manifest contains /donate tenant page')
+  pushCheck(checks, (manifest.articles ?? []).length > 0, 'Import manifest contains articles')
+  pushCheck(checks, Boolean(manifest.routeInventory), 'Import manifest contains route inventory')
+  pushCheck(checks, Boolean(manifest.mediaInventory), 'Import manifest contains media inventory')
+  pushCheck(checks, Boolean(manifest.editSurfaceMatrix), 'Import manifest contains edit-surface matrix')
+  pushCheck(checks, Boolean(manifest.intentionalDifferences), 'Import manifest contains intentional differences')
+
+  const legalFiles = (manifest.mediaInventory?.files ?? []).filter(file => file.kind === 'legal_file')
+  pushCheck(checks, legalFiles.length > 0, 'Import manifest inventories legal files')
+  for (const file of manifest.mediaInventory?.files ?? []) {
+    if (!file.approved_storage_required) continue
+    const hasApprovedAsset = typeof file.asset_id === 'string' && file.asset_id.length > 0 && typeof file.public_url === 'string' && file.public_url.length > 0
+    pushCheck(checks, hasApprovedAsset, `Required media/file has approved asset URL: ${file.source_path || file.source_name || file.asset_id || 'unknown'}`)
+  }
+  const complianceAssetIds = new Set(manifest.compliance?.document_asset_ids ?? [])
+  pushCheck(
+    checks,
+    legalFiles.every(file => complianceAssetIds.has(file.asset_id)),
+    'Compliance document asset ids include all legal files',
+  )
+
+  const consultationUrl = manifest.consultation?.external_url
+  pushCheck(
+    checks,
+    typeof consultationUrl === 'string' && /^https:\/\/ncls\.cliogrow\.com\/book/.test(consultationUrl),
+    'Consultation destination is the approved external booking URL',
+    { consultationUrl },
+  )
+
+  const donationPage = (manifest.tenantPages ?? []).find((page) => page.path === '/donate')
+  pushCheck(
+    checks,
+    typeof donationPage?.cta_url === 'string' && /^https:\/\//.test(donationPage.cta_url),
+    'Donation CTA is external',
+    { donationUrl: donationPage?.cta_url ?? null },
+  )
+
+  for (const page of manifest.tenantPages ?? []) {
+    pushCheck(checks, !String(page.body || '').includes('](/files/'), `Tenant page ${page.path} does not reference legacy /files assets`)
+    for (const component of page.components ?? []) {
+      if (component.type !== 'pricing_calculator') continue
+      const result = validateCalculator(component)
+      pushCheck(checks, result.ok, `Pricing calculator config: ${result.reason}`, { page: page.path })
+    }
+  }
+
+  const sourceMedia = collectArtifactMediaUrls(manifest)
+  for (const url of sourceMedia) {
+    const result = checkMediaUrl(url)
+    pushCheck(checks, result.ok, `Artifact media URL allowed: ${url}`, { reason: result.reason })
+  }
+}
+
+function validatePublicData(checks, data) {
+  if (!data) return
+  pushCheck(checks, Array.isArray(data.offerings) && data.offerings.length > 0, 'Public Blawby API returns offerings')
+  pushCheck(checks, Array.isArray(data.tenantPages) && data.tenantPages.some((page) => page.path === '/pricing'), 'Public Blawby API returns /pricing')
+  pushCheck(checks, data.consultation?.tracking_enabled === true, 'Public consultation tracking is enabled')
+  pushCheck(checks, Boolean(data.compliance?.entity_name), 'Public compliance metadata is present')
+  pushCheck(checks, (data.compliance?.documents ?? []).length > 0, 'Public compliance exposes legal document assets')
+  for (const document of data.compliance?.documents ?? []) {
+    const result = checkMediaUrl(document.url)
+    pushCheck(checks, result.ok, `Public compliance document URL allowed: ${document.url}`, { reason: result.reason })
+  }
+  for (const page of data.tenantPages ?? []) {
+    pushCheck(checks, !String(page.body || '').includes('](/files/'), `Public tenant page ${page.path} does not reference legacy /files assets`)
+  }
+
+  const bridge = data.consultation?.metadata?.analyticsBridge
+  if (bridge) {
+    const allowedEvents = Array.isArray(bridge.allowed_events) ? bridge.allowed_events : []
+    const allowedProperties = Array.isArray(bridge.allowed_properties) ? bridge.allowed_properties : []
+    pushCheck(checks, bridge.provider === 'gtm', 'Analytics bridge uses sanctioned GTM provider')
+    pushCheck(checks, /^GTM-[A-Z0-9]+$/.test(String(bridge.container_id || '')), 'Analytics bridge has a valid GTM container id')
+    pushCheck(checks, allowedEvents.includes('book_consultation_click'), 'Analytics bridge allowlists consultation clicks')
+    pushCheck(checks, ['event', 'page_type', 'page_path', 'cta_destination', 'tenant'].every(property => allowedProperties.includes(property)), 'Analytics bridge allowlists only expected conversion properties')
+    pushCheck(checks, bridge.custom_head_code_ignored === true, 'Analytics bridge does not rely on custom head code')
+  }
+
+  const mediaUrls = collectArtifactMediaUrls(data)
+  for (const url of mediaUrls) {
+    const result = checkMediaUrl(url)
+    pushCheck(checks, result.ok, `Public media URL allowed: ${url}`, { reason: result.reason })
+  }
+}
+
+function validateSitemap(checks, sitemap, manifest) {
+  if (!sitemap) {
+    pushCheck(checks, false, 'Sitemap is fetchable')
+    return
+  }
+  pushCheck(checks, true, 'Sitemap is fetchable')
+  for (const route of ['/', '/services', '/pricing', '/donate', '/schedule', '/contact', '/blog']) {
+    pushCheck(checks, sitemap.includes(`<loc>${route}</loc>`) || sitemap.includes(route), `Sitemap includes ${route}`)
+  }
+  for (const offering of manifest?.offerings ?? []) {
+    const route = offering.canonical_path || `/services/${offering.slug}`
+    pushCheck(checks, sitemap.includes(route), `Sitemap includes offering ${route}`)
+  }
+  for (const article of manifest?.articles ?? []) {
+    const route = article.canonical_url || `/article/${article.slug}`
+    pushCheck(checks, sitemap.includes(route), `Sitemap includes article ${route}`)
+  }
+  pushCheck(checks, !sitemap.includes('/menu') && !sitemap.includes('/reservations'), 'Sitemap excludes Saya restaurant routes')
+}
+
+function validateScreenshots(checks, evidenceDir, required) {
+  if (!evidenceDir && !required) return
+  const screenshotDir = path.resolve(evidenceDir || '')
+  for (const source of ['reference', 'blawby']) {
+    for (const route of SCREENSHOT_ROUTES) {
+      for (const viewport of SCREENSHOT_VIEWPORTS) {
+        const filePath = path.join(screenshotDir, 'screenshots', source, `${route}-${viewport}.png`)
+        pushCheck(
+          checks,
+          fs.existsSync(filePath),
+          `Screenshot artifact exists: ${source}/${route}-${viewport}`,
+          { path: filePath },
+        )
+      }
+    }
+  }
+}
+
+function writeEvidenceBundle(outPath, report, manifest) {
+  if (!outPath) return
+  const absolute = path.resolve(outPath)
+  fs.mkdirSync(path.dirname(absolute), { recursive: true })
+  fs.writeFileSync(absolute, `${JSON.stringify(report, null, 2)}\n`)
+
+  const mdPath = absolute.replace(/\.json$/i, '.md')
+  const lines = [
+    '# Blawby Cutover Evidence',
+    '',
+    `- Checked: ${report.checked_at}`,
+    `- Base URL: ${report.base_url || '(artifact-only)'}`,
+    `- Result: ${report.ok ? 'PASS' : 'FAIL'}`,
+    '',
+    '## Routes',
+    '',
+    ...report.routes.map((route) => `- ${route.route}: ${route.status} (${route.bytes} bytes)`),
+    '',
+    '## Checks',
+    '',
+    ...report.checks.map((check) => `- ${check.ok ? 'PASS' : 'FAIL'}: ${check.label}`),
+    '',
+    '## Intentional Differences',
+    '',
+    ...((manifest?.intentionalDifferences ?? []).map((item) => `- ${item}`)),
+  ]
+  fs.writeFileSync(mdPath, `${lines.join('\n')}\n`)
+}
+
+const args = parseArgs(process.argv.slice(2))
+if (!args.url && !args.importManifest) {
+  console.error('Usage: node scripts/verify-blawby-site.mjs --url https://example.com [--site-id site-id] [--import-manifest file] [--evidence-dir dir] [--out artifact.json]')
+  process.exit(2)
+}
+
+const manifest = readJson(args.importManifest)
+const checks = []
+const routes = args.url ? collectRoutes(manifest, args.routes) : []
+const routeChecks = []
+
+for (const route of routes) {
+  const result = await checkRoute(args.url, route)
+  routeChecks.push(result)
+  pushCheck(checks, result.ok, `GET ${route} returns success`, { status: result.status })
+  pushCheck(checks, result.has_blawby_signal, `GET ${route} renders Blawby/professional signal`)
+  pushCheck(checks, !result.has_saya_signal, `GET ${route} does not render Saya restaurant signal`)
+  pushCheck(checks, result.forbidden_copy.length === 0, `GET ${route} has no forbidden restaurant copy`, {
+    forbiddenCopy: result.forbidden_copy,
+  })
+  if (route === '/' || route.startsWith('/services')) {
+    pushCheck(checks, result.has_professional_schema, `GET ${route} has professional-service schema signal`)
+    pushCheck(checks, !result.has_restaurant_schema, `GET ${route} has no restaurant schema signal`)
+  }
+}
+
+if (args.url) {
+  for (const excluded of ['/conference', '/thank-you']) {
+    const result = await checkRoute(args.url, excluded)
+    const ok = result.status === 404 || result.status === 410 || result.status === 301 || result.status === 302 || result.has_noindex
+    pushCheck(checks, ok, `${excluded} is intentionally excluded, redirected, or noindexed`, {
+      status: result.status,
+      hasNoindex: result.has_noindex,
+    })
+  }
+}
+
+validateArtifacts(checks, manifest)
+validatePublicData(checks, await fetchBlawbyData(args.url, args.siteId))
+if (args.url) validateSitemap(checks, await fetchSitemap(args.url), manifest)
+validateScreenshots(checks, args.evidenceDir, args.requireScreenshots)
+
+const report = {
+  checked_at: new Date().toISOString(),
+  base_url: args.url || null,
+  site_id: args.siteId || null,
+  ok: checks.every((check) => check.ok),
+  routes: routeChecks.map((route) => ({
+    route: route.route,
+    url: route.url,
+    status: route.status,
+    duration_ms: route.duration_ms,
+    bytes: route.bytes,
+  })),
+  checks,
+}
+
+writeEvidenceBundle(args.out, report, manifest)
+process.stdout.write(`${JSON.stringify(report, null, 2)}\n`)
+process.exit(report.ok ? 0 : 1)

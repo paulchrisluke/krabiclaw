@@ -1,6 +1,7 @@
 import type { McpExecutorContext } from './shared'
 import { applyBookingPolicyPatch, getDirectBookingPolicy, renderBookingPolicySummary, resolveBookingPolicy, upsertBookingPolicy, validateBookingPolicyPatch, type BookingPolicyScopeType, type BookingPolicyType } from '~/server/utils/booking-policies'
 import { deleteContentField, getEditorContent, updateHomeHero, updatePageContent } from '~/server/utils/mcp-workflows'
+import { getProfessionalServiceContent, upsertProfessionalServiceContent } from '~/server/utils/professional-services-editor'
 import { getMediaAsset } from '~/server/utils/media-asset-manager'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
@@ -38,6 +39,23 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         return {
           ...updated,
           context: await mutationContextPayload(site, { locationId }),
+        };
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "get_professional_service_content":
+      return await getProfessionalServiceContent(site.db, site.siteId);
+    case "update_professional_service_content":
+      try {
+        const updated = await upsertProfessionalServiceContent(site.db, {
+          organizationId: site.organizationId,
+          siteId: site.siteId,
+          data: objectRecord(args, "content"),
+          updatedBy: site.userId,
+        });
+        return {
+          ...updated,
+          context: await mutationContextPayload(site),
         };
       } catch (error) {
         return rethrowAsInvalidParams(error);

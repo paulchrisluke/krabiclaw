@@ -296,6 +296,10 @@ export default defineNuxtConfig({
   // Components configuration
   components: [
     {
+      path: '~/components/blawby',
+      pathPrefix: false,
+    },
+    {
       path: '~/components/saya',
       prefix: 'Saya',
     },

@@ -3,7 +3,7 @@
 // category-nested platform blog (/blog/[category]/[slug]); on a tenant host
 // (resolved by server/middleware/tenant-resolution.ts) it's that site's own
 // blog (/blog/[slug]) — same source, scoped by event.context.siteId.
-import { queryAll } from '~/server/db'
+import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { blogCategoryToSlug } from '~/utils/blog-categories'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
@@ -18,6 +18,12 @@ export default defineSitemapEventHandler(async (event) => {
   if (event.context.tenantType === TENANT_TYPES.TENANT && !siteId) return []
 
   if (siteId) {
+    const site = await queryFirst<{ vertical: string | null; theme_id: string | null }>(
+      db,
+      `SELECT vertical, theme_id FROM sites WHERE id = ?`,
+      [siteId],
+    )
+    const isProfessionalServiceSite = site?.vertical === 'professional_service' || site?.theme_id === 'blawby-theme-v1'
     const posts = await queryAll<ApiRecord>(
       db,
       `SELECT slug, updated_at FROM blog_posts WHERE status = 'published' AND site_id = ?`,
@@ -25,7 +31,10 @@ export default defineSitemapEventHandler(async (event) => {
     )
     return (posts ?? [])
       .filter(post => post.slug)
-      .map(post => ({ loc: `/blog/${post.slug}`, lastmod: post.updated_at as string | undefined }))
+      .map(post => ({
+        loc: isProfessionalServiceSite ? `/article/${post.slug}` : `/blog/${post.slug}`,
+        lastmod: post.updated_at as string | undefined,
+      }))
   }
 
   const posts = await queryAll<ApiRecord>(

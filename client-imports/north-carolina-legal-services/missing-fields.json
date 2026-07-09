@@ -1,0 +1,14 @@
+{
+  "missing": [],
+  "unresolved_media": [],
+  "intentional_exclusions": [
+    {
+      "path": "/thank-you",
+      "handling": "Use KrabiClaw native noindex confirmation pages instead of SEO content."
+    },
+    {
+      "path": "/conference",
+      "handling": "Out of cutover scope for the first Blawby/NCLS PR."
+    }
+  ]
+}

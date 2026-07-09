@@ -176,6 +176,27 @@
       "when": 1783312459127,
       "tag": "0031_familiar_lady_bullseye",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1783570607448,
+      "tag": "0032_fair_demogoblin",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1783573744155,
+      "tag": "0033_flimsy_white_queen",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1783573788437,
+      "tag": "0034_fancy_ikaris",
+      "breakpoints": true
     }
   ]
 }

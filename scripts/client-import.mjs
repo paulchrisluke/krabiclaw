@@ -26,10 +26,25 @@
 
 import { parseArgs } from "node:util";
 import { readdir, stat, mkdir, writeFile, readFile } from "node:fs/promises";
-import { join, extname, basename } from "node:path";
+import { join, extname, basename, relative } from "node:path";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
+
+function shellQuote(value) {
+  const text = String(value);
+  return /\s/.test(text) ? `"${text.replace(/"/g, '\\"')}"` : text;
+}
+
+function spawnYarn(args) {
+  if (process.platform === "win32") {
+    return spawnSync("cmd.exe", ["/d", "/s", "/c", `corepack yarn ${args.map(shellQuote).join(" ")}`], {
+      stdio: "inherit",
+      cwd: process.cwd(),
+    });
+  }
+  return spawnSync("corepack", ["yarn", ...args], { stdio: "inherit", cwd: process.cwd() });
+}
 
 // ── Args ─────────────────────────────────────────────────────────────────────
 
@@ -71,6 +86,7 @@ const ALLOWED_VERTICALS = [
   "retail",
   "wellness",
   "service",
+  "professional_service",
 ];
 if (VERTICAL && !ALLOWED_VERTICALS.includes(VERTICAL)) {
   console.error(
@@ -483,6 +499,15 @@ const FORBIDDEN_BY_VERTICAL = {
   retail: [],
   wellness: [],
   service: [],
+  professional_service: [
+    "Come dine",
+    "From the kitchen",
+    "Reserve a table",
+    "chef's table",
+    "tasting menu",
+    "one kitchen philosophy",
+    "Also part of Saya",
+  ],
 };
 
 function scanForbiddenCopy(sql, vertical) {
@@ -653,6 +678,21 @@ function generateRouteManifest(places) {
     slug: SLUG,
     vertical: VERTICAL,
     locations,
+    services: VERTICAL === "professional_service" ? ["/services"] : [],
+    tenant_pages:
+      VERTICAL === "professional_service"
+        ? [
+            "/about",
+            "/pricing",
+            "/donate",
+            "/schedule",
+            "/contact",
+            "/blog",
+            "/policies/privacy",
+            "/policies/terms",
+            "/third-party-notices",
+          ]
+        : [],
     // Experience slugs come from the experiences table; verify via bootstrap post-seed.
     experiences: [],
   };
@@ -919,13 +959,8 @@ if (MODE === "apply") {
     `\n→ Executing seed SQL against ${REMOTE ? "remote" : "local"} D1...`,
   );
   const d1Flag = REMOTE ? "--remote" : "--local";
-  try {
-    spawnSync(
-      "yarn",
-      ["wrangler", "d1", "execute", "DB", d1Flag, "--file", seedPath],
-      { stdio: "inherit", cwd: process.cwd() },
-    );
-  } catch {
+  const applyResult = spawnYarn(["wrangler", "d1", "execute", "DB", d1Flag, "--file", relative(process.cwd(), seedPath)]);
+  if (applyResult.status !== 0) {
     console.error("\n✗ Seed execution failed — check wrangler output above.");
     process.exit(1);
   }

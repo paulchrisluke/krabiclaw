@@ -21,6 +21,7 @@ import { parseArgs } from "node:util";
 import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 
 const { values: args } = parseArgs({
   options: {
@@ -29,6 +30,8 @@ const { values: args } = parseArgs({
     "site-id": { type: "string" },
     slug: { type: "string" },
     "out-dir": { type: "string" },
+    "evidence-dir": { type: "string" },
+    "require-screenshots": { type: "boolean", default: false },
     remote: { type: "boolean", default: false },
   },
   allowPositionals: false,
@@ -47,6 +50,33 @@ const SITE_ID = args["site-id"];
 const OUT_DIR =
   args["out-dir"] ??
   (args.slug ? join(process.cwd(), "client-imports", args.slug) : null);
+
+if (VERTICAL === "professional_service") {
+  const blawbyArgs = ["scripts/verify-blawby-site.mjs", "--url", BASE];
+  if (SITE_ID) blawbyArgs.push("--site-id", SITE_ID);
+
+  const importManifest = OUT_DIR ? join(OUT_DIR, "blawby-import.json") : null;
+  if (importManifest && existsSync(importManifest)) {
+    blawbyArgs.push("--import-manifest", importManifest);
+  }
+
+  const evidenceDir = args["evidence-dir"] ?? OUT_DIR ?? null;
+  if (evidenceDir) {
+    blawbyArgs.push("--evidence-dir", evidenceDir);
+  }
+  if (args["require-screenshots"]) {
+    blawbyArgs.push("--require-screenshots");
+  }
+  if (OUT_DIR) {
+    blawbyArgs.push("--out", join(OUT_DIR, "blawby-evidence-bundle.json"));
+  }
+
+  const result = spawnSync(process.execPath, blawbyArgs, {
+    cwd: process.cwd(),
+    stdio: "inherit",
+  });
+  process.exit(result.status ?? 1);
+}
 
 // ── Copy constraints ──────────────────────────────────────────────────────────
 

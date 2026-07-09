@@ -48,6 +48,29 @@ export const CONTENT_CHOWBOT_TOOLS: AiTool[] = [
       },
     },
   {
+      name: "get_professional_service_content",
+      description: "Read Blawby/professional-service content: offerings, tenant pages, compliance text, consultation settings, navigation, and theme tokens.",
+      input_schema: {
+        type: "object",
+        properties: {},
+      },
+    },
+  {
+      name: "update_professional_service_content",
+      description: "Save Blawby/professional-service content. Pricing calculators must use structured data with source/effective metadata, not formulas or scripts.",
+      input_schema: {
+        type: "object",
+        properties: {
+          offerings: { type: "array", items: { type: "object" } },
+          tenantPages: { type: "array", items: { type: "object" } },
+          compliance: { type: "object" },
+          consultation: { type: "object" },
+          navigation: { type: "array", items: { type: "object" } },
+          themeTokens: { type: "object" },
+        },
+      },
+    },
+  {
       name: "delete_content_field",
       description:
         "Delete a site page field from live content. Confirm with the user first.",

@@ -1,0 +1,35 @@
+{
+  "preservedRoutes": [
+    "/",
+    "/services",
+    "/services/family",
+    "/services/small-business-and-nonprofits",
+    "/services/employment",
+    "/services/tenant-rights",
+    "/services/probate-and-estate",
+    "/services/special-education-and-iep-advocacy",
+    "/schedule",
+    "/pricing",
+    "/donate",
+    "/blog",
+    "/article/getting-a-divorce-in-north-carolina",
+    "/article/equitable-distribution-in-north-carolina-divorces",
+    "/about",
+    "/pricing",
+    "/donate",
+    "/policies/privacy",
+    "/policies/terms",
+    "/third-party-notices"
+  ],
+  "intentionalExclusions": [
+    {
+      "path": "/thank-you",
+      "handling": "Use KrabiClaw native noindex confirmation pages instead of SEO content."
+    },
+    {
+      "path": "/conference",
+      "handling": "Out of cutover scope for the first Blawby/NCLS PR."
+    }
+  ],
+  "redirects": []
+}

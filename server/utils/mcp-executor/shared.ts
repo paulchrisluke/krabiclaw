@@ -1078,7 +1078,10 @@ export function rethrowAsInvalidParams(error: unknown): never {
   if (
     message.startsWith('Field "') ||
     message.includes("must be a string") ||
-    message.includes("must be an object with hero_title/hero_subtitle")
+    message.includes("must be an object with hero_title/hero_subtitle") ||
+    message.includes("calculator") ||
+    message.includes("offering needs") ||
+    message.includes("tenant page needs")
   ) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, message);
   }
