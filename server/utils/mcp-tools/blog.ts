@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { BLOG_NAV_FIELDS_SCHEMA, blogComponentInputSchema, blogPostMutationResultObject, blogPostObject, siteTool } from './shared'
+import { BLOG_NAV_FIELDS_SCHEMA, ROBOTS_DIRECTIVE_ENUM, blogComponentInputSchema, blogPostMutationResultObject, blogPostObject, siteTool } from './shared'
 
 export const BLOG_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -46,11 +46,11 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
           items: blogComponentInputSchema,
         },
         ...BLOG_NAV_FIELDS_SCHEMA,
-        seo_title: { type: 'string', description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
+        seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         seo_description: { type: 'string' },
         seo_keywords: { type: 'string' },
         canonical_url: { type: 'string' },
-        robots: { type: 'string', enum: ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow'] },
+        robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null] },
         publish: { type: 'boolean', description: 'Publish immediately. Defaults to false (draft).' },
       },
       required: ['title', 'body'],
@@ -74,11 +74,11 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
           items: blogComponentInputSchema,
         },
         ...BLOG_NAV_FIELDS_SCHEMA,
-        seo_title: { type: 'string', description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
+        seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         seo_description: { type: 'string' },
         seo_keywords: { type: 'string' },
         canonical_url: { type: 'string' },
-        robots: { type: 'string', enum: ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow'] },
+        robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null] },
         publish: { type: 'boolean' },
         unpublish: { type: 'boolean' },
       },

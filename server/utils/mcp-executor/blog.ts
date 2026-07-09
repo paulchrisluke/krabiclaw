@@ -106,10 +106,34 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
           post_id: requiredString(item, "post_id"),
           nav_order: navOrder,
         }
-        if (Object.prototype.hasOwnProperty.call(item, "nav_section")) result.nav_section = (item.nav_section as string | null) ?? null
-        if (Object.prototype.hasOwnProperty.call(item, "nav_title")) result.nav_title = (item.nav_title as string | null) ?? null
-        if (Object.prototype.hasOwnProperty.call(item, "nav_section_order")) result.nav_section_order = (item.nav_section_order as number | null) ?? null
-        if (Object.prototype.hasOwnProperty.call(item, "hide_from_nav")) result.hide_from_nav = item.hide_from_nav === null ? null : Boolean(item.hide_from_nav)
+        if (Object.prototype.hasOwnProperty.call(item, "nav_section")) {
+          const value = item.nav_section
+          if (value !== null && typeof value !== "string") {
+            throw mcpProtocolError(MCP_ERROR.invalidParams, "nav_section must be a string or null when provided.")
+          }
+          result.nav_section = value ?? null
+        }
+        if (Object.prototype.hasOwnProperty.call(item, "nav_title")) {
+          const value = item.nav_title
+          if (value !== null && typeof value !== "string") {
+            throw mcpProtocolError(MCP_ERROR.invalidParams, "nav_title must be a string or null when provided.")
+          }
+          result.nav_title = value ?? null
+        }
+        if (Object.prototype.hasOwnProperty.call(item, "nav_section_order")) {
+          const value = item.nav_section_order
+          if (value !== null && (typeof value !== "number" || !Number.isInteger(value))) {
+            throw mcpProtocolError(MCP_ERROR.invalidParams, "nav_section_order must be an integer or null when provided.")
+          }
+          result.nav_section_order = value ?? null
+        }
+        if (Object.prototype.hasOwnProperty.call(item, "hide_from_nav")) {
+          const value = item.hide_from_nav
+          if (value !== null && typeof value !== "boolean") {
+            throw mcpProtocolError(MCP_ERROR.invalidParams, "hide_from_nav must be a boolean or null when provided.")
+          }
+          result.hide_from_nav = value === null ? null : Boolean(value)
+        }
         return result as { post_id: string; nav_section?: string | null; nav_title?: string | null; nav_order: number; nav_section_order?: number | null; hide_from_nav?: boolean | null }
       })
       const result = await reorderPlatformBlogPosts(site.db, items, site.siteId)

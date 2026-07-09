@@ -18,7 +18,7 @@ export default defineSitemapEventHandler(async (event) => {
 
   const locations = await queryAll<ApiRecord>(
     db,
-    `SELECT slug, updated_at FROM business_locations WHERE site_id = ? AND status = 'active' AND (robots IS NULL OR robots NOT LIKE 'noindex%')`,
+    `SELECT slug, updated_at FROM business_locations WHERE site_id = ? AND status = 'active' AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
     [siteId],
   )
 

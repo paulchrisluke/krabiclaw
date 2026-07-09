@@ -77,10 +77,16 @@ const ogImage = computed(() =>
   config.value?.logo_url ||
   null
 )
+// useRequestURL() must be called eagerly at setup time, not inside the computed
+// getter below — the getter can run lazily during head serialization, after
+// which point Nuxt's request-scoped instance is no longer available and calling
+// a useNuxtApp()-dependent composable there throws "[nuxt] instance unavailable".
+const requestHostname = useRequestURL().hostname
+
 // Site-wide default only — individual pages set their own robots directive
 // when they have one; this is the fallback for pages that don't.
 const siteRobots = computed(() => {
-  if (useRequestURL().hostname.startsWith('demo.')) {
+  if (requestHostname.startsWith('demo.')) {
     return 'noindex, nofollow'
   }
   return config.value?.robots || null

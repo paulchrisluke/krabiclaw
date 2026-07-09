@@ -22,7 +22,7 @@ export default defineSitemapEventHandler(async (event) => {
   if (siteId) {
     const posts = await queryAll<ApiRecord>(
       db,
-      `SELECT slug, updated_at FROM blog_posts WHERE status = 'published' AND site_id = ? AND (robots IS NULL OR robots NOT LIKE 'noindex%')`,
+      `SELECT slug, updated_at FROM blog_posts WHERE status = 'published' AND site_id = ? AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
       [siteId],
     )
     return (posts ?? [])
@@ -32,7 +32,7 @@ export default defineSitemapEventHandler(async (event) => {
 
   const posts = await queryAll<ApiRecord>(
     db,
-    `SELECT slug, category, updated_at FROM blog_posts WHERE status = 'published' AND site_id IS NULL AND (robots IS NULL OR robots NOT LIKE 'noindex%')`,
+    `SELECT slug, category, updated_at FROM blog_posts WHERE status = 'published' AND site_id IS NULL AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
   )
 
   const entries: Array<{ loc: string; lastmod: string | undefined }> = []

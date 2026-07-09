@@ -987,23 +987,23 @@ export async function updateMenuItem(
   }
   if (updates.seo_title !== undefined) {
     setParts.push("seo_title = ?");
-    params.push(updates.seo_title);
+    params.push(updates.seo_title || null);
   }
   if (updates.seo_description !== undefined) {
     setParts.push("seo_description = ?");
-    params.push(updates.seo_description);
+    params.push(updates.seo_description || null);
   }
   if (updates.canonical_url !== undefined) {
     setParts.push("canonical_url = ?");
-    params.push(updates.canonical_url);
+    params.push(updates.canonical_url || null);
   }
   if (updates.robots !== undefined) {
     setParts.push("robots = ?");
-    params.push(updates.robots);
+    params.push(updates.robots || null);
   }
   if (updates.og_image_asset_id !== undefined) {
     setParts.push("og_image_asset_id = ?");
-    params.push(updates.og_image_asset_id);
+    params.push(updates.og_image_asset_id || null);
   }
 
   setParts.push("updated_at = ?");

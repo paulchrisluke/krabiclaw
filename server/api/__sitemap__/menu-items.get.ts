@@ -22,7 +22,7 @@ export default defineSitemapEventHandler(async (event) => {
     `SELECT mi.slug, mi.updated_at
      FROM menu_items mi
      JOIN menus m ON m.id = mi.menu_id
-     WHERE m.site_id = ? AND m.status = 'published' AND (mi.robots IS NULL OR mi.robots NOT LIKE 'noindex%')`,
+     WHERE m.site_id = ? AND m.status = 'published' AND (mi.robots IS NULL OR mi.robots NOT LIKE '%noindex%')`,
     [siteId],
   )
 

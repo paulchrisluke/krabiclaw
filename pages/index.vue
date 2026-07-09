@@ -600,7 +600,7 @@ if (!isPlatform && siteId) {
     ogSiteName: computed(() => site?.brand_name || restaurantName.value),
     twitterTitle: seoTitle,
     twitterDescription: seoDescription,
-    ogImage: useSharedOgImage(() => hero.value.image),
+    ogImage: useSharedOgImage(() => bootstrapConfig.value?.og_image_url || hero.value.image),
     ogUrl: currentPageUrl,
     ogType: 'website',
     robots: () => bootstrapConfig.value?.robots || undefined,

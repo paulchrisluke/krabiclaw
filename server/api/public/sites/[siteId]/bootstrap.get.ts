@@ -416,6 +416,7 @@ export default defineEventHandler(async (event) => {
           LEFT JOIN media_assets ma_img ON bl.hero_image_asset_id = ma_img.id AND ma_img.status = 'active'
           LEFT JOIN media_assets ma_vid ON bl.hero_video_asset_id = ma_vid.id AND ma_vid.status = 'active'
           LEFT JOIN media_assets ma_og ON bl.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
+            AND ma_og.organization_id = bl.organization_id AND ma_og.site_id = bl.site_id
           WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
           ORDER BY bl.is_primary DESC, bl.title ASC`
       : `SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
@@ -572,6 +573,7 @@ export default defineEventHandler(async (event) => {
                   LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
                   LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
                   LEFT JOIN media_assets og ON og.id = e.og_image_asset_id AND og.status = 'active'
+         AND og.organization_id = e.organization_id AND og.site_id = e.site_id
                   WHERE e.organization_id = ? AND e.site_id = ? AND e.status != 'inactive'`;
     if (page === "location" && locationId) {
       expSql += ` AND e.location_id = ?`;
@@ -596,6 +598,7 @@ export default defineEventHandler(async (event) => {
        LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
        LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
        LEFT JOIN media_assets og ON og.id = e.og_image_asset_id AND og.status = 'active'
+         AND og.organization_id = e.organization_id AND og.site_id = e.site_id
        WHERE e.organization_id = ? AND e.site_id = ? AND e.slug = ?
        LIMIT 1`,
       [orgId, siteId, experienceSlug],
