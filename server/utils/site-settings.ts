@@ -49,7 +49,7 @@ function buildSlug(value: string): string {
     .slice(0, 30)
 }
 
-async function loadSettingsPayload(
+export async function loadSettingsPayload(
   db: D1Database,
   organizationId: string,
   siteId: string
@@ -65,7 +65,7 @@ async function loadSettingsPayload(
   `, [siteId, organizationId])
 
   if (!updatedSite) {
-    throw new Error('Site not found after update')
+    throw new Error('Site not found')
   }
 
   let siteSettings: Record<string, unknown> = {}
