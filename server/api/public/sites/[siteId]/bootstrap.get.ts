@@ -587,9 +587,12 @@ export default defineEventHandler(async (event) => {
   // Conditional
   if (needsGlobalReviews)
     idxReviews = push(
-      `SELECT author_name AS author, rating, content, created_at AS date
-       FROM reviews WHERE site_id = ? AND status = 'approved'
-       ORDER BY created_at DESC LIMIT 50`,
+      `SELECT r.author_name AS author, r.rating, r.content, r.created_at AS date,
+              r.location_id, bl.title AS location_title
+       FROM reviews r
+       LEFT JOIN business_locations bl ON bl.id = r.location_id
+       WHERE r.site_id = ? AND r.status = 'approved'
+       ORDER BY r.created_at DESC LIMIT 50`,
       [siteId],
     );
 
@@ -965,6 +968,32 @@ export default defineEventHandler(async (event) => {
     locRows.results?.[0] ??
     null;
 
+  // Site-wide review summary: a review-count-weighted average across every verified
+  // location, not just the primary one — a site with several separately-synced
+  // locations should show a rating that represents the whole business, not one address.
+  const verifiedLocations = (locRows.results ?? []).filter(
+    (l) => l.last_synced_at && l.rating != null && l.review_count != null,
+  );
+  const siteReviewCount = verifiedLocations.reduce(
+    (sum, l) => sum + Number(l.review_count),
+    0,
+  );
+  const siteReviewSummary =
+    siteReviewCount > 0
+      ? {
+          averageRating:
+            Math.round(
+              (verifiedLocations.reduce(
+                (sum, l) => sum + Number(l.rating) * Number(l.review_count),
+                0,
+              ) /
+                siteReviewCount) *
+                10,
+            ) / 10,
+          totalReviewCount: siteReviewCount,
+        }
+      : null;
+
   const googleBusiness = {
     business: primary
       ? {
@@ -979,13 +1008,7 @@ export default defineEventHandler(async (event) => {
               ? { latitude: primary.latitude, longitude: primary.longitude }
               : null,
           profile: { description: primary.description },
-          reviewSummary:
-            primary.last_synced_at && primary.rating != null && primary.review_count != null
-              ? {
-                  averageRating: primary.rating,
-                  totalReviewCount: primary.review_count,
-                }
-              : null,
+          reviewSummary: siteReviewSummary,
         }
       : null,
     reviews: reviewRows.results ?? [],

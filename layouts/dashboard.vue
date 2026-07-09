@@ -237,16 +237,6 @@
                       </div>
                     </div>
 
-                    <!-- Changelog -->
-                    <NuxtLink
-                      to="/changelog"
-                      class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg text-default hover:text-highlighted hover:bg-muted transition-colors text-left"
-                      @click="close"
-                    >
-                      <span>Changelog</span>
-                      <UIcon name="i-lucide-square-pen" class="size-4 text-muted" />
-                    </NuxtLink>
-
                     <!-- Help -->
                     <NuxtLink
                       to="/dashboard/help"

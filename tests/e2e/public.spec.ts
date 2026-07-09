@@ -195,11 +195,12 @@ test.describe('public tenant site', () => {
     const response = await page.goto(`${tenantBaseURL}/`, { waitUntil: 'load' })
     expect(response?.status()).toBeLessThan(400)
 
-    // window.krabiLayer is now declared eagerly on every client boot (app.vue), tenant
-    // pages included, so its mere presence no longer signals platform-bridge inheritance.
-    // The demo tenant fixture has no GA measurement ID configured, so the real signal —
-    // whether any gtag (platform's or a tenant's own) ended up installed — stays reliably
-    // unset here.
+    // Platform analytics load via Cloudflare Zaraz (edge-injected, zone-scoped to
+    // krabiclaw.com's own GA4 property) rather than a client-bundled gtag.js, so
+    // there's no app-owned global to assert the absence of anymore. A tenant's own
+    // connected GA4 (layouts/saya.vue) still injects real gtag.js, but the demo
+    // tenant fixture has no GA measurement ID configured, so window.gtag staying
+    // unset here is still the correct invariant to check.
     const globals = await page.evaluate(() => ({
       hasGtag: typeof (window as Window & { gtag?: unknown }).gtag !== 'undefined',
     }))
@@ -217,12 +218,10 @@ test.describe('platform public site', () => {
     await page.waitForLoadState('load')
     await expect(page.getByRole('link', { name: /krabiclaw/i }).first()).toBeVisible()
     await expect(page.getByRole('heading', { name: /your local business, managed through chatgpt/i })).toBeVisible()
-    // window.krabiLayer is now declared eagerly on every client boot (app.vue) so any
-    // consumer can safely push into it from the first tick — same guarantee GTM's own
-    // dataLayer snippet makes — and gets its first session_start/page_view entries queued
-    // asynchronously shortly after 'load', so asserting its absence here is inherently
-    // racy. The actual privacy/perf-relevant invariant is that the real GA4 script/gtag
-    // hasn't loaded yet (deferred to first interaction — see app.vue's loadOnInteraction).
+    // Platform GA4 loads via Cloudflare Zaraz (edge-injected, see useAnalytics.ts),
+    // which never installs a window.gtag global — its GA4 managed component talks to
+    // Google over its own client, not classic gtag.js. This should reliably be false,
+    // not just "not yet loaded".
     const hasGtag = await page.evaluate(() => typeof (window as Window & { gtag?: unknown }).gtag !== 'undefined')
     expect(hasGtag).toBe(false)
 

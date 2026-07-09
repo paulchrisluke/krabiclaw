@@ -76,7 +76,6 @@ const productLinks = [
   { label: 'Features', to: '/features' },
   { label: 'Pricing', to: '/pricing' },
   { label: 'Templates', to: '/templates' },
-  { label: 'Changelog', to: '/changelog' },
 ]
 const companyLinks = [
   { label: 'About', to: '/about' },

@@ -196,6 +196,78 @@ export const menuObject = {
   },
 }
 
+const faqItemSchema = {
+  type: 'object',
+  properties: {
+    question: { type: 'string' },
+    answer: { type: 'string' },
+    position: { type: 'number' },
+  },
+  required: ['question', 'answer'],
+}
+
+const howToStepSchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    text: { type: 'string' },
+    image_asset_id: { type: ['string', 'null'] },
+    url: { type: ['string', 'null'] },
+    position: { type: 'number' },
+  },
+  required: ['name', 'text'],
+}
+
+// `data`'s shape depends on the sibling `type` field (faq vs how_to), so it's spelled out
+// per-type via if/then here instead of left as a bare object — that's what gives the model
+// the actual field names (how_to steps need `name`+`text`) instead of an opaque object it
+// has to guess the shape of. Tenant blog posts share the same validator (and therefore the
+// same field names) as platform blog posts/docs — see server/utils/platform-content.ts.
+export const blogComponentInputSchema = {
+  type: 'object',
+  properties: {
+    type: { type: 'string', enum: ['faq', 'how_to'] },
+    label: { type: ['string', 'null'] },
+    status: { type: ['string', 'null'], enum: ['active', 'inactive', null] },
+    render_enabled: { type: ['boolean', 'null'] },
+    schema_enabled: { type: ['boolean', 'null'] },
+    position: { type: ['number', 'null'] },
+    data: { type: 'object' },
+  },
+  required: ['type', 'data'],
+  allOf: [
+    {
+      if: { properties: { type: { const: 'faq' } } },
+      then: {
+        properties: {
+          data: {
+            type: 'object',
+            properties: { items: { type: 'array', items: faqItemSchema } },
+            required: ['items'],
+          },
+        },
+      },
+    },
+    {
+      if: { properties: { type: { const: 'how_to' } } },
+      then: {
+        properties: {
+          data: {
+            type: 'object',
+            properties: {
+              steps: { type: 'array', items: howToStepSchema },
+              estimated_time: { type: ['string', 'null'] },
+              tool_items: { type: 'array', items: { type: 'string' } },
+              supply_items: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['steps'],
+          },
+        },
+      },
+    },
+  ],
+}
+
 export const blogPostMutationResultObject = {
   type: 'object',
   properties: {
@@ -222,18 +294,7 @@ export const blogPostObject = {
     category: { type: ['string', 'null'] },
     components: {
       type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          type: { type: 'string', enum: ['faq', 'how_to'] },
-          label: { type: ['string', 'null'] },
-          status: { type: ['string', 'null'], enum: ['active', 'inactive', null] },
-          render_enabled: { type: ['boolean', 'null'] },
-          schema_enabled: { type: ['boolean', 'null'] },
-          position: { type: ['number', 'null'] },
-          data: { type: 'object' },
-        },
-      },
+      items: blogComponentInputSchema,
     },
     seo_description: { type: ['string', 'null'] },
     seo_keywords: { type: ['string', 'null'] },

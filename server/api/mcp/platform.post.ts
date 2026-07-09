@@ -102,6 +102,7 @@ export default defineEventHandler(async (event) => {
   let requestId: string | number | null | undefined
   let requestMethod: string | undefined
   let requestToolName: string | undefined
+  let requestToolArgs: Record<string, unknown> | undefined
 
   try {
     if (!getHeader(event, 'authorization')?.startsWith('Bearer ') && !getHeader(event, 'cookie')) {
@@ -256,6 +257,7 @@ export default defineEventHandler(async (event) => {
         !Array.isArray(request.params.arguments)
           ? request.params.arguments as Record<string, unknown>
           : Object.fromEntries(Object.entries(request.params ?? {}).filter(([key]) => key !== 'name'))
+      requestToolArgs = rawArgs
 
       const result = await executePlatformMcpToolCall(event, toolName, rawArgs)
 
@@ -312,6 +314,7 @@ export default defineEventHandler(async (event) => {
         toolName: requestToolName ?? null,
         toolDomain: requestToolName ? PLATFORM_MCP_TOOL_DOMAIN : null,
         isMutating: isMcpMutatingTool(PLATFORM_MCP_TOOLS.find((t) => t.name === requestToolName)),
+        arguments: requestToolArgs ? summarizePayloadShape(requestToolArgs) : undefined,
         status: error instanceof Error && /Authentication required/i.test(error.message) ? 'auth_required' : 'error',
         errorCode: asMcpError(error).code,
         errorMessage: error instanceof Error && /Authentication required/i.test(error.message)

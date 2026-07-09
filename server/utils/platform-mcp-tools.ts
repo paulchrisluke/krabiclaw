@@ -213,6 +213,52 @@ const AI_ASSISTANCE_COMPONENT_SCHEMA = {
   additionalProperties: false,
 }
 
+const HOW_TO_STEP_INPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    text: { type: 'string' },
+    image_asset_id: NULLABLE_STRING,
+    url: NULLABLE_STRING,
+    position: { type: 'number' },
+  },
+  required: ['name', 'text'],
+  additionalProperties: false,
+}
+
+const FAQ_COMPONENT_INPUT_DATA_SCHEMA = {
+  type: 'object',
+  properties: {
+    items: { type: 'array', items: FAQ_ITEM_SCHEMA },
+  },
+  required: ['items'],
+  additionalProperties: false,
+}
+
+const HOW_TO_COMPONENT_INPUT_DATA_SCHEMA = {
+  type: 'object',
+  properties: {
+    steps: { type: 'array', items: HOW_TO_STEP_INPUT_SCHEMA },
+    estimated_time: NULLABLE_STRING,
+    tool_items: { type: 'array', items: { type: 'string' } },
+    supply_items: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['steps'],
+  additionalProperties: false,
+}
+
+const AI_ASSISTANCE_COMPONENT_INPUT_DATA_SCHEMA = {
+  type: 'object',
+  properties: {
+    intro: NULLABLE_STRING,
+    collapsed: NULLABLE_BOOLEAN,
+    max_visible_lines: NULLABLE_NUMBER,
+    prompts: { type: 'array', items: AI_ASSISTANCE_PROMPT_SCHEMA },
+  },
+  required: ['prompts'],
+  additionalProperties: false,
+}
+
 const COMPONENT_INPUT_SCHEMA = {
   type: 'object',
   properties: {
@@ -222,6 +268,24 @@ const COMPONENT_INPUT_SCHEMA = {
   },
   required: ['type', 'data'],
   additionalProperties: false,
+  // `data`'s shape depends on the sibling `type` field, so it's spelled out per-type here
+  // instead of on the shared `properties.data` above — that's what gives the model the
+  // actual step/item field names (e.g. how_to steps need `name`+`text`) instead of an
+  // opaque object it has to guess the shape of.
+  allOf: [
+    {
+      if: { properties: { type: { const: 'faq' } } },
+      then: { properties: { data: FAQ_COMPONENT_INPUT_DATA_SCHEMA } },
+    },
+    {
+      if: { properties: { type: { const: 'how_to' } } },
+      then: { properties: { data: HOW_TO_COMPONENT_INPUT_DATA_SCHEMA } },
+    },
+    {
+      if: { properties: { type: { const: 'ai_assistance' } } },
+      then: { properties: { data: AI_ASSISTANCE_COMPONENT_INPUT_DATA_SCHEMA } },
+    },
+  ],
 }
 
 const CONTENT_BLOCK_DATA_SCHEMA = { type: 'object' }
@@ -469,7 +533,7 @@ const DELETE_RESPONSE_SCHEMA = {
 
 const SHARED_TOOL_DESCRIPTION_LINES = [
   'Set seo_description explicitly for the intended search snippet. Use canonical_url only for deliberate canonical consolidation. Use robots only for non-default index behavior. Set featured_image_asset_id only when the user has selected or uploaded a real platform media asset; otherwise leave it null.',
-  'Use components[] as the only structured-content authoring shape. FAQ components contain data.items[]. How-To components contain data.steps[] and may also include data.estimated_time, data.tool_items, and data.supply_items. AI Assistance components use type="ai_assistance" and contain data.prompts[]; each prompt is a writer-authored suggested prompt, not a generated answer.',
+  'Use components[] as the only structured-content authoring shape. FAQ components contain data.items[], each item { question: string, answer: string, position?: number }. How-To components contain data.steps[], each step { name: string, text: string, image_asset_id?: string|null, url?: string|null, position?: number } (name and text are both required strings; a missing name or text is the most common cause of a rejected update), and data may also include estimated_time, tool_items, and supply_items. AI Assistance components use type="ai_assistance" and contain data.prompts[], each prompt { prompt: string, title?: string|null, description?: string|null, copy_label?: string|null, position?: number }; each prompt is a writer-authored suggested prompt, not a generated answer.',
   'To place a visual component inside the article body, insert a component embed tag directly into body markdown, for example {{component type="faq"}}, {{component type="how_to"}}, or {{component type="ai_assistance"}}. Keep AI Assistance prompts specific, actionable, page-aware, and rare enough to help the reader act.',
   'Use render_enabled to control whether a component appears on the page. Use schema_enabled to control whether it emits structured data; leave schema_enabled false for ai_assistance unless a future schema representation exists. Use status to disable a component without deleting it.',
   'On update: omitting components preserves existing components; sending components: [] deletes them; sending a non-empty components[] array replaces the full component set for that page.',
