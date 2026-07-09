@@ -4,6 +4,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { execute, queryFirst } from '~/server/db'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { executeSiteTransfer } from '~/server/utils/site-transfer'
+import { createOrganizationForSite } from '~/server/utils/site-creation'
 import { getStripe, getPriceIdForPlan } from '~/server/utils/billing'
 import type Stripe from 'stripe'
 
@@ -73,21 +74,18 @@ export default defineEventHandler(async (event) => {
     )
   }
 
-  // Find the accepting user's owner org (created automatically on signup)
+  // Find the accepting user's owner org. Signup no longer auto-creates one — an
+  // organization is only created when the user actually needs one, so a brand-new
+  // user accepting their first transfer legitimately has none yet. Create it here,
+  // on demand, the same way a first site-creation would (see site-creation.ts).
   const ownerMember = await queryFirst<{ organizationId: string }>(
     db,
     `SELECT organizationId FROM member WHERE userId = ? AND role = 'owner' LIMIT 1`,
     [userId],
   )
 
-  if (!ownerMember) {
-    return jsonResponse(
-      { error: 'Your account does not have an owner organization. Please contact support.' },
-      { status: 422 },
-    )
-  }
-
-  const toOrgId = ownerMember.organizationId
+  const toOrgId = ownerMember?.organizationId
+    ?? (await createOrganizationForSite(db, userId, session.user.name || session.user.email || 'My Business')).organizationId
 
   if (toOrgId === transfer.from_organization_id) {
     return jsonResponse({ error: 'You already own this site' }, { status: 422 })

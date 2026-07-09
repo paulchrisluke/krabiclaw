@@ -15,8 +15,24 @@ export default defineEventHandler(async (event) => {
   const afterTransfer = getQuery(event).afterTransfer === 'true'
   const { db, userId, organization, site } = await getDashboardContext(event, {
     requireSite: false,
+    requireOrganization: false,
     allowTransferFallback: afterTransfer,
   })
+
+  // No organization yet is a normal state for a brand-new user who hasn't
+  // created or joined one — signup no longer auto-creates a personal org.
+  if (!organization) {
+    return jsonResponse({
+      success: true,
+      organization: null,
+      site: null,
+      sites: [],
+      locations: [],
+      selectedLocation: null,
+      managedServiceEnabled
+    })
+  }
+
   const sites = await listOrganizationSites(db, organization.id)
 
   if (!site) {
