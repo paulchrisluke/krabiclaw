@@ -55,7 +55,7 @@ import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
 import { extractMenuFromMediaAsset } from "~/server/utils/chowbot-media";
 import { upsertChannelState } from "~/server/utils/chowbot-conversations";
 import { CHOWBOT_MODEL } from "~/server/utils/ai-models";
-import { updateSiteSettingsFields } from "~/server/utils/site-settings";
+import { loadSettingsPayload, updateSiteSettingsFields, SiteNotFoundError } from "~/server/utils/site-settings";
 import {
   createLocation,
   updateLocation,
@@ -2772,16 +2772,14 @@ async function executeTool(
     }
 
     case "get_site_settings": {
-      const row = await queryFirst(
-        db,
-        `SELECT brand_name, brand_description, logo_url, logo_asset_id, default_currency,
-                         contact_email, facebook_url, instagram_url, tiktok_url, footer_tagline,
-                         press_email, partnerships_email, catering_email, careers_email
-                  FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`,
-        [siteId, orgId],
-      );
-      if (!row) return { error: "Site not found." };
-      return { settings: row };
+      try {
+        return { settings: await loadSettingsPayload(db, orgId, siteId) };
+      } catch (err) {
+        if (err instanceof SiteNotFoundError) {
+          return { error: "Site not found." };
+        }
+        throw err;
+      }
     }
 
     case "set_logo": {

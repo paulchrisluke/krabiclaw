@@ -466,7 +466,7 @@ const features = [
   { icon: 'sparkles', title: 'Beautiful themes', body: 'Conversion-optimized themes for local businesses. Pick one, swap a color, you\'re live.' },
   { icon: 'globe', title: 'Google Business sync', body: 'Hours, photos, offerings — pushed to Google so guests find the right info every time.' },
   { icon: 'calendar', title: 'Bookings + waitlist', body: 'Take bookings 24/7 with WhatsApp confirmations. Walk-ins go on the waitlist automatically.' },
-  { icon: 'shopping-bag', title: 'Online ordering', body: 'Pickup & delivery with no commission. Stripe payouts straight to your bank.' },
+  { icon: 'inbox', title: 'Full Inbox', body: 'Manage all your reservations, bookings, and contact inquiries from a single, unified inbox.' },
   { icon: 'bar-chart', title: 'Real-time insights', body: 'See visits, top pages, and busy hours — ask ChatGPT or check the analytics tab.' },
 ]
 // Validate tenant context ONLY for tenant sites
@@ -577,6 +577,7 @@ if (isPlatform) {
 // SEO for tenant sites: set ogUrl to the actual request URL so custom domains share correctly.
 if (!isPlatform && siteId) {
   const seoTitle = computed(() => {
+    if (bootstrapConfig.value?.seo_title) return bootstrapConfig.value.seo_title
     const primary = (restaurantName.value || '').trim()
     const secondary = (businessTitle.value || 'Business').trim() || 'Business'
     if (!primary || primary.toLowerCase() === secondary.toLowerCase()) {
@@ -586,8 +587,10 @@ if (!isPlatform && siteId) {
   })
 
   const seoDescription = computed(() =>
-    truncateForSeo(businessSubtitle.value || 'Professional business website with photos, updates and reviews.', 160)
+    truncateForSeo(bootstrapConfig.value?.seo_description || businessSubtitle.value || 'Professional business website with photos, updates and reviews.', 160)
   )
+
+  const canonicalUrl = useSeoUrl(() => bootstrapConfig.value?.canonical_url || '/')
 
   useSeoMeta({
     title: seoTitle,
@@ -597,9 +600,14 @@ if (!isPlatform && siteId) {
     ogSiteName: computed(() => site?.brand_name || restaurantName.value),
     twitterTitle: seoTitle,
     twitterDescription: seoDescription,
-    ogImage: useSharedOgImage(() => hero.value.image),
+    ogImage: useSharedOgImage(() => bootstrapConfig.value?.og_image_url || hero.value.image),
     ogUrl: currentPageUrl,
-    ogType: 'website'
+    ogType: 'website',
+    robots: () => bootstrapConfig.value?.robots || undefined,
+  })
+
+  useHead({
+    link: [{ rel: 'canonical', href: canonicalUrl }],
   })
 }
 

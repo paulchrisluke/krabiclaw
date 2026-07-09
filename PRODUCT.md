@@ -31,7 +31,7 @@ Internal ChatGPT app for KrabiClaw operators only.
 - Auth requires global Better Auth `user.role = 'admin'`
 - Tools limited to platform blog/docs operations for `krabiclaw.com/blog` and `krabiclaw.com/docs`
 
-The dashboard is still the home for billing, org settings, inbox triage, analytics, and the managed service work queue. MCP and dashboard operate on the same D1 backend with no forked business logic.
+The dashboard is still the home for billing, org settings, unified inbox (contact, reservations, bookings, reviews), and analytics. MCP and dashboard operate on the same D1 backend with no forked business logic.
 
 See `docs/mcp-surface-split.md` for the canonical split rules.
 
@@ -56,16 +56,14 @@ Pricing managed entirely in Stripe — never duplicated in code. All pricing UI 
 
 | Tier | Price | Key Features |
 |------|-------|-------------|
-| Free (Starter) | $0 | Subdomain, Saya theme, manual editor, basic AI credits, 1 locale |
-| Growth | $49/mo | Custom domain + SSL, Google Business sync, 2,000 AI credits/mo, translation (1 language) |
-| Managed | $149/mo | Everything in Growth + unlimited translation languages, unlimited AI credits, managed service, advanced SEO |
-| SEO Accelerator | $349/mo | Everything in Managed + SEO accelerator entitlement |
+| Free (Starter) | $0 | Subdomain, Saya theme, manual editor, basic AI credits, 1 locale, Post-booking review requests |
+| Growth | $49/mo | Custom domain + SSL, Google Business sync, 2,000 AI credits/mo, translation (1 language), Priority Support |
 
 Locations are unlimited on all plans. Credit top-ups are available as one-time purchases.
 
 **Upgrade modal** triggers on: connecting Google Business, custom domain setup, translation, removing KrabiClaw branding.
 
-**Managed/SEO Accelerator are hidden at launch.** Both tiers' entire pitch (`scripts/seed-stripe.mjs`) is the concierge promise — "Send us a WhatsApp. We run your online presence — no login needed." — which a lean launch team can't reliably deliver yet. They're gated behind `MANAGED_SERVICE_ENABLED` (off by default, `server/utils/feature-flags.ts`), which hides them from `GET /api/billing/plans`, blocks `POST /api/billing/checkout`, hides the dashboard Support page's request form, and hides the admin Work Queue tab. Only Free and Growth ($49, self-serve) are purchasable while it's off. This is UI/marketing visibility only — the underlying `managed_service` DB entitlement, Stripe products, Facebook sync gating, and MCP tool authorization are untouched and ready to flip back on once there's capacity.
+**Managed / Concierge Services Deprecated.** The "Managed by Paul & Julia" service (including Managed and SEO Accelerator tiers) is no longer offered. The `MANAGED_SERVICE_ENABLED` feature flag remains off to hide these from the dashboard and marketing sites.
 
 ### WhatsApp / Google Places cost recovery
 
@@ -168,4 +166,4 @@ Logo | Locations (dropdown) | Story | Contact | **RESERVE** (primary CTA). Locat
   - `/dashboard/account/settings` — personal account settings
 - App-facing dashboard APIs use `/api/dashboard/*`; the active site is resolved server-side from the `x-dashboard-site-slug` header (auto-attached by `plugins/dashboard-site-header.ts` based on the route's `siteSlug`), not by guessing the org's oldest site.
 - **Site transfers move only the site** — its locations, content, billing, and entitlements reparent into the recipient's own existing org. The org itself, its other sites, and org-level billing/credits never move.
-- Dashboard is home for: billing, org settings, inbox triage (contact, reservations, reviews), managed service work queue, analytics.
+- Dashboard is home for: billing, org settings, unified inbox (contact inquiries, reservations, bookings, reviews), analytics.

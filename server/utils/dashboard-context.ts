@@ -48,6 +48,12 @@ interface DashboardContextOptions {
   // multi-site callers (e.g. the org-root single-site auto-redirect) keep returning
   // null on ambiguity rather than being silently steered toward a transferred site.
   allowTransferFallback?: boolean
+  // Defaults to true (throw if the user has no organization at all). Signup no
+  // longer auto-creates a personal org (see auth.ts), so a brand-new user
+  // legitimately has zero organizations until they create or join one — only
+  // the onboarding discovery endpoint (/api/dashboard/context) opts out of the
+  // throw to represent that state instead of erroring.
+  requireOrganization?: boolean
 }
 
 async function resolveSingleOrgSite(db: DbClient, organizationId: string): Promise<DashboardSiteRow | null> {
@@ -78,7 +84,36 @@ async function resolveRecentlyTransferredSite(db: DbClient, organizationId: stri
   `, [organizationId, userId])
 }
 
-export async function getDashboardContext(event: H3Event, options: DashboardContextOptions = {}) {
+export async function getDashboardContext(
+  _event: H3Event,
+  _options: DashboardContextOptions & { requireOrganization: false }
+): Promise<{
+  env: ReturnType<typeof cloudflareEnv>
+  db: D1Database
+  session: NonNullable<Awaited<ReturnType<typeof getAuthSession>>>
+  userId: string
+  organization: DashboardOrganizationRow | null
+  site: DashboardSiteRow | null
+}>
+export async function getDashboardContext(
+  _event: H3Event,
+  _options?: DashboardContextOptions
+): Promise<{
+  env: ReturnType<typeof cloudflareEnv>
+  db: D1Database
+  session: NonNullable<Awaited<ReturnType<typeof getAuthSession>>>
+  userId: string
+  organization: DashboardOrganizationRow
+  site: DashboardSiteRow | null
+}>
+export async function getDashboardContext(event: H3Event, options: DashboardContextOptions = {}): Promise<{
+  env: ReturnType<typeof cloudflareEnv>
+  db: D1Database
+  session: NonNullable<Awaited<ReturnType<typeof getAuthSession>>>
+  userId: string
+  organization: DashboardOrganizationRow | null
+  site: DashboardSiteRow | null
+}> {
   const env = cloudflareEnv(event)
   const db = env.DB
 
@@ -106,6 +141,16 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   `, [session.user.id, activeOrganizationId ?? ''])
 
   if (!organization) {
+    if (options.requireOrganization === false) {
+      return {
+        env,
+        db,
+        session,
+        userId: session.user.id,
+        organization: null,
+        site: null,
+      }
+    }
     throw createError({ statusCode: 404, message: 'No organization found' })
   }
 

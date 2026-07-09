@@ -11,14 +11,6 @@
       </div>
 
       <div class="flex items-center gap-1.5 shrink-0">
-        <button
-          type="button"
-          class="flex size-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-muted hover:text-default lg:hidden"
-          :aria-label="section === 'blog' ? 'Browse blog' : 'Browse docs'"
-          @click="emit('toggle-nav')"
-        >
-          <PlatformIcon name="menu" class="size-5" />
-        </button>
         <template v-if="mounted">
           <template v-if="showAuthenticated">
             <PlatformButton to="/dashboard" size="sm">
@@ -36,6 +28,14 @@
             </PlatformButton>
           </template>
         </template>
+        <button
+          type="button"
+          class="flex size-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-muted hover:text-default lg:hidden"
+          :aria-label="section === 'blog' ? 'Browse blog' : 'Browse docs'"
+          @click="emit('toggle-nav')"
+        >
+          <PlatformIcon name="menu" class="size-5" />
+        </button>
       </div>
     </div>
   </header>

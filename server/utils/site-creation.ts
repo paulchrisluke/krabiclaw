@@ -117,7 +117,7 @@ async function resolveCreationOrganization(
   return await createOrganizationForSite(db, userId, name)
 }
 
-async function createOrganizationForSite(db: D1Database, userId: string, name: string) {
+export async function createOrganizationForSite(db: D1Database, userId: string, name: string) {
   const now = Math.floor(Date.now() / 1000)
   const organizationId = `org-${crypto.randomUUID()}`
   const slug = await uniqueOrganizationSlug(db, name)

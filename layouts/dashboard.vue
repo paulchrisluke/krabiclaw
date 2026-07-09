@@ -239,7 +239,9 @@
 
                     <!-- Help -->
                     <NuxtLink
-                      to="/dashboard/help"
+                      :to="config.public.helpUrl"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg text-default hover:text-highlighted hover:bg-muted transition-colors text-left"
                       @click="close"
                     >
@@ -376,6 +378,7 @@ interface AuthOrganization {
 }
 
 const route = useRoute()
+const config = useRuntimeConfig()
 const { data: sessionData, signOut, refreshSession } = useAuth()
 const { trackDashboardVisited } = useAnalytics()
 const toast = useToast()
@@ -448,7 +451,6 @@ const inLocationWorkspace = dashboardLocation.inLocationWorkspace
 
 const inSettingsWorkspace = computed(() => {
   if (route.path.startsWith('/dashboard/account')) return true
-  if (route.path.startsWith('/dashboard/help')) return true
   if (orgSettingsBase.value && route.path.startsWith(orgSettingsBase.value)) return true
   return /^\/dashboard\/[^/]+\/~\/settings/.test(route.path)
 })
@@ -515,13 +517,8 @@ const mainNavigation = computed(() => [
     { label: 'Conversations', icon: 'i-lucide-messages-square', to: siteBase.value ? `${siteBase.value}/conversations` : '/dashboard' },
   ],
   [
-    { label: 'Blog', icon: 'i-lucide-newspaper', to: siteBase.value ? `${siteBase.value}/blog` : '/dashboard' },
     { label: 'Translations', icon: 'i-lucide-languages', to: siteBase.value ? `${siteBase.value}/translations` : '/dashboard' },
     { label: 'Activity', icon: 'i-lucide-activity', to: orgBase.value ? `${orgBase.value}/activity` : '/dashboard' },
-    { label: 'Support', icon: 'i-lucide-life-buoy', to: orgBase.value ? `${orgBase.value}/support` : '/dashboard' },
-  ],
-  [
-    { label: 'Settings', icon: 'i-lucide-settings', to: orgSettingsBase.value ? `${orgSettingsBase.value}/general` : '/dashboard' },
   ],
 ])
 
@@ -575,8 +572,7 @@ const adminNavigation = computed(() => [[
 ]])
 
 const _utilityNavigation = computed(() => [[
-  { label: 'Account', icon: 'i-lucide-user-cog', to: '/dashboard/account/settings' },
-  { label: 'Help', icon: 'i-lucide-circle-help', to: '/dashboard/help' }
+  { label: 'Account', icon: 'i-lucide-user-cog', to: '/dashboard/account/settings' }
 ]])
 
 const accountSettingsNavigation = computed(() => [[
@@ -626,12 +622,10 @@ const navbarTitle = computed(() => {
     activity: 'Activity',
     analytics: 'Analytics',
     billing: 'Billing',
-    blog: 'Blog',
     chatgpt: 'ChatGPT',
     conversations: 'Conversations',
     content: 'Content',
     experiences: 'Experiences',
-    help: 'Help',
     inbox: 'Inbox',
     locations: 'Locations',
     media: 'Media',

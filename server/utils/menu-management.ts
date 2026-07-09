@@ -11,6 +11,7 @@ import type {
 import { normalizePriceAmount, assertValidSaleWindow } from "~/shared/money";
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from "~/server/db";
 import { fireSiteEventSafe } from "~/server/utils/site-events";
+import { validateMediaAsset } from "~/server/utils/location-management";
 
 const MAX_SUFFIX_ATTEMPTS = 50;
 
@@ -450,6 +451,7 @@ export async function getMenuWithItems(
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
            mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
+           mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, mi.og_image_asset_id,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
     LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
@@ -483,6 +485,7 @@ async function loadPublishedMenuById(
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
            mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
+           mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, mi.og_image_asset_id,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
     LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
@@ -586,6 +589,7 @@ export async function getPublicMenuItem(
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
            mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
+           mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, mi.og_image_asset_id,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
     JOIN menus m ON m.id = mi.menu_id
@@ -772,6 +776,7 @@ export async function createMenuItem(
   );
   if (!menuOwner) throw createError({ statusCode: 404, statusMessage: "Menu not found" });
   assertValidSaleWindow(item.sale_starts_at, item.sale_ends_at);
+  await validateMediaAsset(db, organizationId, siteId, item.og_image_asset_id, "image", "og_image_asset_id");
 
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -781,8 +786,8 @@ export async function createMenuItem(
     db,
     `
     INSERT INTO menu_items (id, menu_id, section, name, slug, description, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, image_asset_id, available, featured, featured_sort_order, sort_order,
-      allergens, ingredients, dietary_notes, preparation, serving_note, created_at, updated_at, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      allergens, ingredients, dietary_notes, preparation, serving_note, seo_title, seo_description, canonical_url, robots, og_image_asset_id, created_at, updated_at, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
     [
       id,
@@ -805,6 +810,11 @@ export async function createMenuItem(
       item.dietary_notes ? JSON.stringify(item.dietary_notes) : null,
       item.preparation || null,
       item.serving_note || null,
+      item.seo_title || null,
+      item.seo_description || null,
+      item.canonical_url || null,
+      item.robots || null,
+      item.og_image_asset_id || null,
       now,
       now,
       createdBy,
@@ -825,6 +835,7 @@ export async function createMenuItem(
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
            mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
+           mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, mi.og_image_asset_id,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
     LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
@@ -884,6 +895,10 @@ export async function updateMenuItem(
 
   if (!existing) {
     throw new Error(`Menu item not found: ${menuItemId}`);
+  }
+
+  if (updates.og_image_asset_id !== undefined) {
+    await validateMediaAsset(db, organizationId, siteId, updates.og_image_asset_id, "image", "og_image_asset_id");
   }
 
   // Build dynamic update query
@@ -970,6 +985,26 @@ export async function updateMenuItem(
     setParts.push("serving_note = ?");
     params.push(updates.serving_note || null);
   }
+  if (updates.seo_title !== undefined) {
+    setParts.push("seo_title = ?");
+    params.push(updates.seo_title || null);
+  }
+  if (updates.seo_description !== undefined) {
+    setParts.push("seo_description = ?");
+    params.push(updates.seo_description || null);
+  }
+  if (updates.canonical_url !== undefined) {
+    setParts.push("canonical_url = ?");
+    params.push(updates.canonical_url || null);
+  }
+  if (updates.robots !== undefined) {
+    setParts.push("robots = ?");
+    params.push(updates.robots || null);
+  }
+  if (updates.og_image_asset_id !== undefined) {
+    setParts.push("og_image_asset_id = ?");
+    params.push(updates.og_image_asset_id || null);
+  }
 
   setParts.push("updated_at = ?");
   setParts.push("updated_by = ?");
@@ -1012,6 +1047,7 @@ export async function updateMenuItem(
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
            mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
+           mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, mi.og_image_asset_id,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
     LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'

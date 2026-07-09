@@ -93,3 +93,55 @@ export function groupItemsByNavSection<T extends NavGroupable>(
       items: group.items.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title)),
     }))
 }
+
+interface DocNavGroupable extends NavGroupable {
+  nav_group?: string | null
+  nav_group_order?: number | null
+}
+
+export interface DocNavSubgroup<T> {
+  group: string | null
+  order: number
+  items: Array<T & { label: string; order: number }>
+}
+
+export interface DocNavSection<T> {
+  category: string
+  order: number
+  groups: Array<DocNavSubgroup<T>>
+}
+
+/**
+ * Docs-only: further partitions each nav section's items into an optional collapsible
+ * subgroup (nav_group), giving a curated Section → Group → Page hierarchy (max 3 levels).
+ * Ungrouped items (no nav_group) render directly under the section, ahead of named subgroups.
+ * Blog posts must stay flat — do not route blog nav through this function, use
+ * groupItemsByNavSection directly (see useBlogNav).
+ */
+export function groupDocItemsByNavSectionAndGroup<T extends DocNavGroupable>(
+  items: T[],
+  getSection: (_item: T) => string,
+  legacyOrder: readonly string[],
+): Array<DocNavSection<T>> {
+  const sections = groupItemsByNavSection(items, getSection, legacyOrder)
+  return sections.map((section) => {
+    const bySubgroup = new Map<string | null, DocNavSubgroup<T>>()
+    for (const item of section.items) {
+      const groupLabel = item.nav_group?.trim() || null
+      const groupOrder = typeof item.nav_group_order === 'number' ? item.nav_group_order : 999999
+      const existing = bySubgroup.get(groupLabel)
+      if (existing) {
+        existing.order = Math.min(existing.order, groupOrder)
+        existing.items.push(item)
+      } else {
+        bySubgroup.set(groupLabel, { group: groupLabel, order: groupOrder, items: [item] })
+      }
+    }
+    const groups = Array.from(bySubgroup.values()).sort((a, b) => {
+      if (a.group === null && b.group !== null) return -1
+      if (a.group !== null && b.group === null) return 1
+      return a.order - b.order || (a.group ?? '').localeCompare(b.group ?? '')
+    })
+    return { category: section.category, order: section.order, groups }
+  })
+}

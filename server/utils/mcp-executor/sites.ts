@@ -2,9 +2,9 @@ import type { McpExecutorContext } from './shared'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { getSiteForMcp } from '~/server/utils/mcp-workflows'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
-import { updateSiteSettingsFields } from '~/server/utils/site-settings'
+import { loadSettingsPayload, updateSiteSettingsFields } from '~/server/utils/site-settings'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { NOT_HANDLED, assertDomainSuccess, loadSiteSettings, mutationContextPayload, requireActiveImageAsset, requiredString, workspaceContextPayload } from './shared'
+import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, requireActiveImageAsset, requiredString, workspaceContextPayload } from './shared'
 
 export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
@@ -30,7 +30,7 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
       }
     case "get_site_settings":
       return {
-        settings: await loadSiteSettings(
+        settings: await loadSettingsPayload(
           site.db,
           site.organizationId,
           site.siteId,

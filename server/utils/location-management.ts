@@ -1,6 +1,6 @@
 import { updateSubscriptionQuantity } from "~/server/utils/billing";
 import { fireSiteEventSafe } from "~/server/utils/site-events";
-import { execute, executeBatch, queryFirst } from "~/server/db";
+import { execute, executeBatch, queryFirst, type DbClient } from "~/server/db";
 import { isValidTimezone, normalizeTimezone } from "~/utils/timezone";
 
 type SetupEnv = Record<string, string | undefined>;
@@ -45,6 +45,11 @@ export interface CreateLocationInput {
   timezone?: string | null;
   max_capacity?: number | null;
   is_primary?: boolean;
+  seo_title?: string | null;
+  seo_description?: string | null;
+  canonical_url?: string | null;
+  robots?: string | null;
+  og_image_asset_id?: string | null;
 }
 
 export interface UpdateLocationInput extends Partial<CreateLocationInput> {
@@ -84,6 +89,11 @@ export interface LocationRecord {
   notification_phone?: string | null;
   timezone?: string | null;
   max_capacity?: number | null;
+  seo_title?: string | null;
+  seo_description?: string | null;
+  canonical_url?: string | null;
+  robots?: string | null;
+  og_image_asset_id?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -242,8 +252,8 @@ function serializeSpecialHours(value: SpecialHoursInput | null | undefined) {
   });
 }
 
-async function validateMediaAsset(
-  db: D1Database,
+export async function validateMediaAsset(
+  db: DbClient,
   organizationId: string,
   siteId: string,
   assetId: string | null | undefined,
@@ -277,7 +287,8 @@ async function loadLocation(
            rating, review_count, description, short_description, status, is_primary,
            address, opening_hours, special_hours, hero_image_asset_id, hero_video_asset_id, price_level,
            facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
-           notification_phone, timezone, max_capacity, created_at, updated_at`;
+           notification_phone, timezone, max_capacity, seo_title, seo_description, canonical_url, robots, og_image_asset_id,
+           created_at, updated_at`;
   // Check id first so a slug that happens to collide with another row's id can
   // never shadow the row actually addressed by that id.
   const byId = await queryFirst<LocationRecord>(
@@ -367,6 +378,14 @@ export async function createLocation(
       "video",
       "hero_video_asset_id",
     );
+    await validateMediaAsset(
+      db,
+      organizationId,
+      siteId,
+      input.og_image_asset_id,
+      "image",
+      "og_image_asset_id",
+    );
   } catch (error) {
     return {
       status: 400,
@@ -421,9 +440,10 @@ export async function createLocation(
             id, organization_id, site_id, title, slug, city, neighborhood, phone, email, website_url, maps_url,
             google_review_url, google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
             price_level, facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
-            hero_image_asset_id, hero_video_asset_id, notification_phone, timezone, max_capacity, is_primary, status, created_at, updated_at
+            hero_image_asset_id, hero_video_asset_id, notification_phone, timezone, max_capacity, is_primary, status,
+            seo_title, seo_description, canonical_url, robots, og_image_asset_id, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
         `,
         params: [
           id,
@@ -459,6 +479,11 @@ export async function createLocation(
           normalizedTimezone ?? null,
           input.max_capacity ?? null,
           isPrimary ? 1 : 0,
+          input.seo_title ?? null,
+          input.seo_description ?? null,
+          input.canonical_url ?? null,
+          input.robots ?? null,
+          input.og_image_asset_id ?? null,
           now,
           now,
         ],
@@ -602,6 +627,14 @@ export async function updateLocation(
       "video",
       "hero_video_asset_id",
     );
+    await validateMediaAsset(
+      db,
+      organizationId,
+      siteId,
+      input.og_image_asset_id,
+      "image",
+      "og_image_asset_id",
+    );
   } catch (error) {
     return {
       status: 400,
@@ -650,6 +683,11 @@ export async function updateLocation(
     "timezone",
     "max_capacity",
     "status",
+    "seo_title",
+    "seo_description",
+    "canonical_url",
+    "robots",
+    "og_image_asset_id",
   ] as const;
 
   for (const field of simpleFields) {

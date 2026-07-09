@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { SUPPORTED_CURRENCIES, currentUserObject, globalTool, siteListItem, siteTool, withToolAnnotations } from './shared'
+import { ROBOTS_DIRECTIVE_ENUM, SUPPORTED_CURRENCIES, currentUserObject, globalTool, siteListItem, siteTool, withToolAnnotations } from './shared'
 
 export const SITES_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
@@ -94,9 +94,13 @@ export const SITES_TOOLS: McpToolDefinition[] = [
             type: 'object',
             properties: {
               id: { type: 'string' },
+              organization_id: { type: 'string' },
               subdomain: { type: 'string' },
               theme: { type: 'string' },
               status: { type: 'string' },
+              primary_location_id: { type: ['string', 'null'] },
+              public_url: { type: ['string', 'null'] },
+              custom_domain_status: { type: ['string', 'null'] },
               brand_name: { type: ['string', 'null'] },
               brand_description: { type: ['string', 'null'] },
               logo_url: { type: ['string', 'null'] },
@@ -104,6 +108,24 @@ export const SITES_TOOLS: McpToolDefinition[] = [
               contact_email: { type: ['string', 'null'] },
               default_currency: { type: ['string', 'null'] },
               url_structure: { type: 'string' },
+              social_facebook: { type: ['string', 'null'] },
+              social_instagram: { type: ['string', 'null'] },
+              social_tiktok: { type: ['string', 'null'] },
+              footer_tagline: { type: ['string', 'null'] },
+              press_email: { type: ['string', 'null'] },
+              partnerships_email: { type: ['string', 'null'] },
+              catering_email: { type: ['string', 'null'] },
+              careers_email: { type: ['string', 'null'] },
+              google_analytics_measurement_id: { type: ['string', 'null'] },
+              google_site_verification: { type: ['string', 'null'] },
+              last_published_at: { type: ['string', 'null'] },
+              seo_title: { type: ['string', 'null'] },
+              seo_description: { type: ['string', 'null'] },
+              canonical_url: { type: ['string', 'null'] },
+              robots: { type: ['string', 'null'] },
+              og_image_asset_id: { type: ['string', 'null'] },
+              created_at: { type: 'string' },
+              updated_at: { type: 'string' },
             },
             required: ['id', 'subdomain'],
           },
@@ -135,6 +157,11 @@ export const SITES_TOOLS: McpToolDefinition[] = [
         google_analytics_measurement_id: { type: 'string' },
         google_site_verification: { type: 'string' },
         url_structure: { type: 'string' },
+        seo_title: { type: ['string', 'null'], description: 'Optional site-wide default SEO title override for the homepage and any page without its own override. Falls back to brand_name if unset.' },
+        seo_description: { type: ['string', 'null'], description: 'Optional site-wide default SEO description override. Falls back to brand_description if unset.' },
+        canonical_url: { type: ['string', 'null'], description: 'Optional site-wide canonical URL override for the homepage.' },
+        robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive for the homepage. Leave unset for the default index,follow.' },
+        og_image_asset_id: { type: ['string', 'null'], description: 'Asset id from get_site_media_assets used as the default social share image site-wide when a page has no more specific image set.' },
       },
       outputSchema: {
         type: 'object',

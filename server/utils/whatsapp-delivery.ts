@@ -7,6 +7,10 @@ type WhatsAppDeliveryEnv = {
 // Fails closed, same rationale as getEmailDeliveryMode in email-delivery.ts: an
 // unset/blank/invalid WHATSAPP_DELIVERY_MODE must never fall through to real sends.
 export function getWhatsAppDeliveryMode(env: WhatsAppDeliveryEnv | null | undefined | unknown): WhatsAppDeliveryMode {
+  // See getEmailDeliveryMode in email-delivery.ts — same rationale: local `nuxt
+  // dev` inherits wrangler.toml's production-only top-level [vars] unless
+  // .dev.vars overrides it, and that override has gone missing before.
+  if (import.meta.dev) return 'log_only'
   const mode = typeof env === 'object' && env !== null && 'WHATSAPP_DELIVERY_MODE' in env
     ? (env as { WHATSAPP_DELIVERY_MODE?: string }).WHATSAPP_DELIVERY_MODE
     : undefined

@@ -16,6 +16,14 @@ type EmailDeliveryEnv = {
 // to seeded e2e fixture addresses like user-mcp-growth@example.test, bouncing and burning
 // sending-domain reputation.
 export function getEmailDeliveryMode(env: EmailDeliveryEnv | null | undefined | unknown): EmailDeliveryMode {
+  // `nuxt dev` reads wrangler.toml's top-level [vars] — the same block
+  // `wrangler deploy` (no --env) uses for production — so a local dev session
+  // silently inherits EMAIL_DELIVERY_MODE=provider unless .dev.vars happens to
+  // override it. That override has drifted/gone missing before (see the 2026-07
+  // incident note below) and burned real Resend sends to e2e/admin-notification
+  // addresses with localhost links. Hard-stop it at the code level instead of
+  // trusting every developer's .dev.vars to have the right line.
+  if (import.meta.dev) return 'log_only'
   const mode = typeof env === 'object' && env !== null && 'EMAIL_DELIVERY_MODE' in env
     ? (env as { EMAIL_DELIVERY_MODE?: string }).EMAIL_DELIVERY_MODE
     : undefined

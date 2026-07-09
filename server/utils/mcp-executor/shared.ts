@@ -1375,48 +1375,6 @@ export function normalizeChannelArray(
   return [...new Set(normalized)];
 }
 
-export async function loadSiteSettings(
-  db: D1Database,
-  organizationId: string,
-  siteId: string,
-) {
-  const site = await queryFirst<Record<string, unknown>>(
-    db,
-    `
-    SELECT s.id, s.organization_id, s.subdomain, s.theme, s.status,
-           s.primary_location_id, s.public_url, s.custom_domain_status, s.default_currency,
-           s.brand_name, s.brand_description, s.logo_url, s.logo_asset_id, s.contact_email,
-           s.settings, s.last_published_at, s.created_at, s.updated_at
-    FROM sites s
-    WHERE s.id = ? AND s.organization_id = ?
-    LIMIT 1
-  `,
-    [siteId, organizationId],
-  );
-
-  if (!site) throw new Error("Site not found");
-
-  const settings =
-    site.settings && typeof site.settings === "string"
-      ? safeParseObject(site.settings)
-      : {};
-
-  return {
-    ...site,
-    url_structure: settings.url_structure ?? "location_subdirectories",
-  };
-}
-
-export function safeParseObject(value: string) {
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object"
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
-}
 
 export function assertDomainSuccess(result: {
   status: number;
