@@ -288,7 +288,7 @@
 </template>
 
 <script setup lang="ts">
-import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
+import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage, nowInTimezone } from '~/utils/formatters'
 import { formatMoneyAmount, isSaleActive, resolveOverridePriceDisplay } from '~/shared/money'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 
@@ -471,15 +471,15 @@ const weekHours = computed(() => {
   const hours = location.value?.opening_hours
   if (!hours) return []
   const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
-  const today = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][new Date().getDay()]
+  const today = nowInTimezone(location.value?.timezone).weekday
   return formatGoogleHours(hours).map((h: ApiValue, i: number) => ({
     ...h,
     today: days[i] === today
   }))
 })
 
-const todayHours = computed(() => getTodayGoogleHours(location.value?.opening_hours))
-const isOpenNow = computed(() => getIsOpenNow(location.value?.opening_hours))
+const todayHours = computed(() => getTodayGoogleHours(location.value?.opening_hours, nowInTimezone(location.value?.timezone).weekday))
+const isOpenNow = computed(() => getIsOpenNow(location.value?.opening_hours, location.value?.timezone))
 
 const activeClosure = computed(() => getActiveSpecialClosure(location.value?.special_hours, location.value?.timezone))
 const activeClosureMessage = computed(() => formatClosureMessage(activeClosure.value))
