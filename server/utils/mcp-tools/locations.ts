@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { locationListItemObject, locationMutationSummaryObject, locationObject, openingHoursInputSchema, siteTool, specialHoursInputSchema } from './shared'
+import { locationListItemObject, locationMutationSummaryObject, locationObject, openingHoursInputSchema, seoOverrideFieldsSchema, siteTool, specialHoursInputSchema } from './shared'
 import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const LOCATIONS_TOOLS: McpToolDefinition[] = [
@@ -49,6 +49,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         foodpanda_url: { type: 'string', description: 'Foodpanda URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
         opening_hours: openingHoursInputSchema,
         special_hours: specialHoursInputSchema,
+        ...seoOverrideFieldsSchema('Falls back to hero_image_asset_id, then the site-level og image, if unset.'),
       },
       required: ['title'],
       outputSchema: locationMutationSummaryObject,
@@ -76,6 +77,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         foodpanda_url: { type: 'string', description: 'Foodpanda URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
         opening_hours: openingHoursInputSchema,
         special_hours: specialHoursInputSchema,
+        ...seoOverrideFieldsSchema('Falls back to hero_image_asset_id, then the site-level og image, if unset.'),
       },
       required: ['location_id'],
       outputSchema: locationMutationSummaryObject,

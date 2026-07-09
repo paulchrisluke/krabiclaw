@@ -35,12 +35,19 @@ const SEO_FIELDS_SCHEMA = {
 }
 
 const NAV_FIELDS_SCHEMA = {
-  nav_section: NULLABLE_STRING,
-  nav_title: NULLABLE_STRING,
-  nav_order: NULLABLE_NUMBER,
-  nav_section_order: NULLABLE_NUMBER,
-  hide_from_nav: NULLABLE_BOOLEAN,
-  featured_order: NULLABLE_NUMBER,
+  nav_section: { type: ['string', 'null'], description: 'Top-level sidebar section label. Falls back to a category→section mapping, then to category itself, if unset. Does not affect the public URL.' },
+  nav_title: { type: ['string', 'null'], description: 'Sidebar label override. Falls back to the title if unset. Does not affect the public URL.' },
+  nav_order: { type: ['number', 'null'], description: 'Sort position within its group (or section if no group). Lower sorts first. Falls back to legacy sort_order, then published_at/created_at, if unset.' },
+  nav_section_order: { type: ['number', 'null'], description: 'Sort position of the section itself among all sections. Falls back to a fixed legacy order if unset.' },
+  hide_from_nav: { type: ['boolean', 'null'], description: 'Excludes this item from sidebar/nav rendering only. Does NOT deindex it or remove it from the sitemap — use robots="noindex,..." for that.' },
+  featured_order: { type: ['number', 'null'], description: 'Sort position in featured/homepage placements, independent of nav ordering.' },
+}
+
+// Docs-only: gives docs a curated Section → Group → Page hierarchy (max 3 levels).
+// Blog posts do not get this — blog nav stays flat/category-grouped.
+const DOC_NAV_GROUP_FIELDS_SCHEMA = {
+  nav_group: { type: ['string', 'null'], description: 'Optional collapsible subgroup within nav_section (e.g. section "Manage your site" → group "Branding"). Omit for a doc that sits directly under its section with no subgroup. Docs support Section → Group → Page (max 3 levels) — do not attempt deeper nesting via parent_doc_id, which is unused by nav rendering.' },
+  nav_group_order: { type: ['number', 'null'], description: 'Sort position of this subgroup among other groups in the same nav_section. Only meaningful if nav_group is set.' },
 }
 
 const FEATURED_IMAGE_SCHEMA = {
@@ -361,6 +368,7 @@ const BLOG_SUMMARY_SCHEMA = {
     published_at: NULLABLE_STRING,
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
+    seo_title: NULLABLE_STRING,
     ...SEO_FIELDS_SCHEMA,
     featured_image: FEATURED_IMAGE_SCHEMA,
     admin_edit_url: { type: 'string' },
@@ -384,6 +392,7 @@ const BLOG_SUMMARY_SCHEMA = {
     'published_at',
     'created_at',
     'updated_at',
+    'seo_title',
     'seo_description',
     'seo_keywords',
     'canonical_url',
@@ -423,6 +432,7 @@ const DOC_SUMMARY_SCHEMA = {
     body: NULLABLE_STRING,
     category: NULLABLE_STRING,
     ...NAV_FIELDS_SCHEMA,
+    ...DOC_NAV_GROUP_FIELDS_SCHEMA,
     difficulty_level: NULLABLE_STRING,
     sort_order: NULLABLE_NUMBER,
     parent_doc_id: NULLABLE_STRING,
@@ -448,6 +458,8 @@ const DOC_SUMMARY_SCHEMA = {
     'nav_title',
     'nav_order',
     'nav_section_order',
+    'nav_group',
+    'nav_group_order',
     'hide_from_nav',
     'featured_order',
     'difficulty_level',
@@ -924,6 +936,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         excerpt: { type: 'string' },
         category: { type: 'string', enum: BLOG_CATEGORY_ENUM },
         ...NAV_FIELDS_SCHEMA,
+        seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         ...SEO_FIELDS_SCHEMA,
         components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
         publish: { type: 'boolean' },
@@ -946,6 +959,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         excerpt: { type: 'string' },
         category: { type: 'string', enum: BLOG_CATEGORY_ENUM },
         ...NAV_FIELDS_SCHEMA,
+        seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         ...SEO_FIELDS_SCHEMA,
         components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
         publish: { type: 'boolean' },
@@ -1018,7 +1032,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   writeTool({
     name: 'reorder_platform_blog_posts',
-    description: 'Set editorial navigation section and order for platform blog posts without changing their taxonomy category or public URL.',
+    description: 'Set editorial navigation (section, title, order, visibility) for platform blog posts without changing their taxonomy category or public URL. Blog posts do not support nav_group subgrouping (docs-only feature) — only nav_section.',
     openWorld: true,
     inputSchema: {
       type: 'object',
@@ -1029,9 +1043,11 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
             type: 'object',
             properties: {
               post_id: { type: 'string', description: 'Post id or slug.' },
-              nav_section: NULLABLE_STRING,
+              nav_section: NAV_FIELDS_SCHEMA.nav_section,
+              nav_title: NAV_FIELDS_SCHEMA.nav_title,
               nav_order: { type: 'number' },
-              nav_section_order: NULLABLE_NUMBER,
+              nav_section_order: NAV_FIELDS_SCHEMA.nav_section_order,
+              hide_from_nav: NAV_FIELDS_SCHEMA.hide_from_nav,
             },
             required: ['post_id', 'nav_order'],
             additionalProperties: false,
@@ -1109,6 +1125,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         excerpt: { type: 'string' },
         category: { type: 'string', enum: DOC_CATEGORY_ENUM },
         ...NAV_FIELDS_SCHEMA,
+        ...DOC_NAV_GROUP_FIELDS_SCHEMA,
         difficulty_level: { type: 'string', enum: DOC_DIFFICULTY_ENUM },
         sort_order: { type: 'number' },
         parent_doc_id: { type: 'string' },
@@ -1134,6 +1151,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         excerpt: { type: 'string' },
         category: { type: 'string', enum: DOC_CATEGORY_ENUM },
         ...NAV_FIELDS_SCHEMA,
+        ...DOC_NAV_GROUP_FIELDS_SCHEMA,
         difficulty_level: { type: 'string', enum: DOC_DIFFICULTY_ENUM },
         sort_order: { type: 'number' },
         parent_doc_id: { type: 'string' },
@@ -1209,7 +1227,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   writeTool({
     name: 'reorder_platform_docs',
-    description: 'Set editorial navigation section and order for platform docs without changing their taxonomy category or public URL.',
+    description: 'Set editorial navigation (section, group, title, order, visibility) for platform docs without changing their taxonomy category, parent_doc_id (unused by nav rendering), or public URL. nav_group nests under nav_section; leave unset for docs with no subgroup.',
     openWorld: true,
     inputSchema: {
       type: 'object',
@@ -1220,9 +1238,13 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
             type: 'object',
             properties: {
               doc_id: { type: 'string', description: 'Doc id or slug.' },
-              nav_section: NULLABLE_STRING,
+              nav_section: NAV_FIELDS_SCHEMA.nav_section,
+              nav_title: NAV_FIELDS_SCHEMA.nav_title,
               nav_order: { type: 'number' },
-              nav_section_order: NULLABLE_NUMBER,
+              nav_section_order: NAV_FIELDS_SCHEMA.nav_section_order,
+              nav_group: DOC_NAV_GROUP_FIELDS_SCHEMA.nav_group,
+              nav_group_order: DOC_NAV_GROUP_FIELDS_SCHEMA.nav_group_order,
+              hide_from_nav: NAV_FIELDS_SCHEMA.hide_from_nav,
             },
             required: ['doc_id', 'nav_order'],
             additionalProperties: false,

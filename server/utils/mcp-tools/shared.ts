@@ -37,6 +37,30 @@ export const MCP_TOOL_SECURITY_SCHEMES: McpToolSecurityScheme[] = [
 
 // --- reusable schema fragments ---
 
+export const ROBOTS_DIRECTIVE_ENUM = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow']
+
+// Tenant blog shares the nav vocabulary with platform docs/blog (server/utils/platform-mcp-tools.ts
+// NAV_FIELDS_SCHEMA), but blog posts never get nav_group subgrouping — only docs do.
+export const BLOG_NAV_FIELDS_SCHEMA = {
+  nav_section: { type: ['string', 'null'], description: 'Top-level sidebar section label for this site\'s blog. Falls back to category if unset. Does not affect the public URL.' },
+  nav_title: { type: ['string', 'null'], description: 'Sidebar label override. Falls back to the post title if unset. Does not affect the public URL.' },
+  nav_order: { type: ['number', 'null'], description: 'Sort position within its section. Lower sorts first.' },
+  nav_section_order: { type: ['number', 'null'], description: 'Sort position of the section itself among all sections.' },
+  hide_from_nav: { type: ['boolean', 'null'], description: 'Excludes this post from nav rendering only. Does NOT deindex it or remove it from the sitemap — use robots="noindex,..." for that.' },
+  featured_order: { type: ['number', 'null'], description: 'Sort position in featured/homepage placements, independent of nav ordering.' },
+}
+
+/** SEO override fields shared across location/menu-item/experience/site tools. Each entity supplies its own og_image fallback description. */
+export function seoOverrideFieldsSchema(ogImageFallbackDescription: string) {
+  return {
+    seo_title: { type: ['string', 'null'], description: 'Optional SEO title override. Falls back to the computed default if unset.' },
+    seo_description: { type: ['string', 'null'], description: 'Optional SEO meta description override. Falls back to the computed default if unset.' },
+    canonical_url: { type: ['string', 'null'], description: 'Optional canonical URL override. Leave unset for the default self-referencing canonical.' },
+    robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive. Leave unset for the default index,follow.' },
+    og_image_asset_id: { type: ['string', 'null'], description: `Asset id from get_site_media_assets for this page's social share image. ${ogImageFallbackDescription}` },
+  }
+}
+
 export const openingHoursInputSchema = {
   type: ['string', 'object', 'null'],
   description: 'Opening hours for this location. Accepted shapes: (1) an object { weekdayDescriptions: string[] } with one entry per day, e.g. { weekdayDescriptions: ["Monday: 9:00 AM – 5:00 PM", "Tuesday: 9:00 AM – 5:00 PM", ...] } — this is also the shape returned by get_location; (2) a plain string with one day per line, e.g. "Monday: 9:00 AM – 5:00 PM\\nTuesday: 9:00 AM – 5:00 PM". A bare array of per-day structured objects (e.g. { openDay, openTime, closeTime }) is NOT supported — convert to weekdayDescriptions strings first. Pass null to clear.',
@@ -86,6 +110,11 @@ export const locationObject = {
     grab_url: { type: ['string', 'null'] },
     uber_eats_url: { type: ['string', 'null'] },
     foodpanda_url: { type: ['string', 'null'] },
+    seo_title: { type: ['string', 'null'] },
+    seo_description: { type: ['string', 'null'] },
+    canonical_url: { type: ['string', 'null'] },
+    robots: { type: ['string', 'null'] },
+    og_image_asset_id: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
   },
@@ -140,6 +169,11 @@ export const menuItemObject = {
     dietary_notes: { type: ['array', 'null'], items: { type: 'string' } },
     preparation: { type: ['string', 'null'] },
     serving_note: { type: ['string', 'null'] },
+    seo_title: { type: ['string', 'null'] },
+    seo_description: { type: ['string', 'null'] },
+    canonical_url: { type: ['string', 'null'] },
+    robots: { type: ['string', 'null'] },
+    og_image_asset_id: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
     created_by: { type: ['string', 'null'] },
@@ -296,6 +330,8 @@ export const blogPostObject = {
       type: 'array',
       items: blogComponentInputSchema,
     },
+    ...BLOG_NAV_FIELDS_SCHEMA,
+    seo_title: { type: ['string', 'null'] },
     seo_description: { type: ['string', 'null'] },
     seo_keywords: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
@@ -524,6 +560,9 @@ export const experienceObject = {
     featured_sort_order: { type: 'number' },
     seo_title: { type: ['string', 'null'] },
     seo_description: { type: ['string', 'null'] },
+    canonical_url: { type: ['string', 'null'] },
+    robots: { type: ['string', 'null'] },
+    og_image_asset_id: { type: ['string', 'null'] },
     public_path: { type: ['string', 'null'] },
     public_url: { type: ['string', 'null'] },
     view_url: { type: ['string', 'null'] },
@@ -595,6 +634,9 @@ export const experienceWriteSchema = {
   location_id: { type: 'string', description: 'Optional location id. If omitted, the site primary location is used when available. If the site has no primary location yet, create a location first or pass a valid location_id.' },
   seo_title: { type: ['string', 'null'], description: 'Optional SEO title override.' },
   seo_description: { type: ['string', 'null'], description: 'Optional SEO description override.' },
+  canonical_url: { type: ['string', 'null'], description: 'Optional canonical URL override. Leave unset for the default self-referencing canonical.' },
+  robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive. Leave unset for the default index,follow.' },
+  og_image_asset_id: { type: ['string', 'null'], description: 'Asset id from get_site_media_assets for this experience\'s social share image. Falls back to the first gallery image, then image_asset_id, if unset.' },
 } as const
 
 export const renderedBookingPolicySummaryObject = {
@@ -1065,6 +1107,7 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'update_menu_item',
   'rename_menu_section',
   'reorder_menu_items',
+  'reorder_blog_posts',
   'publish_post',
   'publish_to_facebook',
   'sync_facebook_page',

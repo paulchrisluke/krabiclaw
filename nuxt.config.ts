@@ -284,7 +284,14 @@ export default defineNuxtConfig({
 
   // Sitemap configuration
   sitemap: {
-    sources: ['/api/__sitemap__/docs', '/api/__sitemap__/blog', '/api/__sitemap__/pages'],
+    sources: [
+      '/api/__sitemap__/docs',
+      '/api/__sitemap__/blog',
+      '/api/__sitemap__/pages',
+      '/api/__sitemap__/locations',
+      '/api/__sitemap__/menu-items',
+      '/api/__sitemap__/experiences',
+    ],
     // Static tenant routes are managed by the /pages source above which gates
     // /reservations on vertical. Disable auto-discovery of app routes for tenant
     // hosts to avoid /reservations appearing via crawl for experience sites.

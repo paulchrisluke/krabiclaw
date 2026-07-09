@@ -232,6 +232,13 @@
       "when": 1783502138471,
       "tag": "0039_outgoing_nitro",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1783580108519,
+      "tag": "0040_lovely_turbo",
+      "breakpoints": true
     }
   ]
 }

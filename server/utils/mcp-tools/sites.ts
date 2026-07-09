@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { SUPPORTED_CURRENCIES, currentUserObject, globalTool, siteListItem, siteTool, withToolAnnotations } from './shared'
+import { ROBOTS_DIRECTIVE_ENUM, SUPPORTED_CURRENCIES, currentUserObject, globalTool, siteListItem, siteTool, withToolAnnotations } from './shared'
 
 export const SITES_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
@@ -119,6 +119,11 @@ export const SITES_TOOLS: McpToolDefinition[] = [
               google_analytics_measurement_id: { type: ['string', 'null'] },
               google_site_verification: { type: ['string', 'null'] },
               last_published_at: { type: ['string', 'null'] },
+              seo_title: { type: ['string', 'null'] },
+              seo_description: { type: ['string', 'null'] },
+              canonical_url: { type: ['string', 'null'] },
+              robots: { type: ['string', 'null'] },
+              og_image_asset_id: { type: ['string', 'null'] },
               created_at: { type: 'string' },
               updated_at: { type: 'string' },
             },
@@ -152,6 +157,11 @@ export const SITES_TOOLS: McpToolDefinition[] = [
         google_analytics_measurement_id: { type: 'string' },
         google_site_verification: { type: 'string' },
         url_structure: { type: 'string' },
+        seo_title: { type: ['string', 'null'], description: 'Optional site-wide default SEO title override for the homepage and any page without its own override. Falls back to brand_name if unset.' },
+        seo_description: { type: ['string', 'null'], description: 'Optional site-wide default SEO description override. Falls back to brand_description if unset.' },
+        canonical_url: { type: ['string', 'null'], description: 'Optional site-wide canonical URL override for the homepage.' },
+        robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive for the homepage. Leave unset for the default index,follow.' },
+        og_image_asset_id: { type: ['string', 'null'], description: 'Asset id from get_site_media_assets used as the default social share image site-wide when a page has no more specific image set.' },
       },
       outputSchema: {
         type: 'object',

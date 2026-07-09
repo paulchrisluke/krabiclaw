@@ -1,5 +1,5 @@
 import { CATEGORY_SLUGS, categoryToSlug } from '~/utils/docs-categories'
-import { docNavSectionFor, groupItemsByNavSection } from '~/utils/platform-content-nav'
+import { docNavSectionFor, groupDocItemsByNavSectionAndGroup } from '~/utils/platform-content-nav'
 
 interface PublicDoc {
   slug: string
@@ -9,20 +9,27 @@ interface PublicDoc {
   nav_title?: string | null
   nav_order?: number | null
   nav_section_order?: number | null
+  nav_group?: string | null
+  nav_group_order?: number | null
   hide_from_nav?: boolean | number | null
+}
+
+type DocWithNavMeta = PublicDoc & { categorySlug: string; label: string; path: string }
+
+interface DocsNavSubgroup {
+  group: string | null
+  docs: DocWithNavMeta[]
 }
 
 interface DocsNavCategory {
   category: string
   categorySlug: string
-  docs: Array<PublicDoc & { categorySlug: string; label: string; path: string }>
+  groups: DocsNavSubgroup[]
 }
 
-// Shared by PlatformHeader's "Docs" dropdown (rendered on every page, so the
-// dropdown works from anywhere on the site) and DocsSidebar's nav — both need
-// the same published-docs-grouped-by-category shape, and Nuxt's useFetch
-// dedupes the underlying request by URL, so mounting both on a docs page
-// only issues one fetch.
+// Used by DocsSidebar's nav. Renders a curated Section → Group → Page hierarchy
+// (max 3 levels) — docs support an optional nav_group subgroup within their
+// nav_section; blog posts never get this (see useBlogNav, which stays flat).
 export function useDocsNav() {
   const { data } = useFetch<{ docs: PublicDoc[] }>('/api/public/docs', {
     default: () => ({ docs: [] }),
@@ -44,16 +51,19 @@ export function useDocsNav() {
         }
       })
 
-    const groups = groupItemsByNavSection(
+    const sections = groupDocItemsByNavSectionAndGroup(
       eligible,
       (doc) => docNavSectionFor(doc.category, doc.nav_section),
       Object.keys(CATEGORY_SLUGS),
     )
 
-    return groups.map(group => ({
-      category: group.category,
-      categorySlug: group.items[0]?.categorySlug ?? '',
-      docs: group.items,
+    return sections.map(section => ({
+      category: section.category,
+      categorySlug: section.groups[0]?.items[0]?.categorySlug ?? '',
+      groups: section.groups.map(subgroup => ({
+        group: subgroup.group,
+        docs: subgroup.items,
+      })),
     }))
   })
 

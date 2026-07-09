@@ -489,10 +489,11 @@ const activeClosureMessage = computed(() => formatClosureMessage(activeClosure.v
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 const currentPageUrl = useSeoUrl(() => `/locations/${slug.value}`)
-const ogImage = useSharedOgImage(() => heroMedia.value.thumb)
+const canonicalUrl = useSeoUrl(() => location.value?.canonical_url || `/locations/${slug.value}`)
+const ogImage = useSharedOgImage(() => location.value?.og_image_public_url || heroMedia.value.thumb)
 
-const seoTitle = () => location.value ? `${location.value.title} | Locations` : 'Location'
-const seoDescription = () => location.value ? `Visit ${location.value.title}. ${formattedAddress.value}` : ''
+const seoTitle = () => location.value?.seo_title || (location.value ? `${location.value.title} | Locations` : 'Location')
+const seoDescription = () => location.value?.seo_description || (location.value ? `Visit ${location.value.title}. ${formattedAddress.value}` : '')
 
 useSeoMeta({
   title: seoTitle,
@@ -503,7 +504,12 @@ useSeoMeta({
   twitterTitle: seoTitle,
   twitterDescription: seoDescription,
   ogImage,
-  ogUrl: currentPageUrl
+  ogUrl: currentPageUrl,
+  robots: () => location.value?.robots || undefined,
+})
+
+useHead({
+  link: [{ rel: 'canonical', href: canonicalUrl }],
 })
 
 useSchemaOrg([

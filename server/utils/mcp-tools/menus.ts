@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { menuItemMutationResultObject, menuMutationResultObject, menuObject, siteTool } from './shared'
+import { menuItemMutationResultObject, menuMutationResultObject, menuObject, seoOverrideFieldsSchema, siteTool } from './shared'
 import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const MENUS_TOOLS: McpToolDefinition[] = [
@@ -110,6 +110,7 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         dietary_notes: { type: 'array', items: { type: 'string' } },
         preparation: { type: ['string', 'null'] },
         serving_note: { type: ['string', 'null'] },
+        ...seoOverrideFieldsSchema('Falls back to image_asset_id, then the site-level og image, if unset.'),
       },
       required: ['menu_id', 'section', 'name'],
       outputSchema: menuItemMutationResultObject,
@@ -213,6 +214,7 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         dietary_notes: { type: 'array', items: { type: 'string' } },
         preparation: { type: ['string', 'null'] },
         serving_note: { type: ['string', 'null'] },
+        ...seoOverrideFieldsSchema('Falls back to image_asset_id, then the site-level og image, if unset.'),
       },
       required: ['menu_item_id'],
       outputSchema: menuItemMutationResultObject,

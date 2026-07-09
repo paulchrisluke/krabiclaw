@@ -15,6 +15,7 @@ const BLOG_TITLE_MAX = 200
 const BLOG_BODY_MAX = 100000
 const BLOG_EXCERPT_MAX = 500
 const BLOG_CATEGORY_MAX = 100
+const BLOG_SEO_TITLE_MAX = 200
 const BLOG_SEO_DESCRIPTION_MAX = 500
 const BLOG_SEO_KEYWORDS_MAX = 500
 const CONTENT_NAV_LABEL_MAX = 120
@@ -206,11 +207,17 @@ export interface BlogScope {
   organization_id?: string | null
 }
 
+export interface PlatformDocNavGroupInput {
+  nav_group?: string | null
+  nav_group_order?: number | null
+}
+
 export interface PlatformBlogCreateInput extends PlatformStructuredContentInput, PlatformContentNavInput {
   title: string
   body: string
   excerpt?: string | null
   category?: string | null
+  seo_title?: string | null
   seo_description?: string | null
   seo_keywords?: string | null
   canonical_url?: string | null
@@ -224,6 +231,7 @@ export interface PlatformBlogUpdateInput extends PlatformStructuredContentInput,
   body?: string
   excerpt?: string | null
   category?: string | null
+  seo_title?: string | null
   seo_description?: string | null
   seo_keywords?: string | null
   canonical_url?: string | null
@@ -233,7 +241,7 @@ export interface PlatformBlogUpdateInput extends PlatformStructuredContentInput,
   unpublish?: boolean
 }
 
-export interface PlatformDocCreateInput extends PlatformStructuredContentInput, PlatformContentNavInput {
+export interface PlatformDocCreateInput extends PlatformStructuredContentInput, PlatformContentNavInput, PlatformDocNavGroupInput {
   title: string
   body: string
   excerpt?: string | null
@@ -249,7 +257,7 @@ export interface PlatformDocCreateInput extends PlatformStructuredContentInput, 
   publish?: boolean
 }
 
-export interface PlatformDocUpdateInput extends PlatformStructuredContentInput, PlatformContentNavInput {
+export interface PlatformDocUpdateInput extends PlatformStructuredContentInput, PlatformContentNavInput, PlatformDocNavGroupInput {
   title?: string
   body?: string
   excerpt?: string | null
@@ -981,7 +989,7 @@ function contentReviewUrls(record: ApiRecord, kind: 'blog' | 'doc', siteId: stri
 export async function getPublishedPlatformBlogPost(db: DbClient, category: string, slug: string) {
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
-      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_description, p.seo_keywords,
+      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_title, p.seo_description, p.seo_keywords,
       p.canonical_url, p.robots,
       p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
       p.published_at, p.created_at, p.updated_at,
@@ -1016,7 +1024,7 @@ export async function getPublishedPlatformDoc(db: DbClient, category: string, sl
     `SELECT
        p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.difficulty_level,
        p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
-       p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
+       p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.nav_group, p.nav_group_order, p.hide_from_nav, p.featured_order,
        p.featured_image_asset_id, p.published_at, p.updated_at,
        ma.public_url, ma.kind, ma.width, ma.height
      FROM platform_docs p
@@ -1056,6 +1064,13 @@ function validateNavMetadata(input: Partial<PlatformContentNavInput>) {
   }
 }
 
+function validateDocNavGroupMetadata(input: Partial<PlatformDocNavGroupInput>) {
+  if (input.nav_group !== undefined) assertStringLength(input.nav_group ?? null, CONTENT_NAV_LABEL_MAX, 'nav_group')
+  if (input.nav_group_order !== undefined && input.nav_group_order !== null && !Number.isInteger(input.nav_group_order)) {
+    badRequest('nav_group_order must be an integer')
+  }
+}
+
 function normalizeHideFromNav(value: PlatformContentNavInput['hide_from_nav']) {
   if (value === undefined || value === null) return value
   return value ? 1 : 0
@@ -1077,6 +1092,7 @@ function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant = 
     assertStringLength(input.category ?? null, BLOG_CATEGORY_MAX, 'category')
     if (!isTenant) assertValidBlogCategory(input.category ?? null)
   }
+  if (input.seo_title !== undefined) assertStringLength(input.seo_title ?? null, BLOG_SEO_TITLE_MAX, 'seo_title')
   if (input.seo_description !== undefined) assertStringLength(input.seo_description ?? null, BLOG_SEO_DESCRIPTION_MAX, 'seo_description')
   if (input.seo_keywords !== undefined) assertStringLength(input.seo_keywords ?? null, BLOG_SEO_KEYWORDS_MAX, 'seo_keywords')
   if (input.canonical_url !== undefined) assertValidCanonicalUrl(input.canonical_url)
@@ -1086,6 +1102,7 @@ function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant = 
 function validateDocCommon(input: Partial<PlatformDocCreateInput>) {
   normalizeBlankToNull(input)
   validateNavMetadata(input)
+  validateDocNavGroupMetadata(input)
   if (input.title !== undefined) assertStringLength(input.title, DOC_TITLE_MAX, 'title')
   if (input.body !== undefined) assertStringLength(input.body, DOC_BODY_MAX, 'body')
   if (input.excerpt !== undefined) assertStringLength(input.excerpt ?? null, DOC_EXCERPT_MAX, 'excerpt')
@@ -1216,7 +1233,7 @@ export async function resolveContentComponentsMedia(db: DbClient, components: Pl
 
 export async function listPlatformBlogPosts(db: DbClient, status?: string | null, siteId: string | null = null) {
   let sql = `SELECT
-      p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
+      p.id, p.title, p.slug, p.excerpt, p.category, p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
       p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
       p.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
       ma.width AS featured_image_width, ma.height AS featured_image_height,
@@ -1237,7 +1254,7 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
   const post = await queryFirst<ApiRecord | null>(
     db,
     `SELECT
-       p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
+       p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
        p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
        p.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
        ma.width AS featured_image_width, ma.height AS featured_image_height,
@@ -1255,7 +1272,7 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
 export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slug: string) {
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
-      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_description, p.seo_keywords,
+      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_title, p.seo_description, p.seo_keywords,
       p.canonical_url, p.robots,
       p.published_at, p.created_at, p.updated_at,
       p.featured_image_asset_id,
@@ -1306,8 +1323,8 @@ export async function createPlatformBlogPost(
     const slug = attempt === 0 ? slugBase : `${slugBase}-${randomSlugSuffix()}`
     try {
       await execute(db, `
-        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, nav_section, nav_title, nav_order, nav_section_order, hide_from_nav, featured_order, status, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, author_id, published_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, nav_section, nav_title, nav_order, nav_section_order, hide_from_nav, featured_order, status, seo_title, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, author_id, published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
         id,
         organizationId,
         siteId,
@@ -1323,6 +1340,7 @@ export async function createPlatformBlogPost(
         normalizeHideFromNav(input.hide_from_nav) ?? 0,
         input.featured_order != null ? Number(input.featured_order) : null,
         input.publish ? 'published' : 'draft',
+        input.seo_title ?? null,
         input.seo_description ?? null,
         input.seo_keywords ?? null,
         input.canonical_url ?? null,
@@ -1437,6 +1455,7 @@ export async function updatePlatformBlogPost(
     'nav_order',
     'nav_section_order',
     'featured_order',
+    'seo_title',
     'seo_description',
     'seo_keywords',
     'canonical_url',
@@ -1523,43 +1542,62 @@ export async function deletePlatformBlogPost(db: D1Database, postIdOrSlug: strin
 
 export async function reorderPlatformBlogPosts(
   db: D1Database,
-  items: Array<{ post_id: string; nav_section?: string | null; nav_order: number; nav_section_order?: number | null }>,
+  items: Array<{
+    post_id: string
+    nav_section?: string | null
+    nav_title?: string | null
+    nav_order: number
+    nav_section_order?: number | null
+    hide_from_nav?: boolean | number | null
+  }>,
+  siteId: string | null = null,
 ) {
   if (!items.length) badRequest('items are required')
   const now = new Date().toISOString()
   const queries: { query: string; params: unknown[] }[] = []
+  const scopeClause = siteId ? 'site_id = ?' : 'site_id IS NULL'
 
   for (const item of items) {
     const metadata: Partial<PlatformContentNavInput> = { nav_order: item.nav_order }
     if (hasOwnField(item, 'nav_section')) metadata.nav_section = item.nav_section ?? null
+    if (hasOwnField(item, 'nav_title')) metadata.nav_title = item.nav_title ?? null
     if (hasOwnField(item, 'nav_section_order')) metadata.nav_section_order = item.nav_section_order ?? null
     validateNavMetadata(metadata)
-    const postId = await resolvePlatformContentId(db, 'blog_posts', item.post_id, 'Post not found')
+    const postId = await resolvePlatformContentId(db, 'blog_posts', item.post_id, 'Post not found', siteId)
     const updates = ['nav_order = ?', 'updated_at = ?']
     const params: ApiValue[] = [Number(item.nav_order), now]
     if (hasOwnField(item, 'nav_section')) {
       updates.splice(1, 0, 'nav_section = ?')
       params.splice(1, 0, item.nav_section ?? null)
     }
+    if (hasOwnField(item, 'nav_title')) {
+      updates.splice(updates.length - 1, 0, 'nav_title = ?')
+      params.splice(params.length - 1, 0, item.nav_title ?? null)
+    }
     if (hasOwnField(item, 'nav_section_order')) {
       updates.splice(updates.length - 1, 0, 'nav_section_order = ?')
-      params.splice(params.length - 1, 0, Number(item.nav_section_order))
+      params.splice(params.length - 1, 0, item.nav_section_order != null ? Number(item.nav_section_order) : null)
+    }
+    if (hasOwnField(item, 'hide_from_nav')) {
+      updates.splice(updates.length - 1, 0, 'hide_from_nav = ?')
+      params.splice(params.length - 1, 0, normalizeHideFromNav(item.hide_from_nav) ?? 0)
     }
     params.push(postId)
+    if (siteId) params.push(siteId)
     queries.push({
-      query: `UPDATE blog_posts SET ${updates.join(', ')} WHERE id = ? AND site_id IS NULL`,
+      query: `UPDATE blog_posts SET ${updates.join(', ')} WHERE id = ? AND ${scopeClause}`,
       params,
     })
   }
 
   await executeBatch(db, queries)
-  return { success: true, posts: await listPlatformBlogPosts(db) }
+  return { success: true, posts: await listPlatformBlogPosts(db, null, siteId) }
 }
 
 export async function listPlatformDocs(db: DbClient, status?: string | null) {
   let sql = `SELECT
       d.id, d.title, d.slug, d.excerpt, d.category, d.seo_description, d.seo_keywords, d.canonical_url, d.robots,
-      d.nav_section, d.nav_title, d.nav_order, d.nav_section_order, d.hide_from_nav, d.featured_order,
+      d.nav_section, d.nav_title, d.nav_order, d.nav_section_order, d.nav_group, d.nav_group_order, d.hide_from_nav, d.featured_order,
       d.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
       ma.width AS featured_image_width, ma.height AS featured_image_height,
       d.difficulty_level, d.sort_order, d.parent_doc_id, d.status, d.published_at, d.created_at, d.updated_at
@@ -1567,7 +1605,7 @@ export async function listPlatformDocs(db: DbClient, status?: string | null) {
     LEFT JOIN media_assets ma ON ma.id = d.featured_image_asset_id AND ma.status = 'active'`
   if (status === 'published') sql += " WHERE d.status = 'published'"
   else if (status === 'draft') sql += " WHERE d.status = 'draft'"
-  sql += ' ORDER BY COALESCE(d.featured_order, 999999), COALESCE(d.nav_section_order, 999999), COALESCE(d.nav_section, d.category), COALESCE(d.nav_order, d.sort_order, 999999), d.created_at DESC'
+  sql += ' ORDER BY COALESCE(d.featured_order, 999999), COALESCE(d.nav_section_order, 999999), COALESCE(d.nav_section, d.category), COALESCE(d.nav_group_order, 999999), COALESCE(d.nav_group, \'\'), COALESCE(d.nav_order, d.sort_order, 999999), d.created_at DESC'
   const results = await queryAll<ApiRecord>(db, sql)
   return (results ?? []).map(record => contentReviewUrls(attachFeaturedImage(attachPublished(record, record.status === 'published')), 'doc'))
 }
@@ -1578,7 +1616,7 @@ export async function getPlatformDoc(db: DbClient, docIdOrSlug: string) {
     db,
     `SELECT
        d.id, d.title, d.slug, d.body, d.excerpt, d.category, d.seo_description, d.seo_keywords, d.canonical_url, d.robots,
-       d.nav_section, d.nav_title, d.nav_order, d.nav_section_order, d.hide_from_nav, d.featured_order,
+       d.nav_section, d.nav_title, d.nav_order, d.nav_section_order, d.nav_group, d.nav_group_order, d.hide_from_nav, d.featured_order,
        d.difficulty_level, d.sort_order, d.parent_doc_id,
        d.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
        ma.width AS featured_image_width, ma.height AS featured_image_height,
@@ -1613,8 +1651,8 @@ export async function createPlatformDoc(
     const slug = attempt === 0 ? slugBase : `${slugBase}-${randomSlugSuffix()}`
     try {
       await execute(db, `
-        INSERT INTO platform_docs (id, title, slug, body, excerpt, category, nav_section, nav_title, nav_order, nav_section_order, hide_from_nav, featured_order, author_id, seo_description, seo_keywords, canonical_url, robots, difficulty_level, sort_order, parent_doc_id, featured_image_asset_id, status, published_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        INSERT INTO platform_docs (id, title, slug, body, excerpt, category, nav_section, nav_title, nav_order, nav_section_order, nav_group, nav_group_order, hide_from_nav, featured_order, author_id, seo_description, seo_keywords, canonical_url, robots, difficulty_level, sort_order, parent_doc_id, featured_image_asset_id, status, published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
         id,
         input.title,
         slug,
@@ -1625,6 +1663,8 @@ export async function createPlatformDoc(
         input.nav_title ?? null,
         input.nav_order != null ? Number(input.nav_order) : null,
         input.nav_section_order != null ? Number(input.nav_section_order) : null,
+        input.nav_group ?? null,
+        input.nav_group_order != null ? Number(input.nav_group_order) : null,
         normalizeHideFromNav(input.hide_from_nav) ?? 0,
         input.featured_order != null ? Number(input.featured_order) : null,
         authorId,
@@ -1733,6 +1773,8 @@ export async function updatePlatformDoc(
     'nav_title',
     'nav_order',
     'nav_section_order',
+    'nav_group',
+    'nav_group_order',
     'featured_order',
     'seo_description',
     'seo_keywords',
@@ -1825,7 +1867,16 @@ export async function deletePlatformDoc(db: D1Database, docIdOrSlug: string) {
 
 export async function reorderPlatformDocs(
   db: D1Database,
-  items: Array<{ doc_id: string; nav_section?: string | null; nav_order: number; nav_section_order?: number | null }>,
+  items: Array<{
+    doc_id: string
+    nav_section?: string | null
+    nav_title?: string | null
+    nav_order: number
+    nav_section_order?: number | null
+    nav_group?: string | null
+    nav_group_order?: number | null
+    hide_from_nav?: boolean | number | null
+  }>,
 ) {
   if (!items.length) badRequest('items are required')
   const now = new Date().toISOString()
@@ -1834,8 +1885,13 @@ export async function reorderPlatformDocs(
   for (const item of items) {
     const metadata: Partial<PlatformContentNavInput> = { nav_order: item.nav_order }
     if (hasOwnField(item, 'nav_section')) metadata.nav_section = item.nav_section ?? null
+    if (hasOwnField(item, 'nav_title')) metadata.nav_title = item.nav_title ?? null
     if (hasOwnField(item, 'nav_section_order')) metadata.nav_section_order = item.nav_section_order ?? null
     validateNavMetadata(metadata)
+    validateDocNavGroupMetadata({
+      nav_group: hasOwnField(item, 'nav_group') ? item.nav_group ?? null : undefined,
+      nav_group_order: hasOwnField(item, 'nav_group_order') ? item.nav_group_order ?? null : undefined,
+    })
     const docId = await resolvePlatformContentId(db, 'platform_docs', item.doc_id, 'Doc not found')
     const updates = ['nav_order = ?', 'updated_at = ?']
     const params: ApiValue[] = [Number(item.nav_order), now]
@@ -1843,9 +1899,25 @@ export async function reorderPlatformDocs(
       updates.splice(1, 0, 'nav_section = ?')
       params.splice(1, 0, item.nav_section ?? null)
     }
+    if (hasOwnField(item, 'nav_title')) {
+      updates.splice(updates.length - 1, 0, 'nav_title = ?')
+      params.splice(params.length - 1, 0, item.nav_title ?? null)
+    }
     if (hasOwnField(item, 'nav_section_order')) {
       updates.splice(updates.length - 1, 0, 'nav_section_order = ?')
-      params.splice(params.length - 1, 0, Number(item.nav_section_order))
+      params.splice(params.length - 1, 0, item.nav_section_order != null ? Number(item.nav_section_order) : null)
+    }
+    if (hasOwnField(item, 'nav_group')) {
+      updates.splice(updates.length - 1, 0, 'nav_group = ?')
+      params.splice(params.length - 1, 0, item.nav_group ?? null)
+    }
+    if (hasOwnField(item, 'nav_group_order')) {
+      updates.splice(updates.length - 1, 0, 'nav_group_order = ?')
+      params.splice(params.length - 1, 0, item.nav_group_order != null ? Number(item.nav_group_order) : null)
+    }
+    if (hasOwnField(item, 'hide_from_nav')) {
+      updates.splice(updates.length - 1, 0, 'hide_from_nav = ?')
+      params.splice(params.length - 1, 0, normalizeHideFromNav(item.hide_from_nav) ?? 0)
     }
     params.push(docId)
     queries.push({

@@ -327,11 +327,16 @@ export default defineEventHandler(async (event) => {
       brand_description: string | null;
       logo_url: string | null;
       og_image_url: string | null;
+      seo_title: string | null;
+      seo_description: string | null;
+      canonical_url: string | null;
+      robots: string | null;
     }>(
       db,
       `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name,
               s.brand_description, COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
-              ma_og.public_url AS og_image_url
+              ma_og.public_url AS og_image_url,
+              s.seo_title, s.seo_description, s.canonical_url, s.robots
          FROM sites s
          LEFT JOIN media_assets ma_logo ON s.logo_asset_id = ma_logo.id AND ma_logo.status = 'active'
          LEFT JOIN media_assets ma_og ON s.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
@@ -402,12 +407,15 @@ export default defineEventHandler(async (event) => {
                  bl.is_primary, bl.status, bl.city, bl.neighborhood,
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
                  bl.description, bl.short_description, bl.last_synced_at,
+                 bl.seo_title, bl.seo_description, bl.canonical_url, bl.robots,
                  ma_img.public_url AS hero_image_public_url,
                  ma_vid.public_url AS hero_video_public_url,
-                 ma_vid.thumbnail_url
+                 ma_vid.thumbnail_url,
+                 ma_og.public_url AS og_image_public_url
           FROM business_locations bl
           LEFT JOIN media_assets ma_img ON bl.hero_image_asset_id = ma_img.id AND ma_img.status = 'active'
           LEFT JOIN media_assets ma_vid ON bl.hero_video_asset_id = ma_vid.id AND ma_vid.status = 'active'
+          LEFT JOIN media_assets ma_og ON bl.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
           WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
           ORDER BY bl.is_primary DESC, bl.title ASC`
       : `SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
@@ -415,8 +423,10 @@ export default defineEventHandler(async (event) => {
                  bl.is_primary, bl.status, bl.city, bl.neighborhood,
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
                  bl.description, bl.short_description, bl.last_synced_at,
+                 bl.seo_title, bl.seo_description, bl.canonical_url, bl.robots,
                  NULL AS hero_image_public_url, NULL AS hero_video_public_url,
-                 NULL AS thumbnail_url
+                 NULL AS thumbnail_url,
+                 NULL AS og_image_public_url
           FROM business_locations bl
           WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
           ORDER BY bl.is_primary DESC, bl.title ASC`,
@@ -507,10 +517,14 @@ export default defineEventHandler(async (event) => {
               mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
               mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured,
               mi.featured_sort_order, mi.sort_order, mi.allergens, mi.ingredients, mi.dietary_notes,
-              mi.preparation, mi.serving_note, mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
+              mi.preparation, mi.serving_note,
+              mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, ma_og.public_url AS og_image_public_url,
+              mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
        FROM menu_items mi
        JOIN menus m ON m.id = mi.menu_id
        LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
+       LEFT JOIN media_assets ma_og ON mi.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
+         AND ma_og.organization_id = m.organization_id AND ma_og.site_id = m.site_id
        WHERE m.organization_id = ? AND m.site_id = ? AND m.status = 'published'
        ORDER BY mi.sort_order, mi.name`,
       [orgId, siteId],
@@ -551,11 +565,13 @@ export default defineEventHandler(async (event) => {
                          e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
                          e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
                          e.status, e.sort_order, e.featured, e.featured_sort_order,
-                         e.seo_title, e.seo_description, e.created_at, e.updated_at,
-                         img.public_url AS image_url, vid.public_url AS video_url
+                         e.seo_title, e.seo_description, e.canonical_url, e.robots, e.created_at, e.updated_at,
+                         img.public_url AS image_url, vid.public_url AS video_url,
+                         og.public_url AS og_image_public_url
                   FROM experiences e
                   LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
                   LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
+                  LEFT JOIN media_assets og ON og.id = e.og_image_asset_id AND og.status = 'active'
                   WHERE e.organization_id = ? AND e.site_id = ? AND e.status != 'inactive'`;
     if (page === "location" && locationId) {
       expSql += ` AND e.location_id = ?`;
@@ -573,11 +589,13 @@ export default defineEventHandler(async (event) => {
               e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
               e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
               e.status, e.sort_order, e.featured, e.featured_sort_order,
-              e.seo_title, e.seo_description, e.created_at, e.updated_at,
-              img.public_url AS image_url, vid.public_url AS video_url
+              e.seo_title, e.seo_description, e.canonical_url, e.robots, e.created_at, e.updated_at,
+              img.public_url AS image_url, vid.public_url AS video_url,
+              og.public_url AS og_image_public_url
        FROM experiences e
        LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
        LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
+       LEFT JOIN media_assets og ON og.id = e.og_image_asset_id AND og.status = 'active'
        WHERE e.organization_id = ? AND e.site_id = ? AND e.slug = ?
        LIMIT 1`,
       [orgId, siteId, experienceSlug],
@@ -910,6 +928,7 @@ export default defineEventHandler(async (event) => {
     const heroImageUrl = loc.hero_image_public_url as string | null;
     const thumbnailUrl = loc.thumbnail_url as string | null;
     const publicUrl = heroVideoUrl || heroImageUrl || null;
+    const ogImagePublicUrl = loc.og_image_public_url as string | null;
 
     return {
       id: loc.id,
@@ -949,6 +968,11 @@ export default defineEventHandler(async (event) => {
       grab_url: loc.grab_url || null,
       uber_eats_url: loc.uber_eats_url || null,
       foodpanda_url: loc.foodpanda_url || null,
+      seo_title: (loc.seo_title as string | null) ?? null,
+      seo_description: (loc.seo_description as string | null) ?? null,
+      canonical_url: (loc.canonical_url as string | null) ?? null,
+      robots: (loc.robots as string | null) ?? null,
+      og_image_public_url: ogImagePublicUrl,
     };
   });
 
@@ -962,6 +986,10 @@ export default defineEventHandler(async (event) => {
   if (site.brand_description) config.brand_description = site.brand_description;
   if (site.logo_url) config.logo_url = site.logo_url;
   if (site.og_image_url) config.og_image_url = site.og_image_url;
+  if (site.seo_title) config.seo_title = site.seo_title;
+  if (site.seo_description) config.seo_description = site.seo_description;
+  if (site.canonical_url) config.canonical_url = site.canonical_url;
+  if (site.robots) config.robots = site.robots;
 
   const primary =
     (locRows.results ?? []).find((l) => l.is_primary) ??

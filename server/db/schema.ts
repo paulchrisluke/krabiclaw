@@ -141,6 +141,11 @@ export const business_locations = sqliteTable("business_locations", {
 	notification_phone: text(),
 	timezone: text(),
 	max_capacity: integer(),
+	seo_title: text(),
+	seo_description: text(),
+	canonical_url: text(),
+	robots: text(),
+	og_image_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
 }, (table) => [
 	unique("business_locations_organization_id_site_id_slug_unique").on(table.organization_id, table.site_id, table.slug),
 ]);
@@ -570,6 +575,11 @@ export const menu_items = sqliteTable("menu_items", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text(),
 	updated_by: text(),
+	seo_title: text(),
+	seo_description: text(),
+	canonical_url: text(),
+	robots: text(),
+	og_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 }, (_table) => [
 	check("menu_items_source_check", sql`source IN ('manual', 'template')`),
 ]);
@@ -606,6 +616,10 @@ export const menus = sqliteTable("menus", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text(),
 	updated_by: text(),
+	seo_title: text(),
+	seo_description: text(),
+	canonical_url: text(),
+	robots: text(),
 });
 
 export const notifications = sqliteTable("notifications", {
@@ -786,6 +800,7 @@ export const blog_posts = sqliteTable("blog_posts", {
 	scheduled_for: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	seo_title: text(),
 	seo_description: text(),
 	seo_keywords: text(),
 	canonical_url: text(),
@@ -832,6 +847,8 @@ export const platform_docs = sqliteTable("platform_docs", {
 	nav_title: text(),
 	nav_order: integer(),
 	nav_section_order: integer(),
+	nav_group: text(),
+	nav_group_order: integer(),
 	hide_from_nav: integer().default(0).notNull(),
 	featured_order: integer(),
 	author_id: text().references(() => user.id, { onDelete: "set null" } ),
@@ -1443,6 +1460,10 @@ export const sites = sqliteTable("sites", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	updated_by: text(),
 	og_image_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
+	seo_title: text(),
+	seo_description: text(),
+	canonical_url: text(),
+	robots: text(),
 });
 
 export const stripe_webhook_events = sqliteTable("stripe_webhook_events", {
@@ -1591,6 +1612,9 @@ export const experiences = sqliteTable("experiences", {
 	featured_sort_order: integer().default(0).notNull(),
 	seo_title: text(),
 	seo_description: text(),
+	canonical_url: text(),
+	robots: text(),
+	og_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text(),

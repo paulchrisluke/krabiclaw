@@ -504,7 +504,8 @@ const locationAddress = computed(() => {
   return [...(addr.addressLines ?? []), addr.locality, addr.administrativeArea].filter(Boolean).join(', ') || null
 })
 const currentPageUrl = useSeoUrl(() => `/experiences/${slug}`)
-const ogImage = useSharedOgImage(() => experience.value?.image_url || (site as ApiValue)?.logo_url)
+const canonicalUrl = useSeoUrl(() => experience.value?.canonical_url || `/experiences/${slug}`)
+const ogImage = useSharedOgImage(() => experience.value?.og_image_public_url || experience.value?.image_url || (site as ApiValue)?.logo_url)
 
 const sanitizedBody = computed(() => {
   const raw = experience.value?.body
@@ -726,6 +727,11 @@ useSeoMeta({
   ogUrl: currentPageUrl,
   ogType: 'website',
   ogImage,
+  robots: () => experience.value?.robots || undefined,
+})
+
+useHead({
+  link: [{ rel: 'canonical', href: canonicalUrl }],
 })
 
 // JSON-LD — @graph with WebPage + Product/Service + Organization
@@ -744,8 +750,9 @@ useHead({
         const experienceId = `${experienceUrl}#experience`
         const currency = siteConfig.value?.default_currency || 'THB'
 
-        // Collect all image URLs in order: primary, then gallery images
+        // Collect all image URLs in order: og override, then primary, then gallery images
         const images = [
+          ...(val.og_image_public_url ? [val.og_image_public_url] : []),
           ...(val.image_url ? [val.image_url] : []),
           ...(Array.isArray(val.images)
             ? val.images.filter((i: { kind?: string }) => i.kind !== 'video').map((i: { url: string }) => i.url)

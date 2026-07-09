@@ -14,8 +14,6 @@
 
     <div v-else class="xl:grid xl:grid-cols-[minmax(0,1fr)_240px] xl:gap-10">
       <article>
-        <DocsBreadcrumb :crumbs="breadcrumbs" />
-
         <h1 class="mb-6 text-4xl font-bold text-default">{{ doc.title }}</h1>
 
         <div v-if="docMedia.url" class="mb-10 overflow-hidden rounded-2xl">
@@ -66,26 +64,30 @@
           </NuxtLink>
         </div>
 
-        <nav v-if="!isOverviewDoc && (previousDoc || nextDoc)" class="mt-16 grid gap-4 border-t border-default pt-8 md:grid-cols-2">
+        <nav v-if="!isOverviewDoc && (previousDoc || nextDoc)" class="mt-16 flex items-start justify-between gap-6">
           <NuxtLink
             v-if="previousDoc"
             :to="previousDoc.path"
-            class="group rounded-2xl border border-default p-5 no-underline transition hover:border-muted hover:bg-elevated"
+            class="group flex min-w-0 flex-initial flex-col gap-1 no-underline"
           >
             <p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Previous</p>
-            <p class="mt-2 text-lg font-semibold text-default group-hover:text-primary">{{ previousDoc.title }}</p>
-            <p v-if="previousDoc.category" class="mt-1 text-sm text-muted">{{ previousDoc.category }}</p>
+            <span class="flex w-full min-w-0 items-center gap-1.5 text-lg font-semibold text-default group-hover:text-primary">
+              <PlatformIcon name="arrow-left" class="size-4 shrink-0" />
+              <span class="min-w-0 truncate">{{ previousDoc.title }}</span>
+            </span>
           </NuxtLink>
-          <div v-else class="hidden md:block" />
+          <div v-else class="flex-1" />
 
           <NuxtLink
             v-if="nextDoc"
             :to="nextDoc.path"
-            class="group rounded-2xl border border-default p-5 text-left no-underline transition hover:border-muted hover:bg-elevated md:justify-self-end md:w-full"
+            class="group flex min-w-0 flex-initial flex-col items-end gap-1 text-right no-underline"
           >
             <p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Next</p>
-            <p class="mt-2 text-lg font-semibold text-default group-hover:text-primary">{{ nextDoc.title }}</p>
-            <p v-if="nextDoc.category" class="mt-1 text-sm text-muted">{{ nextDoc.category }}</p>
+            <span class="flex w-full min-w-0 items-center gap-1.5 text-lg font-semibold text-default group-hover:text-primary">
+              <span class="min-w-0 truncate">{{ nextDoc.title }}</span>
+              <PlatformIcon name="arrow-right" class="size-4 shrink-0" />
+            </span>
           </NuxtLink>
         </nav>
       </article>
@@ -308,19 +310,24 @@ const siblingDocs = computed(() =>
   categoryDocs.value.filter(item => item.slug !== doc.value?.slug),
 )
 
+// Previous/Next walks the full curated Section → Group → Page hierarchy (the same
+// order the sidebar renders in — /api/public/docs is already sorted by
+// nav_section_order → nav_section → nav_group_order → nav_group → nav_order/sort_order),
+// not just the current taxonomy category. This matches Vercel-style docs pagers,
+// which step across sections/groups rather than stopping at a category boundary.
 const currentDocIndex = computed(() =>
-  categoryDocs.value.findIndex(item =>
+  orderedDocs.value.findIndex(item =>
     item.slug === doc.value?.slug && item.category === doc.value?.category,
   ),
 )
 
 const previousDoc = computed(() =>
-  currentDocIndex.value > 0 ? categoryDocs.value[currentDocIndex.value - 1] : null,
+  currentDocIndex.value > 0 ? orderedDocs.value[currentDocIndex.value - 1] : null,
 )
 
 const nextDoc = computed(() =>
-  currentDocIndex.value >= 0 && currentDocIndex.value < categoryDocs.value.length - 1
-    ? categoryDocs.value[currentDocIndex.value + 1]
+  currentDocIndex.value >= 0 && currentDocIndex.value < orderedDocs.value.length - 1
+    ? orderedDocs.value[currentDocIndex.value + 1]
     : null,
 )
 
