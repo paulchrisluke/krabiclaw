@@ -1,17 +1,17 @@
 // Analytics event tracking composable
-// Product analytics writes into the app-owned krabiLayer. A platform-only
-// bridge in app.vue forwards those events into KrabiClaw's GA property once
-// GA is ready.
+// Product analytics is sent straight to Cloudflare Zaraz's `zaraz.track()`
+// API. Zaraz is edge-injected (auto-inject script, see the "Web tag
+// management" Cloudflare dashboard config for krabiclaw.com) and queues
+// calls made before its own snippet has loaded, the same guarantee GTM's
+// dataLayer makes — so there is no app-owned queue/bridge to maintain here.
+// The GA4 tool inside Zaraz has an "All Tracks" trigger that fires on every
+// `zaraz.track()` call and forwards it to GA4.
 
 declare global {
   interface Window {
-    // gtag.js's real contract is variadic — 'js'+Date, 'config'+id, 'event'+name+params,
-    // 'consent'+... all shipped through the same function. Narrowing this to the
-    // trackEvent()-shaped 3-arg form below broke app.vue's own gtag bootstrap
-    // (`gtag('js', new Date())`), which is equally legitimate usage of the same global.
-    gtag?: (..._args: unknown[]) => void
-    dataLayer?: unknown[]
-    krabiLayer?: KrabiAnalyticsEvent[]
+    zaraz?: {
+      track: (_eventName: string, _params?: Record<string, unknown>) => void
+    }
   }
 }
 
@@ -93,14 +93,9 @@ export interface AnalyticsEventParams {
   status_code?: number
 }
 
-export interface KrabiAnalyticsEvent {
-  name: AnalyticsEventName
-  params: AnalyticsEventParams
-  timestamp: string
-}
-
-// Reads the GA4 client_id out of the `_ga` cookie GA4's own gtag.js sets
-// (format `GA1.1.<random>.<timestamp>`; client_id is the last two segments).
+// Reads the GA4 client_id out of the `_ga` cookie Zaraz's GA4 tool sets
+// client-side (same cookie/format gtag.js itself would set:
+// `GA1.1.<random>.<timestamp>`; client_id is the last two segments).
 // Used to stitch server-side Stripe webhook events back to the browsing
 // session that started checkout — see server/utils/ga4-measurement-protocol.ts.
 export const getGaClientId = (): string | null => {
@@ -119,14 +114,7 @@ export const useAnalytics = () => {
     if (import.meta.client) {
       if (typeof window === 'undefined') return
       if (!isPlatform) return
-      const queue = window.krabiLayer || []
-      const event: KrabiAnalyticsEvent = {
-        name: eventName,
-        params,
-        timestamp: new Date().toISOString(),
-      }
-      queue.push(event)
-      window.krabiLayer = queue
+      window.zaraz?.track(eventName, params)
     }
   }
 

@@ -1,5 +1,5 @@
 // Reports uncaught Vue component errors and unhandled promise rejections to
-// GA4 (krabiLayer) as error_encountered. api_error (fetch-level failures) is
+// GA4 (zaraz.track()) as error_encountered. api_error (fetch-level failures) is
 // handled separately in dashboard-site-header.client.ts, which already owns
 // the one globalThis.$fetch override for the dashboard surface — see that
 // file's comment for why a second override here would be fragile.
