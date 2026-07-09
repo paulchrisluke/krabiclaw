@@ -1,11 +1,12 @@
 <template>
   <div v-if="variant === 'compact'" class="bg-elevated p-8">
-    <div class="mb-3 flex gap-1">
+    <div class="mb-3 flex gap-1" role="img" :aria-label="$t('saya.reviews.stars_aria', { rating: review.rating })">
       <SayaIcon
         v-for="s in 5"
         :key="s"
         name="star"
         solid
+        aria-hidden="true"
         class="size-3.5"
         :class="s <= review.rating ? 'text-primary' : 'text-muted'"
       />
@@ -42,12 +43,13 @@
           </span>
         </div>
         <div class="mt-1 flex items-center gap-2">
-          <div class="flex gap-0.5">
+          <div class="flex gap-0.5" role="img" :aria-label="$t('saya.reviews.stars_aria', { rating: review.rating })">
             <SayaIcon
               v-for="s in 5"
               :key="s"
               name="star"
               solid
+              aria-hidden="true"
               class="size-3"
               :class="s <= review.rating ? 'text-primary' : 'text-muted'"
             />
