@@ -12,6 +12,15 @@ on:
 permissions:
   contents: read
 
+# Group by PR number so a new push cancels that PR's stale in-progress run —
+# runners were queueing up behind old commits' runs, starving the current
+# commit's run of hosted runners. Push events (main/staging, which deploy)
+# group by commit sha instead, which never collides with another run, so a
+# deploy in progress is never auto-cancelled by this.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   typecheck:
     name: Type check
