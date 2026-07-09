@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { blogPostMutationResultObject, blogPostObject, siteTool } from './shared'
+import { blogComponentInputSchema, blogPostMutationResultObject, blogPostObject, siteTool } from './shared'
 
 export const BLOG_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -42,19 +42,8 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         category: { type: 'string' },
         components: {
           type: 'array',
-          description: 'Optional structured content components. Use faq or how_to components only.',
-          items: {
-            type: 'object',
-            properties: {
-              type: { type: 'string', enum: ['faq', 'how_to'] },
-              label: { type: ['string', 'null'] },
-              status: { type: ['string', 'null'], enum: ['active', 'inactive', null] },
-              render_enabled: { type: ['boolean', 'null'] },
-              schema_enabled: { type: ['boolean', 'null'] },
-              position: { type: ['number', 'null'] },
-              data: { type: 'object' },
-            },
-          },
+          description: 'Optional structured content components. Use faq or how_to components only. FAQ: data.items[] of { question, answer, position? }. How-To: data.steps[] of { name, text, image_asset_id?, url?, position? } (name and text are both required strings; a missing name or text is the most common cause of a rejected update), plus optional data.estimated_time/tool_items/supply_items.',
+          items: blogComponentInputSchema,
         },
         seo_description: { type: 'string' },
         seo_keywords: { type: 'string' },
@@ -79,19 +68,8 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         category: { type: 'string' },
         components: {
           type: 'array',
-          description: 'Updated structured content components. Use faq or how_to components only.',
-          items: {
-            type: 'object',
-            properties: {
-              type: { type: 'string', enum: ['faq', 'how_to'] },
-              label: { type: ['string', 'null'] },
-              status: { type: ['string', 'null'], enum: ['active', 'inactive', null] },
-              render_enabled: { type: ['boolean', 'null'] },
-              schema_enabled: { type: ['boolean', 'null'] },
-              position: { type: ['number', 'null'] },
-              data: { type: 'object' },
-            },
-          },
+          description: 'Updated structured content components. Use faq or how_to components only. FAQ: data.items[] of { question, answer, position? }. How-To: data.steps[] of { name, text, image_asset_id?, url?, position? } (name and text are both required strings; a missing name or text is the most common cause of a rejected update), plus optional data.estimated_time/tool_items/supply_items.',
+          items: blogComponentInputSchema,
         },
         seo_description: { type: 'string' },
         seo_keywords: { type: 'string' },

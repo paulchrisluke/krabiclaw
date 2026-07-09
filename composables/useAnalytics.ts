@@ -137,23 +137,19 @@ export const useAnalytics = () => {
 
     const { site_id, template, page_path, page_title, page_language, location_id, ...properties } = input
 
-    const page = (page_path || page_title || page_language)
-      ? { path: page_path, title: page_title, language: page_language }
-      : undefined
+    const flatParams: Record<string, unknown> = {
+      ...(page_path ? { page_path } : {}),
+      ...(page_title ? { page_title } : {}),
+      ...(page_language ? { page_language } : {}),
+      ...(location_id ? { location_id } : {}),
+      ...(site_id ? { site_id } : {}),
+      ...(template ? { template } : {}),
+      device_language: navigator.language,
+      is_prod: import.meta.env.PROD,
+      ...properties,
+    }
 
-    const location = location_id ? { id: location_id } : undefined
-
-    window.zaraz?.track(eventName, {
-      ...(page ? { page } : {}),
-      ...(location ? { location } : {}),
-      metadata: {
-        is_prod: import.meta.env.PROD,
-        site_id,
-        template,
-        device_language: navigator.language,
-      },
-      ...(Object.keys(properties).length ? { properties } : {}),
-    })
+    window.zaraz?.track(eventName, flatParams)
   }
 
   // User Acquisition & Onboarding
