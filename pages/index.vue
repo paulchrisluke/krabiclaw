@@ -357,26 +357,12 @@
 
         <!-- Real reviews -->
         <div v-if="featuredReviews.length" class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div
+          <SayaReviewCard
             v-for="review in featuredReviews"
             :key="review.id"
-            class="bg-elevated p-8"
-          >
-            <div class="mb-3 flex gap-1">
-              <SayaIcon
-                v-for="s in 5"
-                :key="s"
-                name="star"
-                solid
-                class="size-3.5"
-                :class="s <= googleReviewRating(review) ? 'text-primary' : 'text-muted'"
-              />
-            </div>
-            <p class="text-sm leading-relaxed text-default">"{{ review.comment?.text || review.content }}"</p>
-            <div class="mt-6 border-t border-default pt-4">
-              <p class="text-sm font-medium text-default">{{ review.reviewer?.displayName || review.author_name }}</p>
-            </div>
-          </div>
+            :review="review"
+            variant="compact"
+          />
         </div>
       </section>
 
@@ -654,7 +640,15 @@ const defaultCurrency = computed(() => bootstrapConfig.value.default_currency ||
 const reviewFilter = ref('all')
 
 const hasGoogleBusiness = computed(() => !!googleBusiness.value?.business)
-const featuredReviews = computed(() => googleReviews.value.slice(0, 3))
+const featuredReviews = computed(() =>
+  googleReviews.value.slice(0, 3).map((review, i) => ({
+    id: review.id ?? review.name ?? i,
+    author: review.reviewer?.displayName || review.author_name || 'Anonymous',
+    content: review.comment?.text || review.content || '',
+    rating: googleReviewRating(review),
+    locationTitle: locations.value.length > 1 ? review.location_title || null : null,
+  }))
+)
 
 // Recent posts — shown in the "Lately" section (posts only, each links to /posts)
 const recentPosts = computed(() => {

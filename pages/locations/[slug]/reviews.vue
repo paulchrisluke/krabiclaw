@@ -115,44 +115,21 @@
         </div>
 
         <div v-else class="flex flex-col gap-8">
-          <article
+          <SayaReviewCard
             v-for="review in filtered"
             :key="review.id"
-            class="rounded-3xl border border-default bg-default p-8 sm:p-9"
+            variant="full"
+            :review="{
+              id: review.id,
+              author: review.author_name,
+              avatarUrl: review.reviewer_photo_url,
+              rating: review.rating,
+              content: review.content,
+              title: review.title,
+              dateLabel: formatReviewDate(review.created_at),
+              source: review.source
+            }"
           >
-            <!-- Reviewer header -->
-            <div class="mb-5 flex items-start gap-4">
-              <AppAvatar
-                :src="review.reviewer_photo_url"
-                :name="review.author_name"
-                size="md"
-              />
-              <div class="flex-1 min-w-0">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span class="font-medium text-default">{{ review.author_name }}</span>
-                  <span v-if="review.source === 'gmb'" class="inline-flex items-center rounded-full border border-default px-2 py-0.5 text-xs font-medium text-muted">{{ t('saya.reviews_page.via_google') }}</span>
-                </div>
-                <div class="mt-1 flex items-center gap-2">
-                  <div class="flex gap-0.5">
-                    <SayaIcon
-                      v-for="s in 5"
-                      :key="s"
-                      name="star"
-                      solid
-                      class="size-3"
-                      :class="s <= review.rating ? 'text-primary' : 'text-muted'"
-                    />
-                  </div>
-                <span class="text-muted">·</span>
-                  <span class="text-xs text-muted">{{ formatReviewDate(review.created_at) }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div v-if="review.title" class="saya-display saya-italic mb-2 text-2xl text-default leading-tight">
-              {{ review.title }}
-            </div>
-            <p class="text-sm leading-relaxed text-default">{{ review.content }}</p>
             <NuxtLink :to="`/locations/${slug}/reviews/${review.id}`" class="mt-4 inline-flex text-sm font-medium text-primary no-underline hover:underline">
               Read review
             </NuxtLink>
@@ -185,7 +162,7 @@
               </div>
               <p class="text-sm leading-relaxed text-default">{{ review.owner_reply }}</p>
             </div>
-          </article>
+          </SayaReviewCard>
         </div>
       </section>
     </template>
