@@ -8,6 +8,13 @@ type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
 
 const MAX_SLUG_ATTEMPTS = 10
 
+export class SiteNotFoundError extends Error {
+  constructor() {
+    super('Site not found')
+    this.name = 'SiteNotFoundError'
+  }
+}
+
 interface SiteSettingsRow {
   id: string
   organization_id: string
@@ -49,7 +56,7 @@ function buildSlug(value: string): string {
     .slice(0, 30)
 }
 
-async function loadSettingsPayload(
+export async function loadSettingsPayload(
   db: D1Database,
   organizationId: string,
   siteId: string
@@ -65,7 +72,7 @@ async function loadSettingsPayload(
   `, [siteId, organizationId])
 
   if (!updatedSite) {
-    throw new Error('Site not found after update')
+    throw new SiteNotFoundError()
   }
 
   let siteSettings: Record<string, unknown> = {}

@@ -34,8 +34,8 @@
                 <UButton color="primary" size="lg" @click="openUpsell('growth', 'translations-page')">
                   Get Growth — $49/mo
                 </UButton>
-                <UButton color="neutral" variant="soft" size="lg" :href="whatsappLink('I want to learn more about translations for my site')" target="_blank" rel="noopener noreferrer">
-                  Ask us on WhatsApp
+                <UButton color="neutral" variant="soft" size="lg" :to="config.public.helpUrl" target="_blank" rel="noopener noreferrer">
+                  Visit help page
                 </UButton>
               </div>
             </div>
@@ -52,11 +52,11 @@
               <div>
                 <h2 class="text-lg font-bold text-highlighted">Translations aren't available yet</h2>
                 <p class="mt-1 text-sm text-muted max-w-md">
-                  We're not taking translation requests right now. For anything urgent, message us directly.
+                  We're not taking translation requests right now. For anything urgent, visit our help page.
                 </p>
               </div>
-              <UButton color="neutral" variant="soft" size="lg" :href="whatsappLink('I need a language translation for my site')" target="_blank" rel="noopener noreferrer">
-                Ask us on WhatsApp
+              <UButton color="neutral" variant="soft" size="lg" :to="config.public.helpUrl" target="_blank" rel="noopener noreferrer">
+                Visit help page
               </UButton>
             </div>
           </UCard>
@@ -87,7 +87,7 @@
                       {{ locale.status }}
                     </UBadge>
                   </div>
-                  <UButton size="xs" color="neutral" variant="soft" :href="whatsappLink(`I need an update to my ${localeLabel(locale.locale)} translation`)" target="_blank" rel="noopener noreferrer">
+                  <UButton size="xs" color="neutral" variant="soft" :to="config.public.helpUrl" target="_blank" rel="noopener noreferrer">
                     Request update
                   </UButton>
                 </div>
@@ -101,7 +101,7 @@
                     :key="option.value"
                     color="neutral"
                     variant="outline"
-                    :href="whatsappLink(`I'd like my site translated into ${option.label}`)"
+                    :to="config.public.helpUrl"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="justify-start"
@@ -109,7 +109,7 @@
                     {{ option.label }}
                   </UButton>
                 </div>
-                <p class="mt-3 text-xs text-muted">Need a different language? <a :href="whatsappLink('I need a language translation not listed')" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">Message us on WhatsApp</a></p>
+                <p class="mt-3 text-xs text-muted">Need a different language? <a :href="config.public.helpUrl" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">Visit our help page</a></p>
               </div>
             </UCard>
 
@@ -152,7 +152,7 @@
                     {{ locale.status }}
                   </UBadge>
                 </div>
-                <UButton size="xs" color="neutral" variant="soft" :href="whatsappLink(`I need an update to my ${localeLabel(locale.locale)} translation`)" target="_blank" rel="noopener noreferrer">
+                <UButton size="xs" color="neutral" variant="soft" :to="config.public.helpUrl" target="_blank" rel="noopener noreferrer">
                   Request update
                 </UButton>
               </div>
@@ -164,7 +164,7 @@
               color="primary"
               variant="soft"
               icon="i-lucide-plus"
-              :href="whatsappLink('I want to add another language translation to my site')"
+              :to="config.public.helpUrl"
               target="_blank"
               rel="noopener noreferrer"
               >
@@ -182,9 +182,6 @@
 definePageMeta({ layout: 'dashboard' })
 
 const config = useRuntimeConfig()
-const rawWhatsapp = config.public.whatsappNumber || '16197200000'
-const WHATSAPP_NUMBER = /^\d+$/.test(String(rawWhatsapp)) ? String(rawWhatsapp) : '16197200000'
-
 const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 
@@ -229,10 +226,6 @@ const localeMap: Record<string, string> = {
 
 function localeLabel(locale: string) {
   return localeMap[locale] ?? locale
-}
-
-function whatsappLink(message: string) {
-  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`
 }
 
 interface SiteLocaleRow {

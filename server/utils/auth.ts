@@ -5,7 +5,7 @@ import { admin, anonymous, jwt, organization, phoneNumber } from 'better-auth/pl
 import { oauthProvider } from '@better-auth/oauth-provider'
 import { getHeaders } from 'h3'
 import type { H3Event } from 'h3'
-import { createDb, execute, schema } from '~/server/db'
+import { createDb, execute, executeBatch, queryFirst, schema } from '~/server/db'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { normalizePhone, sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { notifyAdminNewUserSignup } from '~/server/utils/admin-notifications'
@@ -83,26 +83,27 @@ export function createAuth(env: CloudflareEnv) {
           after: async (user) => {
             if ((user as { isAnonymous?: boolean }).isAnonymous) return
             const now = new Date()
-            const orgId = `org-${user.id}`
-            try {
-              await db.batch([
-                db.insert(schema.organization).values({
-                  id: orgId,
-                  name: user.name ?? user.email ?? 'My Restaurant',
-                  slug: orgId,
-                  createdAt: now,
-                }).onConflictDoNothing(),
-                db.insert(schema.member).values({
-                  id: `member-${orgId}`,
-                  organizationId: orgId,
-                  userId: user.id,
-                  role: 'owner',
-                  createdAt: now,
-                }).onConflictDoNothing(),
-              ])
-            } catch (batchErr) {
-              console.error('Failed to create org/member on signup, batch rolled back for orgId:', orgId, batchErr)
-              throw batchErr
+            // Create a personal owner organization for fresh signups so site transfers
+            // can be accepted even when the user hasn't created a site yet.
+            const db = createDb(env)
+            const existingOrg = await queryFirst<{ organizationId: string }>(
+              db,
+              `SELECT organizationId FROM member WHERE userId = ? AND role = 'owner' LIMIT 1`,
+              [user.id],
+            )
+            if (!existingOrg) {
+              const organizationId = `org-${crypto.randomUUID()}`
+              const slug = user.email?.split('@')[0]?.toLowerCase().replace(/[^a-z0-9]/g, '') || `user-${user.id.slice(0, 8)}`
+              await executeBatch(db, [
+                {
+                  query: `INSERT INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)`,
+                  params: [organizationId, user.name || 'My Business', slug, Math.floor(now.getTime() / 1000)],
+                },
+                {
+                  query: `INSERT INTO member (id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, 'owner', ?)`,
+                  params: [`member-${organizationId}`, organizationId, user.id, Math.floor(now.getTime() / 1000)],
+                },
+              ]).catch((err) => console.error('signup_org_creation_failed', err))
             }
             // Fire-and-forget — must not block or throw into the auth flow
             notifyAdminNewUserSignup(env, {

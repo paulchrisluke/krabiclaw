@@ -11,11 +11,12 @@
       </div>
 
       <div v-else class="space-y-6">
-        <!-- Onboarding checklist (shown until dismissed or all items complete) -->
-        <OnboardingChecklist :org-slug="String(route.params.orgSlug)" @visible="onboardingVisible = $event" />
-
-        <!-- Persistent fallback once the checklist is dismissed/complete, so MCP prompts stay discoverable -->
-        <McpQuickActions v-if="!onboardingVisible" :org-slug="String(route.params.orgSlug)" />
+        <!-- AI Assistance - single canonical prompt section -->
+        <ContentAiAssistanceSection
+          label="Ask ChatGPT"
+          intro="Copy this prompt to ChatGPT to get started with your site"
+          :prompts="aiPrompts"
+        />
 
         <!-- Usage strip -->
         <div v-if="credits" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -77,7 +78,7 @@
               <div class="aspect-video w-full overflow-hidden rounded-t-xl bg-muted">
                 <img
                   v-if="location.hero_url"
-                  :src="location.hero_url"
+                  :src="cfImageVariant(location.hero_url, { width: 640 }) ?? undefined"
                   :alt="location.title"
                   class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   loading="lazy"
@@ -127,18 +128,19 @@
 </template>
 
 <script setup lang="ts">
+import { buildOnboardingStarterPrompt, getQuickActionPrompts, type OnboardingChecklistResponse } from '~/composables/useOnboardingPrompts'
+
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Dashboard | KrabiClaw', robots: 'noindex, nofollow' })
 
 const route = useRoute()
 const dashboardState = useDashboardSite()
-const onboardingVisible = ref(true)
 
 interface Location {
   id: string; slug: string; title: string; city: string | null
   rating: number | null; review_count: number | null
   is_primary: boolean; status: string; updated_at: string
-  hero_url: string | null; thumbnail_url: string | null
+  hero_url: string | null
 }
 interface Credits { balance: number; lifetime_used: number; last_topped_up_at: string | null }
 interface SiteEvent {
@@ -166,6 +168,34 @@ const { data, pending } = await useAsyncData(
 const locations = computed(() => data.value?.locations ?? [])
 const credits = computed(() => data.value?.credits ?? null)
 const events = computed(() => data.value?.events ?? [])
+
+// AI Prompts for ContentAiAssistanceSection
+const { data: onboardingData } = await useFetch<OnboardingChecklistResponse>('/api/dashboard/onboarding/checklist', {
+  server: false,
+  lazy: true,
+})
+
+const aiPrompts = computed(() => {
+  const starterPrompt = buildOnboardingStarterPrompt(onboardingData.value)
+  const quickPrompts = getQuickActionPrompts(onboardingData.value?.vertical)
+
+  const prompts = [
+    {
+      title: 'Getting started',
+      prompt: starterPrompt,
+      description: 'Start with this comprehensive prompt to set up your site',
+      copyLabel: 'Copy prompt',
+    },
+    ...quickPrompts.map((prompt) => ({
+      title: null,
+      prompt,
+      description: null,
+      copyLabel: 'Copy',
+    })),
+  ]
+
+  return prompts
+})
 
 const avgRating = computed(() => {
   const rated = locations.value.filter(l => l.rating != null)

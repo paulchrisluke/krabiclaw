@@ -21,11 +21,11 @@
               <div>
                 <h2 class="text-lg font-bold text-highlighted">Managed support isn't available yet</h2>
                 <p class="mt-1 text-sm text-muted max-w-md">
-                  We're not taking managed-service requests right now. For anything urgent, message us directly.
+                  We're not taking managed-service requests right now. For anything urgent, visit our help page.
                 </p>
               </div>
-              <UButton color="neutral" variant="soft" size="lg" :href="whatsappLink" target="_blank">
-                Ask us on WhatsApp
+              <UButton color="neutral" variant="soft" size="lg" :to="config.public.helpUrl" target="_blank" rel="noopener noreferrer">
+                Visit help page
               </UButton>
             </div>
           </UCard>
@@ -42,15 +42,15 @@
                 <h2 class="text-lg font-bold text-highlighted">Managed support is included in Growth</h2>
                 <p class="mt-1 text-sm text-muted max-w-md">
                   Upgrade and Paul & Julia handle your updates, translations, and Google presence.
-                  Send a WhatsApp — we take care of the rest.
+                  Visit our help page for more information.
                 </p>
               </div>
               <div class="flex flex-col sm:flex-row gap-3">
                 <UButton color="primary" size="lg" @click="openUpsell('growth', 'support-page')">
                   Get Growth — $49/mo
                 </UButton>
-                <UButton color="neutral" variant="soft" size="lg" :href="whatsappLink" target="_blank">
-                  Ask us on WhatsApp
+                <UButton color="neutral" variant="soft" size="lg" :to="config.public.helpUrl" target="_blank" rel="noopener noreferrer">
+                  Visit help page
                 </UButton>
               </div>
             </div>
@@ -114,7 +114,7 @@
                 <UButton :loading="submitting" @click="submitRequest">
                   Submit request
                 </UButton>
-                <p class="text-xs text-muted">Or message us directly on <a :href="whatsappLink" target="_blank" class="text-primary hover:underline">WhatsApp</a></p>
+                <p class="text-xs text-muted">Or visit our <a :href="config.public.helpUrl" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">help page</a></p>
               </div>
 
               <UAlert v-if="submitError" color="error" variant="soft" :description="submitError" />
@@ -153,9 +153,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
 
-const WHATSAPP_NUMBER = '16197200000'
-const whatsappLink = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hi Paul & Julia, I need some help with my site.')}`
-
+const config = useRuntimeConfig()
 const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 const plan = computed(() => dashboard.site.value?.plan ?? 'free')
