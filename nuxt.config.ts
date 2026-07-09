@@ -72,7 +72,6 @@ const skipClientScripts = process.env.PERF_NO_SCRIPTS === 'true'
 // PERF DEBUG PATCH (temporary): build/runtime flags for isolating global
 // client-floor items that affect every /dev/perf-text mode before the page
 // branch can opt in/out. Set one flag at a time and rebuild.
-const skipGa4 = process.env.PERF_NO_GA4 === 'true'
 const skipDompurifyHooks = process.env.PERF_NO_DOMPURIFY_HOOKS === 'true'
 const publicPerfTestPage = process.env.PERF_PUBLIC_TEST_PAGE !== 'false'
 
@@ -172,7 +171,6 @@ export default defineNuxtConfig({
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://krabiclaw.com',
 
       whatsappNumber: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER || '16197200000',
-      perfNoGa4: skipGa4,
       perfNoDompurifyHooks: skipDompurifyHooks,
       perfPublicTestPage: publicPerfTestPage,
     },

@@ -1,5 +1,61 @@
 # Handoff: KrabiClaw page speed — stop adding, start removing
 
+## Latest update (2026-07-09): GA4 TTI item resolved — moved to Cloudflare Zaraz, not just deferred
+
+Use this section first for the GA4 item specifically; it supersedes both the
+"GA4 idle-callback fix" note further down and that note's own predecessor
+("the real finding: GA4 idle-callback costs ~1.5s of TTI"). The other
+sections below (Saya shell, self-fetch elimination, entry-chunk bundle
+audit) are unrelated to GA4 and still stand as-is.
+
+**What changed:** the confirmed ~1.5s TTI cost from client-loaded GA4 (see
+"The real finding" section below) is no longer mitigated by load-timing
+tricks — it's removed at the root. Cloudflare Zaraz is now enabled on the
+`krabiclaw.com` zone with a GA4 tool wired to the platform's measurement ID
+(`G-NJ1BSP9BYG`, `Pageview` + `AllTracks` triggers). `app.vue`'s entire
+client GA4 bootstrap (script injection, interaction/15s-timeout load-gating,
+the `window.krabiLayer` queue/bridge — everything described in the sections
+below) was deleted. `useAnalytics.ts`'s `trackEvent()` now calls
+`window.zaraz.track()` directly; Zaraz's own edge-injected snippet queues
+calls made before it loads, the same guarantee `krabiLayer`/`dataLayer`
+existed to provide, so there's no app-owned queue left to maintain.
+
+Why this is a strictly better fix than the interaction/15s-timeout approach
+documented below: that approach only *delayed* the 166KB `gtag.js` fetch
+past Lighthouse's TTI quiet-window, it didn't remove the fetch. Zaraz runs
+the tool at Cloudflare's edge, so the browser never fetches `gtag.js` at
+all — zero client bundle cost, not "cost paid later."
+
+**Verified so far:** `yarn typecheck`/`yarn lint`/`yarn build` pass; a real
+headless-browser run against local `nuxt dev` confirms `window.gtag` and
+`window.krabiLayer` are both gone (not just deferred — actually absent) and
+that `trackEvent()`'s `window.zaraz?.track()` call is a safe no-op when
+`window.zaraz` is undefined (expected in local dev, since Zaraz only injects
+behind Cloudflare's real edge proxy — there is no way to get a real
+`window.zaraz` in `nuxt dev` or local `wrangler dev`); confirmed the
+unrelated server-side pageview pipeline (`platform_pageview_events` in D1)
+still records a row per visit, so nothing else broke. Cloudflare API access
+to the Zaraz config (read + a safe idempotent write round-trip) was
+confirmed working before relying on it.
+
+**Not yet done:** a fresh interleaved PSI run against a deployed preview
+(same methodology as "Second pass — interleaved, 8 rounds" below) to put a
+real number on the fix, and confirming in a real browser's Network tab that
+Zaraz's collect calls actually reach `google-analytics.com` once deployed
+behind Cloudflare's edge. Do that before declaring the TTI number itself
+fixed — the code-level fix and its removal of the failure mode are
+confirmed; the fresh timing measurement is not yet re-run.
+
+**Deliberately out of scope of this fix:** tenant/Saya pages' own
+Google-connected GA4 (`layouts/saya.vue`, per-tenant
+`google_analytics_measurement_id`) still injects `gtag.js` directly and is
+unaffected by this change — it's a different feature (each customer's own
+GA4 property) than the platform's own analytics, and Zaraz's current config
+has one tool wired to one fixed measurement ID, not a per-tenant dynamic
+one. Extending Zaraz to cover that would need per-hostname Configuration
+Rules or a Worker-side variable enricher — a real feature build, not a
+follow-up cleanup item, so it's intentionally not attempted here.
+
 ## Latest update (2026-07-03, preview shell comparison): public shell cleanup materially helped
 
 Fresh preview Lighthouse runs against the perf harness now show that removing

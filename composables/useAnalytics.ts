@@ -1,17 +1,17 @@
 // Analytics event tracking composable
-// Product analytics writes into the app-owned krabiLayer. A platform-only
-// bridge in app.vue forwards those events into KrabiClaw's GA property once
-// GA is ready.
+// Product analytics is sent straight to Cloudflare Zaraz's `zaraz.track()`
+// API. Zaraz is edge-injected (auto-inject script, see the "Web tag
+// management" Cloudflare dashboard config for krabiclaw.com) and queues
+// calls made before its own snippet has loaded, the same guarantee GTM's
+// dataLayer makes — so there is no app-owned queue/bridge to maintain here.
+// The GA4 tool inside Zaraz has an "All Tracks" trigger that fires on every
+// `zaraz.track()` call and forwards it to GA4.
 
 declare global {
   interface Window {
-    // gtag.js's real contract is variadic — 'js'+Date, 'config'+id, 'event'+name+params,
-    // 'consent'+... all shipped through the same function. Narrowing this to the
-    // trackEvent()-shaped 3-arg form below broke app.vue's own gtag bootstrap
-    // (`gtag('js', new Date())`), which is equally legitimate usage of the same global.
-    gtag?: (..._args: unknown[]) => void
-    dataLayer?: unknown[]
-    krabiLayer?: KrabiAnalyticsEvent[]
+    zaraz?: {
+      track: (_eventName: string, _params?: Record<string, unknown>) => void
+    }
   }
 }
 
@@ -52,13 +52,13 @@ export type AnalyticsEventName =
   | 'error_encountered'
   | 'api_error'
 
-export interface AnalyticsEventParams {
-  // Common params
+// Event-specific fields that don't belong to the structured page/location/
+// metadata groups below — everything here rides along under `properties`.
+export interface AnalyticsEventProperties {
   [key: string]: string | number | boolean | undefined
 
   // User Acquisition
   method?: string // 'oauth_google', 'oauth_github', 'email'
-  site_id?: string
   domain?: string
 
   // Billing
@@ -81,8 +81,6 @@ export interface AnalyticsEventParams {
   dashboard_section?: string // 'billing', 'content', 'settings', etc.
 
   // Engagement
-  page_path?: string
-  page_title?: string
   duration_seconds?: number
 
   // Error
@@ -93,14 +91,21 @@ export interface AnalyticsEventParams {
   status_code?: number
 }
 
-export interface KrabiAnalyticsEvent {
-  name: AnalyticsEventName
-  params: AnalyticsEventParams
-  timestamp: string
+// trackEvent()'s input: AnalyticsEventProperties plus the handful of fields
+// that get lifted into their own page/location/metadata groups instead of
+// staying in the flat properties bag — see trackEvent() below.
+export interface AnalyticsEventInput extends AnalyticsEventProperties {
+  site_id?: string
+  template?: string
+  page_path?: string
+  page_title?: string
+  page_language?: string
+  location_id?: string
 }
 
-// Reads the GA4 client_id out of the `_ga` cookie GA4's own gtag.js sets
-// (format `GA1.1.<random>.<timestamp>`; client_id is the last two segments).
+// Reads the GA4 client_id out of the `_ga` cookie Zaraz's GA4 tool sets
+// client-side (same cookie/format gtag.js itself would set:
+// `GA1.1.<random>.<timestamp>`; client_id is the last two segments).
 // Used to stitch server-side Stripe webhook events back to the browsing
 // session that started checkout — see server/utils/ga4-measurement-protocol.ts.
 export const getGaClientId = (): string | null => {
@@ -115,19 +120,36 @@ export const getGaClientId = (): string | null => {
 export const useAnalytics = () => {
   const { isPlatform } = useTenantSite()
 
-  const trackEvent = (eventName: AnalyticsEventName, params: AnalyticsEventParams = {}) => {
-    if (import.meta.client) {
-      if (typeof window === 'undefined') return
-      if (!isPlatform) return
-      const queue = window.krabiLayer || []
-      const event: KrabiAnalyticsEvent = {
-        name: eventName,
-        params,
-        timestamp: new Date().toISOString(),
-      }
-      queue.push(event)
-      window.krabiLayer = queue
+  // Builds a structured payload instead of one flat params bag, so it reads
+  // the same way it's queried later: page/location/metadata are recognizable
+  // groups, not properties mixed in with everything else. `event` itself
+  // isn't duplicated inside the payload — it's already `zaraz.track()`'s
+  // first argument, unlike the old krabiLayer array where every queued item
+  // needed its own `name` field to stay identifiable once flattened into one
+  // list. `metadata` is for values that are essentially constant for a given
+  // request (environment, site, device language) — event-specific data goes
+  // in `properties`. Extend with `transaction`/`products` groups the same
+  // way if/when e-commerce events are added.
+  const trackEvent = (eventName: AnalyticsEventName, input: AnalyticsEventInput = {}) => {
+    if (!import.meta.client) return
+    if (typeof window === 'undefined') return
+    if (!isPlatform) return
+
+    const { site_id, template, page_path, page_title, page_language, location_id, ...properties } = input
+
+    const flatParams: Record<string, unknown> = {
+      ...(page_path ? { page_path } : {}),
+      ...(page_title ? { page_title } : {}),
+      ...(page_language ? { page_language } : {}),
+      ...(location_id ? { location_id } : {}),
+      ...(site_id ? { site_id } : {}),
+      ...(template ? { template } : {}),
+      device_language: navigator.language,
+      is_prod: import.meta.env.PROD,
+      ...properties,
     }
+
+    window.zaraz?.track(eventName, flatParams)
   }
 
   // User Acquisition & Onboarding

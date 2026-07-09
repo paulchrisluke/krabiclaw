@@ -31,7 +31,7 @@ export default defineNuxtPlugin(() => {
   let isInitialRoute = true
   let lastTrackedPath: string | null = null
 
-  // GA4 product-event tracking (krabiLayer) is platform-only and has no
+  // GA4 product-event tracking (zaraz.track()) is platform-only and has no
   // server-side initial-load recording the way /api/analytics/track does, so
   // unlike the site_events pageview below, this needs to fire for the very
   // first route too, not just subsequent SPA navigations. trackGa4PageView
