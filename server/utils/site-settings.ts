@@ -8,6 +8,13 @@ type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
 
 const MAX_SLUG_ATTEMPTS = 10
 
+export class SiteNotFoundError extends Error {
+  constructor() {
+    super('Site not found')
+    this.name = 'SiteNotFoundError'
+  }
+}
+
 interface SiteSettingsRow {
   id: string
   organization_id: string
@@ -28,6 +35,11 @@ interface FullSiteRow extends SiteSettingsRow {
   logo_asset_id: string | null
   contact_email: string | null
   last_published_at: string | null
+  seo_title: string | null
+  seo_description: string | null
+  canonical_url: string | null
+  robots: string | null
+  og_image_asset_id: string | null
   created_at: string
   updated_at: string
 }
@@ -49,7 +61,7 @@ function buildSlug(value: string): string {
     .slice(0, 30)
 }
 
-async function loadSettingsPayload(
+export async function loadSettingsPayload(
   db: D1Database,
   organizationId: string,
   siteId: string
@@ -58,6 +70,7 @@ async function loadSettingsPayload(
     SELECT id, organization_id, subdomain, theme, status,
            primary_location_id, public_url, custom_domain_status, default_currency,
            brand_name, brand_description, logo_url, logo_asset_id, contact_email,
+           seo_title, seo_description, canonical_url, robots, og_image_asset_id,
            settings, last_published_at, created_at, updated_at
     FROM sites
     WHERE id = ? AND organization_id = ?
@@ -65,7 +78,7 @@ async function loadSettingsPayload(
   `, [siteId, organizationId])
 
   if (!updatedSite) {
-    throw new Error('Site not found after update')
+    throw new SiteNotFoundError()
   }
 
   let siteSettings: Record<string, unknown> = {}
@@ -94,6 +107,11 @@ async function loadSettingsPayload(
     logo_url: updatedSite.logo_url,
     logo_asset_id: updatedSite.logo_asset_id,
     contact_email: updatedSite.contact_email,
+    seo_title: updatedSite.seo_title,
+    seo_description: updatedSite.seo_description,
+    canonical_url: updatedSite.canonical_url,
+    robots: updatedSite.robots,
+    og_image_asset_id: updatedSite.og_image_asset_id,
     brand_color: siteConfig.brand_color || '',
     default_currency: updatedSite.default_currency || 'THB',
     url_structure: siteSettings.url_structure || 'location_subdirectories',
@@ -289,6 +307,41 @@ async function attemptSiteUpdate(
   if (updates.last_published_at !== undefined) {
     setParts.push('last_published_at = ?')
     params.push(updates.last_published_at ?? null)
+  }
+  if (updates.seo_title !== undefined) {
+    setParts.push('seo_title = ?')
+    params.push(updates.seo_title ?? null)
+  }
+  if (updates.seo_description !== undefined) {
+    setParts.push('seo_description = ?')
+    params.push(updates.seo_description ?? null)
+  }
+  if (updates.canonical_url !== undefined) {
+    setParts.push('canonical_url = ?')
+    params.push(updates.canonical_url ?? null)
+  }
+  if (updates.robots !== undefined) {
+    setParts.push('robots = ?')
+    params.push(updates.robots ?? null)
+  }
+  if (updates.og_image_asset_id !== undefined) {
+    if (updates.og_image_asset_id !== null && updates.og_image_asset_id !== '') {
+      const asset = await queryFirst(db, `
+        SELECT id
+        FROM media_assets
+        WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active' AND kind = 'image'
+        LIMIT 1
+      `, [updates.og_image_asset_id, organizationId, siteId])
+
+      if (!asset) {
+        return {
+          status: 400,
+          data: { error: 'og_image_asset_id not found, unauthorized, or not an image' },
+        }
+      }
+    }
+    setParts.push('og_image_asset_id = ?')
+    params.push(updates.og_image_asset_id || null)
   }
 
   if (setParts.length === 0) {

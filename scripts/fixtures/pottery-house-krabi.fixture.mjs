@@ -50,9 +50,20 @@ if (!args.url) {
   process.exit(1)
 }
 
-const BASE    = args.url.replace(/\/$/, '')
+const inputBase = args.url.replace(/\/$/, '')
 const SITE_ID = args['site-id']
 const SLUG    = args.slug
+const BLOG_SLUG = 'group-bookings-create-a-unique-pottery-experience-in-krabi'
+
+function normalizeFixtureBaseUrl(rawUrl, slug) {
+  const url = new URL(rawUrl)
+  if (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
+    url.hostname = `${slug}.localhost`
+  }
+  return url.toString().replace(/\/$/, '')
+}
+
+const BASE = normalizeFixtureBaseUrl(inputBase, SLUG)
 
 // Mirrors isPreviewContext in server/utils/tenant-hosts.ts: on workers.dev,
 // staging.*, and preview.* hosts, the wildcard TLS cert only covers one
@@ -132,6 +143,7 @@ async function get(path, opts = {}) {
 
 console.log(`\n┌─ Pottery House Krabi — Regression Fixture ${'─'.repeat(20)}`)
 console.log(`│  URL:      ${BASE}`)
+if (BASE !== inputBase) console.log(`│  Input:    ${inputBase}`)
 console.log(`│  Site ID:  ${SITE_ID}`)
 console.log(`│  Vertical: experience`)
 console.log(`└${'─'.repeat(63)}`)
@@ -142,7 +154,7 @@ section('Route availability (all must 200)')
 
 const REQUIRED_ROUTES = [
   '/', '/locations', '/reviews', '/qa', '/posts', '/about', '/contact',
-  '/experiences',
+  '/experiences', '/blog',
 ]
 
 const pageHtml = {}
@@ -199,7 +211,61 @@ if (expRes.ok) {
   issues.push('Experiences bootstrap unavailable')
 }
 
-// ── 4. No restaurant copy anywhere ───────────────────────────────────────────
+// ── 4. Blog deep links + exports ──────────────────────────────────────────────
+
+section('Blog deep links and machine-readable exports')
+
+const blogDetailRes = await get(`/blog/${BLOG_SLUG}`)
+assert(`Blog detail routes: GET /blog/${BLOG_SLUG} → 200`, blogDetailRes.ok, true)
+if (blogDetailRes.ok) {
+  pageHtml[`/blog/${BLOG_SLUG}`] = await blogDetailRes.text()
+}
+
+const blogIndexJsonRes = await get('/blog/index.json')
+assert('GET /blog/index.json → 200', blogIndexJsonRes.ok, true)
+if (blogIndexJsonRes.ok) {
+  const payload = await blogIndexJsonRes.json()
+  const posts = Array.isArray(payload.posts) ? payload.posts : []
+  assert('Blog index JSON includes seeded blog slug', posts.some(post => post.url === `/blog/${BLOG_SLUG}`), true)
+}
+
+const blogRssRes = await get('/blog/rss.xml')
+assert('GET /blog/rss.xml → 200', blogRssRes.ok, true)
+if (blogRssRes.ok) {
+  const rss = await blogRssRes.text()
+  assertContains('RSS includes seeded blog slug', rss, `/blog/${BLOG_SLUG}`)
+}
+
+const blogFeedRes = await get('/blog/feed.json')
+assert('GET /blog/feed.json → 200', blogFeedRes.ok, true)
+if (blogFeedRes.ok) {
+  const feed = await blogFeedRes.json()
+  const items = Array.isArray(feed.items) ? feed.items : []
+  assert('JSON Feed includes seeded blog slug', items.some(item => item.url?.includes(`/blog/${BLOG_SLUG}`)), true)
+}
+
+const blogMarkdownRes = await get(`/blog-md/${BLOG_SLUG}.md`)
+assert(`GET /blog-md/${BLOG_SLUG}.md → 200`, blogMarkdownRes.ok, true)
+if (blogMarkdownRes.ok) {
+  const markdown = await blogMarkdownRes.text()
+  assertContains('Blog markdown mirror includes front matter title', markdown, 'title: "Group Bookings Create a Unique Pottery Experience in Krabi"')
+}
+
+const llmsRes = await get('/llms.txt')
+assert('GET /llms.txt → 200', llmsRes.ok, true)
+if (llmsRes.ok) {
+  const llms = await llmsRes.text()
+  assertContains('llms.txt includes tenant markdown mirror', llms, `/blog-md/${BLOG_SLUG}.md`)
+}
+
+const llmsFullRes = await get('/llms-full.txt')
+assert('GET /llms-full.txt → 200', llmsFullRes.ok, true)
+if (llmsFullRes.ok) {
+  const llmsFull = await llmsFullRes.text()
+  assertContains('llms-full.txt includes seeded blog heading', llmsFull, '# Group Bookings Create a Unique Pottery Experience in Krabi')
+}
+
+// ── 5. No restaurant copy anywhere ───────────────────────────────────────────
 
 section('No restaurant copy (experience vertical must not bleed restaurant strings)')
 
@@ -220,14 +286,14 @@ for (const str of FORBIDDEN) {
   assertNotContains(`No "${str}" in any page`, allHtml, str)
 }
 
-// ── 5. Required experience copy ───────────────────────────────────────────────
+// ── 6. Required experience copy ───────────────────────────────────────────────
 
 section('Required experience copy present')
 
 assertContains('CTA "Book a class" present', allHtml, 'book a class')
 assertContains('"From the studio" posts eyebrow present', allHtml, 'from the studio')
 
-// ── 6. No demo/fallback data ─────────────────────────────────────────────────
+// ── 7. No demo/fallback data ─────────────────────────────────────────────────
 
 section('No demo or Saya fallback data')
 
@@ -241,15 +307,20 @@ if (bootstrapData) {
   assertNotContains('No Ember & Slice in bootstrap JSON', allJson, 'Ember & Slice')
 }
 
-// ── 7. Contact data ───────────────────────────────────────────────────────────
+// ── 8. Contact data ───────────────────────────────────────────────────────────
 
 section('Contact data (phone and email)')
 
 if (bootstrapData) {
   const phones = (bootstrapData.locations ?? []).map(l => l.phone).filter(Boolean)
-  const emails = (bootstrapData.locations ?? []).map(l => l.email).filter(Boolean)
   assert('At least one location has a phone number', phones.length >= 1, true)
-  assert('At least one location has an email', emails.length >= 1, true)
+
+  // Location email is legitimately nullable: Google Places doesn't expose a
+  // per-location email, and this client has no site-level contact_email
+  // configured. bootstrap.get.ts used to backfill it with the org owner's
+  // private account email, which leaked personal contact info onto a public
+  // page (fixed in 4d08888a) — so "no email at all" is the correct state
+  // here, not a regression.
 
   // Regression: Google Places sync once wrote Thai-script locality text (e.g. "ตำบล
   // หนองทะเล") into English-source-locale location fields because languageCode was
@@ -285,13 +356,14 @@ if (bootstrapData) {
     if (loc.hero_image_public_url) imageUrls.push(loc.hero_image_public_url)
     if (loc.public_url) imageUrls.push(loc.public_url)
   }
+  const uniqueImageUrls = [...new Set(imageUrls)]
 
-  if (imageUrls.length === 0) {
+  if (uniqueImageUrls.length === 0) {
     console.error('  ✗ No image URLs in bootstrap — cannot verify image 404 detection')
     failed++
     issues.push('No image URLs in bootstrap response')
   } else {
-    for (const url of imageUrls.slice(0, 3)) {
+    for (const url of uniqueImageUrls.slice(0, 3)) {
       const r = await get(url, { method: 'HEAD' })
       assert(`Image resolves: ${url.slice(0, 60)}`, r.ok, true)
     }

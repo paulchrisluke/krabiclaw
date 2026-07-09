@@ -3,7 +3,6 @@
 
     <UPageBody>
       <div class="mb-4 flex flex-wrap items-center gap-2">
-        <USelect v-model="selectedLocationId" :items="locationItems" value-key="id" label-key="label" class="w-64" @update:model-value="loadQa" />
         <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadQa">Refresh</UButton>
       </div>
 
@@ -54,9 +53,6 @@
           </template>
 
           <div class="space-y-4">
-            <UFormField label="Location">
-              <USelect v-model="formLocationId" :items="locationItemsWithoutAll" value-key="id" label-key="label" />
-            </UFormField>
             <UFormField label="Question">
               <UTextarea v-model="form.question" :rows="3" placeholder="Do you accept walk-ins?" />
             </UFormField>
@@ -65,7 +61,7 @@
             </UFormField>
             <div class="flex gap-2">
               <UButton v-if="editingId" block color="neutral" variant="ghost" @click="resetForm">Cancel</UButton>
-              <UButton block :loading="saving" :disabled="!formLocationId || formLocationId === NO_LOCATION_SELECTED || !form.question.trim()" @click="saveQa">
+              <UButton block :loading="saving" :disabled="!locationId || !form.question.trim()" @click="saveQa">
                 {{ editingId ? 'Save changes' : 'Add question' }}
               </UButton>
             </div>
@@ -79,11 +75,6 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
 
-interface LocationRow {
-  id: string
-  title: string
-}
-
 interface QaRow {
   id: string
   question: string
@@ -95,12 +86,10 @@ interface QaRow {
 }
 
 const siteId = await useDashboardSiteId()
+const dashboardLocation = useDashboardLocation()
 const toast = useToast()
-const NO_LOCATION_SELECTED = 'none'
 const sitePublicUrl = ref<string | null>(null)
-const locations = ref<LocationRow[]>([])
-const selectedLocationId = ref(NO_LOCATION_SELECTED)
-const formLocationId = ref('')
+const locationId = computed(() => dashboardLocation.currentLocationId.value)
 const qaRows = ref<QaRow[]>([])
 const loading = ref(true)
 const saving = ref(false)
@@ -113,36 +102,20 @@ const _headerLinks = computed(() => buildHeaderLinks([
   { label: 'Edit page list', icon: 'i-lucide-layers', to: paths.value.pages, color: 'neutral' as const, variant: 'soft' as const }
 ]))
 
-const locationItemsWithoutAll = computed(() => locations.value.map(location => ({ id: location.id, label: location.title })))
-const locationItems = computed(() => [
-  { id: NO_LOCATION_SELECTED, label: 'Choose a location' },
-  ...locationItemsWithoutAll.value
-])
-
 async function loadContext() {
-  const [settingsRes, locationsRes] = await Promise.all([
-    $fetch<{ settings: { public_url: string | null } }>(`/api/dashboard/settings`),
-    $fetch<{ locations: LocationRow[] }>(`/api/dashboard/locations`)
-  ])
+  const settingsRes = await $fetch<{ settings: { public_url: string | null } }>(`/api/dashboard/settings`)
   sitePublicUrl.value = settingsRes.settings.public_url
-  locations.value = locationsRes.locations ?? []
-  if (selectedLocationId.value === NO_LOCATION_SELECTED || !selectedLocationId.value) {
-    selectedLocationId.value = locations.value[0]?.id ?? NO_LOCATION_SELECTED
-  }
-  if (!formLocationId.value || formLocationId.value === NO_LOCATION_SELECTED) {
-    formLocationId.value = locations.value[0]?.id ?? ''
-  }
 }
 
 async function loadQa() {
-  if (!selectedLocationId.value || selectedLocationId.value === NO_LOCATION_SELECTED) {
+  if (!locationId.value) {
     qaRows.value = []
     loading.value = false
     return
   }
   loading.value = true
   try {
-    const res = await $fetch<{ qa: QaRow[] }>(`/api/dashboard/editor/locations/${selectedLocationId.value}/qa`)
+    const res = await $fetch<{ qa: QaRow[] }>(`/api/dashboard/editor/locations/${locationId.value}/qa`)
     qaRows.value = res.qa ?? []
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load Q&A', color: 'error' })
@@ -155,35 +128,33 @@ function resetForm() {
   editingId.value = null
   form.question = ''
   form.answer = ''
-  formLocationId.value = selectedLocationId.value
 }
 
 function startEdit(item: QaRow) {
   editingId.value = item.id
-  formLocationId.value = selectedLocationId.value
   form.question = item.question
   form.answer = item.answer ?? ''
 }
 
 async function saveQa() {
-  if (!formLocationId.value || formLocationId.value === NO_LOCATION_SELECTED) return
+  if (!locationId.value) return
   saving.value = true
   try {
     if (editingId.value) {
-      await $fetch(`/api/dashboard/editor/locations/${formLocationId.value}/qa/${editingId.value}`, {
+      await $fetch(`/api/dashboard/editor/locations/${locationId.value}/qa/${editingId.value}`, {
         method: 'PATCH',
         body: { question: form.question, answer: form.answer || null, is_owner_answer: 1 }
       })
       toast.add({ description: 'Q&A updated', color: 'success' })
     } else {
-      await $fetch(`/api/dashboard/editor/locations/${formLocationId.value}/qa`, {
+      await $fetch(`/api/dashboard/editor/locations/${locationId.value}/qa`, {
         method: 'POST',
         body: { question: form.question, answer: form.answer || null, is_owner_answer: 1 }
       })
       toast.add({ description: 'Q&A added', color: 'success' })
     }
     resetForm()
-    if (selectedLocationId.value === formLocationId.value) await loadQa()
+    await loadQa()
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to save Q&A', color: 'error' })
   } finally {
@@ -192,8 +163,9 @@ async function saveQa() {
 }
 
 async function updateQa(item: QaRow, body: ApiRecord, successMessage: string) {
+  if (!locationId.value) return
   try {
-    await $fetch(`/api/dashboard/editor/locations/${selectedLocationId.value}/qa/${item.id}`, {
+    await $fetch(`/api/dashboard/editor/locations/${locationId.value}/qa/${item.id}`, {
       method: 'PATCH',
       body
     })
@@ -209,6 +181,7 @@ async function toggleStatus(item: QaRow) {
 }
 
 async function moveQa(item: QaRow, direction: -1 | 1) {
+  if (!locationId.value) return
   const currentIndex = qaRows.value.findIndex(row => row.id === item.id)
   if (currentIndex === -1) return
   const targetIndex = currentIndex + direction
@@ -216,7 +189,7 @@ async function moveQa(item: QaRow, direction: -1 | 1) {
   const target = qaRows.value[targetIndex]
   if (!target) return
   try {
-    await $fetch(`/api/dashboard/editor/locations/${selectedLocationId.value}/qa/reorder`, {
+    await $fetch(`/api/dashboard/editor/locations/${locationId.value}/qa/reorder`, {
       method: 'POST',
       body: {
         updates: [
@@ -233,10 +206,11 @@ async function moveQa(item: QaRow, direction: -1 | 1) {
 }
 
 async function deleteQa(item: QaRow) {
+  if (!locationId.value) return
   if (!confirm(`Delete this question?\n\n${item.question}`)) return
   deletingId.value = item.id
   try {
-    await $fetch(`/api/dashboard/editor/locations/${selectedLocationId.value}/qa/${item.id}`, { method: 'DELETE' })
+    await $fetch(`/api/dashboard/editor/locations/${locationId.value}/qa/${item.id}`, { method: 'DELETE' })
     qaRows.value = qaRows.value.filter(row => row.id !== item.id)
     toast.add({ description: 'Q&A deleted', color: 'neutral' })
   } catch (error) {
@@ -254,6 +228,13 @@ onMounted(async () => {
     loading.value = false
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load Q&A page', color: 'error' })
   }
+})
+
+watch(locationId, () => {
+  editingId.value = null
+  form.question = ''
+  form.answer = ''
+  void loadQa()
 })
 
 useSeoMeta({ title: 'Q&A | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

@@ -2,6 +2,7 @@
 import { defineEventHandler, getMethod, getRequestHeader, getRequestURL, sendRedirect } from 'h3'
 import { queryAll } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
+import { isBlawbyTemplate } from '~/utils/template-registry'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 
 const redirects: Record<string, string> = {
@@ -37,9 +38,11 @@ export default defineEventHandler(async (event) => {
   // Server-side redirect for single-location sites
   // Only run if tenant data is available (set by tenant-resolution middleware)
   // Use 302 (temporary) since the single-location condition can change over time
-  const isBlawbyTenant =
-    event.context.themeId === 'blawby-theme-v1' ||
-    event.context.site?.vertical === 'professional_service'
+  const isBlawbyTenant = isBlawbyTemplate({
+    theme: event.context.site?.theme,
+    themeId: event.context.themeId,
+    vertical: event.context.site?.vertical,
+  })
 
   if (normalizedPathname === '/' && event.context.tenantType === TENANT_TYPES.TENANT && event.context.siteId && !isBlawbyTenant) {
     const env = cloudflareEnv(event)

@@ -9,6 +9,19 @@ import { createMediaAsset, deleteMediaAsset, updateMediaAssetMetadata } from '~/
 import { getPlatformMcpTool } from '~/server/utils/platform-mcp-tools'
 import { ensurePlatformMediaScope, listPlatformMediaAssets, PLATFORM_MEDIA_ORG_ID, PLATFORM_MEDIA_SITE_ID } from '~/server/utils/platform-media'
 import {
+  appendContentBlock,
+  deleteContentBlock,
+  getContentBlock,
+  getContentDocumentById,
+  getContentDocumentByOwner,
+  getContentOutline,
+  publishContentDocumentRevision,
+  renderContentPreview,
+  replaceContentBlock,
+  type ContentBlockType,
+  type ContentDocumentOwnerType,
+} from '~/server/utils/content-documents'
+import {
   createPlatformBlogPost,
   createPlatformDoc,
   deletePlatformBlogPost,
@@ -17,6 +30,8 @@ import {
   getPlatformDoc,
   listPlatformBlogPosts,
   listPlatformDocs,
+  reorderPlatformBlogPosts,
+  reorderPlatformDocs,
   updatePlatformBlogPost,
   updatePlatformDoc,
 } from '~/server/utils/platform-content'
@@ -34,6 +49,14 @@ function optionalString(args: Record<string, unknown>, key: string) {
   return typeof value === 'string' ? value : undefined
 }
 
+function optionalNullableString(args: Record<string, unknown>, key: string) {
+  const value = args[key]
+  if (value === null) return null
+  if (value === undefined) return undefined
+  if (typeof value === 'string') return value
+  throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be a string or null when provided.`)
+}
+
 function optionalBoolean(args: Record<string, unknown>, key: string) {
   const value = args[key]
   return typeof value === 'boolean' ? value : undefined
@@ -44,9 +67,87 @@ function optionalNumber(args: Record<string, unknown>, key: string) {
   return typeof value === 'number' ? value : undefined
 }
 
+function optionalNullableNumber(args: Record<string, unknown>, key: string) {
+  const value = args[key]
+  if (value === null) return null
+  return typeof value === 'number' ? value : undefined
+}
+
 function optionalArray(args: Record<string, unknown>, key: string) {
   const value = args[key]
   return Array.isArray(value) ? value : undefined
+}
+
+const CONTENT_DOCUMENT_OWNER_TYPES: readonly ContentDocumentOwnerType[] = ['platform_blog', 'platform_doc', 'tenant_blog']
+const CONTENT_BLOCK_TYPES: readonly ContentBlockType[] = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'ai_assistance', 'cta', 'callout']
+
+function requiredObject(args: Record<string, unknown>, key: string) {
+  const value = args[key]
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be an object.`)
+  }
+  return value as Record<string, unknown>
+}
+
+function optionalContentBlockType(args: Record<string, unknown>, key: string) {
+  const value = args[key]
+  if (!CONTENT_BLOCK_TYPES.includes(value as ContentBlockType)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be one of: ${CONTENT_BLOCK_TYPES.join(', ')}.`)
+  }
+  return value as ContentBlockType
+}
+
+function optionalContentDocumentOwnerType(args: Record<string, unknown>, key: string) {
+  const value = args[key]
+  if (!CONTENT_DOCUMENT_OWNER_TYPES.includes(value as ContentDocumentOwnerType)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be one of: ${CONTENT_DOCUMENT_OWNER_TYPES.join(', ')}.`)
+  }
+  return value as ContentDocumentOwnerType
+}
+
+async function resolveContentDocument(db: D1Database, args: Record<string, unknown>) {
+  const documentId = optionalString(args, 'document_id')
+  const hasOwnerLookup = args.owner_type !== undefined || args.owner_id !== undefined
+  if (documentId && hasOwnerLookup) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, 'Provide either document_id, or owner_type and owner_id, not both.')
+  }
+  if (documentId) {
+    const document = await getContentDocumentById(db, documentId)
+    if (!document) throw mcpProtocolError(MCP_ERROR.invalidParams, 'content document not found.')
+    return document
+  }
+
+  const ownerId = optionalString(args, 'owner_id')
+  const ownerType = args.owner_type !== undefined ? optionalContentDocumentOwnerType(args, 'owner_type') : undefined
+  if (!ownerType || !ownerId) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, 'Provide either document_id, or owner_type and owner_id.')
+  }
+
+  const document = await getContentDocumentByOwner(db, ownerType, ownerId)
+  if (!document) throw mcpProtocolError(MCP_ERROR.invalidParams, 'content document not found.')
+  return document
+}
+
+async function getFormattedContentBlock(db: D1Database, blockId: string) {
+  let block: Awaited<ReturnType<typeof getContentBlock>>
+  try {
+    block = await getContentBlock(db, blockId)
+  } catch (error) {
+    if (error && typeof error === 'object' && 'statusCode' in error && (error as { statusCode?: number }).statusCode === 404) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, 'content block not found.')
+    }
+    throw error
+  }
+  return {
+    document_id: block.document_id,
+    id: block.id,
+    parent_block_id: block.parent_block_id,
+    type: block.type,
+    position: block.position,
+    level: block.level,
+    updated_at: block.updated_at,
+    data: block.data,
+  }
 }
 
 function dateString(date: Date): string {
@@ -66,7 +167,7 @@ function optionalDateParam(args: Record<string, unknown>, key: string): string |
 function structuredContentInput(args: Record<string, unknown>) {
   return {
     components: optionalArray(args, 'components') as Array<{
-      type: 'faq' | 'how_to'
+      type: 'faq' | 'how_to' | 'ai_assistance'
       position?: number
       label?: string
       status?: 'active' | 'inactive'
@@ -75,6 +176,71 @@ function structuredContentInput(args: Record<string, unknown>) {
       data: unknown
     }> | undefined,
   }
+}
+
+function navMetadataInput(args: Record<string, unknown>) {
+  return {
+    nav_section: args.nav_section === null ? null : optionalString(args, 'nav_section'),
+    nav_title: args.nav_title === null ? null : optionalString(args, 'nav_title'),
+    nav_order: optionalNullableNumber(args, 'nav_order'),
+    nav_section_order: optionalNullableNumber(args, 'nav_section_order'),
+    hide_from_nav: args.hide_from_nav === null ? null : optionalBoolean(args, 'hide_from_nav'),
+    featured_order: optionalNullableNumber(args, 'featured_order'),
+  }
+}
+
+function reorderItems(
+  args: Record<string, unknown>,
+  idKey: 'doc_id' | 'post_id',
+  options: { navGroup?: boolean } = {},
+) {
+  const items = optionalArray(args, 'items')
+  if (!items?.length) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, 'items must be a non-empty array.')
+  }
+  return items.map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, 'Each reorder item must be an object.')
+    }
+    const record = item as Record<string, unknown>
+    const navOrder = record.nav_order
+    if (typeof navOrder !== 'number' || !Number.isInteger(navOrder)) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, 'Each reorder item must have an integer nav_order.')
+    }
+    const navSectionOrder = record.nav_section_order
+    if (navSectionOrder !== undefined && navSectionOrder !== null && (typeof navSectionOrder !== 'number' || !Number.isInteger(navSectionOrder))) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, 'nav_section_order must be an integer when provided.')
+    }
+    const navGroupOrder = record.nav_group_order
+    if (options.navGroup && navGroupOrder !== undefined && navGroupOrder !== null && (typeof navGroupOrder !== 'number' || !Number.isInteger(navGroupOrder))) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, 'nav_group_order must be an integer when provided.')
+    }
+    const result: Record<string, string | number | boolean | null> = {
+      [idKey]: requiredString(record, idKey),
+      nav_order: navOrder,
+    }
+    if (Object.prototype.hasOwnProperty.call(record, 'nav_section')) {
+      result.nav_section = optionalNullableString(record, 'nav_section') ?? null
+    }
+    if (Object.prototype.hasOwnProperty.call(record, 'nav_title')) {
+      result.nav_title = optionalNullableString(record, 'nav_title') ?? null
+    }
+    if (Object.prototype.hasOwnProperty.call(record, 'nav_section_order')) {
+      result.nav_section_order = navSectionOrder === null ? null : (typeof navSectionOrder === 'number' ? navSectionOrder : undefined) ?? null
+    }
+    if (Object.prototype.hasOwnProperty.call(record, 'hide_from_nav')) {
+      result.hide_from_nav = record.hide_from_nav === null ? null : Boolean(record.hide_from_nav)
+    }
+    if (options.navGroup) {
+      if (Object.prototype.hasOwnProperty.call(record, 'nav_group')) {
+        result.nav_group = optionalNullableString(record, 'nav_group') ?? null
+      }
+      if (Object.prototype.hasOwnProperty.call(record, 'nav_group_order')) {
+        result.nav_group_order = navGroupOrder === null ? null : (typeof navGroupOrder === 'number' ? navGroupOrder : undefined) ?? null
+      }
+    }
+    return result
+  })
 }
 
 interface ToolFileReference {
@@ -410,7 +576,57 @@ export async function executePlatformMcpToolCall(
       const assetId = requiredString(rawArguments, 'asset_id')
       const asset = (await listPlatformMediaAssets(user.db, { id: assetId, limit: 1 }))[0] ?? null
       if (!asset) throw mcpProtocolError(MCP_ERROR.invalidParams, 'Platform media asset not found.')
-      await deleteMediaAsset(user.db, user.env, assetId, PLATFORM_MEDIA_SITE_ID)
+      await deleteMediaAsset(user.db, user.env, assetId, PLATFORM_MEDIA_SITE_ID, user.userId)
+      return { success: true }
+    }
+    case 'get_content_document_outline': {
+      const document = await resolveContentDocument(user.db, rawArguments)
+      return {
+        document: {
+          id: document.id,
+          owner_type: document.owner_type,
+          owner_id: document.owner_id,
+          draft_revision_id: document.draft_revision_id,
+          published_revision_id: document.published_revision_id,
+          updated_at: document.updated_at,
+        },
+        blocks: await getContentOutline(user.db, document.id),
+      }
+    }
+    case 'get_content_block':
+      return { block: await getFormattedContentBlock(user.db, requiredString(rawArguments, 'block_id')) }
+    case 'append_content_block': {
+      const document = await resolveContentDocument(user.db, rawArguments)
+      return await appendContentBlock(user.db, document.id, {
+        after_block_id: optionalNullableString(rawArguments, 'after_block_id'),
+        type: optionalContentBlockType(rawArguments, 'type'),
+        data: requiredObject(rawArguments, 'data'),
+        parent_block_id: optionalNullableString(rawArguments, 'parent_block_id'),
+        level: optionalNullableNumber(rawArguments, 'level'),
+        createdBy: user.userId,
+        label: 'MCP block append',
+      })
+    }
+    case 'replace_content_block':
+      return await replaceContentBlock(user.db, requiredString(rawArguments, 'block_id'), {
+        expected_updated_at: requiredString(rawArguments, 'expected_updated_at'),
+        data: requiredObject(rawArguments, 'data'),
+        createdBy: user.userId,
+        label: 'MCP block replace',
+      })
+    case 'delete_content_block':
+      return await deleteContentBlock(user.db, requiredString(rawArguments, 'block_id'), {
+        expected_updated_at: requiredString(rawArguments, 'expected_updated_at'),
+        createdBy: user.userId,
+        label: 'MCP block delete',
+      })
+    case 'render_content_preview': {
+      const document = await resolveContentDocument(user.db, rawArguments)
+      return await renderContentPreview(user.db, document.id)
+    }
+    case 'publish_content_revision': {
+      const document = await resolveContentDocument(user.db, rawArguments)
+      await publishContentDocumentRevision(user.db, document.id)
       return { success: true }
     }
     case 'list_platform_blog_posts':
@@ -423,6 +639,8 @@ export async function executePlatformMcpToolCall(
         body: requiredString(rawArguments, 'body'),
         excerpt: optionalString(rawArguments, 'excerpt') ?? null,
         category: optionalString(rawArguments, 'category') ?? null,
+        ...navMetadataInput(rawArguments),
+        seo_title: optionalString(rawArguments, 'seo_title') ?? null,
         seo_description: optionalString(rawArguments, 'seo_description') ?? null,
         seo_keywords: optionalString(rawArguments, 'seo_keywords') ?? null,
         canonical_url: optionalString(rawArguments, 'canonical_url') ?? null,
@@ -437,6 +655,8 @@ export async function executePlatformMcpToolCall(
         body: optionalString(rawArguments, 'body'),
         excerpt: optionalString(rawArguments, 'excerpt'),
         category: optionalString(rawArguments, 'category'),
+        ...navMetadataInput(rawArguments),
+        seo_title: optionalString(rawArguments, 'seo_title'),
         seo_description: optionalString(rawArguments, 'seo_description'),
         seo_keywords: optionalString(rawArguments, 'seo_keywords'),
         canonical_url: optionalString(rawArguments, 'canonical_url'),
@@ -450,6 +670,8 @@ export async function executePlatformMcpToolCall(
       return await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), { publish: true })
     case 'unpublish_platform_blog_post':
       return await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), { unpublish: true })
+    case 'reorder_platform_blog_posts':
+      return await reorderPlatformBlogPosts(user.db, reorderItems(rawArguments, 'post_id') as Array<{ post_id: string; nav_section?: string | null; nav_title?: string | null; nav_order: number; nav_section_order?: number | null; hide_from_nav?: boolean | null }>)
     case 'delete_platform_blog_post':
       return await deletePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'))
     case 'list_platform_docs':
@@ -462,6 +684,9 @@ export async function executePlatformMcpToolCall(
         body: requiredString(rawArguments, 'body'),
         excerpt: optionalString(rawArguments, 'excerpt') ?? null,
         category: optionalString(rawArguments, 'category') ?? null,
+        ...navMetadataInput(rawArguments),
+        nav_group: rawArguments.nav_group === null ? null : optionalString(rawArguments, 'nav_group') ?? null,
+        nav_group_order: optionalNullableNumber(rawArguments, 'nav_group_order') ?? null,
         seo_description: optionalString(rawArguments, 'seo_description') ?? null,
         seo_keywords: optionalString(rawArguments, 'seo_keywords') ?? null,
         canonical_url: optionalString(rawArguments, 'canonical_url') ?? null,
@@ -479,6 +704,9 @@ export async function executePlatformMcpToolCall(
         body: optionalString(rawArguments, 'body'),
         excerpt: optionalString(rawArguments, 'excerpt'),
         category: optionalString(rawArguments, 'category'),
+        ...navMetadataInput(rawArguments),
+        nav_group: rawArguments.nav_group === null ? null : optionalString(rawArguments, 'nav_group'),
+        nav_group_order: optionalNullableNumber(rawArguments, 'nav_group_order'),
         seo_description: optionalString(rawArguments, 'seo_description'),
         seo_keywords: optionalString(rawArguments, 'seo_keywords'),
         canonical_url: optionalString(rawArguments, 'canonical_url'),
@@ -495,6 +723,8 @@ export async function executePlatformMcpToolCall(
       return await updatePlatformDoc(user.db, requiredString(rawArguments, 'doc_id'), { publish: true })
     case 'unpublish_platform_doc':
       return await updatePlatformDoc(user.db, requiredString(rawArguments, 'doc_id'), { unpublish: true })
+    case 'reorder_platform_docs':
+      return await reorderPlatformDocs(user.db, reorderItems(rawArguments, 'doc_id', { navGroup: true }) as Array<{ doc_id: string; nav_section?: string | null; nav_title?: string | null; nav_order: number; nav_section_order?: number | null; nav_group?: string | null; nav_group_order?: number | null; hide_from_nav?: boolean | null }>)
     case 'delete_platform_doc':
       return await deletePlatformDoc(user.db, requiredString(rawArguments, 'doc_id'))
     default:

@@ -28,6 +28,7 @@ const { values: args } = parseArgs({
     url: { type: "string" },
     vertical: { type: "string", default: "restaurant" },
     "site-id": { type: "string" },
+    "tenant-slug": { type: "string" },
     slug: { type: "string" },
     "out-dir": { type: "string" },
     "evidence-dir": { type: "string" },
@@ -54,13 +55,14 @@ const OUT_DIR =
 if (VERTICAL === "professional_service") {
   const blawbyArgs = ["scripts/verify-blawby-site.mjs", "--url", BASE];
   if (SITE_ID) blawbyArgs.push("--site-id", SITE_ID);
+  if (args["tenant-slug"]) blawbyArgs.push("--tenant-slug", args["tenant-slug"]);
 
   const importManifest = OUT_DIR ? join(OUT_DIR, "blawby-import.json") : null;
   if (importManifest && existsSync(importManifest)) {
     blawbyArgs.push("--import-manifest", importManifest);
   }
 
-  const evidenceDir = args["evidence-dir"] ?? OUT_DIR ?? null;
+  const evidenceDir = args["evidence-dir"] ?? (args["require-screenshots"] ? OUT_DIR : null);
   if (evidenceDir) {
     blawbyArgs.push("--evidence-dir", evidenceDir);
   }
@@ -74,7 +76,16 @@ if (VERTICAL === "professional_service") {
   const result = spawnSync(process.execPath, blawbyArgs, {
     cwd: process.cwd(),
     stdio: "inherit",
+    timeout: 10 * 60 * 1000,
   });
+  if (result.error?.code === "ETIMEDOUT") {
+    console.error("Blawby verifier timed out after 10 minutes.");
+    process.exit(124);
+  }
+  if (result.error) {
+    console.error(`Blawby verifier failed to launch: ${result.error.message}`);
+    process.exit(1);
+  }
   process.exit(result.status ?? 1);
 }
 

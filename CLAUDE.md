@@ -75,6 +75,38 @@ Cloudflare D1 rejects `BEGIN`/`COMMIT`/`ROLLBACK` sent as raw SQL.
 - For write sequences that depend on intermediate reads, run statements sequentially and use compensating cleanup in `catch`.
 - If a D1 write path wraps multiple statements in `BEGIN`/`COMMIT`, it is broken.
 
+### Nested SSR self-fetch loses Cloudflare bindings
+
+In this Cloudflare Workers/Nitro deployment, a page's server-side data call that goes through Nitro's internal request dispatch (bare `$fetch()`, or `useFetch()`/`useAsyncData()` calling `$fetch` under the hood during SSR) does **not** go through the Workers `fetch()` entrypoint that attaches `event.context.cloudflare.env`. `cloudflareEnv(event)` then resolves `db: undefined` for that nested request only, and the API 500s with `Database not available` — deterministically in production, not transient, and often invisible in `nuxt dev` since local dev binds env differently.
+
+This has hit the same way at least three times: `pages/docs/[...segments].vue` (first fixed in `7be331e5` via `useRequestFetch()`, later escalated — see below), `pages/blog/[category]/[slug].vue`/`pages/blog/[slug].vue`, and `pages/locations/[slug]/reviews/[reviewId].vue`.
+
+**`useRequestFetch()` alone is not reliable enough — it was tried first and escalated away from in both prior incidents.** The proven fix, currently live in `pages/blog/[category]/[slug].vue` and `pages/docs/[...segments].vue`, is to bypass the self-fetch entirely on the server: import the query logic as a plain server util function and call it directly against `cloudflareEnv(requestEvent).db`, inside `useAsyncData`:
+
+```ts
+const requestEvent = useRequestEvent()
+const { data } = await useAsyncData(key, async () => {
+  if (import.meta.server) {
+    if (!requestEvent) return null
+    const [{ cloudflareEnv }, { getMyThing }] = await Promise.all([
+      import('~/server/utils/api-response'),
+      import('~/server/utils/my-domain-util'),
+    ])
+    const db = cloudflareEnv(requestEvent).db
+    if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+    return await getMyThing(db, /* route params */)
+  }
+  const response = await $fetch<ResponseType>('/api/public/...')
+  return response?.thing ?? null
+})
+```
+
+This requires the API route's query logic to live in an importable `server/utils/*.ts` function (not inline in the route handler) so both the route and the page's server-side branch call the same code — the API route becomes a thin wrapper around it. This also satisfies the "shared server/domain utilities" rule under Platform Strategy above: MCP/ChowBot/dashboard code paths that need the same record get the same function.
+
+- Any new page that does a **server-side detail fetch** (single-item route, not the shared bootstrap payload) to an internal API must use this pattern, not bare `useFetch(url, { server: true })` and not bare `useRequestFetch()` by itself.
+- `useBootstrap()` (`composables/useBootstrap.ts`) already implements the weaker `useRequestFetch()` mitigation for the shared per-site bootstrap payload, with a comment noting it hasn't reproduced the failure yet for that route's shape — reuse it instead of a bespoke fetch where the data is already covered by bootstrap, but treat it as unproven if a detail page built on the same idea starts failing.
+- Symptom to recognize: API works when hit directly (curl, Postman) and the index/list page for the same resource renders fine (because it goes through `useBootstrap()`), but the equivalent detail page silently shows a "not found" state in production only, and the failure doesn't reproduce in `nuxt dev`.
+
 ---
 
 ## Email & WhatsApp Notifications

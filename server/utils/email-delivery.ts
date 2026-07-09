@@ -16,6 +16,14 @@ type EmailDeliveryEnv = {
 // to seeded e2e fixture addresses like user-mcp-growth@example.test, bouncing and burning
 // sending-domain reputation.
 export function getEmailDeliveryMode(env: EmailDeliveryEnv | null | undefined | unknown): EmailDeliveryMode {
+  // `nuxt dev` reads wrangler.toml's top-level [vars] — the same block
+  // `wrangler deploy` (no --env) uses for production — so a local dev session
+  // silently inherits EMAIL_DELIVERY_MODE=provider unless .dev.vars happens to
+  // override it. That override has drifted/gone missing before (see the 2026-07
+  // incident note below) and burned real Resend sends to e2e/admin-notification
+  // addresses with localhost links. Hard-stop it at the code level instead of
+  // trusting every developer's .dev.vars to have the right line.
+  if (import.meta.dev) return 'log_only'
   const mode = typeof env === 'object' && env !== null && 'EMAIL_DELIVERY_MODE' in env
     ? (env as { EMAIL_DELIVERY_MODE?: string }).EMAIL_DELIVERY_MODE
     : undefined
@@ -52,9 +60,20 @@ export function logOnlyEmailProviderId(prefix = 'email'): string {
 // it reaches Resend.
 const RESERVED_TEST_TLDS = new Set(['test', 'example', 'invalid', 'localhost'])
 
+// RFC 2606 also reserves these exact second-level domains under otherwise-real TLDs
+// (example.com/net/org) — these are the ones actually seen bouncing in production
+// (wa-verify@example.com, verify-guest@example.com), since their TLD is "com", not "example".
+const RESERVED_TEST_DOMAINS = new Set(['example.com', 'example.net', 'example.org'])
+
 export function isReservedTestDomain(email: string): boolean {
   const domain = email.trim().toLowerCase().split('@')[1]
   if (!domain) return false
+  if (RESERVED_TEST_DOMAINS.has(domain)) return true
   const tld = domain.split('.').pop() ?? ''
-  return RESERVED_TEST_TLDS.has(tld)
+  if (RESERVED_TEST_TLDS.has(tld)) return true
+  // Check for subdomains under reserved roots (e.g., mail.example.com, wa-verify.example.com)
+  for (const reservedDomain of RESERVED_TEST_DOMAINS) {
+    if (domain === reservedDomain || domain.endsWith(`.${reservedDomain}`)) return true
+  }
+  return false
 }

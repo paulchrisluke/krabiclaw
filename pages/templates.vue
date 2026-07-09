@@ -283,21 +283,22 @@ const featureScreenshots = [
 const included = [
   'Homepage with hero, location grid, and review highlights',
   'Location sub-pages: offerings, reviews, photos, Q&A, contact',
-  'Google Business data sync (Pro plan)',
+  'Unified Inbox for reservations and inquiries',
+  'Google Business data sync (Growth plan)',
   'ChatGPT Plugin for content management',
   'Reservation form',
   'Brand story / about page',
   'SEO-optimised with schema markup',
   'Mobile-first responsive layout',
   'Dark mode support',
-  'Multi-location support (Pro plan)',
-  'Custom domain (Pro plan)',
+  'Multi-location support (Growth plan)',
+  'Custom domain (Growth plan)',
   'Starter AI credits on signup'
 ]
 
 const specs = [
   { label: 'Price', value: 'Free' },
-  { label: 'Locations', value: '1 free / unlimited Pro' },
+  { label: 'Locations', value: '1 free / unlimited Growth' },
   { label: 'Mobile', value: 'Fully responsive' },
   { label: 'Languages', value: 'EN / TH' }
 ]

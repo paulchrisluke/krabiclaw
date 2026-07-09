@@ -360,28 +360,57 @@
 
         <!-- Real reviews -->
         <div v-if="featuredReviews.length" class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div
+          <SayaReviewCard
             v-for="review in featuredReviews"
             :key="review.id"
-            class="bg-elevated p-8"
-          >
-            <div class="mb-3 flex gap-1">
-              <SayaIcon
-                v-for="s in 5"
-                :key="s"
-                name="star"
-                solid
-                class="size-3.5"
-                :class="s <= googleReviewRating(review) ? 'text-primary' : 'text-muted'"
-              />
-            </div>
-            <p class="text-sm leading-relaxed text-default">"{{ review.comment?.text || review.content }}"</p>
-            <div class="mt-6 border-t border-default pt-4">
-              <p class="text-sm font-medium text-default">{{ review.reviewer?.displayName || review.author_name }}</p>
-            </div>
-          </div>
+            :review="review"
+            variant="compact"
+          />
         </div>
       </section>
+
+      <!-- ── Blog highlights ──────────────────────────────────── -->
+      <AppSection v-if="recentBlogPosts.length" bg="black" padding="xl">
+        <div class="mb-16 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div class="max-w-2xl">
+            <p class="saya-kicker mb-6 text-inverted/60">From the blog</p>
+            <h2 class="saya-display-md text-inverted">Planning ideas, updates, and stories from the studio.</h2>
+          </div>
+          <NuxtLink to="/blog" class="inline-flex text-sm font-medium text-inverted no-underline hover:underline">
+            Visit the blog
+          </NuxtLink>
+        </div>
+
+        <div class="grid gap-6 lg:grid-cols-3">
+          <NuxtLink
+            v-for="post in recentBlogPosts"
+            :key="post.slug"
+            :to="`/blog/${post.slug}`"
+            class="group block overflow-hidden rounded-xl border border-inverted/10 bg-inverted/5 no-underline transition hover:-translate-y-0.5 hover:border-inverted/20"
+          >
+            <div v-if="post.image" class="aspect-4/3 overflow-hidden bg-inverted/10">
+              <img
+                :src="post.image"
+                :alt="post.title"
+                class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              >
+            </div>
+            <div class="p-6">
+              <div class="mb-3 flex flex-wrap items-center gap-3">
+                <span v-if="post.category" class="rounded bg-inverted/10 px-2 py-1 text-xs font-medium text-inverted/70">
+                  {{ post.category }}
+                </span>
+                <span v-if="post.publishedAt" class="text-sm text-inverted/40">
+                  <NuxtTime :datetime="post.publishedAt" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
+                </span>
+              </div>
+              <h3 class="text-2xl font-semibold leading-tight text-inverted">{{ post.title }}</h3>
+              <p v-if="post.excerpt" class="mt-3 text-sm leading-relaxed text-inverted/60">{{ post.excerpt }}</p>
+              <p class="mt-4 text-sm font-medium text-inverted">Read article</p>
+            </div>
+          </NuxtLink>
+        </div>
+      </AppSection>
 
       <!-- ── CTA strip (strict component) ───────────────────── -->
       <LazySayaCTA
@@ -431,6 +460,7 @@ const plans = computed(() => isPlatform ? platformPlans.value : null)
 
 const { isAuthenticated } = useAuth()
 const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
+const { resolveMedia } = useMedia()
 
 const { resolveComponent } = useDynamicComponent()
 
@@ -446,7 +476,7 @@ const features = [
   { icon: 'sparkles', title: 'Beautiful themes', body: 'Conversion-optimized themes for local businesses. Pick one, swap a color, you\'re live.' },
   { icon: 'globe', title: 'Google Business sync', body: 'Hours, photos, offerings — pushed to Google so guests find the right info every time.' },
   { icon: 'calendar', title: 'Bookings + waitlist', body: 'Take bookings 24/7 with WhatsApp confirmations. Walk-ins go on the waitlist automatically.' },
-  { icon: 'shopping-bag', title: 'Online ordering', body: 'Pickup & delivery with no commission. Stripe payouts straight to your bank.' },
+  { icon: 'inbox', title: 'Full Inbox', body: 'Manage all your reservations, bookings, and contact inquiries from a single, unified inbox.' },
   { icon: 'bar-chart', title: 'Real-time insights', body: 'See visits, top pages, and busy hours — ask ChatGPT or check the analytics tab.' },
 ]
 // Validate tenant context ONLY for tenant sites
@@ -469,6 +499,7 @@ const {
   menuItemsBySection,
   experiencesList,
   contentBlocks,
+  blogList,
 } = useBootstrap({ enabled: useSayaBootstrap })
 
 const locations = computed(() => bootstrapLocations.value)
@@ -556,6 +587,7 @@ if (isPlatform) {
 // SEO for tenant sites: set ogUrl to the actual request URL so custom domains share correctly.
 if (!isPlatform && siteId && !isBlawbyPage.value) {
   const seoTitle = computed(() => {
+    if (bootstrapConfig.value?.seo_title) return bootstrapConfig.value.seo_title
     const primary = (restaurantName.value || '').trim()
     const secondary = (businessTitle.value || 'Business').trim() || 'Business'
     if (!primary || primary.toLowerCase() === secondary.toLowerCase()) {
@@ -565,8 +597,10 @@ if (!isPlatform && siteId && !isBlawbyPage.value) {
   })
 
   const seoDescription = computed(() =>
-    truncateForSeo(businessSubtitle.value || 'Professional business website with photos, updates and reviews.', 160)
+    truncateForSeo(bootstrapConfig.value?.seo_description || businessSubtitle.value || 'Professional business website with photos, updates and reviews.', 160)
   )
+
+  const canonicalUrl = useSeoUrl(() => bootstrapConfig.value?.canonical_url || '/')
 
   useSeoMeta({
     title: seoTitle,
@@ -576,9 +610,14 @@ if (!isPlatform && siteId && !isBlawbyPage.value) {
     ogSiteName: computed(() => site?.brand_name || restaurantName.value),
     twitterTitle: seoTitle,
     twitterDescription: seoDescription,
-    ogImage: useSharedOgImage(() => hero.value.image),
+    ogImage: useSharedOgImage(() => bootstrapConfig.value?.og_image_url || hero.value.image),
     ogUrl: currentPageUrl,
-    ogType: 'website'
+    ogType: 'website',
+    robots: () => bootstrapConfig.value?.robots || undefined,
+  })
+
+  useHead({
+    link: [{ rel: 'canonical', href: canonicalUrl }],
   })
 }
 
@@ -619,7 +658,15 @@ const defaultCurrency = computed(() => bootstrapConfig.value.default_currency ||
 const reviewFilter = ref('all')
 
 const hasGoogleBusiness = computed(() => !!googleBusiness.value?.business)
-const featuredReviews = computed(() => googleReviews.value.slice(0, 3))
+const featuredReviews = computed(() =>
+  googleReviews.value.slice(0, 3).map((review, i) => ({
+    id: review.id ?? review.name ?? i,
+    author: review.reviewer?.displayName || review.author_name || 'Anonymous',
+    content: review.comment?.text || review.content || '',
+    rating: googleReviewRating(review),
+    locationTitle: locations.value.length > 1 ? review.location_title || null : null,
+  }))
+)
 
 // Recent posts — shown in the "Lately" section (posts only, each links to /posts)
 const recentPosts = computed(() => {
@@ -633,6 +680,20 @@ const recentPosts = computed(() => {
     wide: i === 0,
   }))
 })
+
+const recentBlogPosts = computed(() =>
+  (blogList.value || [])
+    .filter(post => post.slug)
+    .slice(0, 3)
+    .map((post) => ({
+      slug: String(post.slug || ''),
+      title: String(post.title || 'Untitled'),
+      excerpt: typeof post.excerpt === 'string' ? post.excerpt : '',
+      category: typeof post.category === 'string' ? post.category : '',
+      publishedAt: typeof post.published_at === 'string' ? post.published_at : null,
+      image: resolveMedia(post.featured_image).url,
+    }))
+)
 
 const selectedPostId = ref(null)
 const selectedPost = computed(() => selectedPostId.value ? recentPosts.value.find(p => p.id === selectedPostId.value) : null)

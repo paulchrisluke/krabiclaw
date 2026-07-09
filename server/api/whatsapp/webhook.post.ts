@@ -16,8 +16,9 @@ import {
   type ChowBotConversation,
 } from '~/server/utils/chowbot-conversations'
 import { queryFirst } from '~/server/db'
-import { findSubmissionByPhone, insertInboundSubmissionReply, insertSubmissionMessage } from '~/server/utils/submission-messages'
-import { insertDashboardNotification } from '~/server/utils/notifications'
+import { ensureGuestThread, getGuestThreadSource } from '~/server/utils/guest-threads'
+import { notifyGuestThreadReply } from '~/server/utils/notifications'
+import { findSubmissionByPhone, insertInboundSubmissionReply } from '~/server/utils/submission-messages'
 
 interface WhatsAppMessage {
   id: string
@@ -45,6 +46,12 @@ interface UserRow {
   id: string
   phoneNumber: string
   phoneNumberVerified: number
+}
+
+function platformLoginUrl(env: ApiRecord): string {
+  const raw = String(env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'https://krabiclaw.com').trim()
+  const origin = /^https?:\/\//i.test(raw) ? raw.replace(/\/$/, '') : `https://${raw.replace(/\/$/, '')}`
+  return `${origin}/login`
 }
 
 function inboundMessages(payload: WhatsAppPayload): WhatsAppMessage[] {
@@ -201,13 +208,30 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
             metaMessageId: message.id,
             from: toPhone,
           })
+          const thread = await ensureGuestThread(db, match.submissionType, match.submissionId)
+          const source = await getGuestThreadSource(db, match.submissionType, match.submissionId)
+          if (source) {
+            await notifyGuestThreadReply(env, db, {
+              organizationId: match.organizationId,
+              siteId: match.siteId,
+              locationId: source.location_id,
+              threadId: thread.id,
+              submissionType: match.submissionType,
+              submissionId: match.submissionId,
+              guestName: source.guest_name,
+              guestEmail: source.guest_email,
+              guestPhone: source.guest_phone,
+              inboundChannel: 'whatsapp',
+              messagePreview: text,
+            })
+          }
         } catch (err) {
           console.error('[whatsapp] Failed to insert guest reply for submission:', err)
         }
       }
       return
     }
-    await reply(null, env, toPhone, 'This WhatsApp number is not linked to a verified KrabiClaw account. Sign in once with WhatsApp OTP, then message ChowBot again.')
+    await reply(null, env, toPhone, `To continue, open KrabiClaw: ${platformLoginUrl(env)}`)
     return
   }
 

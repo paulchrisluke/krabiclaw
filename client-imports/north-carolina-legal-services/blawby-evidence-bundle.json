@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-07-09T06:06:24.392Z",
+  "checked_at": "2026-07-09T21:45:59.864Z",
   "base_url": "http://ncls.localhost:3000",
   "site_id": "site-ncls-blawby",
   "ok": true,
@@ -8,134 +8,134 @@
       "route": "/",
       "url": "http://ncls.localhost:3000/",
       "status": 200,
-      "duration_ms": 176,
-      "bytes": 126153
+      "duration_ms": 132,
+      "bytes": 128138
     },
     {
       "route": "/services",
       "url": "http://ncls.localhost:3000/services",
       "status": 200,
-      "duration_ms": 21,
-      "bytes": 121090
+      "duration_ms": 20,
+      "bytes": 121427
     },
     {
       "route": "/pricing",
       "url": "http://ncls.localhost:3000/pricing",
       "status": 200,
-      "duration_ms": 32,
-      "bytes": 125769
+      "duration_ms": 22,
+      "bytes": 123914
     },
     {
       "route": "/donate",
       "url": "http://ncls.localhost:3000/donate",
       "status": 200,
-      "duration_ms": 20,
-      "bytes": 119133
+      "duration_ms": 17,
+      "bytes": 119470
     },
     {
       "route": "/schedule",
       "url": "http://ncls.localhost:3000/schedule",
       "status": 200,
-      "duration_ms": 20,
-      "bytes": 118721
+      "duration_ms": 35,
+      "bytes": 119058
     },
     {
       "route": "/contact",
       "url": "http://ncls.localhost:3000/contact",
       "status": 200,
-      "duration_ms": 42,
-      "bytes": 120381
+      "duration_ms": 16,
+      "bytes": 120718
     },
     {
       "route": "/blog",
       "url": "http://ncls.localhost:3000/blog",
       "status": 200,
-      "duration_ms": 34,
-      "bytes": 121958
+      "duration_ms": 31,
+      "bytes": 122458
     },
     {
       "route": "/policies/privacy",
       "url": "http://ncls.localhost:3000/policies/privacy",
       "status": 200,
-      "duration_ms": 18,
-      "bytes": 135520
+      "duration_ms": 19,
+      "bytes": 135857
     },
     {
       "route": "/policies/terms",
       "url": "http://ncls.localhost:3000/policies/terms",
       "status": 200,
-      "duration_ms": 22,
-      "bytes": 139326
+      "duration_ms": 35,
+      "bytes": 139663
     },
     {
       "route": "/third-party-notices",
       "url": "http://ncls.localhost:3000/third-party-notices",
       "status": 200,
-      "duration_ms": 19,
-      "bytes": 119338
+      "duration_ms": 15,
+      "bytes": 119675
     },
     {
       "route": "/services/family",
       "url": "http://ncls.localhost:3000/services/family",
       "status": 200,
-      "duration_ms": 36,
-      "bytes": 131422
+      "duration_ms": 20,
+      "bytes": 131759
     },
     {
       "route": "/services/small-business-and-nonprofits",
       "url": "http://ncls.localhost:3000/services/small-business-and-nonprofits",
       "status": 200,
-      "duration_ms": 25,
-      "bytes": 131015
+      "duration_ms": 21,
+      "bytes": 131352
     },
     {
       "route": "/services/employment",
       "url": "http://ncls.localhost:3000/services/employment",
       "status": 200,
-      "duration_ms": 20,
-      "bytes": 131680
+      "duration_ms": 14,
+      "bytes": 132017
     },
     {
       "route": "/services/tenant-rights",
       "url": "http://ncls.localhost:3000/services/tenant-rights",
       "status": 200,
-      "duration_ms": 24,
-      "bytes": 125509
+      "duration_ms": 25,
+      "bytes": 125846
     },
     {
       "route": "/services/probate-and-estate",
       "url": "http://ncls.localhost:3000/services/probate-and-estate",
       "status": 200,
-      "duration_ms": 32,
-      "bytes": 129474
+      "duration_ms": 25,
+      "bytes": 129811
     },
     {
       "route": "/services/special-education-and-iep-advocacy",
       "url": "http://ncls.localhost:3000/services/special-education-and-iep-advocacy",
       "status": 200,
-      "duration_ms": 22,
-      "bytes": 124102
+      "duration_ms": 20,
+      "bytes": 124439
     },
     {
       "route": "/about",
       "url": "http://ncls.localhost:3000/about",
       "status": 200,
-      "duration_ms": 19,
-      "bytes": 119651
+      "duration_ms": 29,
+      "bytes": 119988
     },
     {
       "route": "/article/getting-a-divorce-in-north-carolina",
       "url": "http://ncls.localhost:3000/article/getting-a-divorce-in-north-carolina",
       "status": 200,
-      "duration_ms": 48,
-      "bytes": 145734
+      "duration_ms": 21,
+      "bytes": 146071
     },
     {
       "route": "/article/equitable-distribution-in-north-carolina-divorces",
       "url": "http://ncls.localhost:3000/article/equitable-distribution-in-north-carolina-divorces",
       "status": 200,
-      "duration_ms": 26,
-      "bytes": 139808
+      "duration_ms": 14,
+      "bytes": 140145
     }
   ],
   "checks": [

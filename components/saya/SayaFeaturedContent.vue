@@ -21,14 +21,11 @@
         class="group relative block overflow-hidden bg-elevated no-underline text-default transition hover:opacity-90"
       >
         <div class="relative aspect-square overflow-hidden bg-muted">
-          <div
+          <SayaBadgeUnavailable
             v-if="item.unavailable"
-            class="absolute inset-0 z-10 flex items-center justify-center bg-black/50"
-          >
-            <span class="rounded-full bg-white px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-default">
-              Temporarily unavailable
-            </span>
-          </div>
+            overlay
+            text="Temporarily unavailable"
+          />
           <video
             v-if="item.imageKind === 'video' && item.image && clientReady"
             :src="item.image"
@@ -65,7 +62,7 @@
       <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <SayaEmptyExample v-for="(example, i) in emptyState.examples" :key="i" :item="example" aspect="square" />
       </div>
-      <SayaMcpHint :hint="emptyState.hint" />
+      <ChowBotPromptTrigger :prompt="emptyState.hint" />
     </template>
   </AppSection>
 </template>
@@ -73,7 +70,7 @@
 <script setup lang="ts">
 import AppSection from '~/components/ui/AppSection.vue'
 import SayaEmptyExample from '~/components/saya/SayaEmptyExample.vue'
-import SayaMcpHint from '~/components/saya/SayaMcpHint.vue'
+import ChowBotPromptTrigger from '~/components/chowbot/ChowBotPromptTrigger.vue'
 import { sayaEmptyStates } from '~/config/saya-empty-states'
 
 interface Props {

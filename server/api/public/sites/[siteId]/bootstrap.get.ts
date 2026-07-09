@@ -35,7 +35,7 @@ import {
 } from "~/server/utils/booking-policies";
 import { getCloudflareWaitUntil } from "~/server/utils/mcp-route-helpers";
 import { isPreviewContext } from "~/server/utils/tenant-hosts";
-import { getOwnerEmail } from "~/server/utils/notifications";
+import { getPublishedPosts } from "~/server/utils/post-management";
 
 function groupContentBlocks(rows: SiteContent[]): Array<SiteContent & { _section: string }> {
   const groups: Record<string, SiteContent & { _section: string }> = {}
@@ -327,11 +327,16 @@ export default defineEventHandler(async (event) => {
       brand_description: string | null;
       logo_url: string | null;
       og_image_url: string | null;
+      seo_title: string | null;
+      seo_description: string | null;
+      canonical_url: string | null;
+      robots: string | null;
     }>(
       db,
       `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name,
               s.brand_description, COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
-              ma_og.public_url AS og_image_url
+              ma_og.public_url AS og_image_url,
+              s.seo_title, s.seo_description, s.canonical_url, s.robots
          FROM sites s
          LEFT JOIN media_assets ma_logo ON s.logo_asset_id = ma_logo.id AND ma_logo.status = 'active'
          LEFT JOIN media_assets ma_og ON s.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
@@ -373,12 +378,10 @@ export default defineEventHandler(async (event) => {
     idxLocale = -1,
     idxExpCount = -1;
   let idxReviews = -1,
-    idxPosts = -1,
     idxLocReviews = -1;
   let idxFullReviews = -1,
     idxPhotos = -1,
-    idxQa = -1,
-    idxLocPosts = -1;
+    idxQa = -1;
   let idxSourceContent = -1,
     idxContentTranslations = -1;
   let idxMenus = -1,
@@ -404,12 +407,16 @@ export default defineEventHandler(async (event) => {
                  bl.is_primary, bl.status, bl.city, bl.neighborhood,
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
                  bl.description, bl.short_description, bl.last_synced_at,
+                 bl.seo_title, bl.seo_description, bl.canonical_url, bl.robots,
                  ma_img.public_url AS hero_image_public_url,
                  ma_vid.public_url AS hero_video_public_url,
-                 ma_vid.thumbnail_url
+                 ma_vid.thumbnail_url,
+                 ma_og.public_url AS og_image_public_url
           FROM business_locations bl
           LEFT JOIN media_assets ma_img ON bl.hero_image_asset_id = ma_img.id AND ma_img.status = 'active'
           LEFT JOIN media_assets ma_vid ON bl.hero_video_asset_id = ma_vid.id AND ma_vid.status = 'active'
+          LEFT JOIN media_assets ma_og ON bl.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
+            AND ma_og.organization_id = bl.organization_id AND ma_og.site_id = bl.site_id
           WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
           ORDER BY bl.is_primary DESC, bl.title ASC`
       : `SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
@@ -417,8 +424,10 @@ export default defineEventHandler(async (event) => {
                  bl.is_primary, bl.status, bl.city, bl.neighborhood,
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
                  bl.description, bl.short_description, bl.last_synced_at,
+                 bl.seo_title, bl.seo_description, bl.canonical_url, bl.robots,
                  NULL AS hero_image_public_url, NULL AS hero_video_public_url,
-                 NULL AS thumbnail_url
+                 NULL AS thumbnail_url,
+                 NULL AS og_image_public_url
           FROM business_locations bl
           WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
           ORDER BY bl.is_primary DESC, bl.title ASC`,
@@ -509,10 +518,14 @@ export default defineEventHandler(async (event) => {
               mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
               mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured,
               mi.featured_sort_order, mi.sort_order, mi.allergens, mi.ingredients, mi.dietary_notes,
-              mi.preparation, mi.serving_note, mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
+              mi.preparation, mi.serving_note,
+              mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, ma_og.public_url AS og_image_public_url,
+              mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
        FROM menu_items mi
        JOIN menus m ON m.id = mi.menu_id
        LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
+       LEFT JOIN media_assets ma_og ON mi.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
+         AND ma_og.organization_id = m.organization_id AND ma_og.site_id = m.site_id
        WHERE m.organization_id = ? AND m.site_id = ? AND m.status = 'published'
        ORDER BY mi.sort_order, mi.name`,
       [orgId, siteId],
@@ -553,11 +566,14 @@ export default defineEventHandler(async (event) => {
                          e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
                          e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
                          e.status, e.sort_order, e.featured, e.featured_sort_order,
-                         e.seo_title, e.seo_description, e.created_at, e.updated_at,
-                         img.public_url AS image_url, vid.public_url AS video_url
+                         e.seo_title, e.seo_description, e.canonical_url, e.robots, e.created_at, e.updated_at,
+                         img.public_url AS image_url, vid.public_url AS video_url,
+                         og.public_url AS og_image_public_url
                   FROM experiences e
                   LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
                   LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
+                  LEFT JOIN media_assets og ON og.id = e.og_image_asset_id AND og.status = 'active'
+         AND og.organization_id = e.organization_id AND og.site_id = e.site_id
                   WHERE e.organization_id = ? AND e.site_id = ? AND e.status != 'inactive'`;
     if (page === "location" && locationId) {
       expSql += ` AND e.location_id = ?`;
@@ -575,11 +591,14 @@ export default defineEventHandler(async (event) => {
               e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
               e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
               e.status, e.sort_order, e.featured, e.featured_sort_order,
-              e.seo_title, e.seo_description, e.created_at, e.updated_at,
-              img.public_url AS image_url, vid.public_url AS video_url
+              e.seo_title, e.seo_description, e.canonical_url, e.robots, e.created_at, e.updated_at,
+              img.public_url AS image_url, vid.public_url AS video_url,
+              og.public_url AS og_image_public_url
        FROM experiences e
        LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
        LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
+       LEFT JOIN media_assets og ON og.id = e.og_image_asset_id AND og.status = 'active'
+         AND og.organization_id = e.organization_id AND og.site_id = e.site_id
        WHERE e.organization_id = ? AND e.site_id = ? AND e.slug = ?
        LIMIT 1`,
       [orgId, siteId, experienceSlug],
@@ -589,31 +608,18 @@ export default defineEventHandler(async (event) => {
   // Conditional
   if (needsGlobalReviews)
     idxReviews = push(
-      `SELECT author_name AS author, rating, content, created_at AS date
-       FROM reviews WHERE site_id = ? AND status = 'approved'
-       ORDER BY created_at DESC LIMIT 50`,
+      `SELECT r.author_name AS author, r.rating, r.content, r.created_at AS date,
+              r.location_id, bl.title AS location_title
+       FROM reviews r
+       LEFT JOIN business_locations bl ON bl.id = r.location_id
+       WHERE r.site_id = ? AND r.status = 'approved'
+       ORDER BY r.created_at DESC LIMIT 50`,
       [siteId],
     );
 
-  if (needsGlobalPosts)
-    idxPosts = push(
-      `SELECT p.id, p.title, p.body, p.published_at, ma.public_url, ma.kind
-       FROM posts p
-       LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
-       WHERE p.site_id = ? AND p.status = 'published'
-       ORDER BY p.published_at DESC LIMIT ${page === "posts" ? 50 : 6}`,
-      [siteId],
-    );
-
-  if (locationId && dataType === "posts")
-    idxLocPosts = push(
-      `SELECT p.id, p.title, p.body, p.published_at, p.created_at, ma.public_url, ma.kind
-       FROM posts p
-       LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
-       WHERE p.site_id = ? AND p.location_id = ? AND p.status = 'published'
-       ORDER BY p.published_at DESC LIMIT 50`,
-      [siteId, locationId],
-    );
+  // Posts are fetched separately via getPublishedPosts() below, which returns the fully
+  // formatted PublishedPostSummary shape (slug, canonical_url, gallery media) that this raw
+  // row shape doesn't have — no point running an equivalent query here just to discard it.
 
   if (locationId)
     idxLocReviews = push(
@@ -646,17 +652,21 @@ export default defineEventHandler(async (event) => {
       locationId ? [siteId, locationId] : [siteId],
     );
 
-  if (dataType === "blog")
+  if (dataType === "blog" || page === "home")
     idxBlogList = push(
+      // read_time_minutes approximates words as body length / 5 chars at 200wpm —
+      // avoids shipping the full post body to list views just to estimate read time.
       `SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords,
-              p.canonical_url, p.robots, p.published_at, p.featured_image_asset_id,
-              ma.public_url, ma.kind, ma.width, ma.height
+              p.canonical_url, p.robots, p.published_at, p.updated_at, u.name AS author_name, p.featured_image_asset_id,
+              ma.public_url, ma.kind, ma.width, ma.height,
+              CAST(MAX(1, ROUND((LENGTH(COALESCE(p.body, '')) / 5.0) / 200.0)) AS INTEGER) AS read_time_minutes
        FROM blog_posts p
+       LEFT JOIN user u ON u.id = p.author_id
        LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
        WHERE p.status = 'published' AND p.site_id = ?
        ORDER BY p.published_at IS NULL, p.published_at DESC, p.id DESC
-       LIMIT 50`,
-      [siteId],
+       LIMIT ?`,
+      [siteId, page === "home" ? 3 : 50],
     );
 
   if (dataType === "blogPost" && blogSlug)
@@ -702,10 +712,6 @@ export default defineEventHandler(async (event) => {
     idxReviews >= 0
       ? (batchResults[idxReviews] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
-  const postRows =
-    idxPosts >= 0
-      ? (batchResults[idxPosts] as { results: Record<string, unknown>[] })
-      : { results: [] as Record<string, unknown>[] };
   const locationReviewRows =
     idxLocReviews >= 0
       ? (batchResults[idxLocReviews] as { results: Record<string, unknown>[] })
@@ -721,10 +727,6 @@ export default defineEventHandler(async (event) => {
   const qaRows =
     idxQa >= 0
       ? (batchResults[idxQa] as { results: Record<string, unknown>[] })
-      : { results: [] as Record<string, unknown>[] };
-  const locPostRows =
-    idxLocPosts >= 0
-      ? (batchResults[idxLocPosts] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
   const localeRows = batchResults[idxLocale] as {
     results: {
@@ -918,13 +920,10 @@ export default defineEventHandler(async (event) => {
       ? (await attachAvailabilitySummaries(db, orgId, siteId, [experienceDetailRaw]))[0]
       : null;
 
-  // Locations rarely have their own email (Google Places API doesn't expose
-  // one) — fall back to the site's contact email, then the org owner's
-  // account email, so guests always have a way to reach someone.
-  const anyLocationMissingEmail = (locRows.results ?? []).some((loc) => !loc.email);
-  const fallbackEmail =
-    site.contact_email ??
-    (anyLocationMissingEmail ? await getOwnerEmail(db, site.organization_id) : null);
+  const [globalPublishedPosts, locationPublishedPosts] = await Promise.all([
+    needsGlobalPosts ? getPublishedPosts(db, siteId, env, page === "posts" ? 50 : 6) : Promise.resolve([]),
+    locationId && dataType === "posts" ? getPublishedPosts(db, siteId, env, 50, locationId) : Promise.resolve([]),
+  ]);
 
   // Shape locations
   const locations = (locRows.results ?? []).map((loc) => {
@@ -932,6 +931,7 @@ export default defineEventHandler(async (event) => {
     const heroImageUrl = loc.hero_image_public_url as string | null;
     const thumbnailUrl = loc.thumbnail_url as string | null;
     const publicUrl = heroVideoUrl || heroImageUrl || null;
+    const ogImagePublicUrl = loc.og_image_public_url as string | null;
 
     return {
       id: loc.id,
@@ -939,7 +939,7 @@ export default defineEventHandler(async (event) => {
       title: loc.title,
       address: parseJson(loc.address as string | null),
       phone: loc.phone,
-      email: (loc.email as string | null) ?? fallbackEmail,
+      email: (loc.email as string | null) ?? null,
       website_url: loc.website_url,
       maps_url: loc.maps_url,
       map_embed_url: calculateMapEmbedUrl({
@@ -971,6 +971,11 @@ export default defineEventHandler(async (event) => {
       grab_url: loc.grab_url || null,
       uber_eats_url: loc.uber_eats_url || null,
       foodpanda_url: loc.foodpanda_url || null,
+      seo_title: (loc.seo_title as string | null) ?? null,
+      seo_description: (loc.seo_description as string | null) ?? null,
+      canonical_url: (loc.canonical_url as string | null) ?? null,
+      robots: (loc.robots as string | null) ?? null,
+      og_image_public_url: ogImagePublicUrl,
     };
   });
 
@@ -984,11 +989,41 @@ export default defineEventHandler(async (event) => {
   if (site.brand_description) config.brand_description = site.brand_description;
   if (site.logo_url) config.logo_url = site.logo_url;
   if (site.og_image_url) config.og_image_url = site.og_image_url;
+  if (site.seo_title) config.seo_title = site.seo_title;
+  if (site.seo_description) config.seo_description = site.seo_description;
+  if (site.canonical_url) config.canonical_url = site.canonical_url;
+  if (site.robots) config.robots = site.robots;
 
   const primary =
     (locRows.results ?? []).find((l) => l.is_primary) ??
     locRows.results?.[0] ??
     null;
+
+  // Site-wide review summary: a review-count-weighted average across every verified
+  // location, not just the primary one — a site with several separately-synced
+  // locations should show a rating that represents the whole business, not one address.
+  const verifiedLocations = (locRows.results ?? []).filter(
+    (l) => l.last_synced_at && l.rating != null && l.review_count != null,
+  );
+  const siteReviewCount = verifiedLocations.reduce(
+    (sum, l) => sum + Number(l.review_count),
+    0,
+  );
+  const siteReviewSummary =
+    siteReviewCount > 0
+      ? {
+          averageRating:
+            Math.round(
+              (verifiedLocations.reduce(
+                (sum, l) => sum + Number(l.rating) * Number(l.review_count),
+                0,
+              ) /
+                siteReviewCount) *
+                10,
+            ) / 10,
+          totalReviewCount: siteReviewCount,
+        }
+      : null;
 
   const googleBusiness = {
     business: primary
@@ -1004,24 +1039,12 @@ export default defineEventHandler(async (event) => {
               ? { latitude: primary.latitude, longitude: primary.longitude }
               : null,
           profile: { description: primary.description },
-          reviewSummary:
-            primary.last_synced_at && primary.rating != null && primary.review_count != null
-              ? {
-                  averageRating: primary.rating,
-                  totalReviewCount: primary.review_count,
-                }
-              : null,
+          reviewSummary: siteReviewSummary,
         }
       : null,
     reviews: reviewRows.results ?? [],
     media: [],
-    posts: (postRows.results ?? []).map((p) => ({
-      name: `posts/${p.id}`,
-      summary: p.body,
-      title: p.title ?? "",
-      createTime: p.published_at ?? "",
-      media: p.public_url ? [{ googleUrl: p.public_url, mediaFormat: p.kind === "video" ? "VIDEO" : "IMAGE" }] : [],
-    })),
+    posts: globalPublishedPosts,
     syncedAt: primary?.last_synced_at ?? null,
   };
 
@@ -1175,20 +1198,14 @@ export default defineEventHandler(async (event) => {
     ...(dataType === "photos" ? { photosList: photos } : {}),
     // Type F — Q&A for /locations/[slug]/qa
     ...(dataType === "qa" ? { qaList: qaRows?.results ?? [] } : {}),
-    // Blog list for /blog
-    ...(dataType === "blog" ? { blogList } : {}),
+    // Blog list for /blog and homepage highlights
+    ...((dataType === "blog" || page === "home") ? { blogList } : {}),
     // Blog post detail for /blog/[slug]
     ...(dataType === "blogPost" ? { blogPost } : {}),
     // Type G — posts for /locations/[slug]/posts
     ...(dataType === "posts"
       ? {
-          postsList: (locPostRows?.results ?? []).map((p) => ({
-            name: `posts/${p.id}`,
-            summary: p.body,
-            title: p.title ?? "",
-            createTime: p.published_at ?? p.created_at ?? "",
-            media: p.public_url ? [{ googleUrl: p.public_url, mediaFormat: p.kind === "video" ? "VIDEO" : "IMAGE" }] : [],
-          })),
+          postsList: locationPublishedPosts,
         }
       : {}),
     // Site locales + experiences — always included for header/nav

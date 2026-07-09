@@ -37,6 +37,30 @@ export const MCP_TOOL_SECURITY_SCHEMES: McpToolSecurityScheme[] = [
 
 // --- reusable schema fragments ---
 
+export const ROBOTS_DIRECTIVE_ENUM = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow']
+
+// Tenant blog shares the nav vocabulary with platform docs/blog (server/utils/platform-mcp-tools.ts
+// NAV_FIELDS_SCHEMA), but blog posts never get nav_group subgrouping — only docs do.
+export const BLOG_NAV_FIELDS_SCHEMA = {
+  nav_section: { type: ['string', 'null'], description: 'Top-level sidebar section label for this site\'s blog. Falls back to category if unset. Does not affect the public URL.' },
+  nav_title: { type: ['string', 'null'], description: 'Sidebar label override. Falls back to the post title if unset. Does not affect the public URL.' },
+  nav_order: { type: ['number', 'null'], description: 'Sort position within its section. Lower sorts first.' },
+  nav_section_order: { type: ['number', 'null'], description: 'Sort position of the section itself among all sections.' },
+  hide_from_nav: { type: ['boolean', 'null'], description: 'Excludes this post from nav rendering only. Does NOT deindex it or remove it from the sitemap — use robots="noindex,..." for that.' },
+  featured_order: { type: ['number', 'null'], description: 'Sort position in featured/homepage placements, independent of nav ordering.' },
+}
+
+/** SEO override fields shared across location/menu-item/experience/site tools. Each entity supplies its own og_image fallback description. */
+export function seoOverrideFieldsSchema(ogImageFallbackDescription: string) {
+  return {
+    seo_title: { type: ['string', 'null'], description: 'Optional SEO title override. Falls back to the computed default if unset.' },
+    seo_description: { type: ['string', 'null'], description: 'Optional SEO meta description override. Falls back to the computed default if unset.' },
+    canonical_url: { type: ['string', 'null'], description: 'Optional canonical URL override. Leave unset for the default self-referencing canonical.' },
+    robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive. Leave unset for the default index,follow.' },
+    og_image_asset_id: { type: ['string', 'null'], description: `Asset id from get_site_media_assets for this page's social share image. ${ogImageFallbackDescription}` },
+  }
+}
+
 export const openingHoursInputSchema = {
   type: ['string', 'object', 'null'],
   description: 'Opening hours for this location. Accepted shapes: (1) an object { weekdayDescriptions: string[] } with one entry per day, e.g. { weekdayDescriptions: ["Monday: 9:00 AM – 5:00 PM", "Tuesday: 9:00 AM – 5:00 PM", ...] } — this is also the shape returned by get_location; (2) a plain string with one day per line, e.g. "Monday: 9:00 AM – 5:00 PM\\nTuesday: 9:00 AM – 5:00 PM". A bare array of per-day structured objects (e.g. { openDay, openTime, closeTime }) is NOT supported — convert to weekdayDescriptions strings first. Pass null to clear.',
@@ -78,12 +102,19 @@ export const locationObject = {
     hero_image_asset_id: { type: ['string', 'null'] },
     hero_video_asset_id: { type: ['string', 'null'] },
     notification_phone: { type: ['string', 'null'], description: 'WhatsApp number for internal booking/reservation alerts to this location\'s manager. Not shown to guests. Falls back to the site-level whatsapp_phone if null.' },
+    timezone: { type: ['string', 'null'], description: 'IANA time zone identifier for this location, e.g. Asia/Bangkok. Used to interpret opening hours and booking slots.' },
+    max_capacity: { type: ['number', 'null'], description: 'Maximum total guests this location can seat per reservation time slot. Null means no cap is enforced (slots remain bookable).' },
     facebook_url: { type: ['string', 'null'] },
     instagram_url: { type: ['string', 'null'] },
     tiktok_url: { type: ['string', 'null'] },
     grab_url: { type: ['string', 'null'] },
     uber_eats_url: { type: ['string', 'null'] },
     foodpanda_url: { type: ['string', 'null'] },
+    seo_title: { type: ['string', 'null'] },
+    seo_description: { type: ['string', 'null'] },
+    canonical_url: { type: ['string', 'null'] },
+    robots: { type: ['string', 'null'] },
+    og_image_asset_id: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
   },
@@ -96,6 +127,20 @@ export const locationMutationResultObject = {
     location: locationObject,
   },
   required: ['success', 'location'],
+}
+
+export const locationMutationSummaryObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['location'] },
+    id: { type: 'string' },
+    slug: { type: 'string' },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
 }
 
 export const menuItemObject = {
@@ -124,12 +169,44 @@ export const menuItemObject = {
     dietary_notes: { type: ['array', 'null'], items: { type: 'string' } },
     preparation: { type: ['string', 'null'] },
     serving_note: { type: ['string', 'null'] },
+    seo_title: { type: ['string', 'null'] },
+    seo_description: { type: ['string', 'null'] },
+    canonical_url: { type: ['string', 'null'] },
+    robots: { type: ['string', 'null'] },
+    og_image_asset_id: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
     created_by: { type: ['string', 'null'] },
     updated_by: { type: ['string', 'null'] },
   },
   required: ['id', 'menu_id', 'section', 'name', 'slug', 'available', 'featured', 'featured_sort_order', 'sort_order', 'created_at', 'updated_at'],
+}
+
+export const menuMutationResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['menu'] },
+    id: { type: 'string' },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
+}
+
+export const menuItemMutationResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['menu_item'] },
+    id: { type: 'string' },
+    slug: { type: 'string' },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
 }
 
 export const menuObject = {
@@ -153,6 +230,93 @@ export const menuObject = {
   },
 }
 
+const faqItemSchema = {
+  type: 'object',
+  properties: {
+    question: { type: 'string' },
+    answer: { type: 'string' },
+    position: { type: 'number' },
+  },
+  required: ['question', 'answer'],
+}
+
+const howToStepSchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    text: { type: 'string' },
+    image_asset_id: { type: ['string', 'null'] },
+    url: { type: ['string', 'null'] },
+    position: { type: 'number' },
+  },
+  required: ['name', 'text'],
+}
+
+// `data`'s shape depends on the sibling `type` field (faq vs how_to), so it's spelled out
+// per-type via if/then here instead of left as a bare object — that's what gives the model
+// the actual field names (how_to steps need `name`+`text`) instead of an opaque object it
+// has to guess the shape of. Tenant blog posts share the same validator (and therefore the
+// same field names) as platform blog posts/docs — see server/utils/platform-content.ts.
+export const blogComponentInputSchema = {
+  type: 'object',
+  properties: {
+    type: { type: 'string', enum: ['faq', 'how_to'] },
+    label: { type: ['string', 'null'] },
+    status: { type: ['string', 'null'], enum: ['active', 'inactive', null] },
+    render_enabled: { type: ['boolean', 'null'] },
+    schema_enabled: { type: ['boolean', 'null'] },
+    position: { type: ['number', 'null'] },
+    data: { type: 'object' },
+  },
+  required: ['type', 'data'],
+  allOf: [
+    {
+      if: { properties: { type: { const: 'faq' } } },
+      then: {
+        properties: {
+          data: {
+            type: 'object',
+            properties: { items: { type: 'array', items: faqItemSchema } },
+            required: ['items'],
+          },
+        },
+      },
+    },
+    {
+      if: { properties: { type: { const: 'how_to' } } },
+      then: {
+        properties: {
+          data: {
+            type: 'object',
+            properties: {
+              steps: { type: 'array', items: howToStepSchema },
+              estimated_time: { type: ['string', 'null'] },
+              tool_items: { type: 'array', items: { type: 'string' } },
+              supply_items: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['steps'],
+          },
+        },
+      },
+    },
+  ],
+}
+
+export const blogPostMutationResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['blog_post'] },
+    id: { type: 'string' },
+    slug: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
+}
+
 export const blogPostObject = {
   type: 'object',
   properties: {
@@ -164,34 +328,71 @@ export const blogPostObject = {
     category: { type: ['string', 'null'] },
     components: {
       type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          type: { type: 'string', enum: ['faq', 'how_to'] },
-          label: { type: ['string', 'null'] },
-          status: { type: ['string', 'null'], enum: ['active', 'inactive', null] },
-          render_enabled: { type: ['boolean', 'null'] },
-          schema_enabled: { type: ['boolean', 'null'] },
-          position: { type: ['number', 'null'] },
-          data: { type: 'object' },
-        },
-      },
+      items: blogComponentInputSchema,
     },
+    ...BLOG_NAV_FIELDS_SCHEMA,
+    seo_title: { type: ['string', 'null'] },
     seo_description: { type: ['string', 'null'] },
     seo_keywords: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
     robots: { type: ['string', 'null'] },
+    author_name: { type: ['string', 'null'] },
     published: { type: 'boolean' },
     published_at: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
+    featured_image: {
+      type: ['object', 'null'],
+      properties: {
+        asset_id: { type: ['string', 'null'] },
+        public_url: { type: ['string', 'null'] },
+        kind: { type: ['string', 'null'] },
+        width: { type: ['number', 'null'] },
+        height: { type: ['number', 'null'] },
+      },
+    },
+    admin_edit_url: { type: ['string', 'null'] },
+    public_path: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    preview_url: { type: ['string', 'null'] },
+    view_url: { type: ['string', 'null'] },
   },
+}
+
+export const postMutationResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['post'] },
+    id: { type: 'string' },
+    slug: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
+}
+
+export const postPublishResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['post'] },
+    id: { type: 'string' },
+    slug: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    channels: { type: 'array', items: { type: 'string' } },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
 }
 
 export const postObject = {
   type: 'object',
   properties: {
     id: { type: 'string' },
+    slug: { type: ['string', 'null'] },
     title: { type: ['string', 'null'] },
     body: { type: 'string' },
     post_type: { type: 'string', enum: ['standard', 'offer', 'event', 'update'] },
@@ -206,6 +407,43 @@ export const postObject = {
     status: { type: 'string', enum: ['draft', 'published', 'scheduled', 'archived'] },
     scheduled_for: { type: ['string', 'null'] },
     published_at: { type: ['string', 'null'] },
+    public_path: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    canonical_url: { type: ['string', 'null'] },
+    view_url: { type: ['string', 'null'] },
+    seo_title: { type: ['string', 'null'] },
+    seo_description: { type: ['string', 'null'] },
+    og_image_asset_id: { type: ['string', 'null'] },
+    media: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          mediaAssetId: { type: ['string', 'null'] },
+          url: { type: 'string' },
+          googleUrl: { type: 'string' },
+          kind: { type: 'string', enum: ['image', 'video'] },
+          mediaFormat: { type: 'string', enum: ['IMAGE', 'VIDEO'] },
+          role: { type: ['string', 'null'], enum: ['cover', 'gallery', null] },
+          caption: { type: ['string', 'null'] },
+          altText: { type: ['string', 'null'] },
+        },
+      },
+    },
+    gallery_media: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          mediaAssetId: { type: ['string', 'null'] },
+          url: { type: 'string' },
+          kind: { type: 'string', enum: ['image', 'video'] },
+          role: { type: ['string', 'null'], enum: ['cover', 'gallery', null] },
+          caption: { type: ['string', 'null'] },
+          altText: { type: ['string', 'null'] },
+        },
+      },
+    },
     channels: {
       type: 'array',
       description: 'Per-channel publish job status. Check this for facebook/instagram publish failures — publish_post can succeed overall while an individual channel is skipped or failed.',
@@ -322,9 +560,30 @@ export const experienceObject = {
     featured_sort_order: { type: 'number' },
     seo_title: { type: ['string', 'null'] },
     seo_description: { type: ['string', 'null'] },
+    canonical_url: { type: ['string', 'null'] },
+    robots: { type: ['string', 'null'] },
+    og_image_asset_id: { type: ['string', 'null'] },
+    public_path: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    view_url: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
   },
+}
+
+export const experienceMutationResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    entity: { type: 'string', enum: ['experience'] },
+    id: { type: 'string' },
+    slug: { type: 'string' },
+    public_url: { type: ['string', 'null'] },
+    changed_fields: { type: 'array', items: { type: 'string' } },
+    updated_at: { type: 'string' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'entity', 'id'],
 }
 
 export const experienceStatusSchema = { type: 'string', enum: [...EXPERIENCE_STATUSES] }
@@ -347,7 +606,7 @@ export const experienceWriteSchema = {
       required: ['url', 'kind'],
     },
   },
-  price: { type: ['string', 'null'], description: 'Optional display override for pricing text, e.g. "Ask us" or "Free".' },
+  price: { type: ['string', 'null'], description: 'Optional display override for pricing text, e.g. "Ask us" or "Free". Leave both price and price_amount unset entirely (not "Ask us") for group/custom-quote experiences — that triggers the public page\'s "Contact us" inquiry flow instead of a Reserve Now button; setting price to text like "Ask us" instead just shows that text as the price label with normal booking still enabled.' },
   price_amount: { type: ['number', 'null'], description: 'Numeric price amount when the experience has a concrete price.' },
   compare_at_price_amount: { type: ['number', 'null'], description: 'Regular/pre-sale price. Set alongside price_amount to run a sale.' },
   sale_starts_at: { type: ['string', 'null'], description: 'ISO 8601 date/time the sale becomes active. Optional.' },
@@ -375,6 +634,9 @@ export const experienceWriteSchema = {
   location_id: { type: 'string', description: 'Optional location id. If omitted, the site primary location is used when available. If the site has no primary location yet, create a location first or pass a valid location_id.' },
   seo_title: { type: ['string', 'null'], description: 'Optional SEO title override.' },
   seo_description: { type: ['string', 'null'], description: 'Optional SEO description override.' },
+  canonical_url: { type: ['string', 'null'], description: 'Optional canonical URL override. Leave unset for the default self-referencing canonical.' },
+  robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive. Leave unset for the default index,follow.' },
+  og_image_asset_id: { type: ['string', 'null'], description: 'Asset id from get_site_media_assets for this experience\'s social share image. Falls back to the first gallery image, then image_asset_id, if unset.' },
 } as const
 
 export const renderedBookingPolicySummaryObject = {
@@ -620,6 +882,7 @@ export const workspaceContextObject = {
     site_id: { type: ['string', 'null'] },
     site_name: { type: ['string', 'null'] },
     site_subdomain: { type: ['string', 'null'] },
+    site_public_url: { type: ['string', 'null'] },
     location_id: { type: ['string', 'null'] },
     location_slug: { type: ['string', 'null'] },
     location_title: { type: ['string', 'null'] },
@@ -845,6 +1108,7 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'update_menu_item',
   'rename_menu_section',
   'reorder_menu_items',
+  'reorder_blog_posts',
   'publish_post',
   'publish_to_facebook',
   'sync_facebook_page',

@@ -26,9 +26,10 @@ function asStringArray(value: unknown) {
 }
 
 function sendNativeConversion(siteId: string, payload: BlawbyConversionPayload) {
+  if (!import.meta.client) return
   const endpoint = `/api/public/sites/${siteId}/conversion-events`
   const body = JSON.stringify(payload)
-  if (import.meta.client && typeof navigator !== 'undefined' && 'sendBeacon' in navigator) {
+  if (typeof navigator !== 'undefined' && 'sendBeacon' in navigator) {
     const blob = new Blob([body], { type: 'application/json' })
     if (navigator.sendBeacon(endpoint, blob)) return
   }

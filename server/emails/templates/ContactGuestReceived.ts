@@ -18,6 +18,7 @@ export default defineComponent({
     subject: { type: String as PropType<string | null>, default: null },
     message: { type: String, required: true },
     platformDomain: { type: String, required: true },
+    experienceTitle: { type: String as PropType<string | null | undefined>, default: null },
   },
   setup(props) {
     return () => h(EmailShell, {
@@ -30,6 +31,7 @@ export default defineComponent({
       h(EmailDetails, {
         rows: [
           props.subject && ['Subject', SUBJECT_LABELS[props.subject] ?? props.subject],
+          props.experienceTitle && ['Regarding', props.experienceTitle],
           ['Message', props.message],
         ].filter(Boolean) as [string, string][]
       }),

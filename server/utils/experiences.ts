@@ -1,7 +1,10 @@
 import { resolveLocationTimezone, isTimeSlotInPast } from '~/server/utils/site-config'
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { assertValidSaleWindow } from '~/shared/money'
+import { revokeReviewRequestForBooking } from '~/server/utils/review-requests'
+import { validateMediaAsset } from '~/server/utils/location-management'
 
 export const WEEKDAY_NAMES = [
   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
@@ -46,8 +49,14 @@ export interface Experience {
   featured_sort_order: number
   seo_title: string | null
   seo_description: string | null
+  canonical_url: string | null
+  robots: string | null
+  og_image_asset_id: string | null
   created_at: string
   updated_at: string
+  // Only present on the public bootstrap payload (resolved via a media_assets join) —
+  // absent on raw rows from create/update/CMS/MCP paths, which only have og_image_asset_id.
+  og_image_public_url?: string | null
   // Only present once attachAvailabilitySummaries has run (public list/detail/bootstrap
   // responses) — absent on raw rows from create/update/CMS/MCP paths.
   availability_state?: AvailabilityState
@@ -92,6 +101,9 @@ interface ExperienceRow {
   featured_sort_order: number
   seo_title: string | null
   seo_description: string | null
+  canonical_url: string | null
+  robots: string | null
+  og_image_asset_id: string | null
   created_at: string
   updated_at: string
 }
@@ -147,7 +159,7 @@ const SELECT = `
          e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
          e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point, e.status, e.sort_order,
          e.featured, e.featured_sort_order,
-         e.seo_title, e.seo_description, e.created_at, e.updated_at,
+         e.seo_title, e.seo_description, e.canonical_url, e.robots, e.og_image_asset_id, e.created_at, e.updated_at,
          img.public_url AS image_url,
          vid.public_url AS video_url
   FROM experiences e
@@ -255,6 +267,9 @@ export interface CreateExperienceInput {
   location_id: string
   seo_title?: string | null
   seo_description?: string | null
+  canonical_url?: string | null
+  robots?: string | null
+  og_image_asset_id?: string | null
 }
 
 function assertExperienceStatus(value: unknown, fieldName: string): ExperienceStatus {
@@ -378,6 +393,9 @@ export async function createExperience(
   assertFiniteNonNegative(input.compare_at_price_amount, 'compare_at_price_amount')
   assertFiniteNonNegative(input.duration_minutes, 'duration_minutes')
   assertValidSaleWindow(input.sale_starts_at, input.sale_ends_at)
+  await validateMediaAsset(db, organizationId, siteId, input.image_asset_id, 'image', 'image_asset_id')
+  await validateMediaAsset(db, organizationId, siteId, input.video_asset_id, 'video', 'video_asset_id')
+  await validateMediaAsset(db, organizationId, siteId, input.og_image_asset_id, 'image', 'og_image_asset_id')
   const id = crypto.randomUUID()
   const slug = await uniqueSlug(db, siteId, slugify(input.title))
   const now = new Date().toISOString()
@@ -396,8 +414,8 @@ export async function createExperience(
        (id, organization_id, site_id, location_id, title, slug, tagline, body,
         image_asset_id, video_asset_id, images, price, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, duration_minutes, max_capacity, time_slots, recurring_slots,
         available_note, highlights, included_items, what_to_bring, meeting_point, status, sort_order, featured, featured_sort_order,
-        seo_title, seo_description, created_at, updated_at, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        seo_title, seo_description, canonical_url, robots, og_image_asset_id, created_at, updated_at, created_by)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id, organizationId, siteId,
       input.location_id,
@@ -428,6 +446,9 @@ export async function createExperience(
       input.featured_sort_order ?? 0,
       input.seo_title ?? null,
       input.seo_description ?? null,
+      input.canonical_url ?? null,
+      input.robots ?? null,
+      input.og_image_asset_id ?? null,
       now, now, userId,
     ],
   )
@@ -440,6 +461,20 @@ export async function createExperience(
   if (!created) {
     throw new Error(`Failed to retrieve newly created experience with ID: ${id}`)
   }
+  await fireSiteEventSafe({
+    db,
+    organizationId,
+    siteId,
+    locationId: created.location_id,
+    actorId: userId,
+    eventType: 'experience.created',
+    entityType: 'experience',
+    entityId: id,
+    metadata: {
+      title: created.title,
+      status: created.status,
+    },
+  })
   return created
 }
 
@@ -456,6 +491,14 @@ export async function updateExperience(
   assertFiniteNonNegative(input.compare_at_price_amount, 'compare_at_price_amount')
   assertFiniteNonNegative(input.duration_minutes, 'duration_minutes')
   assertValidSaleWindow(input.sale_starts_at, input.sale_ends_at)
+  if (input.image_asset_id !== undefined || input.video_asset_id !== undefined || input.og_image_asset_id !== undefined) {
+    const owner = await queryFirst<{ organization_id: string }>(db, `SELECT organization_id FROM experiences WHERE site_id = ? AND id = ? LIMIT 1`, [siteId, id])
+    if (owner) {
+      await validateMediaAsset(db, owner.organization_id, siteId, input.image_asset_id, 'image', 'image_asset_id')
+      await validateMediaAsset(db, owner.organization_id, siteId, input.video_asset_id, 'video', 'video_asset_id')
+      await validateMediaAsset(db, owner.organization_id, siteId, input.og_image_asset_id, 'image', 'og_image_asset_id')
+    }
+  }
   const sets: string[] = []
   const params: (string | number | null)[] = []
 
@@ -514,6 +557,9 @@ export async function updateExperience(
   }
   if (input.seo_title !== undefined) { sets.push('seo_title = ?'); params.push(input.seo_title ?? null) }
   if (input.seo_description !== undefined) { sets.push('seo_description = ?'); params.push(input.seo_description ?? null) }
+  if (input.canonical_url !== undefined) { sets.push('canonical_url = ?'); params.push(input.canonical_url ?? null) }
+  if (input.robots !== undefined) { sets.push('robots = ?'); params.push(input.robots ?? null) }
+  if (input.og_image_asset_id !== undefined) { sets.push('og_image_asset_id = ?'); params.push(input.og_image_asset_id ?? null) }
 
   if (sets.length === 0) return getExperienceById(db, siteId, id)
 
@@ -550,6 +596,7 @@ export interface ExperienceBooking {
   experience_id: string
   organization_id: string
   site_id: string
+  customer_id?: string | null
   location_id: string
   location_title?: string | null
   guest_name: string
@@ -562,6 +609,12 @@ export interface ExperienceBooking {
   notes: string | null
   cancellation_token_hash?: string | null
   cancellation_token_expires_at?: string | null
+  completed_at?: string | null
+  completion_source?: 'manual' | 'auto' | null
+  review_request_sent_at?: string | null
+  review_reminder_sent_at?: string | null
+  review_submitted_at?: string | null
+  review_id?: string | null
   created_at: string
   updated_at: string
 }
@@ -575,12 +628,13 @@ export async function createExperienceBooking(
   const result = await execute(
     db,
     `INSERT INTO experience_bookings
-       (id, experience_id, organization_id, site_id, location_id, guest_name, guest_email, guest_phone,
+       (id, experience_id, organization_id, site_id, customer_id, location_id, guest_name, guest_email, guest_phone,
         party_size, booking_date, time_slot, status, notes, ip_hash,
         cancellation_token_hash, cancellation_token_expires_at, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id, input.experience_id, input.organization_id, input.site_id,
+      input.customer_id ?? null,
       input.location_id,
       input.guest_name, input.guest_email, input.guest_phone ?? null,
       input.party_size, input.booking_date, input.time_slot,
@@ -620,16 +674,17 @@ export async function createExperienceBookingClaimingCapacity(
   const result = await execute(
     db,
     `INSERT INTO experience_bookings
-       (id, experience_id, organization_id, site_id, location_id, guest_name, guest_email, guest_phone,
+       (id, experience_id, organization_id, site_id, customer_id, location_id, guest_name, guest_email, guest_phone,
         party_size, booking_date, time_slot, status, notes, ip_hash,
         cancellation_token_hash, cancellation_token_expires_at, created_at, updated_at)
-     SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+     SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
      WHERE (
        SELECT COALESCE(SUM(party_size), 0) FROM experience_bookings
        WHERE site_id = ? AND experience_id = ? AND booking_date = ? AND time_slot = ? AND status IN ('pending', 'confirmed')
      ) + ? <= ?`,
     [
       id, input.experience_id, input.organization_id, input.site_id,
+      input.customer_id ?? null,
       input.location_id,
       input.guest_name, input.guest_email, input.guest_phone ?? null,
       input.party_size, input.booking_date, input.time_slot,
@@ -677,7 +732,9 @@ export async function listExperienceBookings(
               bl.title AS location_title,
               eb.guest_name, eb.guest_email,
               eb.guest_phone, eb.party_size, eb.booking_date, eb.time_slot,
-              eb.status, eb.notes, eb.created_at, eb.updated_at
+              eb.status, eb.notes, eb.completed_at, eb.completion_source,
+              eb.review_request_sent_at, eb.review_reminder_sent_at,
+              eb.review_submitted_at, eb.review_id, eb.created_at, eb.updated_at
 	       FROM experience_bookings eb
 	       LEFT JOIN business_locations bl ON bl.id = eb.location_id
 	       WHERE ${where}
@@ -711,7 +768,9 @@ export async function listExperienceBookingsForSite(
               e.title AS experience_title,
               eb.guest_name, eb.guest_email,
               eb.guest_phone, eb.party_size, eb.booking_date, eb.time_slot,
-              eb.status, eb.notes, eb.created_at, eb.updated_at
+              eb.status, eb.notes, eb.completed_at, eb.completion_source,
+              eb.review_request_sent_at, eb.review_reminder_sent_at,
+              eb.review_submitted_at, eb.review_id, eb.created_at, eb.updated_at
 	       FROM experience_bookings eb
 	       LEFT JOIN business_locations bl ON bl.id = eb.location_id
 	       LEFT JOIN experiences e ON e.id = eb.experience_id
@@ -812,6 +871,9 @@ export async function updateBookingStatus(
        WHERE site_id = ? AND experience_id = ? AND id = ?`,
     [status, new Date().toISOString(), siteId, experienceId, bookingId],
   )
+  if (status === 'cancelled' && result.meta.changes) {
+    await revokeReviewRequestForBooking(db, 'experience_booking', bookingId)
+  }
   return Boolean(result.meta.changes)
 }
 
@@ -827,6 +889,9 @@ export async function updateBookingStatusForSite(
        WHERE site_id = ? AND id = ?`,
     [status, new Date().toISOString(), siteId, bookingId],
   )
+  if (status === 'cancelled' && result.meta.changes) {
+    await revokeReviewRequestForBooking(db, 'experience_booking', bookingId)
+  }
   return Boolean(result.meta.changes)
 }
 
@@ -1097,7 +1162,8 @@ export async function computeExperienceAvailabilitySummary(
   if (opts.locationClosed) return { availability_state: 'temporarily_unavailable', ...none }
 
   const hasSchedule = Boolean(experience.recurring_slots) || Boolean(experience.time_slots?.length)
-  if (!hasSchedule) return { availability_state: 'inquiry_only', ...none }
+  const hasPrice = Boolean(experience.price) || experience.price_amount != null
+  if (!hasSchedule || !hasPrice) return { availability_state: 'inquiry_only', ...none }
 
   const today = new Date()
   const fromDate = today.toISOString().slice(0, 10)

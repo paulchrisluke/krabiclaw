@@ -100,14 +100,14 @@
             </p>
             <div class="flex flex-wrap gap-4 pt-2">
               <NuxtLink
-                to="/blog/seo/demystifying-restaurant-seo-search-console-analytics"
+                to="/blog"
                 class="inline-flex items-center gap-1.5 bg-white text-(--kc-navy) text-[14px] font-bold px-5 py-3 rounded-[9px] hover:bg-white/90 transition-colors no-underline"
               >
-                Read our SEO Strategy Guide
+                Read our Blog
                 <PlatformIcon name="book" class="size-4" />
               </NuxtLink>
               <NuxtLink
-                to="/docs"
+                to="/help"
                 class="inline-flex items-center gap-1 text-[14px] font-semibold text-white/90 hover:text-white hover:underline transition-colors no-underline"
               >
                 View Setup Documentation →
@@ -264,15 +264,15 @@ const detailedFeatures = [
     ]
   },
   {
-    icon: 'shopping-bag',
-    title: 'Delivery & Order Links',
-    description: 'Connect your Grab, Uber Eats, and FoodPanda pages so guests can order from the platform they already use — without leaving your site.',
+    icon: 'inbox',
+    title: 'Unified Inbox',
+    description: 'Manage all your reservations, bookings, and contact inquiries from a single, unified inbox in your dashboard.',
     docLink: '/docs',
     specs: [
-      'Grab, Uber Eats, and FoodPanda link integration',
-      'Order links visible on menu and location pages',
-      'One-tap ordering for mobile guests',
-      'No setup fees or platform lock-in'
+      'Manage reservations and bookings in one place',
+      'Receive contact inquiries directly',
+      'Respond to guests quickly and efficiently',
+      'Keep track of all guest communications'
     ]
   },
   {

@@ -51,6 +51,11 @@ export interface UpdateSiteSettingsRequest {
   careers_email?: string
   google_analytics_measurement_id?: string
   google_site_verification?: string
+  seo_title?: string | null
+  seo_description?: string | null
+  canonical_url?: string | null
+  robots?: string | null
+  og_image_asset_id?: string | null
 }
 
 export interface LaunchReadiness {

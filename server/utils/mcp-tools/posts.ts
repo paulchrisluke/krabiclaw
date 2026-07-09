@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { postObject, siteTool } from './shared'
+import { postMutationResultObject, postObject, postPublishResultObject, siteTool } from './shared'
 import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const POSTS_TOOLS: McpToolDefinition[] = [
@@ -35,13 +35,31 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'create_post',
-      description: 'Create and publish a post. Use post_type to create a promotion or event instead of a standard update: "offer" for a discount/special (pair with offer_coupon/offer_terms), "event" for a scheduled happening (pair with event_title/event_start/event_end), or "update" for general news. Defaults to "standard".',
+      description: 'Create and publish a post. Use post_type to create a promotion or event instead of a standard update: "offer" for a discount/special (pair with offer_coupon/offer_terms), "event" for a scheduled happening (pair with event_title/event_start/event_end), or "update" for general news. Defaults to "standard". Use this for time-boxed announcements that fan out to Facebook/Instagram/GMB, not evergreen content — for the site\'s own long-form articles use create_blog_post, and for a permanent bookable offering with its own page/pricing/availability (e.g. a new class, package, or group-booking option) use create_experience instead.',
       domain: 'posts',
       minimumRole: 'editor',
       confirmRequired: false,
       inputSchema: {
         body: { type: 'string' },
         title: { type: 'string' },
+        slug: { type: 'string', description: 'Optional public URL slug. If omitted, KrabiClaw generates a stable unique slug.' },
+        seo_title: { type: 'string', description: 'Optional SEO title for the public post page.' },
+        seo_description: { type: 'string', description: 'Optional SEO/meta description for the public post page.' },
+        og_image_asset_id: { type: 'string', description: 'Optional Open Graph image asset id. Defaults to the cover image when omitted.' },
+        gallery_media: {
+          type: 'array',
+          description: 'Optional ordered gallery media for the public post page. Use active media asset ids from get_site_media_assets or uploaded/generated media.',
+          items: {
+            type: 'object',
+            properties: {
+              media_asset_id: { type: 'string' },
+              role: { type: 'string', enum: ['gallery', 'cover'] },
+              caption: { type: 'string' },
+              alt_text: { type: 'string' },
+            },
+            required: ['media_asset_id'],
+          },
+        },
         post_type: { type: 'string', enum: ['standard', 'offer', 'event', 'update'], description: 'Determines how the post is presented. "offer" = promotion, "event" = scheduled happening.' },
         location_id: { type: 'string', description: 'Restrict this post to a specific location. Omit to apply site-wide.' },
         cta_type: { type: 'string', description: 'Call-to-action type shown with the post, e.g. "book", "order", "learn_more".' },
@@ -54,11 +72,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
         scheduled_for: { type: 'string', description: 'If set, the post is scheduled to publish at this datetime (ISO 8601) instead of immediately.' },
       },
       required: ['body'],
-      outputSchema: {
-        type: 'object',
-        properties: { post: postObject },
-        required: ['post'],
-      },
+      outputSchema: postMutationResultObject,
     }),
   siteTool({
       name: 'update_post',
@@ -70,6 +84,24 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
         post_id: { type: 'string' },
         body: { type: 'string' },
         title: { type: 'string' },
+        slug: { type: ['string', 'null'], description: 'Public URL slug. Pass null or omit to keep the current slug; pass a string to change it.' },
+        seo_title: { type: ['string', 'null'] },
+        seo_description: { type: ['string', 'null'] },
+        og_image_asset_id: { type: ['string', 'null'] },
+        gallery_media: {
+          type: 'array',
+          description: 'Replace the ordered public post gallery. Omit to leave unchanged.',
+          items: {
+            type: 'object',
+            properties: {
+              media_asset_id: { type: 'string' },
+              role: { type: 'string', enum: ['gallery', 'cover'] },
+              caption: { type: ['string', 'null'] },
+              alt_text: { type: ['string', 'null'] },
+            },
+            required: ['media_asset_id'],
+          },
+        },
         post_type: { type: 'string', enum: ['standard', 'offer', 'event', 'update'], description: 'Determines how the post is presented. "offer" = promotion, "event" = scheduled happening.' },
         location_id: { type: ['string', 'null'], description: 'Restrict this post to a specific location. Pass null to clear it.' },
         cta_type: { type: 'string', description: 'Call-to-action type shown with the post, e.g. "book", "order", "learn_more".' },
@@ -82,11 +114,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
         scheduled_for: { type: 'string', description: 'If set, the post is scheduled to publish at this datetime (ISO 8601) instead of immediately.' },
       },
       required: ['post_id'],
-      outputSchema: {
-        type: 'object',
-        properties: { post: postObject },
-        required: ['post'],
-      },
+      outputSchema: postMutationResultObject,
     }),
   siteTool({
       name: 'set_post_image',
@@ -99,11 +127,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
         asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
       },
       required: ['post_id', 'asset_id'],
-      outputSchema: {
-        type: 'object',
-        properties: { post: postObject },
-        required: ['post'],
-      },
+      outputSchema: postMutationResultObject,
     }),
   siteTool({
       name: 'open_post_media_upload',
@@ -138,11 +162,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
         targets: { type: 'array', items: { type: 'string', enum: ['site', 'facebook', 'instagram', 'gmb'] }, description: 'Deprecated alias for channels. Prefer channels.' },
       },
       required: ['post_id'],
-      outputSchema: {
-        type: 'object',
-        properties: { post: postObject },
-        required: ['post'],
-      },
+      outputSchema: postPublishResultObject,
     }),
   siteTool({
       name: 'delete_post',

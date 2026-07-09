@@ -5,7 +5,7 @@ import { getProfessionalServiceContent, upsertProfessionalServiceContent } from 
 import { getMediaAsset } from '~/server/utils/media-asset-manager'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
-import { NOT_HANDLED, getCurrentHomeHeroState, mutationContextPayload, objectRecord, optionalString, requireActiveImageAsset, requireActiveVideoAsset, requiredString, rethrowAsInvalidParams } from './shared'
+import { attachViewUrlToRecord, NOT_HANDLED, getCurrentHomeHeroState, mutationContextPayload, objectRecord, optionalString, requireActiveImageAsset, requireActiveVideoAsset, requiredString, rethrowAsInvalidParams } from './shared'
 
 export async function handleContentTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
@@ -16,30 +16,43 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         args.page,
         site.siteId,
       );
-      return await getEditorContent(
+      return attachViewUrlToRecord(await getEditorContent(
         site.db,
         site.organizationId,
         site.siteId,
         requiredString(args, "page"),
         optionalString(args, "location_id") ?? undefined,
-      );
+      ), site, {}, site.env);
     case "update_page_content":
       try {
         const locationId = optionalString(args, "location_id");
+        const page = requiredString(args, "page");
+        const changes = objectRecord(args.changes, "changes");
         const updated = await updatePageContent(
           site.db,
           site.organizationId,
           site.siteId,
           {
-            page: requiredString(args, "page"),
-            changes: objectRecord(args.changes, "changes"),
+            page,
+            changes,
             location_id: locationId,
           },
         );
-        return {
-          ...updated,
-          context: await mutationContextPayload(site, { locationId }),
-        };
+        const hydratedPageContent = attachViewUrlToRecord(updated, site, {}, site.env);
+        const pageContentContext = await mutationContextPayload(site, { locationId });
+        return renderStructuredResponse(
+          {
+            success: true,
+            page,
+            location_id: locationId ?? null,
+            changes_count: Object.keys(changes).length,
+            public_path: updated.public_path,
+            view_url: hydratedPageContent.view_url,
+            context: pageContentContext,
+          },
+          `Updated ${page} page content.`,
+          { page_content: hydratedPageContent },
+        );
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
@@ -111,6 +124,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       const locationId = optionalString(args, "location_id");
       const experienceId = optionalString(args, "experience_id");
       const locale = optionalString(args, "locale") ?? "en";
+      const patch = await validateBookingPolicyPatch(args as Record<string, unknown>, policyType);
       const policy = await upsertBookingPolicy(site.db, {
         organizationId: site.organizationId,
         siteId: site.siteId,
@@ -118,7 +132,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         scopeType,
         locationId,
         experienceId,
-        patch: await validateBookingPolicyPatch(args as Record<string, unknown>, policyType),
+        patch,
       });
       const resolvedPolicy = await resolveBookingPolicy(site.db, {
         siteId: site.siteId,
@@ -126,12 +140,22 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         locationId,
         experienceId,
       });
-      return {
-        policy,
-        resolved_policy: resolvedPolicy,
-        summary: renderBookingPolicySummary(resolvedPolicy, locale),
-        context: await mutationContextPayload(site, { locationId }),
-      };
+      const policyContext = await mutationContextPayload(site, { locationId });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "booking_policy",
+          id: policy.id,
+          policy_type: policyType,
+          scope_type: scopeType,
+          changed_fields: Object.keys(patch),
+          updated_at: policy.updated_at,
+          context: policyContext,
+          summary: renderBookingPolicySummary(resolvedPolicy, locale),
+        },
+        `Updated ${policyType} booking policy.`,
+        { policy, resolved_policy: resolvedPolicy },
+      );
     }
     case "update_home_hero":
       try {
@@ -144,7 +168,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           location_id: locationId,
         });
         return {
-          ...updated,
+          ...attachViewUrlToRecord(updated, site, {}, site.env),
           context: await mutationContextPayload(site, { locationId }),
         };
       } catch (error) {
@@ -167,9 +191,9 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         });
         const asset = await getMediaAsset(site.db, assetId, site.siteId);
         return {
-          ...update,
+          ...attachViewUrlToRecord(update, site, {}, site.env),
           asset_id: assetId,
-          public_url: asset?.public_url ?? null,
+          asset_public_url: asset?.public_url ?? null,
           ...(currentHero.hero_video_asset_id
             ? {
                 warning:
@@ -197,7 +221,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           location_id: locationId,
         });
         return {
-          ...updated,
+          ...attachViewUrlToRecord(updated, site, {}, site.env),
           ...(currentHero.hero_image_asset_id
             ? {
                 warning:
@@ -217,7 +241,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           location_id: locationId,
         });
         return {
-          ...updated,
+          ...attachViewUrlToRecord(updated, site, {}, site.env),
           context: await mutationContextPayload(site, { locationId }),
         };
       } catch (error) {
@@ -231,7 +255,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           location_id: locationId,
         });
         return {
-          ...updated,
+          ...attachViewUrlToRecord(updated, site, {}, site.env),
           context: await mutationContextPayload(site, { locationId }),
         };
       } catch (error) {
@@ -263,10 +287,20 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
             location_id: null,
           },
         );
-        return {
-          ...updated,
-          context: await mutationContextPayload(site),
-        };
+        const hydratedAboutStory = attachViewUrlToRecord(updated, site, {}, site.env);
+        const aboutStoryContext = await mutationContextPayload(site);
+        return renderStructuredResponse(
+          {
+            success: true,
+            page: "about",
+            changes_count: 1,
+            public_path: updated.public_path,
+            view_url: hydratedAboutStory.view_url,
+            context: aboutStoryContext,
+          },
+          "Updated About page story image.",
+          { page_content: hydratedAboutStory },
+        );
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
@@ -284,10 +318,20 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
             location_id: null,
           },
         );
-        return {
-          ...updated,
-          context: await mutationContextPayload(site),
-        };
+        const hydratedHomeStory = attachViewUrlToRecord(updated, site, {}, site.env);
+        const homeStoryContext = await mutationContextPayload(site);
+        return renderStructuredResponse(
+          {
+            success: true,
+            page: "home",
+            changes_count: 1,
+            public_path: updated.public_path,
+            view_url: hydratedHomeStory.view_url,
+            context: homeStoryContext,
+          },
+          "Updated homepage story image.",
+          { page_content: hydratedHomeStory },
+        );
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
@@ -305,7 +349,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         },
         );
         return {
-          ...result,
+          ...attachViewUrlToRecord(result, site, {}, site.env),
           context: await mutationContextPayload(site, { locationId }),
         };
       }

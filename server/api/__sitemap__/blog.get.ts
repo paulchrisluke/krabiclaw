@@ -17,6 +17,8 @@ export default defineSitemapEventHandler(async (event) => {
 
   if (event.context.tenantType === TENANT_TYPES.TENANT && !siteId) return []
 
+  // hide_from_nav is a nav-UI-only concern (sidebar/menu visibility) and does not gate
+  // sitemap/indexing — robots is the correct signal for search-engine inclusion.
   if (siteId) {
     const site = await queryFirst<{ vertical: string | null; theme_id: string | null }>(
       db,
@@ -26,7 +28,7 @@ export default defineSitemapEventHandler(async (event) => {
     const isProfessionalServiceSite = site?.vertical === 'professional_service' || site?.theme_id === 'blawby-theme-v1'
     const posts = await queryAll<ApiRecord>(
       db,
-      `SELECT slug, updated_at FROM blog_posts WHERE status = 'published' AND site_id = ?`,
+      `SELECT slug, updated_at FROM blog_posts WHERE status = 'published' AND site_id = ? AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
       [siteId],
     )
     return (posts ?? [])
@@ -39,7 +41,7 @@ export default defineSitemapEventHandler(async (event) => {
 
   const posts = await queryAll<ApiRecord>(
     db,
-    `SELECT slug, category, updated_at FROM blog_posts WHERE status = 'published' AND site_id IS NULL`,
+    `SELECT slug, category, updated_at FROM blog_posts WHERE status = 'published' AND site_id IS NULL AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
   )
 
   const entries: Array<{ loc: string; lastmod: string | undefined }> = []

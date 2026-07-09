@@ -325,6 +325,7 @@
 // -nocheck
 import type { Experience, SlotAvailability, SlotOverride, WeekdayName } from '~/server/utils/experiences'
 import type { BookingPolicyPatch, RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
+import BookingPolicyForm from '~/components/dashboard/BookingPolicyForm.vue'
 
 const weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const satisfies WeekdayName[]
 
@@ -333,8 +334,9 @@ definePageMeta({ layout: 'dashboard' })
 type ApiRecord = Experience
 
 const toast = useToast()
-const route = useRoute()
 const siteId = await useDashboardSiteId()
+const dashboard = useDashboardSite()
+const dashboardLocation = useDashboardLocation()
 
 const sitePublicUrl = ref<string | null>(null)
 const defaultCurrency = ref('THB')
@@ -351,15 +353,9 @@ interface LocationRow {
 // ── List ──────────────────────────────────────────────────
 const loading = ref(true)
 const experiences = ref<ApiRecord[]>([])
-const locations = ref<LocationRow[]>([])
+const locations = computed(() => dashboard.locations.value as LocationRow[])
 const locationItems = computed(() => locations.value.map(location => ({ id: location.id, label: location.title })))
-const defaultLocationId = computed(() => {
-  const slug = String(route.params.locationSlug ?? '')
-  return locations.value.find(l => l.slug === slug)?.id
-    ?? locations.value.find(l => l.is_primary)?.id
-    ?? locations.value[0]?.id
-    ?? ''
-})
+const defaultLocationId = computed(() => dashboardLocation.currentLocationId.value ?? locations.value.find(l => l.is_primary)?.id ?? locations.value[0]?.id ?? '')
 
 async function loadExperiences() {
   loading.value = true
@@ -373,15 +369,6 @@ async function loadExperiences() {
   }
 }
 
-async function loadLocations() {
-  try {
-    const res = await $fetch<{ locations: LocationRow[] }>(`/api/dashboard/locations`)
-    locations.value = res.locations ?? []
-  } catch {
-    locations.value = []
-  }
-}
-
 async function loadSitePublicUrl() {
   try {
     const response = await $fetch<{ success: boolean; settings: { public_url?: string | null; default_currency?: string } }>(`/api/dashboard/settings`)
@@ -392,7 +379,9 @@ async function loadSitePublicUrl() {
   }
 }
 
-await Promise.all([loadExperiences(), loadLocations(), loadSitePublicUrl()])
+onMounted(() => {
+  Promise.all([loadExperiences(), loadSitePublicUrl()])
+})
 
 // ── Form ──────────────────────────────────────────────────
 const sliderOpen = ref(false)

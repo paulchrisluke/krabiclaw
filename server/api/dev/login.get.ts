@@ -4,8 +4,14 @@ import { cloudflareEnv } from '~/server/utils/api-response'
 import { createAuth } from '~/server/utils/auth'
 import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
 import { hasBetterAuthAdminRole } from '~/server/utils/platform-auth'
-import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
+import { queryAll, queryFirst } from '~/server/db'
 
+// Mirrors better-call's signCookieValue (HMAC-SHA256, base64(raw signature),
+// `${value}.${signature}`) since better-auth only exposes signed-cookie
+// helpers on an authenticated endpoint context, which this bypass route
+// can't construct without already having the session it's trying to create.
+// better-auth is pinned exactly in package.json — re-diff this against
+// better-call's dist/crypto.mjs before any version bump.
 async function hmacSign(value: string, secret: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
@@ -56,28 +62,21 @@ export default defineEventHandler(async (event) => {
       db, 'SELECT id, email, role FROM user WHERE id = ? LIMIT 1', [userId]
     )
     if (!user) {
-      const now = Math.floor(Date.now() / 1000)
       const email = `${userId}@example.test`
       try {
-        await execute(db, `
-          INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
-          VALUES (?, ?, ?, 1, 'user', ?, ?)
-        `, [userId, userId, email, now, now])
-        // Mirrors the databaseHooks.user.create.after hook in auth.ts — real
-        // signups always get an owner organization, but this raw insert
-        // bypasses Better Auth (and its hooks) entirely.
-        const orgId = `org-${userId}`
-        await executeBatch(db, [
-          {
-            query: 'INSERT OR IGNORE INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)',
-            params: [orgId, userId, orgId, now],
-          },
-          {
-            query: 'INSERT OR IGNORE INTO member (id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, ?, ?)',
-            params: [`member-${orgId}`, orgId, userId, 'owner', now],
-          },
-        ])
-        user = { id: userId, email, role: 'user' }
+        // Goes through better-auth's internalAdapter, the same path real
+        // signups/OAuth use — this fires databaseHooks.user.create.after
+        // (server/utils/auth.ts), which creates the owner org/member row and
+        // sends the admin-signup notification, so dev-login test users can't
+        // silently drift from what a real signup produces.
+        const created = await ctx.internalAdapter.createUser<{ id: string; email: string; role?: string | null }>({
+          id: userId,
+          name: userId,
+          email,
+          emailVerified: true,
+          role: 'user',
+        })
+        user = { id: created.id, email: created.email, role: created.role }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         if (/PRIMARY KEY|UNIQUE constraint failed/i.test(message)) {

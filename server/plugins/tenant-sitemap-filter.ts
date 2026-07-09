@@ -1,33 +1,6 @@
 import type { H3Event } from 'h3'
+import { resolvePublicTemplate } from '~/utils/template-registry'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
-
-const BLAWBY_EXACT_PATHS = new Set([
-  '/',
-  '/about',
-  '/services',
-  '/pricing',
-  '/donate',
-  '/schedule',
-  '/contact',
-  '/blog',
-  '/policies/privacy',
-  '/policies/terms',
-  '/third-party-notices',
-])
-
-const SAYA_EXACT_PATHS = new Set([
-  '/',
-  '/menu',
-  '/contact',
-  '/blog',
-  '/experiences',
-  '/locations',
-  '/reservations',
-  '/posts',
-  '/photos',
-  '/qa',
-  '/reviews',
-])
 
 function pathFromLoc(input: unknown) {
   const loc = typeof input === 'string'
@@ -46,28 +19,21 @@ function pathFromLoc(input: unknown) {
   }
 }
 
-function isBlawbyTenant(event: H3Event) {
-  const site = event.context.site as { vertical?: string | null } | undefined
-  return event.context.themeId === 'blawby-theme-v1' || site?.vertical === 'professional_service'
-}
-
-function isAllowedBlawbyPath(path: string) {
-  return BLAWBY_EXACT_PATHS.has(path) || path.startsWith('/services/') || path.startsWith('/article/')
-}
-
-function isAllowedSayaPath(path: string) {
-  return SAYA_EXACT_PATHS.has(path) ||
-    path.startsWith('/blog/') ||
-    path.startsWith('/experiences/') ||
-    path.startsWith('/locations/') ||
-    path.startsWith('/posts/')
+function isAllowedTenantPath(event: H3Event, path: string) {
+  const site = event.context.site as { theme?: string | null; vertical?: string | null } | undefined
+  const template = resolvePublicTemplate({
+    theme: site?.theme,
+    themeId: event.context.themeId,
+    vertical: site?.vertical,
+  })
+  const exactPaths = new Set(template.sitemap.exactPaths)
+  return exactPaths.has(path) || template.sitemap.dynamicPrefixes.some(prefix => path.startsWith(prefix))
 }
 
 export default defineNitroPlugin((nitroApp) => {
   const filterTenantUrls = <T>(ctx: { event: H3Event; urls: T[] }) => {
     if (ctx.event.context.tenantType !== TENANT_TYPES.TENANT) return
-    const allow = isBlawbyTenant(ctx.event) ? isAllowedBlawbyPath : isAllowedSayaPath
-    ctx.urls = ctx.urls.filter((url) => allow(pathFromLoc(url)))
+    ctx.urls = ctx.urls.filter((url) => isAllowedTenantPath(ctx.event, pathFromLoc(url)))
   }
 
   nitroApp.hooks.hook('sitemap:input', (ctx) => {

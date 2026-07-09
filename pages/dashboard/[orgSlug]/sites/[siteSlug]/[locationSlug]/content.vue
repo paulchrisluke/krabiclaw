@@ -391,12 +391,14 @@ const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).de
 
 import { contentRegistry, editablePages, getFieldDef } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
+import BookingPolicyForm from '~/components/dashboard/BookingPolicyForm.vue'
 
 definePageMeta({ layout: 'editor', ssr: false })
 
 const route = useRoute()
 const router = useRouter()
 const siteId = await useDashboardSiteId()
+const dashboardLocation = useDashboardLocation()
 const toast = useToast()
 const config = useRuntimeConfig()
 const { paths, contentPath } = useDashboardSiteLinks(siteId)
@@ -436,10 +438,13 @@ const loadEditorContext = async () => {
 }
 
 // ─── Location Scope ───────────────────────────────────────────────────
-const selectedLocationId = ref<string | null>(null)
+const selectedLocationId = ref<string | null>(dashboardLocation.currentLocationId.value)
+const effectiveLocationId = computed(() =>
+  currentPageIsLocationScoped.value ? selectedLocationId.value : null
+)
 
 const selectedLocation = computed(() =>
-  siteLocations.value.find(location => location.id === selectedLocationId.value) || null
+  siteLocations.value.find(location => location.id === effectiveLocationId.value) || null
 )
 const selectedLocationLabel = computed(() => selectedLocation.value?.title || 'All Locations')
 
@@ -455,14 +460,14 @@ const requiresLocationSelection = computed(() =>
 
 const contentQuery = computed(() => {
   const params = new URLSearchParams()
-  if (currentPageIsLocationScoped.value && selectedLocationId.value) params.set('locationId', selectedLocationId.value)
+  if (effectiveLocationId.value) params.set('locationId', effectiveLocationId.value)
   return params.toString()
 })
 const endpointWithContentScope = (path: string) =>
   contentQuery.value ? `${path}?${contentQuery.value}` : path
 
-const selectLocation = (id: string) => {
-  selectedLocationId.value = id
+const selectLocation = async (id: string) => {
+  await dashboardLocation.selectLocation(id, { replace: true })
 }
 
 // ─── Pages ────────────────────────────────────────────────────────────
@@ -472,7 +477,15 @@ const pages = editablePages.map(p => ({
   path: p.path
 }))
 
-const selectedPageId = ref('home')
+function resolveInitialPageId() {
+  const queryPage = route.query.page
+  if (typeof queryPage === 'string' && pages.some(page => page.id === queryPage)) {
+    return queryPage
+  }
+  return 'home'
+}
+
+const selectedPageId = ref(resolveInitialPageId())
 const currentPagePath = computed(() => pages.find(p => p.id === selectedPageId.value)?.path || '/')
 const selectedPageLabel = computed(() => pages.find(p => p.id === selectedPageId.value)?.label || '')
 
@@ -481,25 +494,7 @@ const applyRouteContentScope = () => {
   if (typeof queryPage === 'string' && pages.some(page => page.id === queryPage)) {
     selectedPageId.value = queryPage
   }
-
-  const queryLocationId = route.query.locationId
-  const queryLocation = typeof queryLocationId === 'string'
-    ? siteLocations.value.find(location => location.id === queryLocationId)
-    : null
-
-  if (
-    currentPageIsLocationScoped.value &&
-    queryLocation
-  ) {
-    selectedLocationId.value = queryLocation.id
-  } else if (currentPageIsLocationScoped.value && siteLocations.value.length > 0) {
-    const primary = siteLocations.value.find(location => location.is_primary) ?? siteLocations.value[0]!
-    selectedLocationId.value = primary.id
-    router.replace({ path: route.path, query: { ...route.query, locationId: primary.id } })
-  } else if (!currentPageIsLocationScoped.value && queryLocationId !== undefined) {
-    selectedLocationId.value = null
-    router.replace({ path: route.path, query: { ...route.query, locationId: undefined } })
-  }
+  selectedLocationId.value = dashboardLocation.currentLocationId.value
 }
 const previewPagePath = computed(() => {
   if (!selectedLocation.value) return currentPagePath.value
@@ -540,14 +535,10 @@ const onPageChange = async (oldPageId?: string) => {
   const previousValues = { ...currentValues.value }
   activeField.value = null
   openGroups.value = ['hero']
-  // When switching to a location-scoped page, auto-select the primary/first location
   if (currentPageIsLocationScoped.value && !selectedLocationId.value && siteLocations.value.length > 0) {
     const primary = siteLocations.value.find(l => l.is_primary) ?? siteLocations.value[0]!
+    await dashboardLocation.selectLocation(primary.id, { replace: true })
     selectedLocationId.value = primary.id
-  }
-  // When switching away from a location-scoped page, clear the location selection
-  if (!currentPageIsLocationScoped.value) {
-    selectedLocationId.value = null
   }
   try {
     await loadPageContent()
@@ -559,28 +550,22 @@ const onPageChange = async (oldPageId?: string) => {
 
 watch(selectedPageId, (newVal, oldVal) => {
   if (newVal !== oldVal) {
-    const nextPageIsLocationScoped = contentRegistry[newVal]?.locationScoped === true
+    const { locationId: _locationId, ...restQuery } = route.query
+    const query = { ...restQuery, page: newVal }
     router.replace({
       path: route.path,
-      query: {
-        ...route.query,
-        page: newVal,
-        locationId: nextPageIsLocationScoped ? selectedLocationId.value || undefined : undefined
-      }
+      query
     })
     onPageChange(oldVal)
   }
 })
 
-watch(selectedLocationId, async (newVal, oldVal) => {
+watch(() => dashboardLocation.currentLocationId.value, async (newVal, oldVal) => {
+  selectedLocationId.value = newVal
   if (newVal !== oldVal) {
     iframeLoading.value = true
     activeField.value = null
     const previousValues = { ...currentValues.value }
-
-    if (currentPageIsLocationScoped.value) {
-      router.replace({ path: route.path, query: { ...route.query, locationId: newVal || undefined } })
-    }
 
     if (requiresLocationSelection.value) return
     try {
@@ -780,7 +765,7 @@ const applyField = async () => {
   if (activeFieldDef.value.type === 'booking_policy') {
     saving.value = true
     try {
-      const res = await $fetch<{ summary: ApiRecord | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
+    const res = await $fetch<{ summary: ApiRecord | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
         method: 'PATCH',
         body: {
           ...bookingPolicyDraft.value,
@@ -900,7 +885,7 @@ const handleSaveContent = async () => {
     await $fetch(`/api/dashboard/editor/content/save`, {
       method: 'POST',
       body: { page: selectedPageId.value, changes: currentValues.value },
-      query: selectedLocationId.value ? { locationId: selectedLocationId.value } : {},
+      query: effectiveLocationId.value ? { locationId: effectiveLocationId.value } : {},
       credentials: 'include'
     })
     localHasChanges.value = false

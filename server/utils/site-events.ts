@@ -1,6 +1,9 @@
 import { execute, type DbClient } from '~/server/db'
+import { listOrganizationSites } from '~/server/utils/dashboard-context'
 
 export type SiteEventType =
+  // Contact
+  | 'contact.created'
   // Posts
   | 'post.created'
   | 'post.published'
@@ -32,6 +35,17 @@ export type SiteEventType =
   // Experiences
   | 'experience.created'
   | 'experience.booking_received'
+  // Work requests
+  | 'work_request.created'
+  | 'work_request.status_changed'
+  // Domains
+  | 'domain.connected'
+  | 'domain.verified'
+  | 'domain.failed'
+  // Members
+  | 'member.invited'
+  | 'member.role_changed'
+  | 'member.removed'
 
 interface FireEventParams {
   db: DbClient
@@ -66,4 +80,36 @@ export async function fireSiteEvent(params: FireEventParams): Promise<void> {
     entityId ?? null,
     metadata ? JSON.stringify(metadata) : null
   ])
+}
+
+export async function fireSiteEventSafe(params: FireEventParams): Promise<void> {
+  try {
+    await fireSiteEvent(params)
+  } catch (error) {
+    console.warn('site_event_write_failed', {
+      eventType: params.eventType,
+      siteId: params.siteId,
+      entityType: params.entityType ?? null,
+      entityId: params.entityId ?? null,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+// Org-level actions (member invites/role changes, ambiguous work requests) have no
+// natural site_id, but site_events.site_id is NOT NULL. Fall back to the org's oldest
+// site rather than guessing; callers should skip firing entirely when this returns null.
+// Best-effort: a lookup failure here must not break the caller's primary flow (an
+// auth hook, a work-request write), so it degrades to null like any other miss.
+export async function resolvePrimarySiteForEvent(db: DbClient, organizationId: string): Promise<string | null> {
+  try {
+    const sites = await listOrganizationSites(db, organizationId)
+    return sites[0]?.id ?? null
+  } catch (error) {
+    console.warn('resolve_primary_site_for_event_failed', {
+      organizationId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  }
 }

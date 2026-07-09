@@ -237,19 +237,11 @@
                       </div>
                     </div>
 
-                    <!-- Changelog -->
-                    <NuxtLink
-                      to="/changelog"
-                      class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg text-default hover:text-highlighted hover:bg-muted transition-colors text-left"
-                      @click="close"
-                    >
-                      <span>Changelog</span>
-                      <UIcon name="i-lucide-square-pen" class="size-4 text-muted" />
-                    </NuxtLink>
-
                     <!-- Help -->
                     <NuxtLink
-                      to="/dashboard/help"
+                      :to="config.public.helpUrl"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg text-default hover:text-highlighted hover:bg-muted transition-colors text-left"
                       @click="close"
                     >
@@ -386,6 +378,7 @@ interface AuthOrganization {
 }
 
 const route = useRoute()
+const config = useRuntimeConfig()
 const { data: sessionData, signOut, refreshSession } = useAuth()
 const { trackDashboardVisited } = useAnalytics()
 const toast = useToast()
@@ -424,9 +417,10 @@ async function checkPlatformStatus() {
 const organization = dashboard.organization
 const site = dashboard.site
 const sites = dashboard.sites
-const selectedLocation = dashboard.selectedLocation
 const locations = dashboard.locations
 const activeSiteId = dashboard.siteId
+const dashboardLocation = useDashboardLocation()
+const selectedLocation = dashboardLocation.currentLocation
 
 const toggleChowbot = () => chowBot.toggle()
 const newChowBotChat = () => chowBot.startNewConversation()
@@ -451,22 +445,12 @@ const siteSlugFromRoute = computed(() => {
 // site dashboard-context.ts resolved (e.g. org root pages with no sites/ segment yet).
 const activeSiteSlug = computed(() => siteSlugFromRoute.value ?? site.value?.subdomain ?? null)
 const siteBase = computed(() => orgBase.value && activeSiteSlug.value ? `${orgBase.value}/sites/${activeSiteSlug.value}` : null)
-const projectBase = computed(() => siteBase.value && selectedLocation.value?.slug ? `${siteBase.value}/${selectedLocation.value.slug}` : siteBase.value)
-
-const locationSlugFromRoute = computed(() => {
-  const slug = route.params.locationSlug
-  return typeof slug === 'string' ? slug : null
-})
-
-const currentLocation = computed(() =>
-  locations.value.find(l => l.slug === locationSlugFromRoute.value || l.id === locationSlugFromRoute.value) ?? selectedLocation.value
-)
-
-const inLocationWorkspace = computed(() => Boolean(locationSlugFromRoute.value))
+const projectBase = computed(() => siteBase.value && dashboardLocation.currentLocationSlug.value ? `${siteBase.value}/${dashboardLocation.currentLocationSlug.value}` : siteBase.value)
+const currentLocation = dashboardLocation.currentLocation
+const inLocationWorkspace = dashboardLocation.inLocationWorkspace
 
 const inSettingsWorkspace = computed(() => {
   if (route.path.startsWith('/dashboard/account')) return true
-  if (route.path.startsWith('/dashboard/help')) return true
   if (orgSettingsBase.value && route.path.startsWith(orgSettingsBase.value)) return true
   return /^\/dashboard\/[^/]+\/~\/settings/.test(route.path)
 })
@@ -515,8 +499,8 @@ const organizationMenuItems = computed(() => [
 const locationMenuItems = computed(() => [
   locations.value.map((location) => ({
     label: location.title,
-    icon: location.id === selectedLocation.value?.id ? 'i-lucide-check' : 'i-lucide-map-pin',
-    onSelect: () => dashboard.selectLocation(location.id)
+    icon: location.id === currentLocation.value?.id ? 'i-lucide-check' : 'i-lucide-map-pin',
+    onSelect: () => dashboardLocation.selectLocation(location.id)
   })),
   [
     {
@@ -533,12 +517,8 @@ const mainNavigation = computed(() => [
     { label: 'Conversations', icon: 'i-lucide-messages-square', to: siteBase.value ? `${siteBase.value}/conversations` : '/dashboard' },
   ],
   [
-    { label: 'Blog', icon: 'i-lucide-newspaper', to: siteBase.value ? `${siteBase.value}/blog` : '/dashboard' },
     { label: 'Translations', icon: 'i-lucide-languages', to: siteBase.value ? `${siteBase.value}/translations` : '/dashboard' },
-    { label: 'Support', icon: 'i-lucide-life-buoy', to: orgBase.value ? `${orgBase.value}/support` : '/dashboard' },
-  ],
-  [
-    { label: 'Settings', icon: 'i-lucide-settings', to: orgSettingsBase.value ? `${orgSettingsBase.value}/general` : '/dashboard' },
+    { label: 'Activity', icon: 'i-lucide-activity', to: orgBase.value ? `${orgBase.value}/activity` : '/dashboard' },
   ],
 ])
 
@@ -592,8 +572,7 @@ const adminNavigation = computed(() => [[
 ]])
 
 const _utilityNavigation = computed(() => [[
-  { label: 'Account', icon: 'i-lucide-user-cog', to: '/dashboard/account/settings' },
-  { label: 'Help', icon: 'i-lucide-circle-help', to: '/dashboard/help' }
+  { label: 'Account', icon: 'i-lucide-user-cog', to: '/dashboard/account/settings' }
 ]])
 
 const accountSettingsNavigation = computed(() => [[
@@ -640,14 +619,13 @@ const navbarTitle = computed(() => {
   if (!segment) return 'Overview'
   const labels: Record<string, string> = {
     account: 'Account',
+    activity: 'Activity',
     analytics: 'Analytics',
     billing: 'Billing',
-    blog: 'Blog',
     chatgpt: 'ChatGPT',
     conversations: 'Conversations',
     content: 'Content',
     experiences: 'Experiences',
-    help: 'Help',
     inbox: 'Inbox',
     locations: 'Locations',
     media: 'Media',

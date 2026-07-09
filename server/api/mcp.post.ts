@@ -1,8 +1,8 @@
 import { createError, getHeader } from "h3";
+import type { H3Event } from "h3";
 import {
   asMcpError,
   mcpFailure,
-  mcpProtocolError,
   mcpSuccess,
   MCP_ERROR,
   MCP_PROTOCOL_VERSION,
@@ -31,6 +31,7 @@ import {
 import {
   buildMcpAuthChallengeForError,
   buildMcpOAuthChallenge,
+  describeMcpAuthTelemetryError,
   getCloudflareWaitUntil,
   isMcpMutatingTool,
   mcpAuthRequiredResult,
@@ -56,6 +57,11 @@ const TENANT_AUTH_REQUIRED_TEXT = "Authentication required: connect KrabiClaw to
 
 function resourceMetadataUrl(baseUrl: string) {
   return `${baseUrl}/.well-known/oauth-protected-resource`;
+}
+
+function shouldUseLeanToolCatalog(event: H3Event) {
+  const userAgent = (getHeader(event, "user-agent") || "").toLowerCase()
+  return userAgent.includes("openai-mcp/")
 }
 
 export default defineEventHandler(async (event) => {
@@ -109,7 +115,7 @@ export default defineEventHandler(async (event) => {
           toolName: requestToolName ?? null,
           toolDomain: MCP_TOOLS.find((t) => t.name === requestToolName)?.domain ?? null,
           status: "auth_required",
-          errorMessage: "Missing bearer token or cookie",
+          errorMessage: "credential_missing: missing bearer token or cookie",
         });
         return mcpSuccess(requestId ?? null, mcpAuthRequiredResult({ challenge: authChallenge, message: TENANT_AUTH_REQUIRED_TEXT }));
       }
@@ -173,6 +179,13 @@ This entire flow runs within the current conversation — do not tell the user t
 - If you already have a resolved ChatGPT file reference for a video (or an image), you can call upload_user_media directly instead of opening the widget.
 - The dashboard media library remains a fallback only for chat clients that do not support inline widgets.
 
+## Choosing a content type
+KrabiClaw has three distinct content-creation tools — do not default to whichever one comes to mind first. Ask yourself whether the request is time-boxed, narrative, or a permanent offering:
+- **create_post** — a time-boxed announcement, offer, or event that should fan out to Facebook/Instagram/GMB. Use for "we're running a sale this week" or "come to our event Saturday."
+- **create_blog_post** — long-form narrative/story content on the site's own blog. Use for "write about our history" or "announce our new location" as a story, not an action.
+- **create_experience** — a permanent, bookable offering with its own page: a class, package, tour, or group/custom-booking option that needs pricing/availability and a Reserve Now (or Contact Us, if left priceless) CTA. Use for "we want a dedicated page for X" when X is something people book or inquire about, even if there's no fixed price yet — leave price/price_amount unset for a "contact us for pricing" experience rather than writing a post or blog entry about it.
+If a request is ambiguous, ask a brief clarifying question rather than guessing.
+
 ## Session start
 Start every conversation by calling get_workspace_context. If no active site is set yet, call list_sites to discover the user's sites and present them clearly.
 - If they have 0 sites, start the Onboarding Flow:
@@ -210,6 +223,8 @@ When calling show_generated_images after native image_generation, always include
 - use_label: "Use as homepage hero for [site name]"  (or the appropriate placement)
 - subtitle: can reference the site name to make the target obvious
 After applying, always confirm: "[Placement] updated for [site name]." — never leave the target ambiguous.
+
+When a public-facing tool result includes \`view_url\` or \`public_url\`, include that URL in your reply so the user can open the live page immediately. Prefer \`view_url\` when both are present.
 
 All other tools require a site_id obtained from list_sites. Never guess or invent site IDs. Use get_current_user when the user asks which account is connected.
 
@@ -327,6 +342,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
           )
         : new Set<string>();
 
+      const leanToolCatalog = shouldUseLeanToolCatalog(event)
       const tools = visibleSurfaceTools.filter((tool) => {
         // Without a site_id, return all tools so AI clients (e.g. ChatGPT) can discover
         // the full capability set on first connection. Security is enforced at execution time.
@@ -338,31 +354,39 @@ Common workflows: update menus and items, create and publish site posts, triage 
         )
           return false;
         return true;
-      }).map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        inputSchema: tool.inputSchema,
-        outputSchema: tool.outputSchema,
-        annotations: tool.annotations,
-        securitySchemes: tool.securitySchemes,
-        _meta: {
-          securitySchemes: tool.securitySchemes,
-          "krabiclaw/toolInfo": {
-            domain: tool.domain,
-            minimumRole: tool.minimumRole,
-            confirmRequired: tool.confirmRequired,
+      }).map((tool) => {
+        const baseTool = {
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+          _meta: {
+            securitySchemes: tool.securitySchemes,
+            "krabiclaw/toolInfo": {
+              domain: tool.domain,
+              minimumRole: tool.minimumRole,
+              confirmRequired: tool.confirmRequired,
+            },
+            ...(tool.fileParams?.length
+              ? { "openai/fileParams": tool.fileParams }
+              : {}),
+            ...(tool.uiResourceUri
+              ? {
+                  ui: { resourceUri: tool.uiResourceUri },
+                  "openai/outputTemplate": tool.uiResourceUri,
+                }
+              : {}),
           },
-          ...(tool.fileParams?.length
-            ? { "openai/fileParams": tool.fileParams }
-            : {}),
-          ...(tool.uiResourceUri
-            ? {
-                ui: { resourceUri: tool.uiResourceUri },
-                "openai/outputTemplate": tool.uiResourceUri,
-              }
-            : {}),
-        },
-      }));
+        }
+
+        if (leanToolCatalog) return baseTool
+
+        return {
+          ...baseTool,
+          outputSchema: tool.outputSchema,
+          annotations: tool.annotations,
+          securitySchemes: tool.securitySchemes,
+        }
+      });
 
       const domains = (() => {
         try {
@@ -416,7 +440,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
           isMutating: isMcpMutatingTool(toolDef),
           arguments: rawArgs,
           status: "auth_required",
-          errorMessage: authError instanceof Error ? authError.message : String(authError),
+          errorMessage: describeMcpAuthTelemetryError(authError),
           durationMs: Date.now() - toolStartedAt,
         });
         throw authError;

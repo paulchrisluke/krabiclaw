@@ -59,7 +59,7 @@ export interface PublicCompliance {
   disclaimer: string | null
   footer_disclaimer: string | null
   document_asset_ids: string[]
-  documents: Array<{ id: string; url: string; label: string | null; file_name: string | null }>
+  documents: Array<{ id: string; url: string | null; label: string | null; file_name: string | null }>
   metadata: ApiRecord
 }
 

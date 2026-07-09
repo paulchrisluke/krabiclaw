@@ -1,35 +1,36 @@
 // Analytics event tracking composable
-// Uses @nuxt/scripts Google Analytics integration (GA4)
+// Product analytics is sent straight to Cloudflare Zaraz's `zaraz.track()`
+// API. Zaraz is edge-injected (auto-inject script, see the "Web tag
+// management" Cloudflare dashboard config for krabiclaw.com) and queues
+// calls made before its own snippet has loaded, the same guarantee GTM's
+// dataLayer makes — so there is no app-owned queue/bridge to maintain here.
+// The GA4 tool inside Zaraz has an "All Tracks" trigger that fires on every
+// `zaraz.track()` call and forwards it to GA4.
 
 declare global {
   interface Window {
-    // gtag.js's real contract is variadic — 'js'+Date, 'config'+id, 'event'+name+params,
-    // 'consent'+... all shipped through the same function. Narrowing this to the
-    // trackEvent()-shaped 3-arg form below broke app.vue's own gtag bootstrap
-    // (`gtag('js', new Date())`), which is equally legitimate usage of the same global.
-    gtag?: (..._args: unknown[]) => void
-    dataLayer?: unknown[]
+    zaraz?: {
+      track: (_eventName: string, _params?: Record<string, unknown>) => void
+    }
   }
 }
 
 export type AnalyticsEventName =
   // User Acquisition & Onboarding
   | 'sign_up'
-  | 'org_created'
   | 'site_created'
   | 'onboarding_completed'
   | 'domain_connected'
   // Billing & Subscription
+  // subscription_created/plan_upgraded/plan_downgraded/subscription_cancelled
+  // fire server-side from server/api/billing/webhook.post.ts via
+  // sendGa4Event (Stripe webhook -> GA4 Measurement Protocol), not from here
+  // — client-side tracking can't see plan changes made through the Stripe
+  // customer portal, or a checkout that completes after the tab closes.
   | 'plan_viewed'
   | 'checkout_started'
-  | 'subscription_created'
-  | 'plan_upgraded'
-  | 'plan_downgraded'
-  | 'subscription_cancelled'
   | 'payment_method_added'
   // Content Creation
-  | 'page_created'
-  | 'page_published'
   | 'menu_item_created'
   | 'menu_imported'
   | 'post_created'
@@ -41,10 +42,8 @@ export type AnalyticsEventName =
   | 'media_library_viewed'
   // Feature Usage
   | 'chowbot_interaction'
-  | 'mcp_tool_used'
   | 'dashboard_visited'
   | 'editor_session_started'
-  | 'ai_feature_used'
   // Engagement
   | 'session_start'
   | 'page_view'
@@ -53,21 +52,19 @@ export type AnalyticsEventName =
   | 'error_encountered'
   | 'api_error'
 
-export interface AnalyticsEventParams {
-  // Common params
+// Event-specific fields that don't belong to the structured page/location/
+// metadata groups below — everything here rides along under `properties`.
+export interface AnalyticsEventProperties {
   [key: string]: string | number | boolean | undefined
 
   // User Acquisition
   method?: string // 'oauth_google', 'oauth_github', 'email'
-  org_id?: string
-  site_id?: string
   domain?: string
 
   // Billing
   plan?: string // 'free', 'growth', 'managed', 'seo_accelerator'
   value?: number // monetary value in cents
   currency?: string
-  previous_plan?: string
 
   // Content
   content_type?: string // 'page', 'menu_item', 'post'
@@ -81,13 +78,9 @@ export interface AnalyticsEventParams {
   generation_prompt?: string
 
   // Feature Usage
-  tool_name?: string // MCP tool name
   dashboard_section?: string // 'billing', 'content', 'settings', etc.
-  ai_feature?: string // 'menu_import', 'image_generation', etc.
 
   // Engagement
-  page_path?: string
-  page_title?: string
   duration_seconds?: number
 
   // Error
@@ -98,8 +91,21 @@ export interface AnalyticsEventParams {
   status_code?: number
 }
 
-// Reads the GA4 client_id out of the `_ga` cookie GA4's own gtag.js sets
-// (format `GA1.1.<random>.<timestamp>`; client_id is the last two segments).
+// trackEvent()'s input: AnalyticsEventProperties plus the handful of fields
+// that get lifted into their own page/location/metadata groups instead of
+// staying in the flat properties bag — see trackEvent() below.
+export interface AnalyticsEventInput extends AnalyticsEventProperties {
+  site_id?: string
+  template?: string
+  page_path?: string
+  page_title?: string
+  page_language?: string
+  location_id?: string
+}
+
+// Reads the GA4 client_id out of the `_ga` cookie Zaraz's GA4 tool sets
+// client-side (same cookie/format gtag.js itself would set:
+// `GA1.1.<random>.<timestamp>`; client_id is the last two segments).
 // Used to stitch server-side Stripe webhook events back to the browsing
 // session that started checkout — see server/utils/ga4-measurement-protocol.ts.
 export const getGaClientId = (): string | null => {
@@ -112,22 +118,43 @@ export const getGaClientId = (): string | null => {
 }
 
 export const useAnalytics = () => {
-  const trackEvent = (eventName: AnalyticsEventName, params: AnalyticsEventParams = {}) => {
-    if (import.meta.client) {
-      // @nuxt/scripts injects gtag globally
-      if (typeof window !== 'undefined' && window.gtag) {
-        window.gtag('event', eventName, params)
-      }
+  const { isPlatform } = useTenantSite()
+
+  // Builds a structured payload instead of one flat params bag, so it reads
+  // the same way it's queried later: page/location/metadata are recognizable
+  // groups, not properties mixed in with everything else. `event` itself
+  // isn't duplicated inside the payload — it's already `zaraz.track()`'s
+  // first argument, unlike the old krabiLayer array where every queued item
+  // needed its own `name` field to stay identifiable once flattened into one
+  // list. `metadata` is for values that are essentially constant for a given
+  // request (environment, site, device language) — event-specific data goes
+  // in `properties`. Extend with `transaction`/`products` groups the same
+  // way if/when e-commerce events are added.
+  const trackEvent = (eventName: AnalyticsEventName, input: AnalyticsEventInput = {}) => {
+    if (!import.meta.client) return
+    if (typeof window === 'undefined') return
+    if (!isPlatform) return
+
+    const { site_id, template, page_path, page_title, page_language, location_id, ...properties } = input
+
+    const flatParams: Record<string, unknown> = {
+      ...(page_path ? { page_path } : {}),
+      ...(page_title ? { page_title } : {}),
+      ...(page_language ? { page_language } : {}),
+      ...(location_id ? { location_id } : {}),
+      ...(site_id ? { site_id } : {}),
+      ...(template ? { template } : {}),
+      device_language: navigator.language,
+      is_prod: import.meta.env.PROD,
+      ...properties,
     }
+
+    window.zaraz?.track(eventName, flatParams)
   }
 
   // User Acquisition & Onboarding
   const trackSignUp = (method: string) => {
     trackEvent('sign_up', { method })
-  }
-
-  const trackOrgCreated = (orgId: string) => {
-    trackEvent('org_created', { org_id: orgId })
   }
 
   const trackSiteCreated = (siteId: string) => {
@@ -151,35 +178,11 @@ export const useAnalytics = () => {
     trackEvent('checkout_started', { plan, value, currency: 'USD' })
   }
 
-  const trackSubscriptionCreated = (plan: string, value: number) => {
-    trackEvent('subscription_created', { plan, value, currency: 'USD' })
-  }
-
-  const trackPlanUpgraded = (plan: string, previousPlan: string, value: number) => {
-    trackEvent('plan_upgraded', { plan, previous_plan: previousPlan, value, currency: 'USD' })
-  }
-
-  const trackPlanDowngraded = (plan: string, previousPlan: string) => {
-    trackEvent('plan_downgraded', { plan, previous_plan: previousPlan })
-  }
-
-  const trackSubscriptionCancelled = (plan: string) => {
-    trackEvent('subscription_cancelled', { plan })
-  }
-
   const trackPaymentMethodAdded = () => {
     trackEvent('payment_method_added', {})
   }
 
   // Content Creation
-  const trackPageCreated = (contentId: string, siteId: string) => {
-    trackEvent('page_created', { content_id: contentId, site_id: siteId, content_type: 'page' })
-  }
-
-  const trackPagePublished = (contentId: string, siteId: string) => {
-    trackEvent('page_published', { content_id: contentId, site_id: siteId, content_type: 'page' })
-  }
-
   const trackMenuItemCreated = (contentId: string, siteId: string) => {
     trackEvent('menu_item_created', { content_id: contentId, site_id: siteId, content_type: 'menu_item' })
   }
@@ -214,24 +217,16 @@ export const useAnalytics = () => {
   }
 
   // Feature Usage
-  const trackChowbotInteraction = (siteId: string) => {
-    trackEvent('chowbot_interaction', { site_id: siteId })
-  }
-
-  const trackMcpToolUsed = (toolName: string, siteId?: string) => {
-    trackEvent('mcp_tool_used', { tool_name: toolName, site_id: siteId })
-  }
-
   const trackDashboardVisited = (section: string, siteId?: string) => {
     trackEvent('dashboard_visited', { dashboard_section: section, site_id: siteId })
   }
 
-  const trackEditorSessionStarted = (siteId: string) => {
-    trackEvent('editor_session_started', { site_id: siteId })
+  const trackChowbotInteraction = (siteId?: string) => {
+    trackEvent('chowbot_interaction', { site_id: siteId })
   }
 
-  const trackAiFeatureUsed = (feature: string, siteId: string) => {
-    trackEvent('ai_feature_used', { ai_feature: feature, site_id: siteId })
+  const trackEditorSessionStarted = (siteId: string) => {
+    trackEvent('editor_session_started', { site_id: siteId })
   }
 
   // Engagement
@@ -259,19 +254,12 @@ export const useAnalytics = () => {
   return {
     trackEvent,
     trackSignUp,
-    trackOrgCreated,
     trackSiteCreated,
     trackOnboardingCompleted,
     trackDomainConnected,
     trackPlanViewed,
     trackCheckoutStarted,
-    trackSubscriptionCreated,
-    trackPlanUpgraded,
-    trackPlanDowngraded,
-    trackSubscriptionCancelled,
     trackPaymentMethodAdded,
-    trackPageCreated,
-    trackPagePublished,
     trackMenuItemCreated,
     trackMenuImported,
     trackPostCreated,
@@ -280,11 +268,9 @@ export const useAnalytics = () => {
     trackVideoUploaded,
     trackMediaGenerated,
     trackMediaLibraryViewed,
-    trackChowbotInteraction,
-    trackMcpToolUsed,
     trackDashboardVisited,
+    trackChowbotInteraction,
     trackEditorSessionStarted,
-    trackAiFeatureUsed,
     trackSessionStart,
     trackPageView,
     trackTimeOnPage,

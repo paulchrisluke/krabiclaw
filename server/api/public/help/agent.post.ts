@@ -1,5 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
+import { logMcpToolCallEvent } from '~/server/utils/mcp-telemetry'
+import { getCloudflareWaitUntil } from '~/server/utils/mcp-route-helpers'
 import { formatPublicSearchResultsForPrompt, searchPublicResources } from '~/server/utils/public-search'
 import { runWorkersAiText } from '~/server/utils/workers-ai'
 
@@ -14,6 +16,21 @@ const DEFAULT_DISCOVERY_PROMPTS = [
   'Do I need technical skills to use KrabiClaw?',
 ]
 const IP_HOURLY_LIMIT = 30
+
+function logPublicHelpEventDetached(
+  event: Parameters<typeof getCloudflareWaitUntil>[0],
+  db: D1Database | undefined,
+  input: Parameters<typeof logMcpToolCallEvent>[1],
+) {
+  if (!db) return
+  const promise = logMcpToolCallEvent(db, {
+    ...input,
+    mcpSurface: 'public_help',
+  })
+  const waitUntil = getCloudflareWaitUntil(event)
+  if (waitUntil) waitUntil(promise)
+  else promise.catch(() => {})
+}
 
 function parseAgentEnvelope(raw: string) {
   const escalateMatch = raw.match(/ESCALATE:\s*(yes|no)/i)
@@ -92,6 +109,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'message is required' }, { status: 400 })
   }
 
+  const startedAt = Date.now()
   try {
     if (!import.meta.dev) {
       const clientIp = getClientIp(event)
@@ -111,6 +129,7 @@ export default defineEventHandler(async (event) => {
     const results = await searchPublicResources(env, `${topic ? `${topic} ` : ''}${message}`, {
       limit: 6,
       surface: 'help',
+      siteId: event.context.tenantType === 'tenant' ? String(event.context.siteId || '') : null,
     })
     const promptResults = formatPublicSearchResultsForPrompt(results)
     let parsed = {
@@ -168,7 +187,7 @@ export default defineEventHandler(async (event) => {
       ? DEFAULT_DISCOVERY_PROMPTS
       : []
 
-    return jsonResponse({
+    const response = {
       reply: parsed.answer,
       citations: results.slice(0, 3),
       suggestedLinks,
@@ -188,8 +207,41 @@ export default defineEventHandler(async (event) => {
             },
           }
         : null,
+    }
+
+    logPublicHelpEventDetached(event, env.DB, {
+      method: 'help/chat',
+      toolName: 'public_help_chowbot',
+      toolDomain: 'support',
+      arguments: {
+        topic: topic || null,
+        message_length: message.length,
+        history_length: history.length,
+      },
+      result: {
+        escalation: shouldEscalate,
+        suggested_links: suggestedLinks.length,
+        citations: response.citations.length,
+      },
+      status: 'success',
+      durationMs: Date.now() - startedAt,
     })
+
+    return jsonResponse(response)
   } catch (error) {
+    logPublicHelpEventDetached(event, env.DB, {
+      method: 'help/chat',
+      toolName: 'public_help_chowbot',
+      toolDomain: 'support',
+      arguments: {
+        topic: topic || null,
+        message_length: message.length,
+        history_length: history.length,
+      },
+      status: 'error',
+      errorMessage: error instanceof Error ? error.message : String(error),
+      durationMs: Date.now() - startedAt,
+    })
     console.error('Public help agent failed:', error)
     return jsonResponse({ error: 'Failed to answer support question' }, { status: 500 })
   }

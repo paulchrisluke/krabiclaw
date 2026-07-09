@@ -11,6 +11,7 @@ import {
   renderCompiledDemoMediaBlock,
   renderCompiledDemoMenuBlock,
   renderCompiledDemoPostsBlock,
+  renderCompiledDemoBlogBlock,
   renderCompiledDemoQaBlock,
   renderCompiledDemoReviewsBlock,
   renderCompiledDemoTranslationsBlock,
@@ -136,6 +137,8 @@ ${renderCompiledDemoMenuBlock()}
 ${renderCompiledDemoQaBlock()}
 
 ${renderCompiledDemoPostsBlock()}
+
+${renderCompiledDemoBlogBlock()}
 
 ${renderDemoExperienceSeedBlock()}
 

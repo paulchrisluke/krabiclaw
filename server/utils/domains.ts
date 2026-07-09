@@ -2,6 +2,7 @@
 
 import { execute, queryAll, queryFirst } from '~/server/db'
 import { hasSiteEntitlement } from '~/server/utils/billing'
+import { fireSiteEventSafe } from '~/server/utils/site-events'
 
 export interface DomainEnv {
   CF_ZONE_ID?: string
@@ -106,6 +107,12 @@ function platformDomainCandidates(env: DomainEnv): string[] {
   return values
     .filter((value): value is string => Boolean(value))
     .map((value) => value.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase())
+}
+
+// Non-throwing variant of platformHostname for callers building a best-effort fallback URL
+// (e.g. a tenant subdomain link) where an unconfigured env should not break the response.
+export function platformHostnameFallback(env: DomainEnv): string {
+  return platformDomainCandidates(env)[0]!
 }
 
 export function normalizeDomain(domain: string): string {
@@ -485,6 +492,19 @@ async function persistCloudflareState(
       beforeState: before,
       afterState: after
     })
+
+    if (before.status !== after.status && (after.status === 'active' || after.status === 'failed' || after.status === 'blocked')) {
+      await fireSiteEventSafe({
+        db,
+        organizationId: after.organization_id,
+        siteId: after.site_id,
+        actorId: options.actorId ?? null,
+        eventType: after.status === 'active' ? 'domain.verified' : 'domain.failed',
+        entityType: 'domain',
+        entityId: domainId,
+        metadata: { domain: after.domain, status: after.status },
+      })
+    }
   }
 
   // promoteCanonicalIfReady can call setCanonicalDomain, which reads/writes
@@ -564,6 +584,23 @@ export async function createCustomDomainPair(
     for (const record of records) {
       if (record.status === 'active') await promoteCanonicalIfReady(db, record.site_id)
       else await queueReconciliation(db, record.id, record.next_check_at || undefined)
+    }
+
+    // Fired only once the whole pairing flow (Cloudflare provisioning, DB
+    // inserts, state sync, promotion/reconciliation) has succeeded — the catch
+    // block below rolls back site_domains rows on failure, so firing earlier
+    // could record a domain.connected event for a domain that never existed.
+    for (const entry of entries) {
+      await fireSiteEventSafe({
+        db,
+        organizationId: opts.organizationId,
+        siteId: opts.siteId,
+        actorId: opts.actorId ?? null,
+        eventType: 'domain.connected',
+        entityType: 'domain',
+        entityId: entry.id,
+        metadata: { domain: entry.domain, role: entry.role },
+      })
     }
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Cloudflare hostname creation failed')

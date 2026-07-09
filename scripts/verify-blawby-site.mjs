@@ -63,6 +63,7 @@ function parseArgs(argv) {
     url: '',
     out: '',
     siteId: '',
+    tenantSlug: '',
     importManifest: '',
     evidenceDir: '',
     requireScreenshots: false,
@@ -73,6 +74,7 @@ function parseArgs(argv) {
     if (arg === '--url') args.url = argv[++i]
     else if (arg === '--out') args.out = argv[++i]
     else if (arg === '--site-id') args.siteId = argv[++i]
+    else if (arg === '--tenant-slug') args.tenantSlug = argv[++i]
     else if (arg === '--import-manifest') args.importManifest = argv[++i]
     else if (arg === '--evidence-dir') args.evidenceDir = argv[++i]
     else if (arg === '--require-screenshots') args.requireScreenshots = true
@@ -88,6 +90,27 @@ function readJson(filePath) {
 
 function resolveUrl(base, route) {
   return new URL(route, base.endsWith('/') ? base : `${base}/`).toString()
+}
+
+function isPreviewContext(hostname) {
+  if (hostname === 'workers.dev' || hostname.endsWith('.workers.dev')) return true
+  if (/^(?:staging|preview)\.[^.]+\.[^.]+$/.test(hostname)) return true
+  return false
+}
+
+function normalizeTenantBaseUrl(rawUrl, tenantSlug) {
+  const url = new URL(rawUrl)
+  if (tenantSlug && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
+    url.hostname = `${tenantSlug}.localhost`
+  }
+  return url.toString().replace(/\/$/, '')
+}
+
+function previewTenantHeaders(base, tenantSlug) {
+  if (!tenantSlug) return {}
+  return isPreviewContext(new URL(base).hostname)
+    ? { 'x-preview-tenant': tenantSlug, 'cache-control': 'no-store' }
+    : {}
 }
 
 function pushCheck(checks, ok, label, details = {}) {
@@ -149,11 +172,17 @@ function checkMediaUrl(url) {
   return { ok: false, reason: `unknown host ${host}` }
 }
 
+let FETCH_HEADERS = {}
+
 async function fetchWithTimeout(url, options = {}) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 10_000)
   try {
-    const response = await fetch(url, { ...options, signal: controller.signal })
+    const response = await fetch(url, {
+      ...options,
+      headers: { ...FETCH_HEADERS, ...(options.headers ?? {}) },
+      signal: controller.signal,
+    })
     clearTimeout(timer)
     return response
   } catch (error) {
@@ -285,6 +314,7 @@ function validatePublicData(checks, data) {
   pushCheck(checks, Boolean(data.compliance?.entity_name), 'Public compliance metadata is present')
   pushCheck(checks, (data.compliance?.documents ?? []).length > 0, 'Public compliance exposes legal document assets')
   for (const document of data.compliance?.documents ?? []) {
+    if (!document.url) continue
     const result = checkMediaUrl(document.url)
     pushCheck(checks, result.ok, `Public compliance document URL allowed: ${document.url}`, { reason: result.reason })
   }
@@ -379,17 +409,19 @@ function writeEvidenceBundle(outPath, report, manifest) {
 
 const args = parseArgs(process.argv.slice(2))
 if (!args.url && !args.importManifest) {
-  console.error('Usage: node scripts/verify-blawby-site.mjs --url https://example.com [--site-id site-id] [--import-manifest file] [--evidence-dir dir] [--out artifact.json]')
+  console.error('Usage: node scripts/verify-blawby-site.mjs --url https://example.com [--site-id site-id] [--tenant-slug slug] [--import-manifest file] [--evidence-dir dir] [--out artifact.json]')
   process.exit(2)
 }
 
+const baseUrl = args.url ? normalizeTenantBaseUrl(args.url, args.tenantSlug) : ''
+FETCH_HEADERS = baseUrl ? previewTenantHeaders(baseUrl, args.tenantSlug) : {}
 const manifest = readJson(args.importManifest)
 const checks = []
-const routes = args.url ? collectRoutes(manifest, args.routes) : []
+const routes = baseUrl ? collectRoutes(manifest, args.routes) : []
 const routeChecks = []
 
 for (const route of routes) {
-  const result = await checkRoute(args.url, route)
+  const result = await checkRoute(baseUrl, route)
   routeChecks.push(result)
   pushCheck(checks, result.ok, `GET ${route} returns success`, { status: result.status })
   pushCheck(checks, result.has_blawby_signal, `GET ${route} renders Blawby/professional signal`)
@@ -403,9 +435,9 @@ for (const route of routes) {
   }
 }
 
-if (args.url) {
+if (baseUrl) {
   for (const excluded of ['/conference', '/thank-you']) {
-    const result = await checkRoute(args.url, excluded)
+    const result = await checkRoute(baseUrl, excluded)
     const ok = result.status === 404 || result.status === 410 || result.status === 301 || result.status === 302 || result.has_noindex
     pushCheck(checks, ok, `${excluded} is intentionally excluded, redirected, or noindexed`, {
       status: result.status,
@@ -415,13 +447,13 @@ if (args.url) {
 }
 
 validateArtifacts(checks, manifest)
-validatePublicData(checks, await fetchBlawbyData(args.url, args.siteId))
-if (args.url) validateSitemap(checks, await fetchSitemap(args.url), manifest)
+validatePublicData(checks, await fetchBlawbyData(baseUrl, args.siteId))
+if (baseUrl) validateSitemap(checks, await fetchSitemap(baseUrl), manifest)
 validateScreenshots(checks, args.evidenceDir, args.requireScreenshots)
 
 const report = {
   checked_at: new Date().toISOString(),
-  base_url: args.url || null,
+  base_url: baseUrl || null,
   site_id: args.siteId || null,
   ok: checks.every((check) => check.ok),
   routes: routeChecks.map((route) => ({

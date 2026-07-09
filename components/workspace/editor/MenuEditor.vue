@@ -414,8 +414,7 @@ const handleCreateMenu = async () => {
 }
 
 const menuRouteQuery = computed(() => ({
-  menuId: currentMenu.value?.id,
-  locationId: props.locationId || undefined
+  menuId: currentMenu.value?.id
 }))
 
 const { paths } = useDashboardSiteLinks(props.siteId)

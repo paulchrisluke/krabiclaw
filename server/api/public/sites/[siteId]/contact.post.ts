@@ -1,6 +1,7 @@
 import { execute, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { notifyContactSubmitted } from '~/server/utils/notifications'
+import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
 const VALID_SUBJECTS = ['general', 'press', 'partnerships', 'catering', 'careers']
@@ -22,6 +23,7 @@ export default defineEventHandler(async (event) => {
   const email   = cleanString(body.email, 200)
   const message = cleanString(body.message, 2000)
   const subject = cleanString(body.subject, 30)
+  const experienceIdInput = cleanString(body.experienceId, 100)
 
   if (!name) return jsonResponse({ error: 'Please enter your name.' }, { status: 400 })
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -37,6 +39,16 @@ export default defineEventHandler(async (event) => {
     [siteId, 'active'],
   )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
+
+  // Best-effort link — an invalid/foreign experienceId just means no "Regarding" context, not a failed submission.
+  let experience: { id: string; title: string } | null = null
+  if (experienceIdInput) {
+    experience = await queryFirst<{ id: string; title: string }>(
+      db,
+      'SELECT id, title FROM experiences WHERE id = ? AND site_id = ? LIMIT 1',
+      [experienceIdInput, siteId],
+    )
+  }
 
   const id = crypto.randomUUID()
   const clientIp = getClientIp(event)
@@ -57,9 +69,21 @@ export default defineEventHandler(async (event) => {
   }
 
   await execute(db, `
-    INSERT INTO contact_submissions (id, organization_id, site_id, name, email, subject, message, ip_hash)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `, [id, site.organization_id, siteId, name, email, subject || null, message, ipHash])
+    INSERT INTO contact_submissions (id, organization_id, site_id, name, email, subject, message, ip_hash, experience_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, site.organization_id, siteId, name, email, subject || null, message, ipHash, experience?.id ?? null])
+
+  await fireSiteEventSafe({
+    db,
+    organizationId: site.organization_id,
+    siteId,
+    eventType: 'contact.created',
+    entityType: 'contact_submission',
+    entityId: id,
+    metadata: {
+      subject: subject || null,
+    },
+  })
 
   try {
     await notifyContactSubmitted(env, db, {
@@ -70,7 +94,9 @@ export default defineEventHandler(async (event) => {
       guestName: name,
       email,
       subject: subject || null,
-      message
+      message,
+      experienceId: experience?.id ?? null,
+      experienceTitle: experience?.title ?? null,
     })
   } catch (error) {
     console.error('contact_notification_failed', {

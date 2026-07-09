@@ -11,6 +11,10 @@ export interface PublicTemplateDefinition {
     articleIndex: string | null
     articleDetailPrefix: string | null
   }
+  sitemap: {
+    exactPaths: string[]
+    dynamicPrefixes: string[]
+  }
 }
 
 export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDefinition> = {
@@ -25,6 +29,10 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       articleIndex: '/blog',
       articleDetailPrefix: '/blog',
     },
+    sitemap: {
+      exactPaths: ['/', '/menu', '/contact', '/blog', '/experiences', '/locations', '/reservations', '/posts', '/photos', '/qa', '/reviews'],
+      dynamicPrefixes: ['/blog/', '/experiences/', '/locations/', '/posts/'],
+    },
   },
   blawby: {
     slug: 'blawby',
@@ -36,6 +44,10 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       offeringDetailPrefix: '/services',
       articleIndex: '/blog',
       articleDetailPrefix: '/article',
+    },
+    sitemap: {
+      exactPaths: ['/', '/about', '/services', '/pricing', '/donate', '/schedule', '/contact', '/blog', '/policies/privacy', '/policies/terms', '/third-party-notices'],
+      dynamicPrefixes: ['/services/', '/article/'],
     },
   },
 }

@@ -1,5 +1,6 @@
 import { execute, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { notifyReservationCreated } from '~/server/utils/notifications'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
@@ -8,6 +9,9 @@ import { generateReservationTimes, isStructuredOpeningHours } from '~/shared/res
 import { getReservationSlotAvailability } from '~/server/utils/reservations'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
+import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking } from '~/server/utils/customers'
+import { fireSiteEventSafe } from '~/server/utils/site-events'
+import { getAuthSession } from '~/server/utils/auth'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
 // Fallback used only when a location has no structured opening_hours (e.g. Google Places imports,
@@ -47,6 +51,10 @@ export default defineEventHandler(async (event) => {
   if (!name) return jsonResponse({ error: 'Please enter your name.' }, { status: 400 })
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     return jsonResponse({ error: 'Please enter a valid email address.' }, { status: 400 })
+  // Reserved test domains (example.com, wa-verify@example.com, etc.) are guaranteed to
+  // hard-bounce and must never be accepted where the environment sends real email.
+  if (shouldSendRealEmail(env) && isReservedTestDomain(email))
+    return jsonResponse({ error: 'Please enter a real email address.' }, { status: 422 })
   if (!phone) return jsonResponse({ error: 'Please enter your phone number.' }, { status: 400 })
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
     return jsonResponse({ error: 'Please choose a valid future date.' }, { status: 400 })
@@ -119,7 +127,8 @@ export default defineEventHandler(async (event) => {
   const cancellation = createReservationCancelToken()
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
 
-  // Rate limiting (skipped in dev so local work and E2E can submit repeatedly)
+  // Rate limiting (skipped in dev so local work and E2E can submit repeatedly) — runs before
+  // customer creation so a rate-limited request never leaves behind an orphaned customer row.
   const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
   if (!import.meta.dev && !e2eOverride) {
     const hourWindow = Math.floor(Date.now() / 3_600_000)
@@ -132,6 +141,21 @@ export default defineEventHandler(async (event) => {
     if (!emailOk) return jsonResponse({ error: 'Too many reservation requests from this email. Please try again tomorrow.' }, { status: 429 })
   }
 
+  const session = await getAuthSession(event, env)
+  const userId = session?.user?.id || null
+
+  const customerInput = {
+    organizationId: site.organization_id,
+    siteId,
+    name,
+    email,
+    phone,
+    source: 'reservation',
+    bookingAt: `${date}T${time}:00`,
+    userId,
+  } as const
+  const customer = await findOrCreateCustomer(db, customerInput)
+
   // Single atomic statement: the capacity re-check and the insert happen in one SQL statement
   // (D1/SQLite guarantees single-statement atomicity even without BEGIN/COMMIT support — see
   // CLAUDE.md "D1 does not support raw transactions") so a concurrent request can't slip in
@@ -139,10 +163,10 @@ export default defineEventHandler(async (event) => {
   // or unstructured hours), the WHERE clause is unconditionally true and the insert always runs.
   const insertResult = await execute(db, `
     INSERT INTO reservation_submissions (
-      id, organization_id, site_id, name, email, phone, date, time, guests, requests, ip_hash,
+      id, organization_id, site_id, customer_id, name, email, phone, date, time, guests, requests, ip_hash,
       cancellation_token_hash, cancellation_token_expires_at, location_id
     )
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     WHERE ? IS NULL OR (
       COALESCE((
         SELECT SUM(CASE WHEN guests = '8+' THEN 8 ELSE CAST(guests AS INTEGER) END)
@@ -154,6 +178,7 @@ export default defineEventHandler(async (event) => {
     id,
     site.organization_id,
     siteId,
+    customer.id,
     name,
     email,
     phone,
@@ -174,8 +199,33 @@ export default defineEventHandler(async (event) => {
   ])
 
   if (!insertResult?.meta?.changes) {
+    if (customer.created) await deleteCustomerIfUnlinked(db, customer.id)
     return jsonResponse({ error: 'This time is no longer available. Please choose another time.' }, { status: 409 })
   }
+  await recordCustomerBooking(db, customer.id, customerInput)
+
+  // Update customer fields only after successful reservation to avoid mutating existing
+  // customers on failed reservations (e.g., capacity conflicts).
+  await execute(db, `
+    UPDATE customers
+    SET last_booking_at = ?, updated_at = ?
+    WHERE id = ?
+  `, [`${date}T${time}:00`, new Date().toISOString(), customer.id])
+
+  await fireSiteEventSafe({
+    db,
+    organizationId: site.organization_id,
+    siteId,
+    locationId: resolvedLocationId,
+    eventType: 'reservation.created',
+    entityType: 'reservation_submission',
+    entityId: id,
+    metadata: {
+      date,
+      time,
+      guests,
+    },
+  })
 
   // Build absolute cancel URL for the confirmation email
   const siteBaseUrl = site.public_url?.replace(/\/$/, '') || (site.subdomain ? `https://${site.subdomain}.krabiclaw.com` : null)

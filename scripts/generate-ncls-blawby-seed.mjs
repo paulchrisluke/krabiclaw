@@ -239,8 +239,8 @@ if (isStdout) {
   process.exit(0)
 }
 
-if (isRemote || isStaging || isPreview) {
-  console.error('NCLS Blawby seed is local-only for preview evidence. Production/staging cutover is out of scope.')
+if (isRemote || isStaging) {
+  console.error('NCLS Blawby seed is limited to local and preview evidence. Production/staging cutover is out of scope.')
   process.exit(1)
 }
 

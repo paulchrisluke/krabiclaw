@@ -253,18 +253,6 @@ export const PLATFORM_DASHBOARD_ROUTE_ENTRIES: PlatformDashboardRouteEntry[] = [
     surfaces: ['dashboard'],
   },
   {
-    id: 'dashboard-help',
-    title: 'Dashboard Help',
-    pathTemplate: '/dashboard/help',
-    fallbackPath: '/dashboard/help',
-    snippet: 'Talk to ChowBot support from inside the authenticated dashboard.',
-    body: 'Dashboard help is the authenticated support surface and reuses ChowBot conversation UI patterns.',
-    icon: 'circle-help',
-    section: 'Support',
-    keywords: ['help', 'support', 'chowbot', 'dashboard help'],
-    surfaces: ['dashboard'],
-  },
-  {
     id: 'org-settings-general',
     title: 'Organization Settings',
     pathTemplate: '/dashboard/:orgSlug/~/settings/general',

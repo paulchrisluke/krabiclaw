@@ -1,0 +1,78 @@
+import { expect, test } from '@playwright/test'
+import { devLoginHeaders, devLoginUrl } from './test-env'
+
+test.describe('dashboard API smoke', () => {
+  test('dashboard APIs work after dev login', async ({ request, baseURL }) => {
+    const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
+    expect(login.status()).toBeLessThan(400)
+
+    const contextResponse = await request.get(`${baseURL}/api/dashboard/context`)
+    expect(contextResponse.status()).toBe(200)
+    const contextBody = await contextResponse.json()
+    expect(contextBody.organization?.id).toEqual(expect.any(String))
+
+    const requestsResponse = await request.get(`${baseURL}/api/dashboard/work-requests`)
+    expect(requestsResponse.status()).toBe(200)
+    const requestsBody = await requestsResponse.json()
+    expect(Array.isArray(requestsBody.requests)).toBe(true)
+  })
+
+  test('owner can update content directly via dashboard API', async ({ request, baseURL }) => {
+    const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
+    expect(login.status()).toBeLessThan(400)
+
+    const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
+    expect(contextRes.status()).toBe(200)
+    const context = await contextRes.json()
+    const siteId = context?.site?.id as string | undefined
+    const hasSite = Boolean(siteId)
+
+    const uniqueTitle = `Dashboard E2E ${Date.now()}`
+
+    if (!hasSite) {
+      const saveRes = await request.post(`${baseURL}/api/dashboard/editor/content/save`, {
+        data: {
+          page: 'home',
+          changes: {
+            'hero.title': uniqueTitle,
+          },
+        },
+      })
+      expect(saveRes.status()).toBe(400)
+      const saveBody = await saveRes.json()
+      expect(String(saveBody.error || '')).toContain('Site workspace has not been created yet')
+      return
+    }
+
+    const saveRes = await request.post(`${baseURL}/api/editor/sites/${siteId}/content/save`, {
+      data: {
+        page: 'home',
+        changes: {
+          'hero.title': uniqueTitle,
+        },
+      },
+    })
+    expect(saveRes.status()).toBe(200)
+    const saveBody = await saveRes.json()
+    expect(saveBody.success).toBe(true)
+
+    const contentRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/content/home`)
+    expect(contentRes.status()).toBe(200)
+    const contentBody = await contentRes.json() as { fields: Array<{ field: string; hero_title?: string }> }
+    const hero = contentBody.fields.find((entry) => entry.field === 'hero')
+    expect(hero?.hero_title).toBe(uniqueTitle)
+
+    const eventsRes = await request.get(`${baseURL}/api/dashboard/events?limit=50`)
+    expect(eventsRes.status()).toBe(200)
+    const eventsBody = await eventsRes.json() as {
+      events: Array<{ event_type: string; entity_type: string | null; metadata: Record<string, unknown> | null }>
+    }
+    expect(
+      eventsBody.events.some((entry) =>
+        entry.event_type === 'content.updated'
+        && entry.entity_type === 'site_content'
+        && entry.metadata?.page === 'home'
+      ),
+    ).toBe(true)
+  })
+})

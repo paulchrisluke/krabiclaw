@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { locationListItemObject, locationMutationResultObject, locationObject, openingHoursInputSchema, siteTool, specialHoursInputSchema } from './shared'
+import { locationListItemObject, locationMutationSummaryObject, locationObject, openingHoursInputSchema, seoOverrideFieldsSchema, siteTool, specialHoursInputSchema } from './shared'
 import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const LOCATIONS_TOOLS: McpToolDefinition[] = [
@@ -39,6 +39,8 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
       confirmRequired: false,
       inputSchema: {
         title: { type: 'string' },
+        timezone: { type: 'string', description: 'IANA time zone identifier for this location, e.g. Asia/Bangkok. Used to interpret opening hours and booking slots.' },
+        max_capacity: { type: 'number', description: 'Maximum total guests this location can seat per reservation time slot. Reservation slots are still generated and bookable when this is left unset (no cap enforced) — set it to actually limit how many guests can book the same time slot.' },
         facebook_url: { type: 'string', description: 'Full Facebook page URL for this location, e.g. https://facebook.com/yourpage. Include the https:// scheme.' },
         instagram_url: { type: 'string', description: 'Full Instagram profile URL for this location, e.g. https://instagram.com/yourhandle. Include the https:// scheme.' },
         tiktok_url: { type: 'string', description: 'Full TikTok profile URL for this location, e.g. https://tiktok.com/@yourhandle. Include the https:// scheme.' },
@@ -47,16 +49,10 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         foodpanda_url: { type: 'string', description: 'Foodpanda URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
         opening_hours: openingHoursInputSchema,
         special_hours: specialHoursInputSchema,
+        ...seoOverrideFieldsSchema('Falls back to hero_image_asset_id, then the site-level og image, if unset.'),
       },
       required: ['title'],
-      outputSchema: {
-        ...locationMutationResultObject,
-        properties: {
-          ...locationMutationResultObject.properties,
-          hydrated_seed_location: { type: 'boolean' },
-          previous_slug: { type: ['string', 'null'] },
-        },
-      },
+      outputSchema: locationMutationSummaryObject,
     }),
   siteTool({
       name: 'update_location',
@@ -69,6 +65,8 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         phone: { type: 'string', description: 'Public phone number shown to guests on the website and in booking/reservation confirmation emails.' },
         email: { type: ['string', 'null'], description: 'Public email shown to guests on the website and in booking/reservation confirmation emails. Pass null to clear it.' },
         notification_phone: { type: 'string', description: 'WhatsApp number for internal booking/reservation alerts to this location\'s manager. Not shown to guests. Falls back to the site-level whatsapp_phone if null. International format: +66812345678' },
+        timezone: { type: 'string', description: 'IANA time zone identifier for this location, e.g. Asia/Bangkok. Used to interpret opening hours and booking slots.' },
+        max_capacity: { type: ['number', 'null'], description: 'Maximum total guests this location can seat per reservation time slot. Reservation slots are still generated and bookable when this is left unset (no cap enforced) — set it to actually limit how many guests can book the same time slot. Pass null to clear it.' },
         hero_image_asset_id: { type: 'string', description: 'Asset ID from get_site_media_assets. Assigns the hero image for this location.' },
         hero_video_asset_id: { type: 'string', description: 'Asset ID from get_site_media_assets. Assigns the hero video for this location.' },
         facebook_url: { type: 'string', description: 'Full Facebook page URL for this location, e.g. https://facebook.com/yourpage. Include the https:// scheme.' },
@@ -79,11 +77,10 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         foodpanda_url: { type: 'string', description: 'Foodpanda URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
         opening_hours: openingHoursInputSchema,
         special_hours: specialHoursInputSchema,
+        ...seoOverrideFieldsSchema('Falls back to hero_image_asset_id, then the site-level og image, if unset.'),
       },
       required: ['location_id'],
-      outputSchema: {
-        ...locationMutationResultObject,
-      },
+      outputSchema: locationMutationSummaryObject,
     }),
   siteTool({
       name: 'copy_location_batch',
@@ -111,12 +108,14 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
       outputSchema: {
         type: 'object',
         properties: {
-          manifest: {
-            type: 'object',
-            description: 'Per-entity counts of what was copied and the resulting location id/slug.',
-          },
+          ok: { type: 'boolean' },
+          entity: { type: 'string', enum: ['location'] },
+          id: { type: 'string' },
+          slug: { type: 'string' },
+          copied: { type: 'object', description: 'Per-entity-type counts of what was copied.' },
+          context: { type: 'object' },
         },
-        required: ['manifest'],
+        required: ['ok', 'entity', 'id'],
       },
     }),
   siteTool({
@@ -131,9 +130,9 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
       },
       required: ['location_id', 'asset_id'],
       outputSchema: {
-        ...locationMutationResultObject,
+        ...locationMutationSummaryObject,
         properties: {
-          ...locationMutationResultObject.properties,
+          ...locationMutationSummaryObject.properties,
           warning: { type: 'string' },
         },
       },
@@ -150,9 +149,9 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
       },
       required: ['location_id', 'asset_id'],
       outputSchema: {
-        ...locationMutationResultObject,
+        ...locationMutationSummaryObject,
         properties: {
-          ...locationMutationResultObject.properties,
+          ...locationMutationSummaryObject.properties,
           warning: { type: 'string' },
         },
       },
@@ -167,9 +166,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         location_id: { type: 'string' },
       },
       required: ['location_id'],
-      outputSchema: {
-        ...locationMutationResultObject,
-      },
+      outputSchema: locationMutationSummaryObject,
     }),
   siteTool({
       name: 'clear_location_hero_video',
@@ -181,9 +178,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         location_id: { type: 'string' },
       },
       required: ['location_id'],
-      outputSchema: {
-        ...locationMutationResultObject,
-      },
+      outputSchema: locationMutationSummaryObject,
     }),
   siteTool({
       name: 'open_location_media_upload',

@@ -207,11 +207,26 @@ test.describe("mcp tools", () => {
     );
     expect(updateLocationRes.status()).toBe(200);
     const updateLocationBody = (await updateLocationRes.json()) as {
-      result: { location?: { id?: string; title?: string; status?: string }; error?: string };
+      result: { ok?: boolean; id?: string; error?: string };
     };
     expect(updateLocationBody.result.error).toBeUndefined();
-    expect(updateLocationBody.result.location?.id).toBe(locationId);
-    expect(updateLocationBody.result.location?.status).toBe("inactive");
+    expect(updateLocationBody.result.ok).toBe(true);
+    expect(updateLocationBody.result.id).toBe(locationId);
+
+    const getLocationRes = await request.post(`${baseURL}/api/dev/mcp-tool`, {
+      headers: devLoginHeaders(),
+      data: {
+        siteId,
+        toolName: "get_location",
+        input: { location_id: locationId },
+      },
+    });
+    expect(getLocationRes.status()).toBe(200);
+    const getLocationBody = (await getLocationRes.json()) as {
+      result: { location?: { id?: string; status?: string } };
+    };
+    expect(getLocationBody.result.location?.id).toBe(locationId);
+    expect(getLocationBody.result.location?.status).toBe("inactive");
 
     const addQaRes = await request.post(`${baseURL}/api/dev/mcp-tool`, {
       headers: devLoginHeaders(),

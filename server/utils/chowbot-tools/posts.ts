@@ -32,6 +32,18 @@ export const POSTS_CHOWBOT_TOOLS: AiTool[] = [
             type: "string",
             description: "Short headline (max 80 chars). Optional.",
           },
+          slug: {
+            type: "string",
+            description: "Optional public URL slug. If omitted, KrabiClaw generates one.",
+          },
+          seo_title: {
+            type: "string",
+            description: "Optional SEO title for the public post page.",
+          },
+          seo_description: {
+            type: "string",
+            description: "Optional SEO/meta description for the public post page.",
+          },
           body: {
             type: "string",
             description: "Post body (max 400 chars). Friendly, warm tone. To embed structured content, include {{component type=\"faq\"}} or {{component type=\"how_to\"}} where the matching component should render.",
@@ -56,6 +68,24 @@ export const POSTS_CHOWBOT_TOOLS: AiTool[] = [
             type: "string",
             description:
               "Optional media asset ID from generate_image, get_site_media_assets, or pending WhatsApp media.",
+          },
+          og_image_asset_id: {
+            type: "string",
+            description: "Optional Open Graph image asset ID.",
+          },
+          gallery_media: {
+            type: "array",
+            description: "Optional ordered gallery media for the public post page.",
+            items: {
+              type: "object",
+              properties: {
+                media_asset_id: { type: "string" },
+                role: { type: "string", enum: ["gallery", "cover"] },
+                caption: { type: "string" },
+                alt_text: { type: "string" },
+              },
+              required: ["media_asset_id"],
+            },
           },
           location_id: {
             type: "string",
@@ -121,6 +151,13 @@ export const POSTS_CHOWBOT_TOOLS: AiTool[] = [
             type: "string",
             description: "New headline (max 80 chars). Omit to leave unchanged.",
           },
+          slug: {
+            type: ["string", "null"],
+            description: "Update the public URL slug. Omit to leave unchanged.",
+          },
+          seo_title: { type: ["string", "null"] },
+          seo_description: { type: ["string", "null"] },
+          og_image_asset_id: { type: ["string", "null"] },
           body: {
             type: "string",
             description:
@@ -145,6 +182,20 @@ export const POSTS_CHOWBOT_TOOLS: AiTool[] = [
           image_asset_id: {
             type: "string",
             description: "New media asset ID. Omit to leave unchanged.",
+          },
+          gallery_media: {
+            type: "array",
+            description: "Replace the ordered public post gallery. Omit to leave unchanged.",
+            items: {
+              type: "object",
+              properties: {
+                media_asset_id: { type: "string" },
+                role: { type: "string", enum: ["gallery", "cover"] },
+                caption: { type: "string" },
+                alt_text: { type: "string" },
+              },
+              required: ["media_asset_id"],
+            },
           },
           location_id: {
             type: "string",

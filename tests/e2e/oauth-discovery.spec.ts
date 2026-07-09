@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { devLoginHeaders } from './test-env'
 
 test.describe('OAuth discovery endpoints', () => {
   test('/.well-known/oauth-protected-resource returns valid document', async ({ request, baseURL }) => {
@@ -136,5 +137,73 @@ test.describe('OAuth discovery endpoints', () => {
     const wwwAuth = res.headers()['www-authenticate']
     expect(wwwAuth).toBeTruthy()
     expect(wwwAuth).toContain('/.well-known/oauth-protected-resource/platform-mcp')
+  })
+
+  test('unauthenticated tenant and platform MCP tool calls are logged to mcp telemetry', async ({ request, baseURL }) => {
+    const MCP_VERSION = '2026-07-28'
+    const since = new Date().toISOString()
+
+    const tenantRes = await request.post(`${baseURL}/api/mcp`, {
+      headers: {
+        'content-type': 'application/json',
+        'mcp-protocol-version': MCP_VERSION,
+        'mcp-method': 'tools/call',
+        'mcp-name': 'list_sites',
+      },
+      data: {
+        jsonrpc: '2.0',
+        id: 'telemetry-tenant-auth-check',
+        method: 'tools/call',
+        params: {
+          name: 'list_sites',
+          arguments: {},
+        },
+        _meta: {
+          'io.modelcontextprotocol/version': MCP_VERSION,
+          'io.modelcontextprotocol/method': 'tools/call',
+          'io.modelcontextprotocol/name': 'list_sites',
+        },
+      },
+    })
+    expect(tenantRes.status()).toBe(200)
+
+    const platformRes = await request.post(`${baseURL}/api/mcp/platform`, {
+      headers: {
+        'content-type': 'application/json',
+        'mcp-protocol-version': MCP_VERSION,
+        'mcp-method': 'tools/call',
+        'mcp-name': 'get_platform_context',
+      },
+      data: {
+        jsonrpc: '2.0',
+        id: 'telemetry-platform-auth-check',
+        method: 'tools/call',
+        params: {
+          name: 'get_platform_context',
+          arguments: {},
+        },
+        _meta: {
+          'io.modelcontextprotocol/version': MCP_VERSION,
+          'io.modelcontextprotocol/method': 'tools/call',
+          'io.modelcontextprotocol/name': 'get_platform_context',
+        },
+      },
+    })
+    expect(platformRes.status()).toBe(200)
+
+    await expect.poll(async () => {
+      const res = await request.get(
+        `${baseURL}/api/dev/mcp-telemetry?since=${encodeURIComponent(since)}&method=tools%2Fcall&status=auth_required&limit=20`,
+        { headers: devLoginHeaders() },
+      )
+      expect(res.status()).toBe(200)
+      const body = await res.json() as {
+        events: Array<{ mcp_surface: string; tool_name: string; status: string; error_message: string | null }>
+      }
+      return body.events.map((event) => `${event.mcp_surface}:${event.tool_name}:${event.status}:${event.error_message ?? ''}`)
+    }).toEqual(expect.arrayContaining([
+      'client:list_sites:auth_required:credential_missing: missing bearer token or cookie',
+      'platform:get_platform_context:auth_required:credential_missing: missing bearer token or cookie',
+    ]))
   })
 })

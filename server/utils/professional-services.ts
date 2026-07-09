@@ -33,74 +33,52 @@ type TenantPageRow = ApiRecord & {
   components_json: string | null
 }
 
-export async function listPublicOfferings(db: DbClient, siteId: string): Promise<PublicOffering[]> {
-  const rows = await queryAll<OfferingRow>(db, `
-    SELECT o.*,
-           thumb.public_url AS thumbnail_url,
-           hero.public_url AS hero_image_url
-      FROM offerings o
-      LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
-      LEFT JOIN media_assets hero ON o.hero_image_asset_id = hero.id AND hero.status = 'active'
-     WHERE o.site_id = ? AND o.status = 'published'
-     ORDER BY o.sort_order ASC, o.name ASC
-  `, [siteId])
-
-  const mediaIds = Array.from(new Set(rows.flatMap(row => parseJson<string[]>(row.media_asset_ids, []))))
-  const mediaRows = mediaIds.length
+async function loadMediaById(db: DbClient, mediaIds: string[]) {
+  const uniqueIds = Array.from(new Set(mediaIds)).filter(Boolean)
+  const mediaRows = uniqueIds.length
     ? await queryAll<ApiRecord>(db, `
         SELECT id, public_url, kind, alt_text
           FROM media_assets
-         WHERE id IN (${mediaIds.map(() => '?').join(',')}) AND status = 'active'
-      `, mediaIds)
+         WHERE id IN (${uniqueIds.map(() => '?').join(',')}) AND status = 'active'
+      `, uniqueIds)
     : []
-  const mediaById = new Map(mediaRows.map(row => [String(row.id), row]))
-
-  return rows.map(row => {
-    const ids = parseJson<string[]>(row.media_asset_ids, [])
-    return {
-      id: String(row.id),
-      name: String(row.name),
-      slug: String(row.slug),
-      label: typeof row.label === 'string' ? row.label : null,
-      summary: typeof row.summary === 'string' ? row.summary : null,
-      short_description: typeof row.short_description === 'string' ? row.short_description : null,
-      body: typeof row.body === 'string' ? row.body : null,
-      features: parseJson<string[]>(row.features, []),
-      faqs: parseJson<Array<{ question: string; answer: string }>>(row.faqs, []),
-      cta_label: typeof row.cta_label === 'string' ? row.cta_label : null,
-      cta_url: typeof row.cta_url === 'string' ? row.cta_url : null,
-      thumbnail_url: row.thumbnail_url,
-      hero_image_url: row.hero_image_url,
-      media: ids.map(id => mediaById.get(id)).filter(Boolean).map(asset => ({
-        id: String(asset!.id),
-        url: String(asset!.public_url),
-        kind: String(asset!.kind || 'image'),
-        alt_text: typeof asset!.alt_text === 'string' ? String(asset!.alt_text) : null,
-      })),
-      schema_type: typeof row.schema_type === 'string' ? row.schema_type : null,
-      seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
-      seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
-      canonical_path: typeof row.canonical_path === 'string' ? row.canonical_path : null,
-      status: String(row.status),
-      sort_order: Number(row.sort_order ?? 0),
-      featured: asBoolean(row.featured),
-    }
-  })
+  return new Map(mediaRows.map(row => [String(row.id), row]))
 }
 
-export async function getPublicOfferingBySlug(db: DbClient, siteId: string, slug: string) {
-  return (await listPublicOfferings(db, siteId)).find(offering => offering.slug === slug) ?? null
+function mapOfferingRow(row: OfferingRow, mediaById: Map<string, ApiRecord>): PublicOffering {
+  const ids = parseJson<string[]>(row.media_asset_ids, [])
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    slug: String(row.slug),
+    label: typeof row.label === 'string' ? row.label : null,
+    summary: typeof row.summary === 'string' ? row.summary : null,
+    short_description: typeof row.short_description === 'string' ? row.short_description : null,
+    body: typeof row.body === 'string' ? row.body : null,
+    features: parseJson<string[]>(row.features, []),
+    faqs: parseJson<Array<{ question: string; answer: string }>>(row.faqs, []),
+    cta_label: typeof row.cta_label === 'string' ? row.cta_label : null,
+    cta_url: typeof row.cta_url === 'string' ? row.cta_url : null,
+    thumbnail_url: typeof row.thumbnail_url === 'string' ? row.thumbnail_url : null,
+    hero_image_url: typeof row.hero_image_url === 'string' ? row.hero_image_url : null,
+    media: ids.map(id => mediaById.get(id)).filter(Boolean).map(asset => ({
+      id: String(asset!.id),
+      url: String(asset!.public_url),
+      kind: String(asset!.kind || 'image'),
+      alt_text: typeof asset!.alt_text === 'string' ? String(asset!.alt_text) : null,
+    })),
+    schema_type: typeof row.schema_type === 'string' ? row.schema_type : null,
+    seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
+    seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
+    canonical_path: typeof row.canonical_path === 'string' ? row.canonical_path : null,
+    status: String(row.status),
+    sort_order: Number(row.sort_order ?? 0),
+    featured: asBoolean(row.featured),
+  }
 }
 
-export async function listPublicTenantPages(db: DbClient, siteId: string): Promise<PublicTenantPage[]> {
-  const rows = await queryAll<TenantPageRow>(db, `
-    SELECT *
-      FROM tenant_pages
-     WHERE site_id = ? AND status = 'published'
-     ORDER BY sort_order ASC, title ASC
-  `, [siteId])
-
-  return rows.map(row => ({
+function mapTenantPageRow(row: TenantPageRow): PublicTenantPage {
+  return {
     id: String(row.id),
     path: String(row.path),
     title: String(row.title),
@@ -115,11 +93,61 @@ export async function listPublicTenantPages(db: DbClient, siteId: string): Promi
     canonical_url: typeof row.canonical_url === 'string' ? row.canonical_url : null,
     robots: typeof row.robots === 'string' ? row.robots : null,
     sort_order: Number(row.sort_order ?? 0),
-  }))
+  }
 }
 
-export async function getPublicTenantPageByPath(db: DbClient, siteId: string, path: string) {
-  return (await listPublicTenantPages(db, siteId)).find(page => page.path === path) ?? null
+export async function listPublicOfferings(db: DbClient, siteId: string): Promise<PublicOffering[]> {
+  const rows = await queryAll<OfferingRow>(db, `
+    SELECT o.*,
+           thumb.public_url AS thumbnail_url,
+           hero.public_url AS hero_image_url
+      FROM offerings o
+      LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
+      LEFT JOIN media_assets hero ON o.hero_image_asset_id = hero.id AND hero.status = 'active'
+     WHERE o.site_id = ? AND o.status = 'published'
+     ORDER BY o.sort_order ASC, o.name ASC
+  `, [siteId])
+
+  const mediaIds = rows.flatMap(row => parseJson<string[]>(row.media_asset_ids, []))
+  const mediaById = await loadMediaById(db, mediaIds)
+  return rows.map(row => mapOfferingRow(row, mediaById))
+}
+
+export async function getPublicOfferingBySlug(db: DbClient, siteId: string, slug: string): Promise<PublicOffering | null> {
+  const row = await queryFirst<OfferingRow>(db, `
+    SELECT o.*,
+           thumb.public_url AS thumbnail_url,
+           hero.public_url AS hero_image_url
+      FROM offerings o
+      LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
+      LEFT JOIN media_assets hero ON o.hero_image_asset_id = hero.id AND hero.status = 'active'
+     WHERE o.site_id = ? AND o.slug = ? AND o.status = 'published'
+     LIMIT 1
+  `, [siteId, slug])
+  if (!row) return null
+  const mediaById = await loadMediaById(db, parseJson<string[]>(row.media_asset_ids, []))
+  return mapOfferingRow(row, mediaById)
+}
+
+export async function listPublicTenantPages(db: DbClient, siteId: string): Promise<PublicTenantPage[]> {
+  const rows = await queryAll<TenantPageRow>(db, `
+    SELECT *
+      FROM tenant_pages
+     WHERE site_id = ? AND status = 'published'
+     ORDER BY sort_order ASC, title ASC
+  `, [siteId])
+
+  return rows.map(mapTenantPageRow)
+}
+
+export async function getPublicTenantPageByPath(db: DbClient, siteId: string, path: string): Promise<PublicTenantPage | null> {
+  const row = await queryFirst<TenantPageRow>(db, `
+    SELECT *
+      FROM tenant_pages
+     WHERE site_id = ? AND path = ? AND status = 'published'
+     LIMIT 1
+  `, [siteId, path])
+  return row ? mapTenantPageRow(row) : null
 }
 
 export async function getPublicConsultationSettings(db: DbClient, siteId: string): Promise<PublicConsultationSettings> {
@@ -170,7 +198,7 @@ export async function getPublicCompliance(db: DbClient, siteId: string): Promise
     document_asset_ids: documentAssetIds,
     documents: documentRows.map(document => ({
       id: String(document.id),
-      url: String(document.public_url || ''),
+      url: typeof document.public_url === 'string' && document.public_url ? document.public_url : null,
       label: typeof document.alt_text === 'string' ? document.alt_text : null,
       file_name: typeof document.file_name === 'string' ? document.file_name : null,
     })),

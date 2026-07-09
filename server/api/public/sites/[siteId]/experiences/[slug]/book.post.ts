@@ -1,4 +1,5 @@
 import { cloudflareEnv, jsonResponse, cleanString } from '~/server/utils/api-response'
+import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { getExperienceBySlug, createExperienceBookingClaimingCapacity, resolveEffectiveTimeSlots, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
 import { isDateBeforeTimezoneToday, isTimeSlotInPast } from '~/server/utils/site-config'
 import { fmt12Hour } from '~/shared/reservation-hours'
@@ -9,8 +10,11 @@ import { queryFirst } from '~/server/db'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
 import { getPlatformDomain } from '~/server/utils/notifications'
+import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
+import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking } from '~/server/utils/customers'
+import { getAuthSession } from '~/server/utils/auth'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
 export default defineEventHandler(async (event) => {
@@ -54,6 +58,11 @@ export default defineEventHandler(async (event) => {
   if (!guestName) return jsonResponse({ error: 'Name is required' }, { status: 400 })
   if (!guestEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail)) {
     return jsonResponse({ error: 'A valid email address is required' }, { status: 400 })
+  }
+  // Reserved test domains (example.com, wa-verify@example.com, etc.) are guaranteed to
+  // hard-bounce and must never be accepted where the environment sends real email.
+  if (shouldSendRealEmail(env) && isReservedTestDomain(guestEmail)) {
+    return jsonResponse({ error: 'Please enter a real email address.' }, { status: 422 })
   }
   if (!bookingDate || !/^\d{4}-\d{2}-\d{2}$/.test(bookingDate)) {
     return jsonResponse({ error: 'A valid date (YYYY-MM-DD) is required' }, { status: 400 })
@@ -122,11 +131,25 @@ export default defineEventHandler(async (event) => {
 
   const cancellation = createReservationCancelToken()
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
+  const session = await getAuthSession(event, env)
+  const userId = session?.user?.id || null
+  const customerInput = {
+    organizationId: site.organization_id,
+    siteId,
+    name: guestName,
+    email: guestEmail,
+    phone: guestPhone || null,
+    source: 'experience_booking',
+    bookingAt: `${bookingDate}T${timeSlot}:00`,
+    userId,
+  } as const
+  const customer = await findOrCreateCustomer(db, customerInput)
 
   const booking = await createExperienceBookingClaimingCapacity(db, {
     experience_id: experience.id,
     organization_id: site.organization_id,
     site_id: siteId,
+    customer_id: customer.id,
     location_id: experience.location_id,
     guest_name: guestName,
     guest_email: guestEmail,
@@ -145,8 +168,26 @@ export default defineEventHandler(async (event) => {
   // another request can claim the last spot in between. createExperienceBookingClaimingCapacity
   // re-checks capacity as part of the insert itself, so this is the authoritative guard.
   if (!booking) {
+    if (customer.created) await deleteCustomerIfUnlinked(db, customer.id)
     return jsonResponse({ error: 'This time slot just filled up. Please pick another time.' }, { status: 409 })
   }
+  await recordCustomerBooking(db, customer.id, customerInput)
+
+  await fireSiteEventSafe({
+    db,
+    organizationId: site.organization_id,
+    siteId,
+    locationId: experience.location_id,
+    eventType: 'experience.booking_received',
+    entityType: 'experience_booking',
+    entityId: booking.id,
+    metadata: {
+      experience_id: experience.id,
+      booking_date: bookingDate,
+      time_slot: timeSlot,
+      party_size: partySize,
+    },
+  })
 
   try {
     const { contactPhone, contactEmail } = await resolveLocationContact(db, siteId, experience.location_id)

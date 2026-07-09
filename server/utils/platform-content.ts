@@ -1,14 +1,25 @@
-import slugify from 'slugify'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import {
+  deleteContentDocumentForOwner,
+  publishCurrentContentRevision,
+  syncContentDocumentFromMarkdown,
+  unpublishContentDocument,
+  type ContentDocumentOwnerType,
+} from '~/server/utils/content-documents'
+import { slugifyTitle } from '~/utils/post-slugs'
 import { PLATFORM_MEDIA_SITE_ID } from '~/server/utils/platform-media'
-import { BLOG_CATEGORY_LABELS } from '~/utils/blog-categories'
+import { BLOG_CATEGORY_LABELS, blogCategoryToSlug } from '~/utils/blog-categories'
+import { categoryToSlug } from '~/utils/docs-categories'
 
 const BLOG_TITLE_MAX = 200
 const BLOG_BODY_MAX = 100000
 const BLOG_EXCERPT_MAX = 500
 const BLOG_CATEGORY_MAX = 100
+const BLOG_SEO_TITLE_MAX = 200
 const BLOG_SEO_DESCRIPTION_MAX = 500
 const BLOG_SEO_KEYWORDS_MAX = 500
+const CONTENT_NAV_LABEL_MAX = 120
+const CONTENT_NAV_TITLE_MAX = 160
 const DOC_TITLE_MAX = 200
 const DOC_BODY_MAX = 100000
 const DOC_EXCERPT_MAX = 500
@@ -19,6 +30,12 @@ const FAQ_ANSWER_MAX = 1000
 const HOW_TO_MIN_STEPS = 2
 const HOW_TO_MAX_STEPS = 30
 const HOW_TO_ESTIMATED_TIME_MAX = 200
+const AI_ASSISTANCE_MAX_PROMPTS = 10
+const AI_ASSISTANCE_INTRO_MAX = 500
+const AI_ASSISTANCE_PROMPT_MAX = 8000
+const AI_ASSISTANCE_PROMPT_TITLE_MAX = 160
+const AI_ASSISTANCE_PROMPT_DESCRIPTION_MAX = 500
+const AI_ASSISTANCE_PROMPT_COPY_LABEL_MAX = 80
 const COMPONENT_LABEL_MAX = 200
 const MAX_SLUG_ATTEMPTS = 8
 
@@ -27,13 +44,57 @@ export const PLATFORM_BLOG_CATEGORIES = BLOG_CATEGORY_LABELS
 export const PLATFORM_DOC_DIFFICULTIES = ['Beginner', 'Intermediate', 'Advanced'] as const
 
 export type PlatformContentType = 'blog_post' | 'doc'
-export type PlatformContentComponentType = 'faq' | 'how_to'
+export type PlatformContentComponentType = 'faq' | 'how_to' | 'ai_assistance'
 export type PlatformContentComponentStatus = 'active' | 'inactive'
 export type PlatformRobotsDirective = 'index,follow' | 'noindex,follow' | 'index,nofollow' | 'noindex,nofollow'
 
-export const PLATFORM_CONTENT_COMPONENT_TYPES: readonly PlatformContentComponentType[] = ['faq', 'how_to']
+export const PLATFORM_CONTENT_COMPONENT_TYPES: readonly PlatformContentComponentType[] = ['faq', 'how_to', 'ai_assistance']
 export const PLATFORM_COMPONENT_STATUSES: readonly PlatformContentComponentStatus[] = ['active', 'inactive']
 export const PLATFORM_ROBOTS_DIRECTIVES: readonly PlatformRobotsDirective[] = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow']
+
+function blogContentOwnerType(siteId: string | null): ContentDocumentOwnerType {
+  return siteId ? 'tenant_blog' : 'platform_blog'
+}
+
+async function syncBlogContentDocument(
+  db: D1Database,
+  postId: string,
+  siteId: string | null,
+  input: { body?: string; publish?: boolean; unpublish?: boolean },
+  createdBy?: string | null,
+) {
+  const ownerType = blogContentOwnerType(siteId)
+  if (input.body !== undefined) {
+    await syncContentDocumentFromMarkdown(db, {
+      ownerType,
+      ownerId: postId,
+      bodyMarkdown: input.body,
+      createdBy,
+      label: input.publish ? 'Published markdown body' : 'Draft markdown body',
+      publish: Boolean(input.publish),
+    })
+  } else if (input.publish) await publishCurrentContentRevision(db, ownerType, postId)
+  if (input.unpublish) await unpublishContentDocument(db, ownerType, postId)
+}
+
+async function syncDocContentDocument(
+  db: D1Database,
+  docId: string,
+  input: { body?: string; publish?: boolean; unpublish?: boolean },
+  createdBy?: string | null,
+) {
+  if (input.body !== undefined) {
+    await syncContentDocumentFromMarkdown(db, {
+      ownerType: 'platform_doc',
+      ownerId: docId,
+      bodyMarkdown: input.body,
+      createdBy,
+      label: input.publish ? 'Published markdown body' : 'Draft markdown body',
+      publish: Boolean(input.publish),
+    })
+  } else if (input.publish) await publishCurrentContentRevision(db, 'platform_doc', docId)
+  if (input.unpublish) await unpublishContentDocument(db, 'platform_doc', docId)
+}
 
 export interface PlatformFaqItemInput {
   question: string
@@ -76,6 +137,26 @@ export interface PlatformHowToComponentData {
   supply_items?: string[]
 }
 
+export interface PlatformAiAssistancePromptInput {
+  title?: string | null
+  prompt: string
+  description?: string | null
+  copy_label?: string | null
+  position?: number | null
+}
+
+export interface PlatformAiAssistanceComponentData {
+  intro?: string | null
+  collapsed?: boolean | null
+  max_visible_lines?: number | null
+  prompts: Array<Required<Pick<PlatformAiAssistancePromptInput, 'prompt'>> & {
+    title?: string | null
+    description?: string | null
+    copy_label?: string | null
+    position: number
+  }>
+}
+
 export interface PlatformContentComponent extends Required<Pick<PlatformComponentMetadataInput, 'position'>> {
   id: string
   content_type: PlatformContentType
@@ -85,7 +166,7 @@ export interface PlatformContentComponent extends Required<Pick<PlatformComponen
   status: PlatformContentComponentStatus
   render_enabled: boolean
   schema_enabled: boolean
-  data: PlatformFaqComponentData | PlatformHowToComponentData
+  data: PlatformFaqComponentData | PlatformHowToComponentData | PlatformAiAssistanceComponentData
   created_at: string
   updated_at: string
 }
@@ -112,16 +193,31 @@ export interface PlatformStructuredContentInput {
   components?: PlatformContentComponentInput[]
 }
 
+export interface PlatformContentNavInput {
+  nav_section?: string | null
+  nav_title?: string | null
+  nav_order?: number | null
+  nav_section_order?: number | null
+  hide_from_nav?: boolean | number | null
+  featured_order?: number | null
+}
+
 export interface BlogScope {
   site_id?: string | null
   organization_id?: string | null
 }
 
-export interface PlatformBlogCreateInput extends PlatformStructuredContentInput {
+export interface PlatformDocNavGroupInput {
+  nav_group?: string | null
+  nav_group_order?: number | null
+}
+
+export interface PlatformBlogCreateInput extends PlatformStructuredContentInput, PlatformContentNavInput {
   title: string
   body: string
   excerpt?: string | null
   category?: string | null
+  seo_title?: string | null
   seo_description?: string | null
   seo_keywords?: string | null
   canonical_url?: string | null
@@ -130,11 +226,12 @@ export interface PlatformBlogCreateInput extends PlatformStructuredContentInput 
   publish?: boolean
 }
 
-export interface PlatformBlogUpdateInput extends PlatformStructuredContentInput {
+export interface PlatformBlogUpdateInput extends PlatformStructuredContentInput, PlatformContentNavInput {
   title?: string
   body?: string
   excerpt?: string | null
   category?: string | null
+  seo_title?: string | null
   seo_description?: string | null
   seo_keywords?: string | null
   canonical_url?: string | null
@@ -144,7 +241,7 @@ export interface PlatformBlogUpdateInput extends PlatformStructuredContentInput 
   unpublish?: boolean
 }
 
-export interface PlatformDocCreateInput extends PlatformStructuredContentInput {
+export interface PlatformDocCreateInput extends PlatformStructuredContentInput, PlatformContentNavInput, PlatformDocNavGroupInput {
   title: string
   body: string
   excerpt?: string | null
@@ -160,7 +257,7 @@ export interface PlatformDocCreateInput extends PlatformStructuredContentInput {
   publish?: boolean
 }
 
-export interface PlatformDocUpdateInput extends PlatformStructuredContentInput {
+export interface PlatformDocUpdateInput extends PlatformStructuredContentInput, PlatformContentNavInput, PlatformDocNavGroupInput {
   title?: string
   body?: string
   excerpt?: string | null
@@ -202,7 +299,7 @@ interface PlatformMediaAssetRow {
 
 interface PlatformComponentReplacement extends PlatformComponentMetadataInput {
   type: PlatformContentComponentType
-  data: PlatformFaqComponentData | PlatformHowToComponentData
+  data: PlatformFaqComponentData | PlatformHowToComponentData | PlatformAiAssistanceComponentData
 }
 
 function badRequest(message: string): never {
@@ -240,7 +337,7 @@ function randomSlugSuffix(): string {
 }
 
 function normalizeSlugFromTitle(title: string, fallbackPrefix: 'post' | 'doc') {
-  const slug = slugify(title, { lower: true, strict: true, trim: true })
+  const slug = slugifyTitle(title)
   return slug || `${fallbackPrefix}-${Date.now()}`
 }
 
@@ -482,9 +579,70 @@ function validateHowToComponent(value: unknown): PlatformHowToComponentData {
   }
 }
 
+function validateAiAssistanceComponent(value: unknown): PlatformAiAssistanceComponentData {
+  const record = asRecord(value, 'ai_assistance component data')
+  const rawPrompts = record.prompts
+  if (!Array.isArray(rawPrompts)) badRequest('ai_assistance component data.prompts must be an array')
+  if (rawPrompts.length === 0) badRequest('ai_assistance component must include at least one prompt')
+  if (rawPrompts.length > AI_ASSISTANCE_MAX_PROMPTS) {
+    badRequest(`ai_assistance component cannot exceed ${AI_ASSISTANCE_MAX_PROMPTS} prompts`)
+  }
+
+  const prompts = rawPrompts.map((prompt, index) => {
+    const entry = asRecord(prompt, `ai_assistance prompt ${index}`)
+    const promptText = asString(entry.prompt, `ai_assistance prompt ${index} prompt`).trim()
+    if (!promptText) badRequest(`ai_assistance prompt ${index}.prompt is required`)
+    assertStringLength(promptText, AI_ASSISTANCE_PROMPT_MAX, `ai_assistance prompt ${index}.prompt`)
+
+    const title = typeof entry.title === 'string' ? entry.title.trim() || null : null
+    const description = typeof entry.description === 'string' ? entry.description.trim() || null : null
+    const copyLabel = typeof entry.copy_label === 'string' ? entry.copy_label.trim() || null : null
+    assertStringLength(title, AI_ASSISTANCE_PROMPT_TITLE_MAX, `ai_assistance prompt ${index}.title`)
+    assertStringLength(description, AI_ASSISTANCE_PROMPT_DESCRIPTION_MAX, `ai_assistance prompt ${index}.description`)
+    assertStringLength(copyLabel, AI_ASSISTANCE_PROMPT_COPY_LABEL_MAX, `ai_assistance prompt ${index}.copy_label`)
+
+    return {
+      title,
+      prompt: promptText,
+      description,
+      copy_label: copyLabel,
+      position: typeof entry.position === 'number' ? entry.position : index,
+    }
+  })
+
+  const intro = typeof record.intro === 'string' ? record.intro.trim() || null : null
+  assertStringLength(intro, AI_ASSISTANCE_INTRO_MAX, 'ai_assistance intro')
+  const maxVisibleLines = typeof record.max_visible_lines === 'number'
+    ? Math.max(1, Math.min(12, Math.round(record.max_visible_lines)))
+    : null
+
+  return {
+    intro,
+    collapsed: typeof record.collapsed === 'boolean' ? record.collapsed : null,
+    max_visible_lines: maxVisibleLines,
+    prompts: sortByPosition(prompts),
+  }
+}
+
 function parsePlatformComponent(row: PlatformContentComponentRow): PlatformContentComponent {
-  const parsed = JSON.parse(row.data_json) as unknown
-  const data = row.type === 'faq' ? validateFaqComponent(parsed) : validateHowToComponent(parsed)
+  let data: PlatformFaqComponentData | PlatformHowToComponentData | PlatformAiAssistanceComponentData
+  let valid = true
+  try {
+    const parsed = JSON.parse(row.data_json) as unknown
+    data = row.type === 'faq'
+      ? validateFaqComponent(parsed)
+      : row.type === 'how_to'
+        ? validateHowToComponent(parsed)
+        : validateAiAssistanceComponent(parsed)
+  } catch (err) {
+    valid = false
+    console.error('Failed to parse platform content component:', { id: row.id, type: row.type, err })
+    data = row.type === 'faq'
+      ? { items: [] }
+      : row.type === 'how_to'
+        ? { steps: [] }
+        : { prompts: [] }
+  }
   return {
     id: row.id,
     content_type: row.content_type,
@@ -492,9 +650,9 @@ function parsePlatformComponent(row: PlatformContentComponentRow): PlatformConte
     type: row.type,
     position: row.position,
     label: row.label,
-    status: row.status,
-    render_enabled: Boolean(row.render_enabled),
-    schema_enabled: Boolean(row.schema_enabled),
+    status: valid ? row.status : 'inactive',
+    render_enabled: valid ? Boolean(row.render_enabled) : false,
+    schema_enabled: valid ? Boolean(row.schema_enabled) : false,
     data,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -507,7 +665,9 @@ function normalizeComponentMetadata(
   previous?: PlatformContentComponent | null,
 ): PlatformComponentMetadataInput {
   const fieldPrefix = `${type} component`
-  const label = metadata.label !== undefined ? (metadata.label?.trim() || null) : previous?.label
+  const label = metadata.label !== undefined
+    ? (metadata.label?.trim() || null)
+    : previous?.label ?? (type === 'ai_assistance' ? 'AI Assistance' : undefined)
   assertStringLength(label, COMPONENT_LABEL_MAX, `${fieldPrefix} label`)
 
   return {
@@ -516,7 +676,7 @@ function normalizeComponentMetadata(
       ? assertValidComponentStatus(metadata.status, `${fieldPrefix} status`)
       : previous?.status,
     render_enabled: metadata.render_enabled !== undefined ? metadata.render_enabled : previous?.render_enabled,
-    schema_enabled: metadata.schema_enabled !== undefined ? metadata.schema_enabled : previous?.schema_enabled,
+    schema_enabled: metadata.schema_enabled !== undefined ? metadata.schema_enabled : previous?.schema_enabled ?? (type === 'ai_assistance' ? false : undefined),
     position: metadata.position !== undefined ? metadata.position : previous?.position,
   }
 }
@@ -532,8 +692,10 @@ async function normalizeFullComponents(
 
   for (const [index, component] of components.entries()) {
     const type = assertValidComponentType(component.type)
-    if (seen.has(type)) badRequest(`components cannot include duplicate ${type} entries`)
-    seen.add(type)
+    if (type !== 'ai_assistance') {
+      if (seen.has(type)) badRequest(`components cannot include duplicate ${type} entries`)
+      seen.add(type)
+    }
 
     const metadata = normalizeComponentMetadata(type, component)
     const position = typeof metadata.position === 'number' ? metadata.position : index
@@ -544,10 +706,16 @@ async function normalizeFullComponents(
       continue
     }
 
-    const data = validateHowToComponent(component.data)
-    for (const [stepIndex, step] of data.steps.entries()) {
-      if (step.image_asset_id) await ensureMediaAssetExists(db, step.image_asset_id, `components[${index}].data.steps[${stepIndex}].image_asset_id`)
+    if (type === 'how_to') {
+      const data = validateHowToComponent(component.data)
+      for (const [stepIndex, step] of data.steps.entries()) {
+        if (step.image_asset_id) await ensureMediaAssetExists(db, step.image_asset_id, `components[${index}].data.steps[${stepIndex}].image_asset_id`)
+      }
+      normalized.push({ type, data, ...metadata, position })
+      continue
     }
+
+    const data = validateAiAssistanceComponent(component.data)
     normalized.push({ type, data, ...metadata, position })
   }
 
@@ -624,6 +792,7 @@ async function syncStructuredContent(
 
   const existingFaq = byType.get('faq') ?? null
   const existingHowTo = byType.get('how_to') ?? null
+  const existingAiAssistance = existing.filter(component => component.type === 'ai_assistance')
 
   if (faqTouched) {
     if (input.faq_items !== undefined && input.faq_items.length === 0) {
@@ -701,6 +870,14 @@ async function syncStructuredContent(
     })
   }
 
+  for (const component of existingAiAssistance) {
+    replacements.push({
+      type: 'ai_assistance',
+      data: component.data as PlatformAiAssistanceComponentData,
+      ...normalizeComponentMetadata('ai_assistance', {}, component),
+    })
+  }
+
   await replaceContentComponents(db, contentType, contentId, replacements)
 }
 
@@ -715,6 +892,14 @@ function attachPublished(record: ApiRecord, published: boolean) {
   return {
     ...record,
     published,
+  }
+}
+
+function normalizeNavVisibility<T extends Record<string, unknown>>(record: T) {
+  if (!('hide_from_nav' in record)) return record
+  return {
+    ...record,
+    hide_from_nav: Boolean(record.hide_from_nav),
   }
 }
 
@@ -734,7 +919,7 @@ export function attachFeaturedImage(record: ApiRecord) {
   } = record
 
   return {
-    ...rest,
+    ...normalizeNavVisibility(rest),
     featured_image: {
       asset_id: record.featured_image_asset_id ?? null,
       public_url: publicUrl ?? null,
@@ -755,7 +940,7 @@ export function attachFeaturedImageFromBareJoin(record: ApiRecord) {
   const { public_url: publicUrl, kind, width, height, featured_image_asset_id: assetId, ...rest } = record
 
   return {
-    ...rest,
+    ...normalizeNavVisibility(rest),
     featured_image_asset_id: assetId ?? null,
     featured_image: {
       asset_id: assetId ?? null,
@@ -764,6 +949,31 @@ export function attachFeaturedImageFromBareJoin(record: ApiRecord) {
       width: width ?? null,
       height: height ?? null,
     },
+  }
+}
+
+function contentReviewUrls(record: ApiRecord, kind: 'blog' | 'doc', siteId: string | null = null) {
+  const id = String(record.id ?? '')
+  const adminEditUrl = kind === 'blog' ? `/admin/blog/${id}` : `/admin/docs/${id}`
+  const isPublished = record.status === 'published' || Boolean(record.published_at)
+  const category = typeof record.category === 'string' ? record.category : null
+  const slug = typeof record.slug === 'string' ? record.slug : null
+  const categorySlug = kind === 'blog' ? blogCategoryToSlug(category) : categoryToSlug(category)
+  const publicPath = (() => {
+    if (!isPublished || !slug) return null
+    if (kind === 'blog') {
+      if (siteId) return `/blog/${slug}`
+      return categorySlug ? `/blog/${categorySlug}/${slug}` : null
+    }
+    return categorySlug ? `/docs/${categorySlug}/${slug}` : null
+  })()
+
+  return {
+    ...record,
+    admin_edit_url: adminEditUrl,
+    public_path: publicPath,
+    public_url: publicPath,
+    preview_url: null,
   }
 }
 
@@ -779,8 +989,9 @@ export function attachFeaturedImageFromBareJoin(record: ApiRecord) {
 export async function getPublishedPlatformBlogPost(db: DbClient, category: string, slug: string) {
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
-      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_description, p.seo_keywords,
+      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_title, p.seo_description, p.seo_keywords,
       p.canonical_url, p.robots,
+      p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
       p.published_at, p.created_at, p.updated_at,
       p.featured_image_asset_id,
       u.name AS author_name,
@@ -813,6 +1024,7 @@ export async function getPublishedPlatformDoc(db: DbClient, category: string, sl
     `SELECT
        p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.difficulty_level,
        p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
+       p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.nav_group, p.nav_group_order, p.hide_from_nav, p.featured_order,
        p.featured_image_asset_id, p.published_at, p.updated_at,
        ma.public_url, ma.kind, ma.width, ma.height
      FROM platform_docs p
@@ -833,10 +1045,46 @@ function normalizeBlankToNull(input: { canonical_url?: string | null; robots?: s
   if (input.robots !== undefined && input.robots?.trim() === '') input.robots = null
 }
 
+function validateNavMetadata(input: Partial<PlatformContentNavInput>) {
+  if (input.nav_section !== undefined) assertStringLength(input.nav_section ?? null, CONTENT_NAV_LABEL_MAX, 'nav_section')
+  if (input.nav_title !== undefined) assertStringLength(input.nav_title ?? null, CONTENT_NAV_TITLE_MAX, 'nav_title')
+  for (const field of ['nav_order', 'nav_section_order', 'featured_order'] as const) {
+    if (input[field] !== undefined && input[field] !== null) {
+      const value = input[field]
+      if (typeof value !== 'string' && typeof value !== 'number') {
+        badRequest(`${field} must be a number or numeric string`)
+      }
+      if (typeof value === 'string' && !/^-?\d+$/.test(value)) {
+        badRequest(`${field} must be a number or numeric string`)
+      }
+      if (typeof value === 'number' && !Number.isInteger(value)) {
+        badRequest(`${field} must be an integer`)
+      }
+    }
+  }
+}
+
+function validateDocNavGroupMetadata(input: Partial<PlatformDocNavGroupInput>) {
+  if (input.nav_group !== undefined) assertStringLength(input.nav_group ?? null, CONTENT_NAV_LABEL_MAX, 'nav_group')
+  if (input.nav_group_order !== undefined && input.nav_group_order !== null && !Number.isInteger(input.nav_group_order)) {
+    badRequest('nav_group_order must be an integer')
+  }
+}
+
+function normalizeHideFromNav(value: PlatformContentNavInput['hide_from_nav']) {
+  if (value === undefined || value === null) return value
+  return value ? 1 : 0
+}
+
+function hasOwnField<T extends object>(input: T, key: PropertyKey) {
+  return Object.prototype.hasOwnProperty.call(input, key)
+}
+
 // The fixed PLATFORM_BLOG_CATEGORIES taxonomy (Marketing, SEO, ...) only makes sense
 // for KrabiClaw's own marketing blog — a tenant restaurant's blog category is free text.
 function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant = false) {
   normalizeBlankToNull(input)
+  validateNavMetadata(input)
   if (input.title !== undefined) assertStringLength(input.title, BLOG_TITLE_MAX, 'title')
   if (input.body !== undefined) assertStringLength(input.body, BLOG_BODY_MAX, 'body')
   if (input.excerpt !== undefined) assertStringLength(input.excerpt ?? null, BLOG_EXCERPT_MAX, 'excerpt')
@@ -844,6 +1092,7 @@ function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant = 
     assertStringLength(input.category ?? null, BLOG_CATEGORY_MAX, 'category')
     if (!isTenant) assertValidBlogCategory(input.category ?? null)
   }
+  if (input.seo_title !== undefined) assertStringLength(input.seo_title ?? null, BLOG_SEO_TITLE_MAX, 'seo_title')
   if (input.seo_description !== undefined) assertStringLength(input.seo_description ?? null, BLOG_SEO_DESCRIPTION_MAX, 'seo_description')
   if (input.seo_keywords !== undefined) assertStringLength(input.seo_keywords ?? null, BLOG_SEO_KEYWORDS_MAX, 'seo_keywords')
   if (input.canonical_url !== undefined) assertValidCanonicalUrl(input.canonical_url)
@@ -852,6 +1101,8 @@ function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant = 
 
 function validateDocCommon(input: Partial<PlatformDocCreateInput>) {
   normalizeBlankToNull(input)
+  validateNavMetadata(input)
+  validateDocNavGroupMetadata(input)
   if (input.title !== undefined) assertStringLength(input.title, DOC_TITLE_MAX, 'title')
   if (input.body !== undefined) assertStringLength(input.body, DOC_BODY_MAX, 'body')
   if (input.excerpt !== undefined) assertStringLength(input.excerpt ?? null, DOC_EXCERPT_MAX, 'excerpt')
@@ -982,7 +1233,8 @@ export async function resolveContentComponentsMedia(db: DbClient, components: Pl
 
 export async function listPlatformBlogPosts(db: DbClient, status?: string | null, siteId: string | null = null) {
   let sql = `SELECT
-      p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
+      p.id, p.title, p.slug, p.excerpt, p.category, p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
+      p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
       p.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
       ma.width AS featured_image_width, ma.height AS featured_image_height,
       p.published_at, p.created_at, p.updated_at
@@ -992,9 +1244,9 @@ export async function listPlatformBlogPosts(db: DbClient, status?: string | null
   const params: ApiValue[] = siteId ? [siteId] : []
   if (status === 'published') sql += " AND p.status = 'published'"
   else if (status === 'draft') sql += " AND p.status = 'draft'"
-  sql += ' ORDER BY p.created_at DESC'
+  sql += ' ORDER BY COALESCE(p.featured_order, 999999), COALESCE(p.nav_section_order, 999999), COALESCE(p.nav_section, p.category), COALESCE(p.nav_order, 999999), p.created_at DESC'
   const results = await queryAll<ApiRecord>(db, sql, params)
-  return (results ?? []).map(record => attachFeaturedImage(attachPublished(record, Boolean(record.published_at))))
+  return (results ?? []).map(record => contentReviewUrls(attachFeaturedImage(attachPublished(record, Boolean(record.published_at))), 'blog', siteId))
 }
 
 export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, siteId: string | null = null) {
@@ -1002,7 +1254,8 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
   const post = await queryFirst<ApiRecord | null>(
     db,
     `SELECT
-       p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
+       p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
+       p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
        p.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
        ma.width AS featured_image_width, ma.height AS featured_image_height,
        p.published_at, p.created_at, p.updated_at
@@ -1013,7 +1266,37 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
   )
   if (!post) notFound('Post not found')
   const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'blog_post', postId))
-  return attachComponents(attachFeaturedImage(attachPublished(post, Boolean(post.published_at))), components)
+  return attachComponents(contentReviewUrls(attachFeaturedImage(attachPublished(post, Boolean(post.published_at))), 'blog', siteId), components)
+}
+
+export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slug: string) {
+  const post = await queryFirst<ApiRecord>(db, `
+    SELECT
+      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_title, p.seo_description, p.seo_keywords,
+      p.canonical_url, p.robots,
+      p.published_at, p.created_at, p.updated_at,
+      p.featured_image_asset_id,
+      u.name AS author_name,
+      u.image AS author_image,
+      ma.public_url,
+      ma.kind,
+      ma.width,
+      ma.height
+    FROM blog_posts p
+    LEFT JOIN user u ON u.id = p.author_id
+    LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
+    WHERE p.slug = ? AND p.site_id = ? AND p.status = 'published'
+    LIMIT 1
+  `, [slug, siteId])
+
+  if (!post) return null
+
+  const components = await resolveContentComponentsMedia(
+    db,
+    await listContentComponents(db, 'blog_post', String(post.id), { activeOnly: true }),
+  )
+
+  return attachFeaturedImageFromBareJoin({ ...post, components })
 }
 
 export async function createPlatformBlogPost(
@@ -1040,8 +1323,8 @@ export async function createPlatformBlogPost(
     const slug = attempt === 0 ? slugBase : `${slugBase}-${randomSlugSuffix()}`
     try {
       await execute(db, `
-        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, status, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, author_id, published_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, nav_section, nav_title, nav_order, nav_section_order, hide_from_nav, featured_order, status, seo_title, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, author_id, published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
         id,
         organizationId,
         siteId,
@@ -1050,7 +1333,14 @@ export async function createPlatformBlogPost(
         input.body,
         input.excerpt ?? null,
         input.category ?? null,
+        input.nav_section ?? null,
+        input.nav_title ?? null,
+        input.nav_order != null ? Number(input.nav_order) : null,
+        input.nav_section_order != null ? Number(input.nav_section_order) : null,
+        normalizeHideFromNav(input.hide_from_nav) ?? 0,
+        input.featured_order != null ? Number(input.featured_order) : null,
         input.publish ? 'published' : 'draft',
+        input.seo_title ?? null,
         input.seo_description ?? null,
         input.seo_keywords ?? null,
         input.canonical_url ?? null,
@@ -1064,8 +1354,10 @@ export async function createPlatformBlogPost(
 
       try {
         await syncStructuredContent(db, 'blog_post', id, input)
+        await syncBlogContentDocument(db, id, siteId, input, authorId)
       } catch (err) {
         try {
+          await deleteContentDocumentForOwner(db, blogContentOwnerType(siteId), id)
           await execute(db, 'DELETE FROM blog_posts WHERE id = ?', [id])
           await replaceContentComponents(db, 'blog_post', id, [])
         } catch (cleanupErr) {
@@ -1074,7 +1366,17 @@ export async function createPlatformBlogPost(
         throw err
       }
       const post = await getPlatformBlogPost(db, id, siteId)
-      return { success: true, id, slug, published_at: publishedAt, post }
+      return {
+        success: true,
+        id,
+        slug,
+        published_at: publishedAt,
+        admin_edit_url: post.admin_edit_url,
+        public_path: post.public_path,
+        public_url: post.public_url,
+        preview_url: post.preview_url,
+        post,
+      }
     } catch (err) {
       if (isUniqueConstraintError(err, 'blog_posts') && attempt < MAX_SLUG_ATTEMPTS - 1) continue
       throw err
@@ -1130,6 +1432,7 @@ export async function updatePlatformBlogPost(
     | 'publish'
     | 'unpublish'
     | 'title'
+    | 'hide_from_nav'
     | 'faq_items'
     | 'faq_label'
     | 'faq_status'
@@ -1147,6 +1450,12 @@ export async function updatePlatformBlogPost(
   >> = [
     'excerpt',
     'category',
+    'nav_section',
+    'nav_title',
+    'nav_order',
+    'nav_section_order',
+    'featured_order',
+    'seo_title',
     'seo_description',
     'seo_keywords',
     'canonical_url',
@@ -1158,6 +1467,10 @@ export async function updatePlatformBlogPost(
       updates.push(`${field} = ?`)
       params.push(input[field] as ApiValue)
     }
+  }
+  if (input.hide_from_nav !== undefined) {
+    updates.push('hide_from_nav = ?')
+    params.push(normalizeHideFromNav(input.hide_from_nav) ?? 0)
   }
 
   if (input.publish && input.unpublish) badRequest('Cannot publish and unpublish simultaneously')
@@ -1182,6 +1495,7 @@ export async function updatePlatformBlogPost(
     const priorPost = await getPlatformBlogPost(db, postId, siteId)
     try {
       await syncStructuredContent(db, 'blog_post', postId, input)
+      await syncBlogContentDocument(db, postId, siteId, input)
     } catch (err) {
       await syncStructuredContent(db, 'blog_post', postId, {
         components: priorPost?.components ?? []
@@ -1189,7 +1503,14 @@ export async function updatePlatformBlogPost(
       throw err
     }
     const updatedPost = await getPlatformBlogPost(db, postId, siteId)
-    return { success: true, post: updatedPost }
+    return {
+      success: true,
+      admin_edit_url: updatedPost.admin_edit_url,
+      public_path: updatedPost.public_path,
+      public_url: updatedPost.public_url,
+      preview_url: updatedPost.preview_url,
+      post: updatedPost,
+    }
   } catch (err) {
     if (isUniqueConstraintError(err, 'blog_posts')) badRequest('Slug already in use')
     throw err
@@ -1203,6 +1524,7 @@ export async function deletePlatformBlogPost(db: D1Database, postIdOrSlug: strin
     await replaceContentComponents(db, 'blog_post', postId, [])
     const result = await execute(db, 'DELETE FROM blog_posts WHERE id = ?', [postId])
     if (!result.meta.changes || result.meta.changes === 0) notFound('Post not found')
+    await deleteContentDocumentForOwner(db, blogContentOwnerType(siteId), postId)
   } catch (err) {
     await replaceContentComponents(db, 'blog_post', postId, priorComponents.map(c => ({
       type: c.type,
@@ -1218,9 +1540,64 @@ export async function deletePlatformBlogPost(db: D1Database, postIdOrSlug: strin
   return { success: true }
 }
 
+export async function reorderPlatformBlogPosts(
+  db: D1Database,
+  items: Array<{
+    post_id: string
+    nav_section?: string | null
+    nav_title?: string | null
+    nav_order: number
+    nav_section_order?: number | null
+    hide_from_nav?: boolean | number | null
+  }>,
+  siteId: string | null = null,
+) {
+  if (!items.length) badRequest('items are required')
+  const now = new Date().toISOString()
+  const queries: { query: string; params: unknown[] }[] = []
+  const scopeClause = siteId ? 'site_id = ?' : 'site_id IS NULL'
+
+  for (const item of items) {
+    const metadata: Partial<PlatformContentNavInput> = { nav_order: item.nav_order }
+    if (hasOwnField(item, 'nav_section')) metadata.nav_section = item.nav_section ?? null
+    if (hasOwnField(item, 'nav_title')) metadata.nav_title = item.nav_title ?? null
+    if (hasOwnField(item, 'nav_section_order')) metadata.nav_section_order = item.nav_section_order ?? null
+    validateNavMetadata(metadata)
+    const postId = await resolvePlatformContentId(db, 'blog_posts', item.post_id, 'Post not found', siteId)
+    const updates = ['nav_order = ?', 'updated_at = ?']
+    const params: ApiValue[] = [Number(item.nav_order), now]
+    if (hasOwnField(item, 'nav_section')) {
+      updates.splice(1, 0, 'nav_section = ?')
+      params.splice(1, 0, item.nav_section ?? null)
+    }
+    if (hasOwnField(item, 'nav_title')) {
+      updates.splice(updates.length - 1, 0, 'nav_title = ?')
+      params.splice(params.length - 1, 0, item.nav_title ?? null)
+    }
+    if (hasOwnField(item, 'nav_section_order')) {
+      updates.splice(updates.length - 1, 0, 'nav_section_order = ?')
+      params.splice(params.length - 1, 0, item.nav_section_order != null ? Number(item.nav_section_order) : null)
+    }
+    if (hasOwnField(item, 'hide_from_nav')) {
+      updates.splice(updates.length - 1, 0, 'hide_from_nav = ?')
+      params.splice(params.length - 1, 0, normalizeHideFromNav(item.hide_from_nav) ?? 0)
+    }
+    params.push(postId)
+    if (siteId) params.push(siteId)
+    queries.push({
+      query: `UPDATE blog_posts SET ${updates.join(', ')} WHERE id = ? AND ${scopeClause}`,
+      params,
+    })
+  }
+
+  await executeBatch(db, queries)
+  return { success: true, posts: await listPlatformBlogPosts(db, null, siteId) }
+}
+
 export async function listPlatformDocs(db: DbClient, status?: string | null) {
   let sql = `SELECT
       d.id, d.title, d.slug, d.excerpt, d.category, d.seo_description, d.seo_keywords, d.canonical_url, d.robots,
+      d.nav_section, d.nav_title, d.nav_order, d.nav_section_order, d.nav_group, d.nav_group_order, d.hide_from_nav, d.featured_order,
       d.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
       ma.width AS featured_image_width, ma.height AS featured_image_height,
       d.difficulty_level, d.sort_order, d.parent_doc_id, d.status, d.published_at, d.created_at, d.updated_at
@@ -1228,9 +1605,9 @@ export async function listPlatformDocs(db: DbClient, status?: string | null) {
     LEFT JOIN media_assets ma ON ma.id = d.featured_image_asset_id AND ma.status = 'active'`
   if (status === 'published') sql += " WHERE d.status = 'published'"
   else if (status === 'draft') sql += " WHERE d.status = 'draft'"
-  sql += ' ORDER BY d.category, d.sort_order, d.created_at DESC'
+  sql += ' ORDER BY COALESCE(d.featured_order, 999999), COALESCE(d.nav_section_order, 999999), COALESCE(d.nav_section, d.category), COALESCE(d.nav_group_order, 999999), COALESCE(d.nav_group, \'\'), COALESCE(d.nav_order, d.sort_order, 999999), d.created_at DESC'
   const results = await queryAll<ApiRecord>(db, sql)
-  return (results ?? []).map(record => attachFeaturedImage(attachPublished(record, record.status === 'published')))
+  return (results ?? []).map(record => contentReviewUrls(attachFeaturedImage(attachPublished(record, record.status === 'published')), 'doc'))
 }
 
 export async function getPlatformDoc(db: DbClient, docIdOrSlug: string) {
@@ -1239,6 +1616,7 @@ export async function getPlatformDoc(db: DbClient, docIdOrSlug: string) {
     db,
     `SELECT
        d.id, d.title, d.slug, d.body, d.excerpt, d.category, d.seo_description, d.seo_keywords, d.canonical_url, d.robots,
+       d.nav_section, d.nav_title, d.nav_order, d.nav_section_order, d.nav_group, d.nav_group_order, d.hide_from_nav, d.featured_order,
        d.difficulty_level, d.sort_order, d.parent_doc_id,
        d.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
        ma.width AS featured_image_width, ma.height AS featured_image_height,
@@ -1250,7 +1628,7 @@ export async function getPlatformDoc(db: DbClient, docIdOrSlug: string) {
   )
   if (!doc) notFound('Doc not found')
   const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'doc', docId))
-  return attachComponents(attachFeaturedImage(attachPublished(doc, doc.status === 'published')), components)
+  return attachComponents(contentReviewUrls(attachFeaturedImage(attachPublished(doc, doc.status === 'published')), 'doc'), components)
 }
 
 export async function createPlatformDoc(
@@ -1273,14 +1651,22 @@ export async function createPlatformDoc(
     const slug = attempt === 0 ? slugBase : `${slugBase}-${randomSlugSuffix()}`
     try {
       await execute(db, `
-        INSERT INTO platform_docs (id, title, slug, body, excerpt, category, author_id, seo_description, seo_keywords, canonical_url, robots, difficulty_level, sort_order, parent_doc_id, featured_image_asset_id, status, published_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        INSERT INTO platform_docs (id, title, slug, body, excerpt, category, nav_section, nav_title, nav_order, nav_section_order, nav_group, nav_group_order, hide_from_nav, featured_order, author_id, seo_description, seo_keywords, canonical_url, robots, difficulty_level, sort_order, parent_doc_id, featured_image_asset_id, status, published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
         id,
         input.title,
         slug,
         input.body,
         input.excerpt ?? null,
         input.category ?? null,
+        input.nav_section ?? null,
+        input.nav_title ?? null,
+        input.nav_order != null ? Number(input.nav_order) : null,
+        input.nav_section_order != null ? Number(input.nav_section_order) : null,
+        input.nav_group ?? null,
+        input.nav_group_order != null ? Number(input.nav_group_order) : null,
+        normalizeHideFromNav(input.hide_from_nav) ?? 0,
+        input.featured_order != null ? Number(input.featured_order) : null,
         authorId,
         input.seo_description ?? null,
         input.seo_keywords ?? null,
@@ -1298,13 +1684,31 @@ export async function createPlatformDoc(
 
       try {
         await syncStructuredContent(db, 'doc', id, input)
+        await syncDocContentDocument(db, id, input, authorId)
       } catch (syncErr) {
-        await execute(db, 'DELETE FROM platform_docs WHERE id = ?', [id])
+        try {
+          await deleteContentDocumentForOwner(db, 'platform_doc', id)
+          await execute(db, 'DELETE FROM platform_docs WHERE id = ?', [id])
+          await replaceContentComponents(db, 'doc', id, [])
+        } catch (cleanupErr) {
+          console.error('Failed to clean up platform doc after create rollback:', cleanupErr)
+        }
         throw syncErr
       }
 
       const doc = await getPlatformDoc(db, id)
-      return { success: true, id, slug, status, published_at: publishedAt, doc }
+      return {
+        success: true,
+        id,
+        slug,
+        status,
+        published_at: publishedAt,
+        admin_edit_url: doc.admin_edit_url,
+        public_path: doc.public_path,
+        public_url: doc.public_url,
+        preview_url: doc.preview_url,
+        doc,
+      }
     } catch (err) {
       if (isUniqueConstraintError(err, 'platform_docs') && attempt < MAX_SLUG_ATTEMPTS - 1) continue
       throw err
@@ -1346,6 +1750,7 @@ export async function updatePlatformDoc(
     | 'publish'
     | 'unpublish'
     | 'title'
+    | 'hide_from_nav'
     | 'faq_items'
     | 'faq_label'
     | 'faq_status'
@@ -1364,6 +1769,13 @@ export async function updatePlatformDoc(
     'body',
     'excerpt',
     'category',
+    'nav_section',
+    'nav_title',
+    'nav_order',
+    'nav_section_order',
+    'nav_group',
+    'nav_group_order',
+    'featured_order',
     'seo_description',
     'seo_keywords',
     'canonical_url',
@@ -1379,6 +1791,10 @@ export async function updatePlatformDoc(
       updates.push(`${field} = ?`)
       params.push(input[field] as ApiValue)
     }
+  }
+  if (input.hide_from_nav !== undefined) {
+    updates.push('hide_from_nav = ?')
+    params.push(normalizeHideFromNav(input.hide_from_nav) ?? 0)
   }
 
   if (input.publish && input.unpublish) badRequest('Cannot publish and unpublish simultaneously')
@@ -1401,8 +1817,25 @@ export async function updatePlatformDoc(
        RETURNING id`, params)
     if (!doc) notFound('Doc not found')
 
-    await syncStructuredContent(db, 'doc', docId, input)
-    return { success: true, doc: await getPlatformDoc(db, docId) }
+    const priorDoc = await getPlatformDoc(db, docId)
+    try {
+      await syncStructuredContent(db, 'doc', docId, input)
+      await syncDocContentDocument(db, docId, input)
+    } catch (err) {
+      await syncStructuredContent(db, 'doc', docId, {
+        components: priorDoc?.components ?? []
+      })
+      throw err
+    }
+    const updatedDoc = await getPlatformDoc(db, docId)
+    return {
+      success: true,
+      admin_edit_url: updatedDoc.admin_edit_url,
+      public_path: updatedDoc.public_path,
+      public_url: updatedDoc.public_url,
+      preview_url: updatedDoc.preview_url,
+      doc: updatedDoc,
+    }
   } catch (err) {
     if (isUniqueConstraintError(err, 'platform_docs')) badRequest('Slug already in use')
     throw err
@@ -1411,8 +1844,88 @@ export async function updatePlatformDoc(
 
 export async function deletePlatformDoc(db: D1Database, docIdOrSlug: string) {
   const docId = await resolvePlatformContentId(db, 'platform_docs', docIdOrSlug, 'Doc not found')
-  await replaceContentComponents(db, 'doc', docId, [])
-  const result = await execute(db, 'DELETE FROM platform_docs WHERE id = ?', [docId])
-  if (!result.meta.changes || result.meta.changes === 0) notFound('Doc not found')
+  const priorComponents = await listContentComponents(db, 'doc', docId)
+  try {
+    await replaceContentComponents(db, 'doc', docId, [])
+    const result = await execute(db, 'DELETE FROM platform_docs WHERE id = ?', [docId])
+    if (!result.meta.changes || result.meta.changes === 0) notFound('Doc not found')
+    await deleteContentDocumentForOwner(db, 'platform_doc', docId)
+  } catch (err) {
+    await replaceContentComponents(db, 'doc', docId, priorComponents.map(c => ({
+      type: c.type,
+      data: c.data,
+      label: c.label,
+      status: c.status,
+      render_enabled: c.render_enabled,
+      schema_enabled: c.schema_enabled,
+      position: c.position,
+    })))
+    throw err
+  }
   return { success: true }
+}
+
+export async function reorderPlatformDocs(
+  db: D1Database,
+  items: Array<{
+    doc_id: string
+    nav_section?: string | null
+    nav_title?: string | null
+    nav_order: number
+    nav_section_order?: number | null
+    nav_group?: string | null
+    nav_group_order?: number | null
+    hide_from_nav?: boolean | number | null
+  }>,
+) {
+  if (!items.length) badRequest('items are required')
+  const now = new Date().toISOString()
+  const queries: { query: string; params: unknown[] }[] = []
+
+  for (const item of items) {
+    const metadata: Partial<PlatformContentNavInput> = { nav_order: item.nav_order }
+    if (hasOwnField(item, 'nav_section')) metadata.nav_section = item.nav_section ?? null
+    if (hasOwnField(item, 'nav_title')) metadata.nav_title = item.nav_title ?? null
+    if (hasOwnField(item, 'nav_section_order')) metadata.nav_section_order = item.nav_section_order ?? null
+    validateNavMetadata(metadata)
+    validateDocNavGroupMetadata({
+      nav_group: hasOwnField(item, 'nav_group') ? item.nav_group ?? null : undefined,
+      nav_group_order: hasOwnField(item, 'nav_group_order') ? item.nav_group_order ?? null : undefined,
+    })
+    const docId = await resolvePlatformContentId(db, 'platform_docs', item.doc_id, 'Doc not found')
+    const updates = ['nav_order = ?', 'updated_at = ?']
+    const params: ApiValue[] = [Number(item.nav_order), now]
+    if (hasOwnField(item, 'nav_section')) {
+      updates.splice(1, 0, 'nav_section = ?')
+      params.splice(1, 0, item.nav_section ?? null)
+    }
+    if (hasOwnField(item, 'nav_title')) {
+      updates.splice(updates.length - 1, 0, 'nav_title = ?')
+      params.splice(params.length - 1, 0, item.nav_title ?? null)
+    }
+    if (hasOwnField(item, 'nav_section_order')) {
+      updates.splice(updates.length - 1, 0, 'nav_section_order = ?')
+      params.splice(params.length - 1, 0, item.nav_section_order != null ? Number(item.nav_section_order) : null)
+    }
+    if (hasOwnField(item, 'nav_group')) {
+      updates.splice(updates.length - 1, 0, 'nav_group = ?')
+      params.splice(params.length - 1, 0, item.nav_group ?? null)
+    }
+    if (hasOwnField(item, 'nav_group_order')) {
+      updates.splice(updates.length - 1, 0, 'nav_group_order = ?')
+      params.splice(params.length - 1, 0, item.nav_group_order != null ? Number(item.nav_group_order) : null)
+    }
+    if (hasOwnField(item, 'hide_from_nav')) {
+      updates.splice(updates.length - 1, 0, 'hide_from_nav = ?')
+      params.splice(params.length - 1, 0, normalizeHideFromNav(item.hide_from_nav) ?? 0)
+    }
+    params.push(docId)
+    queries.push({
+      query: `UPDATE platform_docs SET ${updates.join(', ')} WHERE id = ?`,
+      params,
+    })
+  }
+
+  await executeBatch(db, queries)
+  return { success: true, docs: await listPlatformDocs(db) }
 }

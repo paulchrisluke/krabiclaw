@@ -22,6 +22,7 @@ Multi-tenant restaurant SaaS. Nuxt 4 + Cloudflare Pages + D1.
 | `yarn canary:prod` | Production-safe authenticated browser canary (read-only checks). |
 | `yarn canary:notifications` | Production provider-level email/WhatsApp notification canary. |
 | `yarn rollback:prod` | Roll back Worker to previous version, then run smoke + auth canary checks. |
+| `yarn test:mcp:local` | Local ChatGPT MCP harness preflight against the public tunnel target. |
 
 ---
 
@@ -93,6 +94,20 @@ If you specifically need the old remote-binding behavior for AI debugging, opt b
 NUXT_CF_REMOTE_BINDINGS=true yarn dev
 ```
 
+### Local ChatGPT MCP harness
+
+For local-but-public connector testing through a real HTTPS origin, use the
+hybrid local harness instead of plain localhost:
+
+```bash
+yarn dev:tunnel
+yarn tunnel
+yarn test:mcp:local
+```
+
+The full env contract, tunnel setup, write-smoke mode, and ChatGPT handoff are
+documented in [docs/local-mcp-harness.md](docs/local-mcp-harness.md).
+
 ### macOS file limit fix
 
 ```bash
@@ -120,7 +135,7 @@ yarn wrangler pages secret put CRON_SECRET
 
 `CRON_SECRET` protects internal endpoints such as `/api/internal/translation-jobs/process`. Local `yarn dev` reads it from `.env`; `wrangler pages dev` reads it from `.dev.vars`.
 
-CI + E2E auth/billing parity, tier intent, and staging-vs-production smoke rules are documented in [docs/ci-e2e-guardrails.md](docs/ci-e2e-guardrails.md).
+CI + E2E auth/billing parity, tier intent, and staging-vs-production smoke rules are documented in [docs/ci-e2e-guardrails.md](docs/ci-e2e-guardrails.md). MCP reconnect triage and Cloudflare auth debugging are documented in [docs/mcp-auth-debugging.md](docs/mcp-auth-debugging.md) and [docs/observability-debugging.md](docs/observability-debugging.md).
 
 ---
 

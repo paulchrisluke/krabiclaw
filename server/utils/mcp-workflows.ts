@@ -21,6 +21,8 @@ import type { CloudflareEnv } from "~/server/utils/auth";
 import { signOAuthState } from "~/server/utils/encryption";
 import { updateLocation } from "~/server/utils/location-management";
 import { execute, queryAll, queryFirst } from "~/server/db";
+import { revokeReviewRequestForBooking } from "~/server/utils/review-requests";
+import { fireSiteEventSafe } from "~/server/utils/site-events";
 
 export async function listSitesForUser(
   db: D1Database,
@@ -427,7 +429,14 @@ export async function updateReservationSubmissionStatus(
     throw new Error("Invalid reservation submission status");
   }
 
-  const params = [status, submissionId, siteId]
+  const now = new Date().toISOString()
+  const params = [status, now]
+  const sets = [`status = ?`, `updated_at = ?`]
+  if (status === 'completed') {
+    sets.push(`completed_at = COALESCE(completed_at, ?)`, `completion_source = COALESCE(completion_source, 'manual')`)
+    params.push(now)
+  }
+  params.push(submissionId, siteId)
   let where = `id = ? AND site_id = ?`
   if (opts.locationId) {
     where += ` AND location_id = ?`
@@ -435,11 +444,14 @@ export async function updateReservationSubmissionStatus(
   }
   const result = await execute(db, `
     UPDATE reservation_submissions
-    SET status = ?
+    SET ${sets.join(', ')}
     WHERE ${where}
   `, params);
 
   if (!result.meta.changes) throw new Error("Reservation not found");
+  if (status === 'cancelled') {
+    await revokeReviewRequestForBooking(db, 'reservation', submissionId)
+  }
   return {
     updated: true,
     submission_id: submissionId,
@@ -643,6 +655,7 @@ export async function updatePageContent(
     changes: Record<string, unknown>;
     location_id?: string | null;
   },
+  actorId?: string | null,
 ) {
   const locationId = input.location_id ?? undefined;
   const { normalizedFields, heroChange, hasHeroChange } =
@@ -650,6 +663,7 @@ export async function updatePageContent(
 
   for (const [field, value] of normalizedFields.entries()) {
     const fieldDef = getFieldDef(input.page, field);
+    const isMediaField = fieldDef?.type === "media";
     await upsertSiteContent(db, {
       id: buildContentId(organizationId, siteId, input.page, field, locationId),
       organization_id: organizationId,
@@ -663,8 +677,10 @@ export async function updatePageContent(
       content: value,
       hero_title: undefined,
       hero_subtitle: undefined,
-      hero_image_asset_id: undefined,
-      hero_video_asset_id: undefined,
+      // Clear stale hero_image_asset_id/hero_video_asset_id so a leftover seed-time
+      // reference doesn't win over this field's new content value on read.
+      hero_image_asset_id: isMediaField ? null : undefined,
+      hero_video_asset_id: isMediaField ? null : undefined,
     });
   }
 
@@ -689,6 +705,22 @@ export async function updatePageContent(
       ...(heroChange as Partial<SiteContent>),
     } as Omit<SiteContent, "updated_at">);
   }
+
+  await fireSiteEventSafe({
+    db,
+    organizationId,
+    siteId,
+    locationId: locationId ?? null,
+    actorId,
+    eventType: "content.updated",
+    entityType: "site_content",
+    entityId: `${locationId ?? "site"}:${input.page}`,
+    metadata: {
+      page: input.page,
+      fields: Array.from(normalizedFields.keys()),
+      includes_hero: hasHeroChange,
+    },
+  })
 
   return {
     success: true,
@@ -880,6 +912,7 @@ export async function deleteContentField(
   organizationId: string,
   siteId: string,
   input: { page: string; field: string; location_id?: string | null },
+  actorId?: string | null,
 ) {
   const locationId = input.location_id ?? undefined;
   await deleteSiteContentField(
@@ -890,6 +923,20 @@ export async function deleteContentField(
     input.field,
     locationId,
   );
+  await fireSiteEventSafe({
+    db,
+    organizationId,
+    siteId,
+    locationId: locationId ?? null,
+    actorId,
+    eventType: "content.updated",
+    entityType: "site_content",
+    entityId: `${locationId ?? "site"}:${input.page}`,
+    metadata: {
+      page: input.page,
+      deleted_field: input.field,
+    },
+  })
   return {
     deleted: true,
     page: input.page,

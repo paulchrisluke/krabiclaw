@@ -10,6 +10,7 @@ import {
   updatePost,
   deletePost,
   publishPost,
+  PostValidationError,
 } from "~/server/utils/post-management";
 import {
   listPlatformBlogPosts,
@@ -54,7 +55,7 @@ import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
 import { extractMenuFromMediaAsset } from "~/server/utils/chowbot-media";
 import { upsertChannelState } from "~/server/utils/chowbot-conversations";
 import { CHOWBOT_MODEL } from "~/server/utils/ai-models";
-import { updateSiteSettingsFields } from "~/server/utils/site-settings";
+import { loadSettingsPayload, updateSiteSettingsFields, SiteNotFoundError } from "~/server/utils/site-settings";
 import {
   createLocation,
   updateLocation,
@@ -584,7 +585,7 @@ async function executeTool(
 
   switch (name) {
     case "list_posts": {
-      const posts = await listPosts(db, orgId, siteId, input.status);
+      const posts = await listPosts(db, orgId, siteId, env, input.status);
       const filtered = input.location_id
         ? posts.filter((p) => p.location_id === input.location_id)
         : posts;
@@ -600,76 +601,106 @@ async function executeTool(
     }
 
     case "create_post": {
-      const post = await createPost(
-        db,
-        orgId,
-        siteId,
-        {
-          title: input.title,
-          body: input.body,
-          image_asset_id: input.image_asset_id,
-          location_id: input.location_id,
-          post_type: input.post_type,
-          cta_type: input.cta_type,
-          cta_url: input.cta_url,
-          event_title: input.event_title,
-          event_start: input.event_start,
-          event_end: input.event_end,
-          offer_coupon: input.offer_coupon,
-          offer_terms: input.offer_terms,
-        },
-        userId,
-      );
+      let post;
+      try {
+        post = await createPost(
+          db,
+          orgId,
+          siteId,
+          {
+            title: input.title,
+            body: input.body,
+            image_asset_id: input.image_asset_id,
+            slug: input.slug,
+            seo_title: input.seo_title,
+            seo_description: input.seo_description,
+            og_image_asset_id: input.og_image_asset_id,
+            gallery_media: input.gallery_media,
+            location_id: input.location_id,
+            post_type: input.post_type,
+            cta_type: input.cta_type,
+            cta_url: input.cta_url,
+            event_title: input.event_title,
+            event_start: input.event_start,
+            event_end: input.event_end,
+            offer_coupon: input.offer_coupon,
+            offer_terms: input.offer_terms,
+          },
+          userId,
+          env,
+        );
+      } catch (error) {
+        if (error instanceof PostValidationError) return { error: error.message };
+        throw error;
+      }
       return {
         id: post.id,
         title: post.title,
         body: post.body,
         status: post.status,
         post_type: post.post_type,
+        public_path: post.public_path,
+        public_url: post.canonical_url,
       };
     }
 
     case "publish_post": {
       const result = await publishPost(db, orgId, siteId, input.post_id, [
         "site",
-      ]);
+      ], env);
       if (!result) return { error: "Post not found or already published." };
       return {
         id: result.id,
         title: result.title,
         status: result.status,
         published_at: result.published_at,
+        public_path: result.public_path,
+        public_url: result.canonical_url,
       };
     }
 
     case "update_post": {
-      const post = await updatePost(
-        db,
-        orgId,
-        siteId,
-        input.post_id,
-        {
-          title: input.title,
-          body: input.body,
-          image_asset_id: input.image_asset_id,
-          location_id: input.location_id,
-          post_type: input.post_type,
-          cta_type: input.cta_type,
-          cta_url: input.cta_url,
-          event_title: input.event_title,
-          event_start: input.event_start,
-          event_end: input.event_end,
-          offer_coupon: input.offer_coupon,
-          offer_terms: input.offer_terms,
-        },
-        userId,
-      );
+      let post;
+      try {
+        post = await updatePost(
+          db,
+          orgId,
+          siteId,
+          input.post_id,
+          {
+            title: input.title,
+            body: input.body,
+            image_asset_id: input.image_asset_id,
+            slug: input.slug,
+            seo_title: input.seo_title,
+            seo_description: input.seo_description,
+            og_image_asset_id: input.og_image_asset_id,
+            gallery_media: input.gallery_media,
+            location_id: input.location_id,
+            post_type: input.post_type,
+            cta_type: input.cta_type,
+            cta_url: input.cta_url,
+            event_title: input.event_title,
+            event_start: input.event_start,
+            event_end: input.event_end,
+            offer_coupon: input.offer_coupon,
+            offer_terms: input.offer_terms,
+          },
+          userId,
+          env,
+        );
+      } catch (error) {
+        if (error instanceof PostValidationError) return { error: error.message };
+        throw error;
+      }
       if (!post) return { error: "Post not found." };
       return {
         id: post.id,
         title: post.title,
         body: post.body,
         status: post.status,
+        public_path: post.public_path,
+        public_url: post.canonical_url,
         updated: true,
       };
     }
@@ -1214,6 +1245,11 @@ async function executeTool(
       const reviewCountCreate = getToolInteger(input, "review_count");
       if (reviewCountCreate !== undefined && reviewCountCreate !== null && reviewCountCreate < 0)
         return { error: "review_count must be non-negative." };
+      if (input.max_capacity !== undefined && getToolInteger(input, "max_capacity") === undefined)
+        return { error: "max_capacity must be a valid integer." };
+      const maxCapacityCreate = getToolInteger(input, "max_capacity");
+      if (maxCapacityCreate !== undefined && maxCapacityCreate !== null && maxCapacityCreate < 0)
+        return { error: "max_capacity must be non-negative." };
       const result = await createLocation(
         env,
         db,
@@ -1232,6 +1268,8 @@ async function executeTool(
           short_description: toSqlText(input.short_description) ?? null,
           address: toSqlText(input.address) ?? null,
           opening_hours: toSqlText(input.opening_hours) ?? null,
+          timezone: toSqlText(input.timezone) ?? null,
+          max_capacity: getToolInteger(input, "max_capacity") ?? null,
           rating: getToolNumber(input, "rating") ?? null,
           review_count: getToolInteger(input, "review_count") ?? null,
           price_level: toSqlText(input.price_level) ?? null,
@@ -1276,6 +1314,11 @@ async function executeTool(
       const reviewCountUpdate = getToolInteger(input, "review_count");
       if (reviewCountUpdate !== undefined && reviewCountUpdate !== null && reviewCountUpdate < 0)
         return { error: "review_count must be non-negative." };
+      if (input.max_capacity !== undefined && getToolInteger(input, "max_capacity") === undefined)
+        return { error: "max_capacity must be a valid integer." };
+      const maxCapacityUpdate = getToolInteger(input, "max_capacity");
+      if (maxCapacityUpdate !== undefined && maxCapacityUpdate !== null && maxCapacityUpdate < 0)
+        return { error: "max_capacity must be non-negative." };
       const result = await updateLocation(
         db,
         orgId,
@@ -1307,6 +1350,11 @@ async function executeTool(
             toSqlText(input.hero_video_asset_id) ?? undefined,
           address: toSqlText(input.address) ?? undefined,
           opening_hours: toSqlText(input.opening_hours) ?? undefined,
+          timezone: toSqlText(input.timezone) ?? undefined,
+          max_capacity:
+            input.max_capacity !== undefined
+              ? (getToolInteger(input, "max_capacity") ?? null)
+              : undefined,
           rating:
             input.rating !== undefined
               ? (getToolNumber(input, "rating") ?? null)
@@ -1516,7 +1564,7 @@ async function executeTool(
     case "delete_media_asset": {
       const { deleteMediaAsset } =
         await import("~/server/utils/media-asset-manager");
-      await deleteMediaAsset(db, env, input.asset_id, siteId);
+      await deleteMediaAsset(db, env, input.asset_id, siteId, userId);
       return { asset_id: input.asset_id, deleted: true };
     }
 
@@ -2595,7 +2643,7 @@ async function executeTool(
     case "get_post": {
       const postId = toSqlText(input.post_id);
       if (!postId) return { error: "post_id is required." };
-      const post = await getPost(db, orgId, siteId, postId);
+      const post = await getPost(db, orgId, siteId, postId, env);
       if (!post) return { error: "Post not found." };
       return { post };
     }
@@ -2604,7 +2652,13 @@ async function executeTool(
       const postId = toSqlText(input.post_id);
       const assetId = toSqlText(input.asset_id);
       if (!postId || !assetId) return { error: "post_id and asset_id required." };
-      const result = await updatePost(db, orgId, siteId, postId, { image_asset_id: assetId }, userId);
+      let result;
+      try {
+        result = await updatePost(db, orgId, siteId, postId, { image_asset_id: assetId }, userId, env);
+      } catch (error) {
+        if (error instanceof PostValidationError) return { error: error.message };
+        throw error;
+      }
       if (!result) return { error: "Failed to update post image." };
       return { updated: true, post_id: postId, asset_id: assetId };
     }
@@ -2738,16 +2792,14 @@ async function executeTool(
     }
 
     case "get_site_settings": {
-      const row = await queryFirst(
-        db,
-        `SELECT brand_name, brand_description, logo_url, logo_asset_id, default_currency,
-                         contact_email, facebook_url, instagram_url, tiktok_url, footer_tagline,
-                         press_email, partnerships_email, catering_email, careers_email
-                  FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`,
-        [siteId, orgId],
-      );
-      if (!row) return { error: "Site not found." };
-      return { settings: row };
+      try {
+        return { settings: await loadSettingsPayload(db, orgId, siteId) };
+      } catch (err) {
+        if (err instanceof SiteNotFoundError) {
+          return { error: "Site not found." };
+        }
+        throw err;
+      }
     }
 
     case "set_logo": {
@@ -3065,7 +3117,7 @@ ${SETUP_PREAMBLE}
 Site: ${siteName}
 Default menu currency: ${opts.defaultCurrency}
 Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?? locationId} (id: ${locationId})` : ""}
-${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. Use this asset_id directly in any tool that accepts image/media — update_menu_item (image_asset_id), create_menu_item (image_asset_id), add_menu_items_batch (image_asset_id), update_location or create_location (hero_image_asset_id / hero_video_asset_id), create_post (image_asset_id). If the user wants to import/extract menu items from it, call import_menu_from_media. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call, also call resolve_pending_media with action=save_media to clear the pending state. If the user's intent is unclear, ask one short clarifying question.` : ""}
+${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. Use this asset_id directly in any tool that accepts image/media — update_menu_item (image_asset_id), create_menu_item (image_asset_id), add_menu_items_batch (image_asset_id), update_location or create_location (hero_image_asset_id / hero_video_asset_id), create_post (image_asset_id for the cover, or gallery_media for additional public post media). If the user wants to import/extract menu items from it, call import_menu_from_media. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call, also call resolve_pending_media with action=save_media to clear the pending state. If the user's intent is unclear, ask one short clarifying question.` : ""}
 
 Capabilities (always use tools — never say you can't do something the tools support):
 - Posts: list, create, update, delete, publish (standard/offer/event/update with CTA) — optionally location-scoped

@@ -190,6 +190,23 @@ test.describe('public tenant site', () => {
     await expect(page.locator('body')).toContainText('Error 404')
     await expect(page.locator('body')).toContainText('Page not found')
   })
+
+  test('tenant page does not inherit platform analytics globals', async ({ page }) => {
+    const response = await page.goto(`${tenantBaseURL}/`, { waitUntil: 'load' })
+    expect(response?.status()).toBeLessThan(400)
+
+    // Platform analytics load via Cloudflare Zaraz (edge-injected, zone-scoped to
+    // krabiclaw.com's own GA4 property) rather than a client-bundled gtag.js, so
+    // there's no app-owned global to assert the absence of anymore. A tenant's own
+    // connected GA4 (layouts/saya.vue) still injects real gtag.js, but the demo
+    // tenant fixture has no GA measurement ID configured, so window.gtag staying
+    // unset here is still the correct invariant to check.
+    const globals = await page.evaluate(() => ({
+      hasGtag: typeof (window as Window & { gtag?: unknown }).gtag !== 'undefined',
+    }))
+
+    expect(globals.hasGtag).toBe(false)
+  })
 })
 
 test.describe('platform public site', () => {
@@ -201,6 +218,12 @@ test.describe('platform public site', () => {
     await page.waitForLoadState('load')
     await expect(page.getByRole('link', { name: /krabiclaw/i }).first()).toBeVisible()
     await expect(page.getByRole('heading', { name: /your local business, managed through chatgpt/i })).toBeVisible()
+    // Platform GA4 loads via Cloudflare Zaraz (edge-injected, see useAnalytics.ts),
+    // which never installs a window.gtag global — its GA4 managed component talks to
+    // Google over its own client, not classic gtag.js. This should reliably be false,
+    // not just "not yet loaded".
+    const hasGtag = await page.evaluate(() => typeof (window as Window & { gtag?: unknown }).gtag !== 'undefined')
+    expect(hasGtag).toBe(false)
 
     const blog = await page.goto(`${baseURL}/blog`, { waitUntil: 'domcontentloaded' })
     expect(blog?.status()).toBeLessThan(400)

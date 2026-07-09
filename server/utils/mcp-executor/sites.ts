@@ -2,8 +2,9 @@ import type { McpExecutorContext } from './shared'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { getSiteForMcp } from '~/server/utils/mcp-workflows'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
-import { updateSiteSettingsFields } from '~/server/utils/site-settings'
-import { NOT_HANDLED, assertDomainSuccess, loadSiteSettings, mutationContextPayload, requireActiveImageAsset, requiredString, workspaceContextPayload } from './shared'
+import { loadSettingsPayload, updateSiteSettingsFields } from '~/server/utils/site-settings'
+import { renderStructuredResponse } from '~/server/utils/mcp-render'
+import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, requireActiveImageAsset, requiredString, workspaceContextPayload } from './shared'
 
 export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
@@ -24,12 +25,12 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
         );
         return {
           site: siteRecord,
-          context: workspaceContextPayload(workspace.organization, workspace.site, workspace.location),
+          context: workspaceContextPayload(workspace.organization, workspace.site, workspace.location, site.env),
         };
       }
     case "get_site_settings":
       return {
-        settings: await loadSiteSettings(
+        settings: await loadSettingsPayload(
           site.db,
           site.organizationId,
           site.siteId,
@@ -55,10 +56,20 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
         },
       );
       assertDomainSuccess(result);
-      return {
-        ...result.data,
-        context: await mutationContextPayload(site),
-      };
+      const settingsResult = result.data as { updated_at: string };
+      const updateSettingsContext = await mutationContextPayload(site);
+      return renderStructuredResponse(
+        {
+          ok: true,
+          entity: "site_settings",
+          id: site.siteId,
+          changed_fields: Object.keys(updates),
+          updated_at: settingsResult.updated_at,
+          context: updateSettingsContext,
+        },
+        "Updated site settings.",
+        { settings: settingsResult },
+      );
     }
     case "set_default_currency": {
       const { isCurrencyCode } = await import("~/shared/currencies");

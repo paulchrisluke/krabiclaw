@@ -68,12 +68,12 @@
             {{ content.cta }}
           </UButton>
           <a
-            :href="whatsappLink"
+            :href="config.public.helpUrl"
             target="_blank"
             rel="noopener noreferrer"
             class="text-center text-sm text-muted hover:text-default transition-colors py-1"
           >
-            Questions? WhatsApp us first →
+            Questions? Visit our help page →
           </a>
         </div>
       </div>
@@ -84,16 +84,11 @@
 <script setup lang="ts">
 import type { UpsellType } from '~/composables/useServiceUpsell'
 
+const config = useRuntimeConfig()
+
 // --- Team photo URLs ---
 const PAUL_PHOTO_URL = 'https://res.cloudinary.com/pcl-labs/image/upload/v1714697364/PCL-Labs/1_qjKv1vv3WC6ckf3eTM0hZQ_1_nf3uuk.png'
 const JULIA_PHOTO_URL = 'https://res.cloudinary.com/pcl-labs/image/upload/v1714706641/PCL-Labs/1682091954266_vrcx3n.webp'
-// Paul's WhatsApp number (international format, no +)
-const config = useRuntimeConfig()
-const rawWhatsapp = config.public?.whatsappNumber
-const WHATSAPP_NUMBER = typeof rawWhatsapp === 'string' && /^[1-9]\d{1,14}$/.test(rawWhatsapp.replace(/[\s\-\+\(\)]/g, ''))
-  ? rawWhatsapp.replace(/[\s\-\+\(\)]/g, '')
-  : '16197200000'
-// ---
 
 const { isOpen, type, close } = useServiceUpsell()
 const toast = useToast()
@@ -126,6 +121,7 @@ function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent>
         'WhatsApp booking & reservation notifications',
         'Auto-sync from Facebook & Instagram',
         'Google Business profile sync',
+        'Post-booking review requests',
       ],
       price: '$49',
       priceNote: '/ month',
@@ -138,6 +134,7 @@ function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent>
         'Unlimited language translations',
         `${menuCapitalized}, posts & seasonal content managed for you`,
         'Full Google Business profile management',
+        'Post-booking review requests and reminders',
         'Custom domain + free SSL',
         'Priority WhatsApp support — we respond fast',
       ],
@@ -200,12 +197,6 @@ function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent>
 
 const content = computed<UpsellContent>(() => buildContentMap(isExperience.value)[type.value ?? 'growth'])
 
-const whatsappLink = computed(() => {
-  const planName = content.value.headline
-  const msg = encodeURIComponent(`Hi Paul & Julia, I'm interested in: ${planName}`)
-  return `https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`
-})
-
 const RECURRING_TYPES: UpsellType[] = ['growth', 'managed', 'seo_accelerator']
 
 async function handleCta() {
@@ -237,7 +228,7 @@ async function handleCta() {
     }
   } catch (err) {
     console.error('Checkout error:', err)
-    toast.add({ title: 'Something went wrong', description: 'Please try WhatsApp instead.', color: 'error' })
+    toast.add({ title: 'Something went wrong', description: 'Please visit our help page instead.', color: 'error' })
   } finally {
     loading.value = false
   }

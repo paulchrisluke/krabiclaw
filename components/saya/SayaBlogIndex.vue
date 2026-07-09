@@ -39,7 +39,6 @@
                 class="h-full w-full object-cover"
               />
             </div>
-            <div v-else class="h-48 bg-linear-to-br from-stone-50 to-stone-100 dark:from-stone-900/20 dark:to-stone-800/20" />
             <div class="p-6">
               <div class="mb-3 flex items-center gap-3">
                 <span v-if="post.category" class="rounded bg-muted px-2 py-1 text-xs font-medium text-muted">
@@ -48,9 +47,11 @@
                 <span v-if="post.published_at" class="text-sm text-dimmed">
                   <NuxtTime :datetime="post.published_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
                 </span>
+                <span class="text-sm text-dimmed">{{ estimateReadTime(post) }} min read</span>
               </div>
               <h3 class="mb-3 text-xl font-bold text-default">{{ post.title }}</h3>
               <p v-if="post.excerpt" class="mb-4 text-muted">{{ post.excerpt }}</p>
+              <p class="mb-4 text-sm text-dimmed">By {{ post.author_name || siteName }}</p>
               <span class="text-sm font-semibold text-primary">Read More →</span>
             </div>
           </div>
@@ -67,7 +68,10 @@ interface TenantBlogPost {
   title: string
   excerpt?: string | null
   category?: string | null
+  author_name?: string | null
+  updated_at?: string | null
   published_at?: string | null
+  read_time_minutes?: number | null
   featured_image?: { public_url: string | null; kind: string | null } | null
 }
 
@@ -79,6 +83,16 @@ const siteName = computed(() => site?.brand_name || 'Our Site')
 
 const { blogList, error, pending } = useBootstrap()
 const posts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
+
+function estimateReadTime(post: TenantBlogPost) {
+  if (typeof post.read_time_minutes === 'number' && post.read_time_minutes > 0) {
+    return post.read_time_minutes
+  }
+  // Fallback for payloads that predate read_time_minutes — still an
+  // underestimate since only the excerpt is available here, not the full body.
+  const words = (post.excerpt ?? '').trim().split(/\s+/).filter(Boolean).length
+  return Math.max(1, Math.ceil(words / 160))
+}
 
 const currentPageUrl = useSeoUrl('/blog')
 useSeoMeta({

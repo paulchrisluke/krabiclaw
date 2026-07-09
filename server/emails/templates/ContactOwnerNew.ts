@@ -20,6 +20,7 @@ export default defineComponent({
     siteName: { type: String, required: true },
     platformDomain: { type: String, required: true },
     replyUrl: { type: String as PropType<string | null>, default: null },
+    experienceTitle: { type: String as PropType<string | null | undefined>, default: null },
   },
   setup(props) {
     return () => h(EmailShell, {
@@ -35,6 +36,7 @@ export default defineComponent({
           ['From', props.guestName],
           ['Email', props.email],
           props.subject && ['Subject', SUBJECT_LABELS[props.subject] ?? props.subject],
+          props.experienceTitle && ['Regarding', props.experienceTitle],
         ].filter(Boolean) as [string, string][]
       }),
       h(EText, { class: 'email-title', style: 'margin:0 0 8px;font-size:15px;color:#18181b;font-weight:600' }, () => 'Message:'),

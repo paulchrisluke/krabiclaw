@@ -1,4 +1,5 @@
 import { useChowBotHistory, type ChowBotConv } from './useChowBotHistory'
+import { useAnalytics } from './useAnalytics'
 
 const MENU_TOOLS = new Set(['create_menu', 'rename_menu', 'rename_menu_section', 'delete_menu_section', 'add_menu_item', 'update_menu_item', 'delete_menu_item', 'sync_menu_items', 'publish_menu', 'add_menu_items_batch', 'delete_menu', 'set_default_currency'])
 
@@ -31,21 +32,17 @@ export const useChowBot = () => {
 
   // Defer dashboard context access to avoid hydration issues
   const dashboard = useDashboardSite()
+  const dashboardLocation = useDashboardLocation()
   const siteId = computed(() => import.meta.server ? null : dashboard.siteId.value)
-  const selectedLocation = computed(() => import.meta.server ? null : dashboard.selectedLocation.value)
-
-  const locationId = computed(() => {
-    const param = route.query.locationId
-    return typeof param === 'string' ? param : null
-  })
+  const selectedLocation = computed(() => import.meta.server ? null : dashboardLocation.currentLocation.value)
   const isConversationsWorkspace = computed(() => /^\/dashboard\/[^/]+\/conversations(?:\/|$)/.test(route.path))
   const agentLocationId = computed(() => {
-    if (locationId.value) return locationId.value
     if (isConversationsWorkspace.value) return null
     return selectedLocation.value?.id ?? null
   })
 
   const { update: updateCredits } = useAiCredits(siteId)
+  const { trackChowbotInteraction } = useAnalytics()
 
   const toggle = () => { isOpen.value = !isOpen.value }
   const open = () => { isOpen.value = true }
@@ -99,7 +96,7 @@ export const useChowBot = () => {
     } else if (names.has('create_location') || names.has('update_location')) {
       target = paths.org
     } else if ([...names].some(n => MENU_TOOLS.has(n))) {
-      const locId = locationId.value
+      const locId = selectedLocation.value?.id ?? null
       target = locId ? dashboardLinks.locationMenuPath(locId) : paths.menu
     }
 
@@ -159,6 +156,8 @@ export const useChowBot = () => {
       }]
       return
     }
+
+    trackChowbotInteraction(siteId.value)
 
     // Add user message + streaming placeholder first, then build history
     // (history must include the current user message or the first request sends an empty array)

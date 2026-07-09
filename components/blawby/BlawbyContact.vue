@@ -54,7 +54,8 @@ async function submitContact() {
     form.subject = 'general'
     form.message = ''
   } catch (error) {
-    submitMessage.value = error instanceof Error ? error.message : 'Unable to send right now.'
+    const fetchError = error as { data?: { message?: string; statusMessage?: string } }
+    submitMessage.value = fetchError.data?.message || fetchError.data?.statusMessage || 'Unable to send right now.'
   } finally {
     submitting.value = false
   }

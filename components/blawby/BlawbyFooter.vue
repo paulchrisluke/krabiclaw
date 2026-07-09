@@ -36,9 +36,9 @@
           </NuxtLink>
         </nav>
         <p v-if="compliance?.nonprofit_status" class="mt-6 text-xs text-white/60">{{ compliance.nonprofit_status }}</p>
-        <div v-if="compliance?.documents.length" class="mt-6 flex flex-col gap-3 text-xs">
+        <div v-if="documentLinks.length" class="mt-6 flex flex-col gap-3 text-xs">
           <a
-            v-for="document in compliance.documents"
+            v-for="document in documentLinks"
             :key="document.id"
             :href="document.url"
             class="text-white/70 underline-offset-4 hover:text-white hover:underline"
@@ -63,6 +63,11 @@ const props = defineProps<{
 const brandName = computed(() => props.site?.brand_name || props.compliance?.entity_name || 'Blawby')
 const description = computed(() => props.site?.brand_description || props.compliance?.service_area || '')
 const footerItems = computed(() => props.navigation.filter(item => item.area === 'footer'))
+type DocumentLink = NonNullable<PublicCompliance['documents'][number]> & { url: string }
+
+const documentLinks = computed(() =>
+  props.compliance?.documents.filter((document): document is DocumentLink => Boolean(document.url)) ?? []
+)
 const legalItems = computed(() => {
   const configured = props.navigation.filter(item => item.area === 'legal')
   if (configured.length) return configured

@@ -66,6 +66,47 @@ test('renderContentMarkdownWithComponents replaces embeds and appends leftover c
   assert.match(markdown, /Closing copy\./)
 })
 
+test('renderContentMarkdownWithComponents serializes ai assistance prompts', () => {
+  const markdown = renderContentMarkdownWithComponents(
+    [
+      '# Intro',
+      '',
+      '{{component type="ai_assistance"}}',
+    ].join('\n'),
+    [
+      {
+        id: 'ai-1',
+        content_type: 'doc',
+        content_id: 'doc-1',
+        type: 'ai_assistance',
+        label: 'Try this with ChatGPT',
+        status: 'active',
+        render_enabled: true,
+        schema_enabled: false,
+        position: 0,
+        created_at: '2026-01-01T00:00:00.000Z',
+        updated_at: '2026-01-01T00:00:00.000Z',
+        data: {
+          intro: 'Use this prompt to apply the guide.',
+          prompts: [
+            {
+              title: 'Apply the guide',
+              prompt: 'Read this page and help me apply it.',
+              description: 'Best after reading the setup section.',
+              position: 0,
+            },
+          ],
+        },
+      },
+    ],
+  )
+
+  assert.match(markdown, /## Try this with ChatGPT/)
+  assert.match(markdown, /Use this prompt to apply the guide\./)
+  assert.match(markdown, /### Apply the guide/)
+  assert.match(markdown, /```text\nRead this page and help me apply it\.\n```/)
+})
+
 test('renderPlatformDocMarkdown emits front matter and route metadata', () => {
   const markdown = renderPlatformDocMarkdown({
     id: 'doc-1',

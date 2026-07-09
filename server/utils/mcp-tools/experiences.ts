@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { bookingObject, bookingsSummaryObject, experienceObject, experienceWriteSchema, siteTool } from './shared'
+import { bookingObject, bookingsSummaryObject, experienceMutationResultObject, experienceObject, experienceWriteSchema, siteTool } from './shared'
 import { EXPERIENCE_STATUSES } from '~/server/utils/experiences'
 import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
@@ -25,29 +25,21 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
       confirmRequired: false,
       inputSchema: { experience_id: { type: 'string', description: 'Experience id, or its slug from the public URL (/experiences/<slug>).' } },
       required: ['experience_id'],
-      outputSchema: {
-        type: 'object',
-        properties: { experience: experienceObject },
-        required: ['experience'],
-      },
+      outputSchema: experienceMutationResultObject,
     }),
   siteTool({
       name: 'create_experience',
-      description: `Create an experience. Gather and store the details in the dedicated fields instead of collapsing everything into body: title for the public name, tagline for the short hook, body for the main narrative, highlights for short selling points, included_items for what is included, what_to_bring for guest prep, meeting_point for arrival instructions, price_amount/price for pricing, compare_at_price_amount/sale_starts_at/sale_ends_at only when the user asks to run a sale, duration_minutes for length, max_capacity for guest count, time_slots or recurring_slots for schedule, available_note for urgency text, and image/video fields for primary media. Use update_booking_policy after creation for cancellation, refund, or other guest policy rules. status must be one of: ${EXPERIENCE_STATUSES.join(', ')}. Every experience must belong to a location. Pass location_id directly, or omit it only when the site already has a primary location. If no location exists yet, call list_locations or create_location first.`,
+      description: `Create an experience. Use this — not create_post or create_blog_post — whenever the request is for a permanent, bookable offering with its own page: a new class, package, tour, or group/custom-booking option that needs pricing/availability and a Reserve Now (or Contact Us, if priceless) CTA. Use the dedicated fields below (see their individual descriptions) rather than collapsing everything into body. Use update_booking_policy after creation for cancellation/refund rules — status must be one of: ${EXPERIENCE_STATUSES.join(', ')}. Every experience must belong to a location; omit location_id only if the site already has a primary location, otherwise call list_locations or create_location first.`,
       domain: 'experiences',
       minimumRole: 'editor',
       confirmRequired: false,
       inputSchema: experienceWriteSchema,
       required: ['title'],
-      outputSchema: {
-        type: 'object',
-        properties: { experience: experienceObject },
-        required: ['experience'],
-      },
+      outputSchema: experienceMutationResultObject,
     }),
   siteTool({
       name: 'update_experience',
-      description: `Update an experience using the dedicated fields instead of stuffing all details into body. Keep tagline as the short hook, body as the full description, highlights as short selling points, included_items as what is included, what_to_bring as guest prep notes, meeting_point as arrival instructions, duration_minutes for length, max_capacity for guest count, price_amount/price for pricing, compare_at_price_amount/sale_starts_at/sale_ends_at to run or end a sale, and time_slots or recurring_slots for scheduling. Use update_booking_policy for cancellation, refund, or other guest policy rules. status must be one of: ${EXPERIENCE_STATUSES.join(', ')}. Do NOT set status to 'inactive' to reflect a whole location being temporarily closed (e.g. "closed for renovations for two weeks") — that hides the experience entirely behind a generic placeholder instead of showing it as unavailable. For a location-wide temporary closure, call update_location with special_hours on that location instead; every experience at that location automatically shows as unavailable for booking while the closure is active, and reopens automatically without any further action.`,
+      description: `Update an experience using the dedicated fields below rather than stuffing all details into body. Use update_booking_policy for cancellation/refund rules — status must be one of: ${EXPERIENCE_STATUSES.join(', ')}. Do NOT set status to 'inactive' for a temporary location-wide closure (e.g. "closed for renovations") — that hides the experience entirely. Instead call update_location with special_hours on that location; every experience there auto-shows as unavailable during the closure and reopens automatically after.`,
       domain: 'experiences',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -57,11 +49,7 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
         location_id: { type: 'string', description: 'Move this experience to a different location. Omit to leave its current location unchanged — unlike create_experience, omitting this does not fall back to the site primary location.' },
       },
       required: ['experience_id'],
-      outputSchema: {
-        type: 'object',
-        properties: { experience: experienceObject },
-        required: ['experience'],
-      },
+      outputSchema: experienceMutationResultObject,
     }),
   siteTool({
       name: 'set_experience_image',
@@ -74,11 +62,7 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
         asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
       },
       required: ['experience_id', 'asset_id'],
-      outputSchema: {
-        type: 'object',
-        properties: { experience: experienceObject },
-        required: ['experience'],
-      },
+      outputSchema: experienceMutationResultObject,
     }),
   siteTool({
       name: 'set_experience_video',
@@ -91,11 +75,7 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
         asset_id: { type: 'string', description: 'Active video asset id from get_site_media_assets.' },
       },
       required: ['experience_id', 'asset_id'],
-      outputSchema: {
-        type: 'object',
-        properties: { experience: experienceObject },
-        required: ['experience'],
-      },
+      outputSchema: experienceMutationResultObject,
     }),
   siteTool({
       name: 'open_experience_media_upload',
@@ -130,11 +110,7 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
         images: experienceWriteSchema.images,
       },
       required: ['experience_id', 'images'],
-      outputSchema: {
-        type: 'object',
-        properties: { experience: experienceObject },
-        required: ['experience'],
-      },
+      outputSchema: experienceMutationResultObject,
     }),
   siteTool({
       name: 'delete_experience',

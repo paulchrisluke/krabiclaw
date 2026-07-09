@@ -14,24 +14,13 @@ export default defineEventHandler(async (event) => {
       id: string; slug: string; title: string; city: string | null
       rating: number | null; review_count: number | null
       is_primary: number; status: string; updated_at: string
-      hero_url: string | null; thumbnail_url: string | null
+      hero_url: string | null
     }>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.city, bl.rating, bl.review_count,
              bl.is_primary, bl.status, bl.updated_at,
-             COALESCE(
-               ma_hero.thumbnail_url, ma_hero.public_url,
-               (SELECT thumbnail_url FROM media_assets
-                WHERE location_id = bl.id AND kind = 'image' AND status = 'active'
-                ORDER BY created_at ASC LIMIT 1),
-               (SELECT public_url FROM media_assets
-                WHERE location_id = bl.id AND kind = 'image' AND status = 'active'
-                ORDER BY created_at ASC LIMIT 1),
-               s.logo_url
-             ) as hero_url,
-             COALESCE(ma_hero.thumbnail_url, ma_hero.public_url) as thumbnail_url
+             COALESCE(ma_hero.thumbnail_url, ma_hero.public_url) as hero_url
       FROM business_locations bl
       LEFT JOIN media_assets ma_hero ON ma_hero.id = bl.hero_image_asset_id
-      LEFT JOIN sites s ON s.id = bl.site_id
       WHERE bl.organization_id = ? AND bl.site_id = ?
       ORDER BY bl.is_primary DESC, bl.title ASC
     `, [organization.id, site.id]),

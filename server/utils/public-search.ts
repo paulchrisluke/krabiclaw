@@ -45,6 +45,7 @@ interface SearchOptions {
   type?: PublicSearchTypeFilter
   surface?: PlatformKnowledgeSurface
   dashboardContext?: DashboardRouteContext
+  siteId?: string | null
 }
 
 interface PlatformDocSearchRow {
@@ -69,6 +70,8 @@ interface PlatformBlogSearchRow {
   seo_keywords: string | null
 }
 
+type TenantBlogSearchRow = PlatformBlogSearchRow
+
 interface PlatformKnowledgeDocument {
   id: string
   key: string
@@ -91,6 +94,13 @@ function platformKnowledgeInstanceId(env: CloudflareEnv) {
 
 function normalizeQuery(query: string) {
   return query.trim()
+}
+
+// SQLite LIKE treats '%' and '_' as wildcards even inside a bound parameter, so a
+// literal search term containing them (e.g. "50% off") must have those escaped —
+// paired with `ESCAPE '\'` on every LIKE predicate that uses this.
+function escapeLikePattern(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
 }
 
 function searchNamespace(env: CloudflareEnv) {
@@ -221,6 +231,28 @@ function normalizeSearchResults(
   return [...deduped.values()]
     .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
     .slice(0, options.limit)
+}
+
+function normalizeTenantBlogSearchResults(
+  rows: TenantBlogSearchRow[],
+  options: Required<Pick<SearchOptions, 'limit' | 'surface'>>,
+) {
+  return rows
+    .slice(0, options.limit)
+    .map((post, index) => ({
+      id: `tenant-blog:${post.id}`,
+      type: 'blog' as const,
+      title: post.title,
+      path: `/blog/${post.slug}`,
+      snippet: truncateSnippet(post.excerpt || post.seo_description || post.body || post.title),
+      surface: options.surface,
+      section: post.category || 'Blog',
+      icon: 'newspaper',
+      // These are plain SQL LIKE substring matches, not relevance-ranked — keep the
+      // synthetic score modest (well under the platform instance's AI Search scores)
+      // so keyword-only blog matches don't crowd out genuinely reranked results.
+      score: Math.max(0.15, 0.5 - (index * 0.03)),
+    }))
 }
 
 function platformKnowledgeInstanceConfig(): Omit<AiSearchConfig, 'metadata'> {
@@ -479,31 +511,85 @@ export async function searchPublicResources(
   const typeFilter = resultTypeFilter(options.type ?? 'all')
   const instance = searchNamespace(env).get(platformKnowledgeInstanceId(env))
 
-  const response = await instance.search({
-    query: normalized,
-    ai_search_options: {
-      retrieval: {
-        retrieval_type: 'hybrid',
-        match_threshold: 0,
-        max_num_results: Math.min(50, limit * 5),
-        keyword_match_mode: 'or',
-        return_on_failure: true,
-        filters: buildSearchFilters(surface, typeFilter),
+  const [response, tenantBlogRows] = await Promise.all([
+    instance.search({
+      query: normalized,
+      ai_search_options: {
+        retrieval: {
+          retrieval_type: 'hybrid',
+          match_threshold: 0,
+          max_num_results: Math.min(50, limit * 5),
+          keyword_match_mode: 'or',
+          return_on_failure: true,
+          filters: buildSearchFilters(surface, typeFilter),
+        },
+        query_rewrite: {
+          enabled: false,
+        },
+        reranking: {
+          enabled: false,
+        },
       },
-      query_rewrite: {
-        enabled: false,
-      },
-      reranking: {
-        enabled: false,
-      },
-    },
-  })
+    }),
+    (async () => {
+      if (!options.siteId || !env.db || (typeFilter && typeFilter !== 'blog')) {
+        return [] as TenantBlogSearchRow[]
+      }
+      try {
+        const likePattern = `%${escapeLikePattern(normalized)}%`
+        return await queryAll<TenantBlogSearchRow>(
+          env.db,
+          `SELECT id, title, slug, body, excerpt, category, seo_description, seo_keywords
+           FROM blog_posts
+           WHERE status = 'published'
+             AND site_id = ?
+             AND (
+               lower(title) LIKE lower(?) ESCAPE '\\'
+               OR lower(body) LIKE lower(?) ESCAPE '\\'
+               OR lower(COALESCE(excerpt, '')) LIKE lower(?) ESCAPE '\\'
+               OR lower(COALESCE(category, '')) LIKE lower(?) ESCAPE '\\'
+               OR lower(COALESCE(seo_description, '')) LIKE lower(?) ESCAPE '\\'
+               OR lower(COALESCE(seo_keywords, '')) LIKE lower(?) ESCAPE '\\'
+             )
+           ORDER BY published_at DESC, updated_at DESC
+           LIMIT ?`,
+          [
+            options.siteId,
+            likePattern,
+            likePattern,
+            likePattern,
+            likePattern,
+            likePattern,
+            likePattern,
+            limit,
+          ],
+        )
+      } catch {
+        return [] as TenantBlogSearchRow[]
+      }
+    })(),
+  ])
 
-  return normalizeSearchResults(response.chunks ?? [], {
+  const platformResults = normalizeSearchResults(response.chunks ?? [], {
     limit,
     surface,
     dashboardContext: options.dashboardContext,
   })
+  const tenantResults = normalizeTenantBlogSearchResults(tenantBlogRows ?? [], {
+    limit,
+    surface,
+  })
+
+  const merged = new Map<string, PublicSearchResult>()
+  for (const result of [...tenantResults, ...platformResults]) {
+    const key = `${result.type}:${result.id}:${result.path}`
+    const current = merged.get(key)
+    if (!current || current.score < result.score) merged.set(key, result)
+  }
+
+  return [...merged.values()]
+    .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
+    .slice(0, limit)
 }
 
 export function formatPublicSearchResultsForPrompt(results: PublicSearchResult[]) {

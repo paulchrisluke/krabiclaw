@@ -16,9 +16,12 @@
         class="group block overflow-hidden border border-default text-default no-underline transition hover:border-muted"
       >
         <div class="aspect-video overflow-hidden bg-muted">
-          <!-- Poster image: always present for LCP. Video swaps in when card scrolls into view. -->
-          <template v-if="loc.kind === 'video' && loc.public_url">
-            <ClientOnly v-if="visibleLocCards.has(locIdx)">
+          <!-- Poster image: always present for LCP. Video swaps in when card scrolls into view.
+               Branches are flattened (not nested inside the video template) so a video-kind
+               location with no thumbnail_url and not yet scrolled into view still falls through
+               to the icon placeholder below instead of rendering nothing. -->
+          <template v-if="loc.kind === 'video' && loc.public_url && visibleLocCards.has(locIdx)">
+            <ClientOnly>
               <video
                 :src="loc.public_url"
                 :poster="loc.thumbnail_url || undefined"
@@ -26,19 +29,21 @@
                 class="aspect-video w-full object-contain"
               />
             </ClientOnly>
-            <img
-              v-else-if="loc.thumbnail_url"
-              :src="loc.thumbnail_url"
-              :alt="loc.title"
-              loading="lazy"
-              class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
-            />
           </template>
-          <img
-            v-else-if="loc.public_url"
+          <UImage
+            v-else-if="loc.thumbnail_url"
+            :src="loc.thumbnail_url"
+            :alt="loc.title"
+            :loading="locIdx === 0 ? 'eager' : 'lazy'"
+            :fetchpriority="locIdx === 0 ? 'high' : undefined"
+            class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
+          />
+          <UImage
+            v-else-if="loc.kind !== 'video' && loc.public_url"
             :src="loc.public_url"
             :alt="loc.title"
-            loading="lazy"
+            :loading="locIdx === 0 ? 'eager' : 'lazy'"
+            :fetchpriority="locIdx === 0 ? 'high' : undefined"
             class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
           />
           <div v-else class="flex h-full w-full items-center justify-center" aria-hidden="true">
@@ -70,7 +75,7 @@
         />
       </div>
       <div class="text-center pt-8">
-        <SayaMcpHint :hint="sayaEmptyStates.locations.hint" />
+        <ChowBotPromptTrigger :prompt="sayaEmptyStates.locations.hint" />
         <div v-if="isAuthenticated" class="mt-2">
           <NuxtLink to="/dashboard" class="inline-flex items-center justify-center rounded-full border border-default px-3 py-1.5 text-sm font-medium text-default no-underline transition hover:bg-muted">
             {{ connectGoogleCta }}
@@ -84,7 +89,7 @@
 <script setup lang="ts">
 import AppSection from '~/components/ui/AppSection.vue'
 import SayaEmptyExample from '~/components/saya/SayaEmptyExample.vue'
-import SayaMcpHint from '~/components/saya/SayaMcpHint.vue'
+import ChowBotPromptTrigger from '~/components/chowbot/ChowBotPromptTrigger.vue'
 import { sayaEmptyStates } from '~/config/saya-empty-states'
 
 interface Props {

@@ -23,6 +23,8 @@ const ROBOTS_ENUM = ['index,follow', 'noindex,follow', 'index,nofollow', 'noinde
 const BLOG_CATEGORY_ENUM = BLOG_CATEGORY_LABELS
 const DOC_CATEGORY_ENUM = ['Getting Started', 'Menu Management', 'Theme Customization', 'SEO & Marketing', 'Integrations', 'Advanced']
 const DOC_DIFFICULTY_ENUM = ['Beginner', 'Intermediate', 'Advanced']
+const CONTENT_DOCUMENT_OWNER_TYPE_ENUM = ['platform_blog', 'platform_doc', 'tenant_blog']
+const CONTENT_BLOCK_TYPE_ENUM = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'ai_assistance', 'cta', 'callout']
 
 const SEO_FIELDS_SCHEMA = {
   seo_description: NULLABLE_STRING,
@@ -30,6 +32,22 @@ const SEO_FIELDS_SCHEMA = {
   canonical_url: NULLABLE_STRING,
   robots: { type: ['string', 'null'], enum: [...ROBOTS_ENUM, null] },
   featured_image_asset_id: NULLABLE_STRING,
+}
+
+const NAV_FIELDS_SCHEMA = {
+  nav_section: { type: ['string', 'null'], description: 'Top-level sidebar section label. Falls back to a category→section mapping, then to category itself, if unset. Does not affect the public URL.' },
+  nav_title: { type: ['string', 'null'], description: 'Sidebar label override. Falls back to the title if unset. Does not affect the public URL.' },
+  nav_order: { type: ['number', 'null'], description: 'Sort position within its group (or section if no group). Lower sorts first. Falls back to legacy sort_order, then published_at/created_at, if unset.' },
+  nav_section_order: { type: ['number', 'null'], description: 'Sort position of the section itself among all sections. Falls back to a fixed legacy order if unset.' },
+  hide_from_nav: { type: ['boolean', 'null'], description: 'Excludes this item from sidebar/nav rendering only. Does NOT deindex it or remove it from the sitemap — use robots="noindex,..." for that.' },
+  featured_order: { type: ['number', 'null'], description: 'Sort position in featured/homepage placements, independent of nav ordering.' },
+}
+
+// Docs-only: gives docs a curated Section → Group → Page hierarchy (max 3 levels).
+// Blog posts do not get this — blog nav stays flat/category-grouped.
+const DOC_NAV_GROUP_FIELDS_SCHEMA = {
+  nav_group: { type: ['string', 'null'], description: 'Optional collapsible subgroup within nav_section (e.g. section "Manage your site" → group "Branding"). Omit for a doc that sits directly under its section with no subgroup. Docs support Section → Group → Page (max 3 levels) — do not attempt deeper nesting via parent_doc_id, which is unused by nav rendering.' },
+  nav_group_order: { type: ['number', 'null'], description: 'Sort position of this subgroup among other groups in the same nav_section. Only meaningful if nav_group is set.' },
 }
 
 const FEATURED_IMAGE_SCHEMA = {
@@ -114,6 +132,19 @@ const HOW_TO_STEP_OUTPUT_SCHEMA = {
   additionalProperties: false,
 }
 
+const AI_ASSISTANCE_PROMPT_SCHEMA = {
+  type: 'object',
+  properties: {
+    title: NULLABLE_STRING,
+    prompt: { type: 'string' },
+    description: NULLABLE_STRING,
+    copy_label: NULLABLE_STRING,
+    position: { type: 'number' },
+  },
+  required: ['prompt'],
+  additionalProperties: false,
+}
+
 const FAQ_COMPONENT_SCHEMA = {
   type: 'object',
   properties: {
@@ -163,15 +194,164 @@ const HOW_TO_COMPONENT_SCHEMA = {
   additionalProperties: false,
 }
 
+const AI_ASSISTANCE_COMPONENT_SCHEMA = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    content_type: { type: 'string', enum: ['blog_post', 'doc'] },
+    content_id: { type: 'string' },
+    type: { type: 'string', enum: ['ai_assistance'] },
+    ...COMPONENT_METADATA_SCHEMA,
+    data: {
+      type: 'object',
+      properties: {
+        intro: NULLABLE_STRING,
+        collapsed: NULLABLE_BOOLEAN,
+        max_visible_lines: NULLABLE_NUMBER,
+        prompts: { type: 'array', items: AI_ASSISTANCE_PROMPT_SCHEMA },
+      },
+      required: ['prompts'],
+      additionalProperties: false,
+    },
+    created_at: { type: 'string' },
+    updated_at: { type: 'string' },
+  },
+  required: ['id', 'content_type', 'content_id', 'type', 'position', 'label', 'status', 'render_enabled', 'schema_enabled', 'data', 'created_at', 'updated_at'],
+  additionalProperties: false,
+}
+
+const HOW_TO_STEP_INPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    text: { type: 'string' },
+    image_asset_id: NULLABLE_STRING,
+    url: NULLABLE_STRING,
+    position: { type: 'number' },
+  },
+  required: ['name', 'text'],
+  additionalProperties: false,
+}
+
+const FAQ_COMPONENT_INPUT_DATA_SCHEMA = {
+  type: 'object',
+  properties: {
+    items: { type: 'array', items: FAQ_ITEM_SCHEMA },
+  },
+  required: ['items'],
+  additionalProperties: false,
+}
+
+const HOW_TO_COMPONENT_INPUT_DATA_SCHEMA = {
+  type: 'object',
+  properties: {
+    steps: { type: 'array', items: HOW_TO_STEP_INPUT_SCHEMA },
+    estimated_time: NULLABLE_STRING,
+    tool_items: { type: 'array', items: { type: 'string' } },
+    supply_items: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['steps'],
+  additionalProperties: false,
+}
+
+const AI_ASSISTANCE_COMPONENT_INPUT_DATA_SCHEMA = {
+  type: 'object',
+  properties: {
+    intro: NULLABLE_STRING,
+    collapsed: NULLABLE_BOOLEAN,
+    max_visible_lines: NULLABLE_NUMBER,
+    prompts: { type: 'array', items: AI_ASSISTANCE_PROMPT_SCHEMA },
+  },
+  required: ['prompts'],
+  additionalProperties: false,
+}
+
 const COMPONENT_INPUT_SCHEMA = {
   type: 'object',
   properties: {
-    type: { type: 'string', enum: ['faq', 'how_to'] },
+    type: { type: 'string', enum: ['faq', 'how_to', 'ai_assistance'] },
     ...COMPONENT_METADATA_SCHEMA,
     data: { type: 'object' },
   },
   required: ['type', 'data'],
   additionalProperties: false,
+  // `data`'s shape depends on the sibling `type` field, so it's spelled out per-type here
+  // instead of on the shared `properties.data` above — that's what gives the model the
+  // actual step/item field names (e.g. how_to steps need `name`+`text`) instead of an
+  // opaque object it has to guess the shape of.
+  allOf: [
+    {
+      if: { properties: { type: { const: 'faq' } } },
+      then: { properties: { data: FAQ_COMPONENT_INPUT_DATA_SCHEMA } },
+    },
+    {
+      if: { properties: { type: { const: 'how_to' } } },
+      then: { properties: { data: HOW_TO_COMPONENT_INPUT_DATA_SCHEMA } },
+    },
+    {
+      if: { properties: { type: { const: 'ai_assistance' } } },
+      then: { properties: { data: AI_ASSISTANCE_COMPONENT_INPUT_DATA_SCHEMA } },
+    },
+  ],
+}
+
+const CONTENT_BLOCK_DATA_SCHEMA = { type: 'object' }
+
+const CONTENT_BLOCK_SCHEMA = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    parent_block_id: NULLABLE_STRING,
+    type: { type: 'string', enum: CONTENT_BLOCK_TYPE_ENUM },
+    position: { type: 'number' },
+    level: NULLABLE_NUMBER,
+    updated_at: { type: 'string' },
+    data: CONTENT_BLOCK_DATA_SCHEMA,
+  },
+  required: ['id', 'parent_block_id', 'type', 'position', 'level', 'updated_at', 'data'],
+  additionalProperties: false,
+}
+
+const CONTENT_BLOCK_WRITE_RESULT_SCHEMA = {
+  type: 'object',
+  properties: {
+    revision_id: { type: 'string' },
+    body_markdown: { type: 'string' },
+    blocks: { type: 'array', items: CONTENT_BLOCK_SCHEMA },
+  },
+  required: ['revision_id', 'body_markdown', 'blocks'],
+  additionalProperties: false,
+}
+
+const CONTENT_DOCUMENT_LOOKUP_SCHEMA = {
+  document_id: { type: 'string' },
+  owner_type: { type: 'string', enum: CONTENT_DOCUMENT_OWNER_TYPE_ENUM },
+  owner_id: { type: 'string' },
+}
+
+const CONTENT_DOCUMENT_LOOKUP_REQUIREMENT = {
+  oneOf: [
+    {
+      required: ['document_id'],
+      not: {
+        anyOf: [
+          { required: ['owner_type'] },
+          { required: ['owner_id'] },
+        ],
+      },
+    },
+    {
+      required: ['owner_type', 'owner_id'],
+      not: { required: ['document_id'] },
+    },
+  ],
+}
+
+const CONTENT_BLOCK_INPUT_PROPERTIES = {
+  type: { type: 'string', enum: CONTENT_BLOCK_TYPE_ENUM },
+  data: CONTENT_BLOCK_DATA_SCHEMA,
+  parent_block_id: NULLABLE_STRING,
+  level: NULLABLE_NUMBER,
 }
 
 const BLOG_SUMMARY_SCHEMA = {
@@ -183,12 +363,18 @@ const BLOG_SUMMARY_SCHEMA = {
     excerpt: NULLABLE_STRING,
     body: NULLABLE_STRING,
     category: NULLABLE_STRING,
+    ...NAV_FIELDS_SCHEMA,
     published: { type: 'boolean' },
     published_at: NULLABLE_STRING,
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
+    seo_title: NULLABLE_STRING,
     ...SEO_FIELDS_SCHEMA,
     featured_image: FEATURED_IMAGE_SCHEMA,
+    admin_edit_url: { type: 'string' },
+    public_path: NULLABLE_STRING,
+    public_url: NULLABLE_STRING,
+    preview_url: NULLABLE_STRING,
   },
   required: [
     'id',
@@ -196,16 +382,27 @@ const BLOG_SUMMARY_SCHEMA = {
     'slug',
     'excerpt',
     'category',
+    'nav_section',
+    'nav_title',
+    'nav_order',
+    'nav_section_order',
+    'hide_from_nav',
+    'featured_order',
     'published',
     'published_at',
     'created_at',
     'updated_at',
+    'seo_title',
     'seo_description',
     'seo_keywords',
     'canonical_url',
     'robots',
     'featured_image_asset_id',
     'featured_image',
+    'admin_edit_url',
+    'public_path',
+    'public_url',
+    'preview_url',
   ],
   additionalProperties: false,
 }
@@ -217,7 +414,7 @@ const BLOG_RECORD_SCHEMA = {
     components: {
       type: 'array',
       items: {
-        oneOf: [FAQ_COMPONENT_SCHEMA, HOW_TO_COMPONENT_SCHEMA],
+        oneOf: [FAQ_COMPONENT_SCHEMA, HOW_TO_COMPONENT_SCHEMA, AI_ASSISTANCE_COMPONENT_SCHEMA],
       },
     },
   },
@@ -234,6 +431,8 @@ const DOC_SUMMARY_SCHEMA = {
     excerpt: NULLABLE_STRING,
     body: NULLABLE_STRING,
     category: NULLABLE_STRING,
+    ...NAV_FIELDS_SCHEMA,
+    ...DOC_NAV_GROUP_FIELDS_SCHEMA,
     difficulty_level: NULLABLE_STRING,
     sort_order: NULLABLE_NUMBER,
     parent_doc_id: NULLABLE_STRING,
@@ -244,6 +443,10 @@ const DOC_SUMMARY_SCHEMA = {
     updated_at: { type: 'string' },
     ...SEO_FIELDS_SCHEMA,
     featured_image: FEATURED_IMAGE_SCHEMA,
+    admin_edit_url: { type: 'string' },
+    public_path: NULLABLE_STRING,
+    public_url: NULLABLE_STRING,
+    preview_url: NULLABLE_STRING,
   },
   required: [
     'id',
@@ -251,6 +454,14 @@ const DOC_SUMMARY_SCHEMA = {
     'slug',
     'excerpt',
     'category',
+    'nav_section',
+    'nav_title',
+    'nav_order',
+    'nav_section_order',
+    'nav_group',
+    'nav_group_order',
+    'hide_from_nav',
+    'featured_order',
     'difficulty_level',
     'sort_order',
     'parent_doc_id',
@@ -265,6 +476,10 @@ const DOC_SUMMARY_SCHEMA = {
     'robots',
     'featured_image_asset_id',
     'featured_image',
+    'admin_edit_url',
+    'public_path',
+    'public_url',
+    'preview_url',
   ],
   additionalProperties: false,
 }
@@ -276,7 +491,7 @@ const DOC_RECORD_SCHEMA = {
     components: {
       type: 'array',
       items: {
-        oneOf: [FAQ_COMPONENT_SCHEMA, HOW_TO_COMPONENT_SCHEMA],
+        oneOf: [FAQ_COMPONENT_SCHEMA, HOW_TO_COMPONENT_SCHEMA, AI_ASSISTANCE_COMPONENT_SCHEMA],
       },
     },
   },
@@ -291,9 +506,13 @@ const BLOG_WRITE_RESPONSE_SCHEMA = {
     id: { type: 'string' },
     slug: { type: 'string' },
     published_at: NULLABLE_STRING,
+    admin_edit_url: { type: 'string' },
+    public_path: NULLABLE_STRING,
+    public_url: NULLABLE_STRING,
+    preview_url: NULLABLE_STRING,
     post: BLOG_RECORD_SCHEMA,
   },
-  required: ['success', 'id', 'slug', 'published_at', 'post'],
+  required: ['success', 'id', 'slug', 'published_at', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'post'],
   additionalProperties: false,
 }
 
@@ -305,9 +524,13 @@ const DOC_WRITE_RESPONSE_SCHEMA = {
     slug: { type: 'string' },
     status: { type: 'string' },
     published_at: NULLABLE_STRING,
+    admin_edit_url: { type: 'string' },
+    public_path: NULLABLE_STRING,
+    public_url: NULLABLE_STRING,
+    preview_url: NULLABLE_STRING,
     doc: DOC_RECORD_SCHEMA,
   },
-  required: ['success', 'id', 'slug', 'status', 'published_at', 'doc'],
+  required: ['success', 'id', 'slug', 'status', 'published_at', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'doc'],
   additionalProperties: false,
 }
 
@@ -322,10 +545,11 @@ const DELETE_RESPONSE_SCHEMA = {
 
 const SHARED_TOOL_DESCRIPTION_LINES = [
   'Set seo_description explicitly for the intended search snippet. Use canonical_url only for deliberate canonical consolidation. Use robots only for non-default index behavior. Set featured_image_asset_id only when the user has selected or uploaded a real platform media asset; otherwise leave it null.',
-  'Use components[] as the only structured-content authoring shape. FAQ components contain data.items[]. How-To components contain data.steps[] and may also include data.estimated_time, data.tool_items, and data.supply_items.',
-  'To place a visual component inside the article body, insert a component embed tag directly into body markdown, for example {{component type="faq"}} or {{component type="how_to"}}. A component only renders where its matching embed appears; there is no auto-append fallback.',
-  'Use render_enabled to control whether a component appears on the page. Use schema_enabled to control whether it emits structured data. Use status to disable a component without deleting it.',
+  'Use components[] as the only structured-content authoring shape. FAQ components contain data.items[], each item { question: string, answer: string, position?: number }. How-To components contain data.steps[], each step { name: string, text: string, image_asset_id?: string|null, url?: string|null, position?: number } (name and text are both required strings; a missing name or text is the most common cause of a rejected update), and data may also include estimated_time, tool_items, and supply_items. AI Assistance components use type="ai_assistance" and contain data.prompts[], each prompt { prompt: string, title?: string|null, description?: string|null, copy_label?: string|null, position?: number }; each prompt is a writer-authored suggested prompt, not a generated answer.',
+  'To place a visual component inside the article body, insert a component embed tag directly into body markdown, for example {{component type="faq"}}, {{component type="how_to"}}, or {{component type="ai_assistance"}}. Keep AI Assistance prompts specific, actionable, page-aware, and rare enough to help the reader act.',
+  'Use render_enabled to control whether a component appears on the page. Use schema_enabled to control whether it emits structured data; leave schema_enabled false for ai_assistance unless a future schema representation exists. Use status to disable a component without deleting it.',
   'On update: omitting components preserves existing components; sending components: [] deletes them; sending a non-empty components[] array replaces the full component set for that page.',
+  'Default writer workflow is draft first: create or update the draft, then report admin_edit_url so the writer can review it. If published, also report public_url or public_path. preview_url is null until draft previews are supported.',
   'Once the user has supplied or approved final body text and you have computed the SEO fields, call this tool directly with those values — do not respond with a description of the call you would make instead of making it. If the user also asked to publish, follow this call with the corresponding publish tool in the same turn rather than waiting for a second request.',
 ]
 
@@ -526,6 +750,148 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     outputSchema: DELETE_RESPONSE_SCHEMA,
   }),
   readTool({
+    name: 'get_content_document_outline',
+    description: 'Get the block outline for a platform blog, platform doc, or tenant blog content document. Provide either document_id, or owner_type plus owner_id.',
+    inputSchema: {
+      type: 'object',
+      properties: CONTENT_DOCUMENT_LOOKUP_SCHEMA,
+      ...CONTENT_DOCUMENT_LOOKUP_REQUIREMENT,
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        document: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            owner_type: { type: 'string', enum: CONTENT_DOCUMENT_OWNER_TYPE_ENUM },
+            owner_id: { type: 'string' },
+            draft_revision_id: NULLABLE_STRING,
+            published_revision_id: NULLABLE_STRING,
+            updated_at: { type: 'string' },
+          },
+          required: ['id', 'owner_type', 'owner_id', 'draft_revision_id', 'published_revision_id', 'updated_at'],
+          additionalProperties: false,
+        },
+        blocks: { type: 'array', items: CONTENT_BLOCK_SCHEMA },
+      },
+      required: ['document', 'blocks'],
+      additionalProperties: false,
+    },
+  }),
+  readTool({
+    name: 'get_content_block',
+    description: 'Fetch a single content block, including its data payload and updated_at value for optimistic replacement.',
+    inputSchema: {
+      type: 'object',
+      properties: { block_id: { type: 'string' } },
+      required: ['block_id'],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        block: {
+          type: 'object',
+          properties: {
+            document_id: { type: 'string' },
+            ...CONTENT_BLOCK_SCHEMA.properties,
+          },
+          required: ['document_id', 'id', 'parent_block_id', 'type', 'position', 'level', 'updated_at', 'data'],
+          additionalProperties: false,
+        },
+      },
+      required: ['block'],
+      additionalProperties: false,
+    },
+  }),
+  writeTool({
+    name: 'append_content_block',
+    description: 'Append a block to a content document. Provide either document_id, or owner_type plus owner_id; after_block_id inserts after a specific block.',
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...CONTENT_DOCUMENT_LOOKUP_SCHEMA,
+        after_block_id: NULLABLE_STRING,
+        ...CONTENT_BLOCK_INPUT_PROPERTIES,
+      },
+      required: ['type', 'data'],
+      ...CONTENT_DOCUMENT_LOOKUP_REQUIREMENT,
+      additionalProperties: false,
+    },
+    outputSchema: CONTENT_BLOCK_WRITE_RESULT_SCHEMA,
+  }),
+  writeTool({
+    name: 'replace_content_block',
+    description: 'Replace one block data payload using optimistic concurrency. expected_updated_at must match the block returned by get_content_block or get_content_document_outline.',
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        block_id: { type: 'string' },
+        expected_updated_at: { type: 'string' },
+        data: CONTENT_BLOCK_DATA_SCHEMA,
+      },
+      required: ['block_id', 'expected_updated_at', 'data'],
+      additionalProperties: false,
+    },
+    outputSchema: CONTENT_BLOCK_WRITE_RESULT_SCHEMA,
+  }),
+  writeTool({
+    name: 'delete_content_block',
+    description: 'Delete one block using optimistic concurrency. expected_updated_at must match the block returned by get_content_block or get_content_document_outline.',
+    destructive: true,
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        block_id: { type: 'string' },
+        expected_updated_at: { type: 'string' },
+      },
+      required: ['block_id', 'expected_updated_at'],
+      additionalProperties: false,
+    },
+    outputSchema: CONTENT_BLOCK_WRITE_RESULT_SCHEMA,
+  }),
+  readTool({
+    name: 'render_content_preview',
+    description: 'Render the current content blocks back to a compatibility Markdown body without publishing.',
+    inputSchema: {
+      type: 'object',
+      properties: CONTENT_DOCUMENT_LOOKUP_SCHEMA,
+      ...CONTENT_DOCUMENT_LOOKUP_REQUIREMENT,
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        body_markdown: { type: 'string' },
+        blocks: { type: 'array', items: CONTENT_BLOCK_SCHEMA },
+      },
+      required: ['body_markdown', 'blocks'],
+      additionalProperties: false,
+    },
+  }),
+  writeTool({
+    name: 'publish_content_revision',
+    description: 'Publish the current draft revision for a platform blog, platform doc, or tenant blog content document. Provide either document_id, or owner_type plus owner_id.',
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: CONTENT_DOCUMENT_LOOKUP_SCHEMA,
+      ...CONTENT_DOCUMENT_LOOKUP_REQUIREMENT,
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: { success: { type: 'boolean' } },
+      required: ['success'],
+      additionalProperties: false,
+    },
+  }),
+  readTool({
     name: 'list_platform_blog_posts',
     description: 'List KrabiClaw platform blog posts. Optionally filter by published or draft status.',
     inputSchema: {
@@ -569,6 +935,8 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
         excerpt: { type: 'string' },
         category: { type: 'string', enum: BLOG_CATEGORY_ENUM },
+        ...NAV_FIELDS_SCHEMA,
+        seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         ...SEO_FIELDS_SCHEMA,
         components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
         publish: { type: 'boolean' },
@@ -590,6 +958,8 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
         excerpt: { type: 'string' },
         category: { type: 'string', enum: BLOG_CATEGORY_ENUM },
+        ...NAV_FIELDS_SCHEMA,
+        seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         ...SEO_FIELDS_SCHEMA,
         components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
         publish: { type: 'boolean' },
@@ -602,9 +972,13 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         success: { type: 'boolean' },
+        admin_edit_url: { type: 'string' },
+        public_path: NULLABLE_STRING,
+        public_url: NULLABLE_STRING,
+        preview_url: NULLABLE_STRING,
         post: BLOG_RECORD_SCHEMA,
       },
-      required: ['success', 'post'],
+      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'post'],
       additionalProperties: false,
     },
   }),
@@ -622,9 +996,13 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         success: { type: 'boolean' },
+        admin_edit_url: { type: 'string' },
+        public_path: NULLABLE_STRING,
+        public_url: NULLABLE_STRING,
+        preview_url: NULLABLE_STRING,
         post: BLOG_RECORD_SCHEMA,
       },
-      required: ['success', 'post'],
+      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'post'],
       additionalProperties: false,
     },
   }),
@@ -642,9 +1020,50 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         success: { type: 'boolean' },
+        admin_edit_url: { type: 'string' },
+        public_path: NULLABLE_STRING,
+        public_url: NULLABLE_STRING,
+        preview_url: NULLABLE_STRING,
         post: BLOG_RECORD_SCHEMA,
       },
-      required: ['success', 'post'],
+      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'post'],
+      additionalProperties: false,
+    },
+  }),
+  writeTool({
+    name: 'reorder_platform_blog_posts',
+    description: 'Set editorial navigation (section, title, order, visibility) for platform blog posts without changing their taxonomy category or public URL. Blog posts do not support nav_group subgrouping (docs-only feature) — only nav_section.',
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              post_id: { type: 'string', description: 'Post id or slug.' },
+              nav_section: NAV_FIELDS_SCHEMA.nav_section,
+              nav_title: NAV_FIELDS_SCHEMA.nav_title,
+              nav_order: { type: 'number' },
+              nav_section_order: NAV_FIELDS_SCHEMA.nav_section_order,
+              hide_from_nav: NAV_FIELDS_SCHEMA.hide_from_nav,
+            },
+            required: ['post_id', 'nav_order'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['items'],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        posts: { type: 'array', items: BLOG_SUMMARY_SCHEMA },
+      },
+      required: ['success', 'posts'],
       additionalProperties: false,
     },
   }),
@@ -705,6 +1124,8 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
         excerpt: { type: 'string' },
         category: { type: 'string', enum: DOC_CATEGORY_ENUM },
+        ...NAV_FIELDS_SCHEMA,
+        ...DOC_NAV_GROUP_FIELDS_SCHEMA,
         difficulty_level: { type: 'string', enum: DOC_DIFFICULTY_ENUM },
         sort_order: { type: 'number' },
         parent_doc_id: { type: 'string' },
@@ -729,6 +1150,8 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
         excerpt: { type: 'string' },
         category: { type: 'string', enum: DOC_CATEGORY_ENUM },
+        ...NAV_FIELDS_SCHEMA,
+        ...DOC_NAV_GROUP_FIELDS_SCHEMA,
         difficulty_level: { type: 'string', enum: DOC_DIFFICULTY_ENUM },
         sort_order: { type: 'number' },
         parent_doc_id: { type: 'string' },
@@ -744,9 +1167,13 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         success: { type: 'boolean' },
+        admin_edit_url: { type: 'string' },
+        public_path: NULLABLE_STRING,
+        public_url: NULLABLE_STRING,
+        preview_url: NULLABLE_STRING,
         doc: DOC_RECORD_SCHEMA,
       },
-      required: ['success', 'doc'],
+      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'doc'],
       additionalProperties: false,
     },
   }),
@@ -764,9 +1191,13 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         success: { type: 'boolean' },
+        admin_edit_url: { type: 'string' },
+        public_path: NULLABLE_STRING,
+        public_url: NULLABLE_STRING,
+        preview_url: NULLABLE_STRING,
         doc: DOC_RECORD_SCHEMA,
       },
-      required: ['success', 'doc'],
+      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'doc'],
       additionalProperties: false,
     },
   }),
@@ -784,9 +1215,52 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         success: { type: 'boolean' },
+        admin_edit_url: { type: 'string' },
+        public_path: NULLABLE_STRING,
+        public_url: NULLABLE_STRING,
+        preview_url: NULLABLE_STRING,
         doc: DOC_RECORD_SCHEMA,
       },
-      required: ['success', 'doc'],
+      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'doc'],
+      additionalProperties: false,
+    },
+  }),
+  writeTool({
+    name: 'reorder_platform_docs',
+    description: 'Set editorial navigation (section, group, title, order, visibility) for platform docs without changing their taxonomy category, parent_doc_id (unused by nav rendering), or public URL. nav_group nests under nav_section; leave unset for docs with no subgroup.',
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              doc_id: { type: 'string', description: 'Doc id or slug.' },
+              nav_section: NAV_FIELDS_SCHEMA.nav_section,
+              nav_title: NAV_FIELDS_SCHEMA.nav_title,
+              nav_order: { type: 'number' },
+              nav_section_order: NAV_FIELDS_SCHEMA.nav_section_order,
+              nav_group: DOC_NAV_GROUP_FIELDS_SCHEMA.nav_group,
+              nav_group_order: DOC_NAV_GROUP_FIELDS_SCHEMA.nav_group_order,
+              hide_from_nav: NAV_FIELDS_SCHEMA.hide_from_nav,
+            },
+            required: ['doc_id', 'nav_order'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['items'],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        docs: { type: 'array', items: DOC_SUMMARY_SCHEMA },
+      },
+      required: ['success', 'docs'],
       additionalProperties: false,
     },
   }),

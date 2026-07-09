@@ -1,5 +1,128 @@
 # Handoff: KrabiClaw page speed — stop adding, start removing
 
+## Latest update (2026-07-09, later): real timing tests run — short answer, no measurable Lighthouse TTI delta, and here's why that's expected, plus the real proof that matters
+
+Use this section first; it supersedes the "Not yet done" item in the section
+immediately below (interleaved PSI methodology now actually run).
+
+**Confirmed live in production first** (real browser against `https://krabiclaw.com/`,
+not simulated): `window.zaraz` exists, `window.gtag`/`window.krabiLayer` are
+both gone, and real network traffic hits `POST /cdn-cgi/zaraz/t` (Zaraz's
+track endpoint) on page load — 3 calls (the automatic `Pageview` system
+trigger plus the app's `session_start`/`page_view` calls). Zero console/page
+errors. A plain `curl` to the same URL showed **no** Zaraz injection at all —
+almost certainly Zaraz's "Bot Score Threshold" setting correctly skipping
+injection for non-browser traffic. `curl` is not a reliable way to check
+Zaraz; use a real browser (Playwright or a real Chrome tab) — this cost time
+to figure out before landing on the right test tool.
+
+**Interleaved local A/B (6 rounds, `--throttling-method=simulate`, same
+methodology as the original GA4 on/off test further down), pre-Zaraz commit
+(`8363dcfb`) vs current (`98e44ade`), on `/dev/perf-text?mode=text-no-icons`:**
+TTI 2.42s median (before) vs 2.48s median (after) — a wash, after-faster in
+only 3/6 rounds, no consistent direction. Total byte weight barely moved
+(294401 → 293903 bytes, ~500 bytes).
+
+**This is a real, expected result, not a failed test — the isolated
+Lighthouse page structurally cannot detect this specific improvement.**
+Lighthouse's automated crawl never clicks, scrolls, or types; it only loads
+and waits. The *pre-Zaraz* commit being compared here already had the
+interaction/15s-timeout-deferred `gtag.js` load from the earlier "GA4
+idle-callback fix" (see below) — not the original `requestIdleCallback` bug.
+Since Lighthouse never interacts and its measurement window closes well
+before the 15s passive fallback, `gtag.js` never loads during a Lighthouse
+run in *either* the before or after condition. Both conditions look
+identical to a non-interacting synthetic crawler by construction, so a
+Lighthouse-measured "seconds" delta for this specific change does not exist
+and was never going to, regardless of how many rounds are run.
+
+**The actual improvement only shows up for a real interacting visitor, and
+that was tested directly instead** (Playwright against both local builds,
+real click simulated 500ms after load — the exact trigger the old code's
+`loadOnInteraction` listener was waiting for):
+
+| Condition | `gtag.js` requests before click | `gtag.js` requests after click + 2s |
+| --- | ---: | ---: |
+| Before (pre-Zaraz) | 0 | **1** (`googletagmanager.com/gtag/js?id=G-NJ1BSP9BYG`) |
+| After (Zaraz) | 0 | **0** |
+
+This is the real, concrete effect: any visitor who actually clicks, scrolls,
+or types anywhere on a platform page — the majority of real sessions, as
+opposed to Lighthouse's passive crawl — used to trigger a fresh 166KB
+`gtag.js` fetch plus parse/execute cost on the main thread, at whatever
+moment they first interacted. That fetch no longer happens at all, for
+anyone, ever, because analytics now runs at Cloudflare's edge instead of in
+the browser. It's real, it's zero for every real interacting session instead
+of "delayed," but it is not a number Lighthouse (local or PSI) can report,
+because Lighthouse doesn't produce the interaction event that used to
+trigger it.
+
+**Bottom line for "did this help load speed": yes, for the specific failure
+mode it targeted (a 166KB client fetch firing on real user interaction), and
+that's now fully eliminated rather than just delayed past a benchmark's
+measurement window — but there is no "X seconds faster" Lighthouse/PSI
+number to report, because the thing being measured was never visible to
+that tool in the first place, before or after. The plain-content-page TTI
+regression this whole handoff has been chasing (1.37-5.97s across the July 2
+production snapshot) is a separate, much larger issue — see the "Confirmed
+next lever" entry-chunk-bundle section further down — this fix did not move
+that number and was never expected to.**
+
+## Latest update (2026-07-09): GA4 TTI item resolved — moved to Cloudflare Zaraz, not just deferred
+
+Use this section first for the GA4 item specifically; it supersedes both the
+"GA4 idle-callback fix" note further down and that note's own predecessor
+("the real finding: GA4 idle-callback costs ~1.5s of TTI"). The other
+sections below (Saya shell, self-fetch elimination, entry-chunk bundle
+audit) are unrelated to GA4 and still stand as-is.
+
+**What changed:** the confirmed ~1.5s TTI cost from client-loaded GA4 (see
+"The real finding" section below) is no longer mitigated by load-timing
+tricks — it's removed at the root. Cloudflare Zaraz is now enabled on the
+`krabiclaw.com` zone with a GA4 tool wired to the platform's measurement ID
+(`G-NJ1BSP9BYG`, `Pageview` + `AllTracks` triggers). `app.vue`'s entire
+client GA4 bootstrap (script injection, interaction/15s-timeout load-gating,
+the `window.krabiLayer` queue/bridge — everything described in the sections
+below) was deleted. `useAnalytics.ts`'s `trackEvent()` now calls
+`window.zaraz.track()` directly; Zaraz's own edge-injected snippet queues
+calls made before it loads, the same guarantee `krabiLayer`/`dataLayer`
+existed to provide, so there's no app-owned queue left to maintain.
+
+Why this is a strictly better fix than the interaction/15s-timeout approach
+documented below: that approach only *delayed* the 166KB `gtag.js` fetch
+past Lighthouse's TTI quiet-window, it didn't remove the fetch. Zaraz runs
+the tool at Cloudflare's edge, so the browser never fetches `gtag.js` at
+all — zero client bundle cost, not "cost paid later."
+
+**Verified so far:** `yarn typecheck`/`yarn lint`/`yarn build` pass; a real
+headless-browser run against local `nuxt dev` confirms `window.gtag` and
+`window.krabiLayer` are both gone (not just deferred — actually absent) and
+that `trackEvent()`'s `window.zaraz?.track()` call is a safe no-op when
+`window.zaraz` is undefined (expected in local dev, since Zaraz only injects
+behind Cloudflare's real edge proxy — there is no way to get a real
+`window.zaraz` in `nuxt dev` or local `wrangler dev`); confirmed the
+unrelated server-side pageview pipeline (`platform_pageview_events` in D1)
+still records a row per visit, so nothing else broke. Cloudflare API access
+to the Zaraz config (read + a safe idempotent write round-trip) was
+confirmed working before relying on it.
+
+**Now done** — see the section above this one for the real interleaved local
+A/B and live-production browser verification. Short version: no Lighthouse-
+measurable TTI delta (expected — Lighthouse doesn't interact, and the old
+code's cost was interaction-gated), but a direct real-click test confirms
+the 166KB `gtag.js` fetch that used to fire on any real user interaction no
+longer fires at all.
+
+**Deliberately out of scope of this fix:** tenant/Saya pages' own
+Google-connected GA4 (`layouts/saya.vue`, per-tenant
+`google_analytics_measurement_id`) still injects `gtag.js` directly and is
+unaffected by this change — it's a different feature (each customer's own
+GA4 property) than the platform's own analytics, and Zaraz's current config
+has one tool wired to one fixed measurement ID, not a per-tenant dynamic
+one. Extending Zaraz to cover that would need per-hostname Configuration
+Rules or a Worker-side variable enricher — a real feature build, not a
+follow-up cleanup item, so it's intentionally not attempted here.
+
 ## Latest update (2026-07-03, preview shell comparison): public shell cleanup materially helped
 
 Fresh preview Lighthouse runs against the perf harness now show that removing

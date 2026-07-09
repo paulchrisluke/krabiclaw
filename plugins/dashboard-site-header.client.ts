@@ -18,14 +18,21 @@
 // never actually attached; multi-site dashboard pages were silently relying
 // entirely on the single-site auto-resolve fallback in dashboard-context.ts.)
 export default defineNuxtPlugin(() => {
-  const route = useRoute()
-  
-  // Only run on dashboard routes — early exit for platform/tenant pages
-  if (!route.path.startsWith('/dashboard')) return
-
   // Captured once, synchronously, while still inside the Nuxt app context for this
-  // request/app instance — `route` stays a live reactive ref we can read later from
-  // inside onRequest, where calling useRoute() again would be outside that context.
+  // app instance — `route` is the same reactive object Nuxt hands out everywhere,
+  // so reading `route.params`/`route.path` later inside onRequest reflects
+  // whatever page is active *at request time*, not just the boot route. The
+  // override itself must install unconditionally: if this app instance boots
+  // outside /dashboard (e.g. the marketing homepage, /admin) and the user then
+  // client-navigates into /dashboard/..., there is no second plugin run to
+  // install it later — Nuxt plugins run once per app instance.
+  const route = useRoute()
+
+  // api_error tracking is bundled into this same override rather than a second
+  // plugin overriding globalThis.$fetch — stacking two independent `.create()`
+  // overrides here is fragile (composition depends on plugin load order), so
+  // every dashboard-wide $fetch concern lives in this one place.
+  const { trackApiError } = useAnalytics()
 
   globalThis.$fetch = $fetch.create({
     onRequest({ request, options }) {
@@ -35,6 +42,11 @@ export default defineNuxtPlugin(() => {
       const headers = new Headers(options.headers as HeadersInit)
       headers.set('x-dashboard-site-slug', siteSlug)
       options.headers = headers
+    },
+    onResponseError({ request, response }) {
+      if (typeof request !== 'string' || !request.startsWith('/api/dashboard')) return
+      const endpoint = typeof request === 'string' ? request : String(request)
+      trackApiError(endpoint, response.status, undefined)
     },
   })
 })

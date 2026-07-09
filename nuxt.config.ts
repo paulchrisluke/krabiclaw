@@ -72,7 +72,6 @@ const skipClientScripts = process.env.PERF_NO_SCRIPTS === 'true'
 // PERF DEBUG PATCH (temporary): build/runtime flags for isolating global
 // client-floor items that affect every /dev/perf-text mode before the page
 // branch can opt in/out. Set one flag at a time and rebuild.
-const skipGa4 = process.env.PERF_NO_GA4 === 'true'
 const skipDompurifyHooks = process.env.PERF_NO_DOMPURIFY_HOOKS === 'true'
 const publicPerfTestPage = process.env.PERF_PUBLIC_TEST_PAGE !== 'false'
 
@@ -170,9 +169,9 @@ export default defineNuxtConfig({
       freeSiteDomain: process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN || '',
       appName: process.env.NUXT_PUBLIC_APP_NAME || '',
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://krabiclaw.com',
+      helpUrl: process.env.NUXT_PUBLIC_HELP_URL || 'https://krabiclaw.com/help',
 
       whatsappNumber: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER || '16197200000',
-      perfNoGa4: skipGa4,
       perfNoDompurifyHooks: skipDompurifyHooks,
       perfPublicTestPage: publicPerfTestPage,
     },
@@ -285,7 +284,14 @@ export default defineNuxtConfig({
 
   // Sitemap configuration
   sitemap: {
-    sources: ['/api/__sitemap__/docs', '/api/__sitemap__/blog', '/api/__sitemap__/pages'],
+    sources: [
+      '/api/__sitemap__/docs',
+      '/api/__sitemap__/blog',
+      '/api/__sitemap__/pages',
+      '/api/__sitemap__/locations',
+      '/api/__sitemap__/menu-items',
+      '/api/__sitemap__/experiences',
+    ],
     // Static tenant routes are managed by the /pages source above which gates
     // /reservations on vertical. Disable auto-discovery of app routes for tenant
     // hosts to avoid /reservations appearing via crawl for experience sites.
@@ -439,7 +445,8 @@ export default defineNuxtConfig({
       '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily'],
       '0 4 * * *': ['site-transfer-reminders'],
       '0 1 * * *': ['cash-billing-reminders'],
-      '0 * * * *': ['instagram-sync-process', 'google-business-sync']
+      '0 0 * * 0': ['google-business-sync'],
+      '0 * * * *': ['instagram-sync-process', 'review-request-automation']
     } : {},
     devServer: {
       watch: ['server']

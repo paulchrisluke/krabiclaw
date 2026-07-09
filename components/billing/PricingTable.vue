@@ -73,25 +73,6 @@
       </div>
     </div>
 
-    <!-- Managed service callout -->
-    <div v-if="hasManagedTier" class="max-w-3xl mx-auto mt-20 relative overflow-hidden text-center bg-linear-to-br from-primary/5 via-elevated/40 to-(--kc-teal)/5 border border-default/70 rounded-3xl shadow-lg hover:shadow-xl transition-shadow duration-300">
-      <div class="p-8 sm:p-10">
-      <div class="absolute -top-24 -right-24 w-48 h-48 bg-primary/10 rounded-full blur-3xl opacity-40" />
-      <div class="absolute -bottom-24 -left-24 w-48 h-48 bg-(--kc-teal)/10 rounded-full blur-3xl opacity-40" />
-
-      <div class="relative z-10 flex flex-col items-center gap-3">
-        <div class="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-1">
-          <PlatformIcon name="sparkles" class="size-6" />
-        </div>
-        <h3 class="text-xl font-extrabold text-default tracking-tight">Send us a WhatsApp. We handle the rest.</h3>
-        <p class="text-sm leading-relaxed text-muted max-w-2xl">
-          On Managed or SEO Accelerator, Paul & Julia own your online presence.
-          Content update? Voice note us. New season or offerings? We update it. Visitors can't find you? We fix it.
-          Less than one hour of agency work per month — at a fraction of the cost.
-        </p>
-      </div>
-      </div>
-    </div>
 
     <!-- Feature comparison table -->
     <div class="max-w-5xl mx-auto mt-24">
@@ -207,10 +188,10 @@ const comparisonRows: ComparisonRow[] = [
   { feature: 'LLM-ready SEO (get found by AI)',   free: 'Basic', growth: 'Advanced', managed: 'Advanced' },
   { feature: 'Custom domain',                     free: false,   growth: true,      managed: true },
   { feature: 'Facebook auto-sync',                free: false,   growth: true,      managed: true },
-  { feature: 'Google Business sync',              free: false,   growth: 'Basics',  managed: 'Full management' },
+  { feature: 'Google Business sync',              free: false,   growth: true,  managed: true },
+  { feature: 'Post-booking review requests',      free: true,   growth: true,      managed: true },
   { feature: 'WhatsApp notifications',            free: false,   growth: true,      managed: true },
-  { feature: 'Managed by Paul & Julia',           free: false,   growth: false,     managed: true },
-  { feature: 'Support',                           free: 'Community', growth: 'WhatsApp', managed: 'Priority WhatsApp' },
+  { feature: 'Support',                           free: 'Community', growth: 'Priority', managed: 'Priority' },
 ]
 
 function cellValue(row: ComparisonRow, planId: string): CellValue {

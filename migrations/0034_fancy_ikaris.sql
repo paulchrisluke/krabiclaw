@@ -1,3 +1,0 @@
--- No-op migration.
--- The final sites check constraints are applied in 0033 after hand-adjusting
--- Drizzle's generated table rebuild to preserve existing triggers and indexes.

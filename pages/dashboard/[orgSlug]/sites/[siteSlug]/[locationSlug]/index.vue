@@ -266,6 +266,9 @@
                 <UFormField label="Maps URL">
                   <UInput v-model="detailsForm.maps_url" type="url" />
                 </UFormField>
+                <UFormField label="Google Review URL">
+                  <UInput v-model="detailsForm.google_review_url" type="url" />
+                </UFormField>
                 <UFormField label="Google Place ID">
                   <UInput v-model="detailsForm.google_place_id" />
                 </UFormField>
@@ -427,6 +430,7 @@ interface BusinessLocation {
   email: string | null
   website_url: string | null
   maps_url: string | null
+  google_review_url: string | null
   description: string | null
   short_description: string | null
   price_level: string | null
@@ -483,13 +487,10 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const dashboard = useDashboardSite()
+const dashboardLocation = useDashboardLocation()
 if (!dashboard.state.value) await dashboard.refresh()
 const siteId = await useDashboardSiteId()
-const routeLocation = String(route.params.locationSlug || '')
-const resolvedLocation = computed(() =>
-  dashboard.locations.value.find(location => location.slug === routeLocation || location.id === routeLocation)
-)
-const locationId = computed(() => resolvedLocation.value?.id ?? routeLocation)
+const locationId = computed(() => dashboardLocation.currentLocationId.value ?? '')
 
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -497,6 +498,7 @@ const site = ref<ApiRecord | null>(null)
 const location = ref<BusinessLocation | null>(null)
 const menus = ref<ApiRecord[]>([])
 const gbConnection = ref<GbConnection | null>(null)
+let locationLoadToken = 0
 const connectingGoogle = ref(false)
 const syncingPlace = ref(false)
 const placeSyncResult = ref('')
@@ -555,6 +557,7 @@ const detailsForm = reactive({
   email: '',
   website_url: '',
   maps_url: '',
+  google_review_url: '',
   google_place_id: '',
   rating: '',
   review_count: '',
@@ -642,6 +645,7 @@ function fillDetailsForm(loc: BusinessLocation) {
   detailsForm.email = loc.email ?? ''
   detailsForm.website_url = loc.website_url ?? ''
   detailsForm.maps_url = loc.maps_url ?? ''
+  detailsForm.google_review_url = loc.google_review_url ?? ''
   detailsForm.google_place_id = loc.google_place_id ?? ''
   detailsForm.rating = loc.rating === null || loc.rating === undefined ? '' : String(loc.rating)
   detailsForm.review_count = loc.review_count === null || loc.review_count === undefined ? '' : String(loc.review_count)
@@ -785,6 +789,7 @@ async function saveLocationDetails() {
         email: detailsForm.email || null,
         website_url: detailsForm.website_url || null,
         maps_url: detailsForm.maps_url || null,
+        google_review_url: detailsForm.google_review_url || null,
         google_place_id: detailsForm.google_place_id || null,
         rating: optionalNumber(detailsForm.rating),
         review_count: optionalInteger(detailsForm.review_count),
@@ -993,10 +998,13 @@ const loadLocationWorkspace = async () => {
 const { evaluateAndSuggest } = useUpsellTriggers()
 
 onMounted(async () => {
+  const currentToken = ++locationLoadToken
   const workspaceLoaded = await loadLocationWorkspace()
-  await loadAnalyticsSummary()
-  await loadGbConnection()
+  if (currentToken !== locationLoadToken) return
+  await Promise.all([loadAnalyticsSummary(), loadGbConnection()])
+  if (currentToken !== locationLoadToken) return
   if (workspaceLoaded) await loadManualReviews()
+  if (currentToken !== locationLoadToken) return
 
   if (route.query.gb === 'connected') {
     toast.add({ description: 'Google Business connected successfully', color: 'success' })
@@ -1005,6 +1013,15 @@ onMounted(async () => {
   }
 
   evaluateAndSuggest()
+})
+
+watch(() => dashboardLocation.currentLocationId.value, async () => {
+  const currentToken = ++locationLoadToken
+  const workspaceLoaded = await loadLocationWorkspace()
+  if (currentToken !== locationLoadToken) return
+  await Promise.all([loadAnalyticsSummary(), loadGbConnection()])
+  if (currentToken !== locationLoadToken) return
+  if (workspaceLoaded) await loadManualReviews()
 })
 
 useSeoMeta({ title: 'Location Workspace | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

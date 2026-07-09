@@ -1,5 +1,6 @@
 # Local dev tunnel config (machine-specific credentials path)
 tunnel.yml
+!tunnel.yml
 
 # Nuxt dev/build outputs
 .output
@@ -37,7 +38,10 @@ pr_body.txt
 /watch-*.mjs
 
 # AI tool local state (like .claude/ — never commit)
-.codex/
+.codex/*
+!.codex/config.toml
+!.codex/hooks/
+!.codex/hooks/block_prod_krabiclaw.py
 
 # Playwright browser binaries (installed locally, not committed)
 .playwright/
@@ -46,6 +50,7 @@ pr_body.txt
 .env
 .env.*
 !.env.example
+!.env.mcp.local.example
 .dev.vars
 public/google-business-cache.json
 
@@ -61,3 +66,5 @@ seeds/*.sql
 .lighthouseci/*
 
 .wrangler/state/v3
+
+.scratch/

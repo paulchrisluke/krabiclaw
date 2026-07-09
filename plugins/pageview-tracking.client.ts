@@ -31,6 +31,37 @@ export default defineNuxtPlugin(() => {
   let isInitialRoute = true
   let lastTrackedPath: string | null = null
 
+  // GA4 product-event tracking (zaraz.track()) is platform-only and has no
+  // server-side initial-load recording the way /api/analytics/track does, so
+  // unlike the site_events pageview below, this needs to fire for the very
+  // first route too, not just subsequent SPA navigations. trackGa4PageView
+  // stays null on tenant pages so the afterEach hook below is a no-op there.
+  let trackGa4PageView: ((_path: string, _title: string) => void) | null = null
+  let trackGa4TimeOnPage: ((_path: string, _durationSeconds: number) => void) | null = null
+  if (isPlatform) {
+    const { trackSessionStart, trackPageView, trackTimeOnPage } = useAnalytics()
+    trackGa4PageView = trackPageView
+    trackGa4TimeOnPage = trackTimeOnPage
+    let alreadyStartedThisTab = false
+    try {
+      const SESSION_STARTED_KEY = 'kc_session_started'
+      if (sessionStorage.getItem(SESSION_STARTED_KEY)) {
+        alreadyStartedThisTab = true
+      } else {
+        sessionStorage.setItem(SESSION_STARTED_KEY, '1')
+      }
+    } catch {
+      // sessionStorage unavailable (private mode / disabled) — skip the
+      // once-per-tab dedupe rather than drop session_start entirely.
+    }
+    try {
+      if (!alreadyStartedThisTab) trackSessionStart()
+      trackGa4PageView(currentPath, document.title)
+    } catch {
+      // Analytics must never break the public site.
+    }
+  }
+
   const sendTrack = (payload: Record<string, unknown>) => {
     try {
       fetch('/api/analytics/track', {
@@ -48,6 +79,8 @@ export default defineNuxtPlugin(() => {
   const sendDurationBeacon = () => {
     const durationSeconds = Math.round((Date.now() - pageEnteredAt) / 1000)
     if (durationSeconds <= 0) return
+
+    trackGa4TimeOnPage?.(currentPath, durationSeconds)
 
     // pagePath pins the update to the page being measured — the beacon and the
     // next page's pageview fetch race each other, so this must not depend on
@@ -81,6 +114,8 @@ export default defineNuxtPlugin(() => {
     // If this is a platform route (e.g. /docs, /blog, /pricing) and we're
     // currently in tenant context, don't record it against the tenant site.
     if (isTenant && isPlatformPath(to.path)) return
+
+    trackGa4PageView?.(to.fullPath, document.title)
 
     // Report duration for the page we're leaving, then start the new page's clock.
     sendDurationBeacon()

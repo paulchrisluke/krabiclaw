@@ -88,6 +88,22 @@ async function openMockedTransferOnboarding(
   const locationId = `loc-transfer-ui-${suffix}`
 
   await loginFreshUser(page, baseURL, userId)
+
+  // Signup no longer auto-creates an org (see server/utils/auth.ts) — this test
+  // navigates to a real /dashboard/{orgSlug}/... route (only the site/location
+  // data below is mocked), so the fresh user needs a real org to belong to.
+  // Creating a throwaway site is the same on-demand path a first-time user
+  // actually goes through; its own siteId/slug are unused below since the
+  // mocked routes take over as soon as the wizard loads.
+  const createSiteRes = await page.request.post(`${baseURL}/api/sites`, {
+    data: {
+      name: `Throwaway Org ${suffix}`,
+      subdomain: `e2e-throwaway-${suffix}`,
+      vertical: 'restaurant',
+    },
+  })
+  expect(createSiteRes.status()).toBe(200)
+
   const contextRes = await page.request.get(`${baseURL}/api/dashboard/context`)
   expect(contextRes.status()).toBe(200)
   const context = await contextRes.json() as { organization?: { id?: string; slug?: string } }

@@ -705,8 +705,8 @@ export function getVerticalCopy(vertical: string | null | undefined, locale: str
   return byLocale.restaurant ?? registry.en.restaurant!
 }
 
-// schema.org has a dedicated "Restaurant" subtype but no "Experience" equivalent,
-// so non-restaurant verticals fall back to the generic LocalBusiness type.
+// Restaurants and professional services get their schema.org subtype plus
+// LocalBusiness; other verticals fall back to the generic LocalBusiness type.
 export function getBusinessSchemaTypes(vertical: string | null | undefined): string[] {
   if (vertical === "restaurant") return ["Restaurant", "LocalBusiness"]
   if (vertical === "professional_service") return ["ProfessionalService", "LocalBusiness"]

@@ -1,5 +1,6 @@
 import { updateSubscriptionQuantity } from "~/server/utils/billing";
-import { execute, executeBatch, queryFirst } from "~/server/db";
+import { fireSiteEventSafe } from "~/server/utils/site-events";
+import { execute, executeBatch, queryFirst, type DbClient } from "~/server/db";
 import { isValidTimezone, normalizeTimezone } from "~/utils/timezone";
 
 type SetupEnv = Record<string, string | undefined>;
@@ -22,6 +23,7 @@ export interface CreateLocationInput {
   email?: string | null;
   website_url?: string | null;
   maps_url?: string | null;
+  google_review_url?: string | null;
   google_place_id?: string | null;
   description?: string | null;
   short_description?: string | null;
@@ -41,7 +43,13 @@ export interface CreateLocationInput {
   hero_video_asset_id?: string | null;
   notification_phone?: string | null;
   timezone?: string | null;
+  max_capacity?: number | null;
   is_primary?: boolean;
+  seo_title?: string | null;
+  seo_description?: string | null;
+  canonical_url?: string | null;
+  robots?: string | null;
+  og_image_asset_id?: string | null;
 }
 
 export interface UpdateLocationInput extends Partial<CreateLocationInput> {
@@ -58,6 +66,7 @@ export interface LocationRecord {
   email: string | null;
   website_url: string | null;
   maps_url: string | null;
+  google_review_url: string | null;
   google_place_id: string | null;
   rating: number | null;
   review_count: number | null;
@@ -79,6 +88,12 @@ export interface LocationRecord {
   foodpanda_url?: string | null;
   notification_phone?: string | null;
   timezone?: string | null;
+  max_capacity?: number | null;
+  seo_title?: string | null;
+  seo_description?: string | null;
+  canonical_url?: string | null;
+  robots?: string | null;
+  og_image_asset_id?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -237,8 +252,8 @@ function serializeSpecialHours(value: SpecialHoursInput | null | undefined) {
   });
 }
 
-async function validateMediaAsset(
-  db: D1Database,
+export async function validateMediaAsset(
+  db: DbClient,
   organizationId: string,
   siteId: string,
   assetId: string | null | undefined,
@@ -268,11 +283,12 @@ async function loadLocation(
   siteId: string,
   locationIdOrSlug: string,
 ) {
-  const columns = `id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
+  const columns = `id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_review_url, google_place_id,
            rating, review_count, description, short_description, status, is_primary,
            address, opening_hours, special_hours, hero_image_asset_id, hero_video_asset_id, price_level,
            facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
-           notification_phone, timezone, created_at, updated_at`;
+           notification_phone, timezone, max_capacity, seo_title, seo_description, canonical_url, robots, og_image_asset_id,
+           created_at, updated_at`;
   // Check id first so a slug that happens to collide with another row's id can
   // never shadow the row actually addressed by that id.
   const byId = await queryFirst<LocationRecord>(
@@ -321,6 +337,19 @@ export async function createLocation(
       },
     };
   }
+  if (
+    input.max_capacity !== undefined &&
+    input.max_capacity !== null &&
+    (!Number.isInteger(input.max_capacity) || input.max_capacity < 0)
+  ) {
+    return {
+      status: 400,
+      data: {
+        error:
+          "max_capacity must be a whole number greater than or equal to 0.",
+      },
+    };
+  }
   const normalizedTimezone = input.timezone === undefined
     ? undefined
     : normalizeTimezone(input.timezone);
@@ -348,6 +377,14 @@ export async function createLocation(
       input.hero_video_asset_id,
       "video",
       "hero_video_asset_id",
+    );
+    await validateMediaAsset(
+      db,
+      organizationId,
+      siteId,
+      input.og_image_asset_id,
+      "image",
+      "og_image_asset_id",
     );
   } catch (error) {
     return {
@@ -401,11 +438,12 @@ export async function createLocation(
         query: `
           INSERT INTO business_locations (
             id, organization_id, site_id, title, slug, city, neighborhood, phone, email, website_url, maps_url,
-            google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
+            google_review_url, google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
             price_level, facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
-            hero_image_asset_id, hero_video_asset_id, notification_phone, timezone, is_primary, status, created_at, updated_at
+            hero_image_asset_id, hero_video_asset_id, notification_phone, timezone, max_capacity, is_primary, status,
+            seo_title, seo_description, canonical_url, robots, og_image_asset_id, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
         `,
         params: [
           id,
@@ -419,6 +457,7 @@ export async function createLocation(
           input.email ?? null,
           input.website_url ?? null,
           input.maps_url ?? null,
+          input.google_review_url ?? null,
           input.google_place_id ?? null,
           input.description ?? null,
           input.short_description ?? null,
@@ -438,7 +477,13 @@ export async function createLocation(
           input.hero_video_asset_id ?? null,
           input.notification_phone ?? null,
           normalizedTimezone ?? null,
+          input.max_capacity ?? null,
           isPrimary ? 1 : 0,
+          input.seo_title ?? null,
+          input.seo_description ?? null,
+          input.canonical_url ?? null,
+          input.robots ?? null,
+          input.og_image_asset_id ?? null,
           now,
           now,
         ],
@@ -457,6 +502,20 @@ export async function createLocation(
 
       await executeBatch(db, statements);
       const location = await loadLocation(db, organizationId, siteId, id);
+      await fireSiteEventSafe({
+        db,
+        organizationId,
+        siteId,
+        locationId: id,
+        actorId: userId,
+        eventType: "location.created",
+        entityType: "business_location",
+        entityId: id,
+        metadata: {
+          title,
+          is_primary: isPrimary,
+        },
+      })
       void updateSubscriptionQuantity(env, db, organizationId).catch(
         (error) => {
           console.error(
@@ -527,6 +586,19 @@ export async function updateLocation(
       },
     };
   }
+  if (
+    input.max_capacity !== undefined &&
+    input.max_capacity !== null &&
+    (!Number.isInteger(input.max_capacity) || input.max_capacity < 0)
+  ) {
+    return {
+      status: 400,
+      data: {
+        error:
+          "max_capacity must be a whole number greater than or equal to 0.",
+      },
+    };
+  }
   const normalizedTimezone = input.timezone === undefined
     ? undefined
     : normalizeTimezone(input.timezone);
@@ -554,6 +626,14 @@ export async function updateLocation(
       input.hero_video_asset_id,
       "video",
       "hero_video_asset_id",
+    );
+    await validateMediaAsset(
+      db,
+      organizationId,
+      siteId,
+      input.og_image_asset_id,
+      "image",
+      "og_image_asset_id",
     );
   } catch (error) {
     return {
@@ -595,12 +675,19 @@ export async function updateLocation(
     "tiktok_url",
     "website_url",
     "maps_url",
+    "google_review_url",
     "google_place_id",
     "hero_image_asset_id",
     "hero_video_asset_id",
     "notification_phone",
     "timezone",
+    "max_capacity",
     "status",
+    "seo_title",
+    "seo_description",
+    "canonical_url",
+    "robots",
+    "og_image_asset_id",
   ] as const;
 
   for (const field of simpleFields) {
@@ -752,6 +839,19 @@ export async function updateLocation(
           siteId,
           locationId,
         );
+        await fireSiteEventSafe({
+          db,
+          organizationId,
+          siteId,
+          locationId,
+          actorId: userId,
+          eventType: "location.updated",
+          entityType: "business_location",
+          entityId: locationId,
+          metadata: {
+            title: location?.title ?? null,
+          },
+        })
         return { status: 200, data: { success: true, location } };
       } catch (error) {
         if (isUniqueConstraintError(error)) continue;
@@ -773,6 +873,19 @@ export async function updateLocation(
   params.push(locationId, organizationId, siteId);
   await runUpdate(params);
   const location = await loadLocation(db, organizationId, siteId, locationId);
+  await fireSiteEventSafe({
+    db,
+    organizationId,
+    siteId,
+    locationId,
+    actorId: userId,
+    eventType: "location.updated",
+    entityType: "business_location",
+    entityId: locationId,
+    metadata: {
+      title: location?.title ?? null,
+    },
+  })
   return { status: 200, data: { success: true, location } };
 }
 

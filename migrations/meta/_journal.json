@@ -180,22 +180,71 @@
     {
       "idx": 32,
       "version": "6",
-      "when": 1783570607448,
-      "tag": "0032_fair_demogoblin",
+      "when": 1783388420842,
+      "tag": "0032_goofy_aqueduct",
       "breakpoints": true
     },
     {
       "idx": 33,
       "version": "6",
-      "when": 1783573744155,
-      "tag": "0033_flimsy_white_queen",
+      "when": 1783397715691,
+      "tag": "0033_silly_psynapse",
       "breakpoints": true
     },
     {
       "idx": 34,
       "version": "6",
-      "when": 1783573788437,
-      "tag": "0034_fancy_ikaris",
+      "when": 1783397832027,
+      "tag": "0034_unknown_red_wolf",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1783400001641,
+      "tag": "0035_stale_zodiak",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1783405581599,
+      "tag": "0036_fantastic_ted_forrester",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1783424272999,
+      "tag": "0037_lucky_pandemic",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1783436491858,
+      "tag": "0038_plain_purple_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1783502138471,
+      "tag": "0039_outgoing_nitro",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1783580108519,
+      "tag": "0040_lovely_turbo",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1783632562618,
+      "tag": "0041_youthful_blizzard",
       "breakpoints": true
     }
   ]

@@ -1,15 +1,21 @@
 import { APIError, betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { hashPassword } from 'better-auth/crypto'
-import { admin, jwt, organization, phoneNumber } from 'better-auth/plugins'
+import { admin, anonymous, jwt, organization, phoneNumber } from 'better-auth/plugins'
 import { oauthProvider } from '@better-auth/oauth-provider'
 import { getHeaders } from 'h3'
 import type { H3Event } from 'h3'
-import { createDb, schema } from '~/server/db'
+import { createDb, execute, schema } from '~/server/db'
+import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { normalizePhone, sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { notifyAdminNewUserSignup } from '~/server/utils/admin-notifications'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
 import { validatePassword } from '~/utils/password-validation'
+import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/site-events'
+import type { InferSelectModel } from 'drizzle-orm'
+
+type MemberRow = InferSelectModel<typeof schema.member>
+type InvitationRow = InferSelectModel<typeof schema.invitation>
 
 export interface CloudflareEnv {
   DB: D1Database
@@ -75,28 +81,13 @@ export function createAuth(env: CloudflareEnv) {
       user: {
         create: {
           after: async (user) => {
+            if ((user as { isAnonymous?: boolean }).isAnonymous) return
+            // Organizations are created on demand — either by site-creation.ts
+            // (first site) or by an admin/invitation flow the user is joining.
+            // Signup itself must not assume why the user is here: they may be
+            // accepting an invitation into an existing org, in which case a
+            // personal org here would just be an orphaned, siteless duplicate.
             const now = new Date()
-            const orgId = `org-${user.id}`
-            try {
-              await db.batch([
-                db.insert(schema.organization).values({
-                  id: orgId,
-                  name: user.name ?? user.email ?? 'My Restaurant',
-                  slug: orgId,
-                  createdAt: now,
-                }).onConflictDoNothing(),
-                db.insert(schema.member).values({
-                  id: `member-${orgId}`,
-                  organizationId: orgId,
-                  userId: user.id,
-                  role: 'owner',
-                  createdAt: now,
-                }).onConflictDoNothing(),
-              ])
-            } catch (batchErr) {
-              console.error('Failed to create org/member on signup, batch rolled back for orgId:', orgId, batchErr)
-              throw batchErr
-            }
             // Fire-and-forget — must not block or throw into the auth flow
             notifyAdminNewUserSignup(env, {
               id: user.id,
@@ -104,6 +95,58 @@ export function createAuth(env: CloudflareEnv) {
               email: user.email,
               createdAt: now.toISOString(),
             }).catch((err) => console.error('admin_signup_notify_failed', err))
+          }
+        }
+      },
+      // Better Auth's org-plugin after-hooks only pass the affected row, not the
+      // acting session, so member.update/delete events are attributed to no actor.
+      member: {
+        update: {
+          after: async (member: MemberRow) => {
+            const siteId = await resolvePrimarySiteForEvent(db, member.organizationId)
+            if (!siteId) return
+            await fireSiteEventSafe({
+              db,
+              organizationId: member.organizationId,
+              siteId,
+              eventType: 'member.role_changed',
+              entityType: 'member',
+              entityId: member.id,
+              metadata: { userId: member.userId, role: member.role },
+            })
+          }
+        },
+        delete: {
+          after: async (member: MemberRow) => {
+            const siteId = await resolvePrimarySiteForEvent(db, member.organizationId)
+            if (!siteId) return
+            await fireSiteEventSafe({
+              db,
+              organizationId: member.organizationId,
+              siteId,
+              eventType: 'member.removed',
+              entityType: 'member',
+              entityId: member.id,
+              metadata: { userId: member.userId },
+            })
+          }
+        }
+      },
+      invitation: {
+        create: {
+          after: async (invitation: InvitationRow) => {
+            const siteId = await resolvePrimarySiteForEvent(db, invitation.organizationId)
+            if (!siteId) return
+            await fireSiteEventSafe({
+              db,
+              organizationId: invitation.organizationId,
+              siteId,
+              actorId: invitation.inviterId,
+              eventType: 'member.invited',
+              entityType: 'invitation',
+              entityId: invitation.id,
+              metadata: { role: invitation.role ?? null },
+            })
           }
         }
       }
@@ -167,6 +210,28 @@ export function createAuth(env: CloudflareEnv) {
           // (https://krabiclaw.com/api/auth) but jwt() signs with options.baseURL
           // (https://krabiclaw.com) — the mismatch causes ChatGPT to reject the connector.
           issuer: (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, ''),
+        },
+      }),
+      anonymous({
+        generateRandomEmail: () => `anon-${crypto.randomUUID()}@customers.krabiclaw.local`,
+        onLinkAccount: async ({ anonymousUser, newUser }) => {
+          const now = new Date().toISOString()
+          await linkAnonymousCustomerToUser(db, anonymousUser.user.id, newUser.user.id)
+          await execute(db, `
+            UPDATE review_requests
+            SET user_id = ?, updated_at = ?
+            WHERE anonymous_user_id = ?
+          `, [newUser.user.id, now, anonymousUser.user.id])
+          await execute(db, `
+            UPDATE reviews
+            SET user_id = ?, updated_at = ?
+            WHERE user_id = ?
+               OR review_request_id IN (
+                 SELECT id
+                 FROM review_requests
+                 WHERE anonymous_user_id = ?
+               )
+          `, [newUser.user.id, now, anonymousUser.user.id, anonymousUser.user.id])
         },
       }),
       oauthProvider({
