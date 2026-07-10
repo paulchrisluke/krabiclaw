@@ -1,5 +1,5 @@
 <template>
-  <article v-if="offering" class="bg-[var(--blawby-bg)]">
+  <article v-if="offering" data-parity-root class="bg-[var(--blawby-bg)]">
     <header class="bg-[var(--blawby-primary)] text-white">
       <div class="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[1fr_420px] lg:px-8">
         <div>
@@ -59,7 +59,7 @@ const props = defineProps<{
 
 const { site } = useTenantSite()
 const { consultation } = useBlawbySite()
-const { trackConsultationClick } = useBlawbyConversionTracking()
+const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
 
 function trackConsultation() {
   trackConsultationClick(

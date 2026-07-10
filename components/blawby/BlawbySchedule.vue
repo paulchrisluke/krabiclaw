@@ -1,5 +1,5 @@
 <template>
-  <section class="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[1fr_380px] lg:px-8">
+  <section data-parity-root class="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[1fr_380px] lg:px-8">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--blawby-accent-strong)]">Consultation</p>
       <h1 class="mt-4 blawby-display text-5xl leading-tight text-[var(--blawby-primary)]">Request a consultation</h1>
@@ -24,7 +24,7 @@
 <script setup lang="ts">
 const { site } = useTenantSite()
 const { consultation } = useBlawbySite()
-const { trackConsultationClick } = useBlawbyConversionTracking()
+const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
 
 function trackConsultation() {
   trackConsultationClick('schedule', '/schedule', consultation.value.external_url || consultation.value.confirmation_path)

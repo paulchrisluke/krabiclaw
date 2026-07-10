@@ -1,12 +1,53 @@
 import type { McpExecutorContext } from './shared'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
-import { createLocationQa, deleteLocationQa, listLocationQa } from '~/server/utils/location-qa'
+import { createLocationQa, createQa, deleteLocationQa, deleteQa, listLocationQa, listQa, reorderQa, updateQa } from '~/server/utils/location-qa'
 import { reorderLocationQa, updateLocationQa } from '~/server/utils/mcp-workflows'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, objectArray, omit, requiredString } from './shared'
 
 export async function handleQaTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
   switch (toolName) {
+    case "list_site_qa":
+      return { items: await listQa(site.db, site.siteId, null) };
+    case "create_site_qa": {
+      const result = await createQa(site.db, {
+        organizationId: site.organizationId,
+        siteId: site.siteId,
+        locationId: null,
+      }, omit(args, []) as never);
+      assertDomainSuccess(result);
+      return { ...result.data, context: await mutationContextPayload(site) };
+    }
+    case "update_site_qa": {
+      const qaId = requiredString(args, "qa_id");
+      const result = await updateQa(site.db, {
+        organizationId: site.organizationId,
+        siteId: site.siteId,
+        locationId: null,
+      }, qaId, omit(args, ["qa_id"]));
+      return { ...result, context: await mutationContextPayload(site) };
+    }
+    case "delete_site_qa": {
+      const result = await deleteQa(site.db, {
+        organizationId: site.organizationId,
+        siteId: site.siteId,
+        locationId: null,
+      }, requiredString(args, "qa_id"));
+      assertDomainSuccess(result);
+      return { ...result.data, context: await mutationContextPayload(site) };
+    }
+    case "reorder_site_qa": {
+      const result = await reorderQa(site.db, {
+        organizationId: site.organizationId,
+        siteId: site.siteId,
+        locationId: null,
+      }, objectArray(args.updates, "updates").map(item => {
+        const sortOrder = Number(item.sort_order);
+        if (!Number.isInteger(sortOrder)) throw mcpProtocolError(MCP_ERROR.invalidParams, "Each update must have an integer sort_order");
+        return { id: requiredString(item, "id"), sort_order: sortOrder };
+      }));
+      return { ...result, context: await mutationContextPayload(site) };
+    }
     case "list_location_qa":
       return {
         items: await listLocationQa(

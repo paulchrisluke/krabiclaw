@@ -110,7 +110,7 @@ useHead(() => ({
   link: [{ rel: 'canonical', href: canonicalUrl.value }],
   meta: post.value?.robots ? [{ name: 'robots', content: post.value.robots }] : [],
   script: articleStructuredData.value
-    ? [{ type: 'application/ld+json', innerHTML: JSON.stringify(articleStructuredData.value) }]
+    ? [{ type: 'application/ld+json', children: JSON.stringify(articleStructuredData.value) }]
     : [],
 }))
 </script>

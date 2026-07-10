@@ -30,7 +30,21 @@ function recordArray(value: unknown): ApiRecord[] {
   return Array.isArray(value) ? value.filter((item): item is ApiRecord => typeof item === 'object' && item !== null) : []
 }
 
-const BLAWBY_THEME_COLOR_KEYS = new Set(['bg', 'surface', 'primary', 'primaryDark', 'accent', 'accentStrong', 'border', 'ink'])
+const BLAWBY_THEME_COLOR_KEYS = new Set([
+  'bg',
+  'surface',
+  'primary',
+  'primaryDark',
+  'primary100',
+  'primary200',
+  'primary800',
+  'accent',
+  'accent100',
+  'accent200',
+  'accentStrong',
+  'border',
+  'ink',
+])
 
 function looksLikeExecutableCalculatorSyntax(value: string) {
   return (
@@ -70,21 +84,6 @@ function validateThemeTokens(value: unknown) {
   const output: ApiRecord = {}
 
   for (const [key, rawValue] of Object.entries(input)) {
-    if (key === 'fonts') {
-      if (!Array.isArray(rawValue)) {
-        validationError('themeTokens.fonts must be an array of HTTPS stylesheet URLs.')
-      }
-      const fonts = rawValue.map((font, index) => {
-        const url = safeStoredUrl(font, 500)
-        if (!url || !/^https:\/\//i.test(url)) {
-          validationError(`themeTokens.fonts[${index}] must be a valid HTTPS URL.`)
-        }
-        return url
-      })
-      output.fonts = Array.from(new Set(fonts))
-      continue
-    }
-
     if (!BLAWBY_THEME_COLOR_KEYS.has(key)) {
       validationError(`themeTokens.${key} is not supported.`)
     }

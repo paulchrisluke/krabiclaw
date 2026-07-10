@@ -445,7 +445,7 @@ export const location_qa = sqliteTable("location_qa", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" } ),
+	location_id: text().references(() => business_locations.id, { onDelete: "cascade" } ),
 	google_question_id: text(),
 	question: text().notNull(),
 	question_author: text(),
@@ -460,7 +460,13 @@ export const location_qa = sqliteTable("location_qa", {
 	sort_order: integer().default(0).notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	uniqueIndex("idx_location_qa_google_id").on(table.google_question_id).where(sql`google_question_id IS NOT NULL`),
+	index("idx_location_qa_location").on(table.location_id, table.status, table.sort_order),
+	index("idx_location_qa_site").on(table.site_id, table.status, table.sort_order).where(sql`location_id IS NULL`),
+	check("location_qa_source_check", sql`source IN ('gmb','google_maps','manual','llm_generated','manual_override','template','import')`),
+	check("location_qa_status_check", sql`status IN ('published','hidden')`),
+]);
 
 export const media_assets = sqliteTable("media_assets", {
 	id: text().primaryKey(),
@@ -1097,6 +1103,11 @@ export const reviews = sqliteTable("reviews", {
 	helpful_count: integer().default(0),
 	status: text().default("pending"),
 	source: text().default("direct"),
+	entered_by_user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	collection_method: text(),
+	original_review_date: text(),
+	original_reference: text(),
+	publication_authorized: integer().default(0).notNull(),
 	ip_hash: text(),
 	user_agent: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
@@ -1105,7 +1116,12 @@ export const reviews = sqliteTable("reviews", {
 	index("idx_reviews_request_id").on(table.review_request_id),
 	index("idx_reviews_customer_id").on(table.customer_id),
 	index("idx_reviews_location_status").on(table.location_id, table.status, table.created_at),
+	index("idx_reviews_site_status").on(table.site_id, table.status, table.created_at).where(sql`location_id IS NULL`),
 	check("reviews_booking_type_check", sql`booking_type IS NULL OR booking_type IN ('reservation', 'experience_booking')`),
+	check("reviews_rating_check", sql`rating BETWEEN 1 AND 5`),
+	check("reviews_publication_authorized_check", sql`publication_authorized IN (0, 1)`),
+	check("reviews_collection_method_check", sql`collection_method IS NULL OR collection_method IN ('in_person', 'email', 'phone', 'migration', 'other')`),
+	check("reviews_owner_entered_provenance_check", sql`source != 'owner_entered' OR (organization_id IS NOT NULL AND site_id IS NOT NULL AND location_id IS NULL AND entered_by_user_id IS NOT NULL AND collection_method IS NOT NULL AND publication_authorized = 1)`),
 ]);
 
 export const review_media = sqliteTable("review_media", {
@@ -1403,6 +1419,7 @@ export const tenant_redirects = sqliteTable("tenant_redirects", {
 	unique("tenant_redirects_site_from_path_unique").on(table.site_id, table.from_path),
 	check("tenant_redirects_from_path_check", sql`from_path LIKE '/%'`),
 	check("tenant_redirects_behavior_check", sql`behavior IN ('redirect', 'gone', 'noindex')`),
+	check("tenant_redirects_redirect_to_path_check", sql`behavior != 'redirect' OR to_path IS NOT NULL`),
 ]);
 
 export const site_conversion_events = sqliteTable("site_conversion_events", {

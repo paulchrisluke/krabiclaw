@@ -1,16 +1,20 @@
 <template>
   <div class="blawby-shell min-h-screen bg-[var(--blawby-bg)] text-[var(--blawby-ink)]" :style="themeStyles">
-    <BlawbyHeader :site="site" :navigation="navigation" :consultation="consultation" />
+    <BlawbyHeader :site="identity" :navigation="navigation" :consultation="consultation" />
     <main>
       <slot />
     </main>
-    <BlawbyFooter :site="site" :navigation="navigation" :compliance="compliance" />
+    <BlawbyFooter
+      :site="identity"
+      :navigation="navigation"
+      :compliance="compliance"
+      :offering-links="offeringLinks"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-const { site } = useTenantSite()
-const { navigation, consultation, compliance, themeTokens } = useBlawbySite()
+const { identity, navigation, consultation, compliance, themeTokens, offeringLinks } = await useBlawbyShell()
 const requestUrl = useRequestURL()
 
 function serializeJsonLd(value: unknown) {
@@ -33,26 +37,28 @@ const themeStyles = computed(() => {
     '--blawby-surface': String(tokens.surface || '#ffffff'),
     '--blawby-primary': String(tokens.primary || '#25356c'),
     '--blawby-primary-dark': String(tokens.primaryDark || '#161f3b'),
+    '--blawby-primary-100': String(tokens.primary100 || '#f2f5ff'),
+    '--blawby-primary-200': String(tokens.primary200 || '#b4c5e5'),
+    '--blawby-primary-800': String(tokens.primary800 || '#1d294f'),
     '--blawby-accent': String(tokens.accent || '#c19855'),
+    '--blawby-accent-100': String(tokens.accent100 || '#faf5ea'),
+    '--blawby-accent-200': String(tokens.accent200 || '#f8f0e1'),
     '--blawby-accent-strong': String(tokens.accentStrong || '#a37732'),
-    '--blawby-border': String(tokens.border || '#e7ddcc'),
+    '--blawby-border': String(tokens.border || '#e5e7eb'),
     '--blawby-ink': String(tokens.ink || '#162033'),
   }
 })
 
 useHead(() => ({
-  link: Array.isArray(themeTokens.value.fonts)
-    ? themeTokens.value.fonts.map((href: unknown) => ({ rel: 'stylesheet', href: String(href) }))
-    : [{ rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Marcellus&family=Poppins:wght@400;600&display=swap' }],
   script: [{
     type: 'application/ld+json',
     children: serializeJsonLd({
       '@context': 'https://schema.org',
       '@type': ['ProfessionalService', 'Organization'],
-      name: site?.brand_name || compliance.value?.entity_name || 'Professional services',
-      description: site?.brand_description || compliance.value?.disclaimer || undefined,
+      name: identity.value.brand_name || compliance.value?.entity_name || 'Professional services',
+      description: identity.value.brand_description || undefined,
       url: requestUrl.origin,
-      logo: site?.logo_url || undefined,
+      logo: identity.value.logo_url || undefined,
       areaServed: compliance.value?.service_area || undefined,
       nonprofitStatus: compliance.value?.nonprofit_status || undefined,
     }),

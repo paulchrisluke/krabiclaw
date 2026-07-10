@@ -1,10 +1,13 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import type {
   PublicBlawbyData,
+  PublicBlawbyIdentity,
+  PublicBlawbyShellData,
   PublicCompliance,
   PublicConsultationSettings,
   PublicNavigationItem,
   PublicOffering,
+  PublicOfferingLink,
   PublicTenantPage,
 } from '~/types/blawby'
 
@@ -111,6 +114,24 @@ export async function listPublicOfferings(db: DbClient, siteId: string): Promise
   const mediaIds = rows.flatMap(row => parseJson<string[]>(row.media_asset_ids, []))
   const mediaById = await loadMediaById(db, siteId, mediaIds)
   return rows.map(row => mapOfferingRow(row, mediaById))
+}
+
+export async function listPublicOfferingLinks(db: DbClient, siteId: string): Promise<PublicOfferingLink[]> {
+  const rows = await queryAll<ApiRecord>(db, `
+    SELECT id, name, slug, canonical_path
+      FROM offerings
+     WHERE site_id = ? AND status = 'published'
+     ORDER BY sort_order ASC, name ASC
+  `, [siteId])
+
+  return rows.map(row => ({
+    id: String(row.id),
+    name: String(row.name),
+    slug: String(row.slug),
+    canonical_path: typeof row.canonical_path === 'string' && row.canonical_path
+      ? row.canonical_path
+      : `/services/${String(row.slug)}`,
+  }))
 }
 
 export async function getPublicOfferingBySlug(db: DbClient, siteId: string, slug: string): Promise<PublicOffering | null> {
@@ -232,6 +253,34 @@ export async function getPublicThemeTokens(db: DbClient, siteId: string, templat
      LIMIT 1
   `, [siteId, templateSlug])
   return parseJson<ApiRecord>(row?.tokens_json, {})
+}
+
+export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Promise<PublicBlawbyIdentity> {
+  const row = await queryFirst<ApiRecord>(db, `
+    SELECT s.brand_name, s.brand_description, COALESCE(logo.public_url, s.logo_url) AS logo_url
+      FROM sites s
+      LEFT JOIN media_assets logo ON s.logo_asset_id = logo.id AND logo.status = 'active'
+     WHERE s.id = ?
+     LIMIT 1
+  `, [siteId])
+
+  return {
+    brand_name: typeof row?.brand_name === 'string' ? row.brand_name : null,
+    brand_description: typeof row?.brand_description === 'string' ? row.brand_description : null,
+    logo_url: typeof row?.logo_url === 'string' ? row.logo_url : null,
+  }
+}
+
+export async function getPublicBlawbyShellData(db: DbClient, siteId: string): Promise<PublicBlawbyShellData> {
+  const [identity, navigation, consultation, compliance, themeTokens, offeringLinks] = await Promise.all([
+    getPublicBlawbyIdentity(db, siteId),
+    listPublicNavigationItems(db, siteId),
+    getPublicConsultationSettings(db, siteId),
+    getPublicCompliance(db, siteId),
+    getPublicThemeTokens(db, siteId),
+    listPublicOfferingLinks(db, siteId),
+  ])
+  return { identity, navigation, consultation, compliance, themeTokens, offeringLinks }
 }
 
 export async function getPublicBlawbyData(db: DbClient, siteId: string): Promise<PublicBlawbyData> {

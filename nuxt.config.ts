@@ -420,6 +420,7 @@ export default defineNuxtConfig({
     families: [
       // Instrument Serif removed from global load — loaded conditionally on tenant routes via plugin
       { name: 'Poppins', provider: 'google', weights: [400, 500, 600, 700], display: 'swap' },
+      { name: 'Marcellus', provider: 'google', weights: [400], display: 'swap' },
       { name: 'Fredoka', provider: 'google', weights: [600], display: 'swap' },
     ],
   },

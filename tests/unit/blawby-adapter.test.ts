@@ -94,6 +94,8 @@ test('NCLS Blawby adapter normalizes source data into cutover artifacts', () => 
   assert.equal(payload.consultation.legacy_source_calendly_url_ignored, 'https://calendly.com/old-link')
   assert.equal(payload.analyticsBridge.container_id, 'GTM-MDHRQP5')
   assert.equal(payload.analyticsBridge.custom_head_code_ignored, true)
+  assert.equal('fonts' in payload.themeTokens, false)
+  assert.equal(payload.themeTokens.primary100, '#f2f5ff')
 
   assert.equal(payload.offerings.length, 1)
   assert.equal(payload.offerings[0].canonical_path, '/services/family')

@@ -1,5 +1,5 @@
 <template>
-  <article class="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
+  <article data-parity-root class="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
     <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--blawby-accent-strong)]">{{ eyebrow }}</p>
     <h1 class="mt-4 blawby-display text-5xl leading-tight text-[var(--blawby-primary)]">{{ pageTitle }}</h1>
     <p v-if="pageSummary" class="mt-5 text-lg leading-8 text-slate-600">{{ pageSummary }}</p>
@@ -39,7 +39,7 @@ const props = withDefaults(defineProps<{
 const { pageByPath } = useBlawbySite()
 const { site } = useTenantSite()
 const page = computed(() => pageByPath(props.path))
-const calculatorBlock = computed(() => page.value?.components.find((component: ApiRecord) => component.type === 'pricing_calculator') ?? null)
+const calculatorBlock = computed(() => page.value?.components?.find((component: ApiRecord) => component.type === 'pricing_calculator') ?? null)
 
 const eyebrow = computed(() => props.fallbackEyebrow)
 const pageTitle = computed(() => page.value?.title || props.fallbackTitle)

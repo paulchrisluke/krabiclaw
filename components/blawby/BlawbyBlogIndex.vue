@@ -1,5 +1,5 @@
 <template>
-  <section class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+  <section data-parity-root class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
     <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--blawby-accent-strong)]">Articles</p>
     <h1 class="mt-4 blawby-display text-5xl text-[var(--blawby-primary)]">Articles and updates</h1>
 

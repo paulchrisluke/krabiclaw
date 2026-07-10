@@ -65,8 +65,19 @@ import {
   listLocationQa,
   createLocationQa,
   deleteLocationQa,
+  listQa,
+  createQa,
+  deleteQa,
+  updateQa,
+  reorderQa,
 } from "~/server/utils/location-qa";
 import { replyToReview } from "~/server/utils/review-management";
+import {
+  createOwnerEnteredSiteReview,
+  deleteOwnerEnteredSiteReview,
+  listSiteReviews,
+  updateOwnerEnteredSiteReview,
+} from "~/server/utils/site-reviews";
 import { createWorkRequest } from "~/server/utils/work-request-management";
 import {
   getExperienceById,
@@ -1511,6 +1522,24 @@ async function executeTool(
       };
     }
 
+    case "list_site_reviews":
+      return listSiteReviews(db, siteId);
+
+    case "create_owner_entered_site_review":
+      return createOwnerEnteredSiteReview(db, { organizationId: orgId, siteId, enteredByUserId: userId }, input as never);
+
+    case "update_owner_entered_site_review": {
+      const reviewId = toSqlText(input.review_id);
+      if (!reviewId) return { error: "review_id required." };
+      return updateOwnerEnteredSiteReview(db, { organizationId: orgId, siteId }, reviewId, input);
+    }
+
+    case "delete_owner_entered_site_review": {
+      const reviewId = toSqlText(input.review_id);
+      if (!reviewId) return { error: "review_id required." };
+      return deleteOwnerEnteredSiteReview(db, { organizationId: orgId, siteId }, reviewId);
+    }
+
     case "list_location_reviews": {
       const loc = await queryFirst(
         db,
@@ -1660,6 +1689,23 @@ async function executeTool(
         cfGatewayLogId: generated.cfLogId,
       });
       return { asset_id: assetId, publicUrl, thumbnailUrl };
+    }
+
+    case "list_site_qa":
+      return listQa(db, siteId, null);
+
+    case "create_site_qa": {
+      const result = await createQa(db, { organizationId: orgId, siteId, locationId: null }, {
+        question: String(input.question ?? ""),
+        answer: toSqlText(input.answer),
+        is_owner_answer: true,
+      });
+      return result.status >= 400 ? result.data : { ...(result.data as object), added: true };
+    }
+
+    case "delete_site_qa": {
+      const result = await deleteQa(db, { organizationId: orgId, siteId, locationId: null }, String(input.qa_id ?? ""));
+      return result.data;
     }
 
     case "list_location_qa": {
@@ -2922,6 +2968,26 @@ async function executeTool(
       if (channels && channels.length === 0) return { error: "channels must contain at least one valid value (email or whatsapp)." };
       const result = await updateNotificationsSettings(db, orgId, siteId, phone, channels);
       return { updated: true, ...result };
+    }
+
+    case "update_site_qa": {
+      const qaId = toSqlText(input.qa_id);
+      if (!qaId) return { error: "qa_id required." };
+      const updates: Record<string, unknown> = {};
+      if (input.question !== undefined) updates.question = input.question;
+      if (input.answer !== undefined) updates.answer = input.answer;
+      if (input.status !== undefined) updates.status = input.status;
+      if (input.sort_order !== undefined) updates.sort_order = input.sort_order;
+      return updateQa(db, { organizationId: orgId, siteId, locationId: null }, qaId, updates);
+    }
+
+    case "reorder_site_qa": {
+      if (!Array.isArray(input.updates) || !input.updates.length) return { error: "updates array is required." };
+      const updates = (input.updates as Array<{ id?: unknown; sort_order?: unknown }>).map(item => ({
+        id: String(item.id ?? ""),
+        sort_order: Number(item.sort_order),
+      }));
+      return reorderQa(db, { organizationId: orgId, siteId, locationId: null }, updates);
     }
 
     case "update_location_qa": {

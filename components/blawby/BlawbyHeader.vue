@@ -1,73 +1,91 @@
 <template>
-  <header class="sticky top-0 z-40 border-b border-[var(--blawby-border)] bg-white/95 backdrop-blur">
-    <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:flex-nowrap lg:gap-6 lg:px-8">
-      <NuxtLink to="/" class="flex items-center gap-3 no-underline">
-        <img v-if="site?.logo_url" :src="site.logo_url" :alt="brandName" class="size-10 object-contain">
-        <span v-else class="flex size-10 items-center justify-center border border-[var(--blawby-border)] blawby-display text-lg text-[var(--blawby-primary)]">B</span>
-        <span class="blawby-display text-xl text-[var(--blawby-primary)]">{{ brandName }}</span>
-      </NuxtLink>
-
-      <nav class="hidden items-center gap-7 text-sm font-semibold text-[var(--blawby-primary)] lg:flex" aria-label="Main navigation">
-        <NuxtLink
-          v-for="item in headerItems"
-          :key="item.id"
-          :to="item.url"
-          class="no-underline transition hover:text-[var(--blawby-accent-strong)]"
-        >
-          {{ item.label }}
+  <header class="fixed inset-x-0 top-0 z-50 border-b border-gray-200 bg-white">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <nav class="relative z-50 flex min-h-16 items-center justify-between gap-3 py-2" aria-label="Main navigation">
+        <NuxtLink to="/" class="flex min-w-0 items-center no-underline" :aria-label="`${brandName} home`">
+          <img
+            v-if="site.logo_url"
+            :src="site.logo_url"
+            :alt="brandName"
+            class="max-h-16 w-auto max-w-[160px] object-contain"
+          >
+          <span v-else class="blawby-display truncate text-lg text-[var(--blawby-primary)] sm:text-xl">
+            {{ brandName }}
+          </span>
         </NuxtLink>
-      </nav>
 
-      <BlawbyButton :to="consultation.external_url || consultation.schedule_path" @click="trackConsultation">
-        {{ consultation.cta_label }}
-      </BlawbyButton>
+        <div class="ml-auto flex shrink-0 items-center gap-1 font-semibold uppercase md:gap-8">
+          <div class="hidden items-center text-[var(--blawby-primary)] md:flex">
+            <NuxtLink
+              v-for="item in headerItems"
+              :key="item.id"
+              :to="item.url"
+              class="inline-block rounded-lg px-2 py-1 text-sm no-underline transition hover:text-[var(--blawby-accent-strong)]"
+            >
+              {{ item.label }}
+            </NuxtLink>
+          </div>
 
-      <button
-        class="inline-flex size-11 items-center justify-center border border-[var(--blawby-border)] text-[var(--blawby-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-primary)] focus-visible:ring-offset-2 lg:hidden"
-        type="button"
-        aria-label="Toggle navigation"
-        :aria-expanded="mobileOpen"
-        aria-controls="blawby-mobile-nav"
-        @click="mobileOpen = !mobileOpen"
-      >
-        <span class="grid gap-1.5" aria-hidden="true">
-          <span class="block h-0.5 w-5 bg-current" />
-          <span class="block h-0.5 w-5 bg-current" />
-          <span class="block h-0.5 w-5 bg-current" />
-        </span>
-      </button>
+          <BlawbyButton
+            :to="consultation.external_url || consultation.schedule_path"
+            class="gap-2 px-3 sm:px-4"
+            @click="trackConsultation"
+          >
+            <svg class="size-5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M7.5 4.5h9A4.5 4.5 0 0 1 21 9v3a4.5 4.5 0 0 1-4.5 4.5h-4.86L7.2 20.2a.75.75 0 0 1-1.2-.6v-3.35A4.5 4.5 0 0 1 3 12V9a4.5 4.5 0 0 1 4.5-4.5Z" />
+            </svg>
+            <span class="hidden lg:inline">{{ consultation.cta_label }}</span>
+            <span class="sr-only lg:hidden">{{ consultation.cta_label }}</span>
+          </BlawbyButton>
 
-      <nav
-        id="blawby-mobile-nav"
-        class="w-full border-t border-[var(--blawby-border)] pt-4 text-sm font-semibold text-[var(--blawby-primary)] lg:hidden"
-        :class="mobileOpen ? 'grid gap-3' : 'hidden'"
-        aria-label="Mobile navigation"
-      >
-        <NuxtLink
-          v-for="item in headerItems"
-          :key="item.id"
-          :to="item.url"
-          class="py-2 no-underline transition hover:text-[var(--blawby-accent-strong)]"
-          @click="mobileOpen = false"
-        >
-          {{ item.label }}
-        </NuxtLink>
+          <button
+            class="relative z-10 flex size-8 items-center justify-center text-[var(--blawby-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-primary)] md:hidden"
+            type="button"
+            aria-label="Toggle navigation"
+            :aria-expanded="mobileOpen"
+            aria-controls="blawby-mobile-nav"
+            @click="mobileOpen = !mobileOpen"
+          >
+            <svg class="size-4 overflow-visible stroke-current" viewBox="0 0 14 14" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <path :class="mobileOpen ? 'scale-90 opacity-0' : ''" class="origin-center transition" d="M0 1H14M0 7H14M0 13H14" />
+              <path :class="mobileOpen ? '' : 'scale-90 opacity-0'" class="origin-center transition" d="M2 2L12 12M12 2L2 12" />
+            </svg>
+          </button>
+
+          <div
+            id="blawby-mobile-nav"
+            class="absolute inset-x-0 top-full mt-4 origin-top rounded-2xl bg-white p-4 text-lg normal-case text-[var(--blawby-primary)] shadow-xl ring-1 ring-slate-900/5 transition md:hidden"
+            :class="mobileOpen ? 'scale-100 opacity-100' : 'pointer-events-none scale-95 opacity-0'"
+          >
+            <NuxtLink
+              v-for="item in headerItems"
+              :key="item.id"
+              :to="item.url"
+              class="block w-full p-2 no-underline"
+              @click="mobileOpen = false"
+            >
+              {{ item.label }}
+            </NuxtLink>
+          </div>
+        </div>
       </nav>
     </div>
   </header>
+  <div class="h-20" aria-hidden="true" />
 </template>
 
 <script setup lang="ts">
-import type { PublicConsultationSettings, PublicNavigationItem } from '~/types/blawby'
+import type { PublicBlawbyIdentity, PublicConsultationSettings, PublicNavigationItem } from '~/types/blawby'
 
 const props = defineProps<{
-  site: { brand_name?: string | null; logo_url?: string | null } | null
+  site: PublicBlawbyIdentity
   navigation: PublicNavigationItem[]
   consultation: PublicConsultationSettings
 }>()
 
-const { trackConsultationClick } = useBlawbyConversionTracking()
-const brandName = computed(() => props.site?.brand_name || 'Blawby')
+const { trackConsultationClick } = useBlawbyConversionTracking(() => props.consultation)
+const route = useRoute()
+const brandName = computed(() => props.site.brand_name || 'Blawby')
 const mobileOpen = ref(false)
 const headerItems = computed(() => {
   const configured = props.navigation.filter(item => item.area === 'header')
@@ -75,13 +93,14 @@ const headerItems = computed(() => {
   return [
     { id: 'services', area: 'header', label: 'Services', url: '/services', item_type: 'internal', sort_order: 10, metadata: {} },
     { id: 'pricing', area: 'header', label: 'Pricing', url: '/pricing', item_type: 'internal', sort_order: 20, metadata: {} },
-    { id: 'blog', area: 'header', label: 'Articles', url: '/blog', item_type: 'internal', sort_order: 30, metadata: {} },
-    { id: 'about', area: 'header', label: 'About', url: '/about', item_type: 'internal', sort_order: 40, metadata: {} },
-    { id: 'contact', area: 'header', label: 'Contact', url: '/contact', item_type: 'internal', sort_order: 50, metadata: {} },
+    { id: 'about', area: 'header', label: 'About', url: '/about', item_type: 'internal', sort_order: 30, metadata: {} },
+    { id: 'contact', area: 'header', label: 'Contact', url: '/contact', item_type: 'internal', sort_order: 40, metadata: {} },
+    { id: 'blog', area: 'header', label: 'Blog', url: '/blog', item_type: 'internal', sort_order: 50, metadata: {} },
+    { id: 'donate', area: 'header', label: 'Donate', url: '/donate', item_type: 'internal', sort_order: 60, metadata: {} },
   ] as PublicNavigationItem[]
 })
 
 function trackConsultation() {
-  trackConsultationClick('header', useRoute().path, props.consultation.external_url || props.consultation.schedule_path)
+  trackConsultationClick('header', route.path, props.consultation.external_url || props.consultation.schedule_path)
 }
 </script>

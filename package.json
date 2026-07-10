@@ -68,6 +68,7 @@
     "client:approve:ncls:blawby": "node scripts/adapters/ncls-blawby.mjs --approve",
     "client:verify:blawby": "node scripts/verify-blawby-site.mjs",
     "client:screenshots:blawby": "node scripts/capture-blawby-screenshots.mjs",
+    "client:parity:blawby": "node scripts/compare-blawby-screenshots.mjs",
     "client:deploy": "node scripts/client-deploy.mjs",
     "test:mcp": "node scripts/test-mcp-oauth.mjs",
     "test:mcp:local": "node scripts/check-local-mcp-harness.mjs",

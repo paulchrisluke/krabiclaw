@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div data-parity-root>
     <section class="relative overflow-hidden bg-[var(--blawby-primary)] text-white">
       <div class="absolute inset-0 opacity-20" :style="heroImage ? `background-image:url('${heroImage}');background-size:cover;background-position:center;` : ''" />
       <div class="relative mx-auto grid max-w-7xl gap-10 px-4 py-20 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8 lg:py-28">
@@ -82,7 +82,7 @@
 <script setup lang="ts">
 const { site } = useTenantSite()
 const { offerings, compliance, consultation } = useBlawbySite()
-const { trackConsultationClick } = useBlawbyConversionTracking()
+const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
 
 const featuredOfferings = computed(() => {
   const featured = offerings.value.filter((offering) => offering.featured)

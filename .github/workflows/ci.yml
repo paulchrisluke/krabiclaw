@@ -156,6 +156,8 @@ jobs:
             scripts/canary-prod.mjs \
             scripts/canary-notifications.mjs \
             scripts/generate-ncls-blawby-seed.mjs \
+            scripts/capture-blawby-screenshots.mjs \
+            scripts/compare-blawby-screenshots.mjs \
             scripts/rollback-prod.mjs \
             scripts/verify-blawby-site.mjs \
             scripts/lint-seeds.mjs \

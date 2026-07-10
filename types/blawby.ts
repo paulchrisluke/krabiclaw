@@ -22,6 +22,15 @@ export interface PublicOffering {
   featured: boolean
 }
 
+export type BlawbyShieldVariant = 'about' | 'blog' | 'contact' | 'pricing' | 'schedule' | 'confirmation' | 'donate'
+
+export interface PublicOfferingLink {
+  id: string
+  name: string
+  slug: string
+  canonical_path: string
+}
+
 export interface PublicTenantPage {
   id: string
   path: string
@@ -71,6 +80,21 @@ export interface PublicNavigationItem {
   item_type: string
   sort_order: number
   metadata: ApiRecord
+}
+
+export interface PublicBlawbyIdentity {
+  brand_name: string | null
+  brand_description: string | null
+  logo_url: string | null
+}
+
+export interface PublicBlawbyShellData {
+  identity: PublicBlawbyIdentity
+  navigation: PublicNavigationItem[]
+  consultation: PublicConsultationSettings
+  compliance: PublicCompliance | null
+  themeTokens: ApiRecord
+  offeringLinks: PublicOfferingLink[]
 }
 
 export interface PublicBlawbyData {

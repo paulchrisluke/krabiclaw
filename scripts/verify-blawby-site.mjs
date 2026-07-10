@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 import fs from 'node:fs'
 import path from 'node:path'
+import {
+  BLAWBY_PARITY_ROUTES,
+  BLAWBY_PARITY_VIEWPORTS,
+  BLAWBY_REFERENCE_COMMIT,
+} from './blawby-parity-config.mjs'
 
 const DEFAULT_ROUTES = [
   '/',
@@ -42,21 +47,8 @@ const APPROVED_MEDIA_HOSTS = [
   'customers.krabiclaw.com',
 ]
 
-const SCREENSHOT_ROUTES = [
-  'home',
-  'services',
-  'service-detail',
-  'pricing',
-  'about',
-  'contact',
-  'schedule',
-  'blog',
-  'article',
-  'donate',
-  'policy',
-]
-
-const SCREENSHOT_VIEWPORTS = ['desktop', 'mobile']
+const SCREENSHOT_ROUTES = Object.keys(BLAWBY_PARITY_ROUTES)
+const SCREENSHOT_VIEWPORTS = Object.keys(BLAWBY_PARITY_VIEWPORTS)
 
 function parseArgs(argv) {
   const args = {
@@ -400,6 +392,16 @@ function validateScreenshots(checks, evidenceDir, required) {
   if (!evidenceDir && !required) return
   const screenshotDir = path.resolve(evidenceDir || '')
   for (const source of ['reference', 'blawby']) {
+    const manifestPath = path.join(screenshotDir, `screenshots-${source}.json`)
+    const manifest = fs.existsSync(manifestPath) ? readJson(manifestPath) : null
+    pushCheck(checks, Boolean(manifest), `Screenshot manifest exists: ${source}`, { path: manifestPath })
+    if (source === 'reference' && manifest) {
+      pushCheck(
+        checks,
+        manifest.source_revision === BLAWBY_REFERENCE_COMMIT,
+        `Reference screenshots use pinned commit ${BLAWBY_REFERENCE_COMMIT}`,
+      )
+    }
     for (const route of SCREENSHOT_ROUTES) {
       for (const viewport of SCREENSHOT_VIEWPORTS) {
         const filePath = path.join(screenshotDir, 'screenshots', source, `${route}-${viewport}.png`)
@@ -409,6 +411,10 @@ function validateScreenshots(checks, evidenceDir, required) {
           `Screenshot artifact exists: ${source}/${route}-${viewport}`,
           { path: filePath },
         )
+        const hasSections = Boolean(manifest?.sections?.some(section =>
+          section.route_name === route && section.viewport === viewport,
+        ))
+        pushCheck(checks, hasSections, `Section captures exist: ${source}/${route}-${viewport}`)
       }
     }
   }

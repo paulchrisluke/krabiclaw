@@ -1,84 +1,152 @@
 <template>
-  <footer class="border-t border-[var(--blawby-border)] bg-[var(--blawby-primary)] text-white">
-    <div class="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.4fr_1fr_1fr] lg:px-8">
-      <div>
-        <p class="blawby-display text-2xl">{{ brandName }}</p>
-        <p v-if="description" class="mt-4 max-w-xl text-sm leading-7 text-white/75">{{ description }}</p>
-        <p v-if="compliance?.footer_disclaimer" class="mt-5 max-w-xl text-xs leading-6 text-white/60">
-          {{ stripHtml(compliance.footer_disclaimer) }}
-        </p>
-      </div>
-
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--blawby-accent)]">Explore</p>
-        <nav class="mt-5 flex flex-col gap-3 text-sm" aria-label="Footer navigation">
-          <NuxtLink
-            v-for="item in footerItems"
-            :key="item.id"
-            :to="item.url"
-            class="text-white/75 no-underline hover:text-white"
-          >
-            {{ item.label }}
+  <footer class="bg-[var(--blawby-primary-dark)]" aria-labelledby="blawby-footer-heading">
+    <h2 id="blawby-footer-heading" class="sr-only">Footer</h2>
+    <div class="mx-auto max-w-7xl px-6 pb-8 pt-8 sm:pt-12 lg:px-8 lg:pt-16">
+      <div class="xl:grid xl:grid-cols-3 xl:gap-8">
+        <div class="space-y-8">
+          <NuxtLink to="/" class="inline-flex no-underline" :aria-label="`${brandName} home`">
+            <img v-if="site.logo_url" :src="site.logo_url" :alt="brandName" class="max-h-16 w-auto max-w-[248px] object-contain">
+            <span v-else class="blawby-display text-2xl text-white">{{ brandName }}</span>
           </NuxtLink>
-        </nav>
-      </div>
-
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--blawby-accent)]">Legal</p>
-        <nav class="mt-5 flex flex-col gap-3 text-sm" aria-label="Legal navigation">
-          <NuxtLink
-            v-for="item in legalItems"
-            :key="item.id"
-            :to="item.url"
-            class="text-white/75 no-underline hover:text-white"
-          >
-            {{ item.label }}
-          </NuxtLink>
-        </nav>
-        <p v-if="compliance?.nonprofit_status" class="mt-6 text-xs text-white/60">{{ compliance.nonprofit_status }}</p>
-        <div v-if="documentLinks.length" class="mt-6 flex flex-col gap-3 text-xs">
-          <a
-            v-for="document in documentLinks"
-            :key="document.id"
-            :href="document.url"
-            class="text-white/70 underline-offset-4 hover:text-white hover:underline"
-          >
-            {{ document.label || document.file_name || 'Legal document' }}
-          </a>
+          <BlawbyRichText
+            v-if="description"
+            :content="description"
+            class="blawby-footer-copy max-w-xl text-sm leading-6 text-gray-300"
+          />
+          <div v-if="socialItems.length" class="flex gap-6">
+            <a
+              v-for="item in socialItems"
+              :key="item.id"
+              :href="item.url"
+              class="text-gray-400 transition hover:text-white"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span class="sr-only">{{ item.label }}</span>
+              <BlawbySocialIcon :platform="item.label" class="size-6" />
+            </a>
+          </div>
         </div>
+
+        <div class="mt-16 grid grid-cols-2 gap-8 xl:col-span-2 xl:mt-0">
+          <div class="md:grid md:grid-cols-2 md:gap-8">
+            <div>
+              <h3 class="text-sm font-semibold leading-6 text-white">Services</h3>
+              <ul class="mt-6 space-y-4" role="list">
+                <li v-for="offering in offeringLinks" :key="offering.id">
+                  <NuxtLink :to="offering.canonical_path" class="text-sm leading-6 text-gray-300 no-underline hover:text-white">
+                    {{ offering.name }}
+                  </NuxtLink>
+                </li>
+              </ul>
+            </div>
+            <div class="mt-10 md:mt-0">
+              <h3 class="text-sm font-semibold leading-6 text-white">Support</h3>
+              <BlawbyFooterLinks :items="supportItems" />
+            </div>
+          </div>
+
+          <div class="md:grid md:grid-cols-2 md:gap-8">
+            <div>
+              <h3 class="text-sm font-semibold leading-6 text-white">Company</h3>
+              <BlawbyFooterLinks :items="companyItems" />
+            </div>
+            <div class="mt-10 md:mt-0">
+              <h3 class="text-sm font-semibold leading-6 text-white">Legal</h3>
+              <BlawbyFooterLinks :items="legalItems" />
+              <div v-if="documentLinks.length" class="mt-6 space-y-4">
+                <a
+                  v-for="document in documentLinks"
+                  :key="document.id"
+                  :href="document.url"
+                  class="block text-sm leading-6 text-gray-300 hover:text-white"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {{ document.label || document.file_name || 'Legal document' }}
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-16 border-t border-white/10 pt-8 sm:mt-20 lg:mt-24">
+        <p class="text-xs leading-5 text-gray-400">
+          Copyright &copy; {{ year }} {{ compliance?.entity_name || brandName }}. All rights reserved.
+        </p>
       </div>
     </div>
   </footer>
 </template>
 
 <script setup lang="ts">
-import type { PublicCompliance, PublicNavigationItem } from '~/types/blawby'
+import type { PublicBlawbyIdentity, PublicCompliance, PublicNavigationItem, PublicOfferingLink } from '~/types/blawby'
 
 const props = defineProps<{
-  site: { brand_name?: string | null; brand_description?: string | null } | null
+  site: PublicBlawbyIdentity
   navigation: PublicNavigationItem[]
   compliance: PublicCompliance | null
+  offeringLinks: PublicOfferingLink[]
 }>()
 
-const brandName = computed(() => props.site?.brand_name || props.compliance?.entity_name || 'Blawby')
-const description = computed(() => props.site?.brand_description || props.compliance?.service_area || '')
+const year = new Date().getFullYear()
+const brandName = computed(() => props.site.brand_name || props.compliance?.entity_name || 'Blawby')
+const description = computed(() => props.compliance?.footer_disclaimer || props.site.brand_description || '')
 const footerItems = computed(() => props.navigation.filter(item => item.area === 'footer'))
-type DocumentLink = NonNullable<PublicCompliance['documents'][number]> & { url: string }
+const socialItems = computed(() => props.navigation.filter(item => item.area === 'social' && item.url !== '/none'))
 
-const documentLinks = computed(() =>
-  props.compliance?.documents.filter((document): document is DocumentLink => Boolean(document.url)) ?? []
-)
-const legalItems = computed(() => {
+function groupItems(group: string) {
+  return footerItems.value.filter(item => item.metadata?.group === group)
+}
+
+const supportItems = computed<PublicNavigationItem[]>(() => {
+  const configured = groupItems('support')
+  if (configured.length) return configured
+  return [
+    { id: 'support-consultation', area: 'footer', label: 'Request a Consultation', url: '/schedule', item_type: 'internal', sort_order: 10, metadata: { group: 'support' } },
+    { id: 'support-contact', area: 'footer', label: 'Contact', url: '/contact', item_type: 'internal', sort_order: 20, metadata: { group: 'support' } },
+    { id: 'support-pricing', area: 'footer', label: 'Pricing', url: '/pricing', item_type: 'internal', sort_order: 30, metadata: { group: 'support' } },
+  ]
+})
+
+const companyItems = computed<PublicNavigationItem[]>(() => {
+  const configured = groupItems('company')
+  if (configured.length) return configured
+  return [
+    { id: 'company-about', area: 'footer', label: 'About', url: '/about', item_type: 'internal', sort_order: 10, metadata: { group: 'company' } },
+    { id: 'company-donate', area: 'footer', label: 'Donate', url: '/donate', item_type: 'internal', sort_order: 20, metadata: { group: 'company' } },
+    { id: 'company-blog', area: 'footer', label: 'Blog', url: '/blog', item_type: 'internal', sort_order: 30, metadata: { group: 'company' } },
+  ]
+})
+
+const legalItems = computed<PublicNavigationItem[]>(() => {
   const configured = props.navigation.filter(item => item.area === 'legal')
   if (configured.length) return configured
   return [
-    { id: 'privacy', area: 'legal', label: 'Privacy Policy', url: '/policies/privacy', item_type: 'internal', sort_order: 10, metadata: {} },
+    { id: 'privacy', area: 'legal', label: 'Privacy', url: '/policies/privacy', item_type: 'internal', sort_order: 10, metadata: {} },
     { id: 'terms', area: 'legal', label: 'Terms', url: '/policies/terms', item_type: 'internal', sort_order: 20, metadata: {} },
-    { id: 'notices', area: 'legal', label: 'Third-Party Notices', url: '/third-party-notices', item_type: 'internal', sort_order: 30, metadata: {} },
-  ] as PublicNavigationItem[]
+    { id: 'notices', area: 'legal', label: 'Third Party Notices', url: '/third-party-notices', item_type: 'internal', sort_order: 30, metadata: {} },
+  ]
 })
 
-function stripHtml(value: string) {
-  return value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
-}
+type DocumentLink = NonNullable<PublicCompliance['documents'][number]> & { url: string }
+const documentLinks = computed(() =>
+  props.compliance?.documents.filter((document): document is DocumentLink => Boolean(document.url)) ?? [],
+)
 </script>
+
+<style scoped>
+.blawby-footer-copy :deep(.prose),
+.blawby-footer-copy :deep(p),
+.blawby-footer-copy :deep(a) {
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.blawby-footer-copy :deep(a) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+</style>

@@ -472,6 +472,82 @@ test.describe('stateless MCP server', () => {
     expect(deleteLocationRes.status()).toBe(200)
   })
 
+  test('owner can manage site-level Q&A and provenance-aware reviews', async ({ request, baseURL }) => {
+    test.setTimeout(90_000)
+    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+    const siteId = MCP_GROWTH_SITE_ID
+    const qaIds: string[] = []
+    let reviewId = ''
+    try {
+      for (const question of [`MCP site question A ${Date.now()}`, `MCP site question B ${Date.now()}`]) {
+        const response = await mcpRequest(request, baseURL!, {
+          method: 'tools/call',
+          toolName: 'create_site_qa',
+          args: { site_id: siteId, question, answer: 'Site-wide answer.' },
+        })
+        expect(response.status()).toBe(200)
+        const id = mcpData<{ id?: string }>(await response.json()).id
+        expect(id).toEqual(expect.any(String))
+        qaIds.push(id!)
+      }
+
+      const reorder = await mcpRequest(request, baseURL!, {
+        method: 'tools/call',
+        toolName: 'reorder_site_qa',
+        args: { site_id: siteId, updates: [{ id: qaIds[0], sort_order: 2 }, { id: qaIds[1], sort_order: 1 }] },
+      })
+      expect(reorder.status()).toBe(200)
+
+      const qaList = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'list_site_qa', args: { site_id: siteId },
+      })
+      expect(qaList.status()).toBe(200)
+
+      const reviewCreate = await mcpRequest(request, baseURL!, {
+        method: 'tools/call',
+        toolName: 'create_owner_entered_site_review',
+        args: {
+          site_id: siteId,
+          author_name: 'MCP reviewer',
+          rating: 5,
+          content: 'The service was clear, responsive, and useful.',
+          collection_method: 'email',
+          original_reference: 'MCP regression fixture',
+          publication_authorized: true,
+          status: 'approved',
+        },
+      })
+      expect(reviewCreate.status()).toBe(200)
+      const reviewData = mcpData<{ id?: string; verified?: boolean }>(await reviewCreate.json())
+      reviewId = reviewData.id ?? ''
+      expect(reviewId).toEqual(expect.any(String))
+      expect(reviewData.verified).toBe(false)
+
+      const reviewList = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'list_site_reviews', args: { site_id: siteId },
+      })
+      expect(reviewList.status()).toBe(200)
+
+      const reviewUpdate = await mcpRequest(request, baseURL!, {
+        method: 'tools/call',
+        toolName: 'update_owner_entered_site_review',
+        args: { site_id: siteId, review_id: reviewId, rating: 4 },
+      })
+      expect(reviewUpdate.status()).toBe(200)
+    } finally {
+      for (const qaId of qaIds) {
+        await mcpRequest(request, baseURL!, {
+          method: 'tools/call', toolName: 'delete_site_qa', args: { site_id: siteId, qa_id: qaId },
+        })
+      }
+      if (reviewId) {
+        await mcpRequest(request, baseURL!, {
+          method: 'tools/call', toolName: 'delete_owner_entered_site_review', args: { site_id: siteId, review_id: reviewId },
+        })
+      }
+    }
+  })
+
   test('owner can use menus, posts, media, and experiences workflow tools', async ({ request, baseURL }) => {
     test.setTimeout(180_000)
     await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)

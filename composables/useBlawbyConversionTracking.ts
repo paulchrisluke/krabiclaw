@@ -1,4 +1,6 @@
 import type { PublicConsultationSettings } from '~/types/blawby'
+import type { MaybeRefOrGetter } from 'vue'
+import { toValue } from 'vue'
 
 declare global {
   interface Window {
@@ -77,9 +79,9 @@ function pushAnalyticsBridge(consultation: PublicConsultationSettings, payload: 
   window.dataLayer.push(bridged)
 }
 
-export function useBlawbyConversionTracking() {
+export function useBlawbyConversionTracking(consultationSource: MaybeRefOrGetter<PublicConsultationSettings>) {
   const { siteId, site } = useTenantSite()
-  const { consultation } = useBlawbySite()
+  const consultation = computed(() => toValue(consultationSource))
 
   function track(payload: BlawbyConversionPayload) {
     if (!siteId || !consultation.value.tracking_enabled) return

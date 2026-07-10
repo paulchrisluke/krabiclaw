@@ -1,5 +1,5 @@
 <template>
-  <section class="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[1.2fr_0.8fr] lg:px-8">
+  <section data-parity-root class="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[1.2fr_0.8fr] lg:px-8">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--blawby-accent-strong)]">Contact</p>
       <h1 class="mt-4 blawby-display text-5xl leading-tight text-[var(--blawby-primary)]">Contact {{ siteName }}</h1>
@@ -36,7 +36,7 @@
 <script setup lang="ts">
 const { siteId, site } = useTenantSite()
 const { compliance, consultation } = useBlawbySite()
-const { trackConsultationClick, trackContactSubmit } = useBlawbyConversionTracking()
+const { trackConsultationClick, trackContactSubmit } = useBlawbyConversionTracking(consultation)
 const siteName = computed(() => site?.brand_name || 'our team')
 const submitting = ref(false)
 const submitMessage = ref('')
