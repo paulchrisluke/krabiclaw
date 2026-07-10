@@ -21,7 +21,7 @@ export default defineSitemapEventHandler(async (event) => {
     [siteId],
   )
 
-  const isProfessionalServiceSite = site?.vertical === 'professional_service' || site?.theme_id === 'blawby-theme-v1'
+  const isProfessionalServiceSite = site?.vertical === 'service' || site?.theme_id === 'blawby-theme-v1'
   if (isProfessionalServiceSite) {
     const [offerings, tenantPages] = await Promise.all([
       queryAll<{ slug: string; canonical_path: string | null; updated_at: string | null }>(db, `

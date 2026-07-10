@@ -61,7 +61,7 @@ export function resolvePublicTemplate(input: {
   const themeId = String(input.themeId ?? '').toLowerCase()
   const vertical = String(input.vertical ?? '').toLowerCase()
 
-  if (theme === 'blawby' || themeId === 'blawby-theme-v1' || vertical === 'professional_service') {
+  if (theme === 'blawby' || themeId === 'blawby-theme-v1' || vertical === 'service') {
     return publicTemplateRegistry.blawby
   }
 

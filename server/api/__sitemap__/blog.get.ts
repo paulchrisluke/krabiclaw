@@ -25,7 +25,7 @@ export default defineSitemapEventHandler(async (event) => {
       `SELECT vertical, theme_id FROM sites WHERE id = ?`,
       [siteId],
     )
-    const isProfessionalServiceSite = site?.vertical === 'professional_service' || site?.theme_id === 'blawby-theme-v1'
+    const isProfessionalServiceSite = site?.vertical === 'service' || site?.theme_id === 'blawby-theme-v1'
     const posts = await queryAll<ApiRecord>(
       db,
       `SELECT slug, updated_at FROM blog_posts WHERE status = 'published' AND site_id = ? AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,

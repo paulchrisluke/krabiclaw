@@ -6,4 +6,4 @@ Legal and professional-service tenants need disclaimers, entity/nonprofit metada
 
 - Generic tenant compliance settings plus tenant pages: reusable across regulated tenants and keeps templates presentation-only.
 - Legal-template fields: fast for one template, but hides compliance data inside rendering code.
-- Vertical-specific legal fields: clearer for legal, but too narrow for the `professional_service` vertical.
+- Vertical-specific legal fields: clearer for legal, but too narrow for reusable professional-service compliance data.
