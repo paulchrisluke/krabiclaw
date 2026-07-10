@@ -14,5 +14,9 @@ const props = defineProps<{
   content?: string | null
 }>()
 
-const html = computed(() => sanitizeHtmlForSsr(renderMarkdownToHtml(props.content || '')))
+const DOMPurify = import.meta.client
+  ? (await import('isomorphic-dompurify')).default
+  : { sanitize: sanitizeHtmlForSsr }
+
+const html = computed(() => DOMPurify.sanitize(renderMarkdownToHtml(props.content || '')))
 </script>
