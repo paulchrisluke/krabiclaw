@@ -53,7 +53,8 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/login)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/dashboard)",
       "Bash(sed -i '' \"s/model: 'claude-sonnet-4-6-20250219'/model: 'claude-sonnet-4-6'/g\" \"/Users/paulchrisluke/Repos 2026/kikuzuki-thailand-marketing/server/api/ai/[siteId]/menu/extract.post.ts\")",
-      "mcp__nuxt-ui__get-component-metadata"
+      "mcp__nuxt-ui__get-component-metadata",
+      "Bash(gh run *)"
     ],
     "deny": [
       "Bash(rm -rf / *)",
