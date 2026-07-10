@@ -267,4 +267,112 @@ test.describe("mcp tools", () => {
       }),
     });
   });
+
+  test("chowbot menu tools delegate to the same executor as MCP end-to-end", async ({
+    request,
+    baseURL,
+  }) => {
+    test.setTimeout(60_000);
+
+    await loginAs(request, baseURL!);
+    const siteId = await ensureSite(request, baseURL!, null);
+
+    const execChowbotTool = async (
+      toolName: string,
+      input: Record<string, unknown>,
+      messages?: Array<{ role: "user" | "assistant"; content: string }>,
+    ) => {
+      const res = await request.post(`${baseURL}/api/dev/chowbot-tool`, {
+        headers: devLoginHeaders(),
+        data: { siteId, toolName, input, messages },
+      });
+      expect(res.status()).toBe(200);
+      return (await res.json()) as { result: Record<string, unknown> };
+    };
+
+    const created = await execChowbotTool("create_menu", {
+      name: `Chowbot E2E Menu ${Date.now()}`,
+    });
+    expect(created.result.error).toBeUndefined();
+    const menuId = created.result.id as string;
+    expect(menuId).toEqual(expect.any(String));
+
+    // A menu created through ChowBot's tool path must be visible through
+    // MCP's — same executor, same tables, no shadow model.
+    const mcpList = await request.post(`${baseURL}/api/dev/mcp-tool`, {
+      headers: devLoginHeaders(),
+      data: { siteId, toolName: "list_menus", input: {} },
+    });
+    expect(mcpList.status()).toBe(200);
+    const mcpListBody = (await mcpList.json()) as {
+      result: { menus: Array<{ id: string }> };
+    };
+    expect(mcpListBody.result.menus.some((m) => m.id === menuId)).toBe(true);
+
+    const item = await execChowbotTool("create_menu_item", {
+      menu_id: menuId,
+      section: "Starters",
+      name: "Bruschetta",
+      price_amount: "180",
+    });
+    expect(item.result.error).toBeUndefined();
+    const itemId = item.result.id as string;
+    expect(itemId).toEqual(expect.any(String));
+
+    // sync_menu_items: previously ChowBot-only, now shared with MCP. Matches
+    // the existing item by item_id and creates a second one in one call.
+    const synced = await execChowbotTool("sync_menu_items", {
+      menu_id: menuId,
+      items: [
+        { item_id: itemId, price_amount: "200" },
+        { section: "Starters", name: "Caprese", price_amount: "150" },
+      ],
+    });
+    expect(synced.result.error).toBeUndefined();
+    expect(synced.result.summary).toEqual(
+      expect.objectContaining({ created: 1, updated: 1 }),
+    );
+
+    // Regression check: rename_menu_section previously took old_section/
+    // new_section on ChowBot vs old_name/new_name on MCP. Both surfaces now
+    // share one schema (old_name/new_name).
+    const renamed = await execChowbotTool("rename_menu_section", {
+      menu_id: menuId,
+      old_name: "Starters",
+      new_name: "Antipasti",
+    });
+    expect(renamed.result.error).toBeUndefined();
+    expect(renamed.result.updated).toBe(2);
+
+    // Regression check: delete_menu_item's ChowBot schema declared
+    // menu_item_id but the old handler read menu_id/item_id (always
+    // undefined), so this tool silently no-op'd in production. Confirm it
+    // actually deletes now.
+    const deletedItem = await execChowbotTool(
+      "delete_menu_item",
+      { menu_item_id: itemId },
+      [{ role: "user", content: "yes confirm" }],
+    );
+    expect(deletedItem.result.error).toBeUndefined();
+    expect(deletedItem.result.deleted).toBe(true);
+
+    // publish_menu is a ChowBot-only convenience over update_menu's status
+    // field and is confirm-gated.
+    const published = await execChowbotTool(
+      "publish_menu",
+      { menu_id: menuId },
+      [{ role: "user", content: "yes please publish it" }],
+    );
+    expect(published.result.error).toBeUndefined();
+    const menu = published.result.menu as { status?: string } | undefined;
+    expect(menu?.status).toBe("published");
+
+    const deletedMenu = await execChowbotTool(
+      "delete_menu",
+      { menu_id: menuId },
+      [{ role: "user", content: "yes confirm" }],
+    );
+    expect(deletedMenu.result.error).toBeUndefined();
+    expect(deletedMenu.result.deleted).toBe(true);
+  });
 });
