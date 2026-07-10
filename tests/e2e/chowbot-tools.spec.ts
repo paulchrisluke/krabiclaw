@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import type { APIRequestContext } from "@playwright/test";
 import { devLoginHeaders } from "./test-env";
 import { ensureSite } from "./helpers/ensure-site";
 import { loginAs } from "./helpers/auth";
@@ -7,6 +8,22 @@ type RoleUser = {
   id: string;
   role: "owner" | "admin" | "editor" | "member";
 };
+
+async function execChowbotTool(
+  request: APIRequestContext,
+  baseURL: string,
+  siteId: string,
+  toolName: string,
+  input: Record<string, unknown>,
+  messages?: Array<{ role: "user" | "assistant"; content: string }>,
+) {
+  const res = await request.post(`${baseURL}/api/dev/chowbot-tool`, {
+    headers: devLoginHeaders(),
+    data: { siteId, toolName, input, messages },
+  });
+  expect(res.status()).toBe(200);
+  return (await res.json()) as { result: Record<string, unknown> };
+}
 
 test.describe("mcp tools", () => {
   test.describe.configure({ mode: "serial" });
@@ -277,20 +294,7 @@ test.describe("mcp tools", () => {
     await loginAs(request, baseURL!);
     const siteId = await ensureSite(request, baseURL!, null);
 
-    const execChowbotTool = async (
-      toolName: string,
-      input: Record<string, unknown>,
-      messages?: Array<{ role: "user" | "assistant"; content: string }>,
-    ) => {
-      const res = await request.post(`${baseURL}/api/dev/chowbot-tool`, {
-        headers: devLoginHeaders(),
-        data: { siteId, toolName, input, messages },
-      });
-      expect(res.status()).toBe(200);
-      return (await res.json()) as { result: Record<string, unknown> };
-    };
-
-    const created = await execChowbotTool("create_menu", {
+    const created = await execChowbotTool(request, baseURL!, siteId, "create_menu", {
       name: `Chowbot E2E Menu ${Date.now()}`,
     });
     expect(created.result.error).toBeUndefined();
@@ -309,7 +313,7 @@ test.describe("mcp tools", () => {
     };
     expect(mcpListBody.result.menus.some((m) => m.id === menuId)).toBe(true);
 
-    const item = await execChowbotTool("create_menu_item", {
+    const item = await execChowbotTool(request, baseURL!, siteId, "create_menu_item", {
       menu_id: menuId,
       section: "Starters",
       name: "Bruschetta",
@@ -321,7 +325,7 @@ test.describe("mcp tools", () => {
 
     // sync_menu_items: previously ChowBot-only, now shared with MCP. Matches
     // the existing item by item_id and creates a second one in one call.
-    const synced = await execChowbotTool("sync_menu_items", {
+    const synced = await execChowbotTool(request, baseURL!, siteId, "sync_menu_items", {
       menu_id: menuId,
       items: [
         { item_id: itemId, price_amount: "200" },
@@ -336,7 +340,7 @@ test.describe("mcp tools", () => {
     // Regression check: rename_menu_section previously took old_section/
     // new_section on ChowBot vs old_name/new_name on MCP. Both surfaces now
     // share one schema (old_name/new_name).
-    const renamed = await execChowbotTool("rename_menu_section", {
+    const renamed = await execChowbotTool(request, baseURL!, siteId, "rename_menu_section", {
       menu_id: menuId,
       old_name: "Starters",
       new_name: "Antipasti",
@@ -349,6 +353,9 @@ test.describe("mcp tools", () => {
     // undefined), so this tool silently no-op'd in production. Confirm it
     // actually deletes now.
     const deletedItem = await execChowbotTool(
+      request,
+      baseURL!,
+      siteId,
       "delete_menu_item",
       { menu_item_id: itemId },
       [{ role: "user", content: "yes confirm" }],
@@ -359,6 +366,9 @@ test.describe("mcp tools", () => {
     // publish_menu is a ChowBot-only convenience over update_menu's status
     // field and is confirm-gated.
     const published = await execChowbotTool(
+      request,
+      baseURL!,
+      siteId,
       "publish_menu",
       { menu_id: menuId },
       [{ role: "user", content: "yes please publish it" }],
@@ -368,11 +378,136 @@ test.describe("mcp tools", () => {
     expect(menu?.status).toBe("published");
 
     const deletedMenu = await execChowbotTool(
+      request,
+      baseURL!,
+      siteId,
       "delete_menu",
       { menu_id: menuId },
       [{ role: "user", content: "yes confirm" }],
     );
     expect(deletedMenu.result.error).toBeUndefined();
     expect(deletedMenu.result.deleted).toBe(true);
+  });
+
+  test("chowbot-adapter enforces per-tool minimumRole and requiredEntitlement", async ({
+    request,
+    baseURL,
+  }) => {
+    test.setTimeout(60_000);
+
+    await loginAs(request, baseURL!);
+    const siteId = await ensureSite(request, baseURL!, null);
+
+    const contextRes = await request.get(`${baseURL}/api/dashboard/context`);
+    expect(contextRes.status()).toBe(200);
+    const context = (await contextRes.json()) as {
+      organization?: { id?: string };
+    };
+    const organizationId = context.organization?.id;
+
+    const editorRes = await request.post(`${baseURL}/api/dev/test-member`, {
+      data: { role: "editor", organizationId },
+      headers: devLoginHeaders(),
+    });
+    expect(editorRes.status()).toBe(200);
+    const editor = ((await editorRes.json()) as { user: RoleUser }).user;
+
+    // reply_to_review requires MCP minimumRole 'owner' — an editor must be
+    // rejected by the adapter before it ever reaches reviews.ts.
+    await loginAs(request, baseURL!, editor.id);
+    const editorReply = await execChowbotTool(request, baseURL!, siteId, "reply_to_review", {
+      review_id: "nonexistent-review",
+      reply: "Thanks!",
+    });
+    expect(editorReply.result.error).toContain("does not have permission");
+
+    // create_work_request requires the managed_service entitlement on MCP —
+    // a freshly created site has no such entitlement, so even the owner
+    // must be rejected before create_work_request's own logic runs.
+    const ownerSession = await request.get(`${baseURL}/api/auth/get-session`);
+    const ownerUserId = ((await ownerSession.json()) as { user?: { id?: string } }).user?.id;
+    await loginAs(request, baseURL!, ownerUserId);
+    const workRequest = await execChowbotTool(request, baseURL!, siteId, "create_work_request", {
+      type: "other",
+      title: "Test request",
+    });
+    expect(workRequest.result.error).toBeTruthy();
+  });
+
+  test("chowbot translations/locales tools stay behind the conversational-surface feature flag by default", async ({
+    request,
+    baseURL,
+  }) => {
+    test.setTimeout(30_000);
+
+    await loginAs(request, baseURL!);
+    const siteId = await ensureSite(request, baseURL!, null);
+
+    const result = await execChowbotTool(request, baseURL!, siteId, "list_locales", {});
+    expect(result.result.error).toContain("not exposed on the conversational surface");
+  });
+
+  test("chowbot reviews, submissions, notifications, qa, media, and settings tools delegate to the shared executor", async ({
+    request,
+    baseURL,
+  }) => {
+    test.setTimeout(60_000);
+
+    await loginAs(request, baseURL!);
+    const siteId = await ensureSite(request, baseURL!, null);
+
+    const contacts = await execChowbotTool(request, baseURL!, siteId, "get_contact_inquiries", {});
+    expect(contacts.result.error).toBeUndefined();
+    expect(Array.isArray(contacts.result.submissions)).toBe(true);
+
+    const notifications = await execChowbotTool(request, baseURL!, siteId, "get_notification_settings", {});
+    expect(notifications.result.error).toBeUndefined();
+    expect(notifications.result.notifications).toBeTruthy();
+
+    const assets = await execChowbotTool(request, baseURL!, siteId, "get_site_media_assets", {});
+    expect(assets.result.error).toBeUndefined();
+    expect(Array.isArray(assets.result.assets)).toBe(true);
+
+    const dashboardLink = await execChowbotTool(request, baseURL!, siteId, "get_dashboard_link", {
+      destination: "settings.general",
+    });
+    expect(dashboardLink.result.error).toBeUndefined();
+    expect(typeof dashboardLink.result.url).toBe("string");
+
+    const locationsRes = await request.post(`${baseURL}/api/dev/mcp-tool`, {
+      headers: devLoginHeaders(),
+      data: { siteId, toolName: "list_locations", input: {} },
+    });
+    expect(locationsRes.status()).toBe(200);
+    const locationsBody = (await locationsRes.json()) as {
+      result: { locations: Array<{ id: string }> };
+    };
+    const locationId = locationsBody.result.locations[0]!.id;
+
+    const qaCreated = await execChowbotTool(request, baseURL!, siteId, "create_location_qa", {
+      location_id: locationId,
+      question: `Do you take walk-ins? ${Date.now()}`,
+      answer: "Yes",
+    });
+    expect(qaCreated.result.error).toBeUndefined();
+    const qaId = qaCreated.result.id as string;
+
+    const qaListed = await execChowbotTool(request, baseURL!, siteId, "list_location_qa", {
+      location_id: locationId,
+    });
+    expect(qaListed.result.error).toBeUndefined();
+    const qaItems = qaListed.result.items as Array<{ id: string }>;
+    expect(qaItems.some((qa) => qa.id === qaId)).toBe(true);
+
+    const qaDeleted = await execChowbotTool(
+      request,
+      baseURL!,
+      siteId,
+      "delete_location_qa",
+      { qa_id: qaId, location_id: locationId },
+      [{ role: "user", content: "yes confirm" }],
+    );
+    expect(qaDeleted.result.error).toBeUndefined();
+    expect(qaDeleted.result.deleted).toBe(true);
   });
 });

@@ -28,17 +28,7 @@ import {
   upsertSiteContent,
 } from "~/server/utils/content-management";
 import { setConfig } from "~/server/utils/site-config";
-import {
-  deleteSiteLocale,
-  listSiteLocales,
-  upsertSiteLocale,
-} from "~/server/utils/site-locales";
-import {
-  buildTranslationInventory,
-  createTranslationJob,
-  publishTranslationDrafts,
-} from "~/server/utils/translation-inventory";
-import { processTranslationJobBatch } from "~/server/utils/translation-processor";
+import { upsertSiteLocale } from "~/server/utils/site-locales";
 import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
 import { upsertChannelState } from "~/server/utils/chowbot-conversations";
 import { CHOWBOT_MODEL } from "~/server/utils/ai-models";
@@ -82,14 +72,6 @@ const HERO_FIELDS = new Set([
   "hero.image",
   "hero.video",
 ]);
-const TRANSLATION_SCOPES = new Set([
-  "site",
-  "content",
-  "menus",
-  "locations",
-  "posts",
-]);
-
 export type JsonSerializable =
   | string
   | number
@@ -1353,148 +1335,47 @@ async function executeTool(
       return { updated };
     }
 
-    case "list_locales": {
-      return await listSiteLocales(db, orgId, siteId);
-    }
-
-    case "upsert_locale": {
-      const locale = toSqlText(input.locale)?.trim();
-      if (!locale) return { error: "locale is required." };
-      const saved = await upsertSiteLocale(db, orgId, siteId, {
-        locale,
-        label: toSqlText(input.label) ?? undefined,
-        status:
-          input.status === "published" ||
-          input.status === "disabled" ||
-          input.status === "draft"
-            ? input.status
-            : undefined,
-        fallback_enabled:
-          typeof input.fallback_enabled === "boolean"
-            ? input.fallback_enabled
-            : undefined,
-        is_source:
-          typeof input.is_source === "boolean" ? input.is_source : undefined,
-      });
-      return { locale: saved, updated: true };
-    }
-
+    // Same previously-unreachable-despite-the-feature-flag bug as the
+    // translations tools below, one mcp-executor domain over (locales).
+    case "list_locales":
+    case "upsert_locale":
     case "delete_locale": {
-      const locale = toSqlText(input.locale)?.trim();
-      if (!locale) return { error: "locale is required." };
-      return await deleteSiteLocale(db, orgId, siteId, locale);
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "get_translation_inventory": {
-      const locale = toSqlText(input.locale)?.trim();
-      if (!locale) return { error: "locale is required." };
-      const scopeInput = toSqlText(input.scope)?.trim();
-      const scope =
-        scopeInput && TRANSLATION_SCOPES.has(scopeInput)
-          ? (scopeInput as "site" | "content" | "menus" | "locations" | "posts")
-          : "site";
-      const inventory = await buildTranslationInventory(db, orgId, siteId, {
-        targetLocale: locale,
-        scope,
-        includePublished: input.include_published === true,
-      });
-      return {
-        estimate: inventory.estimate,
-        sample: inventory.items.slice(0, 12).map((item) => ({
-          entity_type: item.entity_type,
-          label: item.label,
-          chars: item.source_chars,
-          status: item.translation_status,
-        })),
-      };
+    // All six require the 'translation' entitlement on MCP (tool.
+    // requiredEntitlement), enforced generically by the adapter. These were
+    // previously unreachable from ChowBot even with
+    // CONVERSATIONAL_TOOLS_TRANSLATIONS_ENABLED=true — the case bodies
+    // existed but chowbot-tools/translations.ts never exposed their
+    // schemas, so filterConversationalTools had nothing to un-hide.
+    case "get_translation_inventory":
+    case "list_translation_jobs":
+    case "get_translation_job":
+    case "run_translation_job_batch": {
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "start_translation_job": {
-      const locale = toSqlText(input.locale)?.trim();
-      if (!locale) return { error: "locale is required." };
-      const scopeInput = toSqlText(input.scope)?.trim();
-      const scope =
-        scopeInput && TRANSLATION_SCOPES.has(scopeInput)
-          ? (scopeInput as "site" | "content" | "menus" | "locations" | "posts")
-          : "site";
-      return await createTranslationJob(db, orgId, siteId, userId, {
-        targetLocale: locale,
-        scope,
-        includePublished: input.include_published === true,
-      });
-    }
-
-    case "list_translation_jobs": {
-      const results = await queryAll(
-        db,
-        `
-        SELECT id, source_locale, target_locale, scope, status, total_items, total_chars,
-               estimated_credits, actual_credits, processed_items, failed_items, created_at, updated_at
-        FROM translation_jobs
-        WHERE organization_id = ? AND site_id = ?
-        ORDER BY created_at DESC
-        LIMIT 10
-      `,
-        [orgId, siteId],
-      );
-      return results ?? [];
-    }
-
-    case "get_translation_job": {
-      const jobId = toSqlText(input.job_id)?.trim();
-      if (!jobId) return { error: "job_id is required." };
-      const job = await queryFirst(
-        db,
-        `
-        SELECT *
-        FROM translation_jobs
-        WHERE id = ? AND organization_id = ? AND site_id = ?
-        LIMIT 1
-      `,
-        [jobId, orgId, siteId],
-      );
-      if (!job) return { error: "Translation job not found." };
-      const results = await queryAll(
-        db,
-        `
-        SELECT entity_type, entity_id, location_id, page, field, source_chars, status, error
-        FROM translation_job_items
-        WHERE job_id = ? AND organization_id = ? AND site_id = ?
-        ORDER BY entity_type, page, field
-        LIMIT 100
-      `,
-        [jobId, orgId, siteId],
-      );
-      return { job, items: results ?? [] };
-    }
-
-    case "run_translation_job_batch": {
-      const jobId = toSqlText(input.job_id)?.trim();
-      if (!jobId) return { error: "job_id is required." };
-      return await processTranslationJobBatch(db, env, orgId, siteId, jobId);
+      return runMcpExecutorToolForChowbot(executorSite, "start_translation_job", input);
     }
 
     case "publish_translations": {
-      const locale = toSqlText(input.locale)?.trim();
-      if (!locale) return { error: "locale is required." };
-      const scopeInput = toSqlText(input.scope)?.trim();
-      const scope =
-        scopeInput && TRANSLATION_SCOPES.has(scopeInput)
-          ? (scopeInput as "site" | "content" | "menus" | "locations" | "posts")
-          : "site";
-      const result = await publishTranslationDrafts(
-        db,
-        orgId,
-        siteId,
-        locale,
-        scope,
-        userId,
-      );
-      await upsertSiteLocale(db, orgId, siteId, {
-        locale: result.target_locale,
-        status: "published",
-        fallback_enabled: true,
-      });
+      const result = await runMcpExecutorToolForChowbot(executorSite, "publish_translations", input) as {
+        error?: string;
+        target_locale?: string;
+      };
+      if (result.error) return result;
+      // ChowBot-only extra step: MCP's publish_translations only marks
+      // drafts as published, it doesn't enable the site locale itself —
+      // ChowBot has historically done both in one call.
+      if (result.target_locale) {
+        await upsertSiteLocale(db, orgId, siteId, {
+          locale: result.target_locale,
+          status: "published",
+          fallback_enabled: true,
+        });
+      }
       return result;
     }
 
