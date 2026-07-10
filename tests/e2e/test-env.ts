@@ -84,13 +84,22 @@ export function isDeployedWorkerTarget(baseURL: string): boolean {
   return isPreviewContext(new URL(baseURL).hostname)
 }
 
+// A public quick tunnel (`cloudflared tunnel --url ...`) proxies exactly one
+// hostname straight to localhost:3000 — it has no wildcard/subdomain routing,
+// so prefixing "demo." or "pottery-house." onto it (like the platform-domain
+// subdomain convention below) would point at a hostname the tunnel never
+// proxies. Pass these through unchanged, same as preview/staging hosts.
+export function isQuickTunnelHost(hostname: string): boolean {
+  return hostname.endsWith('.trycloudflare.com')
+}
+
 export function tenantTestBaseUrl() {
   const base = new URL(testBaseUrl())
   if (['localhost', '127.0.0.1', '[::1]'].includes(base.hostname)) {
     base.hostname = 'demo.localhost'
     return base.toString().replace(/\/$/, '')
   }
-  if (isPreviewContext(base.hostname)) {
+  if (isPreviewContext(base.hostname) || isQuickTunnelHost(base.hostname)) {
     return base.toString().replace(/\/$/, '')
   }
   base.hostname = base.hostname.startsWith('demo.') ? base.hostname : `demo.${base.hostname}`
@@ -103,7 +112,7 @@ export function potteryHouseTestBaseUrl() {
     base.hostname = 'pottery-house.localhost'
     return base.toString().replace(/\/$/, '')
   }
-  if (isPreviewContext(base.hostname)) {
+  if (isPreviewContext(base.hostname) || isQuickTunnelHost(base.hostname)) {
     return base.toString().replace(/\/$/, '')
   }
   base.hostname = base.hostname.startsWith('pottery-house.') ? base.hostname : `pottery-house.${base.hostname}`

@@ -128,14 +128,15 @@ into the shell as described above, then start (or restart) `yarn dev:tunnel`.
 The quick-tunnel URL is random per run — there is no standing hostname to keep
 in sync anywhere else, unlike the named tunnel.
 
-`scripts/check-local-mcp-harness.mjs` will `skip` a "non-canonical MCP base
-URL" check (non-fatal) and `not ok` a "tunnel.yml hostname mismatch" check
-when using a quick tunnel — the latter is expected given the named tunnel is
-not in use, but it still marks the run failed, so `yarn test:mcp:local` exits
-non-zero even though every other check (OAuth discovery, unauthenticated auth
+`scripts/check-local-mcp-harness.mjs` `skip`s a "non-canonical MCP base URL"
+check and a "tunnel.yml hostname mismatch" check when `BASE_URL` is a
+`*.trycloudflare.com` quick tunnel — tunnel.yml always describes the named
+`krabiclaw-local` tunnel, so a mismatch against a random quick-tunnel hostname
+is expected, not a misconfiguration. `yarn test:mcp:local` exits `0` in this
+case as long as every functional check (OAuth discovery, unauthenticated auth
 challenges, authenticated `tools/list`/`tools/call`, resources, and
-`--write-smoke`) passes normally. Read the individual `ok`/`not ok` lines
-rather than relying on the script's exit code while using a quick tunnel.
+`--write-smoke`) passes. The hostname mismatch stays fatal for any other
+`BASE_URL`, i.e. actual named-tunnel usage, where tunnel.yml should match.
 
 ### Named tunnel reference (currently non-functional end-to-end)
 
@@ -178,23 +179,29 @@ Use the OAuth-true path when the bug involves:
 
 ## Startup
 
-In terminal 1, with `.dev.vars`' `BETTER_AUTH_URL`/`NUXT_PUBLIC_PLATFORM_DOMAIN`/
-`MCP_BASE_URL` already pointed at the quick-tunnel URL you plan to use (see
-"Working alternative: `trycloudflare.com` quick tunnel" above — you generally
-need to start the tunnel first in terminal 2 to get that URL, then come back
-and set these before starting the dev server):
+Tested sequence — the tunnel must start first because its URL doesn't exist
+until it prints one, and that URL is what you set in `.dev.vars` before
+starting the dev server:
 
-```bash
-export E2E_ALLOW_DEV_ROUTES=true
-export E2E_DEV_ROUTE_SECRET=<same value as in .dev.vars>
-yarn dev:tunnel
-```
+1. In terminal 1, start the quick tunnel and copy the printed
+   `https://<random-words>.trycloudflare.com` URL:
 
-In terminal 2:
+   ```bash
+   cloudflared tunnel --url http://localhost:3000
+   ```
 
-```bash
-cloudflared tunnel --url http://localhost:3000
-```
+2. Set `BETTER_AUTH_URL`, `NUXT_PUBLIC_PLATFORM_DOMAIN`, and `MCP_BASE_URL` in
+   `.dev.vars` to that URL (see "Working alternative: `trycloudflare.com`
+   quick tunnel" above).
+
+3. In terminal 2, export the dev-route secret into the shell and start the dev
+   server:
+
+   ```bash
+   export E2E_ALLOW_DEV_ROUTES=true
+   export E2E_DEV_ROUTE_SECRET=<same value as in .dev.vars>
+   yarn dev:tunnel
+   ```
 
 Then run the preflight harness:
 
@@ -272,8 +279,10 @@ second — not the library's 5s fetch timeout) with
 `{"error":"invalid_client","error_description":"Failed to fetch metadata document (network error or redirect blocked)"}`,
 while an external client fetching the exact same metadata URL gets a normal
 200. The same flow passes reliably against a local dev server exposed through
-a real public tunnel (quick tunnel or the named tunnel, per "Startup" above) —
-this is specific to a deployed Worker fetching its own zone/route, not app
+a real public quick tunnel (per "Startup" above) — the named tunnel doesn't
+reach the local machine at all yet (see "Tunnel contract"), so it isn't a
+verified path for this either. The self-fetch failure is specific to a
+deployed Worker fetching its own zone/route, not app
 logic. Verify this flow locally via the tunnel harness; do not rely on
 `e2e-smoke`/`e2e-staging` for it until the CIMD test fixture is hosted off-zone
 or the platform restriction is otherwise worked around.
