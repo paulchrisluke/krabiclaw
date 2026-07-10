@@ -1,16 +1,21 @@
 // Lets ChowBot (dashboard chat + WhatsApp) call the same domain handlers MCP
 // uses (server/utils/mcp-executor/*.ts) instead of maintaining a duplicate
 // implementation per tool. See GitHub issue "Consolidate ChowBot onto the
-// MCP tool-executor" for the full migration this is the first slice of.
+// MCP tool-executor" for the full migration this is one slice of.
 //
 // ChowBot resolves its own org/site/user/role via dashboard session
 // (getSiteForMember) or WhatsApp phone-number mapping — neither has an
 // H3Event carrying MCP OAuth/session auth, so this builds an
 // McpExecutorContext directly from already-resolved values rather than
-// going through requireMcpSite.
-import type { McpToolRole } from '~/server/utils/mcp-auth'
-import { handleMenusTools } from './menus'
-import { NOT_HANDLED, type McpExecutorContext } from './shared'
+// going through requireMcpSite. It still enforces the same per-tool
+// minimumRole and requiredEntitlement checks executeMcpToolCall does for
+// MCP, by looking the tool up in the same MCP_TOOLS catalog — those checks
+// are metadata on the tool definition, not something a caller can skip.
+import { hasSiteEntitlement } from '~/server/utils/billing'
+import { roleSatisfies, type McpToolRole } from '~/server/utils/mcp-auth'
+import { getMcpTool } from '~/server/utils/mcp-tools'
+import { DOMAIN_HANDLERS } from './index'
+import { NOT_HANDLED, humanizeEntitlement, type McpExecutorContext } from './shared'
 
 export interface ChowbotExecutorSite {
   db: D1Database
@@ -19,27 +24,6 @@ export interface ChowbotExecutorSite {
   organizationId: string
   siteId: string
   role: McpToolRole
-}
-
-const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promise<unknown>> = {
-  menus: handleMenusTools,
-}
-
-const TOOL_DOMAIN: Record<string, string> = {
-  list_menus: 'menus',
-  get_menu: 'menus',
-  create_menu: 'menus',
-  update_menu: 'menus',
-  delete_menu: 'menus',
-  create_menu_item: 'menus',
-  add_menu_items_batch: 'menus',
-  sync_menu_items: 'menus',
-  update_menu_item: 'menus',
-  set_menu_item_image: 'menus',
-  delete_menu_item: 'menus',
-  rename_menu_section: 'menus',
-  delete_menu_section: 'menus',
-  reorder_menu_items: 'menus',
 }
 
 function unwrapMcpExecutorResult(result: unknown): ApiValue {
@@ -62,19 +46,34 @@ function unwrapMcpExecutorResult(result: unknown): ApiValue {
  * mapping). Never throws — mirrors the existing ChowBot tool convention of
  * returning `{ error: message }` so the agent loop can report it back to the
  * model instead of crashing the chat turn.
+ *
+ * toolName must be a real MCP tool name (looked up via getMcpTool) — ChowBot
+ * -only convenience tools (e.g. publish_menu) are translated to their MCP
+ * equivalent by the caller in chowbot-agent.ts before reaching here.
  */
 export async function runMcpExecutorToolForChowbot(
   site: ChowbotExecutorSite,
   toolName: string,
   args: Record<string, unknown>,
 ): Promise<ApiValue> {
-  const domain = TOOL_DOMAIN[toolName]
-  const handler = domain ? DOMAIN_HANDLERS[domain] : undefined
-  if (!handler) {
+  const tool = getMcpTool(toolName)
+  const handler = tool?.domain ? DOMAIN_HANDLERS[tool.domain] : undefined
+  if (!tool || !handler) {
     return { error: `Unhandled tool: ${toolName}` }
   }
 
+  if (!roleSatisfies(site.role, tool.minimumRole)) {
+    return { error: `Your role does not have permission to use ${toolName}.` }
+  }
+
   try {
+    if (
+      tool.requiredEntitlement &&
+      !(await hasSiteEntitlement(site.db, site.siteId, tool.requiredEntitlement))
+    ) {
+      return { error: `${humanizeEntitlement(tool.requiredEntitlement)} is not enabled for this site.` }
+    }
+
     const ctx: McpExecutorContext = {
       toolName,
       args,
