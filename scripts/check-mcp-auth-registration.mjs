@@ -17,7 +17,6 @@ if (
 }
 
 const BASE_URL = (baseUrlArg ?? process.env.MCP_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
-const EXPECT_CIMD = process.env.MCP_EXPECT_CIMD === '1'
 
 let failed = false
 
@@ -56,16 +55,11 @@ async function main() {
     if (typeof metadata?.token_endpoint === 'string') pass(`${label} has token_endpoint`)
     else fail(`${label} missing token_endpoint`, metadata)
 
-    if (EXPECT_CIMD) {
-      if (metadata?.client_id_metadata_document_supported === true) pass(`${label} advertises CIMD`)
-      else fail(`${label} does not advertise CIMD`, metadata)
-    } else {
-      if (typeof metadata?.registration_endpoint === 'string') pass(`${label} advertises DCR registration_endpoint`)
-      else fail(`${label} missing DCR registration_endpoint`, metadata)
+    if (metadata?.client_id_metadata_document_supported === true) pass(`${label} advertises CIMD`)
+    else fail(`${label} does not advertise CIMD`, metadata)
 
-      if (metadata?.client_id_metadata_document_supported !== true) pass(`${label} does not advertise CIMD on DCR app`)
-      else fail(`${label} advertises CIMD unexpectedly`, metadata)
-    }
+    if (!metadata?.registration_endpoint) pass(`${label} does not advertise DCR registration_endpoint`)
+    else fail(`${label} still advertises DCR registration_endpoint`, metadata)
   }
 
   process.exit(failed ? 1 : 0)

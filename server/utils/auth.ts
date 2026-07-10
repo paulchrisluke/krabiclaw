@@ -3,6 +3,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { hashPassword } from 'better-auth/crypto'
 import { admin, anonymous, jwt, organization, phoneNumber } from 'better-auth/plugins'
 import { oauthProvider } from '@better-auth/oauth-provider'
+import { cimd } from '@better-auth/cimd'
 import { getHeaders } from 'h3'
 import type { H3Event } from 'h3'
 import { createDb, execute, schema } from '~/server/db'
@@ -68,6 +69,7 @@ export function createAuth(env: CloudflareEnv) {
   if (cached) return cached as ReturnType<typeof betterAuth>
 
   const db = env.db ?? createDb(d1)
+  const authBaseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
 
   const instance = betterAuth({
     baseURL: env.BETTER_AUTH_URL,
@@ -209,7 +211,7 @@ export function createAuth(env: CloudflareEnv) {
           // Without this, oauth-provider falls back to ctx.context.baseURL
           // (https://krabiclaw.com/api/auth) but jwt() signs with options.baseURL
           // (https://krabiclaw.com) — the mismatch causes ChatGPT to reject the connector.
-          issuer: (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, ''),
+          issuer: authBaseUrl,
         },
       }),
       anonymous({
@@ -237,6 +239,7 @@ export function createAuth(env: CloudflareEnv) {
       oauthProvider({
         loginPage: '/oauth/login',
         consentPage: '/oauth/consent',
+        allowPublicClientPrelogin: true,
         // Account selection is driven entirely by an explicit prompt=select_account
         // from the client (handled upstream in the provider before this hook runs).
         // shouldRedirect must stay false here — returning true unconditionally
@@ -247,23 +250,21 @@ export function createAuth(env: CloudflareEnv) {
           page: '/oauth/login',
           shouldRedirect: async () => false,
         },
-        allowDynamicClientRegistration: true,
-        allowUnauthenticatedClientRegistration: true,
-        // ChatGPT's MCP connector does dynamic client registration (DCR) without an
-        // explicit `scope` in the body, then echoes back whatever this default
-        // produces verbatim as the `scope=` param on every later /authorize call —
-        // confirmed live: it never falls back to reading the registered client's
-        // scopes at /authorize time, so a narrower default here cannot be patched up
-        // later. DCR has no signal for which surface (tenant vs platform admin) is
-        // registering, since both share this one authorization server, so every
-        // dynamically-registered client gets every custom scope by default. The
-        // real per-surface authorization boundary is the `aud` claim (bound to the
-        // `resource` param, which ChatGPT does set correctly per surface) plus the
-        // DB role/membership check in mcp-auth.ts — not which scopes are present.
+        allowDynamicClientRegistration: false,
+        allowUnauthenticatedClientRegistration: false,
+        enforcePerClientResources: false,
         scopes: ['openid', 'offline_access', 'tenant', 'platform_admin'],
-        validAudiences: [
-          ...(env.BETTER_AUTH_URL ? [`${env.BETTER_AUTH_URL}/api/mcp`] : []),
-          ...(env.BETTER_AUTH_URL ? [`${env.BETTER_AUTH_URL}/api/mcp/platform`] : []),
+        resources: [
+          {
+            identifier: `${authBaseUrl}/api/mcp`,
+            name: 'KrabiClaw tenant MCP',
+            allowedScopes: ['openid', 'offline_access', 'tenant'],
+          },
+          {
+            identifier: `${authBaseUrl}/api/mcp/platform`,
+            name: 'KrabiClaw platform MCP',
+            allowedScopes: ['openid', 'offline_access', 'platform_admin'],
+          },
         ],
         // Well-known metadata is served at /api/auth/.well-known/* by the plugin's
         // onRequest hook. Root-level /.well-known/* are covered by Nitro routes.
@@ -271,6 +272,9 @@ export function createAuth(env: CloudflareEnv) {
           oauthAuthServerConfig: true,
           openidConfig: true,
         },
+      }),
+      cimd({
+        allowLoopback: import.meta.dev,
       }),
       organization(),
       admin({

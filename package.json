@@ -128,14 +128,15 @@
     "wrangler": "^4.88.0"
   },
   "dependencies": {
-    "@better-auth/core": "1.6.18",
-    "@better-auth/oauth-provider": "1.6.18",
+    "@better-auth/cimd": "1.7.0-beta.10",
+    "@better-auth/core": "1.7.0-beta.10",
+    "@better-auth/oauth-provider": "1.7.0-beta.10",
     "@nuxt/ui": "^4.7.1",
     "@nuxtjs/i18n": "^10.3.0",
     "@nuxtjs/robots": "^6.0.8",
     "@nuxtjs/sitemap": "^8.0.15",
     "@opentelemetry/api": "^1.9.1",
-    "better-auth": "1.6.18",
+    "better-auth": "1.7.0-beta.10",
     "drizzle-orm": "^0.45.2",
     "isomorphic-dompurify": "^3.12.0",
     "marked": "^18.0.3",

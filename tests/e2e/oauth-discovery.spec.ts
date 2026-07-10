@@ -1,6 +1,10 @@
 import { expect, test } from '@playwright/test'
 import { devLoginHeaders } from './test-env'
 
+function oauthAuthorizeUrl(baseURL: string, params: Record<string, string>) {
+  return `${baseURL}/api/auth/oauth2/authorize?${new URLSearchParams(params).toString()}`
+}
+
 test.describe('OAuth discovery endpoints', () => {
   test('/.well-known/oauth-protected-resource returns valid document', async ({ request, baseURL }) => {
     const res = await request.get(`${baseURL}/.well-known/oauth-protected-resource`)
@@ -32,8 +36,8 @@ test.describe('OAuth discovery endpoints', () => {
     expect(typeof body.authorization_endpoint).toBe('string')
     expect(typeof body.token_endpoint).toBe('string')
     expect(typeof body.jwks_uri).toBe('string')
-    expect(typeof body.registration_endpoint).toBe('string')
-    expect(body.client_id_metadata_document_supported).not.toBe(true)
+    expect(body.registration_endpoint).toBeUndefined()
+    expect(body.client_id_metadata_document_supported).toBe(true)
   })
 
   test('/.well-known/oauth-authorization-server returns valid RFC 8414 document', async ({ request, baseURL }) => {
@@ -43,10 +47,84 @@ test.describe('OAuth discovery endpoints', () => {
     expect(typeof body.issuer).toBe('string')
     expect(typeof body.authorization_endpoint).toBe('string')
     expect(typeof body.token_endpoint).toBe('string')
-    expect(typeof body.registration_endpoint).toBe('string')
-    expect(body.client_id_metadata_document_supported).not.toBe(true)
+    expect(body.registration_endpoint).toBeUndefined()
+    expect(body.client_id_metadata_document_supported).toBe(true)
     expect(Array.isArray(body.code_challenge_methods_supported)).toBe(true)
     expect((body.code_challenge_methods_supported as string[])).toContain('S256')
+  })
+
+  test('repeat authorize skips consent after remembered approval for the same CIMD client', async ({ request, baseURL }) => {
+    const devHeaders = devLoginHeaders()
+    test.skip(!devHeaders, 'E2E_DEV_ROUTE_SECRET required for dev login')
+
+    const loginRes = await request.get(`${baseURL}/api/dev/login?userId=oauth-cimd-e2e`, {
+      headers: devHeaders,
+      maxRedirects: 0,
+    })
+    expect(loginRes.status()).toBe(302)
+
+    const cookies = (loginRes.headersArray() ?? [])
+      .filter((header) => header.name.toLowerCase() === 'set-cookie')
+      .map((header) => header.value.split(';')[0])
+    expect(cookies.length).toBeGreaterThan(0)
+    const cookieHeader = cookies.join('; ')
+
+    const cimdClientId = `${baseURL}/api/auth/oauth2/test-client-metadata?nonce=${Date.now()}`
+    const redirectUri = `${baseURL}/oauth/test-callback`
+    const authorizeParams = {
+      client_id: cimdClientId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      scope: 'openid offline_access tenant',
+      state: 'first-pass',
+      code_challenge: 'test-challenge-s256',
+      code_challenge_method: 'S256',
+      resource: `${baseURL}/api/mcp`,
+    }
+
+    const firstAuthorize = await request.get(oauthAuthorizeUrl(baseURL!, authorizeParams), {
+      headers: { Cookie: cookieHeader },
+      maxRedirects: 0,
+    })
+    expect(firstAuthorize.status()).toBe(302)
+    const consentLocation = firstAuthorize.headers()['location']
+    expect(consentLocation).toContain('/oauth/consent?')
+
+    const consentUrl = new URL(consentLocation!, baseURL)
+    const oauthQuery = consentUrl.search.slice(1)
+
+    const consentRes = await request.post(`${baseURL}/api/auth/oauth2/consent`, {
+      headers: {
+        Cookie: cookieHeader,
+        Origin: baseURL!,
+      },
+      data: {
+        accept: true,
+        oauth_query: oauthQuery,
+      },
+    })
+    expect(consentRes.status()).toBe(200)
+    const consentBody = await consentRes.json() as { url?: string }
+    expect(consentBody.url).toBeTruthy()
+    const consentRedirect = new URL(consentBody.url!)
+    expect(consentRedirect.searchParams.get('code')).toBeTruthy()
+
+    const secondAuthorize = await request.get(oauthAuthorizeUrl(baseURL!, {
+      ...authorizeParams,
+      state: 'second-pass',
+    }), {
+      headers: { Cookie: cookieHeader },
+      maxRedirects: 0,
+    })
+    expect(secondAuthorize.status()).toBe(302)
+    const secondLocation = secondAuthorize.headers()['location']
+    expect(secondLocation).toBeTruthy()
+    expect(secondLocation).not.toContain('/oauth/consent?')
+
+    const secondRedirect = new URL(secondLocation!, baseURL)
+    expect(secondRedirect.origin + secondRedirect.pathname).toBe(redirectUri)
+    expect(secondRedirect.searchParams.get('code')).toBeTruthy()
+    expect(secondRedirect.searchParams.get('state')).toBe('second-pass')
   })
 
   test('unauthenticated MCP request returns 401 with WWW-Authenticate header', async ({ request, baseURL }) => {

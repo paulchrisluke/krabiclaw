@@ -646,11 +646,16 @@ export const oauthAccessToken = sqliteTable("oauthAccessToken", {
 	userId: text(),
 	token: text().notNull().unique(),
 	scopes: text().default("").notNull(),
+	authorizationCodeId: text(),
+	resources: text(),
+	requestedUserInfoClaims: text(),
 	expiresAt: integer({ mode: "timestamp" }).notNull(),
 	createdAt: integer({ mode: "timestamp" }).notNull(),
 	sessionId: text(),
 	referenceId: text(),
 	refreshId: text(),
+	revoked: integer({ mode: "timestamp" }),
+	confirmation: text(),
 });
 
 export const oauthClient = sqliteTable("oauthClient", {
@@ -679,11 +684,42 @@ export const oauthClient = sqliteTable("oauthClient", {
 	softwareVersion: text(),
 	softwareStatement: text(),
 	postLogoutRedirectUris: text(),
+	backchannelLogoutUri: text(),
+	backchannelLogoutSessionRequired: integer().default(0).notNull(),
 	tokenEndpointAuthMethod: text(),
+	jwks: text(),
+	jwksUri: text(),
 	grantTypes: text(),
 	responseTypes: text(),
 	type: text(),
+	dpopBoundAccessTokens: integer().default(0).notNull(),
 	referenceId: text(),
+});
+
+export const oauthResource = sqliteTable("oauthResource", {
+	id: text().primaryKey(),
+	identifier: text().notNull().unique(),
+	name: text().notNull(),
+	accessTokenTtl: integer(),
+	refreshTokenTtl: integer(),
+	signingAlgorithm: text(),
+	signingKeyId: text(),
+	allowedScopes: text(),
+	customClaims: text(),
+	dpopBoundAccessTokensRequired: integer().default(0).notNull(),
+	disabled: integer().default(0).notNull(),
+	createdAt: integer({ mode: "timestamp" }).notNull(),
+	updatedAt: integer({ mode: "timestamp" }).notNull(),
+	policyVersion: integer().default(1).notNull(),
+	metadata: text(),
+});
+
+export const oauthClientResource = sqliteTable("oauthClientResource", {
+	id: text().primaryKey(),
+	clientId: text().notNull().references(() => oauthClient.id, { onDelete: "cascade" }),
+	resourceId: text().notNull().references(() => oauthResource.id, { onDelete: "cascade" }),
+	metadata: text(),
+	createdAt: integer({ mode: "timestamp" }).notNull(),
 });
 
 export const oauthConsent = sqliteTable("oauthConsent", {
@@ -694,6 +730,8 @@ export const oauthConsent = sqliteTable("oauthConsent", {
 	createdAt: integer({ mode: "timestamp" }).notNull(),
 	updatedAt: integer({ mode: "timestamp" }).notNull(),
 	referenceId: text(),
+	resources: text(),
+	requestedUserInfoClaims: text(),
 }, (table) => [
 	unique("oauthConsent_clientId_userId_unique").on(table.clientId, table.userId),
 ]);
@@ -705,12 +743,19 @@ export const oauthRefreshToken = sqliteTable("oauthRefreshToken", {
 	token: text().notNull().unique(),
 	scopes: text().default("").notNull(),
 	accessTokenId: text(),
+	authorizationCodeId: text(),
+	resources: text(),
+	requestedUserInfoClaims: text(),
 	expiresAt: integer({ mode: "timestamp" }).notNull(),
 	createdAt: integer({ mode: "timestamp" }).notNull(),
 	sessionId: text(),
 	referenceId: text(),
 	revoked: integer({ mode: "timestamp" }),
+	rotatedAt: integer({ mode: "timestamp" }),
+	rotationReplayResponse: text(),
+	rotationReplayExpiresAt: integer({ mode: "timestamp" }),
 	authTime: integer({ mode: "timestamp" }),
+	confirmation: text(),
 });
 
 export const organization = sqliteTable("organization", {
