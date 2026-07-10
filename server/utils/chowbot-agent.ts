@@ -14,12 +14,6 @@ import {
 } from "~/server/utils/post-management";
 import { runMcpExecutorToolForChowbot } from "~/server/utils/mcp-executor/chowbot-adapter";
 import type { McpToolRole } from "~/server/utils/mcp-auth";
-import {
-  deleteSiteContentField,
-  getPageContent,
-  getSiteContentField,
-  upsertSiteContent,
-} from "~/server/utils/content-management";
 import { setConfig } from "~/server/utils/site-config";
 import { upsertSiteLocale } from "~/server/utils/site-locales";
 import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
@@ -37,12 +31,7 @@ import {
   WEEKDAY_NAMES,
   type RecurringSlots,
 } from "~/server/utils/experiences";
-import { buildImageUrl } from "~/server/utils/cloudflare-images";
-import { getMediaAsset } from "~/server/utils/media-asset-manager";
-import {
-  updateHomeHero,
-} from "~/server/utils/mcp-workflows";
-import { contentRegistry, getFieldDef } from "~/config/content-registry";
+import { contentRegistry } from "~/config/content-registry";
 import {
   CHOWBOT_TOOLS,
   CHOWBOT_CONFIRM_REQUIRED,
@@ -58,12 +47,6 @@ import { searchPublicResources } from "~/server/utils/public-search";
 import { PUBLIC_SEARCH_TYPES, type PublicSearchTypeFilter } from '~/server/utils/platform-search-types'
 
 const MAX_ITERATIONS = 10;
-const HERO_FIELDS = new Set([
-  "hero.title",
-  "hero.subtitle",
-  "hero.image",
-  "hero.video",
-]);
 export type JsonSerializable =
   | string
   | number
@@ -133,21 +116,6 @@ function toSqlText(value: ApiValue): string | null | undefined {
   return null;
 }
 
-async function resolveMediaAssetPublicUrl(
-  db: D1Database,
-  env: ApiRecord,
-  siteId: string,
-  assetId: string,
-): Promise<string> {
-  const asset = await getMediaAsset(db, assetId, siteId);
-  if (!asset) throw new Error("Media asset not found.");
-  if (asset.public_url) return asset.public_url;
-  if (asset.cloudflare_image_id) {
-    return buildImageUrl(env, asset.cloudflare_image_id, "public");
-  }
-  throw new Error("Media asset does not have a public URL.");
-}
-
 function isValidHttpUrl(value: string): boolean {
   try {
     const parsed = new URL(value);
@@ -191,149 +159,6 @@ function asValidRecurringSlots(value: unknown): RecurringSlots | null {
 function isSiteContentPage(page: string): page is keyof typeof contentRegistry {
   return Object.prototype.hasOwnProperty.call(contentRegistry, page);
 }
-
-function isHeroField(
-  field: string,
-): field is "hero.title" | "hero.subtitle" | "hero.image" | "hero.video" {
-  return HERO_FIELDS.has(field);
-}
-
-function heroColumnForField(
-  field: "hero.title" | "hero.subtitle" | "hero.image" | "hero.video",
-) {
-  if (field === "hero.title") return "hero_title";
-  if (field === "hero.subtitle") return "hero_subtitle";
-  if (field === "hero.image") return "hero_image_asset_id";
-  return "hero_video_asset_id";
-}
-
-async function readHeroContentState(
-  db: D1Database,
-  orgId: string,
-  siteId: string,
-  page: string,
-  locationId?: string,
-) {
-  const liveRow = await getSiteContentField(
-    db,
-    orgId,
-    siteId,
-    locationId ?? null,
-    page,
-    "hero",
-  );
-
-  const base = liveRow ?? null;
-  return {
-    id: typeof base?.id === "string" ? base.id : undefined,
-    hero_title: typeof base?.hero_title === "string" ? base.hero_title : null,
-    hero_subtitle:
-      typeof base?.hero_subtitle === "string" ? base.hero_subtitle : null,
-    hero_image_asset_id:
-      typeof base?.hero_image_asset_id === "string"
-        ? base.hero_image_asset_id
-        : null,
-    hero_video_asset_id:
-      typeof base?.hero_video_asset_id === "string"
-        ? base.hero_video_asset_id
-        : null,
-  };
-}
-
-function isEmptyHeroState(state: {
-  hero_title: string | null;
-  hero_subtitle: string | null;
-  hero_image_asset_id: string | null;
-  hero_video_asset_id: string | null;
-}) {
-  return (
-    !state.hero_title &&
-    !state.hero_subtitle &&
-    !state.hero_image_asset_id &&
-    !state.hero_video_asset_id
-  );
-}
-
-function getComponentFromField(field: string): string | null {
-  // Direct mapping for specific fields
-  const fieldToComponentMap: Record<string, string> = {
-    hero: "SayaHomeHero",
-    "hero.title": "SayaHomeHero",
-    "hero.subtitle": "SayaHomeHero",
-    "hero.eyebrow": "SayaHomeHero",
-    "hero.image": "SayaHomeHero",
-    "hero.video": "SayaHomeHero",
-    "story.headline": "SayaBrandStory",
-    "story.body": "SayaBrandStory",
-    "story.image": "SayaBrandStory",
-    "journey.title": "SayaBrandStory",
-    "journey.body": "SayaBrandStory",
-    "experience.body": "SayaBrandStory",
-    "experience.title": "SayaBrandStory",
-    "cta.title": "SayaCTA",
-    "cta.description": "SayaCTA",
-    "reviews.heading": "SayaReviews",
-    "posts.eyebrow": "SayaPosts",
-    "posts.heading": "SayaPosts",
-    "locations.heading": "SayaLocationsGrid",
-    "qa.heading": "SayaQA",
-    "featured.heading": "SayaFeaturedContent",
-  };
-
-  if (fieldToComponentMap[field]) {
-    return fieldToComponentMap[field];
-  }
-
-  // Pattern matching
-  if (field.startsWith("hero.")) return "SayaHomeHero";
-  if (field.startsWith("story.")) return "SayaBrandStory";
-  if (field.startsWith("journey.")) return "SayaBrandStory";
-  if (field.startsWith("experience.")) return "SayaBrandStory";
-  if (field.startsWith("cta.")) return "SayaCTA";
-  if (field.startsWith("reviews.")) return "SayaReviews";
-  if (field.startsWith("posts.")) return "SayaPosts";
-  if (field.startsWith("locations.")) return "SayaLocationsGrid";
-  if (field.startsWith("qa.")) return "SayaQA";
-  if (field.startsWith("featured.")) return "SayaFeaturedContent";
-
-  return null;
-}
-
-async function upsertHeroContentState(
-  db: D1Database,
-  orgId: string,
-  siteId: string,
-  page: string,
-  locationId: string | undefined,
-  state: {
-    hero_title: string | null;
-    hero_subtitle: string | null;
-    hero_image_asset_id: string | null;
-    hero_video_asset_id: string | null;
-  },
-) {
-  const id = `content::${orgId}::${siteId}::${locationId ?? "site"}::${page}::hero`;
-  const payload = {
-    id,
-    organization_id: orgId,
-    site_id: siteId,
-    location_id: locationId,
-    page,
-    field: "hero",
-    value: undefined,
-    type: "text",
-    source: "manual",
-    content: undefined,
-    hero_title: state.hero_title ?? undefined,
-    hero_subtitle: state.hero_subtitle ?? undefined,
-    hero_image_asset_id: state.hero_image_asset_id ?? undefined,
-    hero_video_asset_id: state.hero_video_asset_id ?? undefined,
-    component: "SayaHomeHero",
-  };
-
-  await upsertSiteContent(db, payload);
-}
-
 
 function getToolNumber(
   record: Record<string, unknown>,
@@ -1000,36 +825,28 @@ async function executeTool(
       });
     }
 
+    // Regression fix: update_page_content/delete_content_field used to
+    // maintain their own inline hero-field read-merge-write logic
+    // (readHeroContentState/heroColumnForField/isEmptyHeroState), duplicating
+    // what mcp-workflows.ts's updatePageContent/deleteContentField already
+    // do correctly via a CASE-based partial upsert — that shared function
+    // accepts the exact same "hero.title"/"hero.subtitle"/"hero.image"/
+    // "hero.video" field keys via HERO_FIELD_ALIASES. deleteContentField's
+    // hero handling didn't exist at all before this branch (see the fix in
+    // mcp-workflows.ts) — MCP's delete_content_field silently deleted
+    // nothing for hero sub-fields, since they live as columns on a single
+    // row keyed by field="hero", not their own row.
     case "get_page_fields": {
       const page = getToolString(input, "page", 40);
       if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
-
       const targetLocationId =
         typeof input.location_id === "string" && input.location_id.trim()
           ? input.location_id.trim()
           : (ctx.locationId ?? undefined);
-
-      const live = await getPageContent(
-        db,
-        orgId,
-        siteId,
+      return runMcpExecutorToolForChowbot(executorSite, "get_page_fields", {
         page,
-        targetLocationId,
-      );
-
-      return {
-        page,
-        location_id: targetLocationId ?? null,
-        fields: (contentRegistry[page]?.fields
-          ? Object.keys(contentRegistry[page].fields)
-          : []
-        ).map((field) => ({
-          field,
-          label: getFieldDef(page, field)?.label ?? field,
-          type: getFieldDef(page, field)?.type ?? "text",
-        })),
-        live,
-      };
+        location_id: targetLocationId,
+      });
     }
 
     case "update_page_content": {
@@ -1038,63 +855,15 @@ async function executeTool(
       const value = getToolString(input, "value", 20000);
       if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
       if (!field) return { error: "Field is required." };
-
-      const fieldDef = getFieldDef(page, field);
-      if (!fieldDef) return { error: `Unknown field: ${field}` };
-
       const targetLocationId =
         typeof input.location_id === "string" && input.location_id.trim()
           ? input.location_id.trim()
           : (ctx.locationId ?? undefined);
-
-      if (isHeroField(field)) {
-        const heroState = await readHeroContentState(
-          db,
-          orgId,
-          siteId,
-          page,
-          targetLocationId,
-        );
-        const nextState = { ...heroState };
-        nextState[heroColumnForField(field)] = value ?? null;
-        await upsertHeroContentState(
-          db,
-          orgId,
-          siteId,
-          page,
-          targetLocationId,
-          nextState,
-        );
-      } else {
-        const id = `${orgId}::${siteId}::${targetLocationId ?? "site"}::${page}::${field}`;
-        const component = getComponentFromField(field);
-
-        await upsertSiteContent(db, {
-          id,
-          organization_id: orgId,
-          site_id: siteId,
-          location_id: targetLocationId,
-          page,
-          field,
-          value: value ?? undefined,
-          type: fieldDef.type,
-          source: "manual",
-          content: value ?? undefined,
-          hero_title: undefined,
-          hero_subtitle: undefined,
-          hero_image_asset_id: undefined,
-          hero_video_asset_id: undefined,
-          component,
-        });
-      }
-
-      return {
+      return runMcpExecutorToolForChowbot(executorSite, "update_page_content", {
         page,
-        field,
-        value,
-        location_id: targetLocationId ?? null,
-        saved: true,
-      };
+        changes: { [field]: value ?? "" },
+        location_id: targetLocationId,
+      });
     }
 
     case "delete_content_field": {
@@ -1102,58 +871,15 @@ async function executeTool(
       const field = getToolString(input, "field", 80);
       if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
       if (!field) return { error: "Field is required." };
-
       const targetLocationId =
         typeof input.location_id === "string" && input.location_id.trim()
           ? input.location_id.trim()
           : (ctx.locationId ?? undefined);
-
-      if (isHeroField(field)) {
-        const heroState = await readHeroContentState(
-          db,
-          orgId,
-          siteId,
-          page,
-          targetLocationId,
-        );
-        const nextState = { ...heroState };
-        nextState[heroColumnForField(field)] = null;
-        if (isEmptyHeroState(nextState)) {
-          await deleteSiteContentField(
-            db,
-            orgId,
-            siteId,
-            page,
-            "hero",
-            targetLocationId,
-          );
-        } else {
-          await upsertHeroContentState(
-            db,
-            orgId,
-            siteId,
-            page,
-            targetLocationId,
-            nextState,
-          );
-        }
-      } else {
-        await deleteSiteContentField(
-          db,
-          orgId,
-          siteId,
-          page,
-          field,
-          targetLocationId,
-        );
-      }
-
-      return {
+      return runMcpExecutorToolForChowbot(executorSite, "delete_content_field", {
         page,
         field,
-        location_id: targetLocationId ?? null,
-        deleted: true,
-      };
+        location_id: targetLocationId,
+      });
     }
 
     case "get_site_stats": {
@@ -1819,85 +1545,21 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, "update_media_asset", input);
     }
 
-    case "set_home_hero_image": {
-      const assetId = toSqlText(input.asset_id);
-      if (!assetId) return { error: "asset_id is required." };
-      const locationId = typeof input.location_id === "string" && input.location_id.trim()
-        ? input.location_id.trim() : undefined;
-      const result = await updateHomeHero(db, orgId, siteId, { image_asset_id: assetId, location_id: locationId });
-      return { updated: true, ...result };
-    }
-
-    case "set_home_hero_video": {
-      const assetId = toSqlText(input.asset_id);
-      if (!assetId) return { error: "asset_id is required." };
-      const locationId = typeof input.location_id === "string" && input.location_id.trim()
-        ? input.location_id.trim() : undefined;
-      const result = await updateHomeHero(db, orgId, siteId, { video_asset_id: assetId, location_id: locationId });
-      return { updated: true, ...result };
-    }
-
-    case "update_home_hero": {
-      const locationId = typeof input.location_id === "string" && input.location_id.trim()
-        ? input.location_id.trim() : undefined;
-      const result = await updateHomeHero(db, orgId, siteId, {
-        title: typeof input.title === "string" ? input.title : undefined,
-        subtitle: typeof input.subtitle === "string" ? input.subtitle : undefined,
-        image_asset_id: typeof input.image_asset_id === "string" ? input.image_asset_id : undefined,
-        video_asset_id: typeof input.video_asset_id === "string" ? input.video_asset_id : undefined,
-        location_id: locationId,
-      });
-      return { updated: true, ...result };
-    }
-
-    case "set_about_story_image": {
-      const assetId = toSqlText(input.asset_id);
-      if (!assetId) return { error: "asset_id is required." };
-      const id = `${orgId}::${siteId}::site::about::story.image`;
-      const publicUrl = await resolveMediaAssetPublicUrl(db, env, siteId, assetId);
-      await upsertSiteContent(db, {
-        id,
-        organization_id: orgId,
-        site_id: siteId,
-        location_id: undefined,
-        page: "about",
-        field: "story.image",
-        value: publicUrl,
-        type: "image",
-        source: "manual",
-        content: publicUrl,
-        hero_title: undefined,
-        hero_subtitle: undefined,
-        hero_image_asset_id: undefined,
-        hero_video_asset_id: undefined,
-        component: "SayaBrandStory",
-      });
-      return { updated: true, asset_id: assetId, public_url: publicUrl };
-    }
-
+    // Regression fix: set_about_story_image/set_home_story_image stored a
+    // pre-resolved CDN public_url string directly in site_content.value.
+    // Every other media-typed content field (content-registry's
+    // 'story.image' is type: 'media') stores the raw asset_id and lets
+    // resolveMediaFieldUrls resolve it to a URL at read time — storing a
+    // frozen URL instead loses the asset_id linkage (can't tell which
+    // media_asset this came from) and won't reflect a future CDN URL
+    // rotation for that asset. MCP's set_about_story_image/
+    // set_home_story_image already used the correct asset_id-storing path.
+    case "set_home_hero_image":
+    case "set_home_hero_video":
+    case "update_home_hero":
+    case "set_about_story_image":
     case "set_home_story_image": {
-      const assetId = toSqlText(input.asset_id);
-      if (!assetId) return { error: "asset_id is required." };
-      const id = `${orgId}::${siteId}::site::home::story.image`;
-      const publicUrl = await resolveMediaAssetPublicUrl(db, env, siteId, assetId);
-      await upsertSiteContent(db, {
-        id,
-        organization_id: orgId,
-        site_id: siteId,
-        location_id: undefined,
-        page: "home",
-        field: "story.image",
-        value: publicUrl,
-        type: "image",
-        source: "manual",
-        content: publicUrl,
-        hero_title: undefined,
-        hero_subtitle: undefined,
-        hero_image_asset_id: undefined,
-        hero_video_asset_id: undefined,
-        component: "SayaBrandStory",
-      });
-      return { updated: true, asset_id: assetId, public_url: publicUrl };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "get_notification_settings":

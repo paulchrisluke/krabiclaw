@@ -510,4 +510,58 @@ test.describe("mcp tools", () => {
     expect(qaDeleted.result.error).toBeUndefined();
     expect(qaDeleted.result.deleted).toBe(true);
   });
+
+  test("chowbot content/hero tools delegate to the shared executor without clobbering unrelated hero fields", async ({
+    request,
+    baseURL,
+  }) => {
+    test.setTimeout(60_000);
+
+    await loginAs(request, baseURL!);
+    const siteId = await ensureSite(request, baseURL!, null);
+
+    // Regression coverage for two bugs fixed together: ChowBot used to
+    // maintain its own inline hero-field read-merge-write logic instead of
+    // calling the shared updatePageContent/deleteContentField, and
+    // deleteContentField itself never handled hero sub-fields at all (they
+    // live as columns on one row keyed by field="hero", not their own row)
+    // — a delete of just "hero.title" would previously silently do nothing
+    // on both surfaces.
+    const titleSet = await execChowbotTool(request, baseURL!, siteId, "update_page_content", {
+      page: "home",
+      field: "hero.title",
+      value: "E2E Hero Title",
+    });
+    expect(titleSet.result.error).toBeUndefined();
+
+    const subtitleSet = await execChowbotTool(request, baseURL!, siteId, "update_page_content", {
+      page: "home",
+      field: "hero.subtitle",
+      value: "E2E Hero Subtitle",
+    });
+    expect(subtitleSet.result.error).toBeUndefined();
+
+    const afterBothSet = await execChowbotTool(request, baseURL!, siteId, "get_page_fields", { page: "home" });
+    const heroRowAfterSet = (afterBothSet.result.fields as Array<{ field: string; hero_title?: string; hero_subtitle?: string }>)
+      .find((f) => f.field === "hero");
+    expect(heroRowAfterSet?.hero_title).toBe("E2E Hero Title");
+    expect(heroRowAfterSet?.hero_subtitle).toBe("E2E Hero Subtitle");
+
+    const titleDeleted = await execChowbotTool(
+      request,
+      baseURL!,
+      siteId,
+      "delete_content_field",
+      { page: "home", field: "hero.title" },
+      [{ role: "user", content: "yes confirm" }],
+    );
+    expect(titleDeleted.result.error).toBeUndefined();
+    expect(titleDeleted.result.deleted).toBe(true);
+
+    const afterTitleDeleted = await execChowbotTool(request, baseURL!, siteId, "get_page_fields", { page: "home" });
+    const heroRowAfterDelete = (afterTitleDeleted.result.fields as Array<{ field: string; hero_title?: string | null; hero_subtitle?: string }>)
+      .find((f) => f.field === "hero");
+    expect(heroRowAfterDelete?.hero_title).toBeFalsy();
+    expect(heroRowAfterDelete?.hero_subtitle).toBe("E2E Hero Subtitle");
+  });
 });
