@@ -46,11 +46,11 @@
             </div>
             <ClientOnly>
               <div
-                v-if="getTodayHoursLabel(loc.opening_hours, resCopy.closedLabel)"
+                v-if="getTodayHoursLabel(loc.opening_hours, resCopy.closedLabel, loc.timezone)"
                 class="absolute bottom-4 left-4 inline-flex items-center gap-2 rounded-full bg-default/95 px-4 py-2 text-xs font-medium uppercase tracking-wide text-default"
               >
-                <span class="size-1.5 rounded-full" :class="isOpenNow(loc.opening_hours) ? 'bg-green-500' : 'bg-zinc-400'" />
-                {{ isOpenNow(loc.opening_hours) ? resCopy.openNowLabel : resCopy.closedLabel }} · {{ getTodayHoursLabel(loc.opening_hours, resCopy.closedLabel) }}
+                <span class="size-1.5 rounded-full" :class="isOpenNow(loc.opening_hours, loc.timezone) ? 'bg-green-500' : 'bg-zinc-400'" />
+                {{ isOpenNow(loc.opening_hours, loc.timezone) ? resCopy.openNowLabel : resCopy.closedLabel }} · {{ getTodayHoursLabel(loc.opening_hours, resCopy.closedLabel, loc.timezone) }}
               </div>
             </ClientOnly>
           </div>

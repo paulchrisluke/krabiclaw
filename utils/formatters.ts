@@ -81,6 +81,31 @@ function todayInTimezone(timezone?: string | null): GoogleDate {
   }
 }
 
+// Resolves the current weekday name and minutes-since-midnight in the
+// location's own timezone, since the server (Cloudflare Workers) runs in UTC
+// and comparing UTC wall-clock time against a location's local business hours
+// produces wrong open/closed results (and can roll the weekday over early/late).
+export function nowInTimezone(timezone?: string | null): { weekday: string; minutes: number } {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone || undefined,
+      weekday: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(new Date())
+    const weekday = parts.find(p => p.type === 'weekday')?.value?.toUpperCase()
+    const hour = Number(parts.find(p => p.type === 'hour')?.value)
+    const minute = Number(parts.find(p => p.type === 'minute')?.value)
+    if (!weekday || Number.isNaN(hour) || Number.isNaN(minute)) throw new Error('invalid parts')
+    return { weekday, minutes: hour * 60 + minute }
+  } catch {
+    const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+    const now = new Date()
+    return { weekday: days[now.getDay()] as string, minutes: now.getHours() * 60 + now.getMinutes() }
+  }
+}
+
 export const formatGoogleDate = (date: GoogleDate): string => {
   const d = new Date(Date.UTC(date.year, date.month - 1, date.day))
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
@@ -166,9 +191,8 @@ export const formatGoogleHours = (regularHours: GoogleRegularHours | GoogleRegul
   })
 }
 
-export const getIsOpenNow = (regularHours: GoogleRegularHours | GoogleRegularPeriod[] | null | undefined): boolean | undefined => {
-  const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
-  const today = days[new Date().getDay()]
+export const getIsOpenNow = (regularHours: GoogleRegularHours | GoogleRegularPeriod[] | null | undefined, timezone?: string | null): boolean | undefined => {
+  const { weekday: today, minutes: nowMinsInTz } = nowInTimezone(timezone)
 
   const periods: GoogleRegularPeriod[] = Array.isArray(regularHours)
     ? (regularHours as GoogleRegularPeriod[])
@@ -281,7 +305,7 @@ export const getIsOpenNow = (regularHours: GoogleRegularHours | GoogleRegularPer
       const openMins = toMins(openParsed.hour, openParsed.minute, openAmpm)
       const closeMins = toMins(closeParsed.hour, closeParsed.minute, closeAmpm)
 
-      const nowMins = new Date().getHours() * 60 + new Date().getMinutes()
+      const nowMins = nowMinsInTz
       let rangeIsOpen = false
       if (closeMins < openMins) rangeIsOpen = nowMins >= openMins || nowMins < closeMins
       else rangeIsOpen = nowMins >= openMins && nowMins < closeMins
@@ -302,8 +326,7 @@ export const getIsOpenNow = (regularHours: GoogleRegularHours | GoogleRegularPer
   const close = parseTimeStr(period.closeTime)
   if (!open || !close) return undefined
 
-  const now = new Date()
-  const nowMins = now.getHours() * 60 + now.getMinutes()
+  const nowMins = nowMinsInTz
   const openMins = (open.hours ?? 0) * 60 + (open.minutes ?? 0)
   const closeMins = (close.hours ?? 0) * 60 + (close.minutes ?? 0)
   if (closeMins < openMins) return nowMins >= openMins || nowMins < closeMins

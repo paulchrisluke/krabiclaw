@@ -260,7 +260,7 @@ export async function syncPlaceToLocation(
     place.lat,
     place.lng,
     place.mapsUrl,
-    place.openingHours ? JSON.stringify(place.openingHours) : null,
+    place.openingHours ? JSON.stringify({ weekdayDescriptions: place.openingHours }) : null,
     place.rating,
     place.ratingCount,
     now,

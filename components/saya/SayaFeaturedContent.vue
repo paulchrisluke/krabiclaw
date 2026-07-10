@@ -6,16 +6,16 @@
         <h2 class="saya-display-md text-default">{{ sectionHeading }}</h2>
       </div>
       <NuxtLink
-        v-if="items.length"
+        v-if="visibleItems.length"
         :to="linkTarget"
         class="border-b border-default pb-1 text-xs uppercase tracking-widest text-default no-underline transition hover:opacity-60"
       >
         View all →
       </NuxtLink>
     </div>
-    <div v-if="items.length" class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+    <div v-if="visibleItems.length" class="grid grid-cols-2 gap-4 sm:grid-cols-4">
       <NuxtLink
-        v-for="(item, i) in items"
+        v-for="(item, i) in visibleItems"
         :key="i"
         :to="item.href || linkTarget"
         class="group relative block overflow-hidden bg-elevated no-underline text-default transition hover:opacity-90"
@@ -101,6 +101,13 @@ const props = withDefaults(defineProps<Props>(), {
 const { site } = useTenantSite()
 
 const items = computed(() => props.data?.items || [])
+// A location-wide closure marks every item unavailable at once — showing a
+// row of all-badged cards reads as broken, so hide the row entirely instead.
+const visibleItems = computed(() => {
+  const list = items.value
+  if (list.length > 0 && list.every(item => item.unavailable)) return []
+  return list
+})
 const hasMenu = computed(() => props.data?.hasMenu || false)
 const linkTarget = computed(() => hasMenu.value ? '/menu' : '/experiences')
 
