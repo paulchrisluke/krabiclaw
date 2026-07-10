@@ -30,10 +30,20 @@ function recordArray(value: unknown): ApiRecord[] {
   return Array.isArray(value) ? value.filter((item): item is ApiRecord => typeof item === 'object' && item !== null) : []
 }
 
+const BLAWBY_THEME_COLOR_KEYS = new Set(['bg', 'surface', 'primary', 'primaryDark', 'accent', 'accentStrong', 'border', 'ink'])
+
+function looksLikeExecutableCalculatorSyntax(value: string) {
+  return (
+    /=>|\bfunction\b|\bnew Function\b|\bjavascript:/i.test(value) ||
+    /\breturn\b|[{};]/.test(value) ||
+    /^\s*[A-Za-z_$][\w$]*\s*\([^)]*\)\s*$/.test(value)
+  )
+}
+
 function assertNoArbitraryCalculatorLogic(value: unknown, path = 'calculator') {
   if (value == null) return
   if (typeof value === 'string') {
-    if (/\b(function|eval|new Function|script|formula|expression|javascript:)\b|=>/i.test(value)) {
+    if (looksLikeExecutableCalculatorSyntax(value)) {
       validationError(`${path} contains arbitrary calculator logic. Use structured ranges, fees, and source metadata.`)
     }
     return
@@ -49,6 +59,48 @@ function assertNoArbitraryCalculatorLogic(value: unknown, path = 'calculator') {
     }
     assertNoArbitraryCalculatorLogic(nested, `${path}.${key}`)
   }
+}
+
+function validateThemeTokens(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    validationError('themeTokens must be an object.')
+  }
+
+  const input = value as ApiRecord
+  const output: ApiRecord = {}
+
+  for (const [key, rawValue] of Object.entries(input)) {
+    if (key === 'fonts') {
+      if (!Array.isArray(rawValue)) {
+        validationError('themeTokens.fonts must be an array of HTTPS stylesheet URLs.')
+      }
+      const fonts = rawValue.map((font, index) => {
+        const url = safeStoredUrl(font, 500)
+        if (!url || !/^https:\/\//i.test(url)) {
+          validationError(`themeTokens.fonts[${index}] must be a valid HTTPS URL.`)
+        }
+        return url
+      })
+      output.fonts = Array.from(new Set(fonts))
+      continue
+    }
+
+    if (!BLAWBY_THEME_COLOR_KEYS.has(key)) {
+      validationError(`themeTokens.${key} is not supported.`)
+    }
+
+    if (Array.isArray(rawValue) || typeof rawValue === 'object' || rawValue == null) {
+      validationError(`themeTokens.${key} must be a hex color string.`)
+    }
+
+    const token = cleanString(rawValue, 40)
+    if (!token || !/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(token)) {
+      validationError(`themeTokens.${key} must be a valid hex color.`)
+    }
+    output[key] = token
+  }
+
+  return output
 }
 
 export function validateProfessionalServicePayload(body: ApiRecord) {
@@ -250,6 +302,11 @@ export async function upsertProfessionalServiceContent(
 
   if (typeof data.consultation === 'object' && data.consultation) {
     const item = data.consultation as ApiRecord
+    const mode = item.mode === 'native_disabled' ? 'native_disabled' : 'external_url'
+    const externalUrl = mode === 'native_disabled' ? null : safeStoredUrl(item.external_url, 500)
+    if (mode === 'external_url' && !externalUrl) {
+      validationError('consultation.external_url is required when mode is external_url.')
+    }
     statements.push({
       query: `
       INSERT INTO site_consultation_settings
@@ -266,9 +323,9 @@ export async function upsertProfessionalServiceContent(
         cleanString(item.id, 80) || `consultation_${siteId}`,
         organizationId,
         siteId,
-        item.mode === 'native_disabled' ? 'native_disabled' : 'external_url',
+        mode,
         cleanString(item.cta_label, 120) || 'Book a consultation',
-        safeStoredUrl(item.external_url, 500),
+        externalUrl,
         safeStoredUrl(item.schedule_path, 300) || '/schedule',
         safeStoredUrl(item.confirmation_path, 300) || '/contact/confirmed',
         item.tracking_enabled === false ? 0 : 1,
@@ -280,6 +337,7 @@ export async function upsertProfessionalServiceContent(
   }
 
   if (typeof data.themeTokens === 'object' && data.themeTokens) {
+    const themeTokens = validateThemeTokens(data.themeTokens)
     statements.push({
       query: `
       INSERT INTO site_theme_tokens
@@ -289,7 +347,7 @@ export async function upsertProfessionalServiceContent(
         tokens_json = excluded.tokens_json, status = 'active', updated_at = CURRENT_TIMESTAMP,
         updated_by = excluded.updated_by
     `,
-      params: [`theme_${siteId}_blawby`, organizationId, siteId, json(data.themeTokens), updatedBy],
+      params: [`theme_${siteId}_blawby`, organizationId, siteId, json(themeTokens), updatedBy],
     })
     written.themeTokens = 1
   }

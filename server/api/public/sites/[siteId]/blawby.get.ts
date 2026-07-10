@@ -17,7 +17,8 @@ export default defineEventHandler(async (event) => {
      LIMIT 1
   `, [siteId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
-  if (site.vertical !== 'service' && site.theme_id !== 'blawby-theme-v1') {
+  const supportsBlawbyVertical = site.vertical === 'service' || site.vertical === 'professional_service'
+  if (!supportsBlawbyVertical || site.theme_id !== 'blawby-theme-v1') {
     return jsonResponse({ error: 'Blawby is not enabled for this site' }, { status: 404 })
   }
 
