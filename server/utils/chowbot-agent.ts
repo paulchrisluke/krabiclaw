@@ -4,7 +4,7 @@ import {
 } from "~/server/utils/ai-gateway";
 import { hasCredits, chargeCredits } from "~/server/utils/ai-credits";
 import { runMcpExecutorToolForChowbot } from "~/server/utils/mcp-executor/chowbot-adapter";
-import type { McpToolRole } from "~/server/utils/mcp-auth";
+import { normalizeRole } from "~/server/utils/mcp-auth";
 import { setConfig } from "~/server/utils/site-config";
 import { upsertSiteLocale } from "~/server/utils/site-locales";
 import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
@@ -180,16 +180,25 @@ async function executeTool(
   },
 ): Promise<ApiValue> {
   const { db, env, orgId, siteId, userId } = ctx;
+  // normalizeRole rejects anything that isn't exactly 'owner'/'admin'/'editor'
+  // (including undefined). roleSatisfies compares via ROLE_RANK[actual], and
+  // ROLE_RANK[anything unrecognized] is undefined — `undefined < N` is always
+  // false in JS, so an un-normalized role would fail OPEN (satisfy every
+  // minimumRole check) instead of being rejected. Both callers (dashboard
+  // agent.post.ts, WhatsApp webhook.post.ts) resolve userRole from a real
+  // membership row before invoking runChowBot, so this "can't happen" in
+  // practice — but fail closed rather than trust that invariant silently.
+  const normalizedRole = normalizeRole(ctx.userRole);
+  if (!normalizedRole) {
+    return { error: "Could not verify your permissions for this site." };
+  }
   const executorSite = {
     db,
     env: env as CloudflareEnv,
     userId,
     organizationId: orgId,
     siteId,
-    // Both callers (dashboard agent.post.ts, WhatsApp webhook.post.ts) resolve
-    // userRole from a real membership row before invoking runChowBot, so this
-    // is a least-privilege floor, not an expected fallback.
-    role: (ctx.userRole ?? "editor") as McpToolRole,
+    role: normalizedRole,
   };
 
   try {

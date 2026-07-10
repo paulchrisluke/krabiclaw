@@ -26,6 +26,17 @@ export interface ChowbotExecutorSite {
   role: McpToolRole
 }
 
+// privateMeta is, on the MCP surface, sent as JSON-RPC `_meta` — a channel
+// conventionally meant for the connecting host app (widget hydration etc.),
+// separate from the model-visible content/structuredContent. ChowBot has no
+// such separate host channel — everything returned here goes straight into
+// the model's tool-result context — so spreading privateMeta in is only
+// safe if its contents are themselves safe for the model to see. Verified:
+// every renderStructuredResponse(...) call across mcp-executor/*.ts as of
+// this migration passes only the plain domain entity as privateMeta
+// (menu/item/post/location/experience/settings/policy/manifest) — no
+// tokens, no host-only widget wiring, no internal-only fields. Re-check
+// this if a future domain's privateMeta ever carries something host-only.
 function unwrapMcpExecutorResult(result: unknown): ApiValue {
   if (
     result && typeof result === 'object' &&
@@ -62,11 +73,11 @@ export async function runMcpExecutorToolForChowbot(
     return { error: `Unhandled tool: ${toolName}` }
   }
 
-  if (!roleSatisfies(site.role, tool.minimumRole)) {
-    return { error: `Your role does not have permission to use ${toolName}.` }
-  }
-
   try {
+    if (!roleSatisfies(site.role, tool.minimumRole)) {
+      return { error: `Your role does not have permission to use ${toolName}.` }
+    }
+
     if (
       tool.requiredEntitlement &&
       !(await hasSiteEntitlement(site.db, site.siteId, tool.requiredEntitlement))

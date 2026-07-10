@@ -374,7 +374,26 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
           created.push({ id: createdItem.id, name: createdItem.name, section: createdItem.section, price_amount: createdItem.price_amount });
         } catch (error) {
           if (!isUniqueConstraintError(error)) throw error;
-          skipped.push({ name, reason: "unique_conflict" });
+          // The (menu_id, slug) unique constraint fired, meaning an item
+          // already exists that this create attempt collided with — most
+          // likely one findMenuItemMatch's in-memory snapshot didn't catch
+          // (e.g. a slug collision on a name variant). Re-fetch fresh and
+          // re-match so that item is marked touched — otherwise, if the
+          // caller also passed set_missing_unavailable, this pre-existing
+          // item would be wrongly disabled below for never having been
+          // "touched" by this sync, even though it's exactly what the
+          // input was trying to reference.
+          const freshMenu = await getMenuWithItems(site.db, site.organizationId, site.siteId, menuId);
+          const conflictingItem = freshMenu ? findMenuItemMatch(itemRecord, freshMenu.items) : null;
+          if (conflictingItem) {
+            touchedItemIds.add(conflictingItem.id);
+            const index = workingItems.findIndex((wi) => wi.id === conflictingItem.id);
+            if (index >= 0) workingItems[index] = conflictingItem;
+            else workingItems.push(conflictingItem);
+            skipped.push({ name, reason: "unique_conflict", item_id: conflictingItem.id });
+          } else {
+            skipped.push({ name, reason: "unique_conflict" });
+          }
         }
       }
 
