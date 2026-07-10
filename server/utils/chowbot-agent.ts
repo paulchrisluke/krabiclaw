@@ -13,9 +13,7 @@ import { CHOWBOT_MODEL } from "~/server/utils/ai-models";
 import { updateSiteSettingsFields } from "~/server/utils/site-settings";
 import {
   getExperienceById,
-  updateExperience,
   WEEKDAY_NAMES,
-  type RecurringSlots,
 } from "~/server/utils/experiences";
 import { contentRegistry } from "~/config/content-registry";
 import {
@@ -118,20 +116,6 @@ function getToolString(
 ): string | undefined {
   const value = record[key];
   return typeof value === "string" ? value.slice(0, maxLength) : undefined;
-}
-
-const TIME_SLOT_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-function asValidRecurringSlots(value: unknown): RecurringSlots | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
-  for (const key of Object.keys(record)) {
-    if (!WEEKDAY_NAMES.includes(key as (typeof WEEKDAY_NAMES)[number])) return null;
-    const slots = record[key];
-    if (!Array.isArray(slots)) return null;
-    if (!slots.every((s) => typeof s === "string" && TIME_SLOT_PATTERN.test(s))) return null;
-  }
-  return record as RecurringSlots;
 }
 
 function isSiteContentPage(page: string): page is keyof typeof contentRegistry {
@@ -789,298 +773,86 @@ async function executeTool(
 
     // ── Experiences ────────────────────────────────────────────────────────
     case "list_experiences": {
-      const { listExperiences } = await import("~/server/utils/experiences");
-      const experiences = await listExperiences(db, siteId);
-      return { experiences };
+      return runMcpExecutorToolForChowbot(executorSite, "list_experiences", input);
     }
 
     case "create_experience": {
-      const { createExperience } = await import("~/server/utils/experiences");
-      const title = toSqlText(input.title);
-      if (!title) return { error: "title is required" };
-      const explicitLocationId = toSqlText(input.location_id);
-      let locationId = explicitLocationId;
-      if (explicitLocationId) {
-        const location = await queryFirst(
-          db,
-          `
-            SELECT 1 FROM business_locations
-            WHERE id = ? AND organization_id = ? AND site_id = ?
-            LIMIT 1
-          `,
-          [explicitLocationId, orgId, siteId],
-        );
-        if (!location) return { error: "Location not found or access denied" };
-      } else {
+      // ChowBot-only convenience: MCP's create_experience only falls back
+      // from explicit location_id to the site's primary_location_id. ChowBot
+      // additionally tries the dashboard's current-page location first, and
+      // (if the site has no primary set) the first location by is_primary/id
+      // order, before giving up — preserved here rather than narrowed to
+      // MCP's simpler fallback.
+      if (!toSqlText(input.location_id)) {
         const verifiedCtxLocationId = ctx.locationId
           ? (await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?`, [ctx.locationId, orgId, siteId]))?.id
           : null;
-        locationId = verifiedCtxLocationId
+        const fallbackLocationId = verifiedCtxLocationId
           ?? (await queryFirst<{ primary_location_id: string | null }>(db, `SELECT primary_location_id FROM sites WHERE id = ? AND organization_id = ?`, [siteId, orgId]))?.primary_location_id
           ?? (await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE site_id = ? AND organization_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1`, [siteId, orgId]))?.id
           ?? null;
+        if (fallbackLocationId) input.location_id = fallbackLocationId;
       }
-      if (!locationId) return { error: "location_id is required" };
-      let slots = Array.isArray(input.time_slots)
-        ? input.time_slots.map(String)
-        : null;
-      let recurringSlots = asValidRecurringSlots(input.recurring_slots);
-      const slotStart = typeof input.slot_start === 'string' ? input.slot_start : null;
-      const slotEnd = typeof input.slot_end === 'string' ? input.slot_end : null;
-      const slotIntervalMinutes = typeof input.slot_interval_minutes === 'number' ? input.slot_interval_minutes : null;
-      const slotWeekday = typeof input.slot_weekday === 'string' && ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].includes(input.slot_weekday)
-        ? input.slot_weekday
-        : null;
-
-      // Auto-generate slots from convenience parameters if provided
-      if (slotStart && slotEnd && slotIntervalMinutes) {
-        const { generateSlots } = await import("~/server/utils/experiences");
-        const generatedSlots = generateSlots(slotStart, slotEnd, slotIntervalMinutes);
-        if (slotWeekday) {
-          // Assign to recurring_slots for the specific weekday
-          recurringSlots = recurringSlots || {};
-          recurringSlots[slotWeekday as keyof RecurringSlots] = generatedSlots;
-        } else {
-          // Assign to flat time_slots
-          slots = generatedSlots;
-        }
-      }
-      const images = Array.isArray(input.images)
-        ? input.images.map((img: { url?: ApiValue; kind?: ApiValue }) => ({
-            url: toSqlText(img.url) ?? "",
-            kind: img.kind === "video" ? "video" : "image",
-          }))
-        : undefined;
-      const experience = await createExperience(
-        db,
-        orgId,
-        siteId,
-        {
-          title,
-          tagline: toSqlText(input.tagline) ?? null,
-          body: toSqlText(input.body) ?? null,
-          price: toSqlText(input.price) ?? null,
-          price_amount: typeof input.price_amount === "number" ? input.price_amount : null,
-          compare_at_price_amount: typeof input.compare_at_price_amount === "number" ? input.compare_at_price_amount : null,
-          sale_starts_at: toSqlText(input.sale_starts_at) ?? null,
-          sale_ends_at: toSqlText(input.sale_ends_at) ?? null,
-          duration_minutes:
-            typeof input.duration_minutes === "number"
-              ? Math.round(input.duration_minutes)
-              : null,
-          max_capacity:
-            typeof input.max_capacity === "number"
-              ? Math.round(input.max_capacity)
-              : null,
-          time_slots: slots,
-          recurring_slots: recurringSlots,
-          available_note: toSqlText(input.available_note) ?? null,
-          image_asset_id: toSqlText(input.image_asset_id) ?? null,
-          video_asset_id: toSqlText(input.video_asset_id) ?? null,
-          images,
-          location_id: locationId,
-          status: (["active", "inactive", "sold_out"].includes(
-            String(input.status ?? ""),
-          )
-            ? String(input.status)
-            : "active") as "active" | "inactive" | "sold_out",
-          sort_order:
-            typeof input.sort_order === "number"
-              ? Math.round(input.sort_order)
-              : 0,
-          featured:
-            typeof input.featured === "boolean" ? input.featured : false,
-          featured_sort_order:
-            typeof input.featured_sort_order === "number"
-              ? Math.round(input.featured_sort_order)
-              : 0,
-          seo_title: toSqlText(input.seo_title) ?? null,
-          seo_description: toSqlText(input.seo_description) ?? null,
-        },
-        userId,
-      );
-      return {
-        experience_id: experience.id,
-        slug: experience.slug,
-        title: experience.title,
-      };
+      return runMcpExecutorToolForChowbot(executorSite, "create_experience", input);
     }
 
     case "update_experience": {
-      const { updateExperience, getExperienceById } = await import("~/server/utils/experiences");
-      const id = toSqlText(input.experience_id);
-      if (!id) return { error: "experience_id is required" };
-      const updates: Record<string, ApiValue> = {};
-      if (input.title !== undefined) updates.title = toSqlText(input.title);
-      if (input.tagline !== undefined)
-        updates.tagline = toSqlText(input.tagline) ?? null;
-      if (input.body !== undefined)
-        updates.body = toSqlText(input.body) ?? null;
-      if (input.price !== undefined)
-        updates.price = toSqlText(input.price) ?? null;
-      if (input.price_amount !== undefined) {
-        if (input.price_amount !== null && typeof input.price_amount !== "number") {
-          return { error: "price_amount must be a number or null" };
-        }
-        updates.price_amount = typeof input.price_amount === "number" ? input.price_amount : null;
-      }
-      if (input.compare_at_price_amount !== undefined) {
-        if (input.compare_at_price_amount !== null && typeof input.compare_at_price_amount !== "number") {
-          return { error: "compare_at_price_amount must be a number or null" };
-        }
-        updates.compare_at_price_amount = typeof input.compare_at_price_amount === "number" ? input.compare_at_price_amount : null;
-      }
-      if (input.sale_starts_at !== undefined)
-        updates.sale_starts_at = toSqlText(input.sale_starts_at) ?? null;
-      if (input.sale_ends_at !== undefined)
-        updates.sale_ends_at = toSqlText(input.sale_ends_at) ?? null;
-      if (input.duration_minutes !== undefined)
-        updates.duration_minutes =
-          typeof input.duration_minutes === "number"
-            ? Math.round(input.duration_minutes)
-            : null;
-      if (input.max_capacity !== undefined)
-        updates.max_capacity =
-          typeof input.max_capacity === "number"
-            ? Math.round(input.max_capacity)
-            : null;
-      if (input.time_slots !== undefined)
-        updates.time_slots = Array.isArray(input.time_slots)
-          ? input.time_slots.map(String)
-          : null;
-      if (input.recurring_slots !== undefined)
-        updates.recurring_slots = asValidRecurringSlots(input.recurring_slots);
-
-      // Handle convenience slot generation parameters
-      const slotStart = typeof input.slot_start === 'string' ? input.slot_start : null;
-      const slotEnd = typeof input.slot_end === 'string' ? input.slot_end : null;
-      const slotIntervalMinutes = typeof input.slot_interval_minutes === 'number' ? input.slot_interval_minutes : null;
-      const slotWeekday = typeof input.slot_weekday === 'string' && ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].includes(input.slot_weekday)
+      // ChowBot-only convenience: when slot_weekday convenience args are
+      // used, MCP's expandSlotGeneratorArgs (mcp-executor/shared.ts) only
+      // merges against whatever recurring_slots was ALSO passed in the same
+      // call — if the caller reasonably sends just the one weekday's
+      // convenience params, every other weekday's schedule is silently
+      // dropped. Pre-merge against the experience's actual current state
+      // here instead, so the adapter call carries a fully-formed
+      // recurring_slots object and MCP's simpler merge is never exercised
+      // for this case.
+      const experienceId = toSqlText(input.experience_id);
+      const slotWeekday = typeof input.slot_weekday === "string" && WEEKDAY_NAMES.includes(input.slot_weekday as (typeof WEEKDAY_NAMES)[number])
         ? input.slot_weekday
         : null;
-
-      if (slotStart && slotEnd && slotIntervalMinutes) {
-        const { generateSlots } = await import("~/server/utils/experiences");
-        const generatedSlots = generateSlots(slotStart, slotEnd, slotIntervalMinutes);
-        if (slotWeekday) {
-          // Assign to recurring_slots for the specific weekday while preserving
-          // recurring slots for other weekdays.
-          const existingExperience = await getExperienceById(db, siteId, id);
-          const existingRecurring = existingExperience?.recurring_slots && typeof existingExperience.recurring_slots === 'object'
-            ? existingExperience.recurring_slots as Record<string, unknown>
-            : {};
-          const incomingRecurring = updates.recurring_slots && typeof updates.recurring_slots === 'object'
-            ? updates.recurring_slots as Record<string, unknown>
-            : (input.recurring_slots && typeof input.recurring_slots === 'object'
-                ? input.recurring_slots as Record<string, unknown>
-                : {});
-          updates.recurring_slots = {
-            ...existingRecurring,
-            ...incomingRecurring,
-            [slotWeekday]: generatedSlots,
-          };
-        } else {
-          // Assign to flat time_slots and clear recurring slots so the new
-          // flat schedule is the source of truth.
-          updates.time_slots = generatedSlots;
-          updates.recurring_slots = null;
-        }
-      }
-
-      // If flat time_slots are explicitly set without a weekday update, clear
-      // recurring slots to avoid schedule conflicts.
-      if (!slotWeekday && updates.time_slots !== undefined && input.recurring_slots === undefined) {
-        updates.recurring_slots = null;
-      }
-
-      if (input.available_note !== undefined)
-        updates.available_note = toSqlText(input.available_note) ?? null;
-      if (input.image_asset_id !== undefined)
-        updates.image_asset_id = toSqlText(input.image_asset_id) ?? null;
-      if (input.video_asset_id !== undefined)
-        updates.video_asset_id = toSqlText(input.video_asset_id) ?? null;
-      if (input.images !== undefined)
-        updates.images = Array.isArray(input.images)
-          ? input.images.map((img: { url?: ApiValue; kind?: ApiValue }) => ({
-              url: toSqlText(img.url) ?? "",
-              kind: img.kind === "video" ? "video" : "image",
-            }))
-          : null;
-      if (input.location_id !== undefined)
-        updates.location_id = toSqlText(input.location_id) ?? null;
       if (
-        input.status !== undefined &&
-        ["active", "inactive", "sold_out"].includes(String(input.status))
-      )
-        updates.status = String(input.status);
-      if (input.sort_order !== undefined)
-        updates.sort_order = Number(input.sort_order);
-      if (input.featured !== undefined) {
-        if (typeof input.featured !== "boolean")
-          return { error: "featured must be a boolean" };
-        updates.featured = input.featured;
+        experienceId &&
+        slotWeekday &&
+        typeof input.slot_start === "string" &&
+        typeof input.slot_end === "string" &&
+        typeof input.slot_interval_minutes === "number"
+      ) {
+        const { generateSlots } = await import("~/server/utils/experiences");
+        const generated = generateSlots(input.slot_start, input.slot_end, input.slot_interval_minutes);
+        const existingExperience = await getExperienceById(db, siteId, experienceId);
+        const existingRecurring = existingExperience?.recurring_slots && typeof existingExperience.recurring_slots === "object"
+          ? existingExperience.recurring_slots as Record<string, unknown>
+          : {};
+        const incomingRecurring = input.recurring_slots && typeof input.recurring_slots === "object"
+          ? input.recurring_slots as Record<string, unknown>
+          : {};
+        input = {
+          ...input,
+          recurring_slots: { ...existingRecurring, ...incomingRecurring, [slotWeekday]: generated },
+          slot_start: undefined,
+          slot_end: undefined,
+          slot_interval_minutes: undefined,
+          slot_weekday: undefined,
+        };
       }
-      if (input.featured_sort_order !== undefined) {
-        const parsed = Number(input.featured_sort_order);
-        if (!Number.isFinite(parsed))
-          return { error: "featured_sort_order must be a number" };
-        updates.featured_sort_order = parsed;
-      }
-      if (input.seo_title !== undefined)
-        updates.seo_title = toSqlText(input.seo_title) ?? null;
-      if (input.seo_description !== undefined)
-        updates.seo_description = toSqlText(input.seo_description) ?? null;
-      const updated = await updateExperience(
-        db,
-        siteId,
-        id,
-        updates as ApiValue,
-      );
-      if (!updated) return { error: "Experience not found" };
-      return { updated: true, experience_id: updated.id, slug: updated.slug };
+      return runMcpExecutorToolForChowbot(executorSite, "update_experience", input);
     }
 
     case "delete_experience": {
-      const { deleteExperience } = await import("~/server/utils/experiences");
-      const id = toSqlText(input.experience_id);
-      if (!id) return { error: "experience_id is required" };
-      const deleted = await deleteExperience(db, siteId, id, {
-        locationId: toSqlText(input.location_id) ?? null,
-      });
-      if (!deleted) return { error: "Experience not found" };
-      return { deleted: true };
+      return runMcpExecutorToolForChowbot(executorSite, "delete_experience", input);
     }
 
     case "list_experience_bookings": {
-      const { listExperienceBookings } =
-        await import("~/server/utils/experiences");
-      const id = toSqlText(input.experience_id);
-      if (!id) return { error: "experience_id is required" };
-      const bookings = await listExperienceBookings(db, siteId, id, {
-        locationId: toSqlText(input.location_id) ?? ctx.locationId ?? null,
+      // ChowBot-only convenience: fall back to the dashboard's current page
+      // location when the model omits location_id.
+      return runMcpExecutorToolForChowbot(executorSite, "list_experience_bookings", {
+        ...input,
+        location_id: input.location_id ?? ctx.locationId ?? undefined,
       });
-      return { bookings };
     }
 
     case "update_experience_booking": {
-      const { updateBookingStatus } =
-        await import("~/server/utils/experiences");
-      const expId = toSqlText(input.experience_id);
-      const bookingId = toSqlText(input.booking_id);
-      const status = toSqlText(input.status);
-      if (!expId || !bookingId || !status)
-        return { error: "experience_id, booking_id, and status are required" };
-      if (!["confirmed", "cancelled"].includes(status))
-        return { error: "status must be confirmed or cancelled" };
-      const ok = await updateBookingStatus(
-        db,
-        siteId,
-        expId,
-        bookingId,
-        status as "confirmed" | "cancelled",
-      );
-      if (!ok) return { error: "Booking not found" };
-      return { updated: true };
+      return runMcpExecutorToolForChowbot(executorSite, "update_experience_booking", input);
     }
 
     case "get_experience_availability": {
@@ -1237,30 +1009,10 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "get_experience": {
-      const experienceId = toSqlText(input.experience_id);
-      if (!experienceId) return { error: "experience_id is required." };
-      const experience = await getExperienceById(db, siteId, experienceId);
-      if (!experience) return { error: "Experience not found." };
-      return { experience };
-    }
-
-    case "set_experience_image": {
-      const experienceId = toSqlText(input.experience_id);
-      const assetId = toSqlText(input.asset_id);
-      if (!experienceId || !assetId) return { error: "experience_id and asset_id required." };
-      const updated = await updateExperience(db, siteId, experienceId, { image_asset_id: assetId });
-      if (!updated) return { error: "Failed to set experience image." };
-      return { updated: true, experience_id: experienceId, asset_id: assetId };
-    }
-
+    case "get_experience":
+    case "set_experience_image":
     case "set_experience_video": {
-      const experienceId = toSqlText(input.experience_id);
-      const assetId = toSqlText(input.asset_id);
-      if (!experienceId || !assetId) return { error: "experience_id and asset_id required." };
-      const updated = await updateExperience(db, siteId, experienceId, { video_asset_id: assetId });
-      if (!updated) return { error: "Failed to set experience video." };
-      return { updated: true, experience_id: experienceId, asset_id: assetId };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "get_translation_review_items":
