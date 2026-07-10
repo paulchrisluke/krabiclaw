@@ -56,6 +56,18 @@ _Avoid_: ad-hoc redirects, implicit route compatibility
 A tenant-owned visitor action that indicates commercial or operational intent, such as clicking a consultation CTA. Conversion events are first-party KrabiClaw analytics concepts and may be bridged to configured external analytics destinations.
 _Avoid_: raw dataLayer push, custom script snippet
 
+**Site-level review**:
+Approved customer feedback about a tenant as a whole rather than one location. A site-level review has no location association but still requires a 1-5 rating.
+_Avoid_: testimonial, locationless location review, synthetic review
+
+**Owner-entered review**:
+A review collected outside KrabiClaw and entered by an authorized tenant owner with its collection method, attribution, and publication-authority attestation. It is not a verified review unless KrabiClaw collected it directly.
+_Avoid_: verified review, unattributed testimonial, ghost review
+
+**Site-level Q&A**:
+An owner-maintained question and answer that applies to the tenant as a whole rather than one location. It shares KrabiClaw's Q&A workflow but has no location association.
+_Avoid_: location FAQ, Blawby FAQ, static testimonial question
+
 **Consultation**:
 A professional-service intake or appointment path for a prospective client. A consultation may be handled by KrabiClaw-native booking or by an external URL, but it is not a restaurant reservation or an experience booking.
 _Avoid_: table reservation, experience booking, Calendly-specific booking

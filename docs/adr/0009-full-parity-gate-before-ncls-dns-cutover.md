@@ -2,6 +2,8 @@
 
 NCLS is both a real tenant migration and the proving case for KrabiClaw's professional-service platform support, so DNS cutover must wait for more than visual homepage parity. KrabiClaw will require a passing verification report covering routes, redirects, SEO/schema, media/files, consultation CTA and tracking, pricing/calculator behavior, articles, legal/compliance content, and post-import editability before `northcarolinalegalservices.org` moves to KrabiClaw.
 
+Visual acceptance is automated across the global shell and every migrated public route, not only the homepage. Deterministic section-level comparisons use the pinned React baseline and allow at most 0.5% differing pixels with a small color threshold for antialiasing; route, SEO, behavior, media, and editability checks remain independent automated gates.
+
 ## Considered Options
 
 - Full parity gate: slower, but matches the migration and platform-validation goals.
