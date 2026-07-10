@@ -1,6 +1,13 @@
 import { getRequestURL } from 'h3'
 
 export default defineEventHandler((event) => {
+  if (!import.meta.dev) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Forbidden in production'
+    })
+  }
+
   const requestUrl = getRequestURL(event)
   const origin = requestUrl.origin
 
@@ -11,6 +18,6 @@ export default defineEventHandler((event) => {
     grant_types: ['authorization_code', 'refresh_token'],
     response_types: ['code'],
     token_endpoint_auth_method: 'none',
-    scope: 'openid offline_access tenant platform_admin',
+    scope: 'openid offline_access tenant',
   }
 })

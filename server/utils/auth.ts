@@ -72,7 +72,7 @@ export function createAuth(env: CloudflareEnv) {
   const authBaseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
 
   const instance = betterAuth({
-    baseURL: env.BETTER_AUTH_URL,
+    baseURL: authBaseUrl,
     basePath: '/api/auth',
     secret: env.BETTER_AUTH_SECRET,
     database: drizzleAdapter(db, {
