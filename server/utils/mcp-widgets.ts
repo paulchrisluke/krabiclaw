@@ -27,7 +27,13 @@ export interface McpAppResourceContent {
   uri: string;
   mimeType: "text/html;profile=mcp-app";
   text: string;
-  _meta: { ui: { csp: { resourceDomains: string[] } } };
+  _meta: {
+    ui: {
+      csp: { resourceDomains: string[] };
+      domain: string;
+    };
+    "openai/widgetDomain": string;
+  };
 }
 
 function mediaUploadWidgetHtml(baseUrl: string): string {
@@ -68,6 +74,12 @@ export async function readMcpAppResource(
     uri: resource.uri,
     mimeType: resource.mimeType,
     text,
-    _meta: { ui: { csp: { resourceDomains: [origin] } } },
+    _meta: {
+      ui: {
+        csp: { resourceDomains: [origin] },
+        domain: origin,
+      },
+      "openai/widgetDomain": origin,
+    },
   };
 }
