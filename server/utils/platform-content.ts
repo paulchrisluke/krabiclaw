@@ -989,7 +989,7 @@ function contentReviewUrls(record: ApiRecord, kind: 'blog' | 'doc', siteId: stri
 export async function getPublishedPlatformBlogPost(db: DbClient, category: string, slug: string) {
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
-      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_title, p.seo_description, p.seo_keywords,
+      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.tags_json, p.seo_title, p.seo_description, p.seo_keywords,
       p.canonical_url, p.robots,
       p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
       p.published_at, p.created_at, p.updated_at,

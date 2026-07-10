@@ -1,78 +1,81 @@
 <template>
-  <section class="border border-[var(--blawby-border)] bg-white p-6">
-    <div class="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--blawby-accent-strong)]">Estimate</p>
-        <h2 class="mt-3 blawby-display text-3xl text-[var(--blawby-primary)]">{{ title }}</h2>
+  <div class="my-12 w-full rounded-2xl border border-slate-100 bg-white p-6 shadow-sm sm:p-10">
+    <h3 class="mb-3 text-center text-3xl font-semibold text-[var(--blawby-primary)]">{{ title }}</h3>
+    <p class="mx-auto mb-8 max-w-2xl text-center text-gray-600">{{ description }}</p>
+
+    <div class="grid grid-cols-1 gap-10 lg:grid-cols-2">
+      <div class="space-y-6">
+        <fieldset>
+          <legend class="mb-2 flex w-full items-baseline justify-between gap-4 text-sm font-semibold text-[var(--blawby-primary)]">
+            <span>Household Size</span><span class="text-xs font-normal text-gray-500">Includes you + dependents</span>
+          </legend>
+          <div class="grid grid-cols-4 gap-2 sm:grid-cols-8">
+            <label v-for="size in 8" :key="size" class="cursor-pointer">
+              <input v-model.number="householdSize" type="radio" name="household-size" :value="size" class="peer sr-only">
+              <span class="flex aspect-square items-center justify-center rounded-lg text-lg font-semibold ring-1 ring-gray-200 transition peer-checked:bg-[var(--blawby-accent)] peer-checked:text-white peer-checked:ring-[var(--blawby-accent)] peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--blawby-primary)]">{{ size }}</span>
+            </label>
+          </div>
+        </fieldset>
+
+        <div>
+          <div class="mb-2 flex items-baseline justify-between gap-4">
+            <label for="blawby-income" class="text-sm font-semibold text-[var(--blawby-primary)]">Household Income</label>
+            <div class="flex rounded-md bg-gray-100 p-1 text-xs font-medium" aria-label="Income period">
+              <button v-for="option in ['annual', 'monthly'] as const" :key="option" type="button" class="rounded px-2 py-1 capitalize" :class="period === option ? 'bg-white text-[var(--blawby-primary)] shadow' : 'text-gray-500'" @click="period = option">{{ option }}</button>
+            </div>
+          </div>
+          <div class="relative">
+            <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">$</span>
+            <input id="blawby-income" :value="income" inputmode="decimal" autocomplete="off" class="block w-full rounded-md border-0 py-3 pl-7 pr-12 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-[var(--blawby-accent)]" placeholder="0.00" @input="onIncomeInput">
+            <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-gray-500">USD</span>
+          </div>
+        </div>
       </div>
-      <p class="blawby-display text-4xl text-[var(--blawby-primary)]">{{ formatCurrency(estimatedTotal) }}</p>
-    </div>
 
-    <div class="mt-8 grid gap-6 md:grid-cols-2">
-      <label class="block">
-        <span class="text-sm font-semibold text-[var(--blawby-primary)]">Household size</span>
-        <input
-          :value="householdSize"
-          type="number"
-          min="1"
-          max="12"
-          class="mt-2 w-full border border-[var(--blawby-border)] px-3 py-2"
-          @input="onHouseholdSizeInput"
-        >
-      </label>
-      <label class="block">
-        <span class="text-sm font-semibold text-[var(--blawby-primary)]">Case complexity</span>
-        <select v-model.number="complexity" class="mt-2 w-full border border-[var(--blawby-border)] px-3 py-2">
-          <option :value="0">Basic</option>
-          <option :value="1">Moderate</option>
-          <option :value="2">Complex</option>
-        </select>
-      </label>
+      <div class="flex flex-col justify-center rounded-xl border border-[var(--blawby-primary-100)] bg-[var(--blawby-primary-100)] p-6">
+        <h4 class="mb-1 text-lg font-semibold text-[var(--blawby-primary)]">Estimated Hourly Rate</h4>
+        <p v-if="!income" class="mb-6 text-sm italic text-gray-500">Enter income to see your specific rate</p>
+        <div class="space-y-4">
+          <div class="flex items-center justify-between text-sm"><span class="text-gray-600">Standard Rate</span><span class="font-medium">${{ result.standardRate }}/hr</span></div>
+          <div class="flex items-center justify-between text-sm"><span class="text-gray-600">Discount<span v-if="result.percentage"> ({{ result.percentage }}%)</span></span><span class="font-medium" :class="result.percentage ? 'text-green-700' : ''">{{ result.percentage ? `-$${result.standardRate - result.rate}/hr` : 'None' }}</span></div>
+          <div class="border-t border-gray-200 pt-4"><div class="flex items-center justify-between"><span class="text-xl font-bold text-[var(--blawby-primary)]">Your Rate</span><span class="text-3xl font-bold text-[var(--blawby-accent-strong)]">${{ result.rate }}/hr</span></div></div>
+        </div>
+      </div>
     </div>
-
-    <p class="mt-5 text-sm leading-7 text-slate-600">
-      {{ note }}
-    </p>
-  </section>
+    <p v-if="note" class="mt-6 text-center text-xs text-gray-500">{{ note }}</p>
+  </div>
 </template>
 
 <script setup lang="ts">
+import { calculateSlidingScaleRate, parsePricingAmount } from '~/utils/blawby-pricing'
+
 const props = withDefaults(defineProps<{
   title?: string
+  description?: string
   note?: string
-  baseAmount?: number
-  perPersonAmount?: number
-  complexityStep?: number
+  rows: unknown[][]
 }>(), {
-  title: 'Eligibility and cost calculator',
-  note: 'This estimate is informational only. A consultation can confirm eligibility, availability, and the best next step.',
-  baseAmount: 0,
-  perPersonAmount: 0,
-  complexityStep: 0,
+  title: 'Calculate Your Rate',
+  description: 'Estimate your hourly rate using the imported Federal Poverty Level guidelines.',
+  note: 'This calculator provides an estimate. Final rate determination requires verification of income.',
 })
 
 const householdSize = ref(1)
-const complexity = ref(0)
+const income = ref('')
+const period = ref<'annual' | 'monthly'>('annual')
+const result = computed(() => calculateSlidingScaleRate({
+  householdSize: householdSize.value,
+  income: parsePricingAmount(income.value),
+  period: period.value,
+  rows: props.rows,
+}))
 
-function normalizeHouseholdSize(value: unknown) {
-  const parsed = typeof value === 'number' ? value : Number(value)
-  if (!Number.isFinite(parsed)) return 1
-  return Math.min(12, Math.max(1, Math.trunc(parsed)))
-}
-
-const estimatedTotal = computed(() => {
-  const total = props.baseAmount + householdSize.value * props.perPersonAmount + complexity.value * props.complexityStep
-  if (!Number.isFinite(total)) return 0
-  return Math.max(0, total)
-})
-
-function onHouseholdSizeInput(event: Event) {
-  const target = event.target as HTMLInputElement | null
-  householdSize.value = normalizeHouseholdSize(target?.value ?? 1)
-}
-
-function formatCurrency(value: number) {
-  if (!Number.isFinite(value) || value <= 0) return 'Free'
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
+function onIncomeInput(event: Event) {
+  const target = event.target as HTMLInputElement
+  const next = target.value.replace(/[^0-9.]/g, '')
+  const parts = next.split('.')
+  if (parts.length > 2) return
+  income.value = next
+  target.value = next
 }
 </script>

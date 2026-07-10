@@ -56,6 +56,13 @@ export const northcarolinalegalservices: ISeedTenant = {
     source: 'Reviewed 2026 NCLS fee policy',
     effectiveDate: '2026-01-01',
   },
+  donationTiers: [{
+    amount: 100,
+    title: 'Justice Advocate',
+    description: 'Support comprehensive legal assistance for those in need',
+    featured: true,
+    icon: 'ScaleIcon',
+  }],
   services: [{
     name: 'Family law',
     slug: 'family',
@@ -99,11 +106,34 @@ test('NCLS Blawby adapter normalizes source data into cutover artifacts', () => 
 
   assert.equal(payload.offerings.length, 1)
   assert.equal(payload.offerings[0].canonical_path, '/services/family')
+  assert.deepEqual(payload.offerings[0].features[0], {
+    title: 'Custody',
+    description: 'Custody help.',
+    image_url: 'https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/childcustody.webp',
+    image_asset_id: payload.offerings[0].features[0].image_asset_id,
+    icon: null,
+    icon_url: null,
+    sort_order: 0,
+  })
   assert.equal(payload.tenantPages.find((page: { path: string }) => page.path === '/donate')?.cta_url, 'https://app.blawby.com/northcarolinalegalservices/pay/donate')
+  assert.deepEqual(
+    payload.tenantPages.find((page: { path: string }) => page.path === '/')?.components.map((component: { type: string }) => component.type),
+    ['home_hero', 'services_intro', 'qa', 'reviews', 'latest_articles', 'consultation_cta'],
+  )
   assert.equal(payload.articles[0].canonical_url, '/article/preparing-for-your-consultation')
+  assert.equal(payload.source_commit, '5908ab3e64f26f799de61ed55371d02f9ec7bc2f')
 
   assert.ok(payload.mediaInventory.files.some((file: { kind: string }) => file.kind === 'legal_file'))
   assert.ok(payload.mediaInventory.files.some((file: { source_name?: string }) => file.source_name === 'family-law.webp'))
+  const donatePage = payload.tenantPages.find((page: { path: string }) => page.path === '/donate')
+  const donationChoices = donatePage?.components.find((component: { type: string }) => component.type === 'donation_choices')
+  assert.deepEqual(donationChoices?.tiers, [{
+    amount: 100,
+    title: 'Justice Advocate',
+    description: 'Support comprehensive legal assistance for those in need',
+    featured: true,
+    icon: 'ScaleIcon',
+  }])
   assert.ok(payload.routeInventory.preservedRoutes.includes('/services/family'))
   assert.ok(payload.routeInventory.intentionalExclusions.some((route: { path: string }) => route.path === '/conference'))
   assert.ok(payload.editSurfaceMatrix.some((row: { area: string }) => row.area === 'offerings'))
@@ -119,6 +149,16 @@ test('NCLS Blawby adapter output is deterministic for stable source data', () =>
 
 test('Blawby artifact verifier passes a complete import manifest without a deployed URL', () => {
   const payload = runAdapter(sourceFixture)
+  payload.articles = payload.expected_article_slugs.map((slug: string) => ({
+    ...payload.articles[0],
+    slug,
+    canonical_url: `/article/${slug}`,
+  }))
+  payload.redirects = [
+    { from_path: '/article/divorce-and-children-in-north-carolina-what-to-expect-and-how-to-prepare' },
+    { from_path: '/article/writing-your-own-will-how-it-works-in-north-carolina' },
+  ]
+  for (const file of payload.mediaInventory.files) file.upload_status = 'verified'
   const dir = mkdtempSync(join(tmpdir(), 'blawby-verify-'))
   const manifestPath = join(dir, 'blawby-import.json')
   const outPath = join(dir, 'evidence.json')

@@ -1,3 +1,12 @@
+export interface PublicOfferingFeature {
+  title: string
+  description: string
+  image_url: string | null
+  icon: string | null
+  icon_url: string | null
+  sort_order: number
+}
+
 export interface PublicOffering {
   id: string
   name: string
@@ -6,13 +15,13 @@ export interface PublicOffering {
   summary: string | null
   short_description: string | null
   body: string | null
-  features: string[]
+  features: PublicOfferingFeature[]
   faqs: Array<{ question: string; answer: string }>
   cta_label: string | null
   cta_url: string | null
   thumbnail_url: string | null
   hero_image_url: string | null
-  media: Array<{ id: string; url: string; kind: string; alt_text: string | null }>
+  media: Array<{ id: string; url: string; kind: string; alt_text: string | null; width: number | null; height: number | null }>
   schema_type: string | null
   seo_title: string | null
   seo_description: string | null
@@ -22,13 +31,98 @@ export interface PublicOffering {
   featured: boolean
 }
 
-export type BlawbyShieldVariant = 'about' | 'blog' | 'contact' | 'pricing' | 'schedule' | 'confirmation' | 'donate'
+export type BlawbyShieldVariant = 'about' | 'blog' | 'contact' | 'pricing' | 'schedule' | 'confirmation' | 'donate' | 'privacy' | 'terms' | 'third-party-notices'
 
 export interface PublicOfferingLink {
   id: string
   name: string
   slug: string
   canonical_path: string
+}
+
+export interface PublicOfferingSummary {
+  id: string
+  name: string
+  slug: string
+  label: string | null
+  summary: string | null
+  short_description: string | null
+  thumbnail_url: string | null
+  canonical_path: string
+  sort_order: number
+  featured: boolean
+}
+
+export interface PublicSiteQa {
+  id: string
+  question: string
+  answer: string | null
+  sort_order: number
+}
+
+export interface PublicSiteReview {
+  id: string
+  author_name: string
+  reviewer_photo_url: string | null
+  rating: number
+  title: string | null
+  content: string
+  original_review_date: string | null
+  verified: boolean
+}
+
+export interface PublicBlogSummary {
+  id: string
+  title: string
+  slug: string
+  excerpt: string | null
+  category: string | null
+  tags: string[]
+  author_name: string | null
+  author_image: string | null
+  published_at: string | null
+  canonical_url: string
+  featured_image: {
+    public_url: string
+    width: number | null
+    height: number | null
+  } | null
+}
+
+export interface PublicBlogPost extends PublicBlogSummary {
+  body: string
+  seo_description: string | null
+  canonical_url: string
+  robots: string | null
+  created_at: string | null
+  updated_at: string | null
+  components: ApiRecord[]
+}
+
+export type BlawbyRouteRecipe =
+  | 'home'
+  | 'services'
+  | 'offering'
+  | 'about'
+  | 'pricing'
+  | 'contact'
+  | 'schedule'
+  | 'blog'
+  | 'article'
+  | 'donate'
+  | 'privacy'
+  | 'terms'
+  | 'third-party-notices'
+
+export interface PublicBlawbyRouteData {
+  recipe: BlawbyRouteRecipe
+  page: PublicTenantPage | null
+  offerings: PublicOfferingSummary[]
+  offering: PublicOffering | null
+  qa: PublicSiteQa[]
+  reviews: PublicSiteReview[]
+  posts: PublicBlogSummary[]
+  post: PublicBlogPost | null
 }
 
 export interface PublicTenantPage {
@@ -86,6 +180,9 @@ export interface PublicBlawbyIdentity {
   brand_name: string | null
   brand_description: string | null
   logo_url: string | null
+  phone: string | null
+  banner_content: string | null
+  banner_dismissible: boolean
 }
 
 export interface PublicBlawbyShellData {

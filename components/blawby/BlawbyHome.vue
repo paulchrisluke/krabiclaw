@@ -1,105 +1,141 @@
 <template>
   <div data-parity-root>
-    <section class="relative overflow-hidden bg-[var(--blawby-primary)] text-white">
-      <div class="absolute inset-0 opacity-20" :style="heroImage ? `background-image:url('${heroImage}');background-size:cover;background-position:center;` : ''" />
-      <div class="relative mx-auto grid max-w-7xl gap-10 px-4 py-20 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8 lg:py-28">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--blawby-accent)]">{{ compliance?.nonprofit_status || 'Professional services' }}</p>
-          <h1 class="mt-5 max-w-4xl blawby-display text-5xl leading-tight sm:text-6xl lg:text-7xl">
-            {{ site?.brand_name || 'Professional guidance with care.' }}
-          </h1>
-          <p class="mt-6 max-w-2xl text-lg leading-8 text-white/80">
-            {{ site?.brand_description || compliance?.service_area || 'Clear information, thoughtful advocacy, and practical next steps for people who need help.' }}
-          </p>
-          <div class="mt-9 flex flex-wrap gap-3">
-            <BlawbyButton :to="consultation.external_url || consultation.schedule_path" @click="trackConsultation">
-              {{ consultation.cta_label }}
-            </BlawbyButton>
-            <BlawbyButton to="/services" variant="outline" class="border-white text-white hover:bg-white hover:text-[var(--blawby-primary)]">
-              View services
-            </BlawbyButton>
+    <section class="relative overflow-hidden" data-parity-section="hero">
+      <img
+        v-if="heroBackground"
+        :src="heroBackground"
+        alt=""
+        width="1920"
+        height="1080"
+        fetchpriority="high"
+        class="absolute inset-0 size-full object-cover object-center"
+      >
+      <div class="relative mx-auto max-w-7xl px-4 pb-36 pt-16 text-left sm:px-6 lg:px-8">
+        <div class="flex flex-wrap gap-x-6">
+          <div class="w-full lg:w-3/5">
+            <h1 class="max-w-4xl blawby-display text-5xl font-medium text-white sm:text-7xl">
+              {{ heroTitle.before }}<span v-if="heroTitle.accent" class="relative whitespace-nowrap text-[var(--blawby-accent)]">{{ heroTitle.accent }}</span>{{ heroTitle.after }}
+            </h1>
+            <p v-if="hero.description" class="mt-6 max-w-2xl text-lg leading-8 text-white">{{ hero.description }}</p>
           </div>
-        </div>
-        <div class="self-end border border-white/20 bg-white/10 p-7 backdrop-blur">
-          <p class="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--blawby-accent)]">Access to help</p>
-          <div class="mt-6 grid gap-5">
-            <NuxtLink
-              v-for="offering in featuredOfferings"
-              :key="offering.id"
-              :to="`/services/${offering.slug}`"
-              class="group block border-t border-white/15 pt-5 text-white no-underline"
-            >
-              <span class="blawby-display text-2xl">{{ offering.name }}</span>
-              <p class="mt-2 text-sm leading-6 text-white/70">{{ offering.summary || offering.short_description }}</p>
-            </NuxtLink>
+          <div class="w-full lg:w-2/5">
+            <div class="mt-10 flex justify-start gap-x-6">
+              <BlawbyButton :to="heroDestination" class="gap-2" @click="trackConsultation('hero')">
+                <svg class="size-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 4.5h9A4.5 4.5 0 0 1 21 9v3a4.5 4.5 0 0 1-4.5 4.5h-4.86L7.2 20.2a.75.75 0 0 1-1.2-.6v-3.35A4.5 4.5 0 0 1 3 12V9a4.5 4.5 0 0 1 4.5-4.5Z" /></svg>
+                {{ hero.label || consultation.cta_label }}
+              </BlawbyButton>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <section class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-      <div class="mb-12 max-w-3xl">
-        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--blawby-accent-strong)]">Services</p>
-        <h2 class="mt-4 blawby-display text-4xl text-[var(--blawby-primary)]">How we can help</h2>
+    <section class="relative bg-white pb-14 pt-14 sm:pb-20" data-parity-section="services">
+      <div class="relative z-20 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <BlawbySectionHeading
+          :title="services.title || 'Our'"
+          :accent="services.accent || 'Services'"
+          :description="services.description"
+          centered
+        />
+        <BlawbyServiceGrid :offerings="routeData.offerings" class="mt-20" />
       </div>
-      <div v-if="offerings.length" class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-        <NuxtLink
-          v-for="offering in offerings.slice(0, 6)"
-          :key="offering.id"
-          :to="`/services/${offering.slug}`"
-          class="group border border-[var(--blawby-border)] bg-white p-7 no-underline transition hover:-translate-y-0.5 hover:border-[var(--blawby-accent)]"
-        >
-          <img v-if="offering.thumbnail_url" :src="offering.thumbnail_url" :alt="offering.name" class="mb-5 aspect-[4/3] w-full object-cover">
-          <h3 class="blawby-display text-2xl text-[var(--blawby-primary)]">{{ offering.name }}</h3>
-          <p class="mt-3 text-sm leading-7 text-slate-600">{{ offering.summary || offering.short_description }}</p>
-          <span class="mt-5 inline-block text-sm font-semibold text-[var(--blawby-accent-strong)]">Learn more</span>
-        </NuxtLink>
-      </div>
-      <div v-else class="border border-[var(--blawby-border)] bg-white p-8 text-slate-600">
-        Services will appear here once they are published.
-      </div>
+      <img v-if="servicesDecoration" :src="servicesDecoration" alt="" width="1920" height="400" loading="lazy" class="absolute inset-x-0 bottom-0 w-full object-contain">
     </section>
 
-    <section class="bg-white">
-      <div class="mx-auto grid max-w-7xl gap-10 px-4 py-20 sm:px-6 lg:grid-cols-3 lg:px-8">
-        <div class="lg:col-span-2">
-          <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--blawby-accent-strong)]">Mission</p>
-          <h2 class="mt-4 blawby-display text-4xl text-[var(--blawby-primary)]">{{ compliance?.entity_name || site?.brand_name || 'Our work' }}</h2>
-          <p class="mt-5 text-base leading-8 text-slate-600">{{ compliance?.disclaimer || site?.brand_description }}</p>
-        </div>
-        <div class="border-l border-[var(--blawby-border)] pl-8">
-          <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--blawby-accent-strong)]">Contact</p>
-          <p class="mt-4 blawby-display text-2xl text-[var(--blawby-primary)]">{{ consultation.cta_label }}</p>
-          <BlawbyButton class="mt-6" :to="consultation.external_url || consultation.schedule_path" @click="trackConsultation">
-            Get started
-          </BlawbyButton>
-        </div>
+    <BlawbyVideoFeature
+      v-if="videoFeature"
+      :title="String(videoFeature.title || '')"
+      :accent="asOptionalString(videoFeature.accent)"
+      :video-url="asOptionalString(videoFeature.video_url)"
+      :video-title="asOptionalString(videoFeature.video_title)"
+      :features="videoFeatures"
+      :images="videoImages"
+    />
+
+    <BlawbyFaqSection :items="routeData.qa" :decoration-url="assetUrl(qaBlock?.decoration)" />
+    <BlawbyReviewsSection :reviews="routeData.reviews" :description="reviewsDescription" />
+
+    <section v-if="routeData.posts.length" class="bg-white" data-parity-section="articles">
+      <div class="mx-auto my-8 max-w-7xl px-6 lg:px-8">
+        <BlawbySectionHeading title="From the" accent="Blog" centered />
+        <BlawbyArticleGrid :posts="routeData.posts" class="mt-16" />
       </div>
+      <div class="my-4 mb-8 flex justify-center"><BlawbyButton to="/blog">See All</BlawbyButton></div>
     </section>
+
+    <BlawbyConsultationCta
+      v-if="ctaBlock"
+      :title="String(ctaBlock.title || 'Get started today')"
+      :description="asOptionalString(ctaBlock.description)"
+      :label="String(ctaBlock.label || consultation.cta_label)"
+      :destination="consultation.external_url || String(ctaBlock.url || consultation.schedule_path)"
+      :background-url="assetUrl(ctaBlock.background)"
+      :featured-url="assetUrl(ctaBlock.featured)"
+      @click="trackConsultation('cta_section')"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-const { site } = useTenantSite()
-const { offerings, compliance, consultation } = useBlawbySite()
-const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
+const { data } = await useBlawbyRoute('home')
+const { identity, consultation } = await useBlawbyShell()
+const routeData = computed(() => data.value)
 
-const featuredOfferings = computed(() => {
-  const featured = offerings.value.filter((offering) => offering.featured)
-  return (featured.length ? featured : offerings.value).slice(0, 3)
+if (!routeData.value.page) throw createError({ statusCode: 404, statusMessage: 'Homepage content not found' })
+
+function block(type: string) {
+  return routeData.value.page?.components.find(component => component.type === type) ?? null
+}
+
+function asOptionalString(value: unknown) {
+  return typeof value === 'string' && value ? value : null
+}
+
+function assetUrl(value: unknown) {
+  return value && typeof value === 'object' && typeof (value as ApiRecord).url === 'string'
+    ? String((value as ApiRecord).url)
+    : null
+}
+
+const hero = computed(() => block('home_hero') ?? {})
+const services = computed(() => block('services_intro') ?? {})
+const videoFeature = computed(() => block('video_feature'))
+const reviewsBlock = computed(() => block('reviews'))
+const qaBlock = computed(() => block('qa'))
+const ctaBlock = computed(() => block('consultation_cta'))
+const heroBackground = computed(() => assetUrl(hero.value.background))
+const servicesDecoration = computed(() => assetUrl(services.value.decoration))
+const heroDestination = computed(() => consultation.value.external_url || String(hero.value.url || consultation.value.schedule_path))
+const heroTitle = computed(() => {
+  const title = String(hero.value.title || identity.value.brand_name || 'Professional services')
+  const accent = String(hero.value.accent || '')
+  const index = accent ? title.indexOf(accent) : -1
+  return index >= 0
+    ? { before: title.slice(0, index), accent, after: title.slice(index + accent.length) }
+    : { before: title, accent: '', after: '' }
 })
-const heroImage = computed(() => featuredOfferings.value.find(offering => offering.hero_image_url)?.hero_image_url || featuredOfferings.value.find(offering => offering.thumbnail_url)?.thumbnail_url || '')
+const videoFeatures = computed(() => Array.isArray(videoFeature.value?.features)
+  ? videoFeature.value.features.map((item: ApiRecord) => ({ name: String(item.name || ''), desc: String(item.desc || '') }))
+  : [])
+const videoImages = computed(() => Array.isArray(videoFeature.value?.images)
+  ? videoFeature.value.images
+      .map((item: ApiRecord) => ({ url: assetUrl(item) || '', alt: asOptionalString(item.alt) }))
+      .filter((item: { url: string }) => item.url)
+  : [])
+const reviewsDescription = computed(() => String(reviewsBlock.value?.description || ''))
 
-function trackConsultation() {
-  trackConsultationClick('home', '/', consultation.value.external_url || consultation.value.schedule_path)
+const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
+function trackConsultation(pageType: string) {
+  trackConsultationClick(pageType, '/', heroDestination.value)
 }
 
 useSeoMeta({
-  title: computed(() => site?.brand_name || 'Professional services'),
-  description: computed(() => site?.brand_description || compliance.value?.service_area || 'Professional services and consultation.'),
-  ogTitle: computed(() => site?.brand_name || 'Professional services'),
-  ogDescription: computed(() => site?.brand_description || compliance.value?.service_area || 'Professional services and consultation.'),
-  ogImage: computed(() => heroImage.value || undefined),
+  title: computed(() => routeData.value.page?.seo_title || identity.value.brand_name || 'Professional services'),
+  description: computed(() => routeData.value.page?.seo_description || routeData.value.page?.summary || identity.value.brand_description || ''),
+  ogImage: computed(() => heroBackground.value || undefined),
   ogType: 'website',
 })
+const canonicalUrl = useSeoUrl(() => '/')
+useHead(() => ({ link: [{ rel: 'canonical', href: canonicalUrl.value }] }))
 </script>

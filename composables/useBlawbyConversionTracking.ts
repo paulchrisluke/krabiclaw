@@ -9,7 +9,7 @@ declare global {
   }
 }
 
-type BlawbyConversionEvent = 'page_view' | 'book_consultation_click' | 'contact_submit'
+type BlawbyConversionEvent = 'page_view' | 'book_consultation_click' | 'contact_submit' | 'donation_click'
 
 interface BlawbyConversionPayload {
   event_name: BlawbyConversionEvent
@@ -110,9 +110,19 @@ export function useBlawbyConversionTracking(consultationSource: MaybeRefOrGetter
     })
   }
 
+  function trackDonationClick(pagePath: string, ctaDestination: string) {
+    track({
+      event_name: 'donation_click',
+      page_type: 'donate',
+      page_path: pagePath,
+      cta_destination: ctaDestination,
+    })
+  }
+
   return {
     track,
     trackConsultationClick,
     trackContactSubmit,
+    trackDonationClick,
   }
 }

@@ -1,5 +1,11 @@
 <template>
   <header class="fixed inset-x-0 top-0 z-50 border-b border-gray-200 bg-white">
+    <BlawbyBanner
+      :content="site.banner_content"
+      :phone="site.phone"
+      :dismissible="site.banner_dismissible"
+      :storage-key="`blawby-banner:${site.brand_name}:${site.banner_content}`"
+    />
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <nav class="relative z-50 flex min-h-16 items-center justify-between gap-3 py-2" aria-label="Main navigation">
         <NuxtLink to="/" class="flex min-w-0 items-center no-underline" :aria-label="`${brandName} home`">
@@ -52,13 +58,21 @@
             </svg>
           </button>
 
+          <button
+            v-if="mobileOpen"
+            type="button"
+            class="fixed inset-0 bg-slate-300/50 md:hidden"
+            aria-label="Close navigation"
+            @click="mobileOpen = false"
+          />
+
           <div
             id="blawby-mobile-nav"
             class="absolute inset-x-0 top-full mt-4 origin-top rounded-2xl bg-white p-4 text-lg normal-case text-[var(--blawby-primary)] shadow-xl ring-1 ring-slate-900/5 transition md:hidden"
             :class="mobileOpen ? 'scale-100 opacity-100' : 'pointer-events-none scale-95 opacity-0'"
           >
             <NuxtLink
-              v-for="item in headerItems"
+              v-for="item in mobileItems"
               :key="item.id"
               :to="item.url"
               class="block w-full p-2 no-underline"
@@ -71,7 +85,7 @@
       </nav>
     </div>
   </header>
-  <div class="h-20" aria-hidden="true" />
+  <div class="mb-16" aria-hidden="true" />
 </template>
 
 <script setup lang="ts">
@@ -98,6 +112,10 @@ const headerItems = computed(() => {
     { id: 'blog', area: 'header', label: 'Blog', url: '/blog', item_type: 'internal', sort_order: 50, metadata: {} },
     { id: 'donate', area: 'header', label: 'Donate', url: '/donate', item_type: 'internal', sort_order: 60, metadata: {} },
   ] as PublicNavigationItem[]
+})
+const mobileItems = computed(() => {
+  const order = ['Services', 'Pricing', 'About', 'Donate', 'Contact', 'Blog']
+  return [...headerItems.value].sort((left, right) => order.indexOf(left.label) - order.indexOf(right.label))
 })
 
 function trackConsultation() {

@@ -5,6 +5,7 @@ import {
   BLAWBY_PARITY_COLOR_THRESHOLD,
   BLAWBY_PARITY_MAX_DIFF_RATIO,
   BLAWBY_REFERENCE_COMMIT,
+  BLAWBY_REFERENCE_ETAG,
 } from './blawby-parity-config.mjs'
 import { comparePngFiles } from './utils/blawby-image-diff.mjs'
 
@@ -36,6 +37,10 @@ function sectionKey(section) {
   return `${section.route_name}|${section.viewport}|${section.slot}`
 }
 
+function stateKey(state) {
+  return `${state.route_name}|${state.viewport}|state:${state.name}`
+}
+
 function safeName(value) {
   return value.replace(/[^a-z0-9_-]+/gi, '-')
 }
@@ -53,6 +58,9 @@ if (actualManifest.source !== 'blawby') throw new Error('Actual manifest must ha
 if (referenceManifest.source_revision !== BLAWBY_REFERENCE_COMMIT) {
   throw new Error(`Reference manifest is not pinned to ${BLAWBY_REFERENCE_COMMIT}`)
 }
+if (referenceManifest.observed_reference_etag !== BLAWBY_REFERENCE_ETAG) {
+  throw new Error(`Reference manifest is not tied to pinned live ETag ${BLAWBY_REFERENCE_ETAG}`)
+}
 if (referenceManifest.browser?.version !== actualManifest.browser?.version) {
   throw new Error('Reference and actual captures must use the same Chromium version')
 }
@@ -61,6 +69,8 @@ const referenceRoot = path.dirname(referenceManifestPath)
 const actualRoot = path.dirname(actualManifestPath)
 const referenceSections = new Map((referenceManifest.sections || []).map(section => [sectionKey(section), section]))
 const actualSections = new Map((actualManifest.sections || []).map(section => [sectionKey(section), section]))
+for (const state of referenceManifest.states || []) referenceSections.set(stateKey(state), { ...state, slot: `state:${state.name}` })
+for (const state of actualManifest.states || []) actualSections.set(stateKey(state), { ...state, slot: `state:${state.name}` })
 if (!referenceSections.size || !actualSections.size) throw new Error('Both manifests must contain section captures')
 
 const keys = [...new Set([...referenceSections.keys(), ...actualSections.keys()])].sort()

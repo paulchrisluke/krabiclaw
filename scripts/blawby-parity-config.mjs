@@ -1,4 +1,28 @@
 export const BLAWBY_REFERENCE_COMMIT = '5908ab3e64f26f799de61ed55371d02f9ec7bc2f'
+export const BLAWBY_REFERENCE_URL = 'https://www.northcarolinalegalservices.org'
+export const BLAWBY_REFERENCE_ETAG = '"no9z3zb5633rez"'
+
+export const NCLS_ARTICLE_SLUGS = [
+  '7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back',
+  'disaster-relief-for-north-carolina-homeowners-after-hurricane-helene',
+  'divorce-and-children-in-north-carolina',
+  'employee-disability-rights-in-north-carolina',
+  'equitable-distribution-in-north-carolina-divorces',
+  'fairness-is-not-a-zero-sum-game-why-dei-benefits-everyone',
+  'getting-a-divorce-in-north-carolina',
+  'hurricane-disaster-relief-for-north-carolina-renters',
+  'iep-violations-in-north-carolina-how-to-recognize-them-and-protect-your-childs-rights',
+  'know-your-rights-what-to-do-if-you-witness-an-ice-arrest',
+  'pet-custody-in-nc-divorce-how-equitable-distribution-affects-your-dog-or-cat',
+  'preparing-for-your-consultation-with-north-carolina-legal-services',
+  'property-division-in-north-carolina-divorce-protecting-whats-yours',
+  'protecting-your-freelance-business-in-north-carolina-contracts-compliance-and-best-practices',
+  'the-legal-needs-of-small-businesses-in-north-carolina',
+  'understanding-the-legal-process-preparing-for-court-without-a-lawyer',
+  'when-schools-fail-to-follow-the-iep-what-north-carolina-parents-can-do',
+  'writing-your-own-will-how-it-works',
+  'your-landlord-cannot-evict-you-without-a-court-order-heres-what-to-do-when-they-try',
+]
 
 export const BLAWBY_PARITY_VIEWPORTS = {
   mobile: { width: 390, height: 1200 },
@@ -14,7 +38,7 @@ export const BLAWBY_PARITY_ROUTES = {
   },
   services: {
     path: '/services',
-    sections: ['page-hero', 'services', 'qa', 'consultation'],
+    sections: ['services', 'qa', 'consultation'],
   },
   'service-detail': {
     path: '/services/family',
@@ -41,7 +65,7 @@ export const BLAWBY_PARITY_ROUTES = {
     sections: ['page-hero', 'shield-divider', 'articles', 'disclaimer', 'qa', 'consultation'],
   },
   article: {
-    path: '/article/preparing-for-your-consultation',
+    path: '/article/preparing-for-your-consultation-with-north-carolina-legal-services',
     sections: ['article-header', 'article-body', 'related-articles', 'consultation'],
   },
   donate: {

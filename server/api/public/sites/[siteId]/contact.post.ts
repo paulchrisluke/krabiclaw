@@ -33,12 +33,17 @@ export default defineEventHandler(async (event) => {
   if (subject && !VALID_SUBJECTS.includes(subject))
     return jsonResponse({ error: 'Please choose a valid subject.' }, { status: 400 })
 
-  const site = await queryFirst<{ id: string; organization_id: string; brand_name?: string | null }>(
+  const site = await queryFirst<{ id: string; organization_id: string; brand_name?: string | null; vertical?: string | null; theme_id?: string | null }>(
     db,
-    'SELECT id, organization_id, brand_name FROM sites WHERE id = ? AND status = ? LIMIT 1',
+    'SELECT id, organization_id, brand_name, vertical, theme_id FROM sites WHERE id = ? AND status = ? LIMIT 1',
     [siteId, 'active'],
   )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
+  const requiresConsent = site.theme_id === 'blawby-theme-v1' || site.vertical === 'professional_service' || site.vertical === 'service'
+  const consentAcknowledged = body.consent === true
+  if (requiresConsent && !consentAcknowledged) {
+    return jsonResponse({ error: 'Please acknowledge the contact and privacy notice.' }, { status: 400 })
+  }
 
   // Best-effort link — an invalid/foreign experienceId just means no "Regarding" context, not a failed submission.
   let experience: { id: string; title: string } | null = null
@@ -68,10 +73,11 @@ export default defineEventHandler(async (event) => {
     if (!emailOk) return jsonResponse({ error: 'Too many messages from this email. Please try again tomorrow.' }, { status: 429 })
   }
 
+  const consentAt = consentAcknowledged ? new Date().toISOString() : null
   await execute(db, `
-    INSERT INTO contact_submissions (id, organization_id, site_id, name, email, subject, message, ip_hash, experience_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [id, site.organization_id, siteId, name, email, subject || null, message, ipHash, experience?.id ?? null])
+    INSERT INTO contact_submissions (id, organization_id, site_id, name, email, subject, message, consent_at, ip_hash, experience_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, site.organization_id, siteId, name, email, subject || null, message, consentAt, ipHash, experience?.id ?? null])
 
   await fireSiteEventSafe({
     db,
@@ -95,6 +101,7 @@ export default defineEventHandler(async (event) => {
       email,
       subject: subject || null,
       message,
+      consentAcknowledged,
       experienceId: experience?.id ?? null,
       experienceTitle: experience?.title ?? null,
     })

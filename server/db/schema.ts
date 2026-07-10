@@ -210,6 +210,7 @@ export const contact_submissions = sqliteTable("contact_submissions", {
 	email: text().notNull(),
 	subject: text(),
 	message: text().notNull(),
+	consent_at: text(),
 	status: text().default("new").notNull(),
 	ip_hash: text(),
 	experience_id: text().references(() => experiences.id, { onDelete: "set null" } ),
@@ -793,6 +794,7 @@ export const blog_posts = sqliteTable("blog_posts", {
 	body: text().notNull(),
 	excerpt: text(),
 	category: text(),
+	tags_json: text(),
 	nav_section: text(),
 	nav_title: text(),
 	nav_order: integer(),
@@ -1439,7 +1441,7 @@ export const site_conversion_events = sqliteTable("site_conversion_events", {
 }, (table) => [
 	index("site_conversion_events_site_created_idx").on(table.site_id, table.created_at),
 	index("site_conversion_events_name_created_idx").on(table.event_name, table.created_at),
-	check("site_conversion_events_name_check", sql`event_name IN ('page_view', 'book_consultation_click', 'contact_submit')`),
+	check("site_conversion_events_name_check", sql`event_name IN ('page_view', 'book_consultation_click', 'contact_submit', 'donation_click')`),
 ]);
 
 export const client_import_artifacts = sqliteTable("client_import_artifacts", {

@@ -8,6 +8,8 @@ const isStdout = process.argv.includes('--stdout')
 const isRemote = process.argv.includes('--remote')
 const isStaging = process.argv.includes('--staging')
 const isPreview = process.argv.includes('--preview')
+const manifestArgIndex = process.argv.indexOf('--manifest')
+const explicitManifestPath = manifestArgIndex >= 0 ? process.argv[manifestArgIndex + 1] : null
 const envFlag = isStaging ? '--env staging' : isPreview ? '--env preview' : isRemote ? '' : '--local'
 const remoteFlag = isRemote || isStaging || isPreview ? '--remote' : ''
 
@@ -19,7 +21,7 @@ if ([isRemote, isStaging, isPreview].filter(Boolean).length > 1) {
 const clientImportDir = join(process.cwd(), 'client-imports', 'north-carolina-legal-services')
 const clientManifestPath = join(clientImportDir, 'client-manifest.json')
 const legacyManifestPath = join(clientImportDir, 'blawby-import.json')
-const manifestPath = existsSync(clientManifestPath) ? clientManifestPath : legacyManifestPath
+const manifestPath = explicitManifestPath || (existsSync(clientManifestPath) ? clientManifestPath : legacyManifestPath)
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 
 const ORG_ID = 'org-ncls-blawby'
@@ -30,7 +32,9 @@ const LOCATION_ID = 'loc-ncls-blawby-main'
 const SLUG = 'ncls'
 
 function escapeSql(value) {
-  return String(value).replace(/'/g, "''")
+  return String(value)
+    .replace(/[ \t]+(?=\r?$)/gm, whitespace => whitespace.length >= 2 ? '<br>' : '')
+    .replace(/'/g, "''")
 }
 
 function sqlValue(value) {
@@ -57,7 +61,7 @@ const offeringRows = values((manifest.offerings ?? []).map((offering) => `(
   ${sqlValue(offering.summary)}, ${sqlValue(offering.short_description)}, ${sqlValue(offering.body)},
   ${sqlJson(offering.features ?? [])}, ${sqlJson(offering.faqs ?? [])},
   ${sqlValue(offering.cta_label)}, ${sqlValue(offering.cta_url)},
-  NULL, NULL, ${sqlJson([])}, ${sqlValue(offering.schema_type || 'LegalService')},
+  ${sqlValue(offering.thumbnail_asset_id)}, ${sqlValue(offering.hero_image_asset_id)}, ${sqlJson(offering.media_asset_ids ?? [])}, ${sqlValue(offering.schema_type || 'LegalService')},
   ${sqlValue(offering.seo_title)}, ${sqlValue(offering.seo_description)}, ${sqlValue(offering.canonical_path || `/services/${offering.slug}`)},
   ${sqlValue(offering.status || 'published')}, ${Number(offering.sort_order ?? 0)}, ${offering.featured ? 1 : 0},
   'react-adapter', ${sqlValue(manifest.source)}, ${now}, ${now}
@@ -79,6 +83,13 @@ const navRows = values((manifest.navigation ?? []).map((item) => `(
   ${sqlValue(item.status || 'active')}, ${sqlJson(item.metadata ?? {})}, ${now}, ${now}
 )`))
 
+const redirectRows = values((manifest.redirects ?? []).map((redirect, index) => `(
+  ${sqlValue(redirect.id || `redirect_ncls_${index}`)}, ${sqlValue(ORG_ID)}, ${sqlValue(SITE_ID)},
+  ${sqlValue(redirect.from_path)}, ${sqlValue(redirect.to_path)}, ${Number(redirect.status_code ?? 301)},
+  ${sqlValue(redirect.behavior || 'redirect')}, ${sqlValue(redirect.reason)}, ${sqlValue(redirect.source || 'react-adapter')},
+  ${now}, ${now}
+)`))
+
 const mediaRows = values((manifest.mediaInventory?.files ?? [])
   .filter((asset) => asset.asset_id && asset.public_url)
   .map((asset) => {
@@ -93,7 +104,7 @@ const mediaRows = values((manifest.mediaInventory?.files ?? [])
   'uploaded', NULL, ${sqlValue(asset.r2_key)}, NULL,
   ${sqlValue(asset.public_url)}, NULL, ${sqlValue(mimeType)},
   ${sqlValue(asset.file_name || asset.source_name || asset.source_path || asset.asset_id)},
-  NULL, NULL, NULL, NULL, ${sqlValue(asset.role || asset.file_name || 'Legal file')},
+  ${sqlValue(asset.file_size ?? asset.size_bytes)}, ${sqlValue(asset.width)}, ${sqlValue(asset.height)}, NULL, ${sqlValue(asset.role || asset.file_name || 'Legal file')},
   ${sqlValue(category)}, 'active', NULL, ${now}, ${now}, NULL
 )`
   }))
@@ -101,15 +112,38 @@ const mediaRows = values((manifest.mediaInventory?.files ?? [])
 const blogRows = values((manifest.articles ?? []).map((article, index) => `(
   ${sqlValue(`blog_ncls_${article.slug}`)}, ${sqlValue(ORG_ID)}, ${sqlValue(SITE_ID)},
   ${sqlValue(article.title)}, ${sqlValue(article.slug)}, ${sqlValue(article.body || article.excerpt || '')},
-  ${sqlValue(article.excerpt)}, ${sqlValue(article.category || 'Legal Services')}, 'published',
-  ${sqlValue(USER_ID)}, NULL,
-  ${sqlValue(new Date(Date.UTC(2026, 0, 1, 12) + index * 86400000).toISOString())},
-  ${now}, ${now}, ${sqlValue(article.seo_description)}, ${sqlValue(article.seo_keywords)},
+  ${sqlValue(article.excerpt)}, ${sqlValue(article.category || 'Legal Services')}, ${sqlJson(article.tags ?? [])}, 'published',
+  ${sqlValue(USER_ID)}, ${sqlValue(article.featured_image_asset_id)},
+  ${sqlValue(article.published_at || new Date(Date.UTC(2026, 0, 1, 12) + index * 86400000).toISOString())},
+  ${sqlValue(article.published_at || new Date(Date.UTC(2026, 0, 1, 12) + index * 86400000).toISOString())}, ${sqlValue(article.updated_at || article.published_at || new Date(Date.UTC(2026, 0, 1, 12) + index * 86400000).toISOString())}, ${sqlValue(article.seo_description)}, ${sqlValue(article.seo_keywords)},
   ${sqlValue(article.canonical_url || `/article/${article.slug}`)}, NULL
+)`))
+
+const qaRows = values((manifest.siteQa ?? []).map((qa) => `(
+  ${sqlValue(qa.id)}, ${sqlValue(ORG_ID)}, ${sqlValue(SITE_ID)}, NULL, NULL,
+  ${sqlValue(qa.question)}, NULL, NULL, ${sqlValue(qa.answer)}, ${sqlValue(site.brand_name)}, NULL,
+  1, 0, ${sqlValue(qa.source || 'import')}, ${sqlValue(qa.status || 'published')}, ${Number(qa.sort_order ?? 0)}, ${now}, ${now}
+)`))
+
+const reviewRows = values((manifest.reviews ?? []).map((review) => `(
+  ${sqlValue(review.id)}, ${sqlValue(ORG_ID)}, ${sqlValue(SITE_ID)}, NULL,
+  NULL, NULL, NULL, NULL, NULL, NULL,
+  ${sqlValue(review.author_name)}, ${sqlValue(review.reviewer_photo_url)}, ${Number(review.rating ?? 5)},
+  ${sqlValue(review.title)}, ${sqlValue(review.content)}, NULL, NULL, NULL, NULL, 0,
+  ${sqlValue(review.status || 'approved')}, 'owner_entered', ${sqlValue(USER_ID)},
+  ${sqlValue(review.collection_method || 'migration')}, ${sqlValue(review.original_review_date)},
+  ${sqlValue(review.original_reference)}, 1, NULL, NULL, ${now}, ${now}
 )`))
 
 const compliance = manifest.compliance ?? {}
 const consultation = manifest.consultation ?? {}
+const mediaInsertSql = mediaRows ? `INSERT INTO media_assets (
+  id, organization_id, site_id, location_id, kind, provider, source,
+  cloudflare_image_id, r2_key, google_media_name, public_url, thumbnail_url,
+  mime_type, file_name, file_size, width, height, duration, alt_text,
+  category, status, created_by_user_id, created_at, updated_at, delete_pending_at
+) VALUES
+${mediaRows};` : '-- No approved media/file rows in manifest.'
 
 const sql = `-- NCLS Blawby local seed
 -- Generated from ${manifestPath}
@@ -125,8 +159,8 @@ DELETE FROM organization WHERE id = ${sqlValue(ORG_ID)};
 DELETE FROM site_domains WHERE domain IN ('ncls.localhost', 'ncls.krabiclaw.com', 'northcarolinalegalservices.org');
 DELETE FROM user WHERE id = ${sqlValue(USER_ID)};
 
-INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
-VALUES (${sqlValue(USER_ID)}, 'NCLS Blawby Owner', 'ncls-blawby@example.test', 1, 'admin', unixepoch(), unixepoch());
+INSERT INTO user (id, name, email, emailVerified, image, role, createdAt, updatedAt)
+VALUES (${sqlValue(USER_ID)}, 'Rich Gittings', 'ncls-blawby@example.test', 1, ${sqlValue(site.author_image_url)}, 'admin', unixepoch(), unixepoch());
 
 INSERT INTO organization (id, name, slug, createdAt)
 VALUES (${sqlValue(ORG_ID)}, ${sqlValue(site.brand_name)}, 'north-carolina-legal-services', unixepoch());
@@ -169,6 +203,10 @@ UPDATE sites SET primary_location_id = ${sqlValue(LOCATION_ID)} WHERE id = ${sql
 
 INSERT INTO site_locales (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled)
 VALUES ('locale-ncls-en', ${sqlValue(ORG_ID)}, ${sqlValue(SITE_ID)}, 'en', 'English', 1, 'published', 1);
+
+${mediaInsertSql}
+
+UPDATE sites SET logo_asset_id = ${sqlValue(site.logo_asset_id)} WHERE id = ${sqlValue(SITE_ID)};
 
 INSERT INTO offerings (
   id, organization_id, site_id, location_id, name, slug, label, summary,
@@ -218,16 +256,30 @@ INSERT INTO tenant_navigation_items (
 ) VALUES
 ${navRows};
 
-${mediaRows ? `INSERT INTO media_assets (
-  id, organization_id, site_id, location_id, kind, provider, source,
-  cloudflare_image_id, r2_key, google_media_name, public_url, thumbnail_url,
-  mime_type, file_name, file_size, width, height, duration, alt_text,
-  category, status, created_by_user_id, created_at, updated_at, delete_pending_at
+${redirectRows ? `INSERT INTO tenant_redirects (
+  id, organization_id, site_id, from_path, to_path, status_code, behavior,
+  reason, source, created_at, updated_at
 ) VALUES
-${mediaRows};` : '-- No approved media/file rows in manifest.'}
+${redirectRows};` : '-- No tenant redirects in manifest.'}
+
+${qaRows ? `INSERT INTO location_qa (
+  id, organization_id, site_id, location_id, google_question_id, question,
+  question_author, question_date, answer, answer_author, answer_date,
+  is_owner_answer, upvote_count, source, status, sort_order, created_at, updated_at
+) VALUES
+${qaRows};` : '-- No site Q&A rows in manifest.'}
+
+${reviewRows ? `INSERT INTO reviews (
+  id, organization_id, site_id, location_id, customer_id, booking_id, booking_type,
+  review_request_id, user_id, menu_item_slug, author_name, reviewer_photo_url, rating,
+  title, content, google_review_id, owner_reply, owner_reply_at, photo_urls, helpful_count,
+  status, source, entered_by_user_id, collection_method, original_review_date,
+  original_reference, publication_authorized, ip_hash, user_agent, created_at, updated_at
+) VALUES
+${reviewRows};` : '-- No owner-entered review rows in manifest.'}
 
 INSERT INTO blog_posts (
-  id, organization_id, site_id, title, slug, body, excerpt, category, status,
+  id, organization_id, site_id, title, slug, body, excerpt, category, tags_json, status,
   author_id, featured_image_asset_id, published_at, created_at, updated_at,
   seo_description, seo_keywords, canonical_url, robots
 ) VALUES

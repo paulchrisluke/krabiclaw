@@ -97,6 +97,17 @@ export function potteryHouseTestBaseUrl() {
   return base.toString().replace(/\/$/, '')
 }
 
+export function blawbyTestBaseUrl() {
+  const base = new URL(testBaseUrl())
+  if (['localhost', '127.0.0.1', '[::1]'].includes(base.hostname)) {
+    base.hostname = 'ncls.localhost'
+    return base.toString().replace(/\/$/, '')
+  }
+  if (isPreviewContext(base.hostname)) return base.toString().replace(/\/$/, '')
+  base.hostname = base.hostname.startsWith('ncls.') ? base.hostname : `ncls.${base.hostname}`
+  return base.toString().replace(/\/$/, '')
+}
+
 export function tenantTestExtraHeaders(): Record<string, string> {
   const base = new URL(testBaseUrl())
   return isPreviewContext(base.hostname) ? previewWorkerHeaders('demo') : {}
@@ -105,6 +116,11 @@ export function tenantTestExtraHeaders(): Record<string, string> {
 export function potteryHouseTestExtraHeaders(): Record<string, string> {
   const base = new URL(testBaseUrl())
   return isPreviewContext(base.hostname) ? previewWorkerHeaders('pottery-house') : {}
+}
+
+export function blawbyTestExtraHeaders(): Record<string, string> {
+  const base = new URL(testBaseUrl())
+  return isPreviewContext(base.hostname) ? previewWorkerHeaders('ncls') : {}
 }
 
 export function devLoginUrl(baseURL: string, userId?: string) {

@@ -1,13 +1,23 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { listQa } from '~/server/utils/location-qa'
+import { listSiteReviews } from '~/server/utils/site-reviews'
+import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
 import type {
   PublicBlawbyData,
   PublicBlawbyIdentity,
+  PublicBlawbyRouteData,
   PublicBlawbyShellData,
+  PublicBlogSummary,
+  PublicBlogPost,
   PublicCompliance,
   PublicConsultationSettings,
   PublicNavigationItem,
   PublicOffering,
+  PublicOfferingFeature,
   PublicOfferingLink,
+  PublicOfferingSummary,
+  PublicSiteQa,
+  PublicSiteReview,
   PublicTenantPage,
 } from '~/types/blawby'
 
@@ -40,7 +50,7 @@ async function loadMediaById(db: DbClient, siteId: string, mediaIds: string[]) {
   const uniqueIds = Array.from(new Set(mediaIds)).filter(Boolean)
   const mediaRows = uniqueIds.length
     ? await queryAll<ApiRecord>(db, `
-        SELECT id, public_url, kind, alt_text
+        SELECT id, public_url, kind, alt_text, width, height
           FROM media_assets
          WHERE site_id = ? AND id IN (${uniqueIds.map(() => '?').join(',')}) AND status = 'active'
       `, [siteId, ...uniqueIds])
@@ -50,6 +60,29 @@ async function loadMediaById(db: DbClient, siteId: string, mediaIds: string[]) {
 
 function mapOfferingRow(row: OfferingRow, mediaById: Map<string, ApiRecord>): PublicOffering {
   const ids = parseJson<string[]>(row.media_asset_ids, [])
+  const rawFeatures = parseJson<unknown[]>(row.features, [])
+  const features: PublicOfferingFeature[] = rawFeatures.map((feature, index) => {
+    if (typeof feature === 'string') {
+      const separator = feature.indexOf(':')
+      return {
+        title: separator > 0 ? feature.slice(0, separator).trim() : feature,
+        description: separator > 0 ? feature.slice(separator + 1).trim() : '',
+        image_url: null,
+        icon: null,
+        icon_url: null,
+        sort_order: index,
+      }
+    }
+    const record = feature && typeof feature === 'object' ? feature as ApiRecord : {}
+    return {
+      title: String(record.title || record.name || `Feature ${index + 1}`),
+      description: String(record.description || record.desc || ''),
+      image_url: typeof record.image_url === 'string' ? record.image_url : null,
+      icon: typeof record.icon === 'string' ? record.icon : null,
+      icon_url: typeof record.icon_url === 'string' ? record.icon_url : null,
+      sort_order: Number(record.sort_order ?? index),
+    }
+  }).sort((left, right) => left.sort_order - right.sort_order)
   return {
     id: String(row.id),
     name: String(row.name),
@@ -58,7 +91,7 @@ function mapOfferingRow(row: OfferingRow, mediaById: Map<string, ApiRecord>): Pu
     summary: typeof row.summary === 'string' ? row.summary : null,
     short_description: typeof row.short_description === 'string' ? row.short_description : null,
     body: typeof row.body === 'string' ? row.body : null,
-    features: parseJson<string[]>(row.features, []),
+    features,
     faqs: parseJson<Array<{ question: string; answer: string }>>(row.faqs, []),
     cta_label: typeof row.cta_label === 'string' ? row.cta_label : null,
     cta_url: typeof row.cta_url === 'string' ? row.cta_url : null,
@@ -69,6 +102,8 @@ function mapOfferingRow(row: OfferingRow, mediaById: Map<string, ApiRecord>): Pu
       url: String(asset!.public_url),
       kind: String(asset!.kind || 'image'),
       alt_text: typeof asset!.alt_text === 'string' ? String(asset!.alt_text) : null,
+      width: Number.isFinite(Number(asset!.width)) ? Number(asset!.width) : null,
+      height: Number.isFinite(Number(asset!.height)) ? Number(asset!.height) : null,
     })),
     schema_type: typeof row.schema_type === 'string' ? row.schema_type : null,
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
@@ -131,6 +166,65 @@ export async function listPublicOfferingLinks(db: DbClient, siteId: string): Pro
     canonical_path: typeof row.canonical_path === 'string' && row.canonical_path
       ? row.canonical_path
       : `/services/${String(row.slug)}`,
+  }))
+}
+
+export async function listPublicOfferingSummaries(db: DbClient, siteId: string): Promise<PublicOfferingSummary[]> {
+  const rows = await queryAll<ApiRecord>(db, `
+    SELECT o.id, o.name, o.slug, o.label, o.summary, o.short_description,
+           thumb.public_url AS thumbnail_url, o.canonical_path, o.sort_order, o.featured
+      FROM offerings o
+      LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
+     WHERE o.site_id = ? AND o.status = 'published'
+     ORDER BY o.sort_order ASC, o.name ASC
+  `, [siteId])
+  return rows.map(row => ({
+    id: String(row.id),
+    name: String(row.name),
+    slug: String(row.slug),
+    label: typeof row.label === 'string' ? row.label : null,
+    summary: typeof row.summary === 'string' ? row.summary : null,
+    short_description: typeof row.short_description === 'string' ? row.short_description : null,
+    thumbnail_url: typeof row.thumbnail_url === 'string' ? row.thumbnail_url : null,
+    canonical_path: typeof row.canonical_path === 'string' && row.canonical_path
+      ? row.canonical_path
+      : `/services/${String(row.slug)}`,
+    sort_order: Number(row.sort_order ?? 0),
+    featured: asBoolean(row.featured),
+  }))
+}
+
+export async function listPublicBlogSummaries(db: DbClient, siteId: string, limit = 50): Promise<PublicBlogSummary[]> {
+  const rows = await queryAll<ApiRecord>(db, `
+    SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.tags_json, p.published_at, p.canonical_url,
+           u.name AS author_name, u.image AS author_image, media.public_url, media.width, media.height
+      FROM blog_posts p
+      LEFT JOIN user u ON u.id = p.author_id
+      LEFT JOIN media_assets media ON media.id = p.featured_image_asset_id AND media.status = 'active'
+     WHERE p.site_id = ? AND p.status = 'published'
+     ORDER BY p.published_at IS NULL, p.published_at DESC, p.id DESC
+     LIMIT ?
+  `, [siteId, Math.max(1, Math.min(50, Math.trunc(limit)))])
+  return rows.map(row => ({
+    id: String(row.id),
+    title: String(row.title),
+    slug: String(row.slug),
+    excerpt: typeof row.excerpt === 'string' ? row.excerpt : null,
+    category: typeof row.category === 'string' ? row.category : null,
+    tags: parseJson<string[]>(row.tags_json, []),
+    author_name: typeof row.author_name === 'string' ? row.author_name : null,
+    author_image: typeof row.author_image === 'string' ? row.author_image : null,
+    published_at: typeof row.published_at === 'string' ? row.published_at : null,
+    canonical_url: typeof row.canonical_url === 'string' && row.canonical_url
+      ? row.canonical_url
+      : `/article/${String(row.slug)}`,
+    featured_image: typeof row.public_url === 'string' && row.public_url
+      ? {
+          public_url: row.public_url,
+          width: Number.isFinite(Number(row.width)) ? Number(row.width) : null,
+          height: Number.isFinite(Number(row.height)) ? Number(row.height) : null,
+        }
+      : null,
   }))
 }
 
@@ -257,7 +351,7 @@ export async function getPublicThemeTokens(db: DbClient, siteId: string, templat
 
 export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Promise<PublicBlawbyIdentity> {
   const row = await queryFirst<ApiRecord>(db, `
-    SELECT s.brand_name, s.brand_description, COALESCE(logo.public_url, s.logo_url) AS logo_url
+    SELECT s.brand_name, s.brand_description, s.contact_phone, COALESCE(logo.public_url, s.logo_url) AS logo_url
       FROM sites s
       LEFT JOIN media_assets logo ON s.logo_asset_id = logo.id AND logo.status = 'active'
      WHERE s.id = ?
@@ -268,6 +362,9 @@ export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Pro
     brand_name: typeof row?.brand_name === 'string' ? row.brand_name : null,
     brand_description: typeof row?.brand_description === 'string' ? row.brand_description : null,
     logo_url: typeof row?.logo_url === 'string' ? row.logo_url : null,
+    phone: typeof row?.contact_phone === 'string' ? row.contact_phone : null,
+    banner_content: null,
+    banner_dismissible: false,
   }
 }
 
@@ -280,7 +377,126 @@ export async function getPublicBlawbyShellData(db: DbClient, siteId: string): Pr
     getPublicThemeTokens(db, siteId),
     listPublicOfferingLinks(db, siteId),
   ])
+  const header = compliance?.metadata?.header
+  if (header && typeof header === 'object') {
+    identity.banner_content = typeof (header as ApiRecord).banner_content === 'string' ? String((header as ApiRecord).banner_content) : null
+    identity.banner_dismissible = asBoolean((header as ApiRecord).banner_dismissible)
+  }
   return { identity, navigation, consultation, compliance, themeTokens, offeringLinks }
+}
+
+const ROUTE_PAGE_PATHS: Record<PublicBlawbyRouteData['recipe'], string | null> = {
+  home: '/',
+  services: '/services',
+  offering: '/services',
+  about: '/about',
+  pricing: '/pricing',
+  contact: '/contact',
+  schedule: '/schedule',
+  blog: '/blog',
+  article: '/blog',
+  donate: '/donate',
+  privacy: '/policies/privacy',
+  terms: '/policies/terms',
+  'third-party-notices': '/third-party-notices',
+}
+
+function mapPublicQa(rows: Array<Record<string, unknown>>): PublicSiteQa[] {
+  return rows.map(row => ({
+    id: String(row.id),
+    question: String(row.question),
+    answer: typeof row.answer === 'string' ? row.answer : null,
+    sort_order: Number(row.sort_order ?? 0),
+  }))
+}
+
+function mapPublicReviews(rows: Array<Record<string, unknown>>): PublicSiteReview[] {
+  return rows.map(row => ({
+    id: String(row.id),
+    author_name: String(row.author_name || 'Client'),
+    reviewer_photo_url: typeof row.reviewer_photo_url === 'string' ? row.reviewer_photo_url : null,
+    rating: Number(row.rating ?? 5),
+    title: typeof row.title === 'string' ? row.title : null,
+    content: String(row.content || ''),
+    original_review_date: typeof row.original_review_date === 'string' ? row.original_review_date : null,
+    verified: row.verified === true,
+  }))
+}
+
+function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
+  if (!row) return null
+  const featured = row.featured_image && typeof row.featured_image === 'object' ? row.featured_image as ApiRecord : null
+  return {
+    id: String(row.id),
+    title: String(row.title),
+    slug: String(row.slug),
+    body: String(row.body || ''),
+    excerpt: typeof row.excerpt === 'string' ? row.excerpt : null,
+    category: typeof row.category === 'string' ? row.category : null,
+    tags: parseJson<string[]>(row.tags_json, []),
+    author_name: typeof row.author_name === 'string' ? row.author_name : null,
+    published_at: typeof row.published_at === 'string' ? row.published_at : null,
+    canonical_url: typeof row.canonical_url === 'string' && row.canonical_url ? row.canonical_url : `/article/${String(row.slug)}`,
+    seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
+    robots: typeof row.robots === 'string' ? row.robots : null,
+    created_at: typeof row.created_at === 'string' ? row.created_at : null,
+    updated_at: typeof row.updated_at === 'string' ? row.updated_at : null,
+    components: Array.isArray(row.components) ? row.components as ApiRecord[] : [],
+    author_image: typeof row.author_image === 'string' ? row.author_image : null,
+    featured_image: featured && typeof featured.public_url === 'string'
+      ? {
+          public_url: featured.public_url,
+          width: Number.isFinite(Number(featured.width)) ? Number(featured.width) : null,
+          height: Number.isFinite(Number(featured.height)) ? Number(featured.height) : null,
+        }
+      : null,
+  }
+}
+
+export async function getPublicBlawbyRouteData(
+  db: DbClient,
+  siteId: string,
+  recipe: PublicBlawbyRouteData['recipe'],
+  options: { slug?: string | null } = {},
+): Promise<PublicBlawbyRouteData> {
+  const needsOfferings = ['home', 'services', 'offering', 'about', 'pricing'].includes(recipe)
+  const needsQa = ['home', 'services', 'about', 'pricing', 'contact', 'schedule', 'blog', 'donate'].includes(recipe)
+  const needsReviews = ['home', 'offering', 'about', 'contact', 'schedule'].includes(recipe)
+  const postLimit = recipe === 'home' ? 3 : recipe === 'blog' ? 50 : 0
+  const pagePath = ROUTE_PAGE_PATHS[recipe]
+
+  const [page, offerings, offering, qaRows, reviewRows, initialPosts, postRow] = await Promise.all([
+    pagePath ? getPublicTenantPageByPath(db, siteId, pagePath) : Promise.resolve(null),
+    needsOfferings ? listPublicOfferingSummaries(db, siteId) : Promise.resolve([]),
+    recipe === 'offering' && options.slug
+      ? getPublicOfferingBySlug(db, siteId, options.slug)
+      : Promise.resolve(null),
+    needsQa ? listQa(db, siteId, null, true) : Promise.resolve([]),
+    needsReviews ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
+    postLimit ? listPublicBlogSummaries(db, siteId, postLimit) : Promise.resolve([]),
+    recipe === 'article' && options.slug
+      ? getPublishedSiteBlogPost(db, siteId, options.slug)
+      : Promise.resolve(null),
+  ])
+  let posts = initialPosts
+  if (recipe === 'article' && postRow) {
+    const postTags = parseJson<string[]>(postRow.tags_json, [])
+    const summaries = await listPublicBlogSummaries(db, siteId, 50)
+    posts = summaries
+      .filter(summary => summary.slug !== options.slug && summary.tags.some(tag => postTags.includes(tag)))
+      .slice(0, 3)
+  }
+
+  return {
+    recipe,
+    page,
+    offerings,
+    offering,
+    qa: mapPublicQa(qaRows),
+    reviews: mapPublicReviews(reviewRows),
+    posts,
+    post: mapPublicBlogPost(postRow),
+  }
 }
 
 export async function getPublicBlawbyData(db: DbClient, siteId: string): Promise<PublicBlawbyData> {
@@ -298,7 +514,7 @@ export async function getPublicBlawbyData(db: DbClient, siteId: string): Promise
 export async function recordSiteConversionEvent(db: DbClient, input: {
   organizationId: string
   siteId: string
-  eventName: 'page_view' | 'book_consultation_click' | 'contact_submit'
+  eventName: 'page_view' | 'book_consultation_click' | 'contact_submit' | 'donation_click'
   pageType?: string | null
   pagePath?: string | null
   pageLocation?: string | null

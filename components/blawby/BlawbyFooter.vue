@@ -5,7 +5,7 @@
       <div class="xl:grid xl:grid-cols-3 xl:gap-8">
         <div class="space-y-8">
           <NuxtLink to="/" class="inline-flex no-underline" :aria-label="`${brandName} home`">
-            <img v-if="site.logo_url" :src="site.logo_url" :alt="brandName" class="max-h-16 w-auto max-w-[248px] object-contain">
+            <img v-if="footerLogo" :src="footerLogo" :alt="brandName" class="max-h-16 w-auto max-w-[248px] object-contain">
             <span v-else class="blawby-display text-2xl text-white">{{ brandName }}</span>
           </NuxtLink>
           <BlawbyRichText
@@ -54,18 +54,6 @@
             <div class="mt-10 md:mt-0">
               <h3 class="text-sm font-semibold leading-6 text-white">Legal</h3>
               <BlawbyFooterLinks :items="legalItems" />
-              <div v-if="documentLinks.length" class="mt-6 space-y-4">
-                <a
-                  v-for="document in documentLinks"
-                  :key="document.id"
-                  :href="document.url"
-                  class="block text-sm leading-6 text-gray-300 hover:text-white"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {{ document.label || document.file_name || 'Legal document' }}
-                </a>
-              </div>
             </div>
           </div>
         </div>
@@ -93,6 +81,9 @@ const props = defineProps<{
 const year = new Date().getFullYear()
 const brandName = computed(() => props.site.brand_name || props.compliance?.entity_name || 'Blawby')
 const description = computed(() => props.compliance?.footer_disclaimer || props.site.brand_description || '')
+const footerLogo = computed(() => typeof props.compliance?.metadata?.logo_dark_url === 'string'
+  ? props.compliance.metadata.logo_dark_url
+  : props.site.logo_url)
 const footerItems = computed(() => props.navigation.filter(item => item.area === 'footer'))
 const socialItems = computed(() => props.navigation.filter(item => item.area === 'social' && item.url !== '/none'))
 
@@ -130,10 +121,6 @@ const legalItems = computed<PublicNavigationItem[]>(() => {
   ]
 })
 
-type DocumentLink = NonNullable<PublicCompliance['documents'][number]> & { url: string }
-const documentLinks = computed(() =>
-  props.compliance?.documents.filter((document): document is DocumentLink => Boolean(document.url)) ?? [],
-)
 </script>
 
 <style scoped>

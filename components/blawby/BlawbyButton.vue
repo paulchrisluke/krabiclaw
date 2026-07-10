@@ -4,12 +4,13 @@
     :href="isExternal ? to : undefined"
     :to="!isButton && !isExternal ? to : undefined"
     :type="isButton ? type : undefined"
+    :disabled="isButton ? disabled : undefined"
     :target="isExternal ? '_blank' : undefined"
     :rel="isExternal ? 'noopener noreferrer' : undefined"
-    class="inline-flex min-h-11 items-center justify-center rounded-lg border px-5 py-3 text-sm font-semibold uppercase no-underline transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-primary)] focus-visible:ring-offset-2"
+    class="group inline-flex items-center justify-center rounded-lg px-3 py-3 text-sm font-semibold uppercase no-underline disabled:cursor-not-allowed disabled:opacity-60"
     :class="variant === 'outline'
-      ? 'border-[var(--blawby-primary)] text-[var(--blawby-primary)] hover:bg-[var(--blawby-primary)] hover:text-white'
-      : 'border-[var(--blawby-accent)] bg-[var(--blawby-accent)] text-[var(--blawby-primary)] hover:brightness-95'"
+      ? 'bg-[var(--blawby-accent-100)] text-[var(--blawby-primary)] hover:bg-[var(--blawby-accent-200)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-accent)] focus-visible:ring-offset-2'
+      : 'bg-[var(--blawby-accent)] text-white hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-accent)] focus-visible:ring-offset-2'"
     @click="$emit('click', $event)"
   >
     <slot />
@@ -24,11 +25,13 @@ const props = withDefaults(defineProps<{
   as?: 'button' | 'link'
   type?: 'button' | 'submit' | 'reset'
   variant?: 'solid' | 'outline'
+  disabled?: boolean
 }>(), {
   to: '',
   as: 'link',
   type: 'button',
   variant: 'solid',
+  disabled: false,
 })
 
 defineEmits<{

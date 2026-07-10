@@ -5,6 +5,8 @@ import {
   BLAWBY_PARITY_ROUTES,
   BLAWBY_PARITY_VIEWPORTS,
   BLAWBY_REFERENCE_COMMIT,
+  BLAWBY_REFERENCE_ETAG,
+  NCLS_ARTICLE_SLUGS,
 } from './blawby-parity-config.mjs'
 
 const DEFAULT_ROUTES = [
@@ -49,7 +51,6 @@ const APPROVED_MEDIA_HOSTS = [
 
 const SCREENSHOT_ROUTES = Object.keys(BLAWBY_PARITY_ROUTES)
 const SCREENSHOT_VIEWPORTS = Object.keys(BLAWBY_PARITY_VIEWPORTS)
-
 function parseArgs(argv) {
   const args = {
     url: '',
@@ -127,6 +128,9 @@ function collectRoutes(manifest, explicitRoutes) {
   }
   for (const route of manifest?.routeInventory?.preservedRoutes ?? []) {
     routes.add(route)
+  }
+  for (const redirect of manifest?.redirects ?? []) {
+    routes.add(redirect.from_path)
   }
   return Array.from(routes).filter(Boolean).map((route) => {
     try {
@@ -278,11 +282,22 @@ function validateArtifacts(checks, manifest) {
   pushCheck(checks, (manifest.offerings ?? []).length > 0, 'Import manifest contains offerings')
   pushCheck(checks, (manifest.tenantPages ?? []).some((page) => page.path === '/pricing'), 'Import manifest contains /pricing tenant page')
   pushCheck(checks, (manifest.tenantPages ?? []).some((page) => page.path === '/donate'), 'Import manifest contains /donate tenant page')
-  pushCheck(checks, (manifest.articles ?? []).length > 0, 'Import manifest contains articles')
+  const articleSlugs = new Set((manifest.articles ?? []).map(article => article.slug))
+  pushCheck(checks, NCLS_ARTICLE_SLUGS.every(slug => articleSlugs.has(slug)) && articleSlugs.size === NCLS_ARTICLE_SLUGS.length, 'Import manifest contains the complete pinned NCLS Markdown library')
   pushCheck(checks, Boolean(manifest.routeInventory), 'Import manifest contains route inventory')
   pushCheck(checks, Boolean(manifest.mediaInventory), 'Import manifest contains media inventory')
+  pushCheck(
+    checks,
+    manifest.source_commit === BLAWBY_REFERENCE_COMMIT,
+    `Import manifest is tied to pinned source commit ${BLAWBY_REFERENCE_COMMIT}`,
+  )
   pushCheck(checks, Boolean(manifest.editSurfaceMatrix), 'Import manifest contains edit-surface matrix')
   pushCheck(checks, Boolean(manifest.intentionalDifferences), 'Import manifest contains intentional differences')
+  const navigationKeys = (manifest.navigation ?? []).map(item => `${item.area}:${item.label}:${item.url}`)
+  pushCheck(checks, new Set(navigationKeys).size === navigationKeys.length, 'Import manifest navigation has no duplicate rows')
+  const redirectFromPaths = new Set((manifest.redirects ?? []).map(redirect => redirect.from_path))
+  pushCheck(checks, redirectFromPaths.has('/article/divorce-and-children-in-north-carolina-what-to-expect-and-how-to-prepare'), 'Import manifest preserves the legacy divorce article URL')
+  pushCheck(checks, redirectFromPaths.has('/article/writing-your-own-will-how-it-works-in-north-carolina'), 'Import manifest preserves the legacy will article URL')
 
   const legalFiles = (manifest.mediaInventory?.files ?? []).filter(file => file.kind === 'legal_file')
   pushCheck(checks, legalFiles.length > 0, 'Import manifest inventories legal files')
@@ -290,6 +305,7 @@ function validateArtifacts(checks, manifest) {
     if (!file.approved_storage_required) continue
     const hasApprovedAsset = typeof file.asset_id === 'string' && file.asset_id.length > 0 && typeof file.public_url === 'string' && file.public_url.length > 0
     pushCheck(checks, hasApprovedAsset, `Required media/file has approved asset URL: ${file.source_path || file.source_name || file.asset_id || 'unknown'}`)
+    pushCheck(checks, file.upload_status === 'verified', `Required media/file upload is verified: ${file.source_path || file.source_name || file.asset_id || 'unknown'}`)
   }
   const complianceAssetIds = new Set(manifest.compliance?.document_asset_ids ?? [])
   pushCheck(
@@ -368,6 +384,19 @@ function validatePublicData(checks, data, required) {
   }
 }
 
+async function validateRemoteMedia(checks, ...sources) {
+  const urls = [...new Set(sources.flatMap(source => [...collectArtifactMediaUrls(source)]))]
+    .filter(url => checkMediaUrl(url).ok && /^https:\/\//.test(url))
+  const concurrency = 8
+  for (let offset = 0; offset < urls.length; offset += concurrency) {
+    await Promise.all(urls.slice(offset, offset + concurrency).map(async (url) => {
+      const { response, timer } = await fetchResponseWithTimeout(url, { headers: { Range: 'bytes=0-0' } })
+      if (timer) clearTimeout(timer)
+      pushCheck(checks, response.status >= 200 && response.status < 400, `Remote media is fetchable: ${url}`, { status: response.status })
+    }))
+  }
+}
+
 function validateSitemap(checks, sitemap, manifest) {
   if (!sitemap) {
     pushCheck(checks, false, 'Sitemap is fetchable')
@@ -401,6 +430,11 @@ function validateScreenshots(checks, evidenceDir, required) {
         manifest.source_revision === BLAWBY_REFERENCE_COMMIT,
         `Reference screenshots use pinned commit ${BLAWBY_REFERENCE_COMMIT}`,
       )
+      pushCheck(
+        checks,
+        manifest.observed_reference_etag === BLAWBY_REFERENCE_ETAG,
+        `Reference screenshots use pinned live ETag ${BLAWBY_REFERENCE_ETAG}`,
+      )
     }
     for (const route of SCREENSHOT_ROUTES) {
       for (const viewport of SCREENSHOT_VIEWPORTS) {
@@ -417,6 +451,10 @@ function validateScreenshots(checks, evidenceDir, required) {
         pushCheck(checks, hasSections, `Section captures exist: ${source}/${route}-${viewport}`)
       }
     }
+    const hasMobileNavigationState = Boolean(manifest?.states?.some(state =>
+      state.route_name === 'home' && state.viewport === 'mobile' && state.name === 'mobile-navigation-open',
+    ))
+    pushCheck(checks, hasMobileNavigationState, `Mobile navigation state capture exists: ${source}`)
   }
 }
 
@@ -489,7 +527,9 @@ if (baseUrl) {
 }
 
 validateArtifacts(checks, manifest)
-validatePublicData(checks, await fetchBlawbyData(baseUrl, args.siteId), Boolean(args.siteId))
+const publicData = await fetchBlawbyData(baseUrl, args.siteId)
+validatePublicData(checks, publicData, Boolean(args.siteId))
+if (baseUrl) await validateRemoteMedia(checks, manifest, publicData)
 if (baseUrl) validateSitemap(checks, await fetchSitemap(baseUrl), manifest)
 validateScreenshots(checks, args.evidenceDir, args.requireScreenshots)
 

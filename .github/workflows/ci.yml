@@ -58,6 +58,8 @@ jobs:
           filters: |
             pottery_house:
               - 'scripts/**'
+              - '!scripts/*blawby*.mjs'
+              - '!scripts/adapters/ncls-blawby.mjs'
               - 'components/saya/**'
               - 'pages/**'
               - 'utils/vertical-copy.ts'
@@ -78,16 +80,34 @@ jobs:
               - 'pages/services/**'
               - 'pages/third-party-notices.vue'
               - 'scripts/*blawby*.mjs'
+              - 'scripts/adapters/ncls-blawby.mjs'
               - 'scripts/client-verify.mjs'
               - 'server/api/editor/sites/**/professional-services*'
+              - 'server/api/editor/sites/**/qa/**'
+              - 'server/api/editor/sites/**/qa.*'
+              - 'server/api/editor/sites/**/reviews/**'
+              - 'server/api/editor/sites/**/reviews.*'
               - 'server/api/public/sites/**/blawby.get.ts'
+              - 'server/api/public/sites/**/blawby/**'
+              - 'server/api/public/sites/**/contact.post.ts'
               - 'server/api/public/sites/**/conversion-events.post.ts'
               - 'server/db/schema.ts'
               - 'server/middleware/zz-redirects.ts'
               - 'server/plugins/tenant-sitemap-filter.ts'
               - 'server/utils/professional-services*.ts'
+              - 'server/utils/location-qa.ts'
+              - 'server/utils/site-reviews.ts'
+              - 'server/utils/platform-content.ts'
+              - 'server/utils/mcp-executor/qa.ts'
+              - 'server/utils/mcp-executor/reviews.ts'
+              - 'server/utils/mcp-workflows.ts'
               - 'types/blawby.ts'
               - 'utils/template-registry.ts'
+              - 'utils/blawby-pricing.ts'
+              - 'tests/e2e/blawby.spec.ts'
+              - 'tests/e2e/site-content-scopes.spec.ts'
+              - 'tests/unit/blawby*.test.ts'
+              - 'tests/unit/site-content-scopes.test.ts'
 
   lint-seeds:
     name: Seed schema lint
@@ -156,6 +176,7 @@ jobs:
             scripts/canary-prod.mjs \
             scripts/canary-notifications.mjs \
             scripts/generate-ncls-blawby-seed.mjs \
+            scripts/prepare-ncls-blawby-media.mjs \
             scripts/capture-blawby-screenshots.mjs \
             scripts/compare-blawby-screenshots.mjs \
             scripts/rollback-prod.mjs \
@@ -258,7 +279,16 @@ jobs:
       - name: Run smoke tests
         env:
           PLAYWRIGHT_PREVIEW_URL: https://preview.krabiclaw.com
-        run: yarn test:e2e:full
+          POTTERY_HOUSE_CHANGED: ${{ needs.changes.outputs.pottery_house }}
+          BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
+        run: |
+          yarn test:e2e:core
+          if [ "$POTTERY_HOUSE_CHANGED" = "true" ]; then
+            yarn test:e2e:pottery-house
+          fi
+          if [ "$BLAWBY_CHANGED" = "true" ]; then
+            yarn test:e2e:blawby
+          fi
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -312,6 +342,50 @@ jobs:
             --site-id "site-ncls-blawby" \
             --slug "north-carolina-legal-services" \
             --tenant-slug "ncls"
+
+  blawby-parity:
+    name: Blawby full-site pixel parity
+    needs: [changes, e2e-smoke]
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && needs.changes.outputs.blawby == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
+      - name: Capture pinned live reference
+        run: |
+          node scripts/capture-blawby-screenshots.mjs \
+            --url "https://www.northcarolinalegalservices.org" \
+            --source reference \
+            --source-revision "5908ab3e64f26f799de61ed55371d02f9ec7bc2f" \
+            --out-dir "artifacts/blawby-parity"
+      - name: Capture Blawby preview
+        run: |
+          node scripts/capture-blawby-screenshots.mjs \
+            --url "https://preview.krabiclaw.com" \
+            --source blawby \
+            --source-revision "${GITHUB_SHA}" \
+            --tenant-slug "ncls" \
+            --out-dir "artifacts/blawby-parity"
+      - name: Compare every route section and mobile state
+        run: |
+          node scripts/compare-blawby-screenshots.mjs \
+            --reference-manifest "artifacts/blawby-parity/screenshots-reference.json" \
+            --actual-manifest "artifacts/blawby-parity/screenshots-blawby.json" \
+            --out-dir "artifacts/blawby-parity/parity-diff"
+      - name: Upload visual acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: blawby-full-site-parity
+          path: artifacts/blawby-parity/
+          retention-days: 14
 
   e2e-staging:
     name: E2E staging

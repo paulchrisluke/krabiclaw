@@ -1,10 +1,9 @@
 <template>
-  <div class="relative h-[110px] overflow-hidden p-0" aria-hidden="true">
+  <div class="relative h-[110px] p-0" aria-hidden="true" data-parity-section="shield-divider">
     <svg
-      class="h-auto min-h-full w-full"
+      class="w-full"
       viewBox="0 0 1920 160"
       fill="none"
-      preserveAspectRatio="none"
       xmlns="http://www.w3.org/2000/svg"
     >
       <path :fill="fill" :d="SHIELD_PATH" />

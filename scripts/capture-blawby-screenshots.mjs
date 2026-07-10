@@ -6,6 +6,8 @@ import {
   BLAWBY_PARITY_ROUTES,
   BLAWBY_PARITY_VIEWPORTS,
   BLAWBY_REFERENCE_COMMIT,
+  BLAWBY_REFERENCE_ETAG,
+  BLAWBY_REFERENCE_URL,
 } from './blawby-parity-config.mjs'
 
 function parseArgs(argv) {
@@ -14,6 +16,7 @@ function parseArgs(argv) {
     source: 'blawby',
     sourceRevision: '',
     outDir: 'client-imports/north-carolina-legal-services/evidence',
+    tenantSlug: '',
     routes: structuredClone(BLAWBY_PARITY_ROUTES),
   }
   for (let i = 0; i < argv.length; i += 1) {
@@ -22,6 +25,7 @@ function parseArgs(argv) {
     else if (arg === '--source') args.source = argv[++i]
     else if (arg === '--source-revision') args.sourceRevision = argv[++i]
     else if (arg === '--out-dir') args.outDir = argv[++i]
+    else if (arg === '--tenant-slug') args.tenantSlug = argv[++i]
     else if (arg === '--route') {
       const [name, route] = argv[++i].split('=')
       if (!name || !route) throw new Error('--route must use name=/path')
@@ -138,6 +142,19 @@ if (!args.url) {
   process.exit(2)
 }
 
+let referenceEtag = null
+if (args.source === 'reference') {
+  const referenceUrl = new URL(args.url)
+  if (referenceUrl.origin !== BLAWBY_REFERENCE_URL) {
+    throw new Error(`Reference capture must use ${BLAWBY_REFERENCE_URL}`)
+  }
+  const response = await fetch(BLAWBY_REFERENCE_URL, { method: 'HEAD', signal: AbortSignal.timeout(10_000) })
+  referenceEtag = response.headers.get('etag')
+  if (referenceEtag !== BLAWBY_REFERENCE_ETAG) {
+    throw new Error(`Live reference moved: expected ETag ${BLAWBY_REFERENCE_ETAG}, found ${referenceEtag || 'none'}. Review the source deployment before updating the pin.`)
+  }
+}
+
 const browser = await chromium.launch()
 const manifest = {
   schema_version: 2,
@@ -145,6 +162,8 @@ const manifest = {
   source: args.source,
   source_revision: args.sourceRevision,
   pinned_reference_revision: BLAWBY_REFERENCE_COMMIT,
+  pinned_reference_etag: BLAWBY_REFERENCE_ETAG,
+  observed_reference_etag: referenceEtag,
   base_url: args.url,
   browser: { name: 'chromium', version: browser.version(), device_scale_factor: 1 },
   rendering: {
@@ -155,6 +174,7 @@ const manifest = {
   },
   screenshots: [],
   sections: [],
+  states: [],
 }
 
 try {
@@ -166,6 +186,7 @@ try {
       locale: 'en-US',
       reducedMotion: 'reduce',
       timezoneId: 'America/New_York',
+      extraHTTPHeaders: args.tenantSlug ? { 'x-preview-tenant': args.tenantSlug, 'cache-control': 'no-store' } : undefined,
     })
     await context.route(/(?:youtube\.com|youtu\.be|googlevideo\.com|vimeo\.com)/, route => route.abort())
     const page = await context.newPage()
@@ -206,6 +227,25 @@ try {
           name: section.name,
           file: portablePath(args.outDir, sectionPath),
         })
+      }
+
+      if (routeName === 'home' && viewportName === 'mobile') {
+        const mobileToggle = page.locator('button[aria-label*="Toggle" i]').first()
+        if (await mobileToggle.isVisible()) {
+          await mobileToggle.click()
+          await page.waitForTimeout(200)
+          const statePath = path.resolve(args.outDir, 'screenshots', args.source, 'states', 'home-mobile-navigation-open-mobile.png')
+          await fs.mkdir(path.dirname(statePath), { recursive: true })
+          await page.screenshot({ path: statePath, fullPage: true })
+          manifest.states.push({
+            route_name: routeName,
+            route: routeConfig.path,
+            viewport: viewportName,
+            name: 'mobile-navigation-open',
+            file: portablePath(args.outDir, statePath),
+          })
+          await mobileToggle.click()
+        }
       }
     }
     await context.close()

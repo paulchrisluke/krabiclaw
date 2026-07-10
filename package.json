@@ -19,6 +19,9 @@
     "test:unit": "node --experimental-strip-types --experimental-test-module-mocks --test tests/unit/**/*.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test tests/e2e/public.spec.ts tests/e2e/pottery-house.spec.ts tests/e2e/billing.spec.ts tests/e2e/billing-webhook.spec.ts tests/e2e/notifications.spec.ts",
+    "test:e2e:core": "playwright test tests/e2e/public.spec.ts tests/e2e/billing.spec.ts tests/e2e/billing-webhook.spec.ts tests/e2e/notifications.spec.ts",
+    "test:e2e:blawby": "playwright test tests/e2e/blawby.spec.ts tests/e2e/site-content-scopes.spec.ts",
+    "test:e2e:pottery-house": "playwright test tests/e2e/pottery-house.spec.ts tests/e2e/pottery-house-dashboard.spec.ts",
     "test:e2e:full": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "check:deploy": "node scripts/check-deploy-env.mjs",
@@ -65,6 +68,7 @@
     "client:override": "node scripts/client-override.mjs",
     "client:verify": "node scripts/client-verify.mjs",
     "client:import:ncls:blawby": "node scripts/adapters/ncls-blawby.mjs --dry-run",
+    "client:media:ncls:blawby": "node scripts/prepare-ncls-blawby-media.mjs",
     "client:approve:ncls:blawby": "node scripts/adapters/ncls-blawby.mjs --approve",
     "client:verify:blawby": "node scripts/verify-blawby-site.mjs",
     "client:screenshots:blawby": "node scripts/capture-blawby-screenshots.mjs",
@@ -131,7 +135,8 @@
     "vue": "^3.5.33",
     "vue-router": "^5.0.6",
     "vue-tsc": "^3.2.9",
-    "wrangler": "^4.88.0"
+    "wrangler": "^4.88.0",
+    "yaml": "2.8.2"
   },
   "dependencies": {
     "@better-auth/core": "1.6.18",

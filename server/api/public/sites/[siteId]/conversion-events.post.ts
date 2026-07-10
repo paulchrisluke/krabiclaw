@@ -3,7 +3,7 @@ import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-res
 import { HOUR_MS, getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { recordSiteConversionEvent } from '~/server/utils/professional-services'
 
-const VALID_EVENTS = new Set(['page_view', 'book_consultation_click', 'contact_submit'])
+const VALID_EVENTS = new Set(['page_view', 'book_consultation_click', 'contact_submit', 'donation_click'])
 const CONVERSION_IP_HOURLY_LIMIT = 120
 
 function boundedMetadata(value: unknown): ApiRecord | null {
@@ -55,7 +55,7 @@ export default defineEventHandler(async (event) => {
   const result = await recordSiteConversionEvent(db, {
     organizationId: site.organization_id,
     siteId,
-    eventName: eventName as 'page_view' | 'book_consultation_click' | 'contact_submit',
+    eventName: eventName as 'page_view' | 'book_consultation_click' | 'contact_submit' | 'donation_click',
     pageType: cleanString(body.page_type, 80) || null,
     pagePath: cleanString(body.page_path, 300) || null,
     pageLocation: cleanString(body.page_location, 500) || null,
