@@ -1,7 +1,7 @@
 {
   "approved": false,
   "invalidated": true,
-  "invalidated_reason": "Canonical dry-run artifacts were regenerated and require fresh human review.",
+  "invalidated_reason": "Media was uploaded and canonical artifacts changed; fresh human review is required.",
   "source_commit": "5908ab3e64f26f799de61ed55371d02f9ec7bc2f",
   "slug": "north-carolina-legal-services",
   "vertical": "service",

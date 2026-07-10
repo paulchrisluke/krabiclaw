@@ -6,7 +6,6 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import { BLAWBY_REFERENCE_COMMIT } from './blawby-parity-config.mjs'
-import { spawnYarn } from './utils/spawn-yarn.mjs'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const defaultSourceRepo = path.join(repoRoot, '.scratch', 'reference', 'react-next-marketing-site-template')
@@ -124,14 +123,21 @@ async function publicObjectExists(url) {
   }
 }
 
-function uploadObject(asset, sourceFile) {
-  const result = spawnYarn([
-    'wrangler', 'r2', 'object', 'put', `${bucketName}/${asset.r2_key}`,
-    '--file', sourceFile,
-    '--content-type', asset.mime_type || 'application/octet-stream',
-    '--remote',
-  ])
-  if (result.status !== 0) throw new Error(`R2 upload failed for ${asset.source_file}`)
+async function uploadObject(asset, sourceFile) {
+  const wranglerEntry = path.join(repoRoot, 'node_modules', 'wrangler', 'bin', 'wrangler.js')
+  let failure = ''
+  for (const delay of [0, 1000, 3000, 8000]) {
+    if (delay) await new Promise(resolve => setTimeout(resolve, delay))
+    const result = spawnSync(process.execPath, [
+      wranglerEntry, 'r2', 'object', 'put', `${bucketName}/${asset.r2_key}`,
+      '--file', sourceFile,
+      '--content-type', asset.mime_type || 'application/octet-stream',
+      '--remote',
+    ], { cwd: repoRoot, encoding: 'utf8' })
+    if (result.status === 0) return
+    failure = result.stderr || result.stdout || result.error?.message || `exit ${result.status}`
+  }
+  throw new Error(`R2 upload failed for ${asset.source_file} after retries: ${failure}`)
 }
 
 async function verifyPublicObject(asset) {
@@ -195,7 +201,7 @@ if (!args.upload) {
 
 for (const asset of prepared) {
   const sourceFile = path.join(assetRoot, ...asset.source_file.split('/'))
-  if (!(await publicObjectExists(asset.public_url))) uploadObject(asset, sourceFile)
+  if (!(await publicObjectExists(asset.public_url))) await uploadObject(asset, sourceFile)
   await verifyPublicObject(asset)
   asset.upload_status = 'verified'
   asset.upload_verified_at = new Date().toISOString()
