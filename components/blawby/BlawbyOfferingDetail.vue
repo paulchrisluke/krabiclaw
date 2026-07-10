@@ -51,31 +51,27 @@
 </template>
 
 <script setup lang="ts">
+import type { PublicOffering } from '~/types/blawby'
+
 const props = defineProps<{
-  slug: string
+  offering: PublicOffering
 }>()
 
 const { site } = useTenantSite()
-const { offeringBySlug, consultation } = useBlawbySite()
+const { consultation } = useBlawbySite()
 const { trackConsultationClick } = useBlawbyConversionTracking()
-const offering = computed(() => offeringBySlug(props.slug))
-
-if (!offering.value) {
-  throw createError({ statusCode: 404, statusMessage: 'Service not found' })
-}
 
 function trackConsultation() {
-  if (!offering.value) return
   trackConsultationClick(
     'offering',
-    `/services/${offering.value.slug}`,
-    offering.value.cta_url || consultation.value.external_url || consultation.value.schedule_path,
+    `/services/${props.offering.slug}`,
+    props.offering.cta_url || consultation.value.external_url || consultation.value.schedule_path,
   )
 }
 
 useSeoMeta({
-  title: computed(() => offering.value?.seo_title || `${offering.value?.name || 'Service'} | ${site?.brand_name || 'Professional services'}`),
-  description: computed(() => offering.value?.seo_description || offering.value?.summary || 'Professional service details.'),
-  ogImage: computed(() => offering.value?.hero_image_url || offering.value?.thumbnail_url || undefined),
+  title: computed(() => props.offering.seo_title || `${props.offering.name || 'Service'} | ${site?.brand_name || 'Professional services'}`),
+  description: computed(() => props.offering.seo_description || props.offering.summary || 'Professional service details.'),
+  ogImage: computed(() => props.offering.hero_image_url || props.offering.thumbnail_url || undefined),
 })
 </script>

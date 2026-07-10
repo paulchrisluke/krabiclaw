@@ -38,7 +38,7 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
     slug: 'blawby',
     themeId: 'blawby-theme-v1',
     layout: 'blawby',
-    verticals: ['service'],
+    verticals: ['service', 'professional_service'],
     serviceRoutes: {
       offeringsIndex: '/services',
       offeringDetailPrefix: '/services',
@@ -61,7 +61,7 @@ export function resolvePublicTemplate(input: {
   const themeId = String(input.themeId ?? '').toLowerCase()
   const vertical = String(input.vertical ?? '').toLowerCase()
 
-  if (theme === 'blawby' || themeId === 'blawby-theme-v1' || vertical === 'service') {
+  if (theme === 'blawby' || themeId === 'blawby-theme-v1' || vertical === 'service' || vertical === 'professional_service') {
     return publicTemplateRegistry.blawby
   }
 

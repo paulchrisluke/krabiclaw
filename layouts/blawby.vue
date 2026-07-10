@@ -13,6 +13,19 @@ const { site } = useTenantSite()
 const { navigation, consultation, compliance, themeTokens } = useBlawbySite()
 const requestUrl = useRequestURL()
 
+function serializeJsonLd(value: unknown) {
+  return JSON.stringify(value).replace(/[<>&\u2028\u2029]/g, (char) => {
+    switch (char) {
+      case '<': return '\\u003c'
+      case '>': return '\\u003e'
+      case '&': return '\\u0026'
+      case '\u2028': return '\\u2028'
+      case '\u2029': return '\\u2029'
+      default: return char
+    }
+  })
+}
+
 const themeStyles = computed(() => {
   const tokens = themeTokens.value
   return {
@@ -33,7 +46,7 @@ useHead(() => ({
     : [{ rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Marcellus&family=Poppins:wght@400;600&display=swap' }],
   script: [{
     type: 'application/ld+json',
-    children: JSON.stringify({
+    children: serializeJsonLd({
       '@context': 'https://schema.org',
       '@type': ['ProfessionalService', 'Organization'],
       name: site?.brand_name || compliance.value?.entity_name || 'Professional services',

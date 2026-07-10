@@ -3,6 +3,7 @@
 // for pure experience-vertical sites (which redirect away from that page anyway).
 import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
+import { resolvePublicTemplate } from '~/utils/template-registry'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 
 export default defineSitemapEventHandler(async (event) => {
@@ -21,8 +22,12 @@ export default defineSitemapEventHandler(async (event) => {
     [siteId],
   )
 
-  const isProfessionalServiceSite = site?.vertical === 'service' || site?.theme_id === 'blawby-theme-v1'
-  if (isProfessionalServiceSite) {
+  const template = resolvePublicTemplate({
+    themeId: site?.theme_id,
+    vertical: site?.vertical,
+  })
+
+  if (template.slug === 'blawby') {
     const [offerings, tenantPages] = await Promise.all([
       queryAll<{ slug: string; canonical_path: string | null; updated_at: string | null }>(db, `
         SELECT slug, canonical_path, updated_at
@@ -39,7 +44,7 @@ export default defineSitemapEventHandler(async (event) => {
     ])
 
     const routes = new Map<string, { loc: string; lastmod?: string }>()
-    for (const loc of ['/', '/services', '/pricing', '/donate', '/schedule', '/contact', '/blog']) {
+    for (const loc of template.sitemap.exactPaths) {
       routes.set(loc, { loc })
     }
     for (const offering of offerings ?? []) {

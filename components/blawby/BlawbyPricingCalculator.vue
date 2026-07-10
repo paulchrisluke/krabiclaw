@@ -11,7 +11,14 @@
     <div class="mt-8 grid gap-6 md:grid-cols-2">
       <label class="block">
         <span class="text-sm font-semibold text-[var(--blawby-primary)]">Household size</span>
-        <input v-model.number="householdSize" type="number" min="1" max="12" class="mt-2 w-full border border-[var(--blawby-border)] px-3 py-2">
+        <input
+          :value="householdSize"
+          type="number"
+          min="1"
+          max="12"
+          class="mt-2 w-full border border-[var(--blawby-border)] px-3 py-2"
+          @input="onHouseholdSizeInput"
+        >
       </label>
       <label class="block">
         <span class="text-sm font-semibold text-[var(--blawby-primary)]">Case complexity</span>
@@ -47,12 +54,25 @@ const props = withDefaults(defineProps<{
 const householdSize = ref(1)
 const complexity = ref(0)
 
-const estimatedTotal = computed(() =>
-  Math.max(0, props.baseAmount + householdSize.value * props.perPersonAmount + complexity.value * props.complexityStep),
-)
+function normalizeHouseholdSize(value: unknown) {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(parsed)) return 1
+  return Math.min(12, Math.max(1, Math.trunc(parsed)))
+}
+
+const estimatedTotal = computed(() => {
+  const total = props.baseAmount + householdSize.value * props.perPersonAmount + complexity.value * props.complexityStep
+  if (!Number.isFinite(total)) return 0
+  return Math.max(0, total)
+})
+
+function onHouseholdSizeInput(event: Event) {
+  const target = event.target as HTMLInputElement | null
+  householdSize.value = normalizeHouseholdSize(target?.value ?? 1)
+}
 
 function formatCurrency(value: number) {
-  if (value <= 0) return 'Free'
+  if (!Number.isFinite(value) || value <= 0) return 'Free'
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
 }
 </script>
