@@ -258,6 +258,26 @@ OAuth itself, suspect catalog size before suspecting auth — compare the
 `tools/list` response size for a real `openai-mcp/` user agent against a
 manual request without that header.
 
+## Known gap: CIMD self-fetch on deployed Cloudflare Workers
+
+`tests/e2e/oauth-discovery.spec.ts`'s "repeat authorize skips consent after
+remembered approval for the same CIMD client" test is skipped in `e2e-smoke`/
+`e2e-staging` (see `isDeployedWorkerTarget` in `tests/e2e/test-env.ts`). The
+CIMD client_id document it exercises (`server/api/auth/oauth2/test-client-metadata.get.ts`)
+is served by this same app/origin, so `@better-auth/cimd`'s server-side fetch
+of it is a same-zone Worker self-fetch. That self-fetch fails deterministically
+once deployed to Cloudflare (reproduced directly via `curl` against
+`preview.krabiclaw.com/api/auth/oauth2/authorize`, unauthenticated, in under a
+second — not the library's 5s fetch timeout) with
+`{"error":"invalid_client","error_description":"Failed to fetch metadata document (network error or redirect blocked)"}`,
+while an external client fetching the exact same metadata URL gets a normal
+200. The same flow passes reliably against a local dev server exposed through
+a real public tunnel (quick tunnel or the named tunnel, per "Startup" above) —
+this is specific to a deployed Worker fetching its own zone/route, not app
+logic. Verify this flow locally via the tunnel harness; do not rely on
+`e2e-smoke`/`e2e-staging` for it until the CIMD test fixture is hosted off-zone
+or the platform restriction is otherwise worked around.
+
 ## Human + LLM handoff
 
 The LLM can fully drive:

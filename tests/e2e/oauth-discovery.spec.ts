@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { devLoginHeaders } from './test-env'
+import { devLoginHeaders, isDeployedWorkerTarget } from './test-env'
 
 function oauthAuthorizeUrl(baseURL: string, params: Record<string, string>) {
   return `${baseURL}/api/auth/oauth2/authorize?${new URLSearchParams(params).toString()}`
@@ -54,6 +54,18 @@ test.describe('OAuth discovery endpoints', () => {
   })
 
   test('repeat authorize skips consent after remembered approval for the same CIMD client', async ({ request, baseURL }) => {
+    // The CIMD client_id document (test-client-metadata) is served by this same
+    // app/origin, so the auth server's fetch of it is a same-zone Worker
+    // self-fetch on a deployed Cloudflare Worker. That self-fetch fails there
+    // deterministically (reproduced directly via curl against preview.krabiclaw.com,
+    // not a timeout — a Cloudflare Workers/zone-level restriction on a Worker's
+    // own subrequest into its own route, not app logic). The same flow passes
+    // reliably against a local dev server exposed through a real public tunnel
+    // (see docs/local-mcp-harness.md), so this test is local-harness-only until
+    // the CIMD test fixture is hosted off-zone or the platform restriction is
+    // otherwise worked around.
+    test.skip(isDeployedWorkerTarget(baseURL!), 'CIMD same-zone self-fetch is not supported on deployed Cloudflare Workers — verify via the local MCP tunnel harness instead')
+
     const devHeaders = devLoginHeaders()
     test.skip(!devHeaders, 'E2E_DEV_ROUTE_SECRET required for dev login')
 

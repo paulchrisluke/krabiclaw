@@ -71,6 +71,19 @@ function previewWorkerHeaders(slug: string): Record<string, string> {
   return { 'x-preview-tenant': slug, 'cache-control': 'no-store' }
 }
 
+// True when the test target is a real deployed Cloudflare Worker (preview.*,
+// staging.*, *.workers.dev) rather than a local dev server or local tunnel.
+// Server-side self-fetches to a same-zone URL (e.g. the CIMD test-client-metadata
+// fixture, fetched by our own auth server) fail on deployed Workers — reproduced
+// deterministically via direct curl to preview.krabiclaw.com/api/auth/oauth2/authorize,
+// not a timeout, not present when the same flow runs against a real public tunnel
+// in local dev. Root cause is Cloudflare zone/Workers-runtime behavior for a
+// Worker's own subrequest into its own route, not app logic — see
+// docs/local-mcp-harness.md.
+export function isDeployedWorkerTarget(baseURL: string): boolean {
+  return isPreviewContext(new URL(baseURL).hostname)
+}
+
 export function tenantTestBaseUrl() {
   const base = new URL(testBaseUrl())
   if (['localhost', '127.0.0.1', '[::1]'].includes(base.hostname)) {
