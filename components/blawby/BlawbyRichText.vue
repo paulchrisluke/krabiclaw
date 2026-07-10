@@ -14,9 +14,26 @@ const props = defineProps<{
   content?: string | null
 }>()
 
-const DOMPurify = import.meta.client
-  ? (await import('isomorphic-dompurify')).default
-  : { sanitize: sanitizeHtmlForSsr }
+type HtmlSanitizer = {
+  sanitize: (_html: string) => string
+}
 
-const html = computed(() => DOMPurify.sanitize(renderMarkdownToHtml(props.content || '')))
+const clientSanitizer = shallowRef<HtmlSanitizer | null>(null)
+
+const sanitizeContent = (content?: string | null) => {
+  const rendered = renderMarkdownToHtml(content || '')
+  return (clientSanitizer.value || { sanitize: sanitizeHtmlForSsr }).sanitize(rendered)
+}
+
+const html = ref(sanitizeContent(props.content))
+
+watch(() => props.content, (content) => {
+  html.value = sanitizeContent(content)
+})
+
+onMounted(async () => {
+  const { default: DOMPurify } = await import('dompurify')
+  clientSanitizer.value = DOMPurify as HtmlSanitizer
+  html.value = sanitizeContent(props.content)
+})
 </script>
