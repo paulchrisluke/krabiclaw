@@ -90,6 +90,9 @@
     "demo:record:web": "bash scripts/demo-recording/start-screen-recording.sh",
     "demo:chatgpt:web": "node scripts/demo-recording/chatgpt-demo.mjs"
   },
+  "resolutions": {
+    "kysely": "0.28.17"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260503.1",
     "@iconify-json/lucide": "^1.2.115",

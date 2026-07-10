@@ -90,8 +90,8 @@ request's actual origin (`http://localhost:3000`) no longer matches
 `BETTER_AUTH_URL`. Restart `yarn dev` after editing `.dev.vars`; the wrangler
 platform proxy only reads it at boot.
 
-The MCP harness (`yarn dev:tunnel` + `yarn tunnel` + `yarn test:mcp:local`) is
-for MCP/connector testing specifically, and its OAuth-true path always needs a
+The MCP harness (`yarn dev:tunnel` + `cloudflared tunnel --url http://localhost:3000`
++ `yarn test:mcp:local`) is for MCP/connector testing specifically, and its OAuth-true path always needs a
 human in the loop for the ChatGPT consent screen (see "Human + LLM handoff"
 below) — it is not a substitute for day-to-day dashboard/CMS dev, which should
 stay on plain `yarn dev` at `http://localhost:3000`.
@@ -129,10 +129,13 @@ The quick-tunnel URL is random per run — there is no standing hostname to keep
 in sync anywhere else, unlike the named tunnel.
 
 `scripts/check-local-mcp-harness.mjs` will `skip` a "non-canonical MCP base
-URL" check and `not ok` a "tunnel.yml hostname mismatch" check when using a
-quick tunnel — both are expected and non-fatal; every other check (OAuth
-discovery, unauthenticated auth challenges, authenticated `tools/list`/
-`tools/call`, resources, and `--write-smoke`) passes normally.
+URL" check (non-fatal) and `not ok` a "tunnel.yml hostname mismatch" check
+when using a quick tunnel — the latter is expected given the named tunnel is
+not in use, but it still marks the run failed, so `yarn test:mcp:local` exits
+non-zero even though every other check (OAuth discovery, unauthenticated auth
+challenges, authenticated `tools/list`/`tools/call`, resources, and
+`--write-smoke`) passes normally. Read the individual `ok`/`not ok` lines
+rather than relying on the script's exit code while using a quick tunnel.
 
 ### Named tunnel reference (currently non-functional end-to-end)
 

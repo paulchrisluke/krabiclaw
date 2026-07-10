@@ -1,7 +1,9 @@
-import { getRequestURL } from 'h3'
+import { getHeader, getRequestURL } from 'h3'
+import { isPreviewContext } from '~/server/utils/tenant-hosts'
 
 export default defineEventHandler((event) => {
-  if (!import.meta.dev) {
+  const host = getHeader(event, 'host') || ''
+  if (!import.meta.dev && !isPreviewContext(host)) {
     throw createError({
       statusCode: 403,
       statusMessage: 'Forbidden in production'
