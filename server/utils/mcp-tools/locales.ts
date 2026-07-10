@@ -36,7 +36,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         locale: { type: 'string', description: 'BCP-47 locale code, e.g. "th", "zh".' },
         label: { type: 'string', description: 'Optional display label.' },
-        status: { type: 'string', enum: ['draft', 'published', 'disabled'] },
+        status: { type: 'string', enum: ['draft', 'published', 'disabled'], description: 'Lifecycle status of the locale.' },
         fallback_enabled: { type: 'boolean', description: 'Whether to fall back to the source locale for untranslated fields. Defaults to true.' },
         is_source: { type: 'boolean', description: 'Mark this as the site\'s source locale. Forces status to published.' },
       },

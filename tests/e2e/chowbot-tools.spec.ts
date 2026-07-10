@@ -405,6 +405,12 @@ test.describe("mcp tools", () => {
     };
     const organizationId = context.organization?.id;
 
+    // Capture the owner's session before switching to the editor below —
+    // loginAs swaps the request's session cookie, so get-session must run
+    // while the owner is still the active session.
+    const ownerSession = await request.get(`${baseURL}/api/auth/get-session`);
+    const ownerUserId = ((await ownerSession.json()) as { user?: { id?: string } }).user?.id;
+
     const editorRes = await request.post(`${baseURL}/api/dev/test-member`, {
       data: { role: "editor", organizationId },
       headers: devLoginHeaders(),
@@ -424,8 +430,6 @@ test.describe("mcp tools", () => {
     // create_work_request requires the managed_service entitlement on MCP —
     // a freshly created site has no such entitlement, so even the owner
     // must be rejected before create_work_request's own logic runs.
-    const ownerSession = await request.get(`${baseURL}/api/auth/get-session`);
-    const ownerUserId = ((await ownerSession.json()) as { user?: { id?: string } }).user?.id;
     await loginAs(request, baseURL!, ownerUserId);
     const workRequest = await execChowbotTool(request, baseURL!, siteId, "create_work_request", {
       type: "other",

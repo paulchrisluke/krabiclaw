@@ -12,6 +12,12 @@ function toolBoolean(record: Record<string, unknown>, key: string): boolean | un
   return typeof value === 'boolean' ? value : undefined
 }
 
+function stringArraysEqual(a: string[], b: string[] | null | undefined): boolean {
+  const other = b ?? []
+  if (a.length !== other.length) return false
+  return a.every((value, index) => value === other[index])
+}
+
 function findMenuItemMatch(itemRecord: Record<string, unknown>, menuItems: MenuItem[]): MenuItem | null {
   const itemId = toolString(itemRecord, 'item_id', 120)
   if (itemId) return menuItems.find((item) => item.id === itemId) ?? null
@@ -51,9 +57,9 @@ function buildMenuItemUpdates(itemRecord: Record<string, unknown>, match?: MenuI
   if (saleEndsAt !== undefined && saleEndsAt !== match?.sale_ends_at) updates.sale_ends_at = saleEndsAt
   if (imageAssetId !== undefined && imageAssetId !== match?.image_asset_id) updates.image_asset_id = imageAssetId
   if (available !== undefined && available !== Boolean(match?.available)) updates.available = available
-  if (allergens !== undefined) updates.allergens = allergens
-  if (ingredients !== undefined) updates.ingredients = ingredients
-  if (dietaryNotes !== undefined) updates.dietary_notes = dietaryNotes
+  if (allergens !== undefined && !stringArraysEqual(allergens, match?.allergens)) updates.allergens = allergens
+  if (ingredients !== undefined && !stringArraysEqual(ingredients, match?.ingredients)) updates.ingredients = ingredients
+  if (dietaryNotes !== undefined && !stringArraysEqual(dietaryNotes, match?.dietary_notes)) updates.dietary_notes = dietaryNotes
   if (preparation !== undefined && preparation !== match?.preparation) updates.preparation = preparation
   if (servingNote !== undefined && servingNote !== match?.serving_note) updates.serving_note = servingNote
 

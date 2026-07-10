@@ -231,12 +231,78 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: {
           menu_id: { type: 'string' },
-          created: { type: 'array' },
-          updated: { type: 'array' },
-          unchanged: { type: 'array' },
-          made_unavailable: { type: 'array' },
-          skipped: { type: 'array' },
-          summary: { type: 'object' },
+          created: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+                section: { type: 'string' },
+                price_amount: { type: ['string', 'number', 'null'] },
+              },
+              required: ['id', 'name', 'section'],
+            },
+          },
+          updated: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+                section: { type: 'string' },
+                price_amount: { type: ['string', 'number', 'null'] },
+                available: { type: 'boolean' },
+              },
+              required: ['id', 'name', 'section', 'available'],
+            },
+          },
+          unchanged: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+              },
+              required: ['id', 'name'],
+            },
+          },
+          made_unavailable: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+              },
+              required: ['id', 'name'],
+            },
+          },
+          skipped: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                reason: { type: 'string' },
+                item_id: { type: 'string' },
+              },
+              required: ['name', 'reason'],
+            },
+          },
+          summary: {
+            type: 'object',
+            properties: {
+              created: { type: 'number' },
+              updated: { type: 'number' },
+              unchanged: { type: 'number' },
+              made_unavailable: { type: 'number' },
+              skipped: { type: 'number' },
+            },
+            required: ['created', 'updated', 'unchanged', 'made_unavailable', 'skipped'],
+          },
         },
         required: ['menu_id', 'created', 'updated', 'unchanged', 'made_unavailable', 'skipped', 'summary'],
       },
