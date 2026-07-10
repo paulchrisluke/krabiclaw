@@ -19,20 +19,8 @@ import {
   updatePlatformBlogPost,
   deletePlatformBlogPost,
 } from "~/server/utils/platform-content";
-import {
-  getMenus,
-  getMenuWithItems,
-  createMenu,
-  updateMenu,
-  createMenuItem,
-  updateMenuItem,
-  deleteMenuItem,
-  deleteMenu,
-  MenuNotFoundError,
-  renameMenuSection,
-  deleteMenuSection,
-  reorderMenuItems,
-} from "~/server/utils/menu-management";
+import { runMcpExecutorToolForChowbot } from "~/server/utils/mcp-executor/chowbot-adapter";
+import type { McpToolRole } from "~/server/utils/mcp-auth";
 import {
   deleteSiteContentField,
   getPageContent,
@@ -90,7 +78,6 @@ import {
   saveTranslationReviewItem,
 } from "~/server/utils/translation-review";
 import { contentRegistry, getFieldDef } from "~/config/content-registry";
-import type { MenuItem, UpdateMenuItemRequest } from "~/server/types/menu";
 import {
   CHOWBOT_TOOLS,
   CHOWBOT_CONFIRM_REQUIRED,
@@ -183,11 +170,6 @@ interface StatusCountRow {
   count: number;
 }
 
-function isUniqueConstraintError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error || "");
-  return /UNIQUE constraint failed/i.test(message);
-}
-
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) return error.message;
   return fallback;
@@ -225,18 +207,6 @@ function isValidHttpUrl(value: string): boolean {
   }
 }
 
-function menuItemKey(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
-
-function menuItemLookupKey(name: string): string {
-  const key = menuItemKey(name);
-  return key || name.trim().toLowerCase();
-}
-
 function getToolString(
   record: Record<string, unknown>,
   key: string,
@@ -244,17 +214,6 @@ function getToolString(
 ): string | undefined {
   const value = record[key];
   return typeof value === "string" ? value.slice(0, maxLength) : undefined;
-}
-
-function getToolStringArray(
-  record: Record<string, unknown>,
-  key: string,
-): string[] | undefined {
-  const value = record[key];
-  if (Array.isArray(value)) {
-    return value.filter((v) => typeof v === "string");
-  }
-  return undefined;
 }
 
 function getToolBoolean(
@@ -446,81 +405,6 @@ function getToolInteger(
   return Number.isInteger(numeric) ? numeric : undefined;
 }
 
-function findMenuItemMatch(
-  itemRecord: Record<string, unknown>,
-  menuItems: MenuItem[],
-): MenuItem | null {
-  const itemId = getToolString(itemRecord, "item_id", 120);
-  if (itemId) {
-    return menuItems.find((item) => item.id === itemId) ?? null;
-  }
-
-  const name = getToolString(itemRecord, "name", 200)?.trim();
-  if (!name) return null;
-
-  const key = menuItemLookupKey(name);
-  const lowerName = name.toLowerCase();
-  return (
-    menuItems.find(
-      (item) => item.slug === key || item.name.toLowerCase() === lowerName,
-    ) ?? null
-  );
-}
-
-function buildMenuItemUpdates(
-  itemRecord: Record<string, unknown>,
-  match?: MenuItem | null,
-): UpdateMenuItemRequest {
-  const updates: UpdateMenuItemRequest = {};
-  const section = getToolString(itemRecord, "section", 100);
-  const name = getToolString(itemRecord, "name", 200);
-  const description = getToolString(itemRecord, "description", 500);
-  const priceAmount = getToolString(itemRecord, "price_amount", 50);
-  const compareAtPriceAmount = getToolString(itemRecord, "compare_at_price_amount", 50);
-  const saleStartsAt = getToolString(itemRecord, "sale_starts_at", 50);
-  const saleEndsAt = getToolString(itemRecord, "sale_ends_at", 50);
-  const imageAssetId = getToolString(itemRecord, "image_asset_id", 120);
-  const available = getToolBoolean(itemRecord, "available");
-
-  const allergens = getToolStringArray(itemRecord, "allergens");
-  const ingredients = getToolStringArray(itemRecord, "ingredients");
-  const dietary_notes = getToolStringArray(itemRecord, "dietary_notes");
-  const preparation = getToolString(itemRecord, "preparation", 500);
-  const serving_note = getToolString(itemRecord, "serving_note", 500);
-
-  if (section !== undefined && section.trim() && section !== match?.section)
-    updates.section = section;
-  if (name !== undefined && name !== match?.name) updates.name = name;
-  if (description !== undefined && description !== match?.description)
-    updates.description = description;
-  if (priceAmount !== undefined && priceAmount !== match?.price_amount)
-    updates.price_amount = priceAmount;
-  if (compareAtPriceAmount !== undefined && compareAtPriceAmount !== match?.compare_at_price_amount)
-    updates.compare_at_price_amount = compareAtPriceAmount;
-  if (saleStartsAt !== undefined && saleStartsAt !== match?.sale_starts_at)
-    updates.sale_starts_at = saleStartsAt;
-  if (saleEndsAt !== undefined && saleEndsAt !== match?.sale_ends_at)
-    updates.sale_ends_at = saleEndsAt;
-  if (imageAssetId !== undefined && imageAssetId !== match?.image_asset_id)
-    updates.image_asset_id = imageAssetId;
-  if (available !== undefined && available !== Boolean(match?.available))
-    updates.available = available;
-
-  if (allergens !== undefined) updates.allergens = allergens;
-  if (ingredients !== undefined) updates.ingredients = ingredients;
-  if (dietary_notes !== undefined) updates.dietary_notes = dietary_notes;
-  if (preparation !== undefined && preparation !== match?.preparation)
-    updates.preparation = preparation;
-  if (serving_note !== undefined && serving_note !== match?.serving_note)
-    updates.serving_note = serving_note;
-
-  return updates;
-}
-
-function hasMenuItemUpdates(updates: UpdateMenuItemRequest): boolean {
-  return Object.keys(updates).length > 0;
-}
-
 function isAllowedGoogleMapsHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
   return (
@@ -563,6 +447,17 @@ async function executeTool(
   },
 ): Promise<ApiValue> {
   const { db, env, orgId, siteId, userId } = ctx;
+  const menuExecutorSite = {
+    db,
+    env: env as CloudflareEnv,
+    userId,
+    organizationId: orgId,
+    siteId,
+    // Both callers (dashboard agent.post.ts, WhatsApp webhook.post.ts) resolve
+    // userRole from a real membership row before invoking runChowBot, so this
+    // is a least-privilege floor, not an expected fallback.
+    role: (ctx.userRole ?? "editor") as McpToolRole,
+  };
 
   try {
     assertConversationalToolEnabled(name, env);
@@ -710,509 +605,41 @@ async function executeTool(
       return { post_id: input.post_id, deleted: true };
     }
 
-    case "get_menu": {
-      if (input.menu_id) {
-        const menu = await getMenuWithItems(db, orgId, siteId, input.menu_id);
-        if (!menu) return { error: "Menu not found." };
-        return menu;
-      }
-      // Filter by current location when available so we only see relevant menus
-      const locationFilter =
-        (input.location_id as string | undefined) ??
-        ctx.locationId ??
-        undefined;
-      const menus = await getMenus(
-        db,
-        orgId,
-        siteId,
-        locationFilter || undefined,
-      );
-      if (!menus.length) return { message: "No menus found for this site." };
-      return (
-        (await getMenuWithItems(db, orgId, siteId, menus[0]!.id)) ?? {
-          error: "Failed to load menu.",
-        }
-      );
+    // Menu tools below all delegate to the same mcp-executor/menus.ts handlers
+    // MCP uses, via runMcpExecutorToolForChowbot — see mcp-executor/chowbot-adapter.ts.
+    case "get_menu":
+    case "add_menu_items_batch":
+    case "sync_menu_items":
+    case "create_menu_item":
+    case "update_menu_item":
+    case "reorder_menu_items":
+    case "set_menu_item_image": {
+      return runMcpExecutorToolForChowbot(menuExecutorSite, name, input);
     }
 
     case "create_menu": {
-      // Use the explicit location from the AI, fall back to the page's current location
-      const effectiveLocationId =
-        (input.location_id as string | undefined) ??
-        ctx.locationId ??
-        undefined;
-      if (effectiveLocationId) {
-        const location = await queryFirst(
-          db,
-          `
-          SELECT 1 FROM business_locations
-          WHERE id = ? AND organization_id = ? AND site_id = ?
-          LIMIT 1
-        `,
-          [effectiveLocationId, orgId, siteId],
-        );
-        if (!location) return { error: "Location not found or access denied" };
-      }
-      const menu = await createMenu(
-        db,
-        orgId,
-        siteId,
-        {
-          name: input.name,
-          description: input.description,
-          locationId: effectiveLocationId,
-        },
-        userId,
-      );
-      return {
-        id: menu.id,
-        name: menu.name,
-        description: menu.description,
-        status: menu.status,
-      };
-    }
-
-    case "update_menu": {
-      const menu = await updateMenu(
-        db,
-        orgId,
-        siteId,
-        input.menu_id,
-        { name: input.name, description: input.description },
-        userId,
-      );
-      return {
-        id: menu.id,
-        name: menu.name,
-        description: menu.description,
-        status: menu.status,
-      };
-    }
-
-    case "rename_menu_section": {
-      const menuId = toSqlText(input.menu_id);
-      const oldSection = toSqlText(input.old_section)?.trim();
-      const newSection = toSqlText(input.new_section)?.trim();
-      if (!menuId || !oldSection || !newSection) {
-        return { error: "menu_id, old_section, and new_section are required." };
-      }
-      if (oldSection === newSection) {
-        return { error: "New section must be different." };
-      }
-
-      const menu = await getMenuWithItems(db, orgId, siteId, menuId);
-      if (!menu) return { error: "Menu not found." };
-      if (!menu.items.some((item) => item.section === oldSection)) {
-        return { error: "Section not found." };
-      }
-      if (menu.items.some((item) => item.section === newSection)) {
-        return { error: "Section already exists." };
-      }
-
-      let updated: number;
-      try {
-        updated = await renameMenuSection(
-          db,
-          orgId,
-          siteId,
-          menuId,
-          oldSection,
-          newSection,
-          userId,
-        );
-      } catch (error) {
-        if (error instanceof MenuNotFoundError) return { error: error.message };
-        throw error;
-      }
-      return {
-        menu_id: menuId,
-        old_section: oldSection,
-        new_section: newSection,
-        updated,
-      };
-    }
-
-    case "delete_menu_section": {
-      const menuId = toSqlText(input.menu_id);
-      const section = toSqlText(input.section)?.trim();
-      if (!menuId || !section)
-        return { error: "menu_id and section are required." };
-
-      const menu = await getMenuWithItems(db, orgId, siteId, menuId);
-      if (!menu) return { error: "Menu not found." };
-      if (!menu.items.some((item) => item.section === section)) {
-        return { error: "Section not found." };
-      }
-
-      const deleted = await deleteMenuSection(db, orgId, siteId, menuId, section).catch((error) => {
-        if (error instanceof MenuNotFoundError) return null;
-        throw error;
+      // ChowBot-only convenience: fall back to the dashboard's current page
+      // location when the model omits location_id (MCP always requires it explicit).
+      return runMcpExecutorToolForChowbot(menuExecutorSite, "create_menu", {
+        ...input,
+        location_id: input.location_id ?? ctx.locationId ?? undefined,
       });
-      if (deleted === null) return { error: "Menu not found." };
-      return { menu_id: menuId, section, deleted };
     }
 
-    case "add_menu_items_batch": {
-      const menuId = toSqlText(input.menu_id);
-      if (!menuId) return { error: "menu_id is required." };
-      const menu = await getMenuWithItems(db, orgId, siteId, menuId);
-      if (!menu) return { error: "Menu not found." };
-
-      const items: unknown[] = Array.isArray(input.items)
-        ? input.items.slice(0, 100)
-        : [];
-      const existingKeys = new Set(
-        menu.items.map((item) => item.slug || menuItemLookupKey(item.name)),
-      );
-      const inputKeys = new Set<string>();
-      const created: Array<{
-        id: string;
-        name: string;
-        section: string;
-        price_amount: string | number | null;
-      }> = [];
-      const skipped: Array<{
-        name: string;
-        reason: string;
-        existing_item_id?: string;
-      }> = [];
-
-      for (const item of items) {
-        const itemRecord =
-          item && typeof item === "object"
-            ? (item as Record<string, unknown>)
-            : null;
-        const name = itemRecord
-          ? getToolString(itemRecord, "name", 200)?.trim()
-          : "";
-        if (!itemRecord || !name) {
-          skipped.push({ name: "", reason: "missing_name" });
-          continue;
-        }
-        const section = itemRecord
-          ? getToolString(itemRecord, "section", 100)?.trim()
-          : "";
-        if (!section) {
-          skipped.push({ name, reason: "missing_section" });
-          continue;
-        }
-
-        const key = menuItemLookupKey(name);
-        const existing = menu.items.find(
-          (menuItem) =>
-            menuItem.slug === key ||
-            menuItem.name.toLowerCase() === name.toLowerCase(),
-        );
-        if (existing || existingKeys.has(key)) {
-          skipped.push({
-            name,
-            reason: "already_exists",
-            existing_item_id: existing?.id,
-          });
-          continue;
-        }
-        if (inputKeys.has(key)) {
-          skipped.push({ name, reason: "duplicate_in_request" });
-          continue;
-        }
-
-        inputKeys.add(key);
-
-        try {
-          const createdItem = await createMenuItem(
-            db,
-            orgId,
-            siteId,
-            menuId,
-            {
-              section,
-              name,
-              description: getToolString(itemRecord, "description", 500),
-              price_amount: getToolString(itemRecord, "price_amount", 50),
-              compare_at_price_amount: getToolString(itemRecord, "compare_at_price_amount", 50),
-              sale_starts_at: getToolString(itemRecord, "sale_starts_at", 50),
-              sale_ends_at: getToolString(itemRecord, "sale_ends_at", 50),
-              image_asset_id: getToolString(itemRecord, "image_asset_id", 120),
-            },
-            userId,
-          );
-          existingKeys.add(
-            createdItem.slug || menuItemLookupKey(createdItem.name),
-          );
-          created.push({
-            id: createdItem.id,
-            name: createdItem.name,
-            section: createdItem.section,
-            price_amount: createdItem.price_amount,
-          });
-        } catch (error) {
-          if (!isUniqueConstraintError(error)) throw error;
-          skipped.push({ name, reason: "unique_conflict" });
-        }
-      }
-
-      return { added: created.length, created, skipped, menu_id: menuId };
-    }
-
-    case "sync_menu_items": {
-      const menuId = toSqlText(input.menu_id);
-      if (!menuId) return { error: "menu_id is required." };
-      const menu = await getMenuWithItems(db, orgId, siteId, menuId);
-      if (!menu) return { error: "Menu not found." };
-
-      const items: unknown[] = Array.isArray(input.items)
-        ? input.items.slice(0, 100)
-        : [];
-      const workingItems = [...menu.items];
-      const touchedItemIds = new Set<string>();
-      const created: Array<{
-        id: string;
-        name: string;
-        section: string;
-        price_amount: string | number | null;
-      }> = [];
-      const updated: Array<{
-        id: string;
-        name: string;
-        section: string;
-        price_amount: string | number | null;
-        available: boolean;
-      }> = [];
-      const unchanged: Array<{ id: string; name: string }> = [];
-      const skipped: Array<{ name: string; reason: string; item_id?: string }> =
-        [];
-
-      for (const item of items) {
-        const itemRecord =
-          item && typeof item === "object"
-            ? (item as Record<string, unknown>)
-            : null;
-        if (!itemRecord) {
-          skipped.push({ name: "", reason: "invalid_item" });
-          continue;
-        }
-
-        const name = getToolString(itemRecord, "name", 200)?.trim();
-        const match = findMenuItemMatch(itemRecord, workingItems);
-
-        if (match) {
-          const updates = buildMenuItemUpdates(itemRecord, match);
-          touchedItemIds.add(match.id);
-
-          if (!hasMenuItemUpdates(updates)) {
-            unchanged.push({ id: match.id, name: match.name });
-            continue;
-          }
-
-          try {
-            const updatedItem = await updateMenuItem(
-              db,
-              orgId,
-              siteId,
-              match.id,
-              updates,
-              userId,
-            );
-            const index = workingItems.findIndex(
-              (menuItem) => menuItem.id === updatedItem.id,
-            );
-            if (index >= 0) workingItems[index] = updatedItem;
-            updated.push({
-              id: updatedItem.id,
-              name: updatedItem.name,
-              section: updatedItem.section,
-              price_amount: updatedItem.price_amount,
-              available: Boolean(updatedItem.available),
-            });
-          } catch (error) {
-            if (!isUniqueConstraintError(error)) throw error;
-            skipped.push({
-              name: name || match.name,
-              reason: "unique_conflict",
-              item_id: match.id,
-            });
-          }
-          continue;
-        }
-
-        if (!name) {
-          skipped.push({ name: "", reason: "missing_name" });
-          continue;
-        }
-        const section = getToolString(itemRecord, "section", 100)?.trim();
-        if (!section) {
-          skipped.push({ name, reason: "missing_section" });
-          continue;
-        }
-
-        try {
-          const createdItem = await createMenuItem(
-            db,
-            orgId,
-            siteId,
-            menuId,
-            {
-              section,
-              name,
-              description: getToolString(itemRecord, "description", 500),
-              price_amount: getToolString(itemRecord, "price_amount", 50),
-              compare_at_price_amount: getToolString(itemRecord, "compare_at_price_amount", 50),
-              sale_starts_at: getToolString(itemRecord, "sale_starts_at", 50),
-              sale_ends_at: getToolString(itemRecord, "sale_ends_at", 50),
-              image_asset_id: getToolString(itemRecord, "image_asset_id", 120),
-              available: getToolBoolean(itemRecord, "available"),
-            },
-            userId,
-          );
-          workingItems.push(createdItem);
-          touchedItemIds.add(createdItem.id);
-          created.push({
-            id: createdItem.id,
-            name: createdItem.name,
-            section: createdItem.section,
-            price_amount: createdItem.price_amount,
-          });
-        } catch (error) {
-          if (!isUniqueConstraintError(error)) throw error;
-          skipped.push({ name, reason: "unique_conflict" });
-        }
-      }
-
-      const madeUnavailable: Array<{ id: string; name: string }> = [];
-      if (input.set_missing_unavailable === true) {
-        for (const item of workingItems) {
-          if (touchedItemIds.has(item.id) || !item.available) continue;
-          const updatedItem = await updateMenuItem(
-            db,
-            orgId,
-            siteId,
-            item.id,
-            { available: false },
-            userId,
-          );
-          madeUnavailable.push({ id: updatedItem.id, name: updatedItem.name });
-        }
-      }
-
-      return {
-        menu_id: menuId,
-        created,
-        updated,
-        unchanged,
-        made_unavailable: madeUnavailable,
-        skipped,
-        summary: {
-          created: created.length,
-          updated: updated.length,
-          unchanged: unchanged.length,
-          made_unavailable: madeUnavailable.length,
-          skipped: skipped.length,
-        },
-      };
-    }
-
-    case "create_menu_item": {
-      const item = await createMenuItem(
-        db,
-        orgId,
-        siteId,
-        input.menu_id,
-        {
-          section: input.section,
-          name: input.name,
-          description: input.description,
-          price_amount: input.price_amount,
-          compare_at_price_amount: input.compare_at_price_amount,
-          sale_starts_at: input.sale_starts_at,
-          sale_ends_at: input.sale_ends_at,
-          image_asset_id: input.image_asset_id,
-        },
-        userId,
-      );
-      return {
-        id: item.id,
-        name: item.name,
-        section: item.section,
-        price_amount: item.price_amount,
-      };
-    }
-
-    case "update_menu_item": {
-      const updates: Record<string, string | boolean | number | null> = {};
-      for (const f of [
-        "section",
-        "name",
-        "description",
-        "price_amount",
-        "compare_at_price_amount",
-        "sale_starts_at",
-        "sale_ends_at",
-        "image_asset_id",
-        "available",
-        "featured",
-        "featured_sort_order",
-        "allergens",
-        "ingredients",
-        "dietary_notes",
-        "preparation",
-        "serving_note",
-      ]) {
-        if (input[f] !== undefined) updates[f] = input[f];
-      }
-      const item = await updateMenuItem(db, orgId, siteId, input.item_id, updates, userId);
-      return {
-        id: item.id,
-        name: item.name,
-        price_amount: item.price_amount,
-        available: item.available,
-        featured: item.featured,
-        featured_sort_order: item.featured_sort_order,
-        allergens: item.allergens,
-        ingredients: item.ingredients,
-        dietary_notes: item.dietary_notes,
-        preparation: item.preparation,
-        serving_note: item.serving_note,
-      };
-    }
-
-    case "delete_menu_item": {
-      const menuId = toSqlText(input.menu_id);
-      const itemId = toSqlText(input.item_id);
-      if (!menuId || !itemId)
-        return { error: "menu_id and item_id are required." };
-
-      const menu = await getMenuWithItems(db, orgId, siteId, menuId);
-      if (!menu) return { error: "Menu not found." };
-      const item = menu.items.find((menuItem) => menuItem.id === itemId);
-      if (!item) return { error: "Menu item not found." };
-
-      await deleteMenuItem(db, itemId, orgId, siteId, userId);
-      return {
-        menu_id: menuId,
-        item_id: itemId,
-        name: item.name,
-        deleted: true,
-      };
+    case "update_menu":
+    case "rename_menu_section":
+    case "delete_menu_section":
+    case "delete_menu_item":
+    case "delete_menu": {
+      return runMcpExecutorToolForChowbot(menuExecutorSite, name, input);
     }
 
     case "publish_menu": {
-      const menu = await updateMenu(
-        db,
-        orgId,
-        siteId,
-        input.menu_id,
-        { status: "published" },
-        userId,
-      );
-      if (!menu) {
-        return { error: "Menu not found or access denied." };
-      }
-      return { menu_id: input.menu_id, status: "published" };
-    }
-
-    case "delete_menu": {
-      await deleteMenu(db, orgId, siteId, input.menu_id);
-      return { menu_id: input.menu_id, deleted: true };
+      // ChowBot-only ergonomic name — delegates to update_menu's status field.
+      return runMcpExecutorToolForChowbot(menuExecutorSite, "update_menu", {
+        menu_id: input.menu_id,
+        status: "published",
+      });
     }
 
     case "list_locations": {
@@ -2709,36 +2136,7 @@ async function executeTool(
     }
 
     case "list_menus": {
-      const locationId = typeof input.location_id === "string" ? input.location_id.trim() : undefined;
-      const menus = await getMenus(db, orgId, siteId, locationId || undefined);
-      return { menus };
-    }
-
-    case "reorder_menu_items": {
-      const menuId = toSqlText(input.menu_id);
-      if (!menuId) return { error: "menu_id is required." };
-      if (!Array.isArray(input.updates) || !input.updates.length)
-        return { error: "updates array is required." };
-      const updates = (input.updates as Array<{ id?: unknown; sort_order?: unknown }>).map((u) => ({
-        id: String(u.id ?? ""),
-        sort_order: Number(u.sort_order ?? 0),
-      }));
-      try {
-        await reorderMenuItems(db, orgId, siteId, menuId, updates);
-      } catch (error) {
-        if (error instanceof MenuNotFoundError) return { error: error.message };
-        throw error;
-      }
-      return { reordered: true, menu_id: menuId };
-    }
-
-    case "set_menu_item_image": {
-      const itemId = toSqlText(input.menu_item_id);
-      const assetId = toSqlText(input.asset_id);
-      if (!itemId || !assetId) return { error: "menu_item_id and asset_id required." };
-      const result = await updateMenuItem(db, orgId, siteId, itemId, { image_asset_id: assetId }, userId);
-      if (!result) return { error: "Failed to update menu item image." };
-      return { updated: true, menu_item_id: itemId, asset_id: assetId };
+      return runMcpExecutorToolForChowbot(menuExecutorSite, "list_menus", input);
     }
 
     case "get_location": {

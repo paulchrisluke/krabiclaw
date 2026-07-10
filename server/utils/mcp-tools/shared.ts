@@ -1104,6 +1104,7 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'update_menu',
   'create_menu_item',
   'add_menu_items_batch',
+  'sync_menu_items',
   'update_menu_item',
   'rename_menu_section',
   'reorder_menu_items',
