@@ -81,20 +81,34 @@ function extractMcpToolBlocks(source) {
 // Replicates the two derivation-filter shapes actually in use in
 // chowbot-tools/*.ts today (see the comment where this is called). Extend
 // this — don't bypass it — if a future domain file introduces a new filter.
-async function resolveDerivedChowbotToolNames() {
+//
+// Also returns per-file name lists (not deduped across files) so the caller
+// can detect the same tool name registered by two different chowbot-tools
+// files — e.g. a domain file hand-declaring `list_locales` while a separate
+// locales.ts also derives it from MCP_TOOLS. Both files "define" the name
+// individually and neither is wrong in isolation, so no single-file check
+// catches it; a name existing in two files means CHOWBOT_TOOLS ends up with
+// two objects sharing a name, sent to the AI gateway's tool list as if they
+// were both real. This exact bug shipped once already (see git blame on
+// this comment) because a Set-based union silently absorbs duplicates.
+async function collectChowbotToolNamesByFile() {
   const files = await readdir(CHOWBOT_TOOLS_PATH)
-  const names = new Set()
+  const namesByFile = new Map()
 
   for (const file of files) {
     if (!file.endsWith('.ts')) continue
     const filePath = join(CHOWBOT_TOOLS_PATH, file)
     const fileSource = await readFile(filePath, 'utf8')
+    const names = new Set(extractAll(fileSource, /^\s*name: "([a-zA-Z0-9_]+)",?\s*$/gm))
 
     const importRegex = /import \{ (\w+) \} from '~\/server\/utils\/mcp-tools\/([\w-]+)'/g
     let importMatch
     while ((importMatch = importRegex.exec(fileSource)) !== null) {
       const [, importedName, mcpDomainFile] = importMatch
-      if (!fileSource.includes(`${importedName}.`)) continue // imported but unused for derivation
+      // Allow the method chain to wrap onto its own line (`X_TOOLS\n  .filter(...)`),
+      // not just a same-line `X_TOOLS.filter(...)` — don't make derivation
+      // detection depend on a formatting convention nobody's enforcing.
+      if (!new RegExp(`${importedName}\\s*\\.`).test(fileSource)) continue // imported but unused for derivation
 
       const mcpToolsFilePath = join(MCP_TOOLS_PATH, `${mcpDomainFile}.ts`)
       const mcpDomainSource = await readFile(mcpToolsFilePath, 'utf8')
@@ -102,7 +116,7 @@ async function resolveDerivedChowbotToolNames() {
 
       const usesUiResourceUriFilter = fileSource.includes('!tool.uiResourceUri')
       const namedSetMatch = fileSource.match(
-        new RegExp(`${importedName}\\.filter\\(\\(tool\\) => (\\w+)\\.has\\(tool\\.name\\)\\)`),
+        new RegExp(`${importedName}\\s*\\.filter\\(\\(tool\\) => (\\w+)\\.has\\(tool\\.name\\)\\)`),
       )
 
       let allowedNames = null
@@ -117,9 +131,11 @@ async function resolveDerivedChowbotToolNames() {
         names.add(block.name)
       }
     }
+
+    namesByFile.set(file, names)
   }
 
-  return names
+  return namesByFile
 }
 
 function extractAll(content, regex) {
@@ -170,17 +186,15 @@ const mcpExecutorNames = new Set([
 // `X_TOOLS.map(chowbotToolFromMcp)`, so the two surfaces can't drift on
 // argument shape again. A plain regex over chowbot-tools source can't see
 // those names (they only exist at runtime, computed from the imported MCP
-// array), so resolveDerivedChowbotToolNames replicates the derivation
+// array), so collectChowbotToolNamesByFile replicates the derivation
 // statically per-file: find the mcp-tools/<domain>.ts array a file derives
 // from, and apply the same .filter(...) that file applies before mapping.
 // This does NOT re-implement every possible filter shape in general — only
 // the two patterns actually in use today (see its own comments). If a
 // future domain file introduces a new filter shape, extend the function
 // rather than falling back to a literal name list.
-const chowbotDefNames = new Set([
-  ...extractAll(chowbotToolsSource, /^\s*name: "([a-zA-Z0-9_]+)",?\s*$/gm),
-  ...await resolveDerivedChowbotToolNames(),
-])
+const chowbotToolNamesByFile = await collectChowbotToolNamesByFile()
+const chowbotDefNames = new Set([...chowbotToolNamesByFile.values()].flatMap((set) => [...set]))
 
 // 4. CHOWBOT_CONFIRM_REQUIRED
 const confirmRequiredBlock = sliceFrom(chowbotToolsSource, 'export const CHOWBOT_CONFIRM_REQUIRED', ']);')
@@ -240,6 +254,29 @@ report(
   } else {
     for (const name of orphaned) {
       console.error(`  ✗ GROUP_TOOL_NAMES: "${name}" not found in MCP_TOOLS or CHOWBOT_TOOLS`)
+      totalViolations++
+    }
+  }
+}
+
+{
+  // A name registered by two chowbot-tools/*.ts files means CHOWBOT_TOOLS
+  // ends up with two entries sharing a name — neither file is individually
+  // wrong, so the per-file checks above can't see it. See the comment on
+  // collectChowbotToolNamesByFile for how this shipped once already.
+  const fileOccurrences = new Map()
+  for (const [file, names] of chowbotToolNamesByFile) {
+    for (const name of names) {
+      if (!fileOccurrences.has(name)) fileOccurrences.set(name, [])
+      fileOccurrences.get(name).push(file)
+    }
+  }
+  const duplicated = [...fileOccurrences].filter(([, files]) => files.length > 1)
+  if (duplicated.length === 0) {
+    console.log('  ✓ No tool name registered by more than one chowbot-tools/*.ts file')
+  } else {
+    for (const [name, files] of duplicated) {
+      console.error(`  ✗ "${name}" registered by multiple chowbot-tools files: ${files.join(', ')}`)
       totalViolations++
     }
   }

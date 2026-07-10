@@ -12,13 +12,6 @@ import {
   publishPost,
   PostValidationError,
 } from "~/server/utils/post-management";
-import {
-  listPlatformBlogPosts,
-  getPlatformBlogPost,
-  createPlatformBlogPost,
-  updatePlatformBlogPost,
-  deletePlatformBlogPost,
-} from "~/server/utils/platform-content";
 import { runMcpExecutorToolForChowbot } from "~/server/utils/mcp-executor/chowbot-adapter";
 import type { McpToolRole } from "~/server/utils/mcp-auth";
 import {
@@ -32,7 +25,7 @@ import { upsertSiteLocale } from "~/server/utils/site-locales";
 import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
 import { upsertChannelState } from "~/server/utils/chowbot-conversations";
 import { CHOWBOT_MODEL } from "~/server/utils/ai-models";
-import { loadSettingsPayload, updateSiteSettingsFields, SiteNotFoundError } from "~/server/utils/site-settings";
+import { updateSiteSettingsFields } from "~/server/utils/site-settings";
 import {
   createLocation,
   updateLocation,
@@ -60,7 +53,6 @@ import {
   isConversationalToolGroupEnabled,
   normalizeChowBotToolForConversationalSurface,
 } from "~/server/utils/conversational-tool-surface";
-import { SUPPORTED_CURRENCIES } from "~/shared/currencies";
 import { queryAll, queryFirst } from "~/server/db";
 import { searchPublicResources } from "~/server/utils/public-search";
 import { PUBLIC_SEARCH_TYPES, type PublicSearchTypeFilter } from '~/server/utils/platform-search-types'
@@ -1262,24 +1254,7 @@ async function executeTool(
 
     case "set_default_currency": {
       const currency = toSqlText(input.currency)?.trim().toUpperCase();
-      const supportedCurrencies = new Set<string>(SUPPORTED_CURRENCIES);
-      if (!currency || !supportedCurrencies.has(currency)) {
-        return { error: "Unsupported currency." };
-      }
-      const result = await updateSiteSettingsFields(
-        db,
-        env,
-        siteId,
-        orgId,
-        { default_currency: currency as (typeof SUPPORTED_CURRENCIES)[number] },
-        userId,
-      );
-      if (result.status >= 400) {
-        return {
-          error: String(result.data.error ?? "Failed to update site settings."),
-        };
-      }
-      return { default_currency: currency, updated: true };
+      return runMcpExecutorToolForChowbot(executorSite, "set_default_currency", { currency });
     }
 
     case "update_site_social": {
@@ -1784,69 +1759,17 @@ async function executeTool(
       return { updated: true, post_id: postId, asset_id: assetId };
     }
 
-    case "list_blog_posts": {
-      const status = typeof input.status === "string" ? input.status : undefined;
-      const posts = await listPlatformBlogPosts(db, status, siteId);
-      return { posts };
-    }
-
-    case "get_blog_post": {
-      const postId = toSqlText(input.post_id);
-      if (!postId) return { error: "post_id is required." };
-      const post = await getPlatformBlogPost(db, postId, siteId);
-      return { post };
-    }
-
-    case "create_blog_post": {
-      const result = await createPlatformBlogPost(
-        db,
-        userId,
-        {
-          title: input.title,
-          body: input.body,
-          excerpt: input.excerpt,
-          category: input.category,
-          components: input.components,
-          publish: input.publish,
-        },
-        { site_id: siteId, organization_id: orgId },
-      );
-      return { post: result.post };
-    }
-
-    case "update_blog_post": {
-      const postId = toSqlText(input.post_id);
-      if (!postId) return { error: "post_id is required." };
-      const result = await updatePlatformBlogPost(
-        db,
-        postId,
-        {
-          title: input.title,
-          body: input.body,
-          excerpt: input.excerpt,
-          category: input.category,
-          components: input.components,
-          publish: input.publish,
-          unpublish: input.unpublish,
-        },
-        siteId,
-      );
-      return { post: result.post };
-    }
-
-    case "set_blog_post_image": {
-      const postId = toSqlText(input.post_id);
-      const assetId = toSqlText(input.asset_id);
-      if (!postId || !assetId) return { error: "post_id and asset_id required." };
-      const result = await updatePlatformBlogPost(db, postId, { featured_image_asset_id: assetId }, siteId);
-      return { updated: true, post_id: postId, asset_id: assetId, post: result.post };
-    }
-
+    // Regression fix: seo_description/seo_keywords/canonical_url/robots were
+    // in ChowBot's old create/update schema but the case bodies never
+    // forwarded them to createPlatformBlogPost/updatePlatformBlogPost —
+    // silently dropped despite the underlying function fully supporting them.
+    case "list_blog_posts":
+    case "get_blog_post":
+    case "create_blog_post":
+    case "update_blog_post":
+    case "set_blog_post_image":
     case "delete_blog_post": {
-      const postId = toSqlText(input.post_id);
-      if (!postId) return { error: "post_id is required." };
-      await deletePlatformBlogPost(db, postId, siteId);
-      return { post_id: postId, deleted: true };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "list_menus": {
@@ -1883,22 +1806,9 @@ async function executeTool(
       return { updated: true, location_id: locationId, asset_id: assetId };
     }
 
-    case "get_site_settings": {
-      try {
-        return { settings: await loadSettingsPayload(db, orgId, siteId) };
-      } catch (err) {
-        if (err instanceof SiteNotFoundError) {
-          return { error: "Site not found." };
-        }
-        throw err;
-      }
-    }
-
+    case "get_site_settings":
     case "set_logo": {
-      const assetId = toSqlText(input.asset_id);
-      if (!assetId) return { error: "asset_id is required." };
-      await updateSiteSettingsFields(db, env, siteId, orgId, { logo_asset_id: assetId }, userId);
-      return { updated: true, logo_asset_id: assetId };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     // Regression fix: this previously accepted title/caption fields that

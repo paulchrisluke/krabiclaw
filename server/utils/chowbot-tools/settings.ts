@@ -8,38 +8,12 @@ import { chowbotToolFromMcp } from './from-mcp'
 // rotation risk), so it's excluded here rather than derived wholesale.
 const SETTINGS_DOMAIN_TOOL_NAMES = new Set(['get_dashboard_link'])
 
+// get_site_settings/set_logo (mcp-tools/sites.ts) and update_media_asset
+// (mcp-tools/media.ts) used to be hand-written here too, duplicating what's
+// now properly derived in chowbot-tools/sites.ts and chowbot-tools/media.ts
+// respectively — two chowbot-tools files each registering the same tool
+// name, which lint-tool-parity.mjs's cross-file duplicate check now catches.
 export const SETTINGS_CHOWBOT_TOOLS: AiTool[] = [
-  // ── Site settings & media ─────────────────────────────────────────────────
-    {
-      name: "get_site_settings",
-      description: "Read current site settings: brand name, description, logo, currency, social links, contact emails.",
-      input_schema: { type: "object", properties: {} },
-    },
-  {
-      name: "set_logo",
-      description: "Set the site logo from an existing media asset.",
-      input_schema: {
-        type: "object",
-        properties: {
-          asset_id: { type: "string", description: "Media asset ID of the logo image." },
-        },
-        required: ["asset_id"],
-      },
-    },
-  {
-      name: "update_media_asset",
-      description: "Update metadata on a media asset — alt text, title, or caption.",
-      input_schema: {
-        type: "object",
-        properties: {
-          asset_id: { type: "string" },
-          alt_text: { type: "string" },
-          title: { type: "string" },
-          caption: { type: "string" },
-        },
-        required: ["asset_id"],
-      },
-    },
   // ── Dashboard links ────────────────────────────────────────────────────────
   ...SETTINGS_TOOLS.filter((tool) => SETTINGS_DOMAIN_TOOL_NAMES.has(tool.name)).map(chowbotToolFromMcp),
 ]
