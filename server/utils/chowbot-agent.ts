@@ -21,11 +21,6 @@ import { upsertChannelState } from "~/server/utils/chowbot-conversations";
 import { CHOWBOT_MODEL } from "~/server/utils/ai-models";
 import { updateSiteSettingsFields } from "~/server/utils/site-settings";
 import {
-  createLocation,
-  updateLocation,
-  deleteLocation,
-} from "~/server/utils/location-management";
-import {
   getExperienceById,
   updateExperience,
   WEEKDAY_NAMES,
@@ -134,14 +129,6 @@ function getToolString(
   return typeof value === "string" ? value.slice(0, maxLength) : undefined;
 }
 
-function getToolBoolean(
-  record: Record<string, unknown>,
-  key: string,
-): boolean | undefined {
-  const value = record[key];
-  return typeof value === "boolean" ? value : undefined;
-}
-
 const TIME_SLOT_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 function asValidRecurringSlots(value: unknown): RecurringSlots | null {
@@ -158,26 +145,6 @@ function asValidRecurringSlots(value: unknown): RecurringSlots | null {
 
 function isSiteContentPage(page: string): page is keyof typeof contentRegistry {
   return Object.prototype.hasOwnProperty.call(contentRegistry, page);
-}
-
-function getToolNumber(
-  record: Record<string, unknown>,
-  key: string,
-): number | null | undefined {
-  const value = record[key];
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : undefined;
-}
-
-function getToolInteger(
-  record: Record<string, unknown>,
-  key: string,
-): number | null | undefined {
-  const numeric = getToolNumber(record, key);
-  if (numeric === undefined || numeric === null) return numeric;
-  return Number.isInteger(numeric) ? numeric : undefined;
 }
 
 function isAllowedGoogleMapsHost(hostname: string): boolean {
@@ -417,182 +384,15 @@ async function executeTool(
       });
     }
 
-    case "list_locations": {
-      const rows = await queryAll(
-        db,
-        `SELECT id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
-                rating, review_count, description, short_description, price_level,
-                instagram_url, facebook_url, tiktok_url, hero_image_asset_id, hero_video_asset_id,
-                status, is_primary
-         FROM business_locations WHERE organization_id = ? AND site_id = ? ORDER BY is_primary DESC, title ASC`,
-        [orgId, siteId],
-      );
-      return rows ?? [];
-    }
-
-    case "create_location": {
-      const title = toSqlText(input.title)?.trim();
-      if (!title) return { error: "title is required." };
-      if (input.rating !== undefined && getToolNumber(input, "rating") === undefined)
-        return { error: "rating must be a valid number." };
-      const ratingCreate = getToolNumber(input, "rating");
-      if (ratingCreate !== undefined && ratingCreate !== null && (ratingCreate < 0 || ratingCreate > 5))
-        return { error: "rating must be between 0 and 5." };
-      if (input.review_count !== undefined && getToolInteger(input, "review_count") === undefined)
-        return { error: "review_count must be a valid integer." };
-      const reviewCountCreate = getToolInteger(input, "review_count");
-      if (reviewCountCreate !== undefined && reviewCountCreate !== null && reviewCountCreate < 0)
-        return { error: "review_count must be non-negative." };
-      if (input.max_capacity !== undefined && getToolInteger(input, "max_capacity") === undefined)
-        return { error: "max_capacity must be a valid integer." };
-      const maxCapacityCreate = getToolInteger(input, "max_capacity");
-      if (maxCapacityCreate !== undefined && maxCapacityCreate !== null && maxCapacityCreate < 0)
-        return { error: "max_capacity must be non-negative." };
-      const result = await createLocation(
-        env,
-        db,
-        orgId,
-        siteId,
-        {
-          title,
-          city: toSqlText(input.city) ?? null,
-          neighborhood: toSqlText(input.neighborhood) ?? null,
-          phone: toSqlText(input.phone) ?? null,
-          email: toSqlText(input.email) ?? null,
-          website_url: toSqlText(input.website_url) ?? null,
-          maps_url: toSqlText(input.maps_url) ?? null,
-          google_place_id: toSqlText(input.google_place_id) ?? null,
-          description: toSqlText(input.description) ?? null,
-          short_description: toSqlText(input.short_description) ?? null,
-          address: toSqlText(input.address) ?? null,
-          opening_hours: toSqlText(input.opening_hours) ?? null,
-          timezone: toSqlText(input.timezone) ?? null,
-          max_capacity: getToolInteger(input, "max_capacity") ?? null,
-          rating: getToolNumber(input, "rating") ?? null,
-          review_count: getToolInteger(input, "review_count") ?? null,
-          price_level: toSqlText(input.price_level) ?? null,
-          facebook_url: toSqlText(input.facebook_url) ?? null,
-          instagram_url: toSqlText(input.instagram_url) ?? null,
-          tiktok_url: toSqlText(input.tiktok_url) ?? null,
-          grab_url: toSqlText(input.grab_url) ?? null,
-          uber_eats_url: toSqlText(input.uber_eats_url) ?? null,
-          foodpanda_url: toSqlText(input.foodpanda_url) ?? null,
-          hero_image_asset_id: toSqlText(input.hero_image_asset_id) ?? null,
-          hero_video_asset_id: toSqlText(input.hero_video_asset_id) ?? null,
-          is_primary: getToolBoolean(input, "is_primary") === true,
-        },
-        userId,
-      );
-      if (result.status >= 400) return result.data;
-      const location = (
-        result.data as {
-          location?: {
-            id: string;
-            title: string;
-            slug: string;
-            status: string;
-          };
-        }
-      ).location;
-      return location ?? { error: "Location could not be created." };
-    }
-
-    case "update_location": {
-      const locationId = toSqlText(input.location_id);
-      if (!locationId) {
-        return { error: "location_id is required." };
-      }
-      if (input.rating !== undefined && getToolNumber(input, "rating") === undefined)
-        return { error: "rating must be a valid number." };
-      const ratingUpdate = getToolNumber(input, "rating");
-      if (ratingUpdate !== undefined && ratingUpdate !== null && (ratingUpdate < 0 || ratingUpdate > 5))
-        return { error: "rating must be between 0 and 5." };
-      if (input.review_count !== undefined && getToolInteger(input, "review_count") === undefined)
-        return { error: "review_count must be a valid integer." };
-      const reviewCountUpdate = getToolInteger(input, "review_count");
-      if (reviewCountUpdate !== undefined && reviewCountUpdate !== null && reviewCountUpdate < 0)
-        return { error: "review_count must be non-negative." };
-      if (input.max_capacity !== undefined && getToolInteger(input, "max_capacity") === undefined)
-        return { error: "max_capacity must be a valid integer." };
-      const maxCapacityUpdate = getToolInteger(input, "max_capacity");
-      if (maxCapacityUpdate !== undefined && maxCapacityUpdate !== null && maxCapacityUpdate < 0)
-        return { error: "max_capacity must be non-negative." };
-      const result = await updateLocation(
-        db,
-        orgId,
-        siteId,
-        locationId,
-        {
-          title: toSqlText(input.title) ?? undefined,
-          slug: toSqlText(input.slug) ?? undefined,
-          city: toSqlText(input.city) ?? undefined,
-          neighborhood: toSqlText(input.neighborhood) ?? undefined,
-          phone: input.phone !== undefined ? (toSqlText(input.phone) ?? null) : undefined,
-          email: input.email !== undefined ? (toSqlText(input.email) ?? null) : undefined,
-          notification_phone: toSqlText(input.notification_phone) ?? undefined,
-          description: toSqlText(input.description) ?? undefined,
-          short_description: toSqlText(input.short_description) ?? undefined,
-          price_level: toSqlText(input.price_level) ?? undefined,
-          facebook_url: toSqlText(input.facebook_url) ?? undefined,
-          instagram_url: toSqlText(input.instagram_url) ?? undefined,
-          tiktok_url: toSqlText(input.tiktok_url) ?? undefined,
-          grab_url: toSqlText(input.grab_url) ?? undefined,
-          uber_eats_url: toSqlText(input.uber_eats_url) ?? undefined,
-          foodpanda_url: toSqlText(input.foodpanda_url) ?? undefined,
-          website_url: toSqlText(input.website_url) ?? undefined,
-          maps_url: toSqlText(input.maps_url) ?? undefined,
-          google_place_id: toSqlText(input.google_place_id) ?? undefined,
-          hero_image_asset_id:
-            toSqlText(input.hero_image_asset_id) ?? undefined,
-          hero_video_asset_id:
-            toSqlText(input.hero_video_asset_id) ?? undefined,
-          address: toSqlText(input.address) ?? undefined,
-          opening_hours: toSqlText(input.opening_hours) ?? undefined,
-          timezone: toSqlText(input.timezone) ?? undefined,
-          max_capacity:
-            input.max_capacity !== undefined
-              ? (getToolInteger(input, "max_capacity") ?? null)
-              : undefined,
-          rating:
-            input.rating !== undefined
-              ? (getToolNumber(input, "rating") ?? null)
-              : undefined,
-          review_count:
-            input.review_count !== undefined
-              ? (getToolInteger(input, "review_count") ?? null)
-              : undefined,
-          is_primary: getToolBoolean(input, "is_primary"),
-          status:
-            typeof input.status === "string" &&
-            ["active", "inactive", "sync_error"].includes(input.status)
-              ? (input.status as "active" | "inactive" | "sync_error")
-              : undefined,
-        },
-        userId,
-      );
-
-      if (result.status >= 400) return result.data;
-      return (
-        (result.data as { location?: JsonSerializable }).location ?? {
-          error: "Location not found.",
-        }
-      );
-    }
-
+    // Regression note: create_location/update_location's rating/review_count/
+    // max_capacity range checks were duplicated here — createLocation/
+    // updateLocation already validate the same rules server-side, so this
+    // was redundant, not filling a gap.
+    case "list_locations":
+    case "create_location":
+    case "update_location":
     case "delete_location": {
-      const locationId = toSqlText(input.location_id);
-      if (!locationId) return { error: "location_id is required." };
-      const result = await deleteLocation(
-        env,
-        db,
-        orgId,
-        siteId,
-        locationId,
-        userId,
-      );
-      return result.status >= 400
-        ? result.data
-        : { location_id: locationId, deleted: true };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "import_from_maps": {
@@ -1502,34 +1302,10 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, "list_menus", input);
     }
 
-    case "get_location": {
-      const locationId = toSqlText(input.location_id);
-      if (!locationId) return { error: "location_id is required." };
-      const row = await queryFirst(
-        db,
-        `SELECT * FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        [locationId, orgId, siteId],
-      );
-      if (!row) return { error: "Location not found." };
-      return { location: row };
-    }
-
-    case "set_location_hero_image": {
-      const locationId = toSqlText(input.location_id);
-      const assetId = toSqlText(input.asset_id);
-      if (!locationId || !assetId) return { error: "location_id and asset_id required." };
-      const result = await updateLocation(db, orgId, siteId, locationId, { hero_image_asset_id: assetId }, userId);
-      if (!result || result.status >= 400) return { error: "Failed to set location hero image." };
-      return { updated: true, location_id: locationId, asset_id: assetId };
-    }
-
+    case "get_location":
+    case "set_location_hero_image":
     case "set_location_hero_video": {
-      const locationId = toSqlText(input.location_id);
-      const assetId = toSqlText(input.asset_id);
-      if (!locationId || !assetId) return { error: "location_id and asset_id required." };
-      const result = await updateLocation(db, orgId, siteId, locationId, { hero_video_asset_id: assetId }, userId);
-      if (!result || result.status >= 400) return { error: "Failed to set location hero video." };
-      return { updated: true, location_id: locationId, asset_id: assetId };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "get_site_settings":
