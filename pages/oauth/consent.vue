@@ -131,22 +131,6 @@ onMounted(async () => {
 
   if (sessionResult.status === 'fulfilled' && sessionResult.value?.data?.user) {
     currentUser.value = sessionResult.value.data.user
-    // Auto-accept when the user has already consented to this client.
-    // This makes "Always allow" re-auth in ChatGPT seamless — the consent page
-    // silently completes and redirects back without requiring another click.
-    if (clientId && typeof clientId === 'string') {
-      try {
-        const status = await $fetch<{ hasConsented: boolean }>('/api/auth/oauth2/consent-status', {
-          query: { client_id: clientId },
-        })
-        if (status.hasConsented) {
-          await accept()
-          return
-        }
-      } catch {
-        // Non-fatal — fall through to show manual UI
-      }
-    }
   }
 })
 

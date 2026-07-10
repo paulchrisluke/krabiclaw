@@ -449,10 +449,8 @@ export async function executePlatformMcpToolCall(
   }
 
   const user = await requireMcpUser(event, {
-    // See scopes comment in server/utils/auth.ts: DCR-registered MCP clients
-    // legitimately carry every custom scope by default, so forbiddenScopes
-    // isn't used here — audiences (aud claim) + requirePlatformAdmin (DB role)
-    // are the real boundary, matching server/api/mcp/platform.post.ts.
+    // audiences (aud claim) + requirePlatformAdmin (DB role) are the real
+    // boundary here, matching server/api/mcp/platform.post.ts.
     audiences: [
       `${String(event.context.cloudflare?.env?.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')}/api/mcp/platform`,
     ],
