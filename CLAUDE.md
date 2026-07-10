@@ -402,3 +402,19 @@ potteryhousekrabi.com → https://www.potteryhousekrabi.com
 ```
 
 Do not touch DNS again until the cert issues. Every PATCH to the custom hostname rotates ACME tokens.
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+PRDs and issues live in `paulchrisluke/krabiclaw` GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repository using root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
