@@ -1,5 +1,12 @@
 import type { AiTool } from '~/server/utils/ai-gateway'
-import { DASHBOARD_DESTINATIONS } from '~/server/utils/dashboard-links'
+import { SETTINGS_TOOLS } from '~/server/utils/mcp-tools/settings'
+import { chowbotToolFromMcp } from './from-mcp'
+
+// Only get_dashboard_link is shared with MCP's settings domain — domain
+// management (create_domain, sync_domain, etc.) is intentionally not
+// exposed to ChowBot (see CLAUDE.md's Custom Domains section on ACME token
+// rotation risk), so it's excluded here rather than derived wholesale.
+const SETTINGS_DOMAIN_TOOL_NAMES = new Set(['get_dashboard_link'])
 
 export const SETTINGS_CHOWBOT_TOOLS: AiTool[] = [
   // ── Site settings & media ─────────────────────────────────────────────────
@@ -34,20 +41,5 @@ export const SETTINGS_CHOWBOT_TOOLS: AiTool[] = [
       },
     },
   // ── Dashboard links ────────────────────────────────────────────────────────
-    {
-      name: "get_dashboard_link",
-      description:
-        "Resolve a deep link into this site's org dashboard for a destination ChowBot can't act on directly (e.g. billing/subscription management has no chat tool). Use this so the reply can link straight to the right settings page instead of just naming it.",
-      input_schema: {
-        type: "object",
-        properties: {
-          destination: {
-            type: "string",
-            enum: Object.keys(DASHBOARD_DESTINATIONS),
-            description: "Which dashboard page to link to.",
-          },
-        },
-        required: ["destination"],
-      },
-    },
+  ...SETTINGS_TOOLS.filter((tool) => SETTINGS_DOMAIN_TOOL_NAMES.has(tool.name)).map(chowbotToolFromMcp),
 ]

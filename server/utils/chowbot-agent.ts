@@ -40,7 +40,6 @@ import {
 } from "~/server/utils/translation-inventory";
 import { processTranslationJobBatch } from "~/server/utils/translation-processor";
 import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
-import { extractMenuFromMediaAsset } from "~/server/utils/chowbot-media";
 import { upsertChannelState } from "~/server/utils/chowbot-conversations";
 import { CHOWBOT_MODEL } from "~/server/utils/ai-models";
 import { loadSettingsPayload, updateSiteSettingsFields, SiteNotFoundError } from "~/server/utils/site-settings";
@@ -50,33 +49,16 @@ import {
   deleteLocation,
 } from "~/server/utils/location-management";
 import {
-  listLocationQa,
-  createLocationQa,
-  deleteLocationQa,
-} from "~/server/utils/location-qa";
-import { replyToReview } from "~/server/utils/review-management";
-import { createWorkRequest } from "~/server/utils/work-request-management";
-import {
   getExperienceById,
   updateExperience,
   WEEKDAY_NAMES,
   type RecurringSlots,
 } from "~/server/utils/experiences";
 import { buildImageUrl } from "~/server/utils/cloudflare-images";
-import { getMediaAsset, updateMediaAssetMetadata } from "~/server/utils/media-asset-manager";
+import { getMediaAsset } from "~/server/utils/media-asset-manager";
 import {
-  listWorkRequestsForOrganization,
-  getNotificationsSettings,
-  listReservationSubmissions,
-  updateNotificationsSettings,
-  updateLocationQa,
-  reorderLocationQa,
   updateHomeHero,
 } from "~/server/utils/mcp-workflows";
-import {
-  listTranslationReviewItems,
-  saveTranslationReviewItem,
-} from "~/server/utils/translation-review";
 import { contentRegistry, getFieldDef } from "~/config/content-registry";
 import {
   CHOWBOT_TOOLS,
@@ -90,11 +72,6 @@ import {
 } from "~/server/utils/conversational-tool-surface";
 import { SUPPORTED_CURRENCIES } from "~/shared/currencies";
 import { queryAll, queryFirst } from "~/server/db";
-import {
-  buildDashboardUrl,
-  DASHBOARD_DESTINATIONS,
-  type DashboardDestination,
-} from "~/server/utils/dashboard-links";
 import { searchPublicResources } from "~/server/utils/public-search";
 import { PUBLIC_SEARCH_TYPES, type PublicSearchTypeFilter } from '~/server/utils/platform-search-types'
 
@@ -113,7 +90,6 @@ const TRANSLATION_SCOPES = new Set([
   "posts",
 ]);
 
-type SqlBindValue = string | number | boolean | null;
 export type JsonSerializable =
   | string
   | number
@@ -447,7 +423,7 @@ async function executeTool(
   },
 ): Promise<ApiValue> {
   const { db, env, orgId, siteId, userId } = ctx;
-  const menuExecutorSite = {
+  const executorSite = {
     db,
     env: env as CloudflareEnv,
     userId,
@@ -614,13 +590,13 @@ async function executeTool(
     case "update_menu_item":
     case "reorder_menu_items":
     case "set_menu_item_image": {
-      return runMcpExecutorToolForChowbot(menuExecutorSite, name, input);
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "create_menu": {
       // ChowBot-only convenience: fall back to the dashboard's current page
       // location when the model omits location_id (MCP always requires it explicit).
-      return runMcpExecutorToolForChowbot(menuExecutorSite, "create_menu", {
+      return runMcpExecutorToolForChowbot(executorSite, "create_menu", {
         ...input,
         location_id: input.location_id ?? ctx.locationId ?? undefined,
       });
@@ -631,12 +607,12 @@ async function executeTool(
     case "delete_menu_section":
     case "delete_menu_item":
     case "delete_menu": {
-      return runMcpExecutorToolForChowbot(menuExecutorSite, name, input);
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "publish_menu": {
       // ChowBot-only ergonomic name — delegates to update_menu's status field.
-      return runMcpExecutorToolForChowbot(menuExecutorSite, "update_menu", {
+      return runMcpExecutorToolForChowbot(executorSite, "update_menu", {
         menu_id: input.menu_id,
         status: "published",
       });
@@ -838,34 +814,25 @@ async function executeTool(
         return { error: "URL does not appear to be a Google Maps link." };
       }
 
-      // Resolve one redirect hop safely for short URLs.
+      // Resolve short URLs (maps.app.goo.gl).
+      // Use redirect:follow GET instead of redirect:manual HEAD — Cloudflare
+      // Workers blocks manual redirect fetches against goo.gl (see the same
+      // fix in mcp-executor/index.ts's import_from_maps handling).
       let resolvedUrl = parsedRawUrl.toString();
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        const probe = await fetch(parsedRawUrl.toString(), {
-          method: "HEAD",
-          redirect: "manual",
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        const location = probe.headers.get("location");
-        if (location) {
-          const redirected = new URL(location, parsedRawUrl);
-          if (!isAllowedGoogleMapsHost(redirected.hostname)) {
-            return { error: "URL redirects to a non-Google host." };
+      if (parsedRawUrl.hostname === "maps.app.goo.gl") {
+        try {
+          const probe = await fetch(parsedRawUrl.toString(), {
+            method: "GET",
+            redirect: "follow",
+            signal: AbortSignal.timeout(8000),
+            headers: { "User-Agent": "Mozilla/5.0" },
+          });
+          if (probe.url && isAllowedGoogleMapsHost(new URL(probe.url).hostname)) {
+            resolvedUrl = probe.url;
           }
-          resolvedUrl = redirected.toString();
-        } else {
-          const probeUrl = probe.url || parsedRawUrl.toString();
-          const parsedProbeUrl = new URL(probeUrl);
-          if (!isAllowedGoogleMapsHost(parsedProbeUrl.hostname)) {
-            return { error: "Resolved URL is not a Google Maps host." };
-          }
-          resolvedUrl = parsedProbeUrl.toString();
+        } catch {
+          /* keep original — falls through to text search below */
         }
-      } catch {
-        /* keep rawUrl */
       }
 
       try {
@@ -933,75 +900,31 @@ async function executeTool(
       };
     }
 
-    case "list_location_reviews": {
-      const loc = await queryFirst(
-        db,
-        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        [input.location_id, orgId, siteId],
-      );
-      if (!loc) return { error: "Location not found." };
-      const results = await queryAll(
-        db,
-        `SELECT id, author_name, reviewer_photo_url, rating, title, content, owner_reply,
-                owner_reply_at, photo_urls, source, status, created_at, updated_at
-         FROM reviews
-         WHERE site_id = ? AND location_id = ?
-         ORDER BY created_at DESC`,
-        [siteId, input.location_id],
-      );
-      return results ?? [];
-    }
-
+    // Both delegate to mcp-executor/reviews.ts. reply_to_review is MCP
+    // minimumRole 'owner' — the adapter now enforces that (previously
+    // ChowBot's own case body had no role check at all).
+    case "list_location_reviews":
     case "reply_to_review": {
-      const result = await replyToReview(
-        db,
-        orgId,
-        siteId,
-        input.review_id,
-        String(input.reply ?? ""),
-      );
-      return result.data;
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "get_site_media_assets": {
-      const conditions = [
-        `site_id = ?`,
-        `location_id = ?`,
-        `status = 'active'`,
-      ];
-      const params: SqlBindValue[] = [siteId, input.location_id];
-      if (input.kind) {
-        conditions.push(`kind = ?`);
-        params.push(input.kind);
-      }
-      params.push(50);
-      const results = await queryAll(
-        db,
-        `SELECT id, kind, provider, public_url, thumbnail_url, alt_text, mime_type, file_name, created_at
-         FROM media_assets WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC LIMIT ?`,
-        params,
-      );
-      return results ?? [];
-    }
-
+    case "get_site_media_assets":
     case "delete_media_asset": {
-      const { deleteMediaAsset } =
-        await import("~/server/utils/media-asset-manager");
-      await deleteMediaAsset(db, env, input.asset_id, siteId, userId);
-      return { asset_id: input.asset_id, deleted: true };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "import_menu_from_media": {
+      // ChowBot's variant resolves asset_id from WhatsApp's pending-media
+      // state rather than taking it as a direct argument (MCP's ChatGPT
+      // callers already have a resolved assetId from upload_user_media).
       if (!ctx.pendingMedia?.assetId || ctx.pendingMedia.siteId !== siteId) {
         return { error: "No pending WhatsApp media is available to import." };
       }
-      const result = await extractMenuFromMediaAsset(db, env, {
-        organizationId: orgId,
-        siteId,
-        userId,
-        assetId: ctx.pendingMedia.assetId,
-        menuName: toSqlText(input.menu_name)?.trim() || undefined,
-      });
+      const result = await runMcpExecutorToolForChowbot(executorSite, "import_menu_from_media", {
+        asset_id: ctx.pendingMedia.assetId,
+        menu_name: toSqlText(input.menu_name)?.trim() || undefined,
+      }) as { error?: string; menuId?: string; count?: number; warning?: unknown; creditsRemaining?: unknown };
+      if (result.error) return result;
       if (ctx.channel === "whatsapp") {
         await upsertChannelState(db, {
           userId,
@@ -1084,70 +1007,23 @@ async function executeTool(
       return { asset_id: assetId, publicUrl, thumbnailUrl };
     }
 
-    case "list_location_qa": {
-      const loc = await queryFirst(
-        db,
-        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        [input.location_id, orgId, siteId],
-      );
-      if (!loc) return { error: "Location not found." };
-      return listLocationQa(db, siteId, input.location_id);
-    }
-
-    case "create_location_qa": {
-      const loc = await queryFirst(
-        db,
-        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        [input.location_id, orgId, siteId],
-      );
-      if (!loc) return { error: "Location not found." };
-      const result = await createLocationQa(
-        db,
-        orgId,
-        siteId,
-        input.location_id,
-        {
-          question: String(input.question ?? ""),
-          answer: toSqlText(input.answer) ?? null,
-          is_owner_answer: true,
-        },
-      );
-      return result.status >= 400
-        ? result.data
-        : { ...(result.data as object), added: true };
-    }
-
+    case "list_location_qa":
+    case "create_location_qa":
     case "delete_location_qa": {
-      const loc = await queryFirst(
-        db,
-        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        [input.location_id, orgId, siteId],
-      );
-      if (!loc) return { error: "Location not found." };
-      const result = await deleteLocationQa(
-        db,
-        siteId,
-        input.location_id,
-        input.qa_id,
-      );
-      return result.status >= 400
-        ? result.data
-        : { qa_id: input.qa_id, deleted: true };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "get_contact_inquiries": {
-      const results = await queryAll(
-        db,
-        `SELECT id, name, email, message, created_at FROM contact_submissions WHERE site_id = ? ORDER BY created_at DESC LIMIT 20`,
-        [siteId],
-      );
-      return results ?? [];
+      return runMcpExecutorToolForChowbot(executorSite, "get_contact_inquiries", input);
     }
 
     case "get_reservation_inquiries": {
-      const locationId = toSqlText(input.location_id) ?? ctx.locationId ?? null;
-      const results = await listReservationSubmissions(db, siteId, { locationId });
-      return results ?? [];
+      // ChowBot-only convenience: fall back to the dashboard's current page
+      // location when the model omits location_id.
+      return runMcpExecutorToolForChowbot(executorSite, "get_reservation_inquiries", {
+        ...input,
+        location_id: input.location_id ?? ctx.locationId ?? undefined,
+      });
     }
 
     case "get_page_fields": {
@@ -1981,55 +1857,12 @@ async function executeTool(
       return { overrides };
     }
 
-    case "create_work_request": {
-      const type = toSqlText(input.type);
-      let title = toSqlText(input.title);
-      const description = toSqlText(input.description) ?? null;
-      const priority = toSqlText(input.priority) ?? "normal";
-
-      const validTypes = [
-        "content_update",
-        "menu_update",
-        "translation",
-        "seo",
-        "google_business",
-        "seasonal",
-        "photo_update",
-        "social_media",
-        "technical",
-        "other",
-      ];
-      const validPriorities = ["low", "normal", "high", "urgent"];
-
-      if (!type || !validTypes.includes(type))
-        return { error: `type must be one of: ${validTypes.join(", ")}` };
-      title = title?.trim();
-      if (!title) return { error: "title is required" };
-      if (title.length > 120)
-        return { error: "title must be at most 120 characters" };
-      if (!validPriorities.includes(priority))
-        return { error: "priority must be low, normal, high, or urgent" };
-
-      const result = await createWorkRequest(env, db, orgId, siteId, {
-        type,
-        title,
-        description,
-        priority,
-        source: "chowbot",
-      });
-      if (result.status >= 400) return result.data;
-
-      return {
-        created: true,
-        id: (result.data as { id: string }).id,
-        message:
-          "Work request submitted to the Paul & Julia queue. They'll take care of it.",
-      };
-    }
-
+    // Both require the managed_service entitlement on MCP (tool.requiredEntitlement),
+    // which the adapter now enforces — the old case bodies here had no
+    // entitlement check at all.
+    case "create_work_request":
     case "list_work_requests": {
-      const rows = await listWorkRequestsForOrganization(db, orgId);
-      return { work_requests: rows };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "search_public_resources": {
@@ -2136,7 +1969,7 @@ async function executeTool(
     }
 
     case "list_menus": {
-      return runMcpExecutorToolForChowbot(menuExecutorSite, "list_menus", input);
+      return runMcpExecutorToolForChowbot(executorSite, "list_menus", input);
     }
 
     case "get_location": {
@@ -2187,16 +2020,12 @@ async function executeTool(
       return { updated: true, logo_asset_id: assetId };
     }
 
+    // Regression fix: this previously accepted title/caption fields that
+    // updateMediaAssetMetadata's signature never supported (only alt_text,
+    // location_id, category exist) — those were silently dropped, so
+    // "update the caption" always claimed success while doing nothing.
     case "update_media_asset": {
-      const assetId = toSqlText(input.asset_id);
-      if (!assetId) return { error: "asset_id is required." };
-      const updates: Record<string, string> = {};
-      if (typeof input.alt_text === "string") updates.alt_text = input.alt_text;
-      if (typeof input.title === "string") updates.title = input.title;
-      if (typeof input.caption === "string") updates.caption = input.caption;
-      if (!Object.keys(updates).length) return { error: "Provide at least one field to update." };
-      await updateMediaAssetMetadata(db, assetId, siteId, updates);
-      return { updated: true, asset_id: assetId };
+      return runMcpExecutorToolForChowbot(executorSite, "update_media_asset", input);
     }
 
     case "set_home_hero_image": {
@@ -2280,46 +2109,14 @@ async function executeTool(
       return { updated: true, asset_id: assetId, public_url: publicUrl };
     }
 
-    case "get_notification_settings": {
-      const settings = await getNotificationsSettings(db, orgId, siteId);
-      return { settings };
-    }
-
+    case "get_notification_settings":
     case "update_notification_settings": {
-      const phone = typeof input.whatsapp_phone === "string" && input.whatsapp_phone.trim()
-        ? input.whatsapp_phone.trim()
-        : undefined;
-      const channels = Array.isArray(input.channels)
-        ? input.channels.filter((value: unknown): value is string => value === "email" || value === "whatsapp")
-        : undefined;
-      if (!phone && !channels) return { error: "whatsapp_phone and/or channels are required." };
-      if (channels && channels.length === 0) return { error: "channels must contain at least one valid value (email or whatsapp)." };
-      const result = await updateNotificationsSettings(db, orgId, siteId, phone, channels);
-      return { updated: true, ...result };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "update_location_qa": {
-      const qaId = toSqlText(input.qa_id);
-      const locationId = toSqlText(input.location_id);
-      if (!qaId || !locationId) return { error: "qa_id and location_id required." };
-      const updates: Record<string, unknown> = {};
-      if (input.question !== undefined) updates.question = input.question;
-      if (input.answer !== undefined) updates.answer = input.answer;
-      if (input.status !== undefined) updates.status = input.status;
-      if (input.sort_order !== undefined) updates.sort_order = input.sort_order;
-      return await updateLocationQa(db, orgId, siteId, locationId, qaId, updates);
-    }
-
+    case "update_location_qa":
     case "reorder_location_qa": {
-      const locationId = toSqlText(input.location_id);
-      if (!locationId) return { error: "location_id is required." };
-      if (!Array.isArray(input.updates) || !input.updates.length)
-        return { error: "updates array is required." };
-      const updates = (input.updates as Array<{ id?: unknown; sort_order?: unknown }>).map((u) => ({
-        id: String(u.id ?? ""),
-        sort_order: Number(u.sort_order ?? 0),
-      }));
-      return await reorderLocationQa(db, orgId, siteId, locationId, updates);
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "get_experience": {
@@ -2348,51 +2145,17 @@ async function executeTool(
       return { updated: true, experience_id: experienceId, asset_id: assetId };
     }
 
-    case "get_translation_review_items": {
-      const locale = toSqlText(input.locale);
-      if (!locale) return { error: "locale is required." };
-      const scope = (toSqlText(input.scope) ?? undefined) as "site" | "content" | "menus" | "locations" | "posts" | undefined;
-      const status = (toSqlText(input.status) ?? undefined) as "missing" | "draft" | "published" | "stale" | "all" | undefined;
-      const result = await listTranslationReviewItems(db, orgId, siteId, { targetLocale: locale, scope, status });
-      return result;
-    }
-
+    case "get_translation_review_items":
     case "save_translation_review_item": {
-      const locale = toSqlText(input.locale);
-      const entityType = toSqlText(input.entity_type) as "site_content" | "menu" | "menu_item" | "business_location" | "post" | null;
-      const entityId = toSqlText(input.entity_id);
-      const field = toSqlText(input.field);
-      const fields = input.fields as Record<string, string> | null;
-      if (!locale || !entityType || !entityId || !field || !fields)
-        return { error: "locale, entity_type, entity_id, field, and fields are required." };
-      const result = await saveTranslationReviewItem(db, orgId, siteId, {
-        targetLocale: locale,
-        entityType,
-        entityId,
-        field,
-        fields,
-      });
-      return { updated: true, ...result };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
+    // Domain management (create_domain, sync_domain, etc.) also lives in
+    // mcp-executor/settings.ts but is intentionally not exposed to ChowBot —
+    // see CLAUDE.md's Custom Domains section on ACME token rotation risk.
+    // Only get_dashboard_link overlaps between the two surfaces.
     case "get_dashboard_link": {
-      const destination = toSqlText(input.destination) as DashboardDestination | null;
-      if (!destination || !Object.prototype.hasOwnProperty.call(DASHBOARD_DESTINATIONS, destination)) {
-        return {
-          error: `destination is required and must be one of: ${Object.keys(DASHBOARD_DESTINATIONS).join(", ")}`,
-        };
-      }
-      const org = await queryFirst<{ slug: string | null }>(
-        db,
-        `SELECT slug FROM organization WHERE id = ?`,
-        [orgId],
-      );
-      return {
-        url: buildDashboardUrl(
-          { env, organizationId: orgId, organizationSlug: org?.slug ?? undefined },
-          destination,
-        ),
-      };
+      return runMcpExecutorToolForChowbot(executorSite, "get_dashboard_link", input);
     }
 
     default:
