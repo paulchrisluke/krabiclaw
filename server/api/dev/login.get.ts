@@ -69,13 +69,16 @@ export default defineEventHandler(async (event) => {
         // (server/utils/auth.ts), which creates the owner org/member row and
         // sends the admin-signup notification, so dev-login test users can't
         // silently drift from what a real signup produces.
-        const created = await ctx.internalAdapter.createUser<{ id: string; email: string; role?: string | null }>({
-          id: userId,
-          name: userId,
-          email,
-          emailVerified: true,
-          role: 'user',
-        })
+        const created = await ctx.internalAdapter.createUser<{ id: string; email: string; role?: string | null }>(
+          {
+            id: userId,
+            name: userId,
+            email,
+            emailVerified: true,
+            role: 'user',
+          },
+          { method: 'test' },
+        )
         user = { id: created.id, email: created.email, role: created.role }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)

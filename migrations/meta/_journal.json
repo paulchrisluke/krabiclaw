@@ -239,6 +239,13 @@
       "when": 1783580108519,
       "tag": "0040_lovely_turbo",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1783654205499,
+      "tag": "0041_slow_franklin_richards",
+      "breakpoints": true
     }
   ]
 }

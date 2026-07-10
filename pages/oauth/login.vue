@@ -210,8 +210,8 @@ const accountInitial = computed(() =>
 /**
  * User confirms they want to proceed with their current account.
  * Route back through the authorize endpoint so Better Auth can re-run the
- * prompt/consent checks with the now-active session (skips consent page when
- * skipConsent=true or consent is already saved, handles prompt=consent correctly).
+ * prompt/consent checks with the now-active session and handle prompt=consent
+ * correctly.
  */
 function continueWithSession() {
   loading.value = true
