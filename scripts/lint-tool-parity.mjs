@@ -63,6 +63,65 @@ const MCP_EXECUTOR_ONLY_ALLOWLIST = new Set([
   'list_experience_slot_overrides',
 ])
 
+// Extracts { name, hasUiResourceUri } for every siteTool/globalTool(...)
+// entry in an mcp-tools/<domain>.ts file, by slicing the source between
+// consecutive `name: '...'` matches (each tool's fields all appear in that
+// slice, since array entries are sequential, non-nested object literals).
+function extractMcpToolBlocks(source) {
+  const nameRegex = /name: '([a-zA-Z0-9_]+)'/g
+  const matches = [...source.matchAll(nameRegex)]
+  return matches.map((match, i) => {
+    const start = match.index
+    const end = i + 1 < matches.length ? matches[i + 1].index : source.length
+    const block = source.slice(start, end)
+    return { name: match[1], hasUiResourceUri: block.includes('uiResourceUri:') }
+  })
+}
+
+// Replicates the two derivation-filter shapes actually in use in
+// chowbot-tools/*.ts today (see the comment where this is called). Extend
+// this — don't bypass it — if a future domain file introduces a new filter.
+async function resolveDerivedChowbotToolNames() {
+  const files = await readdir(CHOWBOT_TOOLS_PATH)
+  const names = new Set()
+
+  for (const file of files) {
+    if (!file.endsWith('.ts')) continue
+    const filePath = join(CHOWBOT_TOOLS_PATH, file)
+    const fileSource = await readFile(filePath, 'utf8')
+
+    const importRegex = /import \{ (\w+) \} from '~\/server\/utils\/mcp-tools\/([\w-]+)'/g
+    let importMatch
+    while ((importMatch = importRegex.exec(fileSource)) !== null) {
+      const [, importedName, mcpDomainFile] = importMatch
+      if (!fileSource.includes(`${importedName}.`)) continue // imported but unused for derivation
+
+      const mcpToolsFilePath = join(MCP_TOOLS_PATH, `${mcpDomainFile}.ts`)
+      const mcpDomainSource = await readFile(mcpToolsFilePath, 'utf8')
+      const blocks = extractMcpToolBlocks(mcpDomainSource)
+
+      const usesUiResourceUriFilter = fileSource.includes('!tool.uiResourceUri')
+      const namedSetMatch = fileSource.match(
+        new RegExp(`${importedName}\\.filter\\(\\(tool\\) => (\\w+)\\.has\\(tool\\.name\\)\\)`),
+      )
+
+      let allowedNames = null
+      if (namedSetMatch) {
+        const setBlock = sliceFrom(fileSource, `const ${namedSetMatch[1]} = new Set(`, '])')
+        allowedNames = extractAll(setBlock, /'([a-zA-Z0-9_]+)'/g)
+      }
+
+      for (const block of blocks) {
+        if (usesUiResourceUriFilter && block.hasUiResourceUri) continue
+        if (allowedNames && !allowedNames.has(block.name)) continue
+        names.add(block.name)
+      }
+    }
+  }
+
+  return names
+}
+
 function extractAll(content, regex) {
   const names = new Set()
   let match
@@ -104,8 +163,24 @@ const mcpExecutorNames = new Set([
   ...extractAll(mcpExecutorSource, /if \(toolName === "([a-zA-Z0-9_]+)"\)/g),
 ])
 
-// 3. CHOWBOT_TOOLS definitions
-const chowbotDefNames = extractAll(chowbotToolsSource, /^\s*name: "([a-zA-Z0-9_]+)",?\s*$/gm)
+// 3. CHOWBOT_TOOLS definitions. Some chowbot-tools/*.ts files no longer
+// hand-author `name: "..."` literals at all — per-domain migrations (see
+// GitHub issue "Consolidate ChowBot onto the MCP tool-executor") instead
+// derive an AiTool straight from the corresponding McpToolDefinition via
+// `X_TOOLS.map(chowbotToolFromMcp)`, so the two surfaces can't drift on
+// argument shape again. A plain regex over chowbot-tools source can't see
+// those names (they only exist at runtime, computed from the imported MCP
+// array), so resolveDerivedChowbotToolNames replicates the derivation
+// statically per-file: find the mcp-tools/<domain>.ts array a file derives
+// from, and apply the same .filter(...) that file applies before mapping.
+// This does NOT re-implement every possible filter shape in general — only
+// the two patterns actually in use today (see its own comments). If a
+// future domain file introduces a new filter shape, extend the function
+// rather than falling back to a literal name list.
+const chowbotDefNames = new Set([
+  ...extractAll(chowbotToolsSource, /^\s*name: "([a-zA-Z0-9_]+)",?\s*$/gm),
+  ...await resolveDerivedChowbotToolNames(),
+])
 
 // 4. CHOWBOT_CONFIRM_REQUIRED
 const confirmRequiredBlock = sliceFrom(chowbotToolsSource, 'export const CHOWBOT_CONFIRM_REQUIRED', ']);')

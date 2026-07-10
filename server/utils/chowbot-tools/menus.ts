@@ -12,12 +12,12 @@ export const MENUS_CHOWBOT_TOOLS: AiTool[] = [
   // executor already supports. Kept here rather than as an MCP tool since
   // ChatGPT already has update_menu's status field for the same effect.
   {
-    name: 'publish_menu',
-    description: 'Publish a menu so it appears on the live site.',
+    name: "publish_menu",
+    description: "Publish a menu so it appears on the live site.",
     input_schema: {
-      type: 'object',
-      properties: { menu_id: { type: 'string' } },
-      required: ['menu_id'],
+      type: "object",
+      properties: { menu_id: { type: "string" } },
+      required: ["menu_id"],
     },
   },
 ]
