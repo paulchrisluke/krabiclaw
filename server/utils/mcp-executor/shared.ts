@@ -1412,13 +1412,18 @@ export function normalizeSiteCreationData(data: Record<string, unknown>) {
 
 export const NOT_HANDLED = Symbol('mcp-executor-not-handled')
 
+// Only toolName/args/site are read by domain handlers (handleMenusTools etc.) —
+// event/tool/rawArguments/normalizedArguments/siteId exist for the MCP protocol
+// caller (executeMcpToolCall) and are optional so non-MCP callers (ChowBot, see
+// mcp-executor/chowbot-adapter.ts) can build a context without an H3Event or a
+// resolved MCP tool-catalog entry.
 export interface McpExecutorContext {
-  event: H3Event
+  event?: H3Event
   toolName: string
-  rawArguments: Record<string, unknown>
-  normalizedArguments: Record<string, unknown>
-  tool: ReturnType<typeof getMcpTool>
-  siteId: string
+  rawArguments?: Record<string, unknown>
+  normalizedArguments?: Record<string, unknown>
+  tool?: ReturnType<typeof getMcpTool>
+  siteId?: string
   site: Awaited<ReturnType<typeof requireMcpSite>>
   args: Record<string, unknown>
 }

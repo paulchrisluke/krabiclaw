@@ -1,3 +1,4 @@
+import type { MenuItem, UpdateMenuItemRequest } from '~/server/types/menu'
 import type { McpExecutorContext } from './shared'
 import { queryFirst } from '~/server/db'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
@@ -5,6 +6,59 @@ import { createMenu, createMenuItem, deleteMenu, deleteMenuItem, deleteMenuSecti
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 import { NOT_HANDLED, isUniqueConstraintError, menuItemLookupKey, mutationContextPayload, normalizeMenuItemArgs, objectArray, omit, optionalString, requireActiveImageAsset, requiredString, resolveMenuLocationId, toolString } from './shared'
+
+function toolBoolean(record: Record<string, unknown>, key: string): boolean | undefined {
+  const value = record[key]
+  return typeof value === 'boolean' ? value : undefined
+}
+
+function findMenuItemMatch(itemRecord: Record<string, unknown>, menuItems: MenuItem[]): MenuItem | null {
+  const itemId = toolString(itemRecord, 'item_id', 120)
+  if (itemId) return menuItems.find((item) => item.id === itemId) ?? null
+
+  const name = toolString(itemRecord, 'name', 200)?.trim()
+  if (!name) return null
+
+  const key = menuItemLookupKey(name)
+  const lowerName = name.toLowerCase()
+  return menuItems.find((item) => item.slug === key || item.name.toLowerCase() === lowerName) ?? null
+}
+
+function buildMenuItemUpdates(itemRecord: Record<string, unknown>, match?: MenuItem | null): UpdateMenuItemRequest {
+  const updates: UpdateMenuItemRequest = {}
+  const section = toolString(itemRecord, 'section', 100)
+  const name = toolString(itemRecord, 'name', 200)
+  const description = toolString(itemRecord, 'description', 500)
+  const priceAmount = toolString(itemRecord, 'price_amount', 50)
+  const compareAtPriceAmount = toolString(itemRecord, 'compare_at_price_amount', 50)
+  const saleStartsAt = toolString(itemRecord, 'sale_starts_at', 50)
+  const saleEndsAt = toolString(itemRecord, 'sale_ends_at', 50)
+  const imageAssetId = toolString(itemRecord, 'image_asset_id', 120)
+  const available = toolBoolean(itemRecord, 'available')
+
+  const allergens = Array.isArray(itemRecord.allergens) ? itemRecord.allergens as string[] : undefined
+  const ingredients = Array.isArray(itemRecord.ingredients) ? itemRecord.ingredients as string[] : undefined
+  const dietaryNotes = Array.isArray(itemRecord.dietary_notes) ? itemRecord.dietary_notes as string[] : undefined
+  const preparation = toolString(itemRecord, 'preparation', 500)
+  const servingNote = toolString(itemRecord, 'serving_note', 500)
+
+  if (section !== undefined && section.trim() && section !== match?.section) updates.section = section
+  if (name !== undefined && name !== match?.name) updates.name = name
+  if (description !== undefined && description !== match?.description) updates.description = description
+  if (priceAmount !== undefined && priceAmount !== match?.price_amount) updates.price_amount = priceAmount
+  if (compareAtPriceAmount !== undefined && compareAtPriceAmount !== match?.compare_at_price_amount) updates.compare_at_price_amount = compareAtPriceAmount
+  if (saleStartsAt !== undefined && saleStartsAt !== match?.sale_starts_at) updates.sale_starts_at = saleStartsAt
+  if (saleEndsAt !== undefined && saleEndsAt !== match?.sale_ends_at) updates.sale_ends_at = saleEndsAt
+  if (imageAssetId !== undefined && imageAssetId !== match?.image_asset_id) updates.image_asset_id = imageAssetId
+  if (available !== undefined && available !== Boolean(match?.available)) updates.available = available
+  if (allergens !== undefined) updates.allergens = allergens
+  if (ingredients !== undefined) updates.ingredients = ingredients
+  if (dietaryNotes !== undefined) updates.dietary_notes = dietaryNotes
+  if (preparation !== undefined && preparation !== match?.preparation) updates.preparation = preparation
+  if (servingNote !== undefined && servingNote !== match?.serving_note) updates.serving_note = servingNote
+
+  return updates
+}
 
 function rethrowMenuOwnershipAsInvalidParams(error: unknown): never {
   if (error instanceof MenuNotFoundError) {
@@ -239,6 +293,135 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
       }
 
       return { added: created.length, created, skipped, menu_id: menuId };
+    }
+    case "sync_menu_items": {
+      const menuId = requiredString(args, "menu_id");
+      const menu = await getMenuWithItems(site.db, site.organizationId, site.siteId, menuId);
+      if (!menu) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "Menu not found.");
+      }
+
+      const items = objectArray(args.items, "items").slice(0, 100);
+      const workingItems = [...menu.items];
+      const touchedItemIds = new Set<string>();
+      const created: Array<{ id: string; name: string; section: string; price_amount: string | number | null }> = [];
+      const updated: Array<{ id: string; name: string; section: string; price_amount: string | number | null; available: boolean }> = [];
+      const unchanged: Array<{ id: string; name: string }> = [];
+      const skipped: Array<{ name: string; reason: string; item_id?: string }> = [];
+
+      for (const itemRecord of items) {
+        const name = toolString(itemRecord, "name", 200)?.trim();
+        const match = findMenuItemMatch(itemRecord, workingItems);
+
+        if (match) {
+          const updates = buildMenuItemUpdates(itemRecord, match);
+          touchedItemIds.add(match.id);
+
+          if (Object.keys(updates).length === 0) {
+            unchanged.push({ id: match.id, name: match.name });
+            continue;
+          }
+
+          try {
+            const updatedItem = await updateMenuItem(site.db, site.organizationId, site.siteId, match.id, updates, site.userId);
+            const index = workingItems.findIndex((item) => item.id === updatedItem.id);
+            if (index >= 0) workingItems[index] = updatedItem;
+            updated.push({
+              id: updatedItem.id,
+              name: updatedItem.name,
+              section: updatedItem.section,
+              price_amount: updatedItem.price_amount,
+              available: Boolean(updatedItem.available),
+            });
+          } catch (error) {
+            if (!isUniqueConstraintError(error)) throw error;
+            skipped.push({ name: name || match.name, reason: "unique_conflict", item_id: match.id });
+          }
+          continue;
+        }
+
+        if (!name) {
+          skipped.push({ name: "", reason: "missing_name" });
+          continue;
+        }
+        const section = toolString(itemRecord, "section", 100)?.trim();
+        if (!section) {
+          skipped.push({ name, reason: "missing_section" });
+          continue;
+        }
+
+        try {
+          const createdItem = await createMenuItem(
+            site.db,
+            site.organizationId,
+            site.siteId,
+            menuId,
+            {
+              section,
+              name,
+              description: toolString(itemRecord, "description", 500),
+              price_amount: toolString(itemRecord, "price_amount", 50),
+              compare_at_price_amount: toolString(itemRecord, "compare_at_price_amount", 50),
+              sale_starts_at: toolString(itemRecord, "sale_starts_at", 50),
+              sale_ends_at: toolString(itemRecord, "sale_ends_at", 50),
+              image_asset_id: toolString(itemRecord, "image_asset_id", 120),
+              available: toolBoolean(itemRecord, "available"),
+            } as never,
+            site.userId,
+          );
+          workingItems.push(createdItem);
+          touchedItemIds.add(createdItem.id);
+          created.push({ id: createdItem.id, name: createdItem.name, section: createdItem.section, price_amount: createdItem.price_amount });
+        } catch (error) {
+          if (!isUniqueConstraintError(error)) throw error;
+          // The (menu_id, slug) unique constraint fired, meaning an item
+          // already exists that this create attempt collided with — most
+          // likely one findMenuItemMatch's in-memory snapshot didn't catch
+          // (e.g. a slug collision on a name variant). Re-fetch fresh and
+          // re-match so that item is marked touched — otherwise, if the
+          // caller also passed set_missing_unavailable, this pre-existing
+          // item would be wrongly disabled below for never having been
+          // "touched" by this sync, even though it's exactly what the
+          // input was trying to reference.
+          const freshMenu = await getMenuWithItems(site.db, site.organizationId, site.siteId, menuId);
+          const conflictingItem = freshMenu ? findMenuItemMatch(itemRecord, freshMenu.items) : null;
+          if (conflictingItem) {
+            touchedItemIds.add(conflictingItem.id);
+            const index = workingItems.findIndex((wi) => wi.id === conflictingItem.id);
+            if (index >= 0) workingItems[index] = conflictingItem;
+            else workingItems.push(conflictingItem);
+            skipped.push({ name, reason: "unique_conflict", item_id: conflictingItem.id });
+          } else {
+            skipped.push({ name, reason: "unique_conflict" });
+          }
+        }
+      }
+
+      const madeUnavailable: Array<{ id: string; name: string }> = [];
+      if (args.set_missing_unavailable === true) {
+        for (const item of workingItems) {
+          if (touchedItemIds.has(item.id) || !item.available) continue;
+          const updatedItem = await updateMenuItem(site.db, site.organizationId, site.siteId, item.id, { available: false }, site.userId);
+          madeUnavailable.push({ id: updatedItem.id, name: updatedItem.name });
+        }
+      }
+
+      return {
+        menu_id: menuId,
+        created,
+        updated,
+        unchanged,
+        made_unavailable: madeUnavailable,
+        skipped,
+        summary: {
+          created: created.length,
+          updated: updated.length,
+          unchanged: unchanged.length,
+          made_unavailable: madeUnavailable.length,
+          skipped: skipped.length,
+        },
+        context: await mutationContextPayload(site, { locationId: menu.location_id ?? null }),
+      };
     }
     case "update_menu_item": {
       const updateMenuItemArgs = normalizeMenuItemArgs(args, {
