@@ -3,15 +3,6 @@ import {
   type AiMessage,
 } from "~/server/utils/ai-gateway";
 import { hasCredits, chargeCredits } from "~/server/utils/ai-credits";
-import {
-  listPosts,
-  getPost,
-  createPost,
-  updatePost,
-  deletePost,
-  publishPost,
-  PostValidationError,
-} from "~/server/utils/post-management";
 import { runMcpExecutorToolForChowbot } from "~/server/utils/mcp-executor/chowbot-adapter";
 import type { McpToolRole } from "~/server/utils/mcp-auth";
 import { setConfig } from "~/server/utils/site-config";
@@ -217,15 +208,19 @@ async function executeTool(
   }
 
   switch (name) {
+    // ChowBot-only trim: full post bodies (MCP's list_posts returns them
+    // untruncated, unbounded count) would blow up chat context size — cap
+    // to 10 posts with a 120-char body preview, same as before migrating.
     case "list_posts": {
-      const posts = await listPosts(db, orgId, siteId, env, input.status);
-      const filtered = input.location_id
-        ? posts.filter((p) => p.location_id === input.location_id)
-        : posts;
-      return filtered.slice(0, 10).map((p) => ({
+      const result = await runMcpExecutorToolForChowbot(executorSite, "list_posts", input) as {
+        error?: string;
+        posts?: Array<{ id: string; title: string; body: string; status: string; post_type: string; location_id: string | null; updated_at: string }>;
+      };
+      if (result.error || !result.posts) return result;
+      return result.posts.slice(0, 10).map((p) => ({
         id: p.id,
         title: p.title,
-        body: p.body.slice(0, 120) + (p.body.length > 120 ? "…" : ""),
+        body: p.body.length > 120 ? `${p.body.slice(0, 120)}…` : p.body,
         status: p.status,
         post_type: p.post_type,
         location_id: p.location_id,
@@ -233,118 +228,21 @@ async function executeTool(
       }));
     }
 
-    case "create_post": {
-      let post;
-      try {
-        post = await createPost(
-          db,
-          orgId,
-          siteId,
-          {
-            title: input.title,
-            body: input.body,
-            image_asset_id: input.image_asset_id,
-            slug: input.slug,
-            seo_title: input.seo_title,
-            seo_description: input.seo_description,
-            og_image_asset_id: input.og_image_asset_id,
-            gallery_media: input.gallery_media,
-            location_id: input.location_id,
-            post_type: input.post_type,
-            cta_type: input.cta_type,
-            cta_url: input.cta_url,
-            event_title: input.event_title,
-            event_start: input.event_start,
-            event_end: input.event_end,
-            offer_coupon: input.offer_coupon,
-            offer_terms: input.offer_terms,
-          },
-          userId,
-          env,
-        );
-      } catch (error) {
-        if (error instanceof PostValidationError) return { error: error.message };
-        throw error;
-      }
-      return {
-        id: post.id,
-        title: post.title,
-        body: post.body,
-        status: post.status,
-        post_type: post.post_type,
-        public_path: post.public_path,
-        public_url: post.canonical_url,
-      };
+    // Regression note: delete_post used to hard-require owner/admin here,
+    // but MCP's delete_post has always been minimumRole 'editor' (its
+    // description text says "Only owners and admins" but nothing enforces
+    // that beyond the role gate — see the existing e2e test asserting
+    // owner/admin/editor can all delete via the MCP tool path). The
+    // adapter now applies that same, already-tested policy to ChowBot
+    // instead of ChowBot's stricter local check.
+    case "create_post":
+    case "update_post":
+    case "delete_post": {
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "publish_post": {
-      const result = await publishPost(db, orgId, siteId, input.post_id, [
-        "site",
-      ], env);
-      if (!result) return { error: "Post not found or already published." };
-      return {
-        id: result.id,
-        title: result.title,
-        status: result.status,
-        published_at: result.published_at,
-        public_path: result.public_path,
-        public_url: result.canonical_url,
-      };
-    }
-
-    case "update_post": {
-      let post;
-      try {
-        post = await updatePost(
-          db,
-          orgId,
-          siteId,
-          input.post_id,
-          {
-            title: input.title,
-            body: input.body,
-            image_asset_id: input.image_asset_id,
-            slug: input.slug,
-            seo_title: input.seo_title,
-            seo_description: input.seo_description,
-            og_image_asset_id: input.og_image_asset_id,
-            gallery_media: input.gallery_media,
-            location_id: input.location_id,
-            post_type: input.post_type,
-            cta_type: input.cta_type,
-            cta_url: input.cta_url,
-            event_title: input.event_title,
-            event_start: input.event_start,
-            event_end: input.event_end,
-            offer_coupon: input.offer_coupon,
-            offer_terms: input.offer_terms,
-          },
-          userId,
-          env,
-        );
-      } catch (error) {
-        if (error instanceof PostValidationError) return { error: error.message };
-        throw error;
-      }
-      if (!post) return { error: "Post not found." };
-      return {
-        id: post.id,
-        title: post.title,
-        body: post.body,
-        status: post.status,
-        public_path: post.public_path,
-        public_url: post.canonical_url,
-        updated: true,
-      };
-    }
-
-    case "delete_post": {
-      if (!["owner", "admin"].includes(ctx.userRole ?? "")) {
-        return { error: "Only owners or admins can delete posts." };
-      }
-      const deleted = await deletePost(db, orgId, siteId, input.post_id);
-      if (!deleted) return { error: "Post not found." };
-      return { post_id: input.post_id, deleted: true };
+      return runMcpExecutorToolForChowbot(executorSite, "publish_post", { ...input, channels: ["site"] });
     }
 
     // Menu tools below all delegate to the same mcp-executor/menus.ts handlers
@@ -1262,27 +1160,9 @@ async function executeTool(
       return { results };
     }
 
-    case "get_post": {
-      const postId = toSqlText(input.post_id);
-      if (!postId) return { error: "post_id is required." };
-      const post = await getPost(db, orgId, siteId, postId, env);
-      if (!post) return { error: "Post not found." };
-      return { post };
-    }
-
+    case "get_post":
     case "set_post_image": {
-      const postId = toSqlText(input.post_id);
-      const assetId = toSqlText(input.asset_id);
-      if (!postId || !assetId) return { error: "post_id and asset_id required." };
-      let result;
-      try {
-        result = await updatePost(db, orgId, siteId, postId, { image_asset_id: assetId }, userId, env);
-      } catch (error) {
-        if (error instanceof PostValidationError) return { error: error.message };
-        throw error;
-      }
-      if (!result) return { error: "Failed to update post image." };
-      return { updated: true, post_id: postId, asset_id: assetId };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     // Regression fix: seo_description/seo_keywords/canonical_url/robots were
