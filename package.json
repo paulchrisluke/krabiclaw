@@ -100,6 +100,10 @@
     "demo:record:web": "bash scripts/demo-recording/start-screen-recording.sh",
     "demo:chatgpt:web": "node scripts/demo-recording/chatgpt-demo.mjs"
   },
+  "//resolutions": "kysely pinned to 0.28.17: @better-auth/kysely-adapter (bundled transitively by better-auth even though this app only uses drizzleAdapter) imports DEFAULT_MIGRATION_TABLE from the top-level kysely package, which kysely 0.29.x stopped re-exporting from its main barrel. That breaks yarn build's Nitro/Rollup bundling pass. Remove this pin once better-auth's kysely-adapter fixes its import path or drops the kysely dependency.",
+  "resolutions": {
+    "kysely": "0.28.17"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260503.1",
     "@iconify-json/lucide": "^1.2.115",
@@ -139,14 +143,15 @@
     "yaml": "2.8.2"
   },
   "dependencies": {
-    "@better-auth/core": "1.6.18",
-    "@better-auth/oauth-provider": "1.6.18",
+    "@better-auth/cimd": "1.7.0-beta.10",
+    "@better-auth/core": "1.7.0-beta.10",
+    "@better-auth/oauth-provider": "1.7.0-beta.10",
     "@nuxt/ui": "^4.7.1",
     "@nuxtjs/i18n": "^10.3.0",
     "@nuxtjs/robots": "^6.0.8",
     "@nuxtjs/sitemap": "^8.0.15",
     "@opentelemetry/api": "^1.9.1",
-    "better-auth": "1.6.18",
+    "better-auth": "1.7.0-beta.10",
     "drizzle-orm": "^0.45.2",
     "isomorphic-dompurify": "^3.12.0",
     "marked": "^18.0.3",

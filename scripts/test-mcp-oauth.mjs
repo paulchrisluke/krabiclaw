@@ -24,9 +24,9 @@ const BASE_URL = process.argv.includes("--base-url")
 const MCP_URL = `${BASE_URL}/api/mcp`;
 const TOKEN_URL = `${BASE_URL}/api/auth/oauth2/token`;
 const DEV_LOGIN_URL = `${BASE_URL}/api/dev/login`;
-const REGISTER_URL = `${BASE_URL}/api/auth/oauth2/register`;
 const AUTHORIZE_URL = `${BASE_URL}/api/auth/oauth2/authorize`;
 const CONSENT_URL = `${BASE_URL}/api/auth/oauth2/consent`;
+const TEST_CLIENT_METADATA_URL = `${BASE_URL}/api/auth/oauth2/test-client-metadata`;
 
 const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? "2026-07-28";
 
@@ -231,26 +231,12 @@ async function main() {
       return;
     }
 
-    section("DCR + PKCE auth flow (staging)");
+    section("CIMD + PKCE auth flow (staging)");
     const { verifier, challenge } = pkce();
     const state = randomBytes(16).toString("hex");
-    const redirectUri = `${BASE_URL}/api/dev/oauth-cb`;
-
-    // Register client
-    const reg = post(REGISTER_URL, {
-      client_name: "mcp-test-script",
-      redirect_uris: [redirectUri],
-      token_endpoint_auth_method: "none",
-      grant_types: ["authorization_code"],
-      response_types: ["code"],
-      scope: "openid offline_access tenant",
-    });
-    if (reg.status !== 200 && reg.status !== 201) {
-      fail("DCR failed", reg.body);
-      return;
-    }
-    const testClientId = reg.body.client_id;
-    pass(`Registered test client: ${testClientId}`);
+    const redirectUri = `${BASE_URL}/oauth/test-callback`;
+    const testClientId = `${TEST_CLIENT_METADATA_URL}?nonce=${Date.now()}`;
+    pass(`Using CIMD client: ${testClientId}`);
 
     // Authorization request (redirects to consent page)
     const authParams = new URLSearchParams({
