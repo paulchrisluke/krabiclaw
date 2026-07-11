@@ -3,26 +3,36 @@
     <div class="mx-auto max-w-7xl px-0 py-4">
       <div class="border-b border-gray-200 bg-white pb-4">
         <div class="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div ref="menuRoot" class="relative z-10 inline-block text-left">
+          <div ref="rootRef" class="relative z-10 inline-block text-left">
             <button
               type="button"
               class="group inline-flex justify-center text-sm font-medium text-[var(--blawby-primary)] hover:text-[var(--blawby-primary-dark)]"
               :aria-expanded="open"
               aria-haspopup="menu"
-              @click.stop="open = !open"
+              @click.stop="togglePanel"
+              @keydown="onTriggerKeydown"
             >
               Category
               <svg class="-mr-1 ml-1 size-5 shrink-0 text-gray-400 group-hover:text-gray-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.51a.75.75 0 0 1-1.08 0l-4.25-4.51a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" />
               </svg>
             </button>
-            <div v-if="open" class="absolute z-10 mt-1 w-72 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5" role="menu">
-              <label v-for="tag in tags" :key="tag" class="flex cursor-pointer items-center px-4 py-2 text-sm text-[var(--blawby-primary-dark)] hover:bg-gray-100">
+            <div
+              v-if="open"
+              class="absolute z-10 mt-1 w-72 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5"
+              role="menu"
+              @keydown="onPanelKeydown"
+              @focusout="onPanelFocusOut"
+            >
+              <label v-for="(tag, index) in tags" :key="tag" class="flex cursor-pointer items-center px-4 py-2 text-sm text-[var(--blawby-primary-dark)] hover:bg-gray-100">
                 <input
                   type="checkbox"
+                  role="menuitemcheckbox"
+                  :ref="(el) => registerItemRef(el, index)"
                   :checked="modelValue.includes(tag)"
+                  :aria-checked="modelValue.includes(tag)"
                   class="mr-2 size-4 rounded border-gray-300 text-[var(--blawby-accent)] focus:ring-[var(--blawby-accent)]"
-                  @change="toggle(tag)"
+                  @change="toggleTag(tag)"
                 >
                 {{ tag }}
               </label>
@@ -61,10 +71,9 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()
 
-const open = ref(false)
-const menuRoot = useTemplateRef<HTMLElement>('menuRoot')
+const { open, rootRef, registerItemRef, toggle: togglePanel, onTriggerKeydown, onPanelKeydown, onPanelFocusOut } = useDisclosurePanel()
 
-function toggle(tag: string) {
+function toggleTag(tag: string) {
   emit('update:modelValue', props.modelValue.includes(tag)
     ? props.modelValue.filter(value => value !== tag)
     : [...props.modelValue, tag])
@@ -73,11 +82,4 @@ function toggle(tag: string) {
 function remove(tag: string) {
   emit('update:modelValue', props.modelValue.filter(value => value !== tag))
 }
-
-function onDocumentClick(event: MouseEvent) {
-  if (!menuRoot.value?.contains(event.target as Node)) open.value = false
-}
-
-onMounted(() => document.addEventListener('click', onDocumentClick))
-onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
 </script>

@@ -21,7 +21,11 @@ export default defineEventHandler(async (event) => {
     'author_name', 'rating', 'title', 'content', 'collection_method',
     'original_review_date', 'original_reference', 'publication_authorized',
   ]
-  if (ownerEntryFields.some(field => field in body)) {
+  const hasOwnerEntryFields = ownerEntryFields.some(field => field in body)
+  if (hasOwnerEntryFields && 'owner_reply' in body) {
+    return jsonResponse({ error: 'owner_reply cannot be combined with owner-entered review fields in the same request' }, { status: 400 })
+  }
+  if (hasOwnerEntryFields) {
     try {
       await updateOwnerEnteredSiteReview(db, { organizationId: site.organization_id, siteId: siteId! }, reviewId!, body)
     } catch (error) {
@@ -34,10 +38,10 @@ export default defineEventHandler(async (event) => {
     const reply = body.owner_reply == null ? null : typeof body.owner_reply === 'string' ? body.owner_reply : undefined
     if (reply === undefined) return jsonResponse({ error: 'owner_reply must be a string or null' }, { status: 400 })
     const result = await replyToReview(db, site.organization_id, siteId!, reviewId!, reply)
-    if (body.status === undefined && !ownerEntryFields.some(field => field in body)) {
-      if (result.status >= 400) {
-        return jsonResponse(result.data, { status: result.status })
-      }
+    if (result.status >= 400) {
+      return jsonResponse(result.data, { status: result.status })
+    }
+    if (body.status === undefined) {
       return jsonResponse({ updated: true })
     }
   }

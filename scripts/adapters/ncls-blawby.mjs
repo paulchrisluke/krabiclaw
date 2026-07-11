@@ -754,9 +754,9 @@ function buildPayload(config, sourcePath = null) {
       name: service.name,
       slug: service.slug,
       label: service.name,
-      summary: service.summary || service.description || null,
-      short_description: service.description || service.summary || null,
-      body: service.content || service.description || null,
+      summary: htmlishToMarkdown(service.summary || service.description || '') || null,
+      short_description: htmlishToMarkdown(service.description || service.summary || '') || null,
+      body: htmlishToMarkdown(service.content || service.description || '') || null,
       features: (service.features || []).map((feature, index) => ({
         title: feature.title,
         description: feature.description,
@@ -967,6 +967,8 @@ function buildPayload(config, sourcePath = null) {
       tracking_enabled: true,
       metadata: {
         header_cta_label: config.headerComponent?.content || 'Get Started',
+        // NCLS's source contact page has no web form; keep it optional and off by default for parity.
+        contact_form_enabled: false,
       },
       legacy_source_calendly_url_ignored: tenant.calendlyUrl || null,
     },
@@ -1010,7 +1012,7 @@ function buildPayload(config, sourcePath = null) {
       '/thank-you is replaced by KrabiClaw native noindex confirmation pages.',
       '/conference is intentionally out of cutover scope.',
       'Donation remains an external CTA; native donation/payment processing is excluded.',
-      'The source contact page is extended with the native KrabiClaw contact form and noindex confirmation page.',
+      'The native KrabiClaw contact form is available as a platform capability but left off (contact_form_enabled: false) for NCLS to match the source contact page, which has no web form; the noindex confirmation page is still used for the native contact submission endpoint.',
     ],
   }
 }

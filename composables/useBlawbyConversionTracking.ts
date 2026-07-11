@@ -1,4 +1,5 @@
 import type { PublicConsultationSettings } from '~/types/blawby'
+import type { SiteConversionEventName } from '~/utils/site-conversion-events'
 import type { MaybeRefOrGetter } from 'vue'
 import { toValue } from 'vue'
 
@@ -9,10 +10,8 @@ declare global {
   }
 }
 
-type BlawbyConversionEvent = 'page_view' | 'book_consultation_click' | 'contact_submit' | 'donation_click'
-
 interface BlawbyConversionPayload {
-  event_name: BlawbyConversionEvent
+  event_name: SiteConversionEventName
   page_type?: string | null
   page_path?: string | null
   cta_destination?: string | null

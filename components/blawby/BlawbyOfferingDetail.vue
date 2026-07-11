@@ -16,12 +16,12 @@
             {{ offering.name }}
           </h1>
           <div class="mt-6">
-            <div class="prose">
+            <div class="prose prose-p:text-[var(--blawby-primary)]">
               <BlawbyRichText unstyled class="mx-auto mt-6 max-w-2xl text-left text-lg text-[var(--blawby-primary)]" :content="offering.body || offering.summary" />
             </div>
           </div>
           <div class="mt-10 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
-          <BlawbyButton :to="offering.cta_url || consultation.external_url || consultation.schedule_path" class="w-full gap-2" @click="trackConsultation">
+          <BlawbyButton :to="offering.cta_url || consultation.schedule_path" class="w-full gap-2" @click="trackConsultation(offering.cta_url || consultation.schedule_path)">
             <svg class="-ml-0.5 mr-2 size-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 4.5h9A4.5 4.5 0 0 1 21 9v3a4.5 4.5 0 0 1-4.5 4.5h-4.86L7.2 20.2a.75.75 0 0 1-1.2-.6v-3.35A4.5 4.5 0 0 1 3 12V9a4.5 4.5 0 0 1 4.5-4.5Z" /></svg>
             Schedule Call
           </BlawbyButton>
@@ -76,7 +76,7 @@
             <div v-if="activeFeatureItem" :id="`feature-panel-${activeFeature}`" role="tabpanel" class="relative max-w-2xl">
               <img v-if="activeFeatureItem.image_url" :src="activeFeatureItem.image_url" :alt="activeFeatureItem.title" width="2432" height="1442" loading="lazy" class="w-full rounded-xl">
               <div v-if="activeFeatureItem.image_url" class="absolute inset-0 flex flex-col items-center justify-end p-8 pb-16">
-                <BlawbyButton :to="consultation.external_url || consultation.schedule_path" class="gap-2" @click="trackConsultation">
+                <BlawbyButton :to="consultation.schedule_path" class="gap-2" @click="trackConsultation(consultation.schedule_path)">
                   <svg class="size-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 4.5h9A4.5 4.5 0 0 1 21 9v3a4.5 4.5 0 0 1-4.5 4.5h-4.86L7.2 20.2a.75.75 0 0 1-1.2-.6v-3.35A4.5 4.5 0 0 1 3 12V9a4.5 4.5 0 0 1 4.5-4.5Z" /></svg>
                   Schedule your call
                 </BlawbyButton>
@@ -104,10 +104,10 @@
       :title="String(ctaBlock?.title || 'Get started today')"
       :description="optionalString(ctaBlock?.description)"
       :label="String(ctaBlock?.label || consultation.cta_label)"
-      :destination="consultation.external_url || String(ctaBlock?.url || consultation.schedule_path)"
+      :destination="String(ctaBlock?.url || consultation.schedule_path)"
       :background-url="assetUrl(ctaBlock?.background)"
       :featured-url="assetUrl(ctaBlock?.featured)"
-      @click="trackConsultation"
+      @click="trackConsultation(String(ctaBlock?.url || consultation.schedule_path))"
     />
   </article>
 </template>
@@ -168,8 +168,8 @@ const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
 const canonicalUrl = useSeoUrl(() => offering.value.canonical_path || `/services/${offering.value.slug}`)
 const homeUrl = useSeoUrl(() => '/')
 const servicesUrl = useSeoUrl(() => '/services')
-function trackConsultation() {
-  trackConsultationClick('service', `/services/${offering.value.slug}`, offering.value.cta_url || consultation.value.external_url || consultation.value.schedule_path)
+function trackConsultation(destination: string) {
+  trackConsultationClick('service', `/services/${offering.value.slug}`, destination)
 }
 
 useSeoMeta({

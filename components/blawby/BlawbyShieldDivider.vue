@@ -1,5 +1,5 @@
 <template>
-  <div class="relative h-[110px] p-0" aria-hidden="true" data-parity-section="shield-divider">
+  <div class="relative h-[110px] bg-white p-0" aria-hidden="true" data-parity-section="shield-divider">
     <svg
       class="w-full"
       viewBox="0 0 1920 160"

@@ -694,8 +694,16 @@ registry.en.professional_service = {
 
 registry.th.professional_service = registry.en.professional_service!
 
-export function getVerticalCopy(vertical: string | null | undefined, locale: string | null | undefined = "en"): VerticalCopy {
+// `sites.vertical` stores 'service' for Blawby/professional-service tenants (see
+// sites_vertical_check + utils/template-registry.ts); 'professional_service' is the
+// copy-registry key, so callers passing either value must resolve to the same copy.
+function normalizeVertical(vertical: string | null | undefined): string {
   const v = String(vertical ?? "restaurant")
+  return v === "service" ? "professional_service" : v
+}
+
+export function getVerticalCopy(vertical: string | null | undefined, locale: string | null | undefined = "en"): VerticalCopy {
+  const v = normalizeVertical(vertical)
   const l = String(locale ?? "en") as LocaleCode
   const byLocale = Object.prototype.hasOwnProperty.call(registry, l) ? registry[l]! : registry.en
   const localized = byLocale[v as SiteVertical]
@@ -708,7 +716,8 @@ export function getVerticalCopy(vertical: string | null | undefined, locale: str
 // Restaurants and professional services get their schema.org subtype plus
 // LocalBusiness; other verticals fall back to the generic LocalBusiness type.
 export function getBusinessSchemaTypes(vertical: string | null | undefined): string[] {
-  if (vertical === "restaurant") return ["Restaurant", "LocalBusiness"]
-  if (vertical === "professional_service") return ["ProfessionalService", "LocalBusiness"]
+  const v = normalizeVertical(vertical)
+  if (v === "restaurant") return ["Restaurant", "LocalBusiness"]
+  if (v === "professional_service") return ["ProfessionalService", "LocalBusiness"]
   return ["LocalBusiness"]
 }

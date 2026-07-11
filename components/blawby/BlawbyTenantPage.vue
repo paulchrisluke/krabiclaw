@@ -38,8 +38,9 @@
 
     <template v-else-if="recipe === 'privacy' || recipe === 'terms'">
       <BlawbyPageHero :title="heroTitle" :description="heroDescription" :variant="recipe" />
-      <article class="bg-white px-6 pb-12 pt-8 sm:pb-16" data-parity-section="legal-content">
-        <div class="prose blawby-policy-prose mx-auto max-w-3xl text-base leading-7 text-gray-700">
+      <BlawbyShieldDivider :variant="recipe" />
+      <article class="blawby-container bg-white pb-12 pt-8 sm:pb-16" data-parity-section="legal-content">
+        <div class="prose prose-p:text-gray-700 blawby-policy-prose mx-auto max-w-3xl text-base leading-7 text-gray-700">
           <p v-if="recipe === 'privacy' && legalUpdatedAt" class="text-base leading-7 text-gray-600">Last updated: {{ formatLegalDate(legalUpdatedAt) }}</p>
           <BlawbyRichText :content="resolvedPage.body" unstyled class="contents" />
         </div>
@@ -48,10 +49,10 @@
 
     <template v-else>
       <BlawbyPageHero :title="heroTitle" :description="heroDescription" variant="third-party-notices" />
-      <article class="bg-white px-6 pb-12 pt-8 sm:pb-16" data-parity-section="notices">
-        <div class="prose blawby-policy-prose mx-auto max-w-3xl text-base leading-7 text-gray-700"><BlawbyRichText :content="resolvedPage.body" unstyled class="contents" /></div>
+      <BlawbyShieldDivider variant="third-party-notices" />
+      <article class="blawby-container bg-white pb-12 pt-8 sm:pb-16" data-parity-section="notices">
+        <div class="prose prose-p:text-gray-700 blawby-policy-prose mx-auto max-w-3xl text-base leading-7 text-gray-700"><BlawbyRichText :content="resolvedPage.body" unstyled class="contents" /></div>
       </article>
-      <BlawbyConsultationCta v-if="ctaBlock" v-bind="ctaProps" @click="trackConsultation" />
     </template>
   </div>
 </template>
@@ -173,13 +174,13 @@ const ctaProps = computed(() => ({
   title: String(ctaBlock.value?.title || 'Get started today'),
   description: String(ctaBlock.value?.description || ''),
   label: String(ctaBlock.value?.label || consultation.value.cta_label),
-  destination: consultation.value.external_url || String(ctaBlock.value?.url || consultation.value.schedule_path),
+  destination: String(ctaBlock.value?.url || consultation.value.schedule_path),
   backgroundUrl: assetUrl(ctaBlock.value?.background),
   featuredUrl: assetUrl(ctaBlock.value?.featured),
 }))
 
 function trackConsultation() {
-  trackConsultationClick(recipe, props.path, consultation.value.external_url || consultation.value.schedule_path)
+  trackConsultationClick(recipe, props.path, consultation.value.schedule_path)
 }
 
 function trackDonation() {

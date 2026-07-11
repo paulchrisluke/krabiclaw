@@ -69,7 +69,7 @@
       :title="String(ctaBlock.title || 'Get started today')"
       :description="asOptionalString(ctaBlock.description)"
       :label="String(ctaBlock.label || consultation.cta_label)"
-      :destination="consultation.external_url || String(ctaBlock.url || consultation.schedule_path)"
+      :destination="String(ctaBlock.url || consultation.schedule_path)"
       :background-url="assetUrl(ctaBlock.background)"
       :featured-url="assetUrl(ctaBlock.featured)"
       @click="trackConsultation('cta_section')"
@@ -106,7 +106,7 @@ const qaBlock = computed(() => block('qa'))
 const ctaBlock = computed(() => block('consultation_cta'))
 const heroBackground = computed(() => assetUrl(hero.value.background))
 const servicesDecoration = computed(() => assetUrl(services.value.decoration))
-const heroDestination = computed(() => consultation.value.external_url || String(hero.value.url || consultation.value.schedule_path))
+const heroDestination = computed(() => String(hero.value.url || consultation.value.schedule_path))
 const heroTitle = computed(() => {
   const title = String(hero.value.title || identity.value.brand_name || 'Professional services')
   const accent = String(hero.value.accent || '')

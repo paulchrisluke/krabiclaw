@@ -8,7 +8,7 @@
           </p>
           <h1 :aria-label="title" class="blawby-display text-3xl font-bold sm:text-4xl">
             <template v-for="(word, index) in titleWords" :key="`${word}-${index}`">
-              <span :class="index === 1 || index === 2 ? 'text-[var(--blawby-accent)]' : 'text-[var(--blawby-primary)]'">{{ word }}</span><span v-if="index < titleWords.length - 1"> </span>
+              <span :class="index === 1 || index === 2 ? 'text-[var(--blawby-accent)]' : 'text-[var(--blawby-primary)]'">{{ word + (index < titleWords.length - 1 ? ' ' : '') }}</span>
             </template>
           </h1>
           <div v-if="descriptionParts.length" class="mt-6 text-left text-lg leading-8 text-[var(--blawby-primary)]">

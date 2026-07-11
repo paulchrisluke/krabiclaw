@@ -35,7 +35,7 @@
           </div>
 
           <BlawbyButton
-            :to="consultation.external_url || consultation.schedule_path"
+            :to="consultation.schedule_path"
             @click="trackConsultation"
           >
             <svg class="-ml-0.5 mr-2 size-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -51,7 +51,7 @@
               aria-label="Toggle navigation"
               :aria-expanded="mobileOpen"
               aria-controls="blawby-mobile-nav"
-              @click="mobileOpen = !mobileOpen"
+              @click="toggleMobileNav"
             >
               <svg class="size-4 overflow-visible stroke-current" viewBox="0 0 14 14" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                 <path :class="mobileOpen ? 'scale-90 opacity-0' : ''" class="origin-center transition" d="M0 1H14M0 7H14M0 13H14" />
@@ -64,7 +64,7 @@
               type="button"
               class="fixed inset-0 bg-slate-300/50"
               aria-label="Close navigation"
-              @click="mobileOpen = false"
+              @click="closeMobileNav"
             />
 
             <div
@@ -77,7 +77,7 @@
                 :key="item.id"
                 :to="item.url"
                 class="block w-full p-2 no-underline"
-                @click="mobileOpen = false"
+                @click="closeMobileNav"
               >
                 {{ item.label }}
               </NuxtLink>
@@ -105,7 +105,7 @@ const brandName = computed(() => props.site.brand_name || 'Blawby')
 const headerCtaLabel = computed(() => typeof props.consultation.metadata.header_cta_label === 'string'
   ? props.consultation.metadata.header_cta_label
   : 'Get Started')
-const mobileOpen = ref(false)
+const { isOpen: mobileOpen, toggle: toggleMobileNav, close: closeMobileNav } = useMobileNavToggle()
 const headerItems = computed(() => {
   const configured = props.navigation.filter(item => item.area === 'header')
   if (configured.length) return configured
@@ -124,6 +124,6 @@ const mobileItems = computed(() => {
 })
 
 function trackConsultation() {
-  trackConsultationClick('header', route.path, props.consultation.external_url || props.consultation.schedule_path)
+  trackConsultationClick('header', route.path, props.consultation.schedule_path)
 }
 </script>

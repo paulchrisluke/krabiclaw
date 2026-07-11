@@ -2,8 +2,9 @@ import { queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { HOUR_MS, getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { recordSiteConversionEvent } from '~/server/utils/professional-services'
+import { SITE_CONVERSION_EVENT_NAMES, type SiteConversionEventName } from '~/utils/site-conversion-events'
 
-const VALID_EVENTS = new Set(['page_view', 'book_consultation_click', 'contact_submit', 'donation_click'])
+const VALID_EVENTS = new Set<string>(SITE_CONVERSION_EVENT_NAMES)
 const CONVERSION_IP_HOURLY_LIMIT = 120
 
 function boundedMetadata(value: unknown): ApiRecord | null {
@@ -37,7 +38,7 @@ export default defineEventHandler(async (event) => {
      LIMIT 1
   `, [siteId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
-  if (site.vertical !== 'service' && site.theme_id !== 'blawby-theme-v1') {
+  if (site.vertical !== 'service' || site.theme_id !== 'blawby-theme-v1') {
     return jsonResponse({ error: 'Tracking is not enabled for this site' }, { status: 404 })
   }
 
@@ -55,7 +56,7 @@ export default defineEventHandler(async (event) => {
   const result = await recordSiteConversionEvent(db, {
     organizationId: site.organization_id,
     siteId,
-    eventName: eventName as 'page_view' | 'book_consultation_click' | 'contact_submit' | 'donation_click',
+    eventName: eventName as SiteConversionEventName,
     pageType: cleanString(body.page_type, 80) || null,
     pagePath: cleanString(body.page_path, 300) || null,
     pageLocation: cleanString(body.page_location, 500) || null,

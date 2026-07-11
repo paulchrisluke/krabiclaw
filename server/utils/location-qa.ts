@@ -56,17 +56,15 @@ export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInpu
   const answer = stringOrNull(input.answer, 2000)
   const status = input.status === 'hidden' ? 'hidden' : 'published'
   const source = input.source === 'import' ? 'import' : 'manual'
-  const sortOrder = Number(input.sort_order ?? 0)
-  if (!Number.isInteger(sortOrder)) return { status: 400, data: { error: 'sort_order must be an integer' } }
+  const explicitSortOrder = input.sort_order === undefined ? null : Number(input.sort_order)
+  if (explicitSortOrder !== null && !Number.isInteger(explicitSortOrder)) {
+    return { status: 400, data: { error: 'sort_order must be an integer' } }
+  }
 
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
-  await execute(db, `
-    INSERT INTO location_qa (
-      id, organization_id, site_id, location_id, question, question_author,
-      answer, is_owner_answer, source, status, sort_order, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [
+  const scoped = scopeSql(scope.locationId)
+  const params = [
     id,
     scope.organizationId,
     scope.siteId,
@@ -77,10 +75,35 @@ export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInpu
     input.is_owner_answer === false ? 0 : 1,
     source,
     status,
-    sortOrder,
     now,
     now,
-  ])
+  ]
+
+  // When the caller doesn't pin an explicit sort_order (the common case —
+  // appending a new question), compute "next" in the same INSERT statement
+  // rather than reading the current max client-side first: two concurrent
+  // creates reading-then-writing separately could compute the same max+1 and
+  // collide, whereas a single INSERT...SELECT is atomic against that race.
+  if (explicitSortOrder !== null) {
+    await execute(db, `
+      INSERT INTO location_qa (
+        id, organization_id, site_id, location_id, question, question_author,
+        answer, is_owner_answer, source, status, sort_order, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [...params.slice(0, 10), explicitSortOrder, ...params.slice(10)])
+  } else {
+    await execute(db, `
+      INSERT INTO location_qa (
+        id, organization_id, site_id, location_id, question, question_author,
+        answer, is_owner_answer, source, status, sort_order, created_at, updated_at
+      )
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(sort_order), -1) + 1, ?, ?
+      FROM location_qa
+      WHERE organization_id = ? AND site_id = ? AND ${scoped.clause}
+    `, [...params, scope.organizationId, scope.siteId, ...scoped.params])
+  }
+  const inserted = await queryFirst<{ sort_order: number }>(db, 'SELECT sort_order FROM location_qa WHERE id = ?', [id])
+  const sortOrder = inserted?.sort_order ?? explicitSortOrder ?? 0
 
   return {
     status: 201,
@@ -176,7 +199,7 @@ export async function reorderQa(
   }
 
   const now = new Date().toISOString()
-  await executeBatch(db, updates.map(update => ({
+  const results = await executeBatch(db, updates.map(update => ({
     query: `
       UPDATE location_qa
       SET sort_order = ?, updated_at = ?
@@ -184,6 +207,10 @@ export async function reorderQa(
     `,
     params: [update.sort_order, now, update.id, scope.organizationId, scope.siteId, ...scoped.params],
   })))
+  const changed = results.reduce((sum, result) => sum + Number(result.meta.changes ?? 0), 0)
+  if (changed !== updates.length) {
+    throw new Error(`Q&A reorder failed: expected ${updates.length} item(s) to update but only ${changed} matched. Reload and try again.`)
+  }
   return { updated: updates.length }
 }
 

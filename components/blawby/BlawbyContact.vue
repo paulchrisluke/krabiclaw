@@ -26,7 +26,7 @@
       </div>
     </section>
 
-    <section class="bg-white px-6 pb-24 sm:pb-32" aria-labelledby="blawby-contact-form-heading">
+    <section v-if="consultation.contact_form_enabled" class="bg-white px-6 pb-24 sm:pb-32" aria-labelledby="blawby-contact-form-heading">
       <form class="mx-auto grid max-w-3xl gap-5 rounded-2xl bg-[var(--blawby-primary-100)] p-8 sm:p-10" @submit.prevent="submitContact">
         <h2 id="blawby-contact-form-heading" class="blawby-display text-3xl font-bold text-[var(--blawby-primary)]">Send a message</h2>
         <p v-if="submitMessage" role="alert" class="rounded-lg border border-[var(--blawby-border)] bg-white p-4 text-sm text-[var(--blawby-primary)]">{{ submitMessage }}</p>
@@ -49,7 +49,7 @@
       :title="String(ctaBlock.title || 'Get started today')"
       :description="optionalString(ctaBlock.description)"
       :label="String(ctaBlock.label || consultation.cta_label)"
-      :destination="consultation.external_url || String(ctaBlock.url || consultation.schedule_path)"
+      :destination="String(ctaBlock.url || consultation.schedule_path)"
       :background-url="assetUrl(ctaBlock.background)"
       :featured-url="assetUrl(ctaBlock.featured)"
       @click="trackConsultation"
@@ -115,7 +115,7 @@ async function submitContact() {
 }
 
 function trackConsultation() {
-  trackConsultationClick('contact', '/contact', consultation.value.external_url || consultation.value.schedule_path)
+  trackConsultationClick('contact', '/contact', ctaBlock.value?.url || consultation.value.schedule_path)
 }
 
 useSeoMeta({

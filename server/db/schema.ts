@@ -1486,7 +1486,7 @@ export const site_conversion_events = sqliteTable("site_conversion_events", {
 }, (table) => [
 	index("site_conversion_events_site_created_idx").on(table.site_id, table.created_at),
 	index("site_conversion_events_name_created_idx").on(table.event_name, table.created_at),
-	check("site_conversion_events_name_check", sql`event_name IN ('page_view', 'book_consultation_click', 'contact_submit', 'donation_click')`),
+	check("site_conversion_events_name_check", sql`event_name GLOB '[a-z][a-z0-9_]*' AND length(event_name) <= 64`),
 ]);
 
 export const client_import_artifacts = sqliteTable("client_import_artifacts", {

@@ -13,7 +13,7 @@
       :title="String(ctaBlock.title || 'Get started today')"
       :description="optionalString(ctaBlock.description)"
       :label="String(ctaBlock.label || consultation.cta_label)"
-      :destination="consultation.external_url || String(ctaBlock.url || consultation.schedule_path)"
+      :destination="String(ctaBlock.url || consultation.schedule_path)"
       :background-url="assetUrl(ctaBlock.background)"
       :featured-url="assetUrl(ctaBlock.featured)"
       @click="trackConsultation"
@@ -47,7 +47,7 @@ const servicesDecoration = computed(() => assetUrl(servicesBlock.value.decoratio
 const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
 
 function trackConsultation() {
-  trackConsultationClick('services_list', '/services', consultation.value.external_url || consultation.value.schedule_path)
+  trackConsultationClick('services_list', '/services', ctaBlock.value?.url || consultation.value.schedule_path)
 }
 
 useSeoMeta({

@@ -149,6 +149,7 @@ export interface PublicConsultationSettings {
   schedule_path: string
   confirmation_path: string
   tracking_enabled: boolean
+  contact_form_enabled: boolean
   metadata: ApiRecord
 }
 

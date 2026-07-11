@@ -96,9 +96,12 @@ function edit(item: QaRow) {
 async function save() {
   saving.value = true
   try {
-    const body = { question: form.question, answer: form.answer || null, status: form.published ? 'published' : 'hidden' }
-    if (editingId.value) await $fetch(`/api/editor/sites/${siteId}/qa/${editingId.value}`, { method: 'PATCH', body })
-    else await $fetch(`/api/editor/sites/${siteId}/qa`, { method: 'POST', body })
+    const body: Record<string, unknown> = { question: form.question, answer: form.answer || null, status: form.published ? 'published' : 'hidden' }
+    if (editingId.value) {
+      await $fetch(`/api/editor/sites/${siteId}/qa/${editingId.value}`, { method: 'PATCH', body })
+    } else {
+      await $fetch(`/api/editor/sites/${siteId}/qa`, { method: 'POST', body })
+    }
     reset()
     await refresh()
     toast.add({ description: 'Site Q&A saved', color: 'success' })

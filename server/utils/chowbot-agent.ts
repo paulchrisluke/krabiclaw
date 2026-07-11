@@ -1526,18 +1526,30 @@ async function executeTool(
       return listSiteReviews(db, siteId);
 
     case "create_owner_entered_site_review":
-      return createOwnerEnteredSiteReview(db, { organizationId: orgId, siteId, enteredByUserId: userId }, input as never);
+      try {
+        return await createOwnerEnteredSiteReview(db, { organizationId: orgId, siteId, enteredByUserId: userId }, input as never);
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : "Failed to create review." };
+      }
 
     case "update_owner_entered_site_review": {
       const reviewId = toSqlText(input.review_id);
       if (!reviewId) return { error: "review_id required." };
-      return updateOwnerEnteredSiteReview(db, { organizationId: orgId, siteId }, reviewId, input);
+      try {
+        return await updateOwnerEnteredSiteReview(db, { organizationId: orgId, siteId }, reviewId, input);
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : "Failed to update review." };
+      }
     }
 
     case "delete_owner_entered_site_review": {
       const reviewId = toSqlText(input.review_id);
       if (!reviewId) return { error: "review_id required." };
-      return deleteOwnerEnteredSiteReview(db, { organizationId: orgId, siteId }, reviewId);
+      try {
+        return await deleteOwnerEnteredSiteReview(db, { organizationId: orgId, siteId }, reviewId);
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : "Failed to delete review." };
+      }
     }
 
     case "list_location_reviews": {
@@ -2978,7 +2990,11 @@ async function executeTool(
       if (input.answer !== undefined) updates.answer = input.answer;
       if (input.status !== undefined) updates.status = input.status;
       if (input.sort_order !== undefined) updates.sort_order = input.sort_order;
-      return updateQa(db, { organizationId: orgId, siteId, locationId: null }, qaId, updates);
+      try {
+        return await updateQa(db, { organizationId: orgId, siteId, locationId: null }, qaId, updates);
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : "Failed to update Q&A." };
+      }
     }
 
     case "reorder_site_qa": {
@@ -2987,7 +3003,11 @@ async function executeTool(
         id: String(item.id ?? ""),
         sort_order: Number(item.sort_order),
       }));
-      return reorderQa(db, { organizationId: orgId, siteId, locationId: null }, updates);
+      try {
+        return await reorderQa(db, { organizationId: orgId, siteId, locationId: null }, updates);
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : "Failed to reorder Q&A." };
+      }
     }
 
     case "update_location_qa": {

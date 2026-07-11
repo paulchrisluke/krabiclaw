@@ -14,6 +14,7 @@ const emptyBlawbyPayload = (): BlawbyPayload => ({
     schedule_path: '/schedule',
     confirmation_path: '/contact/confirmed',
     tracking_enabled: true,
+    contact_form_enabled: true,
     metadata: {},
   },
   navigation: [],

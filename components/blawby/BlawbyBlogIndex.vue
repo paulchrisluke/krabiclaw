@@ -21,7 +21,7 @@
       :title="String(ctaBlock.title || 'Get started today')"
       :description="optionalString(ctaBlock.description)"
       :label="String(ctaBlock.label || consultation.cta_label)"
-      :destination="consultation.external_url || String(ctaBlock.url || consultation.schedule_path)"
+      :destination="String(ctaBlock.url || consultation.schedule_path)"
       :background-url="assetUrl(ctaBlock.background)"
       :featured-url="assetUrl(ctaBlock.featured)"
       @click="trackConsultation"
@@ -77,7 +77,7 @@ watch([activeTags, currentPage], async () => {
 }, { deep: true })
 const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
 function trackConsultation() {
-  trackConsultationClick('blog', '/blog', consultation.value.external_url || consultation.value.schedule_path)
+  trackConsultationClick('blog', '/blog', ctaBlock.value?.url || consultation.value.schedule_path)
 }
 
 useSeoMeta({

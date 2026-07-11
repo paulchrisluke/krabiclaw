@@ -2,6 +2,7 @@ import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { listQa } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
+import type { SiteConversionEventName } from '~/utils/site-conversion-events'
 import type {
   PublicBlawbyData,
   PublicBlawbyIdentity,
@@ -273,6 +274,8 @@ export async function getPublicConsultationSettings(db: DbClient, siteId: string
      LIMIT 1
   `, [siteId])
 
+  const metadata = parseJson<ApiRecord>(row?.metadata_json as string | null, {})
+
   return {
     mode: row?.mode === 'native_disabled' ? 'native_disabled' : 'external_url',
     cta_label: typeof row?.cta_label === 'string' && row.cta_label.trim() ? row.cta_label : 'Book a consultation',
@@ -280,7 +283,8 @@ export async function getPublicConsultationSettings(db: DbClient, siteId: string
     schedule_path: typeof row?.schedule_path === 'string' ? row.schedule_path : '/schedule',
     confirmation_path: typeof row?.confirmation_path === 'string' ? row.confirmation_path : '/contact/confirmed',
     tracking_enabled: row?.tracking_enabled == null ? true : asBoolean(row.tracking_enabled),
-    metadata: parseJson<ApiRecord>(row?.metadata_json as string | null, {}),
+    contact_form_enabled: metadata.contact_form_enabled == null ? true : asBoolean(metadata.contact_form_enabled),
+    metadata,
   }
 }
 
@@ -514,7 +518,7 @@ export async function getPublicBlawbyData(db: DbClient, siteId: string): Promise
 export async function recordSiteConversionEvent(db: DbClient, input: {
   organizationId: string
   siteId: string
-  eventName: 'page_view' | 'book_consultation_click' | 'contact_submit' | 'donation_click'
+  eventName: SiteConversionEventName
   pageType?: string | null
   pagePath?: string | null
   pageLocation?: string | null
