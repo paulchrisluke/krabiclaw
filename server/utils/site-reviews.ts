@@ -55,7 +55,7 @@ function publicReviewRow(row: Record<string, unknown>) {
 
 export async function listSiteReviews(db: DbClient, siteId: string, options: { publishedOnly?: boolean } = {}) {
   const rows = await queryAll<Record<string, unknown>>(db, `
-    SELECT id, organization_id, site_id, author_name, reviewer_photo_url, rating, title, content,
+    SELECT id, organization_id, site_id, location_id, author_name, reviewer_photo_url, rating, title, content,
            owner_reply, owner_reply_at, photo_urls, helpful_count, status, source,
            review_request_id, entered_by_user_id, collection_method, original_review_date,
            original_reference, publication_authorized, created_at, updated_at

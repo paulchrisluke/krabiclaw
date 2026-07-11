@@ -131,6 +131,7 @@ test('only directly collected review-request feedback is marked verified', async
     { id: 'google', source: 'google', review_request_id: null, publication_authorized: 0 },
   ]
   const reviews = await listSiteReviews(db, 'site-1')
+  assert.match(calls.execute.at(-1)?.query ?? '', /SELECT[\s\S]*location_id[\s\S]*FROM reviews/)
   assert.equal(reviews[0]?.verified, true)
   assert.equal(reviews[1]?.verified, false)
   assert.equal(reviews[2]?.verified, false)

@@ -110,6 +110,7 @@ test.describe('Blawby NCLS public site', () => {
   test('mobile routes do not overflow and expose the source section order', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 1200 })
     await page.goto(`${blawbyBaseURL}/`, { waitUntil: 'load' })
+    await waitForHydration(page)
     const order = await page.locator('[data-parity-root] > [data-parity-section]').evaluateAll(elements => elements.map(element => element.getAttribute('data-parity-section')))
     expect(order).toEqual(['hero', 'services', 'approach', 'qa', 'reviews', 'articles', 'articles-more', 'consultation'])
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
@@ -147,7 +148,7 @@ test.describe('Blawby NCLS public site', () => {
     await page.getByRole('button', { name: 'Category', exact: true }).click()
     const filter = page.locator('[role="menu"] label').filter({ hasText: 'Employee Rights' }).getByRole('checkbox')
     await filter.check()
-    await expect(page).toHaveURL(/tags%5B%5D=Employee(\+|%20)Rights/)
+    await expect.poll(() => new URL(page.url()).searchParams.getAll('tags[]')).toContain('Employee Rights')
     await expect(page.locator('[data-parity-section="articles"] article')).toHaveCount(1)
   })
 
