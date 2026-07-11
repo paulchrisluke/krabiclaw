@@ -1,8 +1,17 @@
 import type { AiTool } from '~/server/utils/ai-gateway'
-import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
+import { SITES_TOOLS } from '~/server/utils/mcp-tools/sites'
+import { chowbotToolFromMcp } from './from-mcp'
+
+// get_site, update_site_settings, and set_brand_color exist on MCP's sites
+// domain but were never exposed to ChowBot — narrower granularity/dashboard
+// utility not currently offered there (see docs/tool-parity.md's
+// "Client MCP-only tool" table). get_site_settings/set_default_currency/
+// set_logo are the three that overlap and are derived below.
+const SITES_DOMAIN_TOOL_NAMES = new Set(['get_site_settings', 'set_default_currency', 'set_logo'])
 
 export const SITES_CHOWBOT_TOOLS: AiTool[] = [
-  // ── Site ───────────────────────────────────────────────────────────────────
+  ...SITES_TOOLS.filter((tool) => SITES_DOMAIN_TOOL_NAMES.has(tool.name)).map(chowbotToolFromMcp),
+  // ── Site (ChowBot-only aliases — no MCP equivalent, use update_site_settings) ──
     {
       name: "get_site_stats",
       description:
@@ -18,17 +27,6 @@ export const SITES_CHOWBOT_TOOLS: AiTool[] = [
           brand_name: { type: "string", description: "New brand name." },
         },
         required: ["brand_name"],
-      },
-    },
-  {
-      name: "set_default_currency",
-      description: "Set the default menu currency for this site.",
-      input_schema: {
-        type: "object",
-        properties: {
-          currency: { type: "string", enum: [...SUPPORTED_CURRENCIES] },
-        },
-        required: ["currency"],
       },
     },
   {
@@ -91,154 +89,6 @@ export const SITES_CHOWBOT_TOOLS: AiTool[] = [
               "Email for careers/job inquiries. Empty string to clear.",
           },
         },
-      },
-    },
-  {
-      name: "list_locales",
-      description:
-        "List the source language and enabled translation languages for this site.",
-      input_schema: { type: "object", properties: {} },
-    },
-  {
-      name: "upsert_locale",
-      description:
-        "Create or update a site language. Use this for source language, draft/published/disabled status, display label, and source fallback.",
-      input_schema: {
-        type: "object",
-        properties: {
-          locale: {
-            type: "string",
-            description: "BCP-47 locale code, such as en, th, fr, ja, or zh-CN.",
-          },
-          label: {
-            type: "string",
-            description: "Optional display label shown in dashboard controls.",
-          },
-          status: {
-            type: "string",
-            enum: ["draft", "published", "disabled"],
-            description: "Public availability for this locale.",
-          },
-          fallback_enabled: {
-            type: "boolean",
-            description:
-              "Whether missing translated content falls back to the source language.",
-          },
-          is_source: {
-            type: "boolean",
-            description: "Set true to make this locale the source language.",
-          },
-        },
-        required: ["locale"],
-      },
-    },
-  {
-      name: "delete_locale",
-      description:
-        "Remove a non-source site language. Confirm with the user first.",
-      input_schema: {
-        type: "object",
-        properties: {
-          locale: { type: "string", description: "Locale code to remove." },
-        },
-        required: ["locale"],
-      },
-    },
-  {
-      name: "get_translation_inventory",
-      description:
-        "Estimate translation scope and AI credits before translating a site language. Use before starting translation work.",
-      input_schema: {
-        type: "object",
-        properties: {
-          locale: {
-            type: "string",
-            description: "Target locale code, such as th or fr.",
-          },
-          scope: {
-            type: "string",
-            enum: ["site", "content", "menus", "locations", "posts"],
-            description: "Which part of the site to estimate.",
-          },
-          include_published: {
-            type: "boolean",
-            description:
-              "Include already published translations in the estimate.",
-          },
-        },
-        required: ["locale"],
-      },
-    },
-  {
-      name: "start_translation_job",
-      description:
-        "Create a queued translation job after the user approves the estimate. This queues work but does not translate immediately.",
-      input_schema: {
-        type: "object",
-        properties: {
-          locale: {
-            type: "string",
-            description: "Target locale code, such as th or fr.",
-          },
-          scope: {
-            type: "string",
-            enum: ["site", "content", "menus", "locations", "posts"],
-            description: "Which part of the site to translate.",
-          },
-          include_published: {
-            type: "boolean",
-            description: "Include already published translations.",
-          },
-        },
-        required: ["locale"],
-      },
-    },
-  {
-      name: "list_translation_jobs",
-      description: "List recent translation jobs for this site.",
-      input_schema: { type: "object", properties: {} },
-    },
-  {
-      name: "get_translation_job",
-      description: "Inspect a translation job and its queued items.",
-      input_schema: {
-        type: "object",
-        properties: {
-          job_id: { type: "string" },
-        },
-        required: ["job_id"],
-      },
-    },
-  {
-      name: "run_translation_job_batch",
-      description:
-        "Run one batch of an approved queued translation job. This calls AI, charges credits, and saves draft translations. Confirm before using.",
-      input_schema: {
-        type: "object",
-        properties: {
-          job_id: { type: "string" },
-        },
-        required: ["job_id"],
-      },
-    },
-  {
-      name: "publish_translations",
-      description:
-        "Publish matching draft translations for a locale and scope so they become visible on the public site. Confirm before using.",
-      input_schema: {
-        type: "object",
-        properties: {
-          locale: {
-            type: "string",
-            description: "Target locale code, such as th or fr.",
-          },
-          scope: {
-            type: "string",
-            enum: ["site", "content", "menus", "locations", "posts"],
-            description: "Which translated drafts to publish.",
-          },
-        },
-        required: ["locale"],
       },
     },
 ]

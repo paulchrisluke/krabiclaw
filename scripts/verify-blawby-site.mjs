@@ -133,15 +133,16 @@ function collectRoutes(manifest, explicitRoutes) {
     routes.add(redirect.from_path)
   }
   return Array.from(routes).filter(Boolean).map((route) => {
+    let parsed
     try {
-      const parsed = new URL(route, 'https://verify-blawby.invalid/')
-      if (parsed.origin !== 'https://verify-blawby.invalid') {
-        throw new Error(`Route escapes verification origin: ${route}`)
-      }
-      return `${parsed.pathname}${parsed.search}${parsed.hash}`
+      parsed = new URL(route, 'https://verify-blawby.invalid/')
     } catch {
       throw new Error(`Invalid local route: ${route}`)
     }
+    if (parsed.origin !== 'https://verify-blawby.invalid') {
+      throw new Error(`Route escapes verification origin: ${route}`)
+    }
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`
   })
 }
 
@@ -410,7 +411,12 @@ function validateSitemap(checks, sitemap, manifest) {
   }
   pushCheck(checks, true, 'Sitemap is fetchable')
   for (const route of ['/', '/services', '/pricing', '/donate', '/schedule', '/contact', '/blog']) {
-    pushCheck(checks, sitemap.includes(`<loc>${route}</loc>`) || sitemap.includes(route), `Sitemap includes ${route}`)
+    // '/' can't use the loose `sitemap.includes(route)` fallback below — every
+    // sitemap URL contains a "/", so that check can never fail for the homepage.
+    const ok = route === '/'
+      ? sitemap.includes('<loc>/</loc>')
+      : sitemap.includes(`<loc>${route}</loc>`) || sitemap.includes(route)
+    pushCheck(checks, ok, `Sitemap includes ${route}`)
   }
   for (const offering of manifest?.offerings ?? []) {
     const route = offering.canonical_path || `/services/${offering.slug}`

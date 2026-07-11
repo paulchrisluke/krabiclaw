@@ -5,6 +5,8 @@
 </template>
 
 <script setup lang="ts">
+import type { PublicOffering } from '~/types/blawby'
+
 const { isBlawby } = usePublicTemplate()
 if (!isBlawby.value) throw createError({ statusCode: 404 })
 const slug = String(useRoute().params.slug || '')

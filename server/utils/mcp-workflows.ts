@@ -14,6 +14,7 @@ import {
 import {
   deleteSiteContentField,
   getPageContent,
+  getSiteContentField,
   upsertSiteContent,
 } from "~/server/utils/content-management";
 import type { SiteContent } from "~/server/utils/content-management";
@@ -818,6 +819,16 @@ export async function hydrateSeededLocationForOnboarding(
   };
 }
 
+const HERO_COLUMN_BY_ALIAS: Record<
+  "hero.title" | "hero.subtitle" | "hero.image" | "hero.video",
+  "hero_title" | "hero_subtitle" | "hero_image_asset_id" | "hero_video_asset_id"
+> = {
+  "hero.title": "hero_title",
+  "hero.subtitle": "hero_subtitle",
+  "hero.image": "hero_image_asset_id",
+  "hero.video": "hero_video_asset_id",
+};
+
 export async function deleteContentField(
   db: D1Database,
   organizationId: string,
@@ -826,14 +837,51 @@ export async function deleteContentField(
   actorId?: string | null,
 ) {
   const locationId = input.location_id ?? undefined;
-  await deleteSiteContentField(
-    db,
-    organizationId,
-    siteId,
-    input.page,
-    input.field,
-    locationId,
-  );
+  const heroAlias = HERO_FIELD_ALIASES[input.field];
+
+  if (heroAlias) {
+    // Hero sub-fields (hero.title/subtitle/image/video) all live as columns
+    // on a single row keyed by field="hero" — deleteSiteContentField(...,
+    // input.field, ...) would look for a row keyed by e.g. "hero.title",
+    // which never exists, and silently delete nothing. Clear just this
+    // column, and only delete the whole "hero" row once every column is
+    // empty — same merge-safety upsertSiteContent already gives
+    // updatePageContent for hero writes, applied to deletes too.
+    const current = await getSiteContentField(db, organizationId, siteId, locationId ?? null, input.page, "hero");
+    const nextState = {
+      hero_title: current?.hero_title ?? null,
+      hero_subtitle: current?.hero_subtitle ?? null,
+      hero_image_asset_id: current?.hero_image_asset_id ?? null,
+      hero_video_asset_id: current?.hero_video_asset_id ?? null,
+    };
+    nextState[HERO_COLUMN_BY_ALIAS[heroAlias]] = null;
+
+    if (!nextState.hero_title && !nextState.hero_subtitle && !nextState.hero_image_asset_id && !nextState.hero_video_asset_id) {
+      await deleteSiteContentField(db, organizationId, siteId, input.page, "hero", locationId);
+    } else {
+      await upsertSiteContent(db, {
+        id: buildContentId(organizationId, siteId, input.page, "hero", locationId),
+        organization_id: organizationId,
+        site_id: siteId,
+        location_id: locationId,
+        page: input.page,
+        field: "hero",
+        type: "text",
+        source: "manual",
+        content: undefined,
+        ...nextState,
+      });
+    }
+  } else {
+    await deleteSiteContentField(
+      db,
+      organizationId,
+      siteId,
+      input.page,
+      input.field,
+      locationId,
+    );
+  }
   await fireSiteEventSafe({
     db,
     organizationId,

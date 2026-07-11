@@ -1,5 +1,5 @@
 -- NCLS Blawby local seed
--- Generated from F:\My Github Repos\Closed Source Repos\krabiclaw\client-imports\north-carolina-legal-services\client-manifest.json
+-- Generated from /Users/paulchrisluke/Repos2026/krabiclaw/client-imports/north-carolina-legal-services/client-manifest.json
 -- Preview at: http://ncls.localhost:3000
 
 PRAGMA foreign_keys = ON;
@@ -1592,7 +1592,7 @@ INSERT INTO tenant_pages (
 (
   'page_ncls_pricing', 'org-ncls-blawby', 'site-ncls-blawby',
   '/pricing', 'Pricing and Fees', 'pricing',
-  'pricing', 'North Carolina Legal Services offers income-based rates ranging from $150-$225 per hour with income-based fees to assist individuals and families that earn too much to qualify for free legal assistance, but who cannot afford the high cost of traditional law firms.', 'North Carolina Legal Services offers income-based rates ranging from $150-$225 per hour with income-based fees to assist individuals and families that earn too much to qualify for free legal assistance, but who cannot afford the high cost of traditional law firms.
+  'pricing', 'North Carolina Legal Services offers income-based rates ranging from $150-$225 per hour with income-based fees to assist individuals and families that earn too much to qualify for free legal assistance, but who cannot afford the high cost of traditional law firms.', 'North Carolina Legal Services offers income-based rates ranging from $160-$320 per hour to assist individuals and families that earn too much to qualify for free legal assistance, but who cannot afford the high cost of traditional law firms.
 
 Use the table below to determine the applicable discount for your family size:
 
@@ -1648,135 +1648,64 @@ Support equal access to justice in North Carolina. Your donation helps provide a
 (
   'page_ncls_privacy', 'org-ncls-blawby', 'site-ncls-blawby',
   '/policies/privacy', 'Privacy Policy', 'policies-privacy',
-  'privacy', 'Welcome to our website. By accessing and using this website, you agree to comply with and be bound by the following terms and conditions of use: The content of this website is for informational purposes only and is subject to change without notice.', 'This Privacy Policy describes how North Carolina Legal Services (the "Site", "we", "us", or "our") collects, uses, and discloses your personal information when you visit, use our services, or make a purchase from https://www.northcarolinalegalservices.org/ (the "Site") or otherwise communicate with us (collectively, the "Services"). For purposes of this Privacy Policy, "you" and "your" means you as the user of the Services, whether you are a customer, website visitor, or another individual whose information we have collected pursuant to this Privacy Policy.
+  'privacy', 'Welcome to our website. By accessing and using this website, you agree to comply with and be bound by the following terms and conditions of use: The content of this website is for informational purposes only and is subject to change without notice.', 'This Privacy Policy describes how North Carolina Legal Services ("NCLS", "we", "us", or "our") collects, uses, and discloses information when you visit this website (the "Site") or otherwise communicate with us (collectively, the "Services").
 
-Please read this Privacy Policy carefully. By using and accessing any of the Services, you agree to the collection, use, and disclosure of your information as described in this Privacy Policy. If you do not agree to this Privacy Policy, please do not use or access any of the Services.
+Please read this Privacy Policy carefully. By using the Services, you agree to the collection, use, and disclosure of your information as described in this Privacy Policy.
 
 ### Changes to This Privacy Policy
 
-We may update this Privacy Policy from time to time, including to reflect changes to our practices or for other operational, legal, or regulatory reasons. We will post the revised Privacy Policy on the Site, update the "Last updated" date and take any other steps required by applicable law.
+We may update this Privacy Policy from time to time to reflect changes to our practices or for other operational, legal, or regulatory reasons. We will post the revised Privacy Policy on the Site and update the "Last updated" date.
 
-### How We Collect and Use Your Personal Information
+### Information We Collect
 
-To provide the Services, we collect and have collected over the past 12 months personal information about you from a variety of sources, as set out below. The information that we collect and use varies depending on how you interact with us.
+We collect information you provide directly to us, including:
 
-In addition to the specific uses set out below, we may use information we collect about you to communicate with you, provide the Services, comply with any applicable legal obligations, enforce any applicable terms of service, and to protect or defend the Services, our rights, and the rights of our users or others.
+*   Contact information you submit through our contact or consultation request forms, such as your name, email address, phone number, and a description of your legal matter.
+*   Scheduling information when you book a consultation through our booking provider.
+*   Communications you send us, including messages, attachments, or documents you choose to share.
 
-### What Personal Information We Collect
+We also automatically collect limited technical information about your visit to the Site, such as your browser type, device information, and pages viewed, through the analytics tool described below.
 
-The types of personal information we obtain about you depends on how you interact with our Site and use our Services. When we use the term "personal information", we are referring to information that identifies, relates to, describes or can be associated with you. The following sections describe the categories and specific types of personal information we collect.
+### How We Use Your Information
 
-### Information We Collect Directly from You
+We use the information we collect to:
 
-Information that you directly submit to us through our Services may include:
+*   Respond to your inquiries and schedule consultations.
+*   Evaluate whether we may be able to assist with your legal matter.
+*   Communicate with you about your request or our services.
+*   Maintain the security and proper functioning of the Site.
+*   Understand, in aggregate, how visitors use the Site so we can improve it.
 
-*   Basic contact details including your name, address, phone number, email.
-*   Order information including your name, billing address, shipping address, payment confirmation, email address, phone number.
-*   Account information including your username, password, security questions.
-*   Shopping information including the items you view, put in your cart or add to your wishlist.
-*   Customer support information including the information you choose to include in communications with us, for example, when sending a message through the Services.
+### Analytics
 
-Some features of the Services may require you to directly provide us with certain information about yourself. You may elect not to provide this information, but doing so may prevent you from using or accessing these features.
+We use Google Tag Manager to understand how visitors use the Site. Analytics tracking on this Site is limited to an allowlisted set of events, such as page views and consultation button clicks, and does not include the content of any message you send us.
 
-### Information We Collect through Cookies
+### How We Share Your Information
 
-We also automatically collect certain information about your interaction with the Services ("Usage Data"). To do this, we may use cookies, pixels and similar technologies ("Cookies"). Usage Data may include information about how you access and use our Site and your account, including device information, browser information, information about your network connection, your IP address and other information regarding your interaction with the Services.
+We do not sell your personal information. We may share it with:
 
-### Information We Obtain from Third Parties
+*   Service providers who help us operate the Site and manage consultation scheduling, such as our booking and hosting providers, who are only permitted to use it to provide those services to us.
+*   Legal or regulatory authorities where required by law.
 
-Finally, we may obtain information about you from third parties, including from vendors and service providers who may collect information on our behalf, such as:
+### No Attorney-Client Relationship
 
-*   Companies who support our Site and Services
-*   Our payment processors, who collect payment information (e.g., bank account, credit or debit card information, billing address) to process your payment in order to fulfill your orders and provide you with products or services you have requested, in order to perform our contract with you.
-*   When you visit our Site, open or click on emails we send you, or interact with our Services or advertisements, we, or third parties we work with, may automatically collect certain information using online tracking technologies such as pixels, web beacons, software developer kits, third-party libraries, and cookies.
+Submitting a contact or consultation request does not create an attorney-client relationship. Information you submit before an attorney-client relationship is formed may not be treated as confidential or privileged. Please avoid sending sensitive details about your legal matter until we have confirmed representation.
 
-Any information we obtain from third parties will be treated in accordance with this Privacy Policy. We are not responsible or liable for the accuracy of the information provided to us by third parties and are not responsible for any third party''s policies or practices. For more information, see the section below, Third Party Websites and Links.
+### Data Retention
 
-### How We Use Your Personal Information
+We retain the information you provide for as long as necessary to respond to your inquiry, provide services, and comply with our legal and recordkeeping obligations.
 
-Providing Products and Services. We use your personal information to provide you with the Services in order to perform our contract with you, including to process your payments, fulfill your orders, to send notifications to you related to your account, purchases, returns, exchanges or other transactions, to create, maintain and otherwise manage your account, to arrange for shipping, facilitate any returns and exchanges and to enable you to post reviews.
+### Security
 
-Marketing and Advertising. We use your personal information for marketing and promotional purposes, such as to send marketing, advertising and promotional communications by email, text message or postal mail, and to show you advertisements for products or services. This may include using your personal information to better tailor the Services and advertising on our Site and other websites.
+We use reasonable administrative and technical safeguards to protect the information you provide, but no method of transmission or storage is completely secure. Please avoid sending highly sensitive information through unsecured channels.
 
-Security and Fraud Prevention. We use your personal information to detect, investigate or take action regarding possible fraudulent, illegal or malicious activity. If you choose to use the Services and register an account, you are responsible for keeping your account credentials safe. We highly recommend that you do not share your username, password, or other access details with anyone else. If you believe your account has been compromised, please contact us immediately.
+### Your Rights
 
-Communicating with you. We use your personal information to provide you with customer support and improve our Services. This is in our legitimate interests in order to be responsive to you, to provide effective services to you, and to maintain our business relationship with you.
-
-### Cookies
-
-Like many websites, we use Cookies on our Site. We use Cookies to power and improve our Site and our Services (including to remember your actions and preferences), to run analytics and better understand user interaction with the Services (in our legitimate interests to administer, improve and optimize the Services). We may also permit third parties and services providers to use Cookies on our Site to better tailor the services, products and advertising on our Site and other websites.
-
-Most browsers automatically accept Cookies by default, but you can choose to set your browser to remove or reject Cookies through your browser controls. Please keep in mind that removing or blocking Cookies can negatively impact your user experience and may cause some of the Services, including certain features and general functionality, to work incorrectly or no longer be available. Additionally, blocking Cookies may not completely prevent how we share information with third parties such as our advertising partners.
-
-### How We Disclose Personal Information
-
-In certain circumstances, we may disclose your personal information to third parties for legitimate purposes subject to this Privacy Policy. Such circumstances may include:
-
-*   With vendors or other third parties who perform services on our behalf (e.g., IT management, payment processing, data analytics, customer support, cloud storage, fulfillment and shipping).
-*   With business and marketing partners, to provide services and advertise to you. Our business and marketing partners will use your information in accordance with their own privacy notices.
-*   When you direct, request us or otherwise consent to our disclosure of certain information to third parties, such as to ship you products or through your use of social media widgets or login integrations, with your consent.
-*   With our affiliates or otherwise within our corporate group, in our legitimate interests to run a successful business.
-*   In connection with a business transaction such as a merger or bankruptcy, to comply with any applicable legal obligations (including to respond to subpoenas, search warrants and similar requests), to enforce any applicable terms of service, and to protect or defend the Services, our rights, and the rights of our users or others.
-
-We have, in the past 12 months disclosed the following categories of personal information and sensitive personal information (denoted by *) about users for the purposes set out above in "How we Collect and Use your Personal Information" and "How we Disclose Personal Information":
-
-#### Category:
-
-*   Identifiers such as basic contact details and certain order and account information
-*   Commercial information such as order information, shopping information and customer support information
-*   Internet or other similar network activity, such as Usage Data
-
-#### Categories of Recipients:
-
-*   Vendors and third parties who perform services on our behalf (such as Internet service providers, payment processors, fulfillment partners, customer support partners and data analytics providers)
-*   Business and marketing partners
-*   Affiliates
-
-We do not use or disclose sensitive personal information for the purposes of inferring characteristics about you.
-
-### User Generated Content
-
-The Services may enable you to post product reviews and other user-generated content. If you choose to submit user generated content to any public area of the Services, this content will be public and accessible by anyone.
-
-We do not control who will have access to the information that you choose to make available to others, and cannot ensure that parties who have access to such information will respect your privacy or keep it secure. We are not responsible for the privacy or security of any information that you make publicly available, or for the accuracy, use or misuse of any information that you disclose or receive from third parties.
-
-### Third Party Websites and Links
-
-Our Site may provide links to websites or other online platforms operated by third parties. If you follow links to sites not affiliated or controlled by us, you should review their privacy and security policies and other terms and conditions. We do not guarantee and are not responsible for the privacy or security of such sites, including the accuracy, completeness, or reliability of information found on these sites. Information you provide on public or semi-public venues, including information you share on third-party social networking platforms may also be viewable by other users of the Services and/or users of those third-party platforms without limitation as to its use by us or by a third party. Our inclusion of such links does not, by itself, imply any endorsement of the content on such platforms or of their owners or operators, except as disclosed on the Services.
+Depending on where you live, you may have the right to request access to, correction of, or deletion of the personal information we hold about you. You can exercise these rights by contacting us using the details below.
 
 ### Children''s Data
 
-The Services are not intended to be used by children, and we do not knowingly collect any personal information about children. If you are the parent or guardian of a child who has provided us with their personal information, you may contact us using the contact details set out below to request that it be deleted.
-
-As of the Effective Date of this Privacy Policy, we do not have actual knowledge that we "share" or "sell" (as those terms are defined in applicable law) personal information of individuals under 16 years of age.
-
-### Security and Retention of Your Information
-
-Please be aware that no security measures are perfect or impenetrable, and we cannot guarantee "perfect security." In addition, any information you send to us may not be secure while in transit. We recommend that you do not use unsecure channels to communicate sensitive or confidential information to us.
-
-How long we retain your personal information depends on different factors, such as whether we need the information to maintain your account, to provide the Services, comply with legal obligations, resolve disputes or enforce other applicable contracts and policies.
-
-### Your Rights and Choices
-
-Depending on where you live, you may have some or all of the rights listed below in relation to your personal information. However, these rights are not absolute, may apply only in certain circumstances and, in certain cases, we may decline your request as permitted by law.
-
-*   Right to Access / Know. You may have a right to request access to personal information that we hold about you, including details relating to the ways in which we use and share your information.
-*   Right to Delete. You may have a right to request that we delete personal information we maintain about you.
-*   Right to Correct. You may have a right to request that we correct inaccurate personal information we maintain about you.
-*   Right of Portability. You may have a right to receive a copy of the personal information we hold about you and to request that we transfer it to a third party, in certain circumstances and with certain exceptions.
-{'' ''}
-
-You may exercise any of these rights where indicated on our Site or by contacting us using the contact details provided below.
-
-We will not discriminate against you for exercising any of these rights. We may need to collect information from you to verify your identity, such as your email address or account information, before providing a substantive response to the request. In accordance with applicable laws, You may designate an authorized agent to make requests on your behalf to exercise your rights. Before accepting such a request from an agent, we will require that the agent provide proof you have authorized them to act on your behalf, and we may need you to verify your identity directly with us. We will respond to your request in a timely manner as required under applicable law.
-
-### Complaints
-
-If you have complaints about how we process your personal information, please contact us using the contact details provided below. If you are not satisfied with our response to your complaint, depending on where you live you may have the right to appeal our decision by contacting us using the contact details set out below, or lodge your complaint with your local data protection authority.
-
-### International Users
-
-Please note that we may transfer, store and process your personal information outside the country you live in, including the United States. Your personal information is also processed by staff and third party service providers and partners in these countries. If we transfer your personal information out of Europe, we will rely on recognized transfer mechanisms like the European Commission''s Standard Contractual Clauses, or any equivalent contracts issued by the relevant competent authority of the UK, as relevant, unless the data transfer is to a country that has been determined to provide an adequate level of protection.
+The Services are not directed to children, and we do not knowingly collect personal information from children.
 
 ### Contact
 
@@ -1790,45 +1719,45 @@ Should you have any questions about our privacy practices or this Privacy Policy
   '/policies/terms', 'Terms of Use', 'policies-terms',
   'terms', 'Welcome to our website. By accessing and using this website, you agree to comply with and be bound by the following terms and conditions of use: The content of this website is for informational purposes only and is subject to change without notice.', '### Overview
 
-This website is operated by North Carolina Legal Services. Throughout the site, the terms "we", "us" and "our" refer to North Carolina Legal Services. North Carolina Legal Services offers this website, including all information, tools and Services available from this site to you, the user, conditioned upon your acceptance of all terms, conditions, policies and notices stated here.
+This website is operated by North Carolina Legal Services ("NCLS", "we", "us", or "our"). Throughout the site, these terms refer to North Carolina Legal Services. By accessing or using this website, you agree to be bound by these Terms of Use ("Terms"). If you do not agree, please do not use the Site.
 
-By visiting our site and/ or purchasing something from us, you engage in our "Service" and agree to be bound by the following terms and conditions ("Terms of Service", "Terms"), including those additional terms and conditions and policies referenced herein and/or available by hyperlink. These Terms of Service apply to all users of the site, including without limitation users who are browsers, vendors, customers, merchants, and/ or contributors of content.
+### Not Legal Advice
 
-Please read these Terms of Service carefully before accessing or using our website. By accessing or using any part of the site, you agree to be bound by these Terms of Service. If you do not agree to all the terms and conditions of this agreement, then you may not access the website or use any Services. If these Terms of Service are considered an offer, acceptance is expressly limited to these Terms of Service.
+The content on this Site, including articles, service descriptions, and the pricing calculator, is provided for general informational purposes only and does not constitute legal advice. Using this Site or submitting a contact or consultation request does not create an attorney-client relationship between you and NCLS. An attorney-client relationship is only formed once we have confirmed representation in writing.
 
-Any new features or tools which are added to the current store shall also be subject to the Terms of Service. You can review the most current version of the Terms of Service at any time on this page. We reserve the right to update, change or replace any part of these Terms of Service by posting updates and/or changes to our website. It is your responsibility to check this page periodically for changes. Your continued use of or access to the website following the posting of any changes constitutes acceptance of those changes.
+### Consultations and Scheduling
 
-Our store is hosted on Vercel They provide us with the online e-commerce platform that allows us to sell our products and Services to you.
+Consultation requests submitted through this Site are routed to our scheduling provider. Submitting a request does not guarantee that NCLS will be able to represent you; eligibility depends on factors such as conflicts, capacity, and the nature of your matter.
 
-### SECTION 1 - ONLINE STORE TERMS
+### Donations
 
-By agreeing to these Terms of Service, you represent that you are at least the age of majority in your state or province of residence, or that you are the age of majority in your state or province of residence and you have given us your consent to allow any of your minor dependents to use this site.
+Donations made through links on this Site are processed by an external payment provider. NCLS does not process or store payment card information directly.
 
-You may not use our products for any illegal or unauthorized purpose nor may you, in the use of the Service, violate any laws in your jurisdiction (including but not limited to copyright laws).
+### Site Use
 
-You must not transmit any worms or viruses or any code of a destructive nature.
+You agree not to use the Site for any unlawful purpose, to transmit any virus or malicious code, or to attempt to interfere with the security or proper functioning of the Site.
 
-A breach or violation of any of the Terms will result in an immediate termination of your Services.
+### Accuracy of Information
 
-### SECTION 2 - GENERAL CONDITIONS
+We work to keep the information on this Site current, but we do not warrant that all content, including pricing and service descriptions, is accurate, complete, or up to date. We may update or correct information on the Site at any time without notice.
 
-We reserve the right to refuse service to anyone for any reason at any time.
+### Third-Party Links
 
-You understand that your content (not including credit card information), may be transferred unencrypted and involve (a) transmissions over various networks; and (b) changes to conform and adapt to technical requirements of connecting networks or devices. Credit card information is always encrypted during transfer over networks.
+This Site may link to third-party websites, including our scheduling and donation providers. We are not responsible for the content, policies, or practices of any third-party website.
 
-You agree not to reproduce, duplicate, copy, sell, resell or exploit any portion of the Service, use of the Service, or access to the Service or any contact on the website through which the service is provided, without express written permission by us.
+### Disclaimer of Warranties; Limitation of Liability
 
-The headings used in this agreement are included for convenience only and will not limit or otherwise affect these Terms.
+The Site and its content are provided "as is" without warranties of any kind, express or implied. To the fullest extent permitted by law, NCLS and its directors, officers, employees, and agents will not be liable for any indirect, incidental, or consequential damages arising from your use of the Site.
 
-### SECTION 3 - ACCURACY, COMPLETENESS AND TIMELINESS OF INFORMATION
+### Governing Law
 
-We are not responsible if information made available on this site is not accurate, complete or current. The material on this site is provided for general information only and should not be relied upon or used as the sole basis for making decisions without consulting primary, more accurate, more complete or more timely sources of information. Any reliance on the material on this site is at your own risk.
+These Terms are governed by the laws of the State of North Carolina, without regard to its conflict-of-law principles.
 
-This site may contain certain historical information. Historical information, necessarily, is not current and is provided for your reference only. We reserve the right to modify the contents of this site at any time, but we have no obligation to update any information on our site. You agree that it is your responsibility to monitor changes to our site.
+### Changes to These Terms
 
-### SECTION 4 - MODIFICATIONS TO THE SERVICE AND PRICES
+We may update these Terms from time to time by posting the revised version on this page. Your continued use of the Site after changes are posted constitutes acceptance of those changes.
 
-Prices for our products are subject to change without notice.
+### Contact
 
 We reserve the right at any time to modify or discontinue the Service (or any part or content thereof) without notice at any time.
 

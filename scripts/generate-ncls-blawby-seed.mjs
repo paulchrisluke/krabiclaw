@@ -215,14 +215,14 @@ INSERT INTO offerings (
   seo_title, seo_description, canonical_path, status, sort_order, featured,
   source, source_ref, created_at, updated_at
 ) VALUES
-${offeringRows};
+${offeringRows};` : '-- No offering rows in manifest.'}
 
-INSERT INTO tenant_pages (
+${tenantPageRows ? `INSERT INTO tenant_pages (
   id, organization_id, site_id, path, title, slug, page_type, summary, body,
   components_json, cta_label, cta_url, seo_title, seo_description, canonical_url,
   robots, status, sort_order, source, source_ref, created_at, updated_at
 ) VALUES
-${tenantPageRows};
+${tenantPageRows};` : '-- No tenant page rows in manifest.'}
 
 INSERT INTO tenant_compliance (
   id, organization_id, site_id, entity_name, dba_name, entity_type, nonprofit_status,
@@ -256,10 +256,10 @@ INSERT INTO site_consultation_settings (
 INSERT INTO site_theme_tokens (id, organization_id, site_id, template_slug, tokens_json, status, created_at, updated_at)
 VALUES ('theme-ncls-blawby', ${sqlValue(ORG_ID)}, ${sqlValue(SITE_ID)}, 'blawby', ${sqlJson(manifest.themeTokens ?? {})}, 'active', ${now}, ${now});
 
-INSERT INTO tenant_navigation_items (
+${navRows ? `INSERT INTO tenant_navigation_items (
   id, organization_id, site_id, area, label, url, item_type, sort_order, status, metadata_json, created_at, updated_at
 ) VALUES
-${navRows};
+${navRows};` : '-- No navigation rows in manifest.'}
 
 ${redirectRows ? `INSERT INTO tenant_redirects (
   id, organization_id, site_id, from_path, to_path, status_code, behavior,
@@ -288,7 +288,7 @@ INSERT INTO blog_posts (
   author_id, featured_image_asset_id, published_at, created_at, updated_at,
   seo_description, seo_keywords, canonical_url, robots
 ) VALUES
-${blogRows};
+${blogRows};` : '-- No blog post rows in manifest.'}
 `
 
 if (isStdout) {
