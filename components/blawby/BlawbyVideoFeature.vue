@@ -11,9 +11,8 @@
       <div class="grid grid-cols-1 items-center gap-x-8 gap-y-16 lg:grid-cols-2">
         <div>
           <div class="border-b border-gray-200 pb-10">
-            <h2 class="mt-2 blawby-display text-3xl font-bold text-white sm:text-4xl">
-              {{ title }} <strong v-if="accent" class="relative whitespace-nowrap blawby-display text-[var(--blawby-accent)]">{{ accent }}</strong>
-            </h2>
+            <h2 class="mt-2 blawby-display text-3xl font-bold text-white sm:text-4xl">{{ title }}</h2>
+            <p v-if="accent"><strong class="relative whitespace-nowrap blawby-display text-3xl font-bold text-[var(--blawby-accent)] sm:text-4xl">{{ accent }}</strong></p>
           </div>
           <dl class="mt-10 space-y-10">
             <div v-for="feature in features" :key="feature.name">
