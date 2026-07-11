@@ -9,7 +9,7 @@
               class="group inline-flex justify-center text-sm font-medium text-[var(--blawby-primary)] hover:text-[var(--blawby-primary-dark)]"
               :aria-expanded="open"
               aria-haspopup="menu"
-              @click="open = !open"
+              @click.stop="open = !open"
             >
               Category
               <svg class="-mr-1 ml-1 size-5 shrink-0 text-gray-400 group-hover:text-gray-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">

@@ -6,7 +6,7 @@
           <p v-if="eyebrow" class="mb-4 text-sm font-semibold uppercase text-[var(--blawby-accent-strong)]">
             {{ eyebrow }}
           </p>
-          <h1 class="blawby-display text-3xl font-bold sm:text-4xl">
+          <h1 :aria-label="title" class="blawby-display text-3xl font-bold sm:text-4xl">
             <template v-for="(word, index) in titleWords" :key="`${word}-${index}`">
               <span :class="index === 1 || index === 2 ? 'text-[var(--blawby-accent)]' : 'text-[var(--blawby-primary)]'">{{ word }}</span><span v-if="index < titleWords.length - 1"> </span>
             </template>

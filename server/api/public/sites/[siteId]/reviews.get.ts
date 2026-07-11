@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
   const db = cloudflareEnv(event).db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-  const site = await queryFirst<{ id: string }>(db, "SELECT id FROM sites WHERE id = ? AND status IN ('live', 'draft')", [siteId])
+  const site = await queryFirst<{ id: string }>(db, "SELECT id FROM sites WHERE id = ? AND status IN ('active', 'live', 'draft')", [siteId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   return jsonResponse({ reviews: await listSiteReviews(db, siteId, { publishedOnly: true }) })
 })

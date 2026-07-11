@@ -83,7 +83,7 @@ const seoDescription = computed(() => post.value.seo_description || post.value.e
 const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(new Date(value))
+  return new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(value))
 }
 function optionalString(value: unknown) {
   return typeof value === 'string' && value ? value : null

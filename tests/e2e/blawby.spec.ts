@@ -1,21 +1,25 @@
 import { expect, test } from '@playwright/test'
 import { blawbyBaseURL, blawbyExtraHeaders, collectPageErrors, expectHealthyPage, setupTenantHeaders } from './helpers'
 
-const routes = [
-  ['/', 'Access to Justice for All.'],
-  ['/services', 'Our Services'],
-  ['/services/family', 'Family law'],
-  ['/about', 'About Us'],
-  ['/pricing', 'Affordable, for everyone'],
-  ['/contact', 'Contact Us'],
-  ['/contact/confirmed', 'Message received'],
-  ['/schedule', 'Request a Legal Consultation'],
-  ['/blog', 'Our Blog'],
-  ['/article/getting-a-divorce-in-north-carolina', 'Getting a Divorce in North Carolina'],
-  ['/donate', 'Support Equal Access to Justice'],
-  ['/policies/privacy', 'Privacy Policy'],
-  ['/policies/terms', 'Terms of Use'],
-  ['/third-party-notices', 'Third-Party Notices'],
+async function waitForHydration(page: import('@playwright/test').Page) {
+  await page.locator('.blawby-shell[data-hydrated="true"]').waitFor()
+}
+
+const routes: ReadonlyArray<readonly [string, RegExp]> = [
+  ['/', /Access to Justice for All\./i],
+  ['/services', /Our Services/i],
+  ['/services/family', /Family law/i],
+  ['/about', /About Us/i],
+  ['/pricing', /Affordable, for everyone/i],
+  ['/contact', /Contact Us/i],
+  ['/contact/confirmed', /Message received/i],
+  ['/schedule', /Request a Legal Consultation/i],
+  ['/blog', /Our Blog/i],
+  ['/article/getting-a-divorce-in-north-carolina', /Getting a Divorce in North Carolina/i],
+  ['/donate', /Support Equal Access to Justice/i],
+  ['/policies/privacy', /Privacy Policy/i],
+  ['/policies/terms', /Terms of Use/i],
+  ['/third-party-notices', /Third-Party Notices/i],
 ] as const
 
 const legacyRedirects = [
@@ -30,13 +34,14 @@ test.describe('Blawby NCLS public site', () => {
     await setupTenantHeaders(page, blawbyBaseURL, blawbyExtraHeaders)
   })
 
-  for (const [path, expectedText] of routes) {
+  for (const [path, expectedHeading] of routes) {
     test(`${path} renders scoped SSR without runtime errors`, async ({ page }) => {
       const errors = collectPageErrors(page)
       const response = await page.goto(`${blawbyBaseURL}${path}`, { waitUntil: 'load' })
       expect(response?.status()).toBeLessThan(400)
-      await expect(page.locator('body')).toContainText(expectedText)
-      await expect(page.locator('header')).toContainText('Schedule a consultation')
+      await waitForHydration(page)
+      await expect(page.getByRole('heading', { name: expectedHeading }).first()).toBeVisible()
+      await expect(page.locator('header').getByRole('link', { name: 'Get Started', exact: true }).first()).toBeVisible()
       await expect(page.locator('footer')).toContainText('North Carolina Legal Services')
       await expectHealthyPage(page, errors)
     })
@@ -99,15 +104,14 @@ test.describe('Blawby NCLS public site', () => {
   test('article body media and related articles render successfully', async ({ page }) => {
     await page.goto(`${blawbyBaseURL}/article/preparing-for-your-consultation-with-north-carolina-legal-services`, { waitUntil: 'load' })
     await expect(page.locator('[data-parity-section="related-articles"]')).toBeVisible()
-    const brokenImages = await page.locator('[data-parity-section="article-content"] img').evaluateAll(images => images.filter(image => !(image as HTMLImageElement).complete || (image as HTMLImageElement).naturalWidth === 0).length)
-    expect(brokenImages).toBe(0)
+    await expect.poll(() => page.locator('[data-parity-section="article-content"] img').evaluateAll(images => images.filter(image => !(image as HTMLImageElement).complete || (image as HTMLImageElement).naturalWidth === 0).length)).toBe(0)
   })
 
   test('mobile routes do not overflow and expose the source section order', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 1200 })
     await page.goto(`${blawbyBaseURL}/`, { waitUntil: 'load' })
     const order = await page.locator('[data-parity-root] > [data-parity-section]').evaluateAll(elements => elements.map(element => element.getAttribute('data-parity-section')))
-    expect(order).toEqual(['hero', 'services', 'approach', 'qa', 'reviews', 'articles', 'consultation'])
+    expect(order).toEqual(['hero', 'services', 'approach', 'qa', 'reviews', 'articles', 'articles-more', 'consultation'])
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
     expect(overflow).toBeLessThanOrEqual(1)
 
@@ -128,18 +132,20 @@ test.describe('Blawby NCLS public site', () => {
 
   test('service feature tabs support arrow-key navigation', async ({ page }) => {
     await page.goto(`${blawbyBaseURL}/services/family`, { waitUntil: 'load' })
-    const tabs = page.getByRole('tab')
+    const featureTabs = page.getByRole('tablist', { name: 'Service features' })
+    const tabs = featureTabs.getByRole('tab')
     expect(await tabs.count()).toBeGreaterThan(1)
-    const selected = page.locator('[role="tab"][aria-selected="true"]')
+    const selected = featureTabs.locator('[role="tab"][aria-selected="true"]')
     expect(await selected.count()).toBe(1)
     await selected.press('ArrowRight')
-    await expect(page.locator('[role="tab"][aria-selected="true"]')).toHaveAttribute('tabindex', '0')
+    await expect(featureTabs.locator('[role="tab"][aria-selected="true"]')).toHaveAttribute('tabindex', '0')
   })
 
   test('blog taxonomy filter changes the visible article set', async ({ page }) => {
     await page.goto(`${blawbyBaseURL}/blog`, { waitUntil: 'load' })
+    await waitForHydration(page)
     await page.getByRole('button', { name: 'Category', exact: true }).click()
-    const filter = page.getByRole('checkbox', { name: 'Employee Rights', exact: true })
+    const filter = page.locator('[role="menu"] label').filter({ hasText: 'Employee Rights' }).getByRole('checkbox')
     await filter.check()
     await expect(page).toHaveURL(/tags%5B%5D=Employee(\+|%20)Rights/)
     await expect(page.locator('[data-parity-section="articles"] article')).toHaveCount(1)
@@ -156,10 +162,11 @@ test.describe('Blawby NCLS public site', () => {
 
   test('contact consent submits through the native noindex confirmation flow', async ({ page }) => {
     await page.goto(`${blawbyBaseURL}/contact`, { waitUntil: 'load' })
+    await waitForHydration(page)
     await page.getByLabel('Name').fill('Blawby Test Client')
     await page.getByLabel('Email').fill(`blawby-${Date.now()}@example.test`)
-    await page.getByLabel('Message').fill('Please contact me about a legal services consultation.')
-    await page.getByRole('checkbox').check()
+    await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Please contact me about a legal services consultation.')
+    await page.getByRole('checkbox', { name: /I understand that submitting/i }).check()
     await page.getByRole('button', { name: 'Send message' }).click()
     await expect(page).toHaveURL(/\/contact\/confirmed$/)
     await expect(page.getByRole('heading', { name: 'Message received' })).toBeVisible()

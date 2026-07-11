@@ -1,5 +1,5 @@
 <template>
-  <div class="blawby-shell min-h-screen bg-[var(--blawby-bg)] text-[var(--blawby-ink)]" :style="themeStyles">
+  <div class="blawby-shell min-h-screen bg-[var(--blawby-bg)] text-[var(--blawby-ink)]" :style="themeStyles" :data-hydrated="hydrated ? 'true' : 'false'">
     <BlawbyHeader :site="identity" :navigation="navigation" :consultation="consultation" />
     <main>
       <slot />
@@ -17,6 +17,8 @@
 import { serializeJsonLd } from '~/utils/json-ld'
 
 const { identity, navigation, consultation, compliance, themeTokens, offeringLinks } = await useBlawbyShell()
+const hydrated = ref(false)
+onMounted(() => { hydrated.value = true })
 const requestUrl = useRequestURL()
 
 const themeStyles = computed(() => {

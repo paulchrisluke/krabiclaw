@@ -37,6 +37,6 @@ import type { PublicBlogSummary } from '~/types/blawby'
 withDefaults(defineProps<{ posts: PublicBlogSummary[], compact?: boolean }>(), { compact: false })
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(value))
+  return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(value))
 }
 </script>
