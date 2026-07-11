@@ -2,7 +2,10 @@
   <UPage>
     <UPageBody class="px-0 sm:px-0">
       <div class="flex min-h-[calc(100vh-12rem)] flex-col overflow-hidden rounded-2xl border border-default bg-default lg:grid lg:grid-cols-[340px_minmax(0,1fr)_320px]">
-        <aside class="border-b border-default lg:border-b-0 lg:border-r">
+        <aside
+          class="border-b border-default lg:block lg:border-b-0 lg:border-r"
+          :class="mobileView === 'thread' ? 'hidden' : 'block'"
+        >
           <div class="border-b border-default px-4 py-4">
             <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Guest Threads</p>
             <h1 class="mt-1 text-xl font-semibold text-highlighted">Inbox</h1>
@@ -79,17 +82,32 @@
           </div>
         </aside>
 
-        <section class="flex min-h-0 flex-col border-b border-default lg:border-b-0 lg:border-r">
+        <section
+          class="min-h-0 flex-col border-b border-default lg:flex lg:border-b-0 lg:border-r"
+          :class="mobileView === 'list' ? 'hidden' : 'flex'"
+        >
           <div class="border-b border-default px-4 py-4" v-if="selectedDetail">
             <div class="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 class="text-lg font-semibold text-highlighted">{{ selectedDetail.thread.guest_name }}</h2>
-                <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
-                  <span>{{ threadTypeLabel(selectedDetail.thread.submission_type) }}</span>
-                  <span>•</span>
-                  <span>{{ selectedDetail.source.location_title || 'Site-wide' }}</span>
-                  <span>•</span>
-                  <span>{{ threadStateLabel(selectedDetail.thread.inbox_status) }}</span>
+              <div class="flex min-w-0 items-start gap-2">
+                <UButton
+                  icon="i-lucide-arrow-left"
+                  color="neutral"
+                  variant="ghost"
+                  size="sm"
+                  square
+                  class="-ml-2 shrink-0 lg:hidden"
+                  aria-label="Back to guest threads"
+                  @click="closeMobileThread"
+                />
+                <div class="min-w-0">
+                  <h2 class="text-lg font-semibold text-highlighted">{{ selectedDetail.thread.guest_name }}</h2>
+                  <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
+                    <span>{{ threadTypeLabel(selectedDetail.thread.submission_type) }}</span>
+                    <span>•</span>
+                    <span>{{ selectedDetail.source.location_title || 'Site-wide' }}</span>
+                    <span>•</span>
+                    <span>{{ threadStateLabel(selectedDetail.thread.inbox_status) }}</span>
+                  </div>
                 </div>
               </div>
               <div class="flex gap-2">
@@ -152,7 +170,7 @@
 
         <aside
           class="min-h-0 overflow-y-auto"
-          :class="mobileTab === 'conversation' ? 'hidden lg:block' : 'block'"
+          :class="mobileView === 'list' || mobileTab === 'conversation' ? 'hidden lg:block' : 'block'"
         >
           <div v-if="selectedDetail" class="space-y-4 p-4">
             <UCard :ui="{ body: 'p-4' }">
@@ -316,6 +334,7 @@ const selectedThreadId = ref<string | null>(null)
 const selectedDetail = ref<ThreadDetailResponse | null>(null)
 const replyDraft = ref('')
 const replySaving = ref(false)
+const mobileView = ref<'list' | 'thread'>('list')
 const mobileTab = ref<'conversation' | 'details'>('conversation')
 const search = ref('')
 const typeFilter = ref<string>('')
@@ -371,6 +390,7 @@ async function applyRouteSelection() {
   const explicitThread = typeof route.query.thread === 'string' ? route.query.thread : null
   if (explicitThread && threads.value.some(thread => thread.id === explicitThread)) {
     if (selectedThreadId.value !== explicitThread) await loadThreadDetail(explicitThread)
+    mobileView.value = 'thread'
     return
   }
 
@@ -392,12 +412,13 @@ async function applyRouteSelection() {
   }
 
   if (!selectedThreadId.value && threads.value[0]) {
-    await selectThread(threads.value[0].id)
+    await loadThreadDetail(threads.value[0].id)
   }
 }
 
 async function selectThread(threadId: string) {
   await loadThreadDetail(threadId)
+  mobileView.value = 'thread'
   mobileTab.value = 'conversation'
   const query: Record<string, string> = {
     ...Object.fromEntries(
@@ -409,8 +430,16 @@ async function selectThread(threadId: string) {
   }
   delete query.reply
   delete query.tab
-  await router.replace({ query })
+  await router.push({ query })
   await loadThreads()
+}
+
+async function closeMobileThread() {
+  mobileView.value = 'list'
+  mobileTab.value = 'conversation'
+  const query = { ...route.query }
+  delete query.thread
+  await router.push({ query })
 }
 
 async function sendReply() {
@@ -567,6 +596,10 @@ watch(() => dashboardLocation.currentLocationId.value, async () => {
   selectedThreadId.value = null
   selectedDetail.value = null
   await loadThreads()
+})
+
+watch(() => route.query.thread, (thread) => {
+  mobileView.value = typeof thread === 'string' ? 'thread' : 'list'
 })
 
 onMounted(async () => {
