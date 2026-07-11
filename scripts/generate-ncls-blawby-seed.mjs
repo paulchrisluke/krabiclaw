@@ -170,21 +170,21 @@ UPDATE sites SET primary_location_id = ${sqlValue(LOCATION_ID)} WHERE id = ${sql
 INSERT INTO site_locales (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled)
 VALUES ('locale-ncls-en', ${sqlValue(ORG_ID)}, ${sqlValue(SITE_ID)}, 'en', 'English', 1, 'published', 1);
 
-INSERT INTO offerings (
+${offeringRows ? `INSERT INTO offerings (
   id, organization_id, site_id, location_id, name, slug, label, summary,
   short_description, body, features, faqs, cta_label, cta_url,
   thumbnail_asset_id, hero_image_asset_id, media_asset_ids, schema_type,
   seo_title, seo_description, canonical_path, status, sort_order, featured,
   source, source_ref, created_at, updated_at
 ) VALUES
-${offeringRows};
+${offeringRows};` : '-- No offering rows in manifest.'}
 
-INSERT INTO tenant_pages (
+${tenantPageRows ? `INSERT INTO tenant_pages (
   id, organization_id, site_id, path, title, slug, page_type, summary, body,
   components_json, cta_label, cta_url, seo_title, seo_description, canonical_url,
   robots, status, sort_order, source, source_ref, created_at, updated_at
 ) VALUES
-${tenantPageRows};
+${tenantPageRows};` : '-- No tenant page rows in manifest.'}
 
 INSERT INTO tenant_compliance (
   id, organization_id, site_id, entity_name, dba_name, entity_type, nonprofit_status,
@@ -213,10 +213,10 @@ INSERT INTO site_consultation_settings (
 INSERT INTO site_theme_tokens (id, organization_id, site_id, template_slug, tokens_json, status, created_at, updated_at)
 VALUES ('theme-ncls-blawby', ${sqlValue(ORG_ID)}, ${sqlValue(SITE_ID)}, 'blawby', ${sqlJson(manifest.themeTokens ?? {})}, 'active', ${now}, ${now});
 
-INSERT INTO tenant_navigation_items (
+${navRows ? `INSERT INTO tenant_navigation_items (
   id, organization_id, site_id, area, label, url, item_type, sort_order, status, metadata_json, created_at, updated_at
 ) VALUES
-${navRows};
+${navRows};` : '-- No navigation rows in manifest.'}
 
 ${mediaRows ? `INSERT INTO media_assets (
   id, organization_id, site_id, location_id, kind, provider, source,
@@ -226,12 +226,12 @@ ${mediaRows ? `INSERT INTO media_assets (
 ) VALUES
 ${mediaRows};` : '-- No approved media/file rows in manifest.'}
 
-INSERT INTO blog_posts (
+${blogRows ? `INSERT INTO blog_posts (
   id, organization_id, site_id, title, slug, body, excerpt, category, status,
   author_id, featured_image_asset_id, published_at, created_at, updated_at,
   seo_description, seo_keywords, canonical_url, robots
 ) VALUES
-${blogRows};
+${blogRows};` : '-- No blog post rows in manifest.'}
 `
 
 if (isStdout) {

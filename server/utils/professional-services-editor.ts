@@ -35,7 +35,11 @@ const BLAWBY_THEME_COLOR_KEYS = new Set(['bg', 'surface', 'primary', 'primaryDar
 function looksLikeExecutableCalculatorSyntax(value: string) {
   return (
     /=>|\bfunction\b|\bnew Function\b|\bjavascript:/i.test(value) ||
-    /\breturn\b|[{};]/.test(value) ||
+    // `;`/`{}` alone are common in ordinary prose (e.g. "50% discount; base rate
+    // applies"), so only flag them when paired with a `return` statement — an
+    // actual code shape rather than punctuation.
+    /\breturn\s+[^;{}]*;/.test(value) ||
+    /\{[^{}]*\breturn\b[^{}]*\}/.test(value) ||
     /^\s*[A-Za-z_$][\w$]*\s*\([^)]*\)\s*$/.test(value)
   )
 }
@@ -293,7 +297,7 @@ export async function upsertProfessionalServiceContent(
         typeof item.disclaimer === 'string' ? item.disclaimer : null,
         typeof item.footer_disclaimer === 'string' ? item.footer_disclaimer : null,
         json(Array.isArray(item.document_asset_ids) ? item.document_asset_ids : []),
-        json(typeof item.metadata === 'object' ? item.metadata : {}),
+        json(item.metadata && typeof item.metadata === 'object' ? item.metadata : {}),
         updatedBy,
       ],
     })
@@ -329,7 +333,7 @@ export async function upsertProfessionalServiceContent(
         safeStoredUrl(item.schedule_path, 300) || '/schedule',
         safeStoredUrl(item.confirmation_path, 300) || '/contact/confirmed',
         item.tracking_enabled === false ? 0 : 1,
-        json(typeof item.metadata === 'object' ? item.metadata : {}),
+        json(item.metadata && typeof item.metadata === 'object' ? item.metadata : {}),
         updatedBy,
       ],
     })
@@ -374,7 +378,7 @@ export async function upsertProfessionalServiceContent(
         cleanString(item.item_type, 40) || 'internal',
         Number(item.sort_order ?? 0),
         cleanString(item.status, 30) || 'active',
-        json(typeof item.metadata === 'object' ? item.metadata : {}),
+        json(item.metadata && typeof item.metadata === 'object' ? item.metadata : {}),
         updatedBy,
       ],
     })

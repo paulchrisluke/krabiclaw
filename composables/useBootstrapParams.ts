@@ -83,7 +83,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
   const articleMatch = path.match(/^\/article\/([^/]+)\/?$/);
   if (articleMatch) {
     return {
-      page: "blog",
+      page: "article",
       location: null,
       experience: null,
       menu: false,

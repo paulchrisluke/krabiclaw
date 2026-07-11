@@ -39,7 +39,7 @@ const props = withDefaults(defineProps<{
 const { pageByPath } = useBlawbySite()
 const { site } = useTenantSite()
 const page = computed(() => pageByPath(props.path))
-const calculatorBlock = computed(() => page.value?.components.find((component: ApiRecord) => component.type === 'pricing_calculator') ?? null)
+const calculatorBlock = computed(() => page.value?.components?.find((component: ApiRecord) => component.type === 'pricing_calculator') ?? null)
 
 const eyebrow = computed(() => props.fallbackEyebrow)
 const pageTitle = computed(() => page.value?.title || props.fallbackTitle)

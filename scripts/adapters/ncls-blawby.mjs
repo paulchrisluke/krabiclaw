@@ -51,13 +51,25 @@ function safeFileName(sourcePath) {
   return path.basename(decoded).replace(/[^a-zA-Z0-9._-]+/g, '-')
 }
 
+// The real IRS determination letter is delivered under a filename that
+// doesn't contain "irs" (it's named after the case/EIN instead), so the
+// generic substring check below can't catch it — match it explicitly.
+const IRS_DETERMINATION_FILENAME_PATTERN = /^FinalLetter_[\d-]+_[A-Za-z0-9]+_Redacted\.pdf$/i
+
 function legalAssetFor(sourcePath) {
   const fileName = safeFileName(sourcePath)
   const base = fileName.replace(/\.[^.]+$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
   const r2Key = `sites/${siteId}/media/legal/${fileName}`
+  const role = IRS_DETERMINATION_FILENAME_PATTERN.test(fileName)
+    ? 'irs_determination'
+    : sourcePath.toLowerCase().includes('irs')
+      ? 'irs_determination'
+      : sourcePath.toLowerCase().includes('dba')
+        ? 'dba_registration'
+        : 'legal_document'
   return {
     kind: 'legal_file',
-    role: sourcePath.toLowerCase().includes('irs') ? 'irs_determination' : sourcePath.toLowerCase().includes('dba') ? 'dba_registration' : 'legal_document',
+    role,
     source_path: sourcePath,
     approved_storage_required: true,
     asset_id: `asset_ncls_legal_${base || createHash('sha1').update(sourcePath).digest('hex').slice(0, 10)}`,
@@ -264,8 +276,6 @@ function buildRouteInventory(offerings, pages, articles) {
       '/services',
       ...offerings.map((offering) => offering.canonical_path || `/services/${offering.slug}`),
       '/schedule',
-      '/pricing',
-      '/donate',
       '/blog',
       ...articles.map((article) => article.canonical_url || `/article/${article.slug}`),
       ...pages.map((page) => page.path),
@@ -377,34 +387,43 @@ function buildPayload(config) {
   ]
   const pages = staticPageSources.map((page) => tenantPageFromVariant(page, config, legalLinkMap))
 
-  const offerings = (config.services || []).map((service) => ({
-    id: `offering_ncls_${service.slug}`,
-    name: service.name,
-    slug: service.slug,
-    label: service.serviceType || null,
-    summary: service.summary || service.description || null,
-    short_description: service.description || service.summary || null,
-    body: service.content || service.description || null,
-    features: (service.features || []).map((feature) => `${feature.title}: ${feature.description}`),
-    faqs: (service.faqs || []).map((faq) => ({ question: faq.question, answer: faq.answer })),
-    cta_label: 'Schedule a consultation',
-    cta_url: '/schedule',
-    thumbnail_asset_id: null,
-    hero_image_asset_id: null,
-    media_asset_ids: [],
-    schema_type: service.itemType || 'LegalService',
-    seo_title: `${service.name} | ${tenant.name}`,
-    seo_description: service.description || service.summary || null,
-    canonical_path: `/services/${service.slug}`,
-    status: 'published',
-    sort_order: Number(service.order || 0),
-    featured: Number(service.order || 0) <= 3,
-    source_media: {
-      thumbnailFileName: service.thumbnailFileName || null,
-      media: service.media || [],
-      features: (service.features || []).map((feature) => feature.img).filter(Boolean),
-    },
-  }))
+  const offerings = (config.services || []).map((service) => {
+    const thumbnailAssetId = service.thumbnailFileName
+      ? storageAssetFor({ role: 'offering_thumbnail', source_name: service.thumbnailFileName }).asset_id
+      : null
+    const mediaAssetIds = (service.media || [])
+      .map((media) => media.name)
+      .filter(Boolean)
+      .map((name) => storageAssetFor({ role: 'offering_media', source_name: name }).asset_id)
+    return {
+      id: `offering_ncls_${service.slug}`,
+      name: service.name,
+      slug: service.slug,
+      label: service.serviceType || null,
+      summary: service.summary || service.description || null,
+      short_description: service.description || service.summary || null,
+      body: service.content || service.description || null,
+      features: (service.features || []).map((feature) => `${feature.title}: ${feature.description}`),
+      faqs: (service.faqs || []).map((faq) => ({ question: faq.question, answer: faq.answer })),
+      cta_label: 'Schedule a consultation',
+      cta_url: '/schedule',
+      thumbnail_asset_id: thumbnailAssetId,
+      hero_image_asset_id: thumbnailAssetId,
+      media_asset_ids: mediaAssetIds,
+      schema_type: service.itemType || 'LegalService',
+      seo_title: `${service.name} | ${tenant.name}`,
+      seo_description: service.description || service.summary || null,
+      canonical_path: `/services/${service.slug}`,
+      status: 'published',
+      sort_order: Number(service.order || 0),
+      featured: Number(service.order || 0) <= 3,
+      source_media: {
+        thumbnailFileName: service.thumbnailFileName || null,
+        media: service.media || [],
+        features: (service.features || []).map((feature) => feature.img).filter(Boolean),
+      },
+    }
+  })
 
   const articles = (config.articles || []).map((article) => ({
     title: article.title,

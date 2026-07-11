@@ -78,6 +78,8 @@ jobs:
               - 'pages/services/**'
               - 'pages/third-party-notices.vue'
               - 'scripts/*blawby*.mjs'
+              - 'scripts/adapters/ncls-blawby.mjs'
+              - 'scripts/client-import.mjs'
               - 'scripts/client-verify.mjs'
               - 'server/api/editor/sites/**/professional-services*'
               - 'server/api/public/sites/**/blawby.get.ts'
