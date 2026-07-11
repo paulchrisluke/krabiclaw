@@ -3,6 +3,7 @@ import { execSync } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { prepareD1SeedFile } from './utils/d1-seed-file.mjs'
 
 const isStdout = process.argv.includes('--stdout')
 const isRemote = process.argv.includes('--remote')
@@ -306,9 +307,17 @@ const sqlPath = join(dir, 'ncls-blawby.sql')
 
 try {
   writeFileSync(sqlPath, sql, 'utf8')
-  const cmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --file "${sqlPath}"`.trim()
-  console.log(`[seed:ncls-blawby] Applying: ${cmd}`)
-  execSync(cmd, { stdio: 'inherit' })
+  const preparedSeed = await prepareD1SeedFile(sqlPath)
+  if (preparedSeed.splitCount) {
+    console.log(`[seed:ncls-blawby] Split ${preparedSeed.splitCount} oversized INSERT statement chunk(s) for D1 execution.`)
+  }
+  try {
+    const cmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --file "${preparedSeed.path}"`.trim()
+    console.log(`[seed:ncls-blawby] Applying: ${cmd}`)
+    execSync(cmd, { stdio: 'inherit' })
+  } finally {
+    await preparedSeed.cleanup()
+  }
   console.log('[seed:ncls-blawby] Done. Preview at http://ncls.localhost:3000')
 } finally {
   rmSync(dir, { recursive: true, force: true })
