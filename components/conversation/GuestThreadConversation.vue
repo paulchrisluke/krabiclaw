@@ -15,7 +15,7 @@
   >
     <template #message="{ message }">
       <div v-if="message.type === 'event'" class="px-4 py-2">
-        <div class="mx-auto max-w-xl rounded-full border border-default bg-elevated px-4 py-2 text-center text-xs font-medium text-muted">
+        <div class="mx-auto max-w-[22.5rem] rounded-[10px] bg-muted px-3 py-1.5 text-center text-xs font-semibold text-muted">
           {{ message.body }}
         </div>
       </div>
@@ -25,7 +25,7 @@
         class="flex px-4 py-2"
         :class="message.role === 'owner' ? 'justify-end' : 'justify-start'"
       >
-        <div class="flex max-w-[min(38rem,100%)] items-start gap-3" :class="message.role === 'owner' ? 'flex-row-reverse' : ''">
+        <div class="flex max-w-[78%] items-start gap-3" :class="message.role === 'owner' ? 'flex-row-reverse' : ''">
           <div
             class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border"
             :class="message.role === 'owner' ? 'border-primary/20 bg-primary/10 text-primary' : 'border-default bg-elevated text-muted'"
@@ -34,16 +34,16 @@
           </div>
 
           <div class="min-w-0 space-y-1">
-            <div class="flex flex-wrap items-center gap-2 text-[11px] text-muted" :class="message.role === 'owner' ? 'justify-end' : ''">
+            <div class="flex flex-wrap items-center gap-2 text-[11px] text-muted" :class="message.role === 'owner' ? 'flex-row-reverse justify-start' : ''">
               <span class="font-semibold text-highlighted">{{ roleLabel(message.role) }}</span>
               <span>{{ channelLabel(message.channel) }}</span>
               <span>{{ formatTimestamp(message.createdAt) }}</span>
             </div>
             <div
-              class="rounded-2xl border px-4 py-3 text-sm leading-relaxed"
+              class="rounded-[14px] border px-4 py-3 text-sm leading-relaxed"
               :class="message.role === 'owner'
-                ? 'border-primary/20 bg-primary/10 text-highlighted'
-                : 'border-default bg-elevated text-default'"
+                ? 'rounded-tr-[5px] border-primary bg-primary text-(--primary-foreground,#fff)'
+                : 'rounded-tl-[5px] border-default bg-elevated text-default'"
             >
               {{ message.body }}
             </div>

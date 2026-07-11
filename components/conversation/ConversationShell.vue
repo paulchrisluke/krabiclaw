@@ -72,7 +72,7 @@
       </UChatMessages>
     </div>
 
-    <div v-if="showPrompt" class="shrink-0 border-t border-default p-3">
+    <div v-if="showPrompt" class="shrink-0 border-t border-default bg-elevated p-3">
       <slot name="prompt-before" />
 
       <div v-if="quickReplies.length" class="flex gap-2 overflow-x-auto pb-1">
@@ -82,7 +82,7 @@
           data-testid="chowbot-quick-reply"
           :data-reply-action="reply.action"
           :class="[
-            'inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12.5px] font-semibold transition-colors',
+            'inline-flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-2 text-[12.5px] font-semibold transition-colors',
             reply.primary
               ? 'border-primary bg-primary text-white hover:bg-primary/90'
               : reply.ghost
