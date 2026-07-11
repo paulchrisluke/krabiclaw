@@ -106,6 +106,10 @@ function htmlishToMarkdown(value, linkMap = new Map()) {
     .replace(/<strong><u>(.*?)<\/u><\/strong>/gi, '**$1**')
     .replace(/<a\s+href="([^"]+)"[^>]*>(.*?)<\/a>/gi, (_, href, label) => `[${label}](${linkMap.get(href) || href})`)
     .replace(/<[^>]+>/g, '')
+    .split('\n')
+    .map(line => line.trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
 
@@ -121,11 +125,21 @@ function plainMdx(value) {
 function mdxLead(value) {
   const content = String(value || '').trim()
   const heading = content.match(/^#{1,6}\s+([^\n]+)/)?.[1] || ''
-  const accent = heading.match(/\*\*(.*?)\*\*/)?.[1] || null
-  const description = content.replace(/^#{1,6}\s+[^\n]+/, '').trim()
+  const headingAccent = heading.match(/\*\*(.*?)\*\*/)?.[1] || null
+  const trailing = content.replace(/^#{1,6}\s+[^\n]+/, '').trim()
+  const leadingAccentMatch = trailing.match(/^\*\*(.*?)\*\*(?:\s*\n|\s*$)/)
+  const accent = headingAccent || leadingAccentMatch?.[1] || null
+  const description = headingAccent || !leadingAccentMatch
+    ? trailing
+    : trailing.slice(leadingAccentMatch[0].length).trim()
   return {
     title: plainMdx(heading),
-    title_without_accent: accent ? plainMdx(heading).replace(plainMdx(accent), '').trim() : plainMdx(heading),
+    title_with_breaks: heading
+      .split(/<br\s*\/?>(?:<\/br>)?/gi)
+      .map(part => plainMdx(part))
+      .filter(Boolean)
+      .join('\n'),
+    title_without_accent: headingAccent ? plainMdx(heading).replace(plainMdx(headingAccent), '').trim() : plainMdx(heading),
     accent: plainMdx(accent),
     description: plainMdx(description),
   }
@@ -548,7 +562,7 @@ function buildPayload(config, sourcePath = null) {
       components: [
         {
           type: 'home_hero',
-          title: homeHero.title || tenant.name,
+          title: homeHero.title_with_breaks || homeHero.title || tenant.name,
           accent: homeHero.accent,
           description: homeHero.description || tenant.description,
           label: config.heroComponent?.cta || 'Request a Consultation',
@@ -629,7 +643,11 @@ function buildPayload(config, sourcePath = null) {
       description: heroSubFor(config, 'contact')?.description || config.contactRowComponent?.description,
       components: [
         pageHero('contact'),
-        { type: 'contact_cards', ...config.contactRowComponent },
+        {
+          type: 'contact_cards',
+          ...config.contactRowComponent,
+          cardsContent: (config.contactRowComponent?.cardsContent || []).map(htmlishToMarkdown),
+        },
         { type: 'qa', decoration: faqDecoration },
         { type: 'reviews' },
         commonCta,
@@ -898,7 +916,14 @@ function buildPayload(config, sourcePath = null) {
       domain: tenant.domain,
       email: tenant.email,
       phone: tenant.phone,
-      service_area: config.serviceArea || null,
+      service_area: config.serviceArea
+        ? {
+            ...config.serviceArea,
+            name: config.serviceArea.name === 'North Carlina'
+              ? 'North Carolina'
+              : config.serviceArea.name || config.serviceArea.locality || null,
+          }
+        : null,
       logo_asset_id: assetPointer('brand_logo', 'icons/logo.svg')?.asset_id || null,
       author_image_url: assetPointer('article_author_image', 'rich-gittings-author.webp')?.url || null,
     },
@@ -940,6 +965,9 @@ function buildPayload(config, sourcePath = null) {
       schedule_path: '/schedule',
       confirmation_path: '/contact/confirmed',
       tracking_enabled: true,
+      metadata: {
+        header_cta_label: config.headerComponent?.content || 'Get Started',
+      },
       legacy_source_calendly_url_ignored: tenant.calendlyUrl || null,
     },
     analyticsBridge: {
@@ -960,6 +988,7 @@ function buildPayload(config, sourcePath = null) {
       accent: '#c19855',
       accent100: '#faf5ea',
       accent200: '#f8f0e1',
+      accentButton: '#b58c4f',
       accentStrong: '#a37732',
       border: '#e5e7eb',
       ink: '#162033',
@@ -981,6 +1010,7 @@ function buildPayload(config, sourcePath = null) {
       '/thank-you is replaced by KrabiClaw native noindex confirmation pages.',
       '/conference is intentionally out of cutover scope.',
       'Donation remains an external CTA; native donation/payment processing is excluded.',
+      'The source contact page is extended with the native KrabiClaw contact form and noindex confirmation page.',
     ],
   }
 }

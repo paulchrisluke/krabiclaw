@@ -13,7 +13,11 @@
             </div>
             <div class="grid grid-cols-1 gap-6 sm:grid-cols-1 lg:col-span-2 lg:gap-8">
               <article v-for="(content, index) in contactCards" :key="index" class="rounded-2xl bg-[var(--blawby-primary-100)] p-10 text-gray-700">
-                <BlawbyRichText :content="content" />
+                <BlawbyRichText
+                  :content="content"
+                  unstyled
+                  class="[&_h3]:text-base [&_h3]:font-semibold [&_h3]:leading-7 [&_h3]:text-[var(--blawby-primary)]"
+                />
               </article>
             </div>
           </div>

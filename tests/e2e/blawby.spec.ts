@@ -18,6 +18,13 @@ const routes = [
   ['/third-party-notices', 'Third-Party Notices'],
 ] as const
 
+const legacyRedirects = [
+  ['/article/divorce-and-children-in-north-carolina-what-to-expect-and-how-to-prepare', '/article/divorce-and-children-in-north-carolina'],
+  ['/article/preparing-for-your-consultation', '/article/preparing-for-your-consultation-with-north-carolina-legal-services'],
+  ['/article/property-division-in-north-carolina-divorce', '/article/property-division-in-north-carolina-divorce-protecting-whats-yours'],
+  ['/article/writing-your-own-will-how-it-works-in-north-carolina', '/article/writing-your-own-will-how-it-works'],
+] as const
+
 test.describe('Blawby NCLS public site', () => {
   test.beforeEach(async ({ page }) => {
     await setupTenantHeaders(page, blawbyBaseURL, blawbyExtraHeaders)
@@ -32,6 +39,17 @@ test.describe('Blawby NCLS public site', () => {
       await expect(page.locator('header')).toContainText('Schedule a consultation')
       await expect(page.locator('footer')).toContainText('North Carolina Legal Services')
       await expectHealthyPage(page, errors)
+    })
+  }
+
+  for (const [from, to] of legacyRedirects) {
+    test(`${from} preserves the source URL with a permanent redirect`, async ({ request }) => {
+      const response = await request.get(`${blawbyBaseURL}${from}`, {
+        headers: blawbyExtraHeaders,
+        maxRedirects: 0,
+      })
+      expect(response.status()).toBe(301)
+      expect(response.headers().location).toBe(to)
     })
   }
 
@@ -62,9 +80,27 @@ test.describe('Blawby NCLS public site', () => {
     expect(payload.post.slug).toBe('preparing-for-your-consultation-with-north-carolina-legal-services')
     expect(payload.post.body.length).toBeGreaterThan(0)
     expect(payload.posts.length).toBeGreaterThan(0)
+    expect(payload.post.tags).toContain('Consultation')
     expect(payload.posts.every((post: Record<string, unknown>) => !('body' in post))).toBe(true)
     expect(payload.offerings).toEqual([])
     expect(payload.page.path).toBe('/blog')
+  })
+
+  test('service cards use the deployed full-width image treatment', async ({ page }) => {
+    await page.goto(`${blawbyBaseURL}/services`, { waitUntil: 'load' })
+    const card = page.locator('[data-parity-section="services"] a').first()
+    const image = card.locator('img').first()
+    const [cardBox, imageBox] = await Promise.all([card.boundingBox(), image.boundingBox()])
+    expect(cardBox).not.toBeNull()
+    expect(imageBox).not.toBeNull()
+    expect(imageBox!.width / cardBox!.width).toBeGreaterThan(0.8)
+  })
+
+  test('article body media and related articles render successfully', async ({ page }) => {
+    await page.goto(`${blawbyBaseURL}/article/preparing-for-your-consultation-with-north-carolina-legal-services`, { waitUntil: 'load' })
+    await expect(page.locator('[data-parity-section="related-articles"]')).toBeVisible()
+    const brokenImages = await page.locator('[data-parity-section="article-content"] img').evaluateAll(images => images.filter(image => !(image as HTMLImageElement).complete || (image as HTMLImageElement).naturalWidth === 0).length)
+    expect(brokenImages).toBe(0)
   })
 
   test('mobile routes do not overflow and expose the source section order', async ({ page }) => {

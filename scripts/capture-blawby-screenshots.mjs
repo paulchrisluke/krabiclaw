@@ -73,13 +73,23 @@ async function stabilizePage(page) {
   })
   await page.evaluate(async () => {
     if (document.fonts?.ready) await document.fonts.ready
+    const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
+    const step = Math.max(window.innerHeight, 600)
+    for (let top = 0; top < document.documentElement.scrollHeight; top += step) {
+      window.scrollTo(0, top)
+      await delay(50)
+    }
+    window.scrollTo(0, 0)
     const images = Array.from(document.images)
-    await Promise.all(images.map(image => image.complete
-      ? Promise.resolve()
-      : new Promise(resolve => {
-          image.addEventListener('load', resolve, { once: true })
-          image.addEventListener('error', resolve, { once: true })
-        })))
+    await Promise.race([
+      Promise.all(images.map(image => image.complete
+        ? Promise.resolve()
+        : new Promise(resolve => {
+            image.addEventListener('load', resolve, { once: true })
+            image.addEventListener('error', resolve, { once: true })
+          }))),
+      delay(5_000),
+    ])
   })
 }
 
@@ -90,6 +100,7 @@ async function markCaptureSections(page, routeName, expectedSections) {
       const style = getComputedStyle(element)
       return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
     }
+    const contentSection = element => visible(element) && !['HEADER', 'FOOTER'].includes(element.tagName)
     document.querySelectorAll('[data-parity-capture-slot]').forEach(element => {
       element.removeAttribute('data-parity-capture-slot')
     })
@@ -98,7 +109,24 @@ async function markCaptureSections(page, routeName, expectedSections) {
     const add = (element, slot, name) => {
       if (!element || !visible(element)) return
       element.setAttribute('data-parity-capture-slot', slot)
-      targets.push({ slot, name })
+      const rect = element.getBoundingClientRect()
+      const documentWidth = document.documentElement.scrollWidth
+      const documentHeight = document.documentElement.scrollHeight
+      const x = Math.max(0, rect.left + window.scrollX)
+      const y = Math.max(0, rect.top + window.scrollY)
+      const width = Math.min(rect.width, documentWidth - x)
+      const height = Math.min(rect.height, documentHeight - y)
+      if (width <= 0 || height <= 0) return
+      targets.push({
+        slot,
+        name,
+        clip: {
+          x,
+          y,
+          width,
+          height,
+        },
+      })
     }
 
     add(Array.from(document.querySelectorAll('header')).find(visible), 'header', 'header')
@@ -114,12 +142,15 @@ async function markCaptureSections(page, routeName, expectedSections) {
     }
 
     if (root) {
-      const explicit = Array.from(root.querySelectorAll('[data-parity-section]')).filter(visible)
+      const explicit = Array.from(root.querySelectorAll('[data-parity-section]')).filter(element => {
+        if (!visible(element)) return false
+        return !element.parentElement?.closest('[data-parity-section]')
+      })
       const elements = root.matches('section')
         ? [root]
         : explicit.length
         ? explicit
-        : Array.from(root.children).filter(visible)
+        : Array.from(root.children).filter(contentSection)
       if (!elements.length) {
         add(root, 'main-01', expectedSections[0] || `${routeName}-content`)
       } else {
@@ -197,8 +228,18 @@ try {
       const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
       await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {})
       await stabilizePage(page)
-      const markedSections = await markCaptureSections(page, routeName, routeConfig.sections)
       await page.screenshot({ path: filePath, fullPage: true })
+      await page.evaluate(() => window.scrollTo(0, 0))
+      const markedSections = await markCaptureSections(page, routeName, routeConfig.sections)
+      const markedMainNames = markedSections
+        .filter(section => section.slot.startsWith('main-'))
+        .map(section => section.name)
+      if (JSON.stringify(markedMainNames) !== JSON.stringify(routeConfig.sections)) {
+        throw new Error(
+          `Section recipe mismatch for ${routeName}/${viewportName}: `
+          + `expected ${JSON.stringify(routeConfig.sections)}, found ${JSON.stringify(markedMainNames)}`,
+        )
+      }
       manifest.screenshots.push({
         route_name: routeName,
         route: routeConfig.path,
@@ -218,7 +259,17 @@ try {
           `${section.slot}-${section.name}.png`,
         )
         await fs.mkdir(path.dirname(sectionPath), { recursive: true })
-        await page.locator(`[data-parity-capture-slot="${section.slot}"]`).screenshot({ path: sectionPath })
+        try {
+          await page.locator(`[data-parity-capture-slot="${section.slot}"]`).first().screenshot({
+            path: sectionPath,
+            animations: 'disabled',
+          })
+        } catch (error) {
+          throw new Error(
+            `Section capture failed for ${routeName}/${viewportName}/${section.slot}-${section.name} `
+            + `at ${JSON.stringify(section.clip)}: ${error instanceof Error ? error.message : String(error)}`,
+          )
+        }
         manifest.sections.push({
           route_name: routeName,
           route: routeConfig.path,

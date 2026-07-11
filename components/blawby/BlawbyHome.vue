@@ -10,16 +10,16 @@
         fetchpriority="high"
         class="absolute inset-0 size-full object-cover object-center"
       >
-      <div class="relative mx-auto max-w-7xl px-4 pb-36 pt-16 text-left sm:px-6 lg:px-8">
-        <div class="flex flex-wrap gap-x-6">
+      <div class="blawby-container relative pb-36 pt-16 text-left min-[1920px]:pb-48 min-[1920px]:pt-24 min-[2560px]:pb-64 min-[2560px]:pt-32">
+        <div class="flex flex-wrap gap-x-6 min-[1920px]:gap-x-12 min-[2560px]:gap-x-16">
           <div class="w-full lg:w-3/5">
-            <h1 class="max-w-4xl blawby-display text-5xl font-medium text-white sm:text-7xl">
+            <h1 class="max-w-4xl whitespace-pre-line blawby-display text-5xl font-medium text-white sm:text-7xl min-[1920px]:max-w-6xl min-[1920px]:text-8xl min-[2560px]:max-w-7xl min-[2560px]:text-9xl">
               {{ heroTitle.before }}<span v-if="heroTitle.accent" class="relative whitespace-nowrap text-[var(--blawby-accent)]">{{ heroTitle.accent }}</span>{{ heroTitle.after }}
             </h1>
-            <p v-if="hero.description" class="mt-6 max-w-2xl text-lg leading-8 text-white">{{ hero.description }}</p>
+            <p v-if="hero.description" class="mt-6 max-w-2xl text-lg text-white min-[1920px]:max-w-3xl min-[1920px]:text-xl min-[2560px]:max-w-4xl min-[2560px]:text-2xl">{{ hero.description }}</p>
           </div>
           <div class="w-full lg:w-2/5">
-            <div class="mt-10 flex justify-start gap-x-6">
+            <div class="mt-10 flex justify-start gap-x-6 min-[1920px]:mt-16 min-[2560px]:mt-20">
               <BlawbyButton :to="heroDestination" class="gap-2" @click="trackConsultation('hero')">
                 <svg class="size-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 4.5h9A4.5 4.5 0 0 1 21 9v3a4.5 4.5 0 0 1-4.5 4.5h-4.86L7.2 20.2a.75.75 0 0 1-1.2-.6v-3.35A4.5 4.5 0 0 1 3 12V9a4.5 4.5 0 0 1 4.5-4.5Z" /></svg>
                 {{ hero.label || consultation.cta_label }}
@@ -30,8 +30,8 @@
       </div>
     </section>
 
-    <section class="relative bg-white pb-14 pt-14 sm:pb-20" data-parity-section="services">
-      <div class="relative z-20 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <section class="relative bg-white pb-14 pt-14 sm:pb-20 sm:pt-14 lg:pb-14" data-parity-section="services">
+      <div class="blawby-container relative z-20">
         <BlawbySectionHeading
           :title="services.title || 'Our'"
           :accent="services.accent || 'Services'"
@@ -56,13 +56,13 @@
     <BlawbyFaqSection :items="routeData.qa" :decoration-url="assetUrl(qaBlock?.decoration)" />
     <BlawbyReviewsSection :reviews="routeData.reviews" :description="reviewsDescription" />
 
-    <section v-if="routeData.posts.length" class="bg-white" data-parity-section="articles">
-      <div class="mx-auto my-8 max-w-7xl px-6 lg:px-8">
-        <BlawbySectionHeading title="From the" accent="Blog" centered />
-        <BlawbyArticleGrid :posts="routeData.posts" class="mt-16" />
-      </div>
-      <div class="my-4 mb-8 flex justify-center"><BlawbyButton to="/blog">See All</BlawbyButton></div>
-    </section>
+    <div v-if="routeData.posts.length" class="mx-auto my-8 max-w-7xl px-6 lg:px-8" data-parity-section="articles">
+      <BlawbySectionHeading title="From the" accent="Blog" centered />
+      <BlawbyArticleGrid :posts="routeData.posts" class="mx-auto my-16 max-w-2xl sm:mt-20 lg:mx-0 lg:max-w-none" />
+    </div>
+    <div v-if="routeData.posts.length" class="my-4 mb-8 flex justify-center" data-parity-section="articles-more">
+      <BlawbyButton to="/blog">See All</BlawbyButton>
+    </div>
 
     <BlawbyConsultationCta
       v-if="ctaBlock"

@@ -1,16 +1,16 @@
 <template>
   <div data-parity-root>
     <section class="relative isolate overflow-hidden bg-[var(--blawby-primary-dark)]" data-parity-section="schedule-hero">
-      <div class="relative z-20 mx-auto max-w-7xl px-4 py-24 text-center sm:px-6 sm:py-32 lg:px-8 lg:py-40">
+      <div class="blawby-container relative z-20 py-24 text-center sm:py-32 lg:py-40">
         <div class="mx-auto max-w-4xl">
           <p class="font-bold uppercase text-[var(--blawby-accent)]">{{ identity.brand_name }}</p>
-          <h1 class="mt-2 blawby-display text-5xl font-medium text-white sm:text-7xl">
+          <h1 class="blawby-display text-5xl font-medium text-white sm:text-7xl">
             {{ scheduleTitle.before }}<span v-if="scheduleTitle.accent" class="text-[var(--blawby-accent)]">{{ scheduleTitle.accent }}</span>{{ scheduleTitle.after }}
           </h1>
-          <p class="mt-6 whitespace-pre-line text-lg leading-8 text-gray-300 sm:text-xl">{{ scheduleHero?.description || page.summary }}</p>
+          <p class="mt-6 text-lg leading-8 text-gray-300 sm:text-xl">{{ scheduleHero?.description || page.summary }}</p>
           <p v-if="scheduleHero?.priceLine" class="mt-6 text-lg font-bold text-[var(--blawby-accent)] sm:text-xl">{{ scheduleHero.priceLine }}</p>
-          <BlawbyButton :to="consultation.external_url || String(scheduleHero?.buttonUrl || consultation.schedule_path)" class="mt-10 w-full gap-2 px-8 py-4 text-lg" @click="trackConsultation('schedule_hero')">
-            <svg class="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 2v4m8-4v4M3 10h18" /><rect x="3" y="4" width="18" height="18" rx="2" /></svg>
+          <BlawbyButton :to="consultation.external_url || String(scheduleHero?.buttonUrl || consultation.schedule_path)" class="mt-10 w-full px-8 py-4 text-lg" @click="trackConsultation('schedule_hero')">
+            <svg class="-ml-0.5 mr-2 size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 2v4m8-4v4M3 10h18" /><rect x="3" y="4" width="18" height="18" rx="2" /></svg>
             {{ scheduleHero?.buttonText || consultation.cta_label }}
           </BlawbyButton>
           <p v-if="scheduleHero?.notice" class="mt-6 text-sm leading-6 text-gray-300">{{ scheduleHero.notice }}</p>
@@ -19,11 +19,13 @@
     </section>
 
     <section v-if="guidanceBlock" class="relative overflow-hidden bg-white pb-16 pt-16 sm:pb-20 sm:pt-16 lg:pb-24 lg:pt-20" data-parity-section="guidance">
-      <div class="relative z-20 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div class="blawby-container relative z-20">
         <div class="mx-auto max-w-4xl">
           <div class="mx-auto max-w-3xl text-center">
             <h2 class="blawby-display text-3xl font-bold text-[var(--blawby-primary)] sm:text-4xl">{{ guidanceBlock.title }}</h2>
-            <BlawbyRichText class="mt-5 space-y-4 text-left text-lg leading-8 text-gray-700 sm:text-xl" :content="String(guidanceBlock.content || guidanceBlock.description || '')" />
+            <div class="mt-5 space-y-4 text-left text-lg leading-8 text-gray-700 sm:text-xl">
+              <p v-for="paragraph in guidanceParagraphs" :key="paragraph">{{ paragraph }}</p>
+            </div>
           </div>
           <div class="mx-auto mt-12 max-w-3xl divide-y divide-[var(--blawby-primary-200)]">
             <section v-for="section in guidanceSections" :key="section.title" class="py-8 first:pt-0">
@@ -83,6 +85,14 @@ const scheduleTitle = computed(() => {
   return index >= 0 ? { before: title.slice(0, index), accent, after: title.slice(index + accent.length) } : { before: title, accent: '', after: '' }
 })
 const guidanceBlock = computed(() => block('schedule_guidance'))
+const guidanceContent = computed(() => stripLeadingTitleHeading(
+  String(guidanceBlock.value?.content || guidanceBlock.value?.description || ''),
+  optionalString(guidanceBlock.value?.title),
+))
+const guidanceParagraphs = computed(() => guidanceContent.value
+  .split(/\n\n+/)
+  .map(paragraph => paragraph.trim())
+  .filter(paragraph => paragraph && !paragraph.startsWith('#')))
 const guidanceDecoration = computed(() => assetUrl(guidanceBlock.value?.decoration))
 const scheduleCta = computed(() => block('schedule_cta'))
 const qaBlock = computed(() => block('schedule_qa'))

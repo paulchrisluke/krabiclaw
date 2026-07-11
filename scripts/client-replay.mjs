@@ -19,6 +19,7 @@ import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { spawnYarn } from './utils/spawn-yarn.mjs'
+import { prepareD1SeedFile } from './utils/d1-seed-file.mjs'
 
 const args = process.argv.slice(2)
 
@@ -107,7 +108,18 @@ if (ENV) {
 }
 d1Args.push('--file', relative(process.cwd(), seedPath))
 
-const result = spawnYarn(d1Args)
+const preparedSeed = await prepareD1SeedFile(seedPath)
+if (preparedSeed.splitCount) {
+  console.log(`  Split ${preparedSeed.splitCount} oversized INSERT statement chunk(s) for D1 execution.`)
+}
+d1Args[d1Args.length - 1] = preparedSeed.path
+
+let result
+try {
+  result = spawnYarn(d1Args)
+} finally {
+  await preparedSeed.cleanup()
+}
 
 if (result.status !== 0) {
   console.error('\n✗ Seed replay failed — check wrangler output above.')

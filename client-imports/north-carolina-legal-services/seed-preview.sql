@@ -1569,7 +1569,7 @@ INSERT INTO tenant_pages (
   'page_ncls_home', 'org-ncls-blawby', 'site-ncls-blawby',
   '/', 'Access to Justice for All. North Carolina''s affordable legal services.', '',
   'home', '', 'We believe that access to the Justice System is a fundamental right. At North Carolina Legal Services we are committed to removing financial barriers that prevent many in our community from obtaining high-quality legal assistance.',
-  '[{"type":"home_hero","title":"Access to Justice for All. North Carolina''s affordable legal services.","accent":"Justice for All.","description":"We believe that access to the Justice System is a fundamental right. At North Carolina Legal Services we are committed to removing financial barriers that prevent many in our community from obtaining high-quality legal assistance.","label":"Request a Consultation","url":"/schedule","background":{"asset_id":"asset_ncls_media_background-hero_05f81e86","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/599abbcd10dd490792d2.webp","role":"home_hero_background","source_name":"background-hero.webp"}},{"type":"services_intro","title":"Our","accent":"Services","description":"Explore a wide range of legal services provided by North Carolina Legal Services. Our dedicated team offers expert assistance in Family Law, Small Business Legal Support, Employment Law, Tenant Rights Law, and Probate & Estate Planning. Find the legal support you need to protect your rights and secure your future.","decoration":{"asset_id":"asset_ncls_media_background-features_d3572b1b","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/be87d08d6e14bf57ecef.webp","role":"services_background","source_name":"background-features.webp"}},{"type":"video_feature","title":"Empowering North Carolina: Our Innovative","accent":"","video_url":"https://www.youtube.com/embed/glBHONAzWYo?si=coXUD5UlzMHAfzVD","video_title":"Rich Gittings Speaks about North Carolina Legal Services","features":[{"name":"Accessible Justice","desc":"North Carolina Legal Services introduces a groundbreaking approach to legal aid, ensuring justice is within reach for all. Our sliding scale fee system, based on income, guarantees affordability without compromising quality representation."},{"name":"Expert Attorneys","desc":"Our team comprises seasoned attorneys committed to swift and efficient service. With tight budgets in mind, our attorneys prioritize quick turnaround times, ensuring every client receives the attention they deserve."},{"name":"Flexible Scheduling","desc":"At North Carolina Legal Services, flexibility is key. Attorneys have the freedom to set their own schedules, ensuring work-life balance without sacrificing client needs. It''s a stress-free environment where both judges and clients are satisfied."},{"name":"Supportive Environment","desc":"Join a team where support is abundant. Whether it''s assistance with cases or guidance on legal matters, North Carolina Legal Services fosters a supportive atmosphere, allowing attorneys to thrive and deliver exceptional results."}],"images":[{"asset_id":"asset_ncls_media_getting-a-divorce-in-north-carolina_ffbfbfd0","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/ea4d301a3cefbbd17a44.webp","role":"approach_supporting_image","source_name":"getting_a_divorce_in_north_carolina.webp"},{"asset_id":"asset_ncls_media_writing-your-own-will-how-it-works_c1f1ad9b","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/6b9b810084d4809b6d5d.webp","role":"approach_supporting_image","source_name":"writing-your-own-will-how-it-works.webp"}]},{"type":"qa","decoration":{"asset_id":"asset_ncls_media_background-feature-2_970a5c32","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/c53c7b8d7a6de1e7cc70.webp","role":"qa_background","source_name":"background-feature-2.webp"}},{"type":"reviews","title":"What Clients Say","description":"At North Carolina Legal Services we believe that access to the justice system shouldn''t be limited by one''s income. We offer quality legal services at a price that working families can afford."},{"type":"latest_articles"},{"type":"consultation_cta","title":"Get started today","accent":"today","description":"Trust our friendly team for affordable, comprehensive legal services. Contact us today to resolve your legal issues and gain peace of mind.","label":"Request a Consultation","url":"/schedule","background":{"asset_id":"asset_ncls_media_background-cta_79bdbc52","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/735d1ec58bf43ca897ce.webp","role":"consultation_cta_background","source_name":"background-cta.webp"},"featured":{"asset_id":"asset_ncls_media_logo-2_e3a91ed9","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9cb15d96c31f5ba5fb2c.webp","role":"consultation_cta_featured","source_name":"logo-2.webp"}}]', NULL, NULL,
+  '[{"type":"home_hero","title":"Access to Justice for All.\nNorth Carolina''s affordable\nlegal services.","accent":"Justice for All.","description":"We believe that access to the Justice System is a fundamental right. At North Carolina Legal Services we are committed to removing financial barriers that prevent many in our community from obtaining high-quality legal assistance.","label":"Request a Consultation","url":"/schedule","background":{"asset_id":"asset_ncls_media_background-hero_05f81e86","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/599abbcd10dd490792d2.webp","role":"home_hero_background","source_name":"background-hero.webp"}},{"type":"services_intro","title":"Our","accent":"Services","description":"Explore a wide range of legal services provided by North Carolina Legal Services. Our dedicated team offers expert assistance in Family Law, Small Business Legal Support, Employment Law, Tenant Rights Law, and Probate & Estate Planning. Find the legal support you need to protect your rights and secure your future.","decoration":{"asset_id":"asset_ncls_media_background-features_d3572b1b","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/be87d08d6e14bf57ecef.webp","role":"services_background","source_name":"background-features.webp"}},{"type":"video_feature","title":"Empowering North Carolina: Our Innovative","accent":"Approach to Justice","video_url":"https://www.youtube.com/embed/glBHONAzWYo?si=coXUD5UlzMHAfzVD","video_title":"Rich Gittings Speaks about North Carolina Legal Services","features":[{"name":"Accessible Justice","desc":"North Carolina Legal Services introduces a groundbreaking approach to legal aid, ensuring justice is within reach for all. Our sliding scale fee system, based on income, guarantees affordability without compromising quality representation."},{"name":"Expert Attorneys","desc":"Our team comprises seasoned attorneys committed to swift and efficient service. With tight budgets in mind, our attorneys prioritize quick turnaround times, ensuring every client receives the attention they deserve."},{"name":"Flexible Scheduling","desc":"At North Carolina Legal Services, flexibility is key. Attorneys have the freedom to set their own schedules, ensuring work-life balance without sacrificing client needs. It''s a stress-free environment where both judges and clients are satisfied."},{"name":"Supportive Environment","desc":"Join a team where support is abundant. Whether it''s assistance with cases or guidance on legal matters, North Carolina Legal Services fosters a supportive atmosphere, allowing attorneys to thrive and deliver exceptional results."}],"images":[{"asset_id":"asset_ncls_media_getting-a-divorce-in-north-carolina_ffbfbfd0","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/ea4d301a3cefbbd17a44.webp","role":"approach_supporting_image","source_name":"getting_a_divorce_in_north_carolina.webp"},{"asset_id":"asset_ncls_media_writing-your-own-will-how-it-works_c1f1ad9b","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/6b9b810084d4809b6d5d.webp","role":"approach_supporting_image","source_name":"writing-your-own-will-how-it-works.webp"}]},{"type":"qa","decoration":{"asset_id":"asset_ncls_media_background-feature-2_970a5c32","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/c53c7b8d7a6de1e7cc70.webp","role":"qa_background","source_name":"background-feature-2.webp"}},{"type":"reviews","title":"What Clients Say","description":"At North Carolina Legal Services we believe that access to the justice system shouldn''t be limited by one''s income. We offer quality legal services at a price that working families can afford."},{"type":"latest_articles"},{"type":"consultation_cta","title":"Get started today","accent":"today","description":"Trust our friendly team for affordable, comprehensive legal services. Contact us today to resolve your legal issues and gain peace of mind.","label":"Request a Consultation","url":"/schedule","background":{"asset_id":"asset_ncls_media_background-cta_79bdbc52","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/735d1ec58bf43ca897ce.webp","role":"consultation_cta_background","source_name":"background-cta.webp"},"featured":{"asset_id":"asset_ncls_media_logo-2_e3a91ed9","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9cb15d96c31f5ba5fb2c.webp","role":"consultation_cta_featured","source_name":"logo-2.webp"}}]', NULL, NULL,
   NULL, NULL, NULL, NULL,
   'published', 0, 'react-adapter', 'react-next-marketing-site-template/northcarolinalegalservices', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 ),
@@ -1596,15 +1596,15 @@ INSERT INTO tenant_pages (
 
 Use the table below to determine the applicable discount for your family size:
 
-      1) Find Your Family Size: In the table, locate the row that matches the number of people in your household under the "Family Size" column. This includes yourself, your spouse or partner, and any dependents.
+1) Find Your Family Size: In the table, locate the row that matches the number of people in your household under the "Family Size" column. This includes yourself, your spouse or partner, and any dependents.
 
-      2) Determine Your Income Level: Compare your household''s annual income to the income ranges in the table, under the columns "250% Federal Poverty Level," "350% Federal Poverty Level," and "400% Federal Poverty Level."
+2) Determine Your Income Level: Compare your household''s annual income to the income ranges in the table, under the columns "250% Federal Poverty Level," "350% Federal Poverty Level," and "400% Federal Poverty Level."
 
-      Identify Your Discount:
-      - If your household income is 250% or less of the Federal Poverty Level for your family size, you qualify for a 50% discount ($160/hr rate).
-      - If your income is between 250% and 350% of the Federal Poverty Level, you qualify for a 33% discount ($215/hr rate).
-      - If your income is between 350% and 400% of the Federal Poverty Level, you qualify for a 25% discount ($240/hr rate).
-      - If your income exceeds 400% of the Federal Poverty Level for your family size, this sliding scale may not apply, and standard rates ($320/hr) may be in effect.',
+Identify Your Discount:
+- If your household income is 250% or less of the Federal Poverty Level for your family size, you qualify for a 50% discount ($160/hr rate).
+- If your income is between 250% and 350% of the Federal Poverty Level, you qualify for a 33% discount ($215/hr rate).
+- If your income is between 350% and 400% of the Federal Poverty Level, you qualify for a 25% discount ($240/hr rate).
+- If your income exceeds 400% of the Federal Poverty Level for your family size, this sliding scale may not apply, and standard rates ($320/hr) may be in effect.',
   '[{"type":"page_hero","title":"Affordable, for everyone","description":"In 2022, the Legal Services Corporation reported that 92% of substantial civil legal problems faced by low-income Americans received inadequate or no legal help. Market-rate legal fees are expensive and often unaffordable for working individuals and families. Community organizations do offer free legal assistance, but many people earn too much to qualify and still cannot afford the high cost of hiring a private attorney. To bridge this gap, North Carolina Legal Services offers income-based fee arrangements for individual matters and discounted rates for small businesses and nonprofits.\n\n**Clear, predictable pricing.**\n\nTraditional firms in North Carolina charge an average of $320 per hour for individual and family cases, and about $360 per hour for businesses. Consultations often cost up to $200 for a 60–90 minute meeting that includes legal research and planning.\n\nNorth Carolina Legal Services offers individuals and families up to a 50% discount for legal services and representation, depending on income and household size.\n\nWe also offer a 50% discount on the $360/hour market rate to qualifying small businesses and 501(c)(3) nonprofits. At $180/hour, we''re able to support the mission-driven organizations that strengthen our communities.","variant":"pricing","background":"primary-100"},{"type":"pricing_plans","plans":[{"discount":"50%","price":"$160 **/hr**","description":"Client households at or below 250% of the Federal Poverty Level receive a 50% discount off the $320/hour market average.","features":["This discount also applies to flat-rate services where available."]},{"discount":"33%","price":"$215 **/hr**","description":"Client households between 250% and 350% of the Federal Poverty Level receive a 33% discount off the $320/hour market average.","features":["This discount also applies to flat-rate services where available."]},{"discount":"25%","price":"$240 **/hr**","description":"Client households between 350% and 400% of the Federal Poverty Level receive a 25% discount off the $320/hour market average.","features":["This discount also applies to flat-rate services where available."]},{"discount":"Market Rate","price":"$320 **/hr**","description":"Client households above 400% of the Federal Poverty Level pay the standard market rate.","features":["Standard market rate."]},{"discount":"50%","price":"$180 **/hr**","description":"Qualifying small businesses and nonprofits receive a 50% discount off the $360/hour market rate.","features":["Includes 501(c)(3) nonprofits."]},{"discount":"Market Rate","price":"$360 **/hr**","description":"Businesses that do not qualify as small businesses under the SBA definition pay the market rate.","features":["Market rate."]}]},{"type":"pricing_calculator","title":"Sliding-scale fee estimator","note":"If your income falls below 250% of the Federal Poverty Level for your family size, you qualify for a 50% discount. Those with incomes between 250% and 350% receive a 33% discount, while individuals and families earning between 350% and 400% are eligible for a 25% discount. We understand that everyones situation is unique, and our goal is to ensure that you have access to the legal representation you deserve, regardless of your financial situation.","source":"React NCLS priceTableComponent normalized by Blawby adapter","effectiveDate":null,"table":{"description":"Use the table below to determine the applicable discount for your family size:\n\n      1) Find Your Family Size: In the table, locate the row that matches the number of people in your household under the \"Family Size\" column. This includes yourself, your spouse or partner, and any dependents.\n\n      2) Determine Your Income Level: Compare your household''s annual income to the income ranges in the table, under the columns \"250% Federal Poverty Level,\" \"350% Federal Poverty Level,\" and \"400% Federal Poverty Level.\"\n\n      Identify Your Discount:\n      - If your household income is 250% or less of the Federal Poverty Level for your family size, you qualify for a 50% discount ($160/hr rate).\n      - If your income is between 250% and 350% of the Federal Poverty Level, you qualify for a 33% discount ($215/hr rate).\n      - If your income is between 350% and 400% of the Federal Poverty Level, you qualify for a 25% discount ($240/hr rate).\n      - If your income exceeds 400% of the Federal Poverty Level for your family size, this sliding scale may not apply, and standard rates ($320/hr) may be in effect.","notice":"If your income falls below 250% of the Federal Poverty Level for your family size, you qualify for a 50% discount. Those with incomes between 250% and 350% receive a 33% discount, while individuals and families earning between 350% and 400% are eligible for a 25% discount. We understand that everyones situation is unique, and our goal is to ensure that you have access to the legal representation you deserve, regardless of your financial situation.","columns":["Family Size","250% Federal Poverty Level","350% Federal Poverty Level","400% Federal Poverty Level"],"rows":[["1","$39,900","$55,860","$63,840"],["2","$54,100","$75,740","$86,560"],["3","$68,300","$95,620","$109,280"],["4","$82,500","$115,500","$132,000"],["5","$96,700","$135,380","$154,720"],["6","$110,900","$155,260","$177,440"],["7","$125,100","$175,140","$200,160"],["8","$139,300","$195,020","$222,880"]]},"enabled":true},{"type":"qa","decoration":{"asset_id":"asset_ncls_media_background-feature-2_970a5c32","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/c53c7b8d7a6de1e7cc70.webp","role":"qa_background","source_name":"background-feature-2.webp"}},{"type":"services_intro","title":"Our","accent":"Services","description":"Explore a wide range of legal services provided by North Carolina Legal Services. Our dedicated team offers expert assistance in Family Law, Small Business Legal Support, Employment Law, Tenant Rights Law, and Probate & Estate Planning. Find the legal support you need to protect your rights and secure your future.","decoration":{"asset_id":"asset_ncls_media_background-features_d3572b1b","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/be87d08d6e14bf57ecef.webp","role":"services_background","source_name":"background-features.webp"}},{"type":"consultation_cta","title":"Get started today","accent":"today","description":"Trust our friendly team for affordable, comprehensive legal services. Contact us today to resolve your legal issues and gain peace of mind.","label":"Request a Consultation","url":"/schedule","background":{"asset_id":"asset_ncls_media_background-cta_79bdbc52","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/735d1ec58bf43ca897ce.webp","role":"consultation_cta_background","source_name":"background-cta.webp"},"featured":{"asset_id":"asset_ncls_media_logo-2_e3a91ed9","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9cb15d96c31f5ba5fb2c.webp","role":"consultation_cta_featured","source_name":"logo-2.webp"}}]', NULL, NULL,
   'Pricing and Fees | North Carolina Legal Services', 'North Carolina Legal Services offers income-based rates ranging from $150-$225 per hour with income-based fees to assist individuals and families that earn too much to qualify for free legal assistance, but who cannot afford the high cost of traditional law firms.', NULL, NULL,
   'published', 0, 'react-adapter', 'react-next-marketing-site-template/northcarolinalegalservices', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -1613,7 +1613,7 @@ Use the table below to determine the applicable discount for your family size:
   'page_ncls_contact', 'org-ncls-blawby', 'site-ncls-blawby',
   '/contact', 'Contact Us', 'contact',
   'contact', 'Have a question or need to get in touch? Connect with North Carolina Legal Services. Whether you need help finding an attorney or want to help make the justice system more fair and accessible, reach out to one of our professionals today.', 'Have a question or need to get in touch? Connect with North Carolina Legal Services. Whether you need help finding an attorney or want to help make the justice system more fair and accessible, reach out to one of our professionals today.',
-  '[{"type":"page_hero","title":"Contact Us","description":"Have a question or need to get in touch? Connect with North Carolina Legal Services. Whether you need help finding an attorney or want to help make the justice system more fair and accessible, reach out to one of our professionals today.","variant":"contact","background":"accent-200"},{"type":"contact_cards","title":"Get in touch","description":"If you have any questions prior to your consultation, feel free to reach out!","cardsContent":["### Contact\n\n\n      - **Email:** [contact@northcarolinalegalservices.org](mailto:contact@northcarolinalegalservices.org)\n      - **Phone:** [+1 (984) 777-8288](tel:+19847778288)\n      ","### Donations\n\n\n      - **Email:** [donate@northcarolinalegalservices.org](mailto:donate@northcarolinalegalservices.org)\n      - **Phone:** [+1 (984) 777-8288](tel:+19847778288)\n      - **Donate Online:** [Visit our donation page](/donate) to make a secure online donation and learn more about how your contribution supports our mission.\n      "]},{"type":"qa","decoration":{"asset_id":"asset_ncls_media_background-feature-2_970a5c32","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/c53c7b8d7a6de1e7cc70.webp","role":"qa_background","source_name":"background-feature-2.webp"}},{"type":"reviews"},{"type":"consultation_cta","title":"Get started today","accent":"today","description":"Trust our friendly team for affordable, comprehensive legal services. Contact us today to resolve your legal issues and gain peace of mind.","label":"Request a Consultation","url":"/schedule","background":{"asset_id":"asset_ncls_media_background-cta_79bdbc52","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/735d1ec58bf43ca897ce.webp","role":"consultation_cta_background","source_name":"background-cta.webp"},"featured":{"asset_id":"asset_ncls_media_logo-2_e3a91ed9","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9cb15d96c31f5ba5fb2c.webp","role":"consultation_cta_featured","source_name":"logo-2.webp"}}]', NULL, NULL,
+  '[{"type":"page_hero","title":"Contact Us","description":"Have a question or need to get in touch? Connect with North Carolina Legal Services. Whether you need help finding an attorney or want to help make the justice system more fair and accessible, reach out to one of our professionals today.","variant":"contact","background":"accent-200"},{"type":"contact_cards","title":"Get in touch","description":"If you have any questions prior to your consultation, feel free to reach out!","cardsContent":["### Contact\n\n- **Email:** [contact@northcarolinalegalservices.org](mailto:contact@northcarolinalegalservices.org)\n- **Phone:** [+1 (984) 777-8288](tel:+19847778288)","### Donations\n\n- **Email:** [donate@northcarolinalegalservices.org](mailto:donate@northcarolinalegalservices.org)\n- **Phone:** [+1 (984) 777-8288](tel:+19847778288)\n- **Donate Online:** [Visit our donation page](/donate) to make a secure online donation and learn more about how your contribution supports our mission."]},{"type":"qa","decoration":{"asset_id":"asset_ncls_media_background-feature-2_970a5c32","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/c53c7b8d7a6de1e7cc70.webp","role":"qa_background","source_name":"background-feature-2.webp"}},{"type":"reviews"},{"type":"consultation_cta","title":"Get started today","accent":"today","description":"Trust our friendly team for affordable, comprehensive legal services. Contact us today to resolve your legal issues and gain peace of mind.","label":"Request a Consultation","url":"/schedule","background":{"asset_id":"asset_ncls_media_background-cta_79bdbc52","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/735d1ec58bf43ca897ce.webp","role":"consultation_cta_background","source_name":"background-cta.webp"},"featured":{"asset_id":"asset_ncls_media_logo-2_e3a91ed9","url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9cb15d96c31f5ba5fb2c.webp","role":"consultation_cta_featured","source_name":"logo-2.webp"}}]', NULL, NULL,
   'Contact | North Carolina Legal Services', 'Have a question or need to get in touch? Connect with North Carolina Legal Services. Whether you need help finding an attorney or want to help make the justice system more fair and accessible, reach out to one of our professionals today.', NULL, NULL,
   'published', 0, 'react-adapter', 'react-next-marketing-site-template/northcarolinalegalservices', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 ),
@@ -2007,21 +2007,18 @@ INSERT INTO tenant_compliance (
   'North Carolina Legal Services', 'Bull City Legal Services', 'LegalService',
   '501(c)(3)', NULL, 'North Carolina',
   '*DISCLAIMER: The purpose of this website is informational - no
-              attorney-client relationship is created by using this website or
-              reading this blog. No legal advice is intended. If you have
-              questions about a current or potential legal problem, you should
-              always contact an attorney directly for specific advice. Results
-              described on this website are meant to describe the work and
-              experience of our Firm. The uncertainty & risk inherent in
-              litigation, as well as the specific individual details of each
-              case mean that results or a particular outcome are never
-              guaranteed. This website is provided "as is," without any warranty
-              of any kind, express or implied.', 'Access to Justice for All. We believe that access to the justice system is a fundamental right. At North Carolina Legal Services, we are committed to removing financial barriers that prevent many in our community from obtaining high-quality legal assistance.
+attorney-client relationship is created by using this website or
+reading this blog. No legal advice is intended. If you have
+questions about a current or potential legal problem, you should
+always contact an attorney directly for specific advice. Results
+described on this website are meant to describe the work and
+experience of our Firm. The uncertainty & risk inherent in
+litigation, as well as the specific individual details of each
+case mean that results or a particular outcome are never
+guaranteed. This website is provided "as is," without any warranty
+of any kind, express or implied.', 'Access to Justice for All. We believe that access to the justice system is a fundamental right. At North Carolina Legal Services, we are committed to removing financial barriers that prevent many in our community from obtaining high-quality legal assistance.
 
-
-
-
-  North Carolina Legal Services is a registered [**DBA**](https://media.krabiclaw.com/sites/site-ncls-blawby/media/legal/NorthCarolinaLegalServices_DBA__Redacted.pdf) of Bull City Legal Services. See our [**IRS Determination Letter**](https://media.krabiclaw.com/sites/site-ncls-blawby/media/legal/FinalLetter_88-0565637_BULLCITYLEGALSERVICESINC_Redacted.pdf). All rights reserved.',
+North Carolina Legal Services is a registered [**DBA**](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9f06152ccd5d6f29c11a.pdf) of Bull City Legal Services. See our [**IRS Determination Letter**](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/8de1e5793e0806ece163.pdf). All rights reserved.',
   '["asset_ncls_legal_northcarolinalegalservices-dba-redacted","asset_ncls_legal_finalletter-88-0565637-bullcitylegalservicesinc-redacted"]', '{"founder":"Rich Gittings","foundingDate":null,"languages":["English"],"keywords":["North Carolina Legal Services","North Carolina Lawyer","North Carolina Law Firm","Family Law Attorney","Employment Law Consultation","Probate Services NC","Tenant Rights Lawyer","Small Business Legal Advice","Legal Counsel NC"],"logo_dark_url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/3869491ea5373de6bb34.svg","header":{"banner_content":null,"banner_dismissible":false}}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 );
 
@@ -2034,11 +2031,11 @@ INSERT INTO site_consultation_settings (
   'https://ncls.cliogrow.com/book', '/schedule',
   '/contact/confirmed',
   1,
-  '{"source":"react-next-marketing-site-template/northcarolinalegalservices","analyticsBridge":{"provider":"gtm","container_id":"GTM-MDHRQP5","allowed_events":["page_view","book_consultation_click","contact_submit","donation_click"],"allowed_properties":["event","page_type","page_path","cta_destination","tenant"],"custom_head_code_ignored":true}}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+  '{"header_cta_label":"Get Started","source":"react-next-marketing-site-template/northcarolinalegalservices","analyticsBridge":{"provider":"gtm","container_id":"GTM-MDHRQP5","allowed_events":["page_view","book_consultation_click","contact_submit","donation_click"],"allowed_properties":["event","page_type","page_path","cta_destination","tenant"],"custom_head_code_ignored":true},"legacy_source_calendly_url_ignored":"https://calendly.com/rgittings-bcls/consultation?embed_domain=www.northcarolinalegalservices.org&embed_type=Inline&hide_gdpr_banner=1&invitee_uuid=8a35897f-89c1-4ed7-b707-948a7c0e219d"}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 );
 
 INSERT INTO site_theme_tokens (id, organization_id, site_id, template_slug, tokens_json, status, created_at, updated_at)
-VALUES ('theme-ncls-blawby', 'org-ncls-blawby', 'site-ncls-blawby', 'blawby', '{"bg":"#fbfaf7","surface":"#ffffff","primary":"#25356c","primaryDark":"#161f3b","primary100":"#f2f5ff","primary200":"#b4c5e5","primary800":"#1d294f","accent":"#c19855","accent100":"#faf5ea","accent200":"#f8f0e1","accentStrong":"#a37732","border":"#e5e7eb","ink":"#162033"}', 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('theme-ncls-blawby', 'org-ncls-blawby', 'site-ncls-blawby', 'blawby', '{"bg":"#fbfaf7","surface":"#ffffff","primary":"#25356c","primaryDark":"#161f3b","primary100":"#f2f5ff","primary200":"#b4c5e5","primary800":"#1d294f","accent":"#c19855","accent100":"#faf5ea","accent200":"#f8f0e1","accentButton":"#b58c4f","accentStrong":"#a37732","border":"#e5e7eb","ink":"#162033"}', 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO tenant_navigation_items (
   id, organization_id, site_id, area, label, url, item_type, sort_order, status, metadata_json, created_at, updated_at
@@ -2343,7 +2340,7 @@ Alimony can last for a year, a decade, or a lifetime. Essentially, there are no 
 - Remarriage or cohabitation of the dependent spouse
 - A substantial change in circumstances
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
 
 ## Equitable Distribution
 
@@ -2443,7 +2440,7 @@ North Carolina law states that marital property and the net value of divisible p
 
 This list does not include each factor listed in North Carolina General Statute § 50-20. The judge will consider a wide range of issues before deciding on how to divide assets and debts between the parties.
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
 
 ## North Carolina Equitable Distribution Process
 
@@ -2479,7 +2476,7 @@ At North Carolina Legal Services, we often see delays at this stage that slow do
 
 **What you can do: Document the dates** when you submitted your consent or referral request. If deadlines pass without communication, send an email requesting an immediate update and completion timeline. **Create a timeline of events** related to your child''s IEP, including when you sent that email, and **save copies** of all communications and documents related to the request. If the delays continue you can file a complaint with the North Carolina Department of Public Instruction if delays continue, but we strongly recommend [meeting with an attorney](/article/preparing-for-your-consultation) before you do so.
 
-![Image](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back-3.webp)
+![Image](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/4400f49221ae732604ed.webp)
 
 ## **2\. Failure to Implement Required Services**
 
@@ -2489,7 +2486,7 @@ Common implementation failures include skipping therapy sessions, reducing servi
 
 **What you can do:** Track your child''s services weekly using a simple calendar or log. When services are missed, document the date, service type, and reason given (if any). **Send written notice to the school** immediately and request compensatory education to make up for missed services. Schools are required to provide makeup services when they fail to implement the IEP as written.
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
 
 ## **3\. Using Unqualified Personnel**
 
@@ -2499,7 +2496,7 @@ Across North Carolina, staffing shortages sometimes lead schools to substitute t
 
 **What you can do:** Ask about the qualifications of anyone providing specialized services to your child. Request written documentation of their credentials, training, and state licensing. If unqualified personnel are providing services, remind school officials in an email that only appropriately credentialed professionals can provide your child with IEP-related services, and request that the school provides makeup services from qualified providers for any services already provided inappropriately.
 
-![Image](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back-4.webp)
+![Image](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/bf31809ddf6bbbcaf8dd.webp)
 
 ## **4\. Excluding Parents from Decision-Making**
 
@@ -2509,7 +2506,7 @@ Predetermination: when schools decide on services or placement before the IEP me
 
 **What you can do:** If you feel excluded from decisions, immediately request another IEP meeting. Bring an advocate or support person if needed. If language barriers exist, request an interpreter in advance. Document any instances where you feel decisions were made without your input and consider filing a procedural complaint if the school continues to exclude you from the process.
 
-![Image](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back-1.webp)
+![Image](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/5ea1b2ee81b8475abdd2.webp)
 
 ## **5\. Wrongful Denial of Eligibility**
 
@@ -2519,7 +2516,7 @@ Educational performance encompasses more than just academics: it includes how a 
 
 **What you can do:** If your child has a diagnosis and continues to struggle despite accommodations, request a detailed written explanation of the eligibility decision. You have the right to an Independent Educational Evaluation (IEE) at public expense if you disagree with the school''s evaluation. The school must either agree to fund the IEE or file for a due process hearing to defend their evaluation—they cannot simply refuse your request. Consider [consulting with a special education advocate or attorney](/article/preparing-for-your-consultation) to review the eligibility determination if you believe it was inappropriate.
 
-![Image](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back-2.webp)
+![Image](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/f26a1f0b2536d75b50be.webp)
 
 ## **6\. Poorly Written or Inadequate IEPs**
 
@@ -2529,7 +2526,7 @@ Every IEP must include your child''s present levels of performance, specific mea
 
 **What you can do:** Review your child''s IEP carefully for vague language and unmeasurable goals. Request specific data on how goals will be measured and when progress will be reviewed. If goals are too general or don''t address your child''s needs, request an IEP meeting to revise them. Don''t sign an IEP that doesn''t adequately address your child''s needs: you have the right to disagree with proposed services.
 
-![Image](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back-5.webp)
+![Image](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e8224978251e8c48e0d7.webp)
 
 ## **7\. Inappropriate Disciplinary Actions**
 
@@ -2593,7 +2590,7 @@ Taking these steps will not only aid in the recovery process but also facilitate
 
 - [Crisis Cleanup (1-844-965-1386)](https://www.crisiscleanup.org/): Severe home damage cleanup assistance.
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
 
 ## Filing Insurance For Damaged Property
 
@@ -2709,7 +2706,7 @@ Another aspect of North Carolina custody cases to consider is that [mediation is
 
 A judge may waive this requirement, meaning parents do not have to go through mediation before trial, but a motion requesting a waiver must be filed. This may be granted if you meet one of the reasons for exemption. It is a favorable option to participate in mediation in many cases because [mediation is meant to be an amicable process](https://www.ncleg.gov/EnactedLegislation/Statutes/PDF/BySection/Chapter_50/GS_50-13.1.pdf) that reduces stress surrounding child custody disputes.
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
 
 ## Calculating Child Support in North Carolina
 
@@ -2802,7 +2799,7 @@ Most HR departments aren''t staffed or trained for this. The person handling you
 
 Whether your request is denied or simply ignored, and whether it was deliberate or because of a lack of training, get it on the record. If your request is denied, send an email to the person you spoke with: "I''m following up on our conversation about my accommodation request. I asked for [X], and I was told my request is being denied because of [Y]. Is there anything I can do to appeal this decision?" Don''t be confrontational—your goal isn''t to win an argument, it''s to create a record.
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp)](/schedule)
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp)](/schedule)
 
 ## What Your Employer Can''t Do
 
@@ -2985,7 +2982,7 @@ If you care about these issues but don’t know where to start, that’s okay. Y
 
 **Whatever issue drives you**, whether it’s wages, housing, healthcare, or my passion—equitable access to the justice system—**there’s a place for you to make your community more fair, inclusive, and just**. You don''t have to be perfect—I certainly am not—you just have to be willing to **give it your best shot**. Because, at the end of the day, whether you’re from the Appalachian foothills, the Outer Banks, or the heart of the Triangle, **we all have a role to play in building a better, stronger future**.
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp)](/schedule)',
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp)](/schedule)',
   'DEI isn''t about historic grievances—it''s about breaking systemic barriers that hold everyone back. Learn how Diversity, Equity, and Inclusion (DEI) impacts education, the justice system, and economic opportunity for all.', 'Diversity Equity Inclusion', '["Diversity Equity Inclusion","Legal Services","North Carolina","Social Justice"]', 'published',
   'user-ncls-blawby', 'asset_ncls_media_fairness-is-not-a-zero-sum-game-why-dei-benefits-everyone-crop_a2271426',
   '2025-02-18T00:00:00.000Z',
@@ -3038,7 +3035,7 @@ If you’re looking to request damages from your landlord, be sure to always doc
 - [North Carolina Housing Coalition](https://www.nchousing.org)
 - [Legal Aid of North Carolina](https://www.legalaidnc.org) for tenant rights assistance
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
 
 ## Renters'' Insurance Claims
 
@@ -3130,7 +3127,7 @@ Schools also have a legal **Child Find obligation** (20 U.S.C. § 1412(a)(3)) to
 
 **Real Case Example:** A 2023 systemic complaint against Wake County Schools revealed that many students with behavioral concerns were not receiving proper FBAs, leading to misdiagnoses and discipline instead of support (Legal Aid of NC, 2023).
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp)](/schedule)
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp)](/schedule)
 
 ---
 
@@ -3166,7 +3163,7 @@ Schools also have a legal **Child Find obligation** (20 U.S.C. § 1412(a)(3)) to
 
 **Need help navigating the IEP process or filing a complaint?** Contact **North Carolina Legal Services** for affordable, compassionate legal guidance: visit our [special education and IEP advocacy services](/services/special-education-and-iep-advocacy) page or call (984) 777-8288.
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp)](/schedule)',
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp)](/schedule)',
   'Learn how to spot common IEP violations in North Carolina schools—from delayed evaluations to flawed IEPs. Protect your child''s education rights with North Carolina Legal Services.', 'Special Education', '["Special Education","Family Law","North Carolina"]', 'published',
   'user-ncls-blawby', 'asset_ncls_media_iep1a_e918957a',
   '2025-04-29T00:00:00.000Z',
@@ -3212,7 +3209,7 @@ Whatever method you choose, your notes could become important evidence during fu
 - Duration and location of arrest
 - Nearby surveillance cameras
 
-  [![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
+  [![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
 
 ### Safe Recording Practices
 
@@ -3315,7 +3312,7 @@ This guide explains how judges actually handle pets in divorce, what evidence ma
 
 ## **What the Law Says About Pets in Divorce**
 
-![Image](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/pet-custody-in-nc-divorce-how-equitable-distribution-affects-your-dog-or-cat-7.webp)
+![Image](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/4661569ca43b62b79e63.webp)
 
 To [file for an absolute divorce](/article/getting-a-divorce-in-north-carolina) in North Carolina, you and your spouse must live "separate and apart" for at least one continuous year, with one of you having lived in NC for at least six months.
 
@@ -3327,7 +3324,7 @@ At North Carolina Legal Services, we often see couples surprised by this legal f
 
 ## **What Actually Matters to a Judge**
 
-![Image](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/pet-custody-in-nc-divorce-how-equitable-distribution-affects-your-dog-or-cat-8.webp)
+![Image](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/95815cecb8c4bbc346fc.webp)
 
 When dividing marital property, judges aim to make a fair split that gives each spouse their share of the jointly accumulated wealth. Here''s what surprises most people: most pets have little financial value in court. When determining "value," courts look at resale value, not emotional bonds. The exceptions are working animals, show dogs, or expensive breeds with documented resale value.
 
@@ -3383,13 +3380,13 @@ Start collecting documentation now:
 
 ## **When Safety Is a Concern**
 
-![Image](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/pet-custody-in-nc-divorce-how-equitable-distribution-affects-your-dog-or-cat-9.webp)
+![Image](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9e68787a4d6880c03406.webp)
 
 If you''re experiencing domestic violence, you can request that the court include your pet in a Domestic Violence Protective Order (DVPO). Under N.C. Gen. Stat. § 50B-3, judges may grant you possession of the animal and forbid the other party from harming it.
 
 The law recognizes that abusers often threaten or harm pets to control their victims. If you''re in this situation, don''t hesitate to contact your local domestic violence prevention agency for assistance in planning for your safety. Legal Aid North Carolina may provide you with a free attorney to help obtain a protection order. The safety of both you and your pet matters.
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
 
 ## **When to Get Help**
 
@@ -3471,7 +3468,7 @@ When the judge grants the divorce officially ending the marriage, if there is no
 
 ## **The Bottom Line**
 
-![Image](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/pet-custody-in-nc-divorce-how-equitable-distribution-affects-your-dog-or-cat-10.webp)
+![Image](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/ffca5f1905bf4cb3f07e.webp)
 
 Your pet isn''t "just property" to you, but North Carolina law treats them that way. That''s why documentation and proactive planning matter so much.
 
@@ -3523,7 +3520,7 @@ Here are some key points to ensure you get the most out of your consultation:
 
 If you need to reschedule your consultation, instructions for how to do so are included in your consultation request email confirmation. Should any questions arise before your consultation please contact us at contact@northcarolinalegalservices.com.
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
 
 ## What to Expect During Your Consultation
 
@@ -3596,7 +3593,7 @@ Prenuptial agreements can:
 
 If no prenuptial agreement exists—or if the agreement doesn’t address all areas of property division—North Carolina’s equitable distribution laws will guide the process. This means the court will step in to ensure a fair division of marital property and debts, following a structured process that begins with identifying and categorizing assets.
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
 
 ## Step 2: Identify and Separate Property
 
@@ -3746,7 +3743,7 @@ Include a clause that specifies how disputes will be handled. Mediation or arbit
 
 Ensure your contract aligns with North Carolina''s legal requirements, especially around independent contractor status to avoid being misclassified, as outlined in N.C. Gen. Stat. § 95-25.22.
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
 
 ## Regular Compliance Checks: Avoid Issues Before They Arise
 
@@ -3821,7 +3818,7 @@ Freelancing offers freedom, but it also requires careful planning and ongoing co
 
 At North Carolina Legal Services, we''re here to support freelancers in navigating the legal complexities of their businesses. [Schedule a consultation today](/schedule) to take the first step toward securing your freelance career.
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)',
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)',
   'Navigate the legal landscape of freelancing in North Carolina with confidence. Learn essential contract elements, compliance requirements, and best practices to protect your business and ensure long-term success.', 'Legal Services', '["Legal Services","Business Law","North Carolina","Freelancing"]', 'published',
   'user-ncls-blawby', 'asset_ncls_media_north-carolina-legal-services-freelancer-contract-law_2bd6b781',
   '2025-02-02T00:00:00.000Z',
@@ -3862,7 +3859,7 @@ Contracts are an inescapable and integral part of running a business. This is an
 
 Consulting a lawyer allows you to explain your business, needs, and goals so that they can create a personalized contract for your company. An attorney can draft, review, and negotiate contracts and business agreements so you don’t have to worry whether something is missing, incorrect, or unnecessary.
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
 
 ## Partnership Agreements
 
@@ -4015,7 +4012,7 @@ The Individuals with Disabilities Education Act (IDEA) provides specific protect
 - If the behavior is linked to their disability, the school cannot suspend or expel students for behavior directly caused by, or significantly related to, their disability.
 - Unfortunately, schools sometimes try to skip or rush through this process—especially if a child''s behavior is challenging—because it''s easier for them to remove the child from school rather than provide the required supports.
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp)](/schedule)
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp)](/schedule)
 
 ### Common Violations
 
@@ -4116,7 +4113,7 @@ When schools fail their obligations, you have the law on your side—you have th
 
 At North Carolina Legal Services, we help families navigate and resolve challenges like these every day. You are not alone. Learn more about our [special education and IEP advocacy services](/services/special-education-and-iep-advocacy), or explore our comprehensive guide on [7 common IEP violations every NC parent should recognize](/article/7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back).
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp)](/schedule)',
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp)](/schedule)',
   'Learn what to do when your child''s IEP isn''t followed, how to handle unfair discipline, and how to ensure your voice is heard in your child''s education. North Carolina Legal Services is here to help.', 'Special Education', '["Special Education","Family Law","North Carolina"]', 'published',
   'user-ncls-blawby', 'asset_ncls_media_iep-north-carolina-legal-services-2_73252e09',
   '2025-05-14T00:00:00.000Z',
@@ -4185,7 +4182,7 @@ Many assets are considered probate assets, meaning they must go through the esta
 
 Some accounts allow you to name a beneficiary with the financial institution or establish transfer-on-death terms, in which case you will likely not need to include those assets in your will.
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp ''Schedule a Consultation with North Carolina Legal Services'')](/schedule)
 
 ## What is the difference between a will and a simple will?
 
@@ -4305,7 +4302,7 @@ If they ask questions unrelated to your request, tell them you''re only particip
 
 Police sometimes tell tenants this is a "civil matter" and decline to act. That is frustrating, but it does not mean you are wrong or that the system has failed you. The officer may not know landlord-tenant law well. What matters is that you called and that the call is logged. Ask for the incident report number or the officer''s name and badge number before they leave. That record still helps you.
 
-[![Schedule a Consultation with North Carolina Legal Services](https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/landscape-cta.webp)](/schedule)
+[![Schedule a Consultation with North Carolina Legal Services](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp)](/schedule)
 
 ## North Carolina Eviction Laws Tenants Should Know
 

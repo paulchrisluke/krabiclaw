@@ -1,7 +1,7 @@
 <template>
   <NuxtLayout name="blawby">
     <div v-if="post" data-parity-root>
-      <header class="px-6 pb-0 pt-12 sm:pt-12" data-parity-section="article-header">
+      <div class="px-6 pb-12 pt-12 sm:pb-16" data-parity-section="article-content">
         <div class="mx-auto max-w-3xl text-base leading-6 text-gray-700">
           <p v-if="displayTags.length" class="mt-6 inline-block rounded bg-[var(--blawby-accent)] px-2 text-sm font-semibold uppercase text-white">
             <template v-for="(tag, index) in displayTags" :key="tag">
@@ -23,23 +23,23 @@
             <BlawbyArticleShare :title="post.title" :url="canonicalUrl" />
           </div>
           <img v-if="post.featured_image?.public_url" :src="post.featured_image.public_url" :alt="post.title" :width="post.featured_image.width || 704" :height="post.featured_image.height || 478" loading="lazy" class="aspect-video min-w-full rounded-xl bg-gray-50 object-cover">
+          <div class="mt-10 min-w-full max-w-2xl">
+            <p v-if="post.excerpt" class="mb-10 min-w-full italic text-[var(--blawby-primary-dark)]">{{ post.excerpt }}</p>
+            <div class="prose min-w-full">
+              <BlawbyRichText :content="body" unstyled class="contents" />
+            </div>
+            <p v-if="compliance?.disclaimer" class="mt-8 text-sm italic text-gray-500">{{ compliance.disclaimer }}</p>
+          </div>
         </div>
-      </header>
+      </div>
 
-      <article class="mx-auto min-w-0 max-w-3xl px-6 pb-12 pt-10 sm:pb-16" data-parity-section="article-body">
-        <p v-if="post.excerpt" class="mb-10 italic text-[var(--blawby-primary-dark)]">{{ post.excerpt }}</p>
-        <BlawbyRichText :content="body" />
-        <aside v-if="compliance?.disclaimer" class="mt-8 text-sm italic text-gray-500">
-          <BlawbyRichText :content="compliance.disclaimer" />
-        </aside>
-      </article>
-
-      <section v-if="relatedPosts.length" class="bg-white" data-parity-section="related-articles">
-        <div class="mx-auto my-8 max-w-7xl px-6 lg:px-8">
-          <BlawbySectionHeading title="Related" accent="Articles" centered />
-          <BlawbyArticleGrid :posts="relatedPosts" class="mt-16" />
-        </div>
-      </section>
+      <div v-if="relatedPosts.length" class="mx-auto my-8 max-w-7xl px-6 lg:px-8" data-parity-section="related-articles">
+        <BlawbySectionHeading title="From the" accent="Blog" centered />
+        <BlawbyArticleGrid :posts="relatedPosts" class="mx-auto my-16 max-w-2xl sm:mt-20 lg:mx-0 lg:max-w-none" />
+      </div>
+      <div v-if="relatedPosts.length" class="my-4 mb-8 flex justify-center" data-parity-section="related-articles-more">
+        <BlawbyButton to="/blog">See All</BlawbyButton>
+      </div>
 
       <BlawbyConsultationCta
         :title="String(ctaBlock?.title || 'Get started today')"
@@ -55,6 +55,7 @@
 </template>
 
 <script setup lang="ts">
+import { serializeJsonLd } from '~/utils/json-ld'
 import { stripLeadingTitleHeading } from '~/utils/markdown'
 
 const { isBlawby } = usePublicTemplate()
@@ -98,7 +99,7 @@ useSeoMeta({ title: seoTitle, description: seoDescription, ogTitle: seoTitle, og
 useHead(() => ({
   link: [{ rel: 'canonical', href: canonicalUrl.value }],
   meta: post.value.robots ? [{ name: 'robots', content: post.value.robots }] : [],
-  script: [{ type: 'application/ld+json', children: JSON.stringify({
+  script: [{ type: 'application/ld+json', children: serializeJsonLd({
     '@context': 'https://schema.org', '@type': 'Article', headline: post.value.title, description: seoDescription.value, url: canonicalUrl.value,
     datePublished: post.value.published_at || post.value.created_at || undefined, dateModified: post.value.updated_at || post.value.published_at || undefined,
     image: post.value.featured_image?.public_url ? [post.value.featured_image.public_url] : undefined,

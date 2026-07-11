@@ -1,388 +1,466 @@
 # Blawby Cutover Evidence
 
-- Checked: 2026-07-09T23:39:28.814Z
-- Base URL: http://ncls.localhost:3000
+- Checked: 2026-07-10T16:36:38.143Z
+- Base URL: (artifact-only)
 - Result: PASS
 
 ## Routes
 
-- /: 200 (129755 bytes)
-- /services: 200 (122739 bytes)
-- /pricing: 200 (124958 bytes)
-- /donate: 200 (120861 bytes)
-- /schedule: 200 (120415 bytes)
-- /contact: 200 (122567 bytes)
-- /blog: 200 (123762 bytes)
-- /policies/privacy: 200 (137065 bytes)
-- /policies/terms: 200 (140871 bytes)
-- /third-party-notices: 200 (120883 bytes)
-- /services/family: 200 (133211 bytes)
-- /services/small-business-and-nonprofits: 200 (132804 bytes)
-- /services/employment: 200 (133469 bytes)
-- /services/tenant-rights: 200 (127296 bytes)
-- /services/probate-and-estate: 200 (131263 bytes)
-- /services/special-education-and-iep-advocacy: 200 (125889 bytes)
-- /about: 200 (121196 bytes)
-- /article/getting-a-divorce-in-north-carolina: 200 (146612 bytes)
-- /article/equitable-distribution-in-north-carolina-divorces: 200 (140700 bytes)
 
 ## Checks
 
-- PASS: GET / returns success
-- PASS: GET / renders Blawby/professional signal
-- PASS: GET / does not render Saya restaurant signal
-- PASS: GET / has no forbidden restaurant copy
-- PASS: GET / has professional-service schema signal
-- PASS: GET / has no restaurant schema signal
-- PASS: GET /services returns success
-- PASS: GET /services renders Blawby/professional signal
-- PASS: GET /services does not render Saya restaurant signal
-- PASS: GET /services has no forbidden restaurant copy
-- PASS: GET /services has professional-service schema signal
-- PASS: GET /services has no restaurant schema signal
-- PASS: GET /pricing returns success
-- PASS: GET /pricing renders Blawby/professional signal
-- PASS: GET /pricing does not render Saya restaurant signal
-- PASS: GET /pricing has no forbidden restaurant copy
-- PASS: GET /donate returns success
-- PASS: GET /donate renders Blawby/professional signal
-- PASS: GET /donate does not render Saya restaurant signal
-- PASS: GET /donate has no forbidden restaurant copy
-- PASS: GET /schedule returns success
-- PASS: GET /schedule renders Blawby/professional signal
-- PASS: GET /schedule does not render Saya restaurant signal
-- PASS: GET /schedule has no forbidden restaurant copy
-- PASS: GET /contact returns success
-- PASS: GET /contact renders Blawby/professional signal
-- PASS: GET /contact does not render Saya restaurant signal
-- PASS: GET /contact has no forbidden restaurant copy
-- PASS: GET /blog returns success
-- PASS: GET /blog renders Blawby/professional signal
-- PASS: GET /blog does not render Saya restaurant signal
-- PASS: GET /blog has no forbidden restaurant copy
-- PASS: GET /policies/privacy returns success
-- PASS: GET /policies/privacy renders Blawby/professional signal
-- PASS: GET /policies/privacy does not render Saya restaurant signal
-- PASS: GET /policies/privacy has no forbidden restaurant copy
-- PASS: GET /policies/terms returns success
-- PASS: GET /policies/terms renders Blawby/professional signal
-- PASS: GET /policies/terms does not render Saya restaurant signal
-- PASS: GET /policies/terms has no forbidden restaurant copy
-- PASS: GET /third-party-notices returns success
-- PASS: GET /third-party-notices renders Blawby/professional signal
-- PASS: GET /third-party-notices does not render Saya restaurant signal
-- PASS: GET /third-party-notices has no forbidden restaurant copy
-- PASS: GET /services/family returns success
-- PASS: GET /services/family renders Blawby/professional signal
-- PASS: GET /services/family does not render Saya restaurant signal
-- PASS: GET /services/family has no forbidden restaurant copy
-- PASS: GET /services/family has professional-service schema signal
-- PASS: GET /services/family has no restaurant schema signal
-- PASS: GET /services/small-business-and-nonprofits returns success
-- PASS: GET /services/small-business-and-nonprofits renders Blawby/professional signal
-- PASS: GET /services/small-business-and-nonprofits does not render Saya restaurant signal
-- PASS: GET /services/small-business-and-nonprofits has no forbidden restaurant copy
-- PASS: GET /services/small-business-and-nonprofits has professional-service schema signal
-- PASS: GET /services/small-business-and-nonprofits has no restaurant schema signal
-- PASS: GET /services/employment returns success
-- PASS: GET /services/employment renders Blawby/professional signal
-- PASS: GET /services/employment does not render Saya restaurant signal
-- PASS: GET /services/employment has no forbidden restaurant copy
-- PASS: GET /services/employment has professional-service schema signal
-- PASS: GET /services/employment has no restaurant schema signal
-- PASS: GET /services/tenant-rights returns success
-- PASS: GET /services/tenant-rights renders Blawby/professional signal
-- PASS: GET /services/tenant-rights does not render Saya restaurant signal
-- PASS: GET /services/tenant-rights has no forbidden restaurant copy
-- PASS: GET /services/tenant-rights has professional-service schema signal
-- PASS: GET /services/tenant-rights has no restaurant schema signal
-- PASS: GET /services/probate-and-estate returns success
-- PASS: GET /services/probate-and-estate renders Blawby/professional signal
-- PASS: GET /services/probate-and-estate does not render Saya restaurant signal
-- PASS: GET /services/probate-and-estate has no forbidden restaurant copy
-- PASS: GET /services/probate-and-estate has professional-service schema signal
-- PASS: GET /services/probate-and-estate has no restaurant schema signal
-- PASS: GET /services/special-education-and-iep-advocacy returns success
-- PASS: GET /services/special-education-and-iep-advocacy renders Blawby/professional signal
-- PASS: GET /services/special-education-and-iep-advocacy does not render Saya restaurant signal
-- PASS: GET /services/special-education-and-iep-advocacy has no forbidden restaurant copy
-- PASS: GET /services/special-education-and-iep-advocacy has professional-service schema signal
-- PASS: GET /services/special-education-and-iep-advocacy has no restaurant schema signal
-- PASS: GET /about returns success
-- PASS: GET /about renders Blawby/professional signal
-- PASS: GET /about does not render Saya restaurant signal
-- PASS: GET /about has no forbidden restaurant copy
-- PASS: GET /article/getting-a-divorce-in-north-carolina returns success
-- PASS: GET /article/getting-a-divorce-in-north-carolina renders Blawby/professional signal
-- PASS: GET /article/getting-a-divorce-in-north-carolina does not render Saya restaurant signal
-- PASS: GET /article/getting-a-divorce-in-north-carolina has no forbidden restaurant copy
-- PASS: GET /article/equitable-distribution-in-north-carolina-divorces returns success
-- PASS: GET /article/equitable-distribution-in-north-carolina-divorces renders Blawby/professional signal
-- PASS: GET /article/equitable-distribution-in-north-carolina-divorces does not render Saya restaurant signal
-- PASS: GET /article/equitable-distribution-in-north-carolina-divorces has no forbidden restaurant copy
-- PASS: /conference is intentionally excluded, redirected, or noindexed
-- PASS: /thank-you is intentionally excluded, redirected, or noindexed
 - PASS: Import manifest uses DB-supported service vertical
 - PASS: Import manifest selects Blawby
 - PASS: Import manifest contains offerings
 - PASS: Import manifest contains /pricing tenant page
 - PASS: Import manifest contains /donate tenant page
-- PASS: Import manifest contains articles
+- PASS: Import manifest contains the complete pinned NCLS Markdown library
 - PASS: Import manifest contains route inventory
 - PASS: Import manifest contains media inventory
+- PASS: Import manifest is tied to pinned source commit 5908ab3e64f26f799de61ed55371d02f9ec7bc2f
 - PASS: Import manifest contains edit-surface matrix
 - PASS: Import manifest contains intentional differences
+- PASS: Import manifest navigation has no duplicate rows
+- PASS: Import manifest preserves the legacy divorce article URL
+- PASS: Import manifest preserves the legacy will article URL
 - PASS: Import manifest inventories legal files
-- PASS: Required media/file has approved asset URL: /logo.webp
-- PASS: Required media/file has approved asset URL: mission.svg
-- PASS: Required media/file has approved asset URL: people.svg
-- PASS: Required media/file has approved asset URL: vision.svg
-- PASS: Required media/file has approved asset URL: family-law.webp
-- PASS: Required media/file has approved asset URL: divorce-in-nc-01.webp
-- PASS: Required media/file has approved asset URL: divorce-in-nc-02.webp
-- PASS: Required media/file has approved asset URL: divorce-in-nc-03.webp
-- PASS: Required media/file has approved asset URL: divorce-in-nc-04.webp
-- PASS: Required media/file has approved asset URL: divorce-in-nc-05.webp
-- PASS: Required media/file has approved asset URL: divorce-in-nc-06.webp
-- PASS: Required media/file has approved asset URL: divorce-in-nc-07.webp
-- PASS: Required media/file has approved asset URL: alimony.webp
-- PASS: Required media/file has approved asset URL: childcustody.webp
-- PASS: Required media/file has approved asset URL: childsupport.webp
-- PASS: Required media/file has approved asset URL: custodial-power-of-attorney.webp
-- PASS: Required media/file has approved asset URL: divorce.webp
-- PASS: Required media/file has approved asset URL: custody-evaluations.webp
-- PASS: Required media/file has approved asset URL: prenuptialagreement.webp
-- PASS: Required media/file has approved asset URL: separationagreement.webp
-- PASS: Required media/file has approved asset URL: equitabledistribution.webp
-- PASS: Required media/file has approved asset URL: domesticviolenceprotectiveorder.webp
-- PASS: Required media/file has approved asset URL: visitation.webp
-- PASS: Required media/file has approved asset URL: enforcementofcourtorders.webp
-- PASS: Required media/file has approved asset URL: mediationservices.webp
-- PASS: Required media/file has approved asset URL: small-business.webp
-- PASS: Required media/file has approved asset URL: small-business-01.webp
-- PASS: Required media/file has approved asset URL: small-business-02.webp
-- PASS: Required media/file has approved asset URL: small-business-03.webp
-- PASS: Required media/file has approved asset URL: small-business-04.webp
-- PASS: Required media/file has approved asset URL: small-business-05.webp
-- PASS: Required media/file has approved asset URL: small-business-06.webp
-- PASS: Required media/file has approved asset URL: small-business-07.webp
-- PASS: Required media/file has approved asset URL: small-business-08.webp
-- PASS: Required media/file has approved asset URL: small-business-09.webp
-- PASS: Required media/file has approved asset URL: Arbitration_mediation.webp
-- PASS: Required media/file has approved asset URL: businessentityformation.webp
-- PASS: Required media/file has approved asset URL: compliance.webp
-- PASS: Required media/file has approved asset URL: commercial-litigation.webp
-- PASS: Required media/file has approved asset URL: contracts.webp
-- PASS: Required media/file has approved asset URL: employment-law.webp
-- PASS: Required media/file has approved asset URL: nonprofit-formation-and-governance.webp
-- PASS: Required media/file has approved asset URL: partnership-agreements.webp
-- PASS: Required media/file has approved asset URL: real-estate-transactions.webp
-- PASS: Required media/file has approved asset URL: risk-management.webp
-- PASS: Required media/file has approved asset URL: shareholder-agreements.webp
-- PASS: Required media/file has approved asset URL: child-support-modification.webp
-- PASS: Required media/file has approved asset URL: taxation.webp
-- PASS: Required media/file has approved asset URL: employment.webp
-- PASS: Required media/file has approved asset URL: Breach-of-Employment-Contract.webp
-- PASS: Required media/file has approved asset URL: Civil-Rights-Violations.webp
-- PASS: Required media/file has approved asset URL: contract-and-agreement-disputes.webp
-- PASS: Required media/file has approved asset URL: defamation.webp
-- PASS: Required media/file has approved asset URL: employee-benefits-and-rights.webp
-- PASS: Required media/file has approved asset URL: FMLA-violations.webp
-- PASS: Required media/file has approved asset URL: harassment.webp
-- PASS: Required media/file has approved asset URL: military-leave.webp
-- PASS: Required media/file has approved asset URL: privacy-rights-at-the-workplace.webp
-- PASS: Required media/file has approved asset URL: retaliation-and-whistleblower-claims.webp
-- PASS: Required media/file has approved asset URL: union-rights-and-collective-bargining.webp
-- PASS: Required media/file has approved asset URL: wage-and-hour-disputes.webp
-- PASS: Required media/file has approved asset URL: workers-compensation-claims.webp
-- PASS: Required media/file has approved asset URL: workplace-safety-and-OSHA-violations.webp
-- PASS: Required media/file has approved asset URL: wrongful-termination.webp
-- PASS: Required media/file has approved asset URL: tenant-rights.webp
-- PASS: Required media/file has approved asset URL: eviction-defense.webp
-- PASS: Required media/file has approved asset URL: housing-discrimination.webp
-- PASS: Required media/file has approved asset URL: illegal-landlord-practices.webp
-- PASS: Required media/file has approved asset URL: lease-review.webp
-- PASS: Required media/file has approved asset URL: lease-termination.webp
-- PASS: Required media/file has approved asset URL: Maintenance-and-Repair-Advocacy.webp
-- PASS: Required media/file has approved asset URL: quiet-enjoyment-violations.webp
-- PASS: Required media/file has approved asset URL: rent-overcharge-and-deposit-disputes.webp
-- PASS: Required media/file has approved asset URL: retaliatory-eviction.webp
-- PASS: Required media/file has approved asset URL: roommate-disputes.webp
-- PASS: Required media/file has approved asset URL: tenant-harassment.webp
-- PASS: Required media/file has approved asset URL: tenant-union-support.webp
-- PASS: Required media/file has approved asset URL: unlawful-rent-increases.webp
-- PASS: Required media/file has approved asset URL: utility-shutof-protection.webp
-- PASS: Required media/file has approved asset URL: probate.webp
-- PASS: Required media/file has approved asset URL: wills-01.webp
-- PASS: Required media/file has approved asset URL: wills-02.webp
-- PASS: Required media/file has approved asset URL: wills-03.webp
-- PASS: Required media/file has approved asset URL: wills-04.webp
-- PASS: Required media/file has approved asset URL: wills-05.webp
-- PASS: Required media/file has approved asset URL: wills-06.webp
-- PASS: Required media/file has approved asset URL: asset-protection.webp
-- PASS: Required media/file has approved asset URL: elder-law.webp
-- PASS: Required media/file has approved asset URL: estate-planning.webp
-- PASS: Required media/file has approved asset URL: financial-power-of-attorney.webp
-- PASS: Required media/file has approved asset URL: guardianships.webp
-- PASS: Required media/file has approved asset URL: living-will.webp
-- PASS: Required media/file has approved asset URL: medical-power-of-attorney.webp
-- PASS: Required media/file has approved asset URL: probate-feature.webp
-- PASS: Required media/file has approved asset URL: trusts.webp
-- PASS: Required media/file has approved asset URL: wills.webp
-- PASS: Required media/file has approved asset URL: special-education.webp
+- PASS: Required media/file has approved asset URL: icons/logo.svg
+- PASS: Required media/file upload is verified: icons/logo.svg
+- PASS: Required media/file has approved asset URL: icons/logo-dark.svg
+- PASS: Required media/file upload is verified: icons/logo-dark.svg
+- PASS: Required media/file has approved asset URL: rich-gittings-author.webp
+- PASS: Required media/file upload is verified: rich-gittings-author.webp
+- PASS: Required media/file has approved asset URL: background-hero.webp
+- PASS: Required media/file upload is verified: background-hero.webp
+- PASS: Required media/file has approved asset URL: background-features.webp
+- PASS: Required media/file upload is verified: background-features.webp
+- PASS: Required media/file has approved asset URL: background-feature-2.webp
+- PASS: Required media/file upload is verified: background-feature-2.webp
+- PASS: Required media/file has approved asset URL: background-cta.webp
+- PASS: Required media/file upload is verified: background-cta.webp
+- PASS: Required media/file has approved asset URL: logo-2.webp
+- PASS: Required media/file upload is verified: logo-2.webp
 - PASS: Required media/file has approved asset URL: getting_a_divorce_in_north_carolina.webp
+- PASS: Required media/file upload is verified: getting_a_divorce_in_north_carolina.webp
+- PASS: Required media/file has approved asset URL: writing-your-own-will-how-it-works.webp
+- PASS: Required media/file upload is verified: writing-your-own-will-how-it-works.webp
+- PASS: Required media/file has approved asset URL: rich-gittings.webp
+- PASS: Required media/file upload is verified: rich-gittings.webp
+- PASS: Required media/file has approved asset URL: jonathan-matthews.webp
+- PASS: Required media/file upload is verified: jonathan-matthews.webp
+- PASS: Required media/file has approved asset URL: morgan-brock-smith.webp
+- PASS: Required media/file upload is verified: morgan-brock-smith.webp
+- PASS: Required media/file has approved asset URL: kyle-beausoleil.webp
+- PASS: Required media/file upload is verified: kyle-beausoleil.webp
+- PASS: Required media/file has approved asset URL: marcus-morrow.webp
+- PASS: Required media/file upload is verified: marcus-morrow.webp
+- PASS: Required media/file has approved asset URL: kristen-rissell.webp
+- PASS: Required media/file upload is verified: kristen-rissell.webp
+- PASS: Required media/file has approved asset URL: amy-hahn.webp
+- PASS: Required media/file upload is verified: amy-hahn.webp
+- PASS: Required media/file has approved asset URL: mission.svg
+- PASS: Required media/file upload is verified: mission.svg
+- PASS: Required media/file has approved asset URL: people.svg
+- PASS: Required media/file upload is verified: people.svg
+- PASS: Required media/file has approved asset URL: vision.svg
+- PASS: Required media/file upload is verified: vision.svg
+- PASS: Required media/file has approved asset URL: family-law.webp
+- PASS: Required media/file upload is verified: family-law.webp
+- PASS: Required media/file has approved asset URL: divorce-in-nc-01.webp
+- PASS: Required media/file upload is verified: divorce-in-nc-01.webp
+- PASS: Required media/file has approved asset URL: divorce-in-nc-02.webp
+- PASS: Required media/file upload is verified: divorce-in-nc-02.webp
+- PASS: Required media/file has approved asset URL: divorce-in-nc-03.webp
+- PASS: Required media/file upload is verified: divorce-in-nc-03.webp
+- PASS: Required media/file has approved asset URL: divorce-in-nc-04.webp
+- PASS: Required media/file upload is verified: divorce-in-nc-04.webp
+- PASS: Required media/file has approved asset URL: divorce-in-nc-05.webp
+- PASS: Required media/file upload is verified: divorce-in-nc-05.webp
+- PASS: Required media/file has approved asset URL: divorce-in-nc-06.webp
+- PASS: Required media/file upload is verified: divorce-in-nc-06.webp
+- PASS: Required media/file has approved asset URL: divorce-in-nc-07.webp
+- PASS: Required media/file upload is verified: divorce-in-nc-07.webp
+- PASS: Required media/file has approved asset URL: alimony.webp
+- PASS: Required media/file upload is verified: alimony.webp
+- PASS: Required media/file has approved asset URL: childcustody.webp
+- PASS: Required media/file upload is verified: childcustody.webp
+- PASS: Required media/file has approved asset URL: childsupport.webp
+- PASS: Required media/file upload is verified: childsupport.webp
+- PASS: Required media/file has approved asset URL: custodial-power-of-attorney.webp
+- PASS: Required media/file upload is verified: custodial-power-of-attorney.webp
+- PASS: Required media/file has approved asset URL: divorce.webp
+- PASS: Required media/file upload is verified: divorce.webp
+- PASS: Required media/file has approved asset URL: custody-evaluations.webp
+- PASS: Required media/file upload is verified: custody-evaluations.webp
+- PASS: Required media/file has approved asset URL: prenuptialagreement.webp
+- PASS: Required media/file upload is verified: prenuptialagreement.webp
+- PASS: Required media/file has approved asset URL: separationagreement.webp
+- PASS: Required media/file upload is verified: separationagreement.webp
+- PASS: Required media/file has approved asset URL: equitabledistribution.webp
+- PASS: Required media/file upload is verified: equitabledistribution.webp
+- PASS: Required media/file has approved asset URL: domesticviolenceprotectiveorder.webp
+- PASS: Required media/file upload is verified: domesticviolenceprotectiveorder.webp
+- PASS: Required media/file has approved asset URL: visitation.webp
+- PASS: Required media/file upload is verified: visitation.webp
+- PASS: Required media/file has approved asset URL: enforcementofcourtorders.webp
+- PASS: Required media/file upload is verified: enforcementofcourtorders.webp
+- PASS: Required media/file has approved asset URL: mediationservices.webp
+- PASS: Required media/file upload is verified: mediationservices.webp
+- PASS: Required media/file has approved asset URL: small-business.webp
+- PASS: Required media/file upload is verified: small-business.webp
+- PASS: Required media/file has approved asset URL: small-business-01.webp
+- PASS: Required media/file upload is verified: small-business-01.webp
+- PASS: Required media/file has approved asset URL: small-business-02.webp
+- PASS: Required media/file upload is verified: small-business-02.webp
+- PASS: Required media/file has approved asset URL: small-business-03.webp
+- PASS: Required media/file upload is verified: small-business-03.webp
+- PASS: Required media/file has approved asset URL: small-business-04.webp
+- PASS: Required media/file upload is verified: small-business-04.webp
+- PASS: Required media/file has approved asset URL: small-business-05.webp
+- PASS: Required media/file upload is verified: small-business-05.webp
+- PASS: Required media/file has approved asset URL: small-business-06.webp
+- PASS: Required media/file upload is verified: small-business-06.webp
+- PASS: Required media/file has approved asset URL: small-business-07.webp
+- PASS: Required media/file upload is verified: small-business-07.webp
+- PASS: Required media/file has approved asset URL: small-business-08.webp
+- PASS: Required media/file upload is verified: small-business-08.webp
+- PASS: Required media/file has approved asset URL: small-business-09.webp
+- PASS: Required media/file upload is verified: small-business-09.webp
+- PASS: Required media/file has approved asset URL: Arbitration_mediation.webp
+- PASS: Required media/file upload is verified: Arbitration_mediation.webp
+- PASS: Required media/file has approved asset URL: businessentityformation.webp
+- PASS: Required media/file upload is verified: businessentityformation.webp
+- PASS: Required media/file has approved asset URL: compliance.webp
+- PASS: Required media/file upload is verified: compliance.webp
+- PASS: Required media/file has approved asset URL: commercial-litigation.webp
+- PASS: Required media/file upload is verified: commercial-litigation.webp
+- PASS: Required media/file has approved asset URL: contracts.webp
+- PASS: Required media/file upload is verified: contracts.webp
+- PASS: Required media/file has approved asset URL: employment-law.webp
+- PASS: Required media/file upload is verified: employment-law.webp
+- PASS: Required media/file has approved asset URL: nonprofit-formation-and-governance.webp
+- PASS: Required media/file upload is verified: nonprofit-formation-and-governance.webp
+- PASS: Required media/file has approved asset URL: partnership-agreements.webp
+- PASS: Required media/file upload is verified: partnership-agreements.webp
+- PASS: Required media/file has approved asset URL: real-estate-transactions.webp
+- PASS: Required media/file upload is verified: real-estate-transactions.webp
+- PASS: Required media/file has approved asset URL: risk-management.webp
+- PASS: Required media/file upload is verified: risk-management.webp
+- PASS: Required media/file has approved asset URL: shareholder-agreements.webp
+- PASS: Required media/file upload is verified: shareholder-agreements.webp
+- PASS: Required media/file has approved asset URL: child-support-modification.webp
+- PASS: Required media/file upload is verified: child-support-modification.webp
+- PASS: Required media/file has approved asset URL: taxation.webp
+- PASS: Required media/file upload is verified: taxation.webp
+- PASS: Required media/file has approved asset URL: employment.webp
+- PASS: Required media/file upload is verified: employment.webp
+- PASS: Required media/file has approved asset URL: Breach-of-Employment-Contract.webp
+- PASS: Required media/file upload is verified: Breach-of-Employment-Contract.webp
+- PASS: Required media/file has approved asset URL: Civil-Rights-Violations.webp
+- PASS: Required media/file upload is verified: Civil-Rights-Violations.webp
+- PASS: Required media/file has approved asset URL: contract-and-agreement-disputes.webp
+- PASS: Required media/file upload is verified: contract-and-agreement-disputes.webp
+- PASS: Required media/file has approved asset URL: defamation.webp
+- PASS: Required media/file upload is verified: defamation.webp
+- PASS: Required media/file has approved asset URL: employee-benefits-and-rights.webp
+- PASS: Required media/file upload is verified: employee-benefits-and-rights.webp
+- PASS: Required media/file has approved asset URL: FMLA-violations.webp
+- PASS: Required media/file upload is verified: FMLA-violations.webp
+- PASS: Required media/file has approved asset URL: harassment.webp
+- PASS: Required media/file upload is verified: harassment.webp
+- PASS: Required media/file has approved asset URL: military-leave.webp
+- PASS: Required media/file upload is verified: military-leave.webp
+- PASS: Required media/file has approved asset URL: privacy-rights-at-the-workplace.webp
+- PASS: Required media/file upload is verified: privacy-rights-at-the-workplace.webp
+- PASS: Required media/file has approved asset URL: retaliation-and-whistleblower-claims.webp
+- PASS: Required media/file upload is verified: retaliation-and-whistleblower-claims.webp
+- PASS: Required media/file has approved asset URL: union-rights-and-collective-bargining.webp
+- PASS: Required media/file upload is verified: union-rights-and-collective-bargining.webp
+- PASS: Required media/file has approved asset URL: wage-and-hour-disputes.webp
+- PASS: Required media/file upload is verified: wage-and-hour-disputes.webp
+- PASS: Required media/file has approved asset URL: workers-compensation-claims.webp
+- PASS: Required media/file upload is verified: workers-compensation-claims.webp
+- PASS: Required media/file has approved asset URL: workplace-safety-and-OSHA-violations.webp
+- PASS: Required media/file upload is verified: workplace-safety-and-OSHA-violations.webp
+- PASS: Required media/file has approved asset URL: wrongful-termination.webp
+- PASS: Required media/file upload is verified: wrongful-termination.webp
+- PASS: Required media/file has approved asset URL: tenant-rights.webp
+- PASS: Required media/file upload is verified: tenant-rights.webp
+- PASS: Required media/file has approved asset URL: eviction-defense.webp
+- PASS: Required media/file upload is verified: eviction-defense.webp
+- PASS: Required media/file has approved asset URL: housing-discrimination.webp
+- PASS: Required media/file upload is verified: housing-discrimination.webp
+- PASS: Required media/file has approved asset URL: illegal-landlord-practices.webp
+- PASS: Required media/file upload is verified: illegal-landlord-practices.webp
+- PASS: Required media/file has approved asset URL: lease-review.webp
+- PASS: Required media/file upload is verified: lease-review.webp
+- PASS: Required media/file has approved asset URL: lease-termination.webp
+- PASS: Required media/file upload is verified: lease-termination.webp
+- PASS: Required media/file has approved asset URL: Maintenance-and-Repair-Advocacy.webp
+- PASS: Required media/file upload is verified: Maintenance-and-Repair-Advocacy.webp
+- PASS: Required media/file has approved asset URL: quiet-enjoyment-violations.webp
+- PASS: Required media/file upload is verified: quiet-enjoyment-violations.webp
+- PASS: Required media/file has approved asset URL: rent-overcharge-and-deposit-disputes.webp
+- PASS: Required media/file upload is verified: rent-overcharge-and-deposit-disputes.webp
+- PASS: Required media/file has approved asset URL: retaliatory-eviction.webp
+- PASS: Required media/file upload is verified: retaliatory-eviction.webp
+- PASS: Required media/file has approved asset URL: roommate-disputes.webp
+- PASS: Required media/file upload is verified: roommate-disputes.webp
+- PASS: Required media/file has approved asset URL: tenant-harassment.webp
+- PASS: Required media/file upload is verified: tenant-harassment.webp
+- PASS: Required media/file has approved asset URL: tenant-union-support.webp
+- PASS: Required media/file upload is verified: tenant-union-support.webp
+- PASS: Required media/file has approved asset URL: unlawful-rent-increases.webp
+- PASS: Required media/file upload is verified: unlawful-rent-increases.webp
+- PASS: Required media/file has approved asset URL: utility-shutof-protection.webp
+- PASS: Required media/file upload is verified: utility-shutof-protection.webp
+- PASS: Required media/file has approved asset URL: probate.webp
+- PASS: Required media/file upload is verified: probate.webp
+- PASS: Required media/file has approved asset URL: wills-01.webp
+- PASS: Required media/file upload is verified: wills-01.webp
+- PASS: Required media/file has approved asset URL: wills-02.webp
+- PASS: Required media/file upload is verified: wills-02.webp
+- PASS: Required media/file has approved asset URL: wills-03.webp
+- PASS: Required media/file upload is verified: wills-03.webp
+- PASS: Required media/file has approved asset URL: wills-04.webp
+- PASS: Required media/file upload is verified: wills-04.webp
+- PASS: Required media/file has approved asset URL: wills-05.webp
+- PASS: Required media/file upload is verified: wills-05.webp
+- PASS: Required media/file has approved asset URL: wills-06.webp
+- PASS: Required media/file upload is verified: wills-06.webp
+- PASS: Required media/file has approved asset URL: asset-protection.webp
+- PASS: Required media/file upload is verified: asset-protection.webp
+- PASS: Required media/file has approved asset URL: elder-law.webp
+- PASS: Required media/file upload is verified: elder-law.webp
+- PASS: Required media/file has approved asset URL: estate-planning.webp
+- PASS: Required media/file upload is verified: estate-planning.webp
+- PASS: Required media/file has approved asset URL: financial-power-of-attorney.webp
+- PASS: Required media/file upload is verified: financial-power-of-attorney.webp
+- PASS: Required media/file has approved asset URL: guardianships.webp
+- PASS: Required media/file upload is verified: guardianships.webp
+- PASS: Required media/file has approved asset URL: living-will.webp
+- PASS: Required media/file upload is verified: living-will.webp
+- PASS: Required media/file has approved asset URL: medical-power-of-attorney.webp
+- PASS: Required media/file upload is verified: medical-power-of-attorney.webp
+- PASS: Required media/file has approved asset URL: probate-feature.webp
+- PASS: Required media/file upload is verified: probate-feature.webp
+- PASS: Required media/file has approved asset URL: trusts.webp
+- PASS: Required media/file upload is verified: trusts.webp
+- PASS: Required media/file has approved asset URL: wills.webp
+- PASS: Required media/file upload is verified: wills.webp
+- PASS: Required media/file has approved asset URL: special-education.webp
+- PASS: Required media/file upload is verified: special-education.webp
+- PASS: Required media/file has approved asset URL: landscape-cta.webp
+- PASS: Required media/file upload is verified: landscape-cta.webp
 - PASS: Required media/file has approved asset URL: equitable_distribution_in_north_carolina_divorces.webp
+- PASS: Required media/file upload is verified: equitable_distribution_in_north_carolina_divorces.webp
+- PASS: Required media/file has approved asset URL: 7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back-1.webp
+- PASS: Required media/file upload is verified: 7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back-1.webp
+- PASS: Required media/file has approved asset URL: 7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back-3.webp
+- PASS: Required media/file upload is verified: 7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back-3.webp
+- PASS: Required media/file has approved asset URL: 7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back-4.webp
+- PASS: Required media/file upload is verified: 7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back-4.webp
+- PASS: Required media/file has approved asset URL: 7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back-2.webp
+- PASS: Required media/file upload is verified: 7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back-2.webp
+- PASS: Required media/file has approved asset URL: 7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back-5.webp
+- PASS: Required media/file upload is verified: 7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back-5.webp
+- PASS: Required media/file has approved asset URL: disaster-relief-for-north-carolina-homeowners-after-hurricane-helene.webp
+- PASS: Required media/file upload is verified: disaster-relief-for-north-carolina-homeowners-after-hurricane-helene.webp
+- PASS: Required media/file has approved asset URL: divorce_and_children_in_north_carolina_what_to_expect_and_how_to_prepare.webp
+- PASS: Required media/file upload is verified: divorce_and_children_in_north_carolina_what_to_expect_and_how_to_prepare.webp
+- PASS: Required media/file has approved asset URL: employee-disability-rights-in-north-carolina.webp
+- PASS: Required media/file upload is verified: employee-disability-rights-in-north-carolina.webp
+- PASS: Required media/file has approved asset URL: fairness-is-not-a-zero-sum-game-why-dei-benefits-everyone-crop.webp
+- PASS: Required media/file upload is verified: fairness-is-not-a-zero-sum-game-why-dei-benefits-everyone-crop.webp
+- PASS: Required media/file has approved asset URL: hurricane-disaster-relief-for-north-carolina-renters.webp
+- PASS: Required media/file upload is verified: hurricane-disaster-relief-for-north-carolina-renters.webp
+- PASS: Required media/file has approved asset URL: IEP1a.webp
+- PASS: Required media/file upload is verified: IEP1a.webp
+- PASS: Required media/file has approved asset URL: ice-north-carolina-legal-services.webp
+- PASS: Required media/file upload is verified: ice-north-carolina-legal-services.webp
+- PASS: Required media/file has approved asset URL: pet-custody-in-nc-divorce-how-equitable-distribution-affects-your-dog-or-cat-6.webp
+- PASS: Required media/file upload is verified: pet-custody-in-nc-divorce-how-equitable-distribution-affects-your-dog-or-cat-6.webp
+- PASS: Required media/file has approved asset URL: pet-custody-in-nc-divorce-how-equitable-distribution-affects-your-dog-or-cat-7.webp
+- PASS: Required media/file upload is verified: pet-custody-in-nc-divorce-how-equitable-distribution-affects-your-dog-or-cat-7.webp
+- PASS: Required media/file has approved asset URL: pet-custody-in-nc-divorce-how-equitable-distribution-affects-your-dog-or-cat-8.webp
+- PASS: Required media/file upload is verified: pet-custody-in-nc-divorce-how-equitable-distribution-affects-your-dog-or-cat-8.webp
+- PASS: Required media/file has approved asset URL: pet-custody-in-nc-divorce-how-equitable-distribution-affects-your-dog-or-cat-9.webp
+- PASS: Required media/file upload is verified: pet-custody-in-nc-divorce-how-equitable-distribution-affects-your-dog-or-cat-9.webp
+- PASS: Required media/file has approved asset URL: pet-custody-in-nc-divorce-how-equitable-distribution-affects-your-dog-or-cat-10.webp
+- PASS: Required media/file upload is verified: pet-custody-in-nc-divorce-how-equitable-distribution-affects-your-dog-or-cat-10.webp
+- PASS: Required media/file has approved asset URL: preparing-for-your-consultation.webp
+- PASS: Required media/file upload is verified: preparing-for-your-consultation.webp
+- PASS: Required media/file has approved asset URL: property-division-in-north-carolina-divorce.webp
+- PASS: Required media/file upload is verified: property-division-in-north-carolina-divorce.webp
+- PASS: Required media/file has approved asset URL: north-carolina-legal-services-freelancer-contract-law.webp
+- PASS: Required media/file upload is verified: north-carolina-legal-services-freelancer-contract-law.webp
+- PASS: Required media/file has approved asset URL: the-legal-needs-of-small-businesses-in-north-carolina.webp
+- PASS: Required media/file upload is verified: the-legal-needs-of-small-businesses-in-north-carolina.webp
+- PASS: Required media/file has approved asset URL: representing-yourself-in-court-north-carolina.webp
+- PASS: Required media/file upload is verified: representing-yourself-in-court-north-carolina.webp
+- PASS: Required media/file has approved asset URL: iep-north-carolina-legal-services-2.webp
+- PASS: Required media/file upload is verified: iep-north-carolina-legal-services-2.webp
+- PASS: Required media/file has approved asset URL: Illegal-Eviction-in-North-Carolina.webp
+- PASS: Required media/file upload is verified: Illegal-Eviction-in-North-Carolina.webp
 - PASS: Required media/file has approved asset URL: /files/NorthCarolinaLegalServices_DBA__Redacted.pdf
+- PASS: Required media/file upload is verified: /files/NorthCarolinaLegalServices_DBA__Redacted.pdf
 - PASS: Required media/file has approved asset URL: /files/FinalLetter_88-0565637_BULLCITYLEGALSERVICESINC_Redacted.pdf
+- PASS: Required media/file upload is verified: /files/FinalLetter_88-0565637_BULLCITYLEGALSERVICESINC_Redacted.pdf
 - PASS: Compliance document asset ids include all legal files
 - PASS: Consultation destination is the approved external booking URL
 - PASS: Donation CTA is external
+- PASS: Tenant page / does not reference legacy /files assets
+- PASS: Tenant page /services does not reference legacy /files assets
 - PASS: Tenant page /about does not reference legacy /files assets
 - PASS: Tenant page /pricing does not reference legacy /files assets
 - PASS: Pricing calculator config: structured calculator has source/effective metadata
+- PASS: Tenant page /contact does not reference legacy /files assets
+- PASS: Tenant page /schedule does not reference legacy /files assets
+- PASS: Tenant page /blog does not reference legacy /files assets
 - PASS: Tenant page /donate does not reference legacy /files assets
 - PASS: Tenant page /policies/privacy does not reference legacy /files assets
 - PASS: Tenant page /policies/terms does not reference legacy /files assets
 - PASS: Tenant page /third-party-notices does not reference legacy /files assets
-- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/legal/NorthCarolinaLegalServices_DBA__Redacted.pdf
-- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/legal/FinalLetter_88-0565637_BULLCITYLEGALSERVICESINC_Redacted.pdf
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/logo.webp
-- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/files/mission.svg
-- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/files/people.svg
-- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/files/vision.svg
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/family-law.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/divorce-in-nc-01.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/divorce-in-nc-02.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/divorce-in-nc-03.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/divorce-in-nc-04.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/divorce-in-nc-05.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/divorce-in-nc-06.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/divorce-in-nc-07.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/alimony.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/childcustody.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/childsupport.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/custodial-power-of-attorney.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/divorce.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/custody-evaluations.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/prenuptialagreement.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/separationagreement.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/equitabledistribution.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/domesticviolenceprotectiveorder.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/visitation.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/enforcementofcourtorders.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/mediationservices.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-01.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-02.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-03.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-04.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-05.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-06.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-07.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-08.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/small-business-09.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/Arbitration_mediation.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/businessentityformation.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/compliance.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/commercial-litigation.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/contracts.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/employment-law.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/nonprofit-formation-and-governance.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/partnership-agreements.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/real-estate-transactions.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/risk-management.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/shareholder-agreements.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/child-support-modification.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/taxation.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/employment.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/Breach-of-Employment-Contract.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/Civil-Rights-Violations.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/contract-and-agreement-disputes.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/defamation.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/employee-benefits-and-rights.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/FMLA-violations.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/harassment.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/military-leave.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/privacy-rights-at-the-workplace.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/retaliation-and-whistleblower-claims.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/union-rights-and-collective-bargining.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wage-and-hour-disputes.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/workers-compensation-claims.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/workplace-safety-and-OSHA-violations.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wrongful-termination.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/tenant-rights.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/eviction-defense.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/housing-discrimination.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/illegal-landlord-practices.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/lease-review.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/lease-termination.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/Maintenance-and-Repair-Advocacy.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/quiet-enjoyment-violations.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/rent-overcharge-and-deposit-disputes.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/retaliatory-eviction.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/roommate-disputes.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/tenant-harassment.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/tenant-union-support.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/unlawful-rent-increases.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/utility-shutof-protection.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/probate.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wills-01.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wills-02.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wills-03.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wills-04.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wills-05.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wills-06.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/asset-protection.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/elder-law.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/estate-planning.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/financial-power-of-attorney.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/guardianships.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/living-will.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/medical-power-of-attorney.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/probate-feature.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/trusts.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/wills.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/special-education.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/getting_a_divorce_in_north_carolina.webp
-- PASS: Artifact media URL allowed: https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/equitable_distribution_in_north_carolina_divorces.webp
-- PASS: Public Blawby API data is fetchable and valid
-- PASS: Public Blawby API returns offerings
-- PASS: Public Blawby API returns /pricing
-- PASS: Public consultation tracking is enabled
-- PASS: Public compliance metadata is present
-- PASS: Public compliance exposes legal document assets
-- PASS: Public compliance document URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/legal/FinalLetter_88-0565637_BULLCITYLEGALSERVICESINC_Redacted.pdf
-- PASS: Public compliance document URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/legal/NorthCarolinaLegalServices_DBA__Redacted.pdf
-- PASS: Public tenant page /about does not reference legacy /files assets
-- PASS: Public tenant page /pricing does not reference legacy /files assets
-- PASS: Public tenant page /policies/privacy does not reference legacy /files assets
-- PASS: Public tenant page /donate does not reference legacy /files assets
-- PASS: Public tenant page /policies/terms does not reference legacy /files assets
-- PASS: Public tenant page /third-party-notices does not reference legacy /files assets
-- PASS: Analytics bridge uses sanctioned GTM provider
-- PASS: Analytics bridge has a valid GTM container id
-- PASS: Analytics bridge allowlists consultation clicks
-- PASS: Analytics bridge allowlists only expected conversion properties
-- PASS: Analytics bridge does not rely on custom head code
-- PASS: Public media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/legal/FinalLetter_88-0565637_BULLCITYLEGALSERVICESINC_Redacted.pdf
-- PASS: Public media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/legal/NorthCarolinaLegalServices_DBA__Redacted.pdf
-- PASS: Sitemap is fetchable
-- PASS: Sitemap includes /
-- PASS: Sitemap includes /services
-- PASS: Sitemap includes /pricing
-- PASS: Sitemap includes /donate
-- PASS: Sitemap includes /schedule
-- PASS: Sitemap includes /contact
-- PASS: Sitemap includes /blog
-- PASS: Sitemap includes offering /services/family
-- PASS: Sitemap includes offering /services/small-business-and-nonprofits
-- PASS: Sitemap includes offering /services/employment
-- PASS: Sitemap includes offering /services/tenant-rights
-- PASS: Sitemap includes offering /services/probate-and-estate
-- PASS: Sitemap includes offering /services/special-education-and-iep-advocacy
-- PASS: Sitemap includes article /article/getting-a-divorce-in-north-carolina
-- PASS: Sitemap includes article /article/equitable-distribution-in-north-carolina-divorces
-- PASS: Sitemap excludes Saya restaurant routes
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/c5293ac64f48747e7b4b.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9f06152ccd5d6f29c11a.pdf
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/8de1e5793e0806ece163.pdf
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/3869491ea5373de6bb34.svg
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/7277c674a1f8c5581f10.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/ab63ba56d1d12826f532.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/5421e9e4fd21b3c4826b.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/f24afb9578caa8eb2a2f.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/926d9d9f906913b2d02a.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/280c3536f333fe6f5560.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/26c7750899fbb60c91f1.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/4b066f9c7c954ee7c03a.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9160b2644f7039a0a19b.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/291220f9e47a492ff25a.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/1c3d21a61dd22b9e16c0.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/3d82790384b45abcb2ba.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/6fa2f3b50a4653dd697c.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/cb5056b64d904d8735b9.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/a90292c48419da132615.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/05b49768af802ba8e3d8.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/1d9c91908846078577de.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/f67f4a2fe91abf1e5717.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/16573c795d153831b37f.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/6b9a6aea1fd95c7662ce.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/c5b2bf714e3c54b85675.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/369636058474b338d070.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/6a7296935dad30625906.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/002d88bab34cb3310870.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/314e050d62e204adaa64.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/48f60b831a9cb80561bf.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/24cd363e18b7b2407d82.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/fe44f58092bac0c66e11.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/fa2d7d35a68c6adc59ff.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/5793f2d5c13b7bb09b3b.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/7686a349466bf4f52c7a.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/ecced05026b225fd4588.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/4178d0f78353324bca01.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/329f85b1d6d4783e39d3.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/7c267c3e1149a24334cf.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/06bfcb286a3f89e89c96.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/bfdfebefd796ae2a75eb.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/f3e6ab83f162735a3b1b.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/7683cbe17b8cddff82f5.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/eb733bb7d42ae15d8fb3.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/97fd1db61a66b7203b5b.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/5efb0c8c3ae0955f76e0.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/b82e0074cc0e8a216b4c.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/fa3fdb1d59d899af2565.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/a54cf90957b32edf379d.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/8ec41e5524cd4b1c56ad.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/10a9cfdeab21e0cd9aec.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/7e5fee11c63ab43935a5.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/01222e125328547e3575.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/3666b857ce471928d1b5.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/86aad206dfcc15366a82.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/d1ada2d3584a7c316472.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/1b1ebc752dfbd080bdc6.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/c8a92a5830efd7c828b5.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/aeafe02fc312af27037c.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/6a160901802dd8842fbd.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/b6bb1d39d48c68d6d235.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/71c23cd30e36e5077af8.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/3e0e853efa8497b9494d.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e32e116257a9e4d891d6.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/900fec46ad4cb009eaba.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/6794e2d8fe3d6eb86697.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e30ceb064f55ad60f0d1.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/db28ef30fcee279856bc.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9c46389c33fe8b070c39.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/6bbf53416eb2e561a144.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/599abbcd10dd490792d2.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/be87d08d6e14bf57ecef.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/ea4d301a3cefbbd17a44.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/6b9b810084d4809b6d5d.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/c53c7b8d7a6de1e7cc70.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/735d1ec58bf43ca897ce.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9cb15d96c31f5ba5fb2c.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/d9a827c04465883d96b5.svg
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/1b05529f94fe9dce7161.svg
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/3eaccea50d2ecfa63643.svg
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/5b03236f92812fb7db78.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e47c24ad39e5089d7d79.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/4400f49221ae732604ed.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/bf31809ddf6bbbcaf8dd.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/5ea1b2ee81b8475abdd2.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/f26a1f0b2536d75b50be.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e8224978251e8c48e0d7.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/4661569ca43b62b79e63.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/95815cecb8c4bbc346fc.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9e68787a4d6880c03406.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/ffca5f1905bf4cb3f07e.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/15bba3d4f3f3fcb40dac.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/238e8a7cc3be720f5725.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/70782b21e0a213f15dbd.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/f169dd677c4e18d8c61c.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/903ee6ad336ed296ad1b.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e59d9ce19451c918fd59.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/c48b4d590eecc120f76e.svg
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/863bceee9c6e5e4f41cb.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/e5c69cf788b3fd2728e3.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/0d240b51fd80bf66bc57.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/763eaae30dbb867e1f71.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/af72889de687d31adbf9.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/520426ca778e2fe081e8.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/f74b2db21366fc54057a.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/8b5b1bc8af553cf84d1a.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9447dc6ad951a53c7c0a.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/28b8d371ac381ea5737c.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/047f4c31c0f89bdd9e89.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/0c807f38cee2f3a80c7c.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/d05cf71b8859b687e317.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/88cb9b4c33eadbeb9d2c.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/cd8606210abdc587ff17.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/3e9b7da5492e13602fe2.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9111abd4cd66a9820d69.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/cf853cdfd0902a345de9.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/7f9f3d4b51b2d9999ca1.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/7c4f4b78ebefb2613fdd.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/0750c6fcc544e0966b1b.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/0efe20ea344012bedb65.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9e2049facfc8d8a30aa4.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/1f0c7612b4a1725e52d8.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/925d9801695e4dab74a7.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/8f49065376bdf8c1ef45.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/6ff287c027b5e76db25b.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/5fc0384f3eb1ab1f4291.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/4992b36617a33c60003b.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/94afcb31801ed13f7ab2.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/27078d61a0c52dc37859.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/b32c23116ba051b4df0a.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/fd35215909818cd16454.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/3e5119ec9e79e06cca81.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/cd4cd22ac1dbb2a3d954.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/67c5ea411d21e62c5469.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/f9dc933b49a2e7f07a69.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/a39b500c45f7b4444f1e.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/6aed39519b0ac80219bf.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9155f1de225046ecac6e.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/dd527873ff91dc3142c3.webp
+- PASS: Artifact media URL allowed: https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/0de81973286ca2607247.webp
 
 ## Intentional Differences
 
@@ -392,3 +470,4 @@
 - /thank-you is replaced by KrabiClaw native noindex confirmation pages.
 - /conference is intentionally out of cutover scope.
 - Donation remains an external CTA; native donation/payment processing is excluded.
+- The source contact page is extended with the native KrabiClaw contact form and noindex confirmation page.

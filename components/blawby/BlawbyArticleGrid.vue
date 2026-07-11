@@ -1,5 +1,8 @@
 <template>
-  <div class="grid auto-rows-fr grid-cols-1 lg:grid-cols-3" :class="compact ? 'gap-4' : 'gap-8'">
+  <div
+    class="grid grid-cols-1 lg:grid-cols-3"
+    :class="compact ? 'gap-4 md:grid-cols-2' : 'auto-rows-fr gap-8'"
+  >
     <article
       v-for="post in posts"
       :key="post.id"

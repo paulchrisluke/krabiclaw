@@ -26,11 +26,12 @@
 
 import { parseArgs } from "node:util";
 import { readdir, stat, mkdir, writeFile, readFile } from "node:fs/promises";
-import { join, extname, basename, relative } from "node:path";
+import { join, extname, basename } from "node:path";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { spawnYarn } from "./utils/spawn-yarn.mjs";
+import { prepareD1SeedFile } from "./utils/d1-seed-file.mjs";
 
 // ── Args ─────────────────────────────────────────────────────────────────────
 
@@ -945,7 +946,16 @@ if (MODE === "apply") {
     `\n→ Executing seed SQL against ${REMOTE ? "remote" : "local"} D1...`,
   );
   const d1Flag = REMOTE ? "--remote" : "--local";
-  const applyResult = spawnYarn(["wrangler", "d1", "execute", "DB", d1Flag, "--file", relative(process.cwd(), seedPath)]);
+  const preparedSeed = await prepareD1SeedFile(seedPath);
+  if (preparedSeed.splitCount) {
+    console.log(`  Split ${preparedSeed.splitCount} oversized INSERT statement chunk(s) for D1 execution.`);
+  }
+  let applyResult;
+  try {
+    applyResult = spawnYarn(["wrangler", "d1", "execute", "DB", d1Flag, "--file", preparedSeed.path]);
+  } finally {
+    await preparedSeed.cleanup();
+  }
   if (applyResult.status !== 0) {
     console.error("\n✗ Seed execution failed — check wrangler output above.");
     process.exit(1);

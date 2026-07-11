@@ -1,11 +1,7 @@
 <template>
   <section class="bg-white py-16" data-parity-section="donation">
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="blawby-container">
       <BlawbyImpactSection v-if="impact" v-bind="impact" :parity-section="null" compact />
-
-      <div v-if="destination" class="mb-4 flex justify-center">
-        <BlawbyButton :to="destination" class="px-8 py-4 text-lg" @click="$emit('click')">{{ label }}</BlawbyButton>
-      </div>
 
       <div v-if="support" class="rounded-2xl py-16">
         <div class="grid grid-cols-1 gap-8 md:grid-cols-2">
@@ -55,9 +51,5 @@ defineProps<{
     difference: { title: string; description: string; items: string[] }
     other_ways: { title: string; description: string; items: Array<{ title: string; description: string; url: string; icon: string }> }
   } | null
-  destination?: string | null
-  label: string
 }>()
-
-defineEmits<{ click: [] }>()
 </script>

@@ -89,6 +89,20 @@ export const northcarolinalegalservices: ISeedTenant = {
   terms: { content: 'Terms of use.' },
   thirdPartyNotice: { content: 'Third-party notices.' },
   scheduleRedirectComponent: { buttonUrl: 'https://ncls.cliogrow.com/book' },
+  heroComponent: {
+    content: '# Access to **Justice.**<br></br>For all.',
+    cta: 'Request a Consultation',
+    ctaLink: '/schedule',
+  },
+  contactRowComponent: {
+    cardsContent: ['    # Call us\\n\\n    Phone support.'],
+  },
+  videoFeatures: [{
+    variant: 'index',
+    videoUrl: 'https://www.youtube.com/embed/example',
+    content: '## Empowering North Carolina\\n\\n**Approach to Justice**',
+    features: [],
+  }],
 }
 `
 
@@ -98,11 +112,23 @@ test('NCLS Blawby adapter normalizes source data into cutover artifacts', () => 
   assert.equal(payload.site.vertical, 'service')
   assert.equal(payload.site.theme_id, 'blawby-theme-v1')
   assert.equal(payload.consultation.external_url, 'https://ncls.cliogrow.com/book')
+  assert.equal(payload.site.service_area.name, 'North Carolina')
+  assert.doesNotMatch(payload.compliance.disclaimer, /^\s{4}/m)
   assert.equal(payload.consultation.legacy_source_calendly_url_ignored, 'https://calendly.com/old-link')
+  assert.equal(payload.consultation.metadata.header_cta_label, 'Get Started')
+  assert.equal(
+    payload.tenantPages
+      .find((page: { path: string }) => page.path === '/')
+      ?.components.find((component: { type: string }) => component.type === 'video_feature')?.accent,
+    'Approach to Justice',
+  )
   assert.equal(payload.analyticsBridge.container_id, 'GTM-MDHRQP5')
   assert.equal(payload.analyticsBridge.custom_head_code_ignored, true)
   assert.equal('fonts' in payload.themeTokens, false)
   assert.equal(payload.themeTokens.primary100, '#f2f5ff')
+  assert.equal(payload.themeTokens.accentButton, '#b58c4f')
+  const homeHero = payload.tenantPages.find((page: { path: string }) => page.path === '/')?.components.find((component: { type: string }) => component.type === 'home_hero')
+  assert.equal(homeHero?.title, 'Access to Justice.\nFor all.')
 
   assert.equal(payload.offerings.length, 1)
   assert.equal(payload.offerings[0].canonical_path, '/services/family')
@@ -118,7 +144,7 @@ test('NCLS Blawby adapter normalizes source data into cutover artifacts', () => 
   assert.equal(payload.tenantPages.find((page: { path: string }) => page.path === '/donate')?.cta_url, 'https://app.blawby.com/northcarolinalegalservices/pay/donate')
   assert.deepEqual(
     payload.tenantPages.find((page: { path: string }) => page.path === '/')?.components.map((component: { type: string }) => component.type),
-    ['home_hero', 'services_intro', 'qa', 'reviews', 'latest_articles', 'consultation_cta'],
+    ['home_hero', 'services_intro', 'video_feature', 'qa', 'reviews', 'latest_articles', 'consultation_cta'],
   )
   assert.equal(payload.articles[0].canonical_url, '/article/preparing-for-your-consultation')
   assert.equal(payload.source_commit, '5908ab3e64f26f799de61ed55371d02f9ec7bc2f')
@@ -138,6 +164,10 @@ test('NCLS Blawby adapter normalizes source data into cutover artifacts', () => 
   assert.ok(payload.routeInventory.intentionalExclusions.some((route: { path: string }) => route.path === '/conference'))
   assert.ok(payload.editSurfaceMatrix.some((row: { area: string }) => row.area === 'offerings'))
   assert.ok(payload.intentionalDifferences.some((item: string) => item.includes('Calendly')))
+  assert.ok(payload.intentionalDifferences.some((item: string) => item.includes('native KrabiClaw contact form')))
+  const contactPage = payload.tenantPages.find((page: { path: string }) => page.path === '/contact')
+  const contactCards = contactPage?.components.find((component: { type: string }) => component.type === 'contact_cards')
+  assert.equal(contactCards?.cardsContent[0], '# Call us\n\nPhone support.')
 })
 
 test('NCLS Blawby adapter output is deterministic for stable source data', () => {

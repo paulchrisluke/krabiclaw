@@ -1,6 +1,6 @@
 <template>
   <section class="relative bg-white pb-14 pt-14 sm:pb-20 sm:pt-14 lg:pb-14" :data-parity-section="paritySection">
-    <div class="relative z-20 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="blawby-container relative z-20">
       <BlawbySectionHeading
         :title="title"
         :accent="accent"

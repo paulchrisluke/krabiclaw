@@ -6,6 +6,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import { BLAWBY_REFERENCE_COMMIT } from './blawby-parity-config.mjs'
+import { replaceMediaUrls } from './utils/media-url-replacements.mjs'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const defaultSourceRepo = path.join(repoRoot, '.scratch', 'reference', 'react-next-marketing-site-template')
@@ -148,12 +149,6 @@ async function verifyPublicObject(asset) {
   throw new Error(`Uploaded object is not publicly fetchable: ${asset.public_url}`)
 }
 
-function replaceUrls(value, replacements) {
-  if (Array.isArray(value)) return value.map(item => replaceUrls(item, replacements))
-  if (!value || typeof value !== 'object') return typeof value === 'string' ? replacements.get(value) || value : value
-  return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, replaceUrls(nested, replacements)]))
-}
-
 function regenerateSeed(importDir) {
   const result = spawnSync(process.execPath, [
     path.join(repoRoot, 'scripts', 'generate-ncls-blawby-seed.mjs'),
@@ -212,7 +207,7 @@ for (let index = 0; index < prepared.length; index += 1) {
   const previous = manifest.mediaInventory.files[index]
   if (previous.public_url) replacements.set(previous.public_url, prepared[index].public_url)
 }
-const updated = replaceUrls(manifest, replacements)
+const updated = replaceMediaUrls(manifest, replacements)
 updated.mediaInventory = {
   ...updated.mediaInventory,
   source_commit: revision,

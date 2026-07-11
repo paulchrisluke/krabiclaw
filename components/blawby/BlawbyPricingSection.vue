@@ -1,6 +1,6 @@
 <template>
   <section class="bg-white py-16" data-parity-section="pricing">
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="blawby-container">
       <template v-if="individualPlans.length">
         <div class="mx-4 mb-12 text-center"><h2 class="mb-2 text-3xl font-semibold text-[var(--blawby-primary)]">Pricing for Individuals &amp; Families</h2><p class="text-base text-[var(--blawby-primary)]/80">Income-based sliding scale rates</p></div>
         <div class="mx-4 mb-12 grid grid-cols-1 gap-y-10 sm:mx-auto lg:grid-cols-2 lg:gap-x-8 xl:grid-cols-3"><BlawbyPricePlan v-for="plan in individualPlans" :key="`${plan.discount}-${plan.price}`" :plan="plan" /></div>

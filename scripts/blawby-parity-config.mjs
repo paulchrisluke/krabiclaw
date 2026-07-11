@@ -34,7 +34,7 @@ export const BLAWBY_PARITY_VIEWPORTS = {
 export const BLAWBY_PARITY_ROUTES = {
   home: {
     path: '/',
-    sections: ['hero', 'services', 'approach', 'qa', 'reviews', 'articles', 'consultation'],
+    sections: ['hero', 'services', 'approach', 'qa', 'reviews', 'articles', 'articles-more', 'consultation'],
   },
   services: {
     path: '/services',
@@ -66,7 +66,7 @@ export const BLAWBY_PARITY_ROUTES = {
   },
   article: {
     path: '/article/preparing-for-your-consultation-with-north-carolina-legal-services',
-    sections: ['article-header', 'article-body', 'related-articles', 'consultation'],
+    sections: ['article-content', 'related-articles', 'related-articles-more', 'consultation'],
   },
   donate: {
     path: '/donate',

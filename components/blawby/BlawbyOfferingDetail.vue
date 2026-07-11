@@ -1,23 +1,35 @@
 <template>
   <article data-parity-root>
-    <section class="mx-auto mb-8 max-w-7xl border-b border-slate-200 pb-8 pt-8 sm:px-6 md:flex lg:px-8" data-parity-section="service-overview">
+    <section
+      class="mx-auto mb-8 max-w-7xl border-b border-slate-200 pt-8 sm:px-6 md:flex lg:px-8"
+      :class="gallery.length ? '' : 'mt-8'"
+      data-parity-section="service-overview"
+    >
       <BlawbyMediaGallery v-if="gallery.length" v-model="activeMedia" :media="gallery" :fallback-alt="offering.name" />
 
-      <div class="flex-1 md:pl-4">
-        <div class="flex items-center gap-0.5 text-yellow-400" aria-label="5 out of 5 stars">
-          <svg v-for="star in 5" :key="star" class="size-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="m10 1.8 2.42 4.9 5.4.78-3.91 3.81.92 5.38L10 14.13l-4.83 2.54.92-5.38-3.91-3.81 5.4-.78L10 1.8Z" /></svg>
-        </div>
-        <h1 class="mt-2 blawby-display text-3xl font-bold text-[var(--blawby-primary)] sm:text-4xl">{{ offering.name }}</h1>
-        <BlawbyRichText class="mt-6" :content="offering.body || offering.summary" />
-        <div class="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div :class="gallery.length ? 'flex-1' : ''">
+        <div class="blawby-container pb-8 pt-8">
+          <h1 class="mx-auto max-w-4xl blawby-display text-3xl font-bold text-[var(--blawby-primary)] sm:text-4xl md:mt-2">
+            <span class="flex items-center text-yellow-400" aria-label="5 out of 5 stars">
+              <svg v-for="star in 5" :key="star" class="size-5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="m10 1.8 2.42 4.9 5.4.78-3.91 3.81.92 5.38L10 14.13l-4.83 2.54.92-5.38-3.91-3.81 5.4-.78L10 1.8Z" /></svg>
+            </span>
+            {{ offering.name }}
+          </h1>
+          <div class="mt-6">
+            <div class="prose">
+              <BlawbyRichText class="mx-auto mt-6 max-w-2xl text-left text-lg text-[var(--blawby-primary)]" :content="offering.body || offering.summary" />
+            </div>
+          </div>
+          <div class="mt-10 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
           <BlawbyButton :to="offering.cta_url || consultation.external_url || consultation.schedule_path" class="w-full gap-2" @click="trackConsultation">
-            <svg class="size-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 4.5h9A4.5 4.5 0 0 1 21 9v3a4.5 4.5 0 0 1-4.5 4.5h-4.86L7.2 20.2a.75.75 0 0 1-1.2-.6v-3.35A4.5 4.5 0 0 1 3 12V9a4.5 4.5 0 0 1 4.5-4.5Z" /></svg>
+            <svg class="-ml-0.5 mr-2 size-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 4.5h9A4.5 4.5 0 0 1 21 9v3a4.5 4.5 0 0 1-4.5 4.5h-4.86L7.2 20.2a.75.75 0 0 1-1.2-.6v-3.35A4.5 4.5 0 0 1 3 12V9a4.5 4.5 0 0 1 4.5-4.5Z" /></svg>
             Schedule Call
           </BlawbyButton>
           <BlawbyButton to="/contact" variant="outline" class="w-full gap-2">
-            <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>
+            <svg class="-ml-0.5 mr-2 size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>
             Contact Us
           </BlawbyButton>
+          </div>
         </div>
       </div>
     </section>
@@ -101,6 +113,8 @@
 </template>
 
 <script setup lang="ts">
+import { serializeJsonLd } from '~/utils/json-ld'
+
 import type { PublicBlawbyRouteData, PublicSiteQa } from '~/types/blawby'
 
 const props = defineProps<{ routeData: PublicBlawbyRouteData }>()
@@ -166,7 +180,7 @@ useSeoMeta({
 useHead(() => ({
   link: [{ rel: 'canonical', href: canonicalUrl.value }],
   script: [
-    { type: 'application/ld+json', children: JSON.stringify({
+    { type: 'application/ld+json', children: serializeJsonLd({
       '@context': 'https://schema.org',
       '@type': offering.value.schema_type || 'LegalService',
       name: offering.value.name,
@@ -175,7 +189,7 @@ useHead(() => ({
       provider: { '@type': 'Organization', name: identity.value.brand_name || 'Professional services' },
       image: offering.value.hero_image_url || offering.value.thumbnail_url || undefined,
     }) },
-    { type: 'application/ld+json', children: JSON.stringify({
+    { type: 'application/ld+json', children: serializeJsonLd({
       '@context': 'https://schema.org',
       '@type': 'BreadcrumbList',
       itemListElement: [

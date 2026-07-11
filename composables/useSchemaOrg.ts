@@ -1,4 +1,5 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
+import { serializeJsonLd } from '~/utils/json-ld'
 
 // Composable for adding JSON-LD schema markup to pages
 export function useSchemaOrg(schema: MaybeRefOrGetter<ApiRecord | null | undefined>) {
@@ -9,7 +10,7 @@ export function useSchemaOrg(schema: MaybeRefOrGetter<ApiRecord | null | undefin
     return [
       {
         type: 'application/ld+json',
-        innerHTML: JSON.stringify(value).replace(/</g, '\\u003c'),
+        innerHTML: serializeJsonLd(value),
       },
     ]
   })

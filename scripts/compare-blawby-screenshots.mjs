@@ -82,6 +82,16 @@ for (const key of keys) {
     comparisons.push({ key, ok: false, reason: reference ? 'missing_actual_section' : 'missing_reference_section' })
     continue
   }
+  if (reference.name !== actual.name) {
+    comparisons.push({
+      key,
+      ok: false,
+      reason: 'section_name_mismatch',
+      reference_name: reference.name,
+      actual_name: actual.name,
+    })
+    continue
+  }
   const diffPath = path.resolve(args.outDir, `${safeName(key)}.png`)
   const result = await comparePngFiles({
     referencePath: path.resolve(referenceRoot, reference.file),

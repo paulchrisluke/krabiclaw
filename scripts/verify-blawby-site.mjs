@@ -158,6 +158,12 @@ function collectArtifactMediaUrls(value, urls = new Set()) {
       if (/^(https?:)?\/\//.test(nested) && (isMediaField || hasMediaExtension)) {
         urls.add(nested)
       }
+      for (const match of nested.matchAll(/!\[[^\]]*\]\((https:\/\/[^\s)'"<>]+\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#][^\s)'"<>]*)?)/gi)) {
+        urls.add(match[1])
+      }
+      for (const match of nested.matchAll(/<img\b[^>]*\bsrc=["'](https:\/\/[^"']+)["']/gi)) {
+        urls.add(match[1])
+      }
     } else {
       collectArtifactMediaUrls(nested, urls)
     }
@@ -487,6 +493,57 @@ function writeEvidenceBundle(outPath, report, manifest) {
   fs.writeFileSync(mdPath, `${lines.join('\n')}\n`)
 }
 
+function writeClientHandoff(outPath, report, manifest) {
+  if (!outPath || !report.ok || !manifest) return
+  const handoffPath = path.join(path.dirname(path.resolve(outPath)), 'client-handoff.md')
+  const lines = [
+    `# Client Handoff: ${manifest.site?.brand_name || report.site_id || 'Blawby tenant'}`,
+    '',
+    `**Verified:** ${report.checked_at.slice(0, 10)}  `,
+    `**Status:** PASSED (${report.checks.length} checks)  `,
+    '**Vertical:** Professional service  ',
+    '',
+    '## Live Site',
+    '',
+    `- URL: ${report.base_url}`,
+    '',
+    '## Contact',
+    '',
+    `- Email: ${manifest.site?.email || 'Not configured'}`,
+    `- Phone: ${manifest.site?.phone || 'Not configured'}`,
+    `- Service area: ${manifest.site?.service_area?.name || manifest.site?.service_area?.locality || 'Not configured'}`,
+    '',
+    '## Services',
+    '',
+    ...(manifest.offerings ?? []).map(offering => `- ${offering.name}: ${report.base_url}${offering.canonical_path || `/services/${offering.slug}`}`),
+    '',
+    '## Conversion Paths',
+    '',
+    `- Consultation: ${manifest.consultation?.external_url || `${report.base_url}/schedule`}`,
+    `- Donation: ${(manifest.tenantPages ?? []).find(page => page.path === '/donate')?.cta_url || `${report.base_url}/donate`}`,
+    '',
+    '## Imported Content',
+    '',
+    `- Articles: ${(manifest.articles ?? []).length}`,
+    `- Reviews: ${(manifest.reviews ?? []).length}`,
+    `- Q&A: ${(manifest.siteQa ?? []).length}`,
+    `- Media and legal files: ${(manifest.mediaInventory?.files ?? []).length}`,
+    '',
+    '## Legal Documents',
+    '',
+    ...((manifest.compliance?.documents ?? []).map(document => `- ${document.label}: ${document.public_url}`)),
+    '',
+    '## Intentional Differences',
+    '',
+    ...((manifest.intentionalDifferences ?? []).map(item => `- ${item}`)),
+    '',
+    '## Verification Summary',
+    '',
+    `${report.checks.length} checks passed, 0 failed.`,
+  ]
+  fs.writeFileSync(handoffPath, `${lines.join('\n')}\n`)
+}
+
 const args = parseArgs(process.argv.slice(2))
 if (!args.url && !args.importManifest) {
   console.error('Usage: node scripts/verify-blawby-site.mjs --url https://example.com [--site-id site-id] [--tenant-slug slug] [--import-manifest file] [--evidence-dir dir] [--out artifact.json]')
@@ -549,5 +606,6 @@ const report = {
 }
 
 writeEvidenceBundle(args.out, report, manifest)
+writeClientHandoff(args.out, report, manifest)
 process.stdout.write(`${JSON.stringify(report, null, 2)}\n`)
 process.exit(report.ok ? 0 : 1)

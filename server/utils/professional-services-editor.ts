@@ -41,6 +41,7 @@ const BLAWBY_THEME_COLOR_KEYS = new Set([
   'accent',
   'accent100',
   'accent200',
+  'accentButton',
   'accentStrong',
   'border',
   'ink',

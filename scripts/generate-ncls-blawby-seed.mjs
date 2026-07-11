@@ -245,7 +245,12 @@ INSERT INTO site_consultation_settings (
   ${sqlValue(consultation.external_url)}, ${sqlValue(consultation.schedule_path || '/schedule')},
   ${sqlValue(consultation.confirmation_path || '/contact/confirmed')},
   ${consultation.tracking_enabled === false ? 0 : 1},
-  ${sqlJson({ source: manifest.source, analyticsBridge: manifest.analyticsBridge ?? null })}, ${now}, ${now}
+  ${sqlJson({
+    ...(consultation.metadata ?? {}),
+    source: manifest.source,
+    analyticsBridge: manifest.analyticsBridge ?? null,
+    legacy_source_calendly_url_ignored: consultation.legacy_source_calendly_url_ignored ?? null,
+  })}, ${now}, ${now}
 );
 
 INSERT INTO site_theme_tokens (id, organization_id, site_id, template_slug, tokens_json, status, created_at, updated_at)

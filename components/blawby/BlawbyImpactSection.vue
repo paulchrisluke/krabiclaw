@@ -1,6 +1,6 @@
 <template>
   <section v-if="statistics.length" :class="compact ? 'mb-16' : 'bg-white py-16'" :data-parity-section="paritySection">
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="blawby-container">
       <div class="mx-auto max-w-4xl">
         <div class="mb-12 text-center">
           <h2 class="blawby-display mb-6 text-3xl font-bold text-[var(--blawby-primary-dark)] sm:text-4xl">{{ title }}</h2>

@@ -1,6 +1,6 @@
 <template>
   <section v-if="reviews.length" class="bg-slate-50 py-20 sm:py-32" data-parity-section="reviews">
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="blawby-container">
       <BlawbySectionHeading
         title="What Clients"
         accent="Say"

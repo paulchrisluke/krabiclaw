@@ -32,9 +32,6 @@
       <BlawbyDonationSupport
         :impact="impactBlock ? impactProps : null"
         :support="donationSupport"
-        :destination="resolvedPage.cta_url"
-        :label="resolvedPage.cta_label || 'Donate'"
-        @click="trackDonation"
       />
       <BlawbyFaqSection :items="routeData.qa" :decoration-url="qaDecoration" />
     </template>
@@ -42,9 +39,9 @@
     <template v-else-if="recipe === 'privacy' || recipe === 'terms'">
       <BlawbyPageHero :title="heroTitle" :description="heroDescription" :variant="recipe" />
       <article class="bg-white px-6 pb-12 pt-8 sm:pb-16" data-parity-section="legal-content">
-        <div class="mx-auto max-w-3xl text-base leading-7 text-gray-700">
+        <div class="prose mx-auto max-w-3xl text-base leading-7 text-gray-700">
           <p v-if="recipe === 'privacy' && legalUpdatedAt" class="text-base leading-7 text-gray-600">Last updated: {{ formatLegalDate(legalUpdatedAt) }}</p>
-          <BlawbyRichText :content="resolvedPage.body" />
+          <BlawbyRichText :content="resolvedPage.body" unstyled class="contents" />
         </div>
       </article>
     </template>
@@ -52,7 +49,7 @@
     <template v-else>
       <BlawbyPageHero :title="heroTitle" :description="heroDescription" variant="third-party-notices" />
       <article class="bg-white px-6 pb-12 pt-8 sm:pb-16" data-parity-section="notices">
-        <div class="mx-auto max-w-3xl text-base leading-7 text-gray-700"><BlawbyRichText :content="resolvedPage.body" /></div>
+        <div class="prose mx-auto max-w-3xl text-base leading-7 text-gray-700"><BlawbyRichText :content="resolvedPage.body" unstyled class="contents" /></div>
       </article>
       <BlawbyConsultationCta v-if="ctaBlock" v-bind="ctaProps" @click="trackConsultation" />
     </template>

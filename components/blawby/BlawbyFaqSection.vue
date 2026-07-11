@@ -1,6 +1,6 @@
 <template>
   <section v-if="items.length" id="faq" class="relative overflow-hidden bg-[var(--blawby-accent-200)] py-20 sm:py-32" data-parity-section="qa">
-    <div class="relative z-20 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="blawby-container relative z-20">
       <BlawbySectionHeading :title="heading" accent="questions" />
       <ul class="mx-auto mb-auto mt-16 grid max-w-2xl grid-cols-1 content-start gap-8 lg:max-w-none lg:grid-cols-3" role="list">
         <li v-for="(column, columnIndex) in columns" :key="columnIndex">
@@ -8,9 +8,11 @@
             <li v-for="item in column" :key="item.id">
               <article class="rounded-2xl bg-white p-6 shadow-xl shadow-slate-900/10">
                 <h3 class="blawby-display text-lg font-bold leading-7 text-[var(--blawby-primary)]">{{ item.question }}</h3>
-                <div class="mt-4 border-l-2 border-[var(--blawby-accent)] pl-6 text-sm leading-6 text-[var(--blawby-primary)]">
-                  <BlawbyRichText :content="item.answer" />
-                </div>
+                <BlawbyRichText
+                  :content="item.answer"
+                  unstyled
+                  class="blawby-faq-answer prose prose-sm mt-4 max-w-none border-l-2 border-[var(--blawby-accent)] pl-6 text-sm text-[var(--blawby-primary)] prose-p:my-1 prose-ul:my-1 prose-li:my-0"
+                />
               </article>
             </li>
           </ul>
@@ -38,3 +40,21 @@ const columns = computed(() => {
   return Array.from({ length: 3 }, (_, index) => props.items.slice(index * size, (index + 1) * size))
 })
 </script>
+
+<style>
+.blawby-faq-answer p,
+.blawby-faq-answer li {
+  color: var(--blawby-primary) !important;
+  font-size: 0.875rem !important;
+  line-height: 1.5rem !important;
+}
+
+.blawby-faq-answer p,
+.blawby-faq-answer ul {
+  margin-block: 0.25rem !important;
+}
+
+.blawby-faq-answer li {
+  margin-block: 0 !important;
+}
+</style>

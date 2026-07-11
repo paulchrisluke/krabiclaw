@@ -3,18 +3,16 @@
     <BlawbyPageHero :title="heroTitle" :description="heroDescription" variant="blog" />
     <BlawbyShieldDivider variant="blog" />
 
-    <section class="bg-white" data-parity-section="articles">
-      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" data-parity-section="articles">
+      <div class="flex flex-col">
         <BlawbyBlogFilter v-if="tags.length" v-model="activeTags" :tags="tags" class="mb-4" />
         <BlawbyArticleGrid :posts="pagedPosts" compact />
         <BlawbyPagination v-model="currentPage" :total-pages="totalPages" />
       </div>
-    </section>
+    </div>
 
     <section v-if="disclaimerBlock?.content" class="mx-auto mb-6 max-w-7xl px-4 text-center md:text-left sm:px-6 lg:px-8" data-parity-section="disclaimer">
-      <div class="mt-8 text-sm italic text-gray-500">
-        <BlawbyRichText :content="String(disclaimerBlock.content)" />
-      </div>
+      <p class="mt-8 text-sm italic text-gray-500">{{ disclaimerBlock.content }}</p>
     </section>
 
     <BlawbyFaqSection :items="routeData.qa" :decoration-url="assetUrl(qaBlock?.decoration)" />
@@ -32,6 +30,8 @@
 </template>
 
 <script setup lang="ts">
+import { serializeJsonLd } from '~/utils/json-ld'
+
 const { data, error } = await useBlawbyRoute('blog')
 if (error.value) throw error.value
 const routeData = computed(() => data.value)
@@ -87,7 +87,7 @@ useSeoMeta({
 const canonicalUrl = useSeoUrl(() => '/blog')
 useHead(() => ({
   link: [{ rel: 'canonical', href: canonicalUrl.value }],
-  script: [{ type: 'application/ld+json', children: JSON.stringify({
+  script: [{ type: 'application/ld+json', children: serializeJsonLd({
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
     name: heroTitle.value,

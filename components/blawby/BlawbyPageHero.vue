@@ -1,6 +1,6 @@
 <template>
   <section :class="backgroundClass" class="relative overflow-hidden" data-parity-section="page-hero">
-    <div class="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="blawby-container relative">
       <div class="px-6 pb-4 pt-16 lg:px-8">
         <div class="mx-auto max-w-4xl text-center">
           <p v-if="eyebrow" class="mb-4 text-sm font-semibold uppercase text-[var(--blawby-accent-strong)]">
@@ -12,7 +12,9 @@
             </template>
           </h1>
           <div v-if="descriptionParts.length" class="mt-6 text-left text-lg leading-8 text-[var(--blawby-primary)]">
-            <BlawbyRichText v-for="(part, index) in descriptionParts" :key="index" :content="part" class="mb-4 max-w-none prose-p:mb-4 prose-p:text-lg prose-p:leading-8 prose-p:text-[var(--blawby-primary)]" />
+            <div v-for="(part, index) in descriptionParts" :key="index" class="flex items-start gap-3">
+              <BlawbyRichText :content="part" unstyled class="blawby-page-hero-copy contents prose prose-lg max-w-none" />
+            </div>
           </div>
           <div v-if="$slots.default" class="mt-12">
             <slot />
@@ -46,3 +48,21 @@ const descriptionParts = computed(() => Array.isArray(props.description)
   ? props.description.filter(Boolean)
   : String(props.description || '').split(/\n\s*\n/).map(part => part.trim()).filter(Boolean))
 </script>
+
+<style>
+.blawby-page-hero-copy p {
+  color: rgb(82 82 91) !important;
+  font-size: 1.125rem !important;
+  line-height: 2rem !important;
+  margin: 0 0 1rem !important;
+}
+
+.blawby-page-hero-copy strong {
+  color: var(--blawby-primary);
+  font-weight: 700;
+}
+
+.blawby-page-hero-copy a {
+  color: var(--blawby-accent);
+}
+</style>

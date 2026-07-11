@@ -1,5 +1,5 @@
 // SEO 301 redirects for legacy legal URLs
-import { defineEventHandler, getMethod, getRequestHeader, getRequestURL, sendRedirect } from 'h3'
+import { createError, defineEventHandler, getMethod, getRequestHeader, getRequestURL, sendRedirect, setResponseHeader } from 'h3'
 import { queryAll } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { isBlawbyTemplate } from '~/utils/template-registry'
@@ -33,6 +33,29 @@ export default defineEventHandler(async (event) => {
     const targetWithParams = `${target}${url.search}${url.hash}`
     // Permanent redirect for SEO
     return sendRedirect(event, targetWithParams, 301)
+  }
+
+  const tenantRedirect = event.context.tenantRedirect as {
+    toPath: string | null
+    statusCode: number | null
+    behavior: string
+  } | null | undefined
+  if (event.context.tenantType === TENANT_TYPES.TENANT && tenantRedirect) {
+    if (tenantRedirect.behavior === 'gone') {
+      throw createError({ statusCode: 410, statusMessage: 'Gone' })
+    }
+    if (tenantRedirect.behavior === 'noindex') {
+      setResponseHeader(event, 'x-robots-tag', 'noindex, nofollow')
+    }
+    if (tenantRedirect.behavior === 'redirect') {
+      if (!tenantRedirect.toPath || !/^\/(?!\/)/.test(tenantRedirect.toPath)) {
+        throw createError({ statusCode: 500, statusMessage: 'Invalid tenant redirect target' })
+      }
+      const statusCode = [301, 302, 307, 308].includes(tenantRedirect.statusCode ?? 0)
+        ? tenantRedirect.statusCode!
+        : 301
+      return sendRedirect(event, `${tenantRedirect.toPath}${url.search}${url.hash}`, statusCode)
+    }
   }
 
   // Server-side redirect for single-location sites
