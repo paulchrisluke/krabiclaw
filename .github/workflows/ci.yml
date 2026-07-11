@@ -109,8 +109,8 @@ jobs:
               - 'tests/unit/blawby*.test.ts'
               - 'tests/unit/site-content-scopes.test.ts'
 
-  lint-seeds:
-    name: Seed schema lint
+  guardrails:
+    name: CI guardrails
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
@@ -121,51 +121,13 @@ jobs:
         with:
           node-version: "22"
           cache: yarn
-      - run: yarn install --frozen-lockfile
-      - run: yarn lint:seeds
+      - name: Run Node-only guardrails
+        run: |
+          node scripts/lint-seeds.mjs
+          node scripts/lint-migrations.mjs
+          node scripts/lint-tool-parity.mjs
 
-  lint-migrations:
-    name: Migration guardrails
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: "22"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - run: yarn lint:migrations
-
-  lint-tool-parity:
-    name: Tool registry parity
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: "22"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - run: yarn lint:tool-parity
-
-  lint-scripts:
-    name: Script syntax check
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: "22"
-      - name: Check all pipeline scripts
+      - name: Check pipeline scripts
         run: |
           for f in \
             scripts/client-import.mjs \
@@ -229,11 +191,10 @@ jobs:
         run: |
           yarn migrate:preview
           node --experimental-strip-types scripts/generate-demo-bundle.ts
-          node --experimental-strip-types scripts/generate-demo-seed.ts --preview
-          sleep 5
-          node --experimental-strip-types scripts/generate-pottery-house-seed.ts --preview
-          sleep 5
-          node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview
+          node --experimental-strip-types scripts/generate-demo-seed.ts --preview --stdout > /tmp/preview-seed.sql
+          node --experimental-strip-types scripts/generate-pottery-house-seed.ts --preview --stdout >> /tmp/preview-seed.sql
+          node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview --stdout >> /tmp/preview-seed.sql
+          npx wrangler d1 execute DB --env preview --remote --file /tmp/preview-seed.sql
           if [ "$BLAWBY_CHANGED" = "true" ]; then
             node scripts/generate-ncls-blawby-seed.mjs --preview
           fi
@@ -377,10 +338,7 @@ jobs:
           node-version: "22"
           cache: yarn
       - run: yarn install --frozen-lockfile
-      - name: Build application
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144
-        run: yarn build
+      - run: yarn build
       - name: Migrate + seed staging database
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -477,10 +435,7 @@ jobs:
           node-version: "22"
           cache: yarn
       - run: yarn install --frozen-lockfile
-      - name: Build application
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144
-        run: yarn build
+      - run: yarn build
       - name: Migrate + deploy production Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
