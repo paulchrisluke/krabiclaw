@@ -1,11 +1,9 @@
 <template>
   <div class="relative flex min-h-0 flex-col border-r border-default bg-default">
 
-    <!-- Scroll area -->
-    <div ref="scrollRef" class="min-h-0 flex-1 overflow-y-auto">
-
-      <!-- Welcome screen -->
-      <div v-if="step === 'welcome'" class="flex flex-col gap-[18px] p-6 pb-4">
+    <!-- Welcome screen -->
+    <div v-if="step === 'welcome'" class="min-h-0 flex-1 overflow-y-auto p-6 pb-4">
+      <div class="flex flex-col gap-[18px]">
         <div class="flex size-16 items-center justify-center rounded-[18px] bg-primary/10 text-primary">
           <UIcon name="i-lucide-badge-check" class="size-8" />
         </div>
@@ -40,17 +38,21 @@
           Let's go
         </UButton>
       </div>
+    </div>
 
-      <!-- Chat transcript -->
-      <UChatMessages
-        v-else
-        class="p-5"
-      >
-        <template v-for="(msg, i) in messages" :key="msg.id">
-
-          <!-- Bot bubble -->
+    <!-- Chat transcript uses the same scroll and message layout as every ChowBot surface. -->
+    <ConversationShell
+      v-else
+      :messages="messages"
+      input=""
+      placeholder=""
+      :show-empty-state="false"
+      :show-prompt="false"
+    >
+      <template #message="{ message: msg }">
+        <div class="px-5 py-2">
           <UChatMessage
-            :id="String(i)"
+            :id="msg.id"
             role="assistant"
             :parts="[{ type: 'text', text: '' }]"
             side="left"
@@ -198,9 +200,9 @@
               </div>
             </template>
           </UChatMessage>
-        </template>
-      </UChatMessages>
-    </div>
+        </div>
+      </template>
+    </ConversationShell>
   </div>
 </template>
 
@@ -236,6 +238,8 @@ type WizardStep = 'welcome' | 'preview' | 'notifications' | 'team' | 'social' | 
 
 interface BotMessage {
   id: string
+  role: 'assistant'
+  content?: string
   text?: string
   siteCard?: { name: string; locationCount: number; plan: string; url: string }
   notifCard?: boolean
@@ -253,7 +257,6 @@ const WELCOME_POINTS: [string, string][] = [
   ['i-lucide-messages-square', 'Edit anything from ChatGPT'],
 ]
 
-const scrollRef = ref<HTMLElement | null>(null)
 const step = ref<WizardStep>('welcome')
 const messages = ref<BotMessage[]>([])
 let msgSeq = 0
@@ -281,11 +284,8 @@ const { data: session } = await authClient.useSession(useFetch)
 const activeOrgId = computed(() => session.value?.session?.activeOrganizationId ?? null)
 const toast = useToast()
 
-function pushMessage(msg: Omit<BotMessage, 'id'>) {
-  messages.value.push({ id: String(++msgSeq), ...msg })
-  nextTick(() => {
-    if (scrollRef.value) scrollRef.value.scrollTop = scrollRef.value.scrollHeight
-  })
+function pushMessage(msg: Omit<BotMessage, 'id' | 'role'>) {
+  messages.value.push({ id: String(++msgSeq), role: 'assistant', ...msg })
 }
 
 function advance(target: WizardStep) {
