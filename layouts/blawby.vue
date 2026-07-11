@@ -135,4 +135,8 @@ html.blawby-document {
 .blawby-shell .prose :where(h1, h2, h3, h4) {
   font-family: Marcellus, Georgia, serif;
 }
+
+.blawby-shell .prose.blawby-policy-prose :where(h1, h2, h3, h4) {
+  font-family: Poppins, Arial, sans-serif;
+}
 </style>
