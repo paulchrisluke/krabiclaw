@@ -373,14 +373,18 @@ async function loadThreads() {
 
 async function loadThreadDetail(threadId: string) {
   loadingDetail.value = true
+  selectedThreadId.value = null
+  selectedDetail.value = null
   try {
     const res = await $fetch<ThreadDetailResponse>(`/api/dashboard/sites/${siteId}/guest-threads/${threadId}`)
     selectedThreadId.value = threadId
     selectedDetail.value = res
     selectedInboxStatus.value = res.thread.inbox_status
     replyDraft.value = ''
+    return true
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load thread', color: 'error' })
+    return false
   } finally {
     loadingDetail.value = false
   }
@@ -388,9 +392,19 @@ async function loadThreadDetail(threadId: string) {
 
 async function applyRouteSelection() {
   const explicitThread = typeof route.query.thread === 'string' ? route.query.thread : null
-  if (explicitThread && threads.value.some(thread => thread.id === explicitThread)) {
-    if (selectedThreadId.value !== explicitThread) await loadThreadDetail(explicitThread)
-    mobileView.value = 'thread'
+  if (explicitThread) {
+    if (!threads.value.some(thread => thread.id === explicitThread)) {
+      selectedThreadId.value = null
+      selectedDetail.value = null
+      mobileView.value = 'list'
+      mobileTab.value = 'conversation'
+      return
+    }
+    const loaded = selectedThreadId.value === explicitThread && selectedDetail.value !== null
+      ? true
+      : await loadThreadDetail(explicitThread)
+    mobileView.value = loaded ? 'thread' : 'list'
+    if (loaded) mobileTab.value = 'conversation'
     return
   }
 
@@ -411,13 +425,21 @@ async function applyRouteSelection() {
     }
   }
 
-  if (!selectedThreadId.value && threads.value[0]) {
+  selectedThreadId.value = null
+  selectedDetail.value = null
+  mobileView.value = 'list'
+  mobileTab.value = 'conversation'
+  if (!isMobileInbox() && threads.value[0]) {
     await loadThreadDetail(threads.value[0].id)
   }
 }
 
 async function selectThread(threadId: string) {
-  await loadThreadDetail(threadId)
+  const loaded = await loadThreadDetail(threadId)
+  if (!loaded) {
+    mobileView.value = 'list'
+    return
+  }
   mobileView.value = 'thread'
   mobileTab.value = 'conversation'
   const query: Record<string, string> = {
@@ -442,6 +464,15 @@ async function closeMobileThread() {
   await router.push({ query })
 }
 
+function isMobileInbox() {
+  return import.meta.client && window.matchMedia('(max-width: 1023px)').matches
+}
+
+async function refreshThread(threadId: string) {
+  await loadThreadDetail(threadId)
+  await loadThreads()
+}
+
 async function sendReply() {
   if (!selectedThreadId.value || !replyDraft.value.trim()) return
   replySaving.value = true
@@ -454,7 +485,7 @@ async function sendReply() {
       },
     })
     toast.add({ description: 'Reply sent', color: 'success' })
-    await Promise.all([loadThreadDetail(selectedThreadId.value), loadThreads()])
+    await refreshThread(selectedThreadId.value)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to send reply', color: 'error' })
   } finally {
@@ -469,7 +500,7 @@ async function markSeen() {
       method: 'PATCH',
       body: { mark_seen: true },
     })
-    await Promise.all([loadThreadDetail(selectedThreadId.value), loadThreads()])
+    await refreshThread(selectedThreadId.value)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to mark thread as seen', color: 'error' })
   }
@@ -483,7 +514,7 @@ async function updateInboxStatus() {
       method: 'PATCH',
       body: { inbox_status: selectedInboxStatus.value },
     })
-    await Promise.all([loadThreadDetail(selectedThreadId.value), loadThreads()])
+    await refreshThread(selectedThreadId.value)
   } catch (error) {
     selectedInboxStatus.value = previousStatus
     toast.add({ description: error instanceof Error ? error.message : 'Failed to update thread status', color: 'error' })
@@ -498,7 +529,7 @@ async function updateContactStatus(status: 'read' | 'replied') {
       body: { status },
     })
     toast.add({ description: 'Contact status updated', color: 'success' })
-    await Promise.all([loadThreadDetail(selectedDetail.value.thread.id), loadThreads()])
+    await refreshThread(selectedDetail.value.thread.id)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to update contact status', color: 'error' })
   }
@@ -513,7 +544,7 @@ async function updateReservationStatus(status: 'confirmed' | 'completed' | 'canc
       body: { status },
     })
     toast.add({ description: 'Reservation status updated', color: 'success' })
-    await Promise.all([loadThreadDetail(selectedDetail.value.thread.id), loadThreads()])
+    await refreshThread(selectedDetail.value.thread.id)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to update reservation status', color: 'error' })
   }
@@ -527,7 +558,7 @@ async function updateBookingStatus(status: 'confirmed' | 'cancelled') {
       body: { status },
     })
     toast.add({ description: 'Booking status updated', color: 'success' })
-    await Promise.all([loadThreadDetail(selectedDetail.value.thread.id), loadThreads()])
+    await refreshThread(selectedDetail.value.thread.id)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to update booking status', color: 'error' })
   }
@@ -538,7 +569,7 @@ async function completeBooking() {
   try {
     await $fetch(`/api/editor/sites/${siteId}/experience-bookings/${selectedDetail.value.thread.submission_id}/complete`, { method: 'POST' })
     toast.add({ description: 'Booking completed', color: 'success' })
-    await Promise.all([loadThreadDetail(selectedDetail.value.thread.id), loadThreads()])
+    await refreshThread(selectedDetail.value.thread.id)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to complete booking', color: 'error' })
   }
@@ -595,11 +626,14 @@ watch(search, () => {
 watch(() => dashboardLocation.currentLocationId.value, async () => {
   selectedThreadId.value = null
   selectedDetail.value = null
+  mobileView.value = 'list'
+  mobileTab.value = 'conversation'
   await loadThreads()
 })
 
-watch(() => route.query.thread, (thread) => {
-  mobileView.value = typeof thread === 'string' ? 'thread' : 'list'
+watch(() => route.query.thread, async () => {
+  mobileTab.value = 'conversation'
+  await applyRouteSelection()
 })
 
 onMounted(async () => {

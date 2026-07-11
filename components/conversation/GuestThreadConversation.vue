@@ -34,7 +34,7 @@
           </div>
 
           <div class="min-w-0 space-y-1">
-            <div class="flex flex-wrap items-center gap-2 text-[11px] text-muted" :class="message.role === 'owner' ? 'flex-row-reverse justify-start' : ''">
+            <div class="flex flex-wrap items-center gap-2 text-[11px] text-muted" :class="message.role === 'owner' ? 'justify-end' : ''">
               <span class="font-semibold text-highlighted">{{ roleLabel(message.role) }}</span>
               <span>{{ channelLabel(message.channel) }}</span>
               <span>{{ formatTimestamp(message.createdAt) }}</span>
