@@ -15,6 +15,7 @@
     :render-markdown="renderMarkdown"
     :tool-label="toolLabel"
     :quick-replies="quickReplies"
+    :show-prompt="showPrompt"
     @update:input="$emit('update:input', $event)"
     @submit="$emit('submit')"
     @stop="$emit('stop')"
@@ -52,6 +53,7 @@ withDefaults(defineProps<{
   renderMarkdown: (_text: string) => string
   toolLabel?: (_name: string) => string
   quickReplies?: ConversationQuickReplyOption[]
+  showPrompt?: boolean
 }>(), {
   loading: false,
   disabled: false,
@@ -64,6 +66,7 @@ withDefaults(defineProps<{
   showBotEmptyIcon: true,
   messagesStatus: undefined,
   quickReplies: () => [],
+  showPrompt: true,
 })
 
 defineEmits<{

@@ -2,7 +2,10 @@
   <UPage>
     <UPageBody class="px-0 sm:px-0">
       <div class="flex min-h-[calc(100vh-12rem)] flex-col overflow-hidden rounded-2xl border border-default bg-default lg:grid lg:grid-cols-[340px_minmax(0,1fr)_320px]">
-        <aside class="border-b border-default lg:border-b-0 lg:border-r">
+        <aside
+          class="border-b border-default lg:block lg:border-b-0 lg:border-r"
+          :class="mobileView === 'thread' ? 'hidden' : 'block'"
+        >
           <div class="border-b border-default px-4 py-4">
             <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Guest Threads</p>
             <h1 class="mt-1 text-xl font-semibold text-highlighted">Inbox</h1>
@@ -79,17 +82,32 @@
           </div>
         </aside>
 
-        <section class="flex min-h-0 flex-col border-b border-default lg:border-b-0 lg:border-r">
+        <section
+          class="min-h-0 flex-col border-b border-default lg:flex lg:border-b-0 lg:border-r"
+          :class="mobileView === 'list' ? 'hidden' : 'flex'"
+        >
           <div class="border-b border-default px-4 py-4" v-if="selectedDetail">
             <div class="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 class="text-lg font-semibold text-highlighted">{{ selectedDetail.thread.guest_name }}</h2>
-                <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
-                  <span>{{ threadTypeLabel(selectedDetail.thread.submission_type) }}</span>
-                  <span>•</span>
-                  <span>{{ selectedDetail.source.location_title || 'Site-wide' }}</span>
-                  <span>•</span>
-                  <span>{{ threadStateLabel(selectedDetail.thread.inbox_status) }}</span>
+              <div class="flex min-w-0 items-start gap-2">
+                <UButton
+                  icon="i-lucide-arrow-left"
+                  color="neutral"
+                  variant="ghost"
+                  size="sm"
+                  square
+                  class="-ml-2 shrink-0 lg:hidden"
+                  aria-label="Back to guest threads"
+                  @click="closeMobileThread"
+                />
+                <div class="min-w-0">
+                  <h2 class="text-lg font-semibold text-highlighted">{{ selectedDetail.thread.guest_name }}</h2>
+                  <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
+                    <span>{{ threadTypeLabel(selectedDetail.thread.submission_type) }}</span>
+                    <span>•</span>
+                    <span>{{ selectedDetail.source.location_title || 'Site-wide' }}</span>
+                    <span>•</span>
+                    <span>{{ threadStateLabel(selectedDetail.thread.inbox_status) }}</span>
+                  </div>
                 </div>
               </div>
               <div class="flex gap-2">
@@ -152,7 +170,7 @@
 
         <aside
           class="min-h-0 overflow-y-auto"
-          :class="mobileTab === 'conversation' ? 'hidden lg:block' : 'block'"
+          :class="mobileView === 'list' || mobileTab === 'conversation' ? 'hidden lg:block' : 'block'"
         >
           <div v-if="selectedDetail" class="space-y-4 p-4">
             <UCard :ui="{ body: 'p-4' }">
@@ -316,6 +334,7 @@ const selectedThreadId = ref<string | null>(null)
 const selectedDetail = ref<ThreadDetailResponse | null>(null)
 const replyDraft = ref('')
 const replySaving = ref(false)
+const mobileView = ref<'list' | 'thread'>('list')
 const mobileTab = ref<'conversation' | 'details'>('conversation')
 const search = ref('')
 const typeFilter = ref<string>('')
@@ -354,14 +373,18 @@ async function loadThreads() {
 
 async function loadThreadDetail(threadId: string) {
   loadingDetail.value = true
+  selectedThreadId.value = null
+  selectedDetail.value = null
   try {
     const res = await $fetch<ThreadDetailResponse>(`/api/dashboard/sites/${siteId}/guest-threads/${threadId}`)
     selectedThreadId.value = threadId
     selectedDetail.value = res
     selectedInboxStatus.value = res.thread.inbox_status
     replyDraft.value = ''
+    return true
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load thread', color: 'error' })
+    return false
   } finally {
     loadingDetail.value = false
   }
@@ -369,8 +392,19 @@ async function loadThreadDetail(threadId: string) {
 
 async function applyRouteSelection() {
   const explicitThread = typeof route.query.thread === 'string' ? route.query.thread : null
-  if (explicitThread && threads.value.some(thread => thread.id === explicitThread)) {
-    if (selectedThreadId.value !== explicitThread) await loadThreadDetail(explicitThread)
+  if (explicitThread) {
+    if (!threads.value.some(thread => thread.id === explicitThread)) {
+      selectedThreadId.value = null
+      selectedDetail.value = null
+      mobileView.value = 'list'
+      mobileTab.value = 'conversation'
+      return
+    }
+    const loaded = selectedThreadId.value === explicitThread && selectedDetail.value !== null
+      ? true
+      : await loadThreadDetail(explicitThread)
+    mobileView.value = loaded ? 'thread' : 'list'
+    if (loaded) mobileTab.value = 'conversation'
     return
   }
 
@@ -391,13 +425,22 @@ async function applyRouteSelection() {
     }
   }
 
-  if (!selectedThreadId.value && threads.value[0]) {
-    await selectThread(threads.value[0].id)
+  selectedThreadId.value = null
+  selectedDetail.value = null
+  mobileView.value = 'list'
+  mobileTab.value = 'conversation'
+  if (!isMobileInbox() && threads.value[0]) {
+    await loadThreadDetail(threads.value[0].id)
   }
 }
 
 async function selectThread(threadId: string) {
-  await loadThreadDetail(threadId)
+  const loaded = await loadThreadDetail(threadId)
+  if (!loaded) {
+    mobileView.value = 'list'
+    return
+  }
+  mobileView.value = 'thread'
   mobileTab.value = 'conversation'
   const query: Record<string, string> = {
     ...Object.fromEntries(
@@ -409,7 +452,24 @@ async function selectThread(threadId: string) {
   }
   delete query.reply
   delete query.tab
-  await router.replace({ query })
+  await router.push({ query })
+  await loadThreads()
+}
+
+async function closeMobileThread() {
+  mobileView.value = 'list'
+  mobileTab.value = 'conversation'
+  const query = { ...route.query }
+  delete query.thread
+  await router.push({ query })
+}
+
+function isMobileInbox() {
+  return import.meta.client && window.matchMedia('(max-width: 1023px)').matches
+}
+
+async function refreshThread(threadId: string) {
+  await loadThreadDetail(threadId)
   await loadThreads()
 }
 
@@ -425,7 +485,7 @@ async function sendReply() {
       },
     })
     toast.add({ description: 'Reply sent', color: 'success' })
-    await Promise.all([loadThreadDetail(selectedThreadId.value), loadThreads()])
+    await refreshThread(selectedThreadId.value)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to send reply', color: 'error' })
   } finally {
@@ -440,7 +500,7 @@ async function markSeen() {
       method: 'PATCH',
       body: { mark_seen: true },
     })
-    await Promise.all([loadThreadDetail(selectedThreadId.value), loadThreads()])
+    await refreshThread(selectedThreadId.value)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to mark thread as seen', color: 'error' })
   }
@@ -454,7 +514,7 @@ async function updateInboxStatus() {
       method: 'PATCH',
       body: { inbox_status: selectedInboxStatus.value },
     })
-    await Promise.all([loadThreadDetail(selectedThreadId.value), loadThreads()])
+    await refreshThread(selectedThreadId.value)
   } catch (error) {
     selectedInboxStatus.value = previousStatus
     toast.add({ description: error instanceof Error ? error.message : 'Failed to update thread status', color: 'error' })
@@ -469,7 +529,7 @@ async function updateContactStatus(status: 'read' | 'replied') {
       body: { status },
     })
     toast.add({ description: 'Contact status updated', color: 'success' })
-    await Promise.all([loadThreadDetail(selectedDetail.value.thread.id), loadThreads()])
+    await refreshThread(selectedDetail.value.thread.id)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to update contact status', color: 'error' })
   }
@@ -484,7 +544,7 @@ async function updateReservationStatus(status: 'confirmed' | 'completed' | 'canc
       body: { status },
     })
     toast.add({ description: 'Reservation status updated', color: 'success' })
-    await Promise.all([loadThreadDetail(selectedDetail.value.thread.id), loadThreads()])
+    await refreshThread(selectedDetail.value.thread.id)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to update reservation status', color: 'error' })
   }
@@ -498,7 +558,7 @@ async function updateBookingStatus(status: 'confirmed' | 'cancelled') {
       body: { status },
     })
     toast.add({ description: 'Booking status updated', color: 'success' })
-    await Promise.all([loadThreadDetail(selectedDetail.value.thread.id), loadThreads()])
+    await refreshThread(selectedDetail.value.thread.id)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to update booking status', color: 'error' })
   }
@@ -509,7 +569,7 @@ async function completeBooking() {
   try {
     await $fetch(`/api/editor/sites/${siteId}/experience-bookings/${selectedDetail.value.thread.submission_id}/complete`, { method: 'POST' })
     toast.add({ description: 'Booking completed', color: 'success' })
-    await Promise.all([loadThreadDetail(selectedDetail.value.thread.id), loadThreads()])
+    await refreshThread(selectedDetail.value.thread.id)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to complete booking', color: 'error' })
   }
@@ -566,7 +626,14 @@ watch(search, () => {
 watch(() => dashboardLocation.currentLocationId.value, async () => {
   selectedThreadId.value = null
   selectedDetail.value = null
+  mobileView.value = 'list'
+  mobileTab.value = 'conversation'
   await loadThreads()
+})
+
+watch(() => route.query.thread, async () => {
+  mobileTab.value = 'conversation'
+  await applyRouteSelection()
 })
 
 onMounted(async () => {
