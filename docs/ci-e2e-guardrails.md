@@ -60,3 +60,10 @@ For local Miniflare-backed tests, keep bindings with `remote = false` in `wrangl
 4. Confirm dev login selected user is non-admin, non-platform-owner, and has org membership.
 5. Confirm remote seeds are idempotent on repeated runs, especially for unique fields like `sites.subdomain`.
 6. Confirm production smoke targets are still intentionally active customer/platform domains.
+
+## PR execution and guardrails
+
+- Draft pull requests do not deploy or run remote E2E. Marking a PR ready, or pushing a new commit after it is ready, starts the preview deployment and smoke suite.
+- Preview seeds are generated into one SQL bundle and applied with one remote D1 operation. The bundle remains idempotent and uses the same real preview D1, migration flow, fixed secrets, and deployed Worker as before.
+- `e2e-smoke` runs `yarn test:e2e:smoke`; the full `yarn test:e2e:full` suite remains the staging gate.
+- The seed, migration, tool-parity, and script-syntax checks run together in one Node-only job, avoiding redundant dependency installations.

@@ -72,17 +72,17 @@
       </UChatMessages>
     </div>
 
-    <div class="shrink-0 border-t border-default p-3">
+    <div v-if="showPrompt" class="shrink-0 border-t border-default bg-elevated p-3">
       <slot name="prompt-before" />
 
-      <div v-if="quickReplies.length" class="flex flex-wrap gap-2">
+      <div v-if="quickReplies.length" class="flex gap-2 overflow-x-auto pb-1">
         <button
           v-for="(reply, index) in quickReplies"
           :key="index"
           data-testid="chowbot-quick-reply"
           :data-reply-action="reply.action"
           :class="[
-            'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12.5px] font-semibold transition-colors',
+            'inline-flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-2 text-[12.5px] font-semibold transition-colors',
             reply.primary
               ? 'border-primary bg-primary text-white hover:bg-primary/90'
               : reply.ghost
@@ -163,6 +163,7 @@ withDefaults(defineProps<{
   // must handle via @stop). Set to false for non-streaming submits (e.g. a plain save
   // request) so the submit button just shows a loading spinner instead of a dead stop control.
   cancelable?: boolean
+  showPrompt?: boolean
 }>(), {
   loading: false,
   disabled: false,
@@ -179,6 +180,7 @@ withDefaults(defineProps<{
   renderMarkdown: (text: string) => text,
   toolLabel: (name: string) => name,
   cancelable: true,
+  showPrompt: true,
 })
 
 defineEmits<{

@@ -189,6 +189,125 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
       },
     }),
   siteTool({
+      name: 'sync_menu_items',
+      description: 'Reconcile a menu item list with an existing menu — use for updates, replacements, revised prices/descriptions, renamed items, or mixed create/update work. Items match by item_id first, then by normalized name/slug.',
+      domain: 'menus',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        menu_id: { type: 'string' },
+        items: {
+          type: 'array',
+          description: 'Items to reconcile. Up to 100.',
+          items: {
+            type: 'object',
+            properties: {
+              item_id: { type: 'string', description: 'Existing menu item ID when known.' },
+              section: { type: 'string', description: 'Section/category name.' },
+              name: { type: 'string' },
+              description: { type: ['string', 'null'] },
+              price_amount: { type: ['string', 'number', 'null'] },
+              compare_at_price_amount: { type: ['string', 'number', 'null'] },
+              sale_starts_at: { type: ['string', 'null'] },
+              sale_ends_at: { type: ['string', 'null'] },
+              image_asset_id: { type: ['string', 'null'] },
+              available: { type: 'boolean' },
+              allergens: { type: 'array', items: { type: 'string' } },
+              ingredients: { type: 'array', items: { type: 'string' } },
+              dietary_notes: { type: 'array', items: { type: 'string' } },
+              preparation: { type: ['string', 'null'] },
+              serving_note: { type: ['string', 'null'] },
+            },
+            additionalProperties: true,
+          },
+        },
+        set_missing_unavailable: {
+          type: 'boolean',
+          description: 'Only true when the user explicitly asks to remove, replace, hide, or make omitted items unavailable.',
+        },
+      },
+      required: ['menu_id', 'items'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          menu_id: { type: 'string' },
+          created: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+                section: { type: 'string' },
+                price_amount: { type: ['string', 'number', 'null'] },
+              },
+              required: ['id', 'name', 'section'],
+            },
+          },
+          updated: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+                section: { type: 'string' },
+                price_amount: { type: ['string', 'number', 'null'] },
+                available: { type: 'boolean' },
+              },
+              required: ['id', 'name', 'section', 'available'],
+            },
+          },
+          unchanged: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+              },
+              required: ['id', 'name'],
+            },
+          },
+          made_unavailable: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+              },
+              required: ['id', 'name'],
+            },
+          },
+          skipped: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                reason: { type: 'string' },
+                item_id: { type: 'string' },
+              },
+              required: ['name', 'reason'],
+            },
+          },
+          summary: {
+            type: 'object',
+            properties: {
+              created: { type: 'number' },
+              updated: { type: 'number' },
+              unchanged: { type: 'number' },
+              made_unavailable: { type: 'number' },
+              skipped: { type: 'number' },
+            },
+            required: ['created', 'updated', 'unchanged', 'made_unavailable', 'skipped'],
+          },
+        },
+        required: ['menu_id', 'created', 'updated', 'unchanged', 'made_unavailable', 'skipped', 'summary'],
+      },
+    }),
+  siteTool({
       name: 'update_menu_item',
       description: 'Update a menu item.',
       domain: 'menus',
