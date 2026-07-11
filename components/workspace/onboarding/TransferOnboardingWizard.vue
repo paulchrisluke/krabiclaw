@@ -1,11 +1,9 @@
 <template>
   <div class="relative flex min-h-0 flex-col border-r border-default bg-default">
 
-    <!-- Scroll area -->
-    <div ref="scrollRef" class="min-h-0 flex-1 overflow-y-auto">
-
-      <!-- Welcome screen -->
-      <div v-if="step === 'welcome'" class="flex flex-col gap-[18px] p-6 pb-4">
+    <!-- Welcome screen -->
+    <div v-if="step === 'welcome'" class="min-h-0 flex-1 overflow-y-auto p-6 pb-4">
+      <div class="flex flex-col gap-[18px]">
         <div class="flex size-16 items-center justify-center rounded-[18px] bg-primary/10 text-primary">
           <UIcon name="i-lucide-badge-check" class="size-8" />
         </div>
@@ -40,28 +38,20 @@
           Let's go
         </UButton>
       </div>
+    </div>
 
-      <!-- Chat transcript -->
-      <UChatMessages
-        v-else
-        class="p-5"
-      >
-        <template v-for="(msg, i) in messages" :key="msg.id">
-
-          <!-- Bot bubble -->
-          <UChatMessage
-            :id="String(i)"
-            role="assistant"
-            :parts="[{ type: 'text', text: '' }]"
-            side="left"
-          >
-            <template #content>
-              <div class="space-y-3">
-                <div
-                  v-if="msg.text"
-                  class="text-sm leading-relaxed"
-                >{{ msg.text }}</div>
-
+    <!-- Chat transcript uses the same scroll and message layout as every ChowBot surface. -->
+    <ChowBotConversation
+      v-else
+      :messages="messages"
+      input=""
+      placeholder=""
+      :show-empty-state="false"
+      :show-prompt="false"
+      :render-markdown="renderMarkdown"
+    >
+      <template #assistant-after="{ message: msg }">
+        <div class="space-y-3">
                 <!-- Site preview card -->
                 <div v-if="msg.siteCard" class="rounded-xl border border-default bg-elevated px-4 py-3 space-y-2">
                   <div class="flex items-center gap-2">
@@ -195,17 +185,15 @@
                     @click="action.fn()"
                   >{{ action.label }}</UButton>
                 </div>
-              </div>
-            </template>
-          </UChatMessage>
-        </template>
-      </UChatMessages>
-    </div>
+        </div>
+      </template>
+    </ChowBotConversation>
   </div>
 </template>
 
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
+import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
 
 interface Location {
   id: string
@@ -236,7 +224,8 @@ type WizardStep = 'welcome' | 'preview' | 'notifications' | 'team' | 'social' | 
 
 interface BotMessage {
   id: string
-  text?: string
+  role: 'assistant'
+  content: string
   siteCard?: { name: string; locationCount: number; plan: string; url: string }
   notifCard?: boolean
   teamCard?: boolean
@@ -253,7 +242,6 @@ const WELCOME_POINTS: [string, string][] = [
   ['i-lucide-messages-square', 'Edit anything from ChatGPT'],
 ]
 
-const scrollRef = ref<HTMLElement | null>(null)
 const step = ref<WizardStep>('welcome')
 const messages = ref<BotMessage[]>([])
 let msgSeq = 0
@@ -281,11 +269,17 @@ const { data: session } = await authClient.useSession(useFetch)
 const activeOrgId = computed(() => session.value?.session?.activeOrganizationId ?? null)
 const toast = useToast()
 
-function pushMessage(msg: Omit<BotMessage, 'id'>) {
-  messages.value.push({ id: String(++msgSeq), ...msg })
-  nextTick(() => {
-    if (scrollRef.value) scrollRef.value.scrollTop = scrollRef.value.scrollHeight
-  })
+function renderMarkdown(text: string) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function pushMessage(msg: Omit<BotMessage, 'id' | 'role'>) {
+  messages.value.push({ id: String(++msgSeq), role: 'assistant', ...msg })
 }
 
 function advance(target: WizardStep) {
@@ -294,7 +288,7 @@ function advance(target: WizardStep) {
 
   if (target === 'preview') {
     pushMessage({
-      text: `Here's what we built for ${props.siteName}. Take a look at the live preview on the right — you can browse every page and switch locations.`,
+      content: `Here's what we built for ${props.siteName}. Take a look at the live preview on the right — you can browse every page and switch locations.`,
       siteCard: {
         name: props.siteName,
         locationCount: props.locations.length,
@@ -311,35 +305,35 @@ function advance(target: WizardStep) {
 
   if (target === 'notifications') {
     pushMessage({
-      text: `First, let's confirm where alerts should go so bookings and messages land with the right person at each location.`,
+      content: `First, let's confirm where alerts should go so bookings and messages land with the right person at each location.`,
       notifCard: true,
     })
   }
 
   if (target === 'team') {
     pushMessage({
-      text: `Would you like to invite anyone to help manage the site? You can add team members now or do it later from Settings → Members.`,
+      content: `Would you like to invite anyone to help manage the site? You can add team members now or do it later from Settings → Members.`,
       teamCard: true,
     })
   }
 
   if (target === 'social') {
     pushMessage({
-      text: `Your ${props.plan} plan includes Facebook and Instagram sync. Connect your Facebook Page and posts you publish there will automatically appear on your site.`,
+      content: `Your ${props.plan} plan includes Facebook and Instagram sync. Connect your Facebook Page and posts you publish there will automatically appear on your site.`,
       socialCard: true,
     })
   }
 
   if (target === 'domain') {
     pushMessage({
-      text: `Your ${props.plan} plan includes a custom domain. If you have a domain like www.yourdomain.com you can point it to your site. Head to Settings → Domains, or skip and do it later.`,
+      content: `Your ${props.plan} plan includes a custom domain. If you have a domain like www.yourdomain.com you can point it to your site. Head to Settings → Domains, or skip and do it later.`,
       domainCard: true,
     })
   }
 
   if (target === 'done') {
     pushMessage({
-      text: `You're all set. ${props.siteName} is live and your notifications are configured. Here's how to make changes whenever you need to.`,
+      content: `You're all set. ${props.siteName} is live and your notifications are configured. Here's how to make changes whenever you need to.`,
       doneCard: true,
     })
   }
