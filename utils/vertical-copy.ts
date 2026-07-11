@@ -1,7 +1,7 @@
 export type SiteVertical =
   | "restaurant"
   | "experience"
-  | "service";
+  | "professional_service";
 
 type LocaleCode = "en" | "th";
 
@@ -594,7 +594,7 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
   },
 }
 
-registry.en.service = {
+registry.en.professional_service = {
   ...(registry.en.experience ?? registry.en.restaurant!),
   poweredByTagline: "professional-service sites that stay current",
   aboutImageAlt: "About our organization",
@@ -692,7 +692,7 @@ registry.en.service = {
   callUsLabel: (_phone: string) => `Call: ${_phone}`,
 }
 
-registry.th.service = registry.en.service!
+registry.th.professional_service = registry.en.professional_service!
 
 export function getVerticalCopy(vertical: string | null | undefined, locale: string | null | undefined = "en"): VerticalCopy {
   const v = String(vertical ?? "restaurant")
@@ -709,6 +709,6 @@ export function getVerticalCopy(vertical: string | null | undefined, locale: str
 // LocalBusiness; other verticals fall back to the generic LocalBusiness type.
 export function getBusinessSchemaTypes(vertical: string | null | undefined): string[] {
   if (vertical === "restaurant") return ["Restaurant", "LocalBusiness"]
-  if (vertical === "service") return ["ProfessionalService", "LocalBusiness"]
+  if (vertical === "professional_service") return ["ProfessionalService", "LocalBusiness"]
   return ["LocalBusiness"]
 }

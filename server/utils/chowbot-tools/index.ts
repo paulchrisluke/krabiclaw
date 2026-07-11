@@ -3,7 +3,6 @@ import { BLOG_CHOWBOT_TOOLS } from './blog'
 import { CONTENT_CHOWBOT_TOOLS } from './content'
 import { EXPERIENCES_CHOWBOT_TOOLS } from './experiences'
 import { INTEGRATIONS_CHOWBOT_TOOLS } from './integrations'
-import { LOCALES_CHOWBOT_TOOLS } from './locales'
 import { LOCATIONS_CHOWBOT_TOOLS } from './locations'
 import { MANAGED_SERVICE_CHOWBOT_TOOLS } from './managed-service'
 import { MEDIA_CHOWBOT_TOOLS } from './media'
@@ -22,7 +21,6 @@ export const CHOWBOT_TOOLS: AiTool[] = [
   ...CONTENT_CHOWBOT_TOOLS,
   ...EXPERIENCES_CHOWBOT_TOOLS,
   ...INTEGRATIONS_CHOWBOT_TOOLS,
-  ...LOCALES_CHOWBOT_TOOLS,
   ...LOCATIONS_CHOWBOT_TOOLS,
   ...MANAGED_SERVICE_CHOWBOT_TOOLS,
   ...MEDIA_CHOWBOT_TOOLS,

@@ -1,7 +1,7 @@
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { ProfessionalServiceValidationError, upsertProfessionalServiceContent } from '~/server/utils/professional-services-editor'
+import { upsertProfessionalServiceContent } from '~/server/utils/professional-services-editor'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -39,10 +39,6 @@ export default defineEventHandler(async (event) => {
     })
     return jsonResponse(result)
   } catch (error) {
-    if (error instanceof ProfessionalServiceValidationError) {
-      return jsonResponse({ error: error.message }, { status: 400 })
-    }
-    console.error('[professional-services.patch] Failed to save professional-service content', error)
-    return jsonResponse({ error: 'Failed to save professional-service content' }, { status: 500 })
+    return jsonResponse({ error: error instanceof Error ? error.message : 'Invalid professional-service content' }, { status: 400 })
   }
 })

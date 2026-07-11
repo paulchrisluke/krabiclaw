@@ -23,9 +23,5 @@ export default defineEventHandler(async (event) => {
   `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  try {
-    return jsonResponse({ success: true, ...(await getProfessionalServiceContent(db, siteId)) })
-  } catch (error) {
-    return jsonResponse({ error: error instanceof Error ? error.message : 'Failed to load professional-service content' }, { status: 500 })
-  }
+  return jsonResponse({ success: true, ...(await getProfessionalServiceContent(db, siteId)) })
 })

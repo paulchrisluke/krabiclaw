@@ -259,7 +259,7 @@ export default defineEventHandler(async (event) => {
   // the page value; allowlisting against the real route set bounds that space.
   const VALID_PAGES = new Set([
     'home', 'locations', 'location', 'about', 'contact', 'reservations',
-    'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'blog', 'article',
+    'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'blog',
   ]);
   const isValidDataType = dataType === null || VALID_DATA_TYPES.has(dataType);
   const isValidLocale = locale === undefined || /^[a-z]{2}(-[A-Z]{2})?$/.test(locale);

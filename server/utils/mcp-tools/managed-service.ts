@@ -22,20 +22,7 @@ export const MANAGED_SERVICE_TOOLS: McpToolDefinition[] = [
       minimumRole: 'editor',
       confirmRequired: false,
       requiredEntitlement: 'managed_service',
-      inputSchema: {
-        type: {
-          type: 'string',
-          enum: ['content_update', 'menu_update', 'translation', 'seo', 'google_business', 'seasonal', 'photo_update', 'social_media', 'technical', 'other'],
-          description: 'Category of work needed.',
-        },
-        title: { type: 'string', description: 'Short summary of what needs to be done (max 120 chars).' },
-        description: { type: 'string', description: 'Full details — what, where, any specific requirements or context.' },
-        priority: {
-          type: 'string',
-          enum: ['low', 'normal', 'high', 'urgent'],
-          description: 'How urgent. Default: normal.',
-        },
-      },
+      inputSchema: { type: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, priority: { type: 'string' } },
       required: ['type', 'title'],
       outputSchema: {
         type: 'object',

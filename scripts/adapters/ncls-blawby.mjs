@@ -55,25 +55,13 @@ function safeFileName(sourcePath) {
   return path.basename(decoded).replace(/[^a-zA-Z0-9._-]+/g, '-')
 }
 
-// The real IRS determination letter is delivered under a filename that
-// doesn't contain "irs" (it's named after the case/EIN instead), so the
-// generic substring check below can't catch it — match it explicitly.
-const IRS_DETERMINATION_FILENAME_PATTERN = /^FinalLetter_[\d-]+_[A-Za-z0-9]+_Redacted\.pdf$/i
-
 function legalAssetFor(sourcePath) {
   const fileName = safeFileName(sourcePath)
   const base = fileName.replace(/\.[^.]+$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
   const r2Key = `sites/${siteId}/media/legal/${fileName}`
-  const role = IRS_DETERMINATION_FILENAME_PATTERN.test(fileName)
-    ? 'irs_determination'
-    : sourcePath.toLowerCase().includes('irs')
-      ? 'irs_determination'
-      : sourcePath.toLowerCase().includes('dba')
-        ? 'dba_registration'
-        : 'legal_document'
   return {
     kind: 'legal_file',
-    role,
+    role: sourcePath.toLowerCase().includes('irs') ? 'irs_determination' : sourcePath.toLowerCase().includes('dba') ? 'dba_registration' : 'legal_document',
     source_path: sourcePath,
     approved_storage_required: true,
     asset_id: `asset_ncls_legal_${base || createHash('sha1').update(sourcePath).digest('hex').slice(0, 10)}`,
@@ -453,6 +441,8 @@ function buildRouteInventory(offerings, pages, articles, redirects = []) {
       '/services',
       ...offerings.map((offering) => offering.canonical_path || `/services/${offering.slug}`),
       '/schedule',
+      '/pricing',
+      '/donate',
       '/blog',
       ...articles.map((article) => article.canonical_url || `/article/${article.slug}`),
       ...pages.map((page) => page.path),
