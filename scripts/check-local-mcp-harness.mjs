@@ -31,8 +31,9 @@ function fail(message, detail) {
   if (detail) console.error(typeof detail === 'string' ? detail : JSON.stringify(detail, null, 2))
 }
 
-function skip(message) {
+function skip(message, detail) {
   console.log(`skip  ${message}`)
+  if (detail) console.log(typeof detail === 'string' ? detail : JSON.stringify(detail, null, 2))
 }
 
 function note(message) {
@@ -64,6 +65,20 @@ function extractTunnelHostname() {
   const source = readFileSync(TUNNEL_CONFIG_PATH, 'utf8')
   const match = source.match(/^\s*-?\s*hostname:\s*("?)([^"\n#]+)\1\s*$/m)
   return match ? `https://${match[2].trim()}` : null
+}
+
+// Quick tunnels (`cloudflared tunnel --url ...`) never read tunnel.yml — its
+// hostname always still points at the named krabiclaw-local tunnel, so a
+// mismatch against a *.trycloudflare.com BASE_URL is expected, not a
+// misconfiguration. Keep the check fatal for every other host (i.e. actual
+// named-tunnel usage, where tunnel.yml SHOULD match).
+function isQuickTunnelOrigin(origin) {
+  if (!origin) return false
+  try {
+    return new URL(origin).hostname.endsWith('.trycloudflare.com')
+  } catch {
+    return false
+  }
 }
 
 function extractTunnelId() {
@@ -269,6 +284,8 @@ async function main() {
     fail(`could not find hostname in ${TUNNEL_CONFIG_PATH}`)
   } else if (baseOrigin && tunnelHostname === baseOrigin) {
     pass(`${TUNNEL_CONFIG_PATH} hostname matches BETTER_AUTH_URL/MCP_BASE_URL`)
+  } else if (isQuickTunnelOrigin(baseOrigin)) {
+    skip(`${TUNNEL_CONFIG_PATH} hostname mismatch (expected — using a trycloudflare.com quick tunnel, not the named tunnel)`, { tunnelHostname, baseUrl: BASE_URL })
   } else {
     fail(`${TUNNEL_CONFIG_PATH} hostname mismatch`, { tunnelHostname, baseUrl: BASE_URL })
   }

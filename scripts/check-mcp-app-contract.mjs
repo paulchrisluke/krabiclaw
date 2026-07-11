@@ -171,6 +171,13 @@ async function main() {
     else fail(`${resource.uri} read content has wrong MIME type`, content)
     if (content?._meta?.ui?.csp?.resourceDomains?.length) pass(`${resource.uri} declares standard CSP metadata`)
     else fail(`${resource.uri} missing standard CSP metadata`, content?._meta)
+    if (content?._meta?.ui?.domain) pass(`${resource.uri} declares ui.domain`)
+    else fail(`${resource.uri} missing ui.domain`, content?._meta)
+    if (content?._meta?.['openai/widgetDomain'] === content?._meta?.ui?.domain) {
+      pass(`${resource.uri} keeps openai/widgetDomain aligned with ui.domain`)
+    } else {
+      fail(`${resource.uri} widget domain metadata mismatch`, content?._meta)
+    }
 
     const baseOrigin = new URL(BASE_URL).origin
     for (const src of scriptUrls(content?.text ?? '')) {

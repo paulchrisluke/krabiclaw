@@ -74,8 +74,8 @@
           </p>
 
           <!-- Today's hours -->
-          <p v-if="getTodayHoursLabel(loc.opening_hours, 'Closed')" class="text-sm text-muted">
-            <span class="text-default font-medium">Today: </span>{{ getTodayHoursLabel(loc.opening_hours, 'Closed') }}
+          <p v-if="getTodayHoursLabel(loc.opening_hours, 'Closed', loc.timezone)" class="text-sm text-muted">
+            <span class="text-default font-medium">Today: </span>{{ getTodayHoursLabel(loc.opening_hours, 'Closed', loc.timezone) }}
           </p>
 
           <!-- Phone -->
@@ -105,6 +105,7 @@ export interface BookingLocation {
   kind?: 'image' | 'video' | null
   thumbnail_url?: string | null
   opening_hours?: unknown
+  timezone?: string | null
 }
 
 defineProps<{

@@ -22,12 +22,12 @@ The shared gate lives in `server/utils/conversational-tool-surface.ts`.
 
 ## Default Visible Surface
 
-As of 2026-07-05:
+As of 2026-07-10:
 
 | Surface | Raw tools | Default visible tools | Notes |
 | --- | ---: | ---: | --- |
-| Client MCP | 119 | 94 | Deprecated upload primitives removed; feature-flagged groups hidden |
-| ChowBot | 95 | 82 | Same feature-flag policy; WhatsApp-specific tools remain ChowBot-only |
+| Client MCP | 128 | 103 | Feature-flagged groups hidden (translations/locales 11, social/OAuth publishing 7, domains 5, managed service 2 = 25). Raw count grew from 119 as of 2026-07-05; only +1 (`sync_menu_items`, see below) is from the ChowBot consolidation work in this doc's history — the remaining growth predates it and wasn't re-audited here |
+| ChowBot | 95 | 82 | Same feature-flag policy (translations/locales 11 + managed service 2 = 13 hidden); WhatsApp-specific tools remain ChowBot-only. Previously only 2 of the 11 translations tools and 0 of the 2 managed-service tools were actually reachable despite the flag existing — `chowbot-tools/translations.ts` and `chowbot-tools/managed-service.ts` never defined schemas for the rest. Fixed; counts above reflect the tools now actually being registered, matching what this table already described |
 
 Counts are checked by `yarn lint:tool-parity` (`scripts/lint-tool-parity.mjs`), which also verifies tool names stay in sync across definitions, executor dispatch, the confirm-required set, and feature-gate groups — update this table whenever those counts drift.
 
@@ -46,8 +46,7 @@ These groups are hidden by default on both conversational surfaces where present
 
 | ChowBot-only tool | Reason |
 | --- | --- |
-| `sync_menu_items` | WhatsApp/chat reconciliation workflow; Client MCP uses explicit menu item calls |
-| `publish_menu` | ChowBot menu workflow step; Client MCP menu writes publish immediately through canonical APIs |
+| `publish_menu` | ChowBot menu workflow step; Client MCP menu writes publish immediately through canonical APIs (via `update_menu`'s `status` field, same effect) |
 | `generate_image` | ChowBot has one generic image tool; Client MCP uses ChatGPT native image generation plus `save_generated_image_file` |
 | `get_site_stats` | ChowBot content-count helper; Client MCP has `get_site_analytics` for traffic/SEO analytics |
 | `rename_site`, `set_default_currency`, `save_brand_description`, `update_site_social` | Narrow ChowBot aliases for owner-friendly chat turns; Client MCP uses `update_site_settings` plus specific tools where available |

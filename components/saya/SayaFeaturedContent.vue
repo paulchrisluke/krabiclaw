@@ -1,5 +1,5 @@
 <template>
-  <AppSection :bg="bg" :padding="padding">
+  <AppSection v-if="!allUnavailable" :bg="bg" :padding="padding">
     <div class="mb-12 flex flex-wrap items-end justify-between gap-4">
       <div class="max-w-2xl">
         <p class="saya-kicker mb-6">{{ sectionKicker }}</p>
@@ -101,6 +101,14 @@ const props = withDefaults(defineProps<Props>(), {
 const { site } = useTenantSite()
 
 const items = computed(() => props.data?.items || [])
+// A location-wide closure marks every item unavailable at once — showing a
+// row of all-badged cards reads as broken, so hide the whole section instead.
+// This is distinct from a genuinely empty list, which still shows the
+// filled example placeholders per the Saya empty-state design.
+const allUnavailable = computed(() => {
+  const list = items.value
+  return list.length > 0 && list.every(item => item.unavailable)
+})
 const hasMenu = computed(() => props.data?.hasMenu || false)
 const linkTarget = computed(() => hasMenu.value ? '/menu' : '/experiences')
 

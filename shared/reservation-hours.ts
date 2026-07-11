@@ -34,6 +34,29 @@ const toTimeString = (minutes: number) => {
   return `${h}:${m}`
 }
 
+// Resolves the current weekday and minutes-since-midnight in the location's own timezone.
+// The server (Cloudflare Workers) runs in UTC, so comparing UTC wall-clock time against a
+// location's local opening_hours produces wrong open/closed results.
+function nowInTimezone(timezone: string | null | undefined, now: Date): { weekdayName: string; nowMinutes: number } {
+  if (!timezone) return { weekdayName: WEEKDAY_BY_INDEX[now.getDay()]!, nowMinutes: now.getHours() * 60 + now.getMinutes() }
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      weekday: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(now)
+    const weekday = parts.find(p => p.type === 'weekday')?.value?.toUpperCase()
+    const hour = Number(parts.find(p => p.type === 'hour')?.value)
+    const minute = Number(parts.find(p => p.type === 'minute')?.value)
+    if (!weekday || Number.isNaN(hour) || Number.isNaN(minute)) throw new Error('invalid parts')
+    return { weekdayName: weekday, nowMinutes: hour * 60 + minute }
+  } catch {
+    return { weekdayName: WEEKDAY_BY_INDEX[now.getDay()]!, nowMinutes: now.getHours() * 60 + now.getMinutes() }
+  }
+}
+
 /**
  * Generates reservation time options for a given calendar date from a location's structured
  * opening hours, at a fixed interval, stopping `lastSeatingBufferMinutes` before closing so the
@@ -76,9 +99,9 @@ export const fmt12Hour = (timeStr: string): string => {
  * closedLabel when the location has structured hours but isn't open today. Returns null when
  * the location has no structured opening_hours to read (e.g. Google Places free-text hours).
  */
-export function getTodayHoursLabel(openingHours: unknown, closedLabel: string, now = new Date()): string | null {
+export function getTodayHoursLabel(openingHours: unknown, closedLabel: string, timezone?: string | null, now = new Date()): string | null {
   if (!isStructuredOpeningHours(openingHours)) return null
-  const weekdayName = WEEKDAY_BY_INDEX[now.getDay()]!
+  const { weekdayName } = nowInTimezone(timezone, now)
   const todaysEntry = openingHours.find(entry => entry.openDay.toUpperCase() === weekdayName)
   if (!todaysEntry) return closedLabel
   return `${fmt12Hour(todaysEntry.openTime)} – ${fmt12Hour(todaysEntry.closeTime)}`
@@ -90,11 +113,11 @@ export function getTodayHoursLabel(openingHours: unknown, closedLabel: string, n
  * and avoid rendering an open/closed badge at all rather than trusting a false negative.
  * Handles overnight hours by treating ranges where closeTime <= openTime as spanning midnight.
  */
-export function isOpenNow(openingHours: unknown, now = new Date()): boolean {
+export function isOpenNow(openingHours: unknown, timezone?: string | null, now = new Date()): boolean {
   if (!isStructuredOpeningHours(openingHours)) return false
-  const weekdayName = WEEKDAY_BY_INDEX[now.getDay()]!
-  const previousWeekdayName = WEEKDAY_BY_INDEX[(now.getDay() + 6) % 7]!
-  const nowMinutes = now.getHours() * 60 + now.getMinutes()
+  const { weekdayName, nowMinutes } = nowInTimezone(timezone, now)
+  const weekdayIndex = WEEKDAY_BY_INDEX.indexOf(weekdayName)
+  const previousWeekdayName = WEEKDAY_BY_INDEX[(weekdayIndex + 6) % 7]!
   return openingHours.some(entry => {
     const open = toMinutes(entry.openTime)
     const close = toMinutes(entry.closeTime)

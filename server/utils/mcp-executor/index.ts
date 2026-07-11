@@ -23,7 +23,10 @@ import { handleTranslationsTools } from './translations'
 import { NOT_HANDLED } from './shared'
 import type { McpExecutorContext } from './shared'
 
-const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promise<unknown>> = {
+// Exported so non-MCP callers (chowbot-adapter.ts) dispatch through the same
+// domain-handler registry instead of hand-copying it — one list of which
+// domain owns which tool, not two.
+export const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promise<unknown>> = {
   analytics: handleAnalyticsTools,
   blog: handleBlogTools,
   content: handleContentTools,

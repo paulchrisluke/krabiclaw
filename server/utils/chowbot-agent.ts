@@ -3,76 +3,17 @@ import {
   type AiMessage,
 } from "~/server/utils/ai-gateway";
 import { hasCredits, chargeCredits } from "~/server/utils/ai-credits";
-import {
-  listPosts,
-  getPost,
-  createPost,
-  updatePost,
-  deletePost,
-  publishPost,
-  PostValidationError,
-} from "~/server/utils/post-management";
-import {
-  listPlatformBlogPosts,
-  getPlatformBlogPost,
-  createPlatformBlogPost,
-  updatePlatformBlogPost,
-  deletePlatformBlogPost,
-} from "~/server/utils/platform-content";
-import {
-  getMenus,
-  getMenuWithItems,
-  createMenu,
-  updateMenu,
-  createMenuItem,
-  updateMenuItem,
-  deleteMenuItem,
-  deleteMenu,
-  MenuNotFoundError,
-  renameMenuSection,
-  deleteMenuSection,
-  reorderMenuItems,
-} from "~/server/utils/menu-management";
-import {
-  deleteSiteContentField,
-  getPageContent,
-  getSiteContentField,
-  upsertSiteContent,
-} from "~/server/utils/content-management";
+import { runMcpExecutorToolForChowbot } from "~/server/utils/mcp-executor/chowbot-adapter";
+import { normalizeRole } from "~/server/utils/mcp-auth";
 import { setConfig } from "~/server/utils/site-config";
-import {
-  deleteSiteLocale,
-  listSiteLocales,
-  upsertSiteLocale,
-} from "~/server/utils/site-locales";
-import {
-  buildTranslationInventory,
-  createTranslationJob,
-  publishTranslationDrafts,
-} from "~/server/utils/translation-inventory";
-import { processTranslationJobBatch } from "~/server/utils/translation-processor";
+import { upsertSiteLocale } from "~/server/utils/site-locales";
 import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
-import { extractMenuFromMediaAsset } from "~/server/utils/chowbot-media";
 import { upsertChannelState } from "~/server/utils/chowbot-conversations";
 import { CHOWBOT_MODEL } from "~/server/utils/ai-models";
-import { loadSettingsPayload, updateSiteSettingsFields, SiteNotFoundError } from "~/server/utils/site-settings";
-import {
-  createLocation,
-  updateLocation,
-  deleteLocation,
-} from "~/server/utils/location-management";
-import {
-  listLocationQa,
-  createLocationQa,
-  deleteLocationQa,
-} from "~/server/utils/location-qa";
-import { replyToReview } from "~/server/utils/review-management";
-import { createWorkRequest } from "~/server/utils/work-request-management";
+import { updateSiteSettingsFields } from "~/server/utils/site-settings";
 import {
   getExperienceById,
-  updateExperience,
   WEEKDAY_NAMES,
-  type RecurringSlots,
 } from "~/server/utils/experiences";
 import { buildImageUrl } from "~/server/utils/cloudflare-images";
 import { getMediaAsset, updateMediaAssetMetadata } from "~/server/utils/media-asset-manager";
@@ -106,32 +47,11 @@ import {
   isConversationalToolGroupEnabled,
   normalizeChowBotToolForConversationalSurface,
 } from "~/server/utils/conversational-tool-surface";
-import { SUPPORTED_CURRENCIES } from "~/shared/currencies";
 import { queryAll, queryFirst } from "~/server/db";
-import {
-  buildDashboardUrl,
-  DASHBOARD_DESTINATIONS,
-  type DashboardDestination,
-} from "~/server/utils/dashboard-links";
 import { searchPublicResources } from "~/server/utils/public-search";
 import { PUBLIC_SEARCH_TYPES, type PublicSearchTypeFilter } from '~/server/utils/platform-search-types'
 
 const MAX_ITERATIONS = 10;
-const HERO_FIELDS = new Set([
-  "hero.title",
-  "hero.subtitle",
-  "hero.image",
-  "hero.video",
-]);
-const TRANSLATION_SCOPES = new Set([
-  "site",
-  "content",
-  "menus",
-  "locations",
-  "posts",
-]);
-
-type SqlBindValue = string | number | boolean | null;
 export type JsonSerializable =
   | string
   | number
@@ -188,11 +108,6 @@ interface StatusCountRow {
   count: number;
 }
 
-function isUniqueConstraintError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error || "");
-  return /UNIQUE constraint failed/i.test(message);
-}
-
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) return error.message;
   return fallback;
@@ -206,21 +121,6 @@ function toSqlText(value: ApiValue): string | null | undefined {
   return null;
 }
 
-async function resolveMediaAssetPublicUrl(
-  db: D1Database,
-  env: ApiRecord,
-  siteId: string,
-  assetId: string,
-): Promise<string> {
-  const asset = await getMediaAsset(db, assetId, siteId);
-  if (!asset) throw new Error("Media asset not found.");
-  if (asset.public_url) return asset.public_url;
-  if (asset.cloudflare_image_id) {
-    return buildImageUrl(env, asset.cloudflare_image_id, "public");
-  }
-  throw new Error("Media asset does not have a public URL.");
-}
-
 function isValidHttpUrl(value: string): boolean {
   try {
     const parsed = new URL(value);
@@ -228,18 +128,6 @@ function isValidHttpUrl(value: string): boolean {
   } catch {
     return false;
   }
-}
-
-function menuItemKey(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
-
-function menuItemLookupKey(name: string): string {
-  const key = menuItemKey(name);
-  return key || name.trim().toLowerCase();
 }
 
 function getToolString(
@@ -251,279 +139,8 @@ function getToolString(
   return typeof value === "string" ? value.slice(0, maxLength) : undefined;
 }
 
-function getToolStringArray(
-  record: Record<string, unknown>,
-  key: string,
-): string[] | undefined {
-  const value = record[key];
-  if (Array.isArray(value)) {
-    return value.filter((v) => typeof v === "string");
-  }
-  return undefined;
-}
-
-function getToolBoolean(
-  record: Record<string, unknown>,
-  key: string,
-): boolean | undefined {
-  const value = record[key];
-  return typeof value === "boolean" ? value : undefined;
-}
-
-const TIME_SLOT_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-function asValidRecurringSlots(value: unknown): RecurringSlots | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
-  for (const key of Object.keys(record)) {
-    if (!WEEKDAY_NAMES.includes(key as (typeof WEEKDAY_NAMES)[number])) return null;
-    const slots = record[key];
-    if (!Array.isArray(slots)) return null;
-    if (!slots.every((s) => typeof s === "string" && TIME_SLOT_PATTERN.test(s))) return null;
-  }
-  return record as RecurringSlots;
-}
-
 function isSiteContentPage(page: string): page is keyof typeof contentRegistry {
   return Object.prototype.hasOwnProperty.call(contentRegistry, page);
-}
-
-function isHeroField(
-  field: string,
-): field is "hero.title" | "hero.subtitle" | "hero.image" | "hero.video" {
-  return HERO_FIELDS.has(field);
-}
-
-function heroColumnForField(
-  field: "hero.title" | "hero.subtitle" | "hero.image" | "hero.video",
-) {
-  if (field === "hero.title") return "hero_title";
-  if (field === "hero.subtitle") return "hero_subtitle";
-  if (field === "hero.image") return "hero_image_asset_id";
-  return "hero_video_asset_id";
-}
-
-async function readHeroContentState(
-  db: D1Database,
-  orgId: string,
-  siteId: string,
-  page: string,
-  locationId?: string,
-) {
-  const liveRow = await getSiteContentField(
-    db,
-    orgId,
-    siteId,
-    locationId ?? null,
-    page,
-    "hero",
-  );
-
-  const base = liveRow ?? null;
-  return {
-    id: typeof base?.id === "string" ? base.id : undefined,
-    hero_title: typeof base?.hero_title === "string" ? base.hero_title : null,
-    hero_subtitle:
-      typeof base?.hero_subtitle === "string" ? base.hero_subtitle : null,
-    hero_image_asset_id:
-      typeof base?.hero_image_asset_id === "string"
-        ? base.hero_image_asset_id
-        : null,
-    hero_video_asset_id:
-      typeof base?.hero_video_asset_id === "string"
-        ? base.hero_video_asset_id
-        : null,
-  };
-}
-
-function isEmptyHeroState(state: {
-  hero_title: string | null;
-  hero_subtitle: string | null;
-  hero_image_asset_id: string | null;
-  hero_video_asset_id: string | null;
-}) {
-  return (
-    !state.hero_title &&
-    !state.hero_subtitle &&
-    !state.hero_image_asset_id &&
-    !state.hero_video_asset_id
-  );
-}
-
-function getComponentFromField(field: string): string | null {
-  // Direct mapping for specific fields
-  const fieldToComponentMap: Record<string, string> = {
-    hero: "SayaHomeHero",
-    "hero.title": "SayaHomeHero",
-    "hero.subtitle": "SayaHomeHero",
-    "hero.eyebrow": "SayaHomeHero",
-    "hero.image": "SayaHomeHero",
-    "hero.video": "SayaHomeHero",
-    "story.headline": "SayaBrandStory",
-    "story.body": "SayaBrandStory",
-    "story.image": "SayaBrandStory",
-    "journey.title": "SayaBrandStory",
-    "journey.body": "SayaBrandStory",
-    "experience.body": "SayaBrandStory",
-    "experience.title": "SayaBrandStory",
-    "cta.title": "SayaCTA",
-    "cta.description": "SayaCTA",
-    "reviews.heading": "SayaReviews",
-    "posts.eyebrow": "SayaPosts",
-    "posts.heading": "SayaPosts",
-    "locations.heading": "SayaLocationsGrid",
-    "qa.heading": "SayaQA",
-    "featured.heading": "SayaFeaturedContent",
-  };
-
-  if (fieldToComponentMap[field]) {
-    return fieldToComponentMap[field];
-  }
-
-  // Pattern matching
-  if (field.startsWith("hero.")) return "SayaHomeHero";
-  if (field.startsWith("story.")) return "SayaBrandStory";
-  if (field.startsWith("journey.")) return "SayaBrandStory";
-  if (field.startsWith("experience.")) return "SayaBrandStory";
-  if (field.startsWith("cta.")) return "SayaCTA";
-  if (field.startsWith("reviews.")) return "SayaReviews";
-  if (field.startsWith("posts.")) return "SayaPosts";
-  if (field.startsWith("locations.")) return "SayaLocationsGrid";
-  if (field.startsWith("qa.")) return "SayaQA";
-  if (field.startsWith("featured.")) return "SayaFeaturedContent";
-
-  return null;
-}
-
-async function upsertHeroContentState(
-  db: D1Database,
-  orgId: string,
-  siteId: string,
-  page: string,
-  locationId: string | undefined,
-  state: {
-    hero_title: string | null;
-    hero_subtitle: string | null;
-    hero_image_asset_id: string | null;
-    hero_video_asset_id: string | null;
-  },
-) {
-  const id = `content::${orgId}::${siteId}::${locationId ?? "site"}::${page}::hero`;
-  const payload = {
-    id,
-    organization_id: orgId,
-    site_id: siteId,
-    location_id: locationId,
-    page,
-    field: "hero",
-    value: undefined,
-    type: "text",
-    source: "manual",
-    content: undefined,
-    hero_title: state.hero_title ?? undefined,
-    hero_subtitle: state.hero_subtitle ?? undefined,
-    hero_image_asset_id: state.hero_image_asset_id ?? undefined,
-    hero_video_asset_id: state.hero_video_asset_id ?? undefined,
-    component: "SayaHomeHero",
-  };
-
-  await upsertSiteContent(db, payload);
-}
-
-
-function getToolNumber(
-  record: Record<string, unknown>,
-  key: string,
-): number | null | undefined {
-  const value = record[key];
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : undefined;
-}
-
-function getToolInteger(
-  record: Record<string, unknown>,
-  key: string,
-): number | null | undefined {
-  const numeric = getToolNumber(record, key);
-  if (numeric === undefined || numeric === null) return numeric;
-  return Number.isInteger(numeric) ? numeric : undefined;
-}
-
-function findMenuItemMatch(
-  itemRecord: Record<string, unknown>,
-  menuItems: MenuItem[],
-): MenuItem | null {
-  const itemId = getToolString(itemRecord, "item_id", 120);
-  if (itemId) {
-    return menuItems.find((item) => item.id === itemId) ?? null;
-  }
-
-  const name = getToolString(itemRecord, "name", 200)?.trim();
-  if (!name) return null;
-
-  const key = menuItemLookupKey(name);
-  const lowerName = name.toLowerCase();
-  return (
-    menuItems.find(
-      (item) => item.slug === key || item.name.toLowerCase() === lowerName,
-    ) ?? null
-  );
-}
-
-function buildMenuItemUpdates(
-  itemRecord: Record<string, unknown>,
-  match?: MenuItem | null,
-): UpdateMenuItemRequest {
-  const updates: UpdateMenuItemRequest = {};
-  const section = getToolString(itemRecord, "section", 100);
-  const name = getToolString(itemRecord, "name", 200);
-  const description = getToolString(itemRecord, "description", 500);
-  const priceAmount = getToolString(itemRecord, "price_amount", 50);
-  const compareAtPriceAmount = getToolString(itemRecord, "compare_at_price_amount", 50);
-  const saleStartsAt = getToolString(itemRecord, "sale_starts_at", 50);
-  const saleEndsAt = getToolString(itemRecord, "sale_ends_at", 50);
-  const imageAssetId = getToolString(itemRecord, "image_asset_id", 120);
-  const available = getToolBoolean(itemRecord, "available");
-
-  const allergens = getToolStringArray(itemRecord, "allergens");
-  const ingredients = getToolStringArray(itemRecord, "ingredients");
-  const dietary_notes = getToolStringArray(itemRecord, "dietary_notes");
-  const preparation = getToolString(itemRecord, "preparation", 500);
-  const serving_note = getToolString(itemRecord, "serving_note", 500);
-
-  if (section !== undefined && section.trim() && section !== match?.section)
-    updates.section = section;
-  if (name !== undefined && name !== match?.name) updates.name = name;
-  if (description !== undefined && description !== match?.description)
-    updates.description = description;
-  if (priceAmount !== undefined && priceAmount !== match?.price_amount)
-    updates.price_amount = priceAmount;
-  if (compareAtPriceAmount !== undefined && compareAtPriceAmount !== match?.compare_at_price_amount)
-    updates.compare_at_price_amount = compareAtPriceAmount;
-  if (saleStartsAt !== undefined && saleStartsAt !== match?.sale_starts_at)
-    updates.sale_starts_at = saleStartsAt;
-  if (saleEndsAt !== undefined && saleEndsAt !== match?.sale_ends_at)
-    updates.sale_ends_at = saleEndsAt;
-  if (imageAssetId !== undefined && imageAssetId !== match?.image_asset_id)
-    updates.image_asset_id = imageAssetId;
-  if (available !== undefined && available !== Boolean(match?.available))
-    updates.available = available;
-
-  if (allergens !== undefined) updates.allergens = allergens;
-  if (ingredients !== undefined) updates.ingredients = ingredients;
-  if (dietary_notes !== undefined) updates.dietary_notes = dietary_notes;
-  if (preparation !== undefined && preparation !== match?.preparation)
-    updates.preparation = preparation;
-  if (serving_note !== undefined && serving_note !== match?.serving_note)
-    updates.serving_note = serving_note;
-
-  return updates;
-}
-
-function hasMenuItemUpdates(updates: UpdateMenuItemRequest): boolean {
-  return Object.keys(updates).length > 0;
 }
 
 function isAllowedGoogleMapsHost(hostname: string): boolean {
@@ -568,6 +185,26 @@ async function executeTool(
   },
 ): Promise<ApiValue> {
   const { db, env, orgId, siteId, userId } = ctx;
+  // normalizeRole rejects anything that isn't exactly 'owner'/'admin'/'editor'
+  // (including undefined). roleSatisfies compares via ROLE_RANK[actual], and
+  // ROLE_RANK[anything unrecognized] is undefined — `undefined < N` is always
+  // false in JS, so an un-normalized role would fail OPEN (satisfy every
+  // minimumRole check) instead of being rejected. Both callers (dashboard
+  // agent.post.ts, WhatsApp webhook.post.ts) resolve userRole from a real
+  // membership row before invoking runChowBot, so this "can't happen" in
+  // practice — but fail closed rather than trust that invariant silently.
+  const normalizedRole = normalizeRole(ctx.userRole);
+  if (!normalizedRole) {
+    return { error: "Could not verify your permissions for this site." };
+  }
+  const executorSite = {
+    db,
+    env: env as CloudflareEnv,
+    userId,
+    organizationId: orgId,
+    siteId,
+    role: normalizedRole,
+  };
 
   try {
     assertConversationalToolEnabled(name, env);
@@ -585,15 +222,19 @@ async function executeTool(
   }
 
   switch (name) {
+    // ChowBot-only trim: full post bodies (MCP's list_posts returns them
+    // untruncated, unbounded count) would blow up chat context size — cap
+    // to 10 posts with a 120-char body preview, same as before migrating.
     case "list_posts": {
-      const posts = await listPosts(db, orgId, siteId, env, input.status);
-      const filtered = input.location_id
-        ? posts.filter((p) => p.location_id === input.location_id)
-        : posts;
-      return filtered.slice(0, 10).map((p) => ({
+      const result = await runMcpExecutorToolForChowbot(executorSite, "list_posts", input) as {
+        error?: string;
+        posts?: Array<{ id: string; title: string; body: string; status: string; post_type: string; location_id: string | null; updated_at: string }>;
+      };
+      if (result.error || !result.posts) return result;
+      return result.posts.slice(0, 10).map((p) => ({
         id: p.id,
         title: p.title,
-        body: p.body.slice(0, 120) + (p.body.length > 120 ? "…" : ""),
+        body: p.body.length > 120 ? `${p.body.slice(0, 120)}…` : p.body,
         status: p.status,
         post_type: p.post_type,
         location_id: p.location_id,
@@ -601,801 +242,69 @@ async function executeTool(
       }));
     }
 
-    case "create_post": {
-      let post;
-      try {
-        post = await createPost(
-          db,
-          orgId,
-          siteId,
-          {
-            title: input.title,
-            body: input.body,
-            image_asset_id: input.image_asset_id,
-            slug: input.slug,
-            seo_title: input.seo_title,
-            seo_description: input.seo_description,
-            og_image_asset_id: input.og_image_asset_id,
-            gallery_media: input.gallery_media,
-            location_id: input.location_id,
-            post_type: input.post_type,
-            cta_type: input.cta_type,
-            cta_url: input.cta_url,
-            event_title: input.event_title,
-            event_start: input.event_start,
-            event_end: input.event_end,
-            offer_coupon: input.offer_coupon,
-            offer_terms: input.offer_terms,
-          },
-          userId,
-          env,
-        );
-      } catch (error) {
-        if (error instanceof PostValidationError) return { error: error.message };
-        throw error;
-      }
-      return {
-        id: post.id,
-        title: post.title,
-        body: post.body,
-        status: post.status,
-        post_type: post.post_type,
-        public_path: post.public_path,
-        public_url: post.canonical_url,
-      };
+    // Regression note: delete_post used to hard-require owner/admin here,
+    // but MCP's delete_post has always been minimumRole 'editor' (its
+    // description text says "Only owners and admins" but nothing enforces
+    // that beyond the role gate — see the existing e2e test asserting
+    // owner/admin/editor can all delete via the MCP tool path). The
+    // adapter now applies that same, already-tested policy to ChowBot
+    // instead of ChowBot's stricter local check.
+    case "create_post":
+    case "update_post":
+    case "delete_post": {
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "publish_post": {
-      const result = await publishPost(db, orgId, siteId, input.post_id, [
-        "site",
-      ], env);
-      if (!result) return { error: "Post not found or already published." };
-      return {
-        id: result.id,
-        title: result.title,
-        status: result.status,
-        published_at: result.published_at,
-        public_path: result.public_path,
-        public_url: result.canonical_url,
-      };
+      return runMcpExecutorToolForChowbot(executorSite, "publish_post", { ...input, channels: ["site"] });
     }
 
-    case "update_post": {
-      let post;
-      try {
-        post = await updatePost(
-          db,
-          orgId,
-          siteId,
-          input.post_id,
-          {
-            title: input.title,
-            body: input.body,
-            image_asset_id: input.image_asset_id,
-            slug: input.slug,
-            seo_title: input.seo_title,
-            seo_description: input.seo_description,
-            og_image_asset_id: input.og_image_asset_id,
-            gallery_media: input.gallery_media,
-            location_id: input.location_id,
-            post_type: input.post_type,
-            cta_type: input.cta_type,
-            cta_url: input.cta_url,
-            event_title: input.event_title,
-            event_start: input.event_start,
-            event_end: input.event_end,
-            offer_coupon: input.offer_coupon,
-            offer_terms: input.offer_terms,
-          },
-          userId,
-          env,
-        );
-      } catch (error) {
-        if (error instanceof PostValidationError) return { error: error.message };
-        throw error;
-      }
-      if (!post) return { error: "Post not found." };
-      return {
-        id: post.id,
-        title: post.title,
-        body: post.body,
-        status: post.status,
-        public_path: post.public_path,
-        public_url: post.canonical_url,
-        updated: true,
-      };
-    }
-
-    case "delete_post": {
-      if (!["owner", "admin"].includes(ctx.userRole ?? "")) {
-        return { error: "Only owners or admins can delete posts." };
-      }
-      const deleted = await deletePost(db, orgId, siteId, input.post_id);
-      if (!deleted) return { error: "Post not found." };
-      return { post_id: input.post_id, deleted: true };
-    }
-
-    case "get_menu": {
-      if (input.menu_id) {
-        const menu = await getMenuWithItems(db, orgId, siteId, input.menu_id);
-        if (!menu) return { error: "Menu not found." };
-        return menu;
-      }
-      // Filter by current location when available so we only see relevant menus
-      const locationFilter =
-        (input.location_id as string | undefined) ??
-        ctx.locationId ??
-        undefined;
-      const menus = await getMenus(
-        db,
-        orgId,
-        siteId,
-        locationFilter || undefined,
-      );
-      if (!menus.length) return { message: "No menus found for this site." };
-      return (
-        (await getMenuWithItems(db, orgId, siteId, menus[0]!.id)) ?? {
-          error: "Failed to load menu.",
-        }
-      );
+    // Menu tools below all delegate to the same mcp-executor/menus.ts handlers
+    // MCP uses, via runMcpExecutorToolForChowbot — see mcp-executor/chowbot-adapter.ts.
+    case "get_menu":
+    case "add_menu_items_batch":
+    case "sync_menu_items":
+    case "create_menu_item":
+    case "update_menu_item":
+    case "reorder_menu_items":
+    case "set_menu_item_image": {
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "create_menu": {
-      // Use the explicit location from the AI, fall back to the page's current location
-      const effectiveLocationId =
-        (input.location_id as string | undefined) ??
-        ctx.locationId ??
-        undefined;
-      if (effectiveLocationId) {
-        const location = await queryFirst(
-          db,
-          `
-          SELECT 1 FROM business_locations
-          WHERE id = ? AND organization_id = ? AND site_id = ?
-          LIMIT 1
-        `,
-          [effectiveLocationId, orgId, siteId],
-        );
-        if (!location) return { error: "Location not found or access denied" };
-      }
-      const menu = await createMenu(
-        db,
-        orgId,
-        siteId,
-        {
-          name: input.name,
-          description: input.description,
-          locationId: effectiveLocationId,
-        },
-        userId,
-      );
-      return {
-        id: menu.id,
-        name: menu.name,
-        description: menu.description,
-        status: menu.status,
-      };
-    }
-
-    case "update_menu": {
-      const menu = await updateMenu(
-        db,
-        orgId,
-        siteId,
-        input.menu_id,
-        { name: input.name, description: input.description },
-        userId,
-      );
-      return {
-        id: menu.id,
-        name: menu.name,
-        description: menu.description,
-        status: menu.status,
-      };
-    }
-
-    case "rename_menu_section": {
-      const menuId = toSqlText(input.menu_id);
-      const oldSection = toSqlText(input.old_section)?.trim();
-      const newSection = toSqlText(input.new_section)?.trim();
-      if (!menuId || !oldSection || !newSection) {
-        return { error: "menu_id, old_section, and new_section are required." };
-      }
-      if (oldSection === newSection) {
-        return { error: "New section must be different." };
-      }
-
-      const menu = await getMenuWithItems(db, orgId, siteId, menuId);
-      if (!menu) return { error: "Menu not found." };
-      if (!menu.items.some((item) => item.section === oldSection)) {
-        return { error: "Section not found." };
-      }
-      if (menu.items.some((item) => item.section === newSection)) {
-        return { error: "Section already exists." };
-      }
-
-      let updated: number;
-      try {
-        updated = await renameMenuSection(
-          db,
-          orgId,
-          siteId,
-          menuId,
-          oldSection,
-          newSection,
-          userId,
-        );
-      } catch (error) {
-        if (error instanceof MenuNotFoundError) return { error: error.message };
-        throw error;
-      }
-      return {
-        menu_id: menuId,
-        old_section: oldSection,
-        new_section: newSection,
-        updated,
-      };
-    }
-
-    case "delete_menu_section": {
-      const menuId = toSqlText(input.menu_id);
-      const section = toSqlText(input.section)?.trim();
-      if (!menuId || !section)
-        return { error: "menu_id and section are required." };
-
-      const menu = await getMenuWithItems(db, orgId, siteId, menuId);
-      if (!menu) return { error: "Menu not found." };
-      if (!menu.items.some((item) => item.section === section)) {
-        return { error: "Section not found." };
-      }
-
-      const deleted = await deleteMenuSection(db, orgId, siteId, menuId, section).catch((error) => {
-        if (error instanceof MenuNotFoundError) return null;
-        throw error;
+      // ChowBot-only convenience: fall back to the dashboard's current page
+      // location when the model omits location_id (MCP always requires it explicit).
+      return runMcpExecutorToolForChowbot(executorSite, "create_menu", {
+        ...input,
+        location_id: input.location_id ?? ctx.locationId ?? undefined,
       });
-      if (deleted === null) return { error: "Menu not found." };
-      return { menu_id: menuId, section, deleted };
     }
 
-    case "add_menu_items_batch": {
-      const menuId = toSqlText(input.menu_id);
-      if (!menuId) return { error: "menu_id is required." };
-      const menu = await getMenuWithItems(db, orgId, siteId, menuId);
-      if (!menu) return { error: "Menu not found." };
-
-      const items: unknown[] = Array.isArray(input.items)
-        ? input.items.slice(0, 100)
-        : [];
-      const existingKeys = new Set(
-        menu.items.map((item) => item.slug || menuItemLookupKey(item.name)),
-      );
-      const inputKeys = new Set<string>();
-      const created: Array<{
-        id: string;
-        name: string;
-        section: string;
-        price_amount: string | number | null;
-      }> = [];
-      const skipped: Array<{
-        name: string;
-        reason: string;
-        existing_item_id?: string;
-      }> = [];
-
-      for (const item of items) {
-        const itemRecord =
-          item && typeof item === "object"
-            ? (item as Record<string, unknown>)
-            : null;
-        const name = itemRecord
-          ? getToolString(itemRecord, "name", 200)?.trim()
-          : "";
-        if (!itemRecord || !name) {
-          skipped.push({ name: "", reason: "missing_name" });
-          continue;
-        }
-        const section = itemRecord
-          ? getToolString(itemRecord, "section", 100)?.trim()
-          : "";
-        if (!section) {
-          skipped.push({ name, reason: "missing_section" });
-          continue;
-        }
-
-        const key = menuItemLookupKey(name);
-        const existing = menu.items.find(
-          (menuItem) =>
-            menuItem.slug === key ||
-            menuItem.name.toLowerCase() === name.toLowerCase(),
-        );
-        if (existing || existingKeys.has(key)) {
-          skipped.push({
-            name,
-            reason: "already_exists",
-            existing_item_id: existing?.id,
-          });
-          continue;
-        }
-        if (inputKeys.has(key)) {
-          skipped.push({ name, reason: "duplicate_in_request" });
-          continue;
-        }
-
-        inputKeys.add(key);
-
-        try {
-          const createdItem = await createMenuItem(
-            db,
-            orgId,
-            siteId,
-            menuId,
-            {
-              section,
-              name,
-              description: getToolString(itemRecord, "description", 500),
-              price_amount: getToolString(itemRecord, "price_amount", 50),
-              compare_at_price_amount: getToolString(itemRecord, "compare_at_price_amount", 50),
-              sale_starts_at: getToolString(itemRecord, "sale_starts_at", 50),
-              sale_ends_at: getToolString(itemRecord, "sale_ends_at", 50),
-              image_asset_id: getToolString(itemRecord, "image_asset_id", 120),
-            },
-            userId,
-          );
-          existingKeys.add(
-            createdItem.slug || menuItemLookupKey(createdItem.name),
-          );
-          created.push({
-            id: createdItem.id,
-            name: createdItem.name,
-            section: createdItem.section,
-            price_amount: createdItem.price_amount,
-          });
-        } catch (error) {
-          if (!isUniqueConstraintError(error)) throw error;
-          skipped.push({ name, reason: "unique_conflict" });
-        }
-      }
-
-      return { added: created.length, created, skipped, menu_id: menuId };
-    }
-
-    case "sync_menu_items": {
-      const menuId = toSqlText(input.menu_id);
-      if (!menuId) return { error: "menu_id is required." };
-      const menu = await getMenuWithItems(db, orgId, siteId, menuId);
-      if (!menu) return { error: "Menu not found." };
-
-      const items: unknown[] = Array.isArray(input.items)
-        ? input.items.slice(0, 100)
-        : [];
-      const workingItems = [...menu.items];
-      const touchedItemIds = new Set<string>();
-      const created: Array<{
-        id: string;
-        name: string;
-        section: string;
-        price_amount: string | number | null;
-      }> = [];
-      const updated: Array<{
-        id: string;
-        name: string;
-        section: string;
-        price_amount: string | number | null;
-        available: boolean;
-      }> = [];
-      const unchanged: Array<{ id: string; name: string }> = [];
-      const skipped: Array<{ name: string; reason: string; item_id?: string }> =
-        [];
-
-      for (const item of items) {
-        const itemRecord =
-          item && typeof item === "object"
-            ? (item as Record<string, unknown>)
-            : null;
-        if (!itemRecord) {
-          skipped.push({ name: "", reason: "invalid_item" });
-          continue;
-        }
-
-        const name = getToolString(itemRecord, "name", 200)?.trim();
-        const match = findMenuItemMatch(itemRecord, workingItems);
-
-        if (match) {
-          const updates = buildMenuItemUpdates(itemRecord, match);
-          touchedItemIds.add(match.id);
-
-          if (!hasMenuItemUpdates(updates)) {
-            unchanged.push({ id: match.id, name: match.name });
-            continue;
-          }
-
-          try {
-            const updatedItem = await updateMenuItem(
-              db,
-              orgId,
-              siteId,
-              match.id,
-              updates,
-              userId,
-            );
-            const index = workingItems.findIndex(
-              (menuItem) => menuItem.id === updatedItem.id,
-            );
-            if (index >= 0) workingItems[index] = updatedItem;
-            updated.push({
-              id: updatedItem.id,
-              name: updatedItem.name,
-              section: updatedItem.section,
-              price_amount: updatedItem.price_amount,
-              available: Boolean(updatedItem.available),
-            });
-          } catch (error) {
-            if (!isUniqueConstraintError(error)) throw error;
-            skipped.push({
-              name: name || match.name,
-              reason: "unique_conflict",
-              item_id: match.id,
-            });
-          }
-          continue;
-        }
-
-        if (!name) {
-          skipped.push({ name: "", reason: "missing_name" });
-          continue;
-        }
-        const section = getToolString(itemRecord, "section", 100)?.trim();
-        if (!section) {
-          skipped.push({ name, reason: "missing_section" });
-          continue;
-        }
-
-        try {
-          const createdItem = await createMenuItem(
-            db,
-            orgId,
-            siteId,
-            menuId,
-            {
-              section,
-              name,
-              description: getToolString(itemRecord, "description", 500),
-              price_amount: getToolString(itemRecord, "price_amount", 50),
-              compare_at_price_amount: getToolString(itemRecord, "compare_at_price_amount", 50),
-              sale_starts_at: getToolString(itemRecord, "sale_starts_at", 50),
-              sale_ends_at: getToolString(itemRecord, "sale_ends_at", 50),
-              image_asset_id: getToolString(itemRecord, "image_asset_id", 120),
-              available: getToolBoolean(itemRecord, "available"),
-            },
-            userId,
-          );
-          workingItems.push(createdItem);
-          touchedItemIds.add(createdItem.id);
-          created.push({
-            id: createdItem.id,
-            name: createdItem.name,
-            section: createdItem.section,
-            price_amount: createdItem.price_amount,
-          });
-        } catch (error) {
-          if (!isUniqueConstraintError(error)) throw error;
-          skipped.push({ name, reason: "unique_conflict" });
-        }
-      }
-
-      const madeUnavailable: Array<{ id: string; name: string }> = [];
-      if (input.set_missing_unavailable === true) {
-        for (const item of workingItems) {
-          if (touchedItemIds.has(item.id) || !item.available) continue;
-          const updatedItem = await updateMenuItem(
-            db,
-            orgId,
-            siteId,
-            item.id,
-            { available: false },
-            userId,
-          );
-          madeUnavailable.push({ id: updatedItem.id, name: updatedItem.name });
-        }
-      }
-
-      return {
-        menu_id: menuId,
-        created,
-        updated,
-        unchanged,
-        made_unavailable: madeUnavailable,
-        skipped,
-        summary: {
-          created: created.length,
-          updated: updated.length,
-          unchanged: unchanged.length,
-          made_unavailable: madeUnavailable.length,
-          skipped: skipped.length,
-        },
-      };
-    }
-
-    case "create_menu_item": {
-      const item = await createMenuItem(
-        db,
-        orgId,
-        siteId,
-        input.menu_id,
-        {
-          section: input.section,
-          name: input.name,
-          description: input.description,
-          price_amount: input.price_amount,
-          compare_at_price_amount: input.compare_at_price_amount,
-          sale_starts_at: input.sale_starts_at,
-          sale_ends_at: input.sale_ends_at,
-          image_asset_id: input.image_asset_id,
-        },
-        userId,
-      );
-      return {
-        id: item.id,
-        name: item.name,
-        section: item.section,
-        price_amount: item.price_amount,
-      };
-    }
-
-    case "update_menu_item": {
-      const updates: Record<string, string | boolean | number | null> = {};
-      for (const f of [
-        "section",
-        "name",
-        "description",
-        "price_amount",
-        "compare_at_price_amount",
-        "sale_starts_at",
-        "sale_ends_at",
-        "image_asset_id",
-        "available",
-        "featured",
-        "featured_sort_order",
-        "allergens",
-        "ingredients",
-        "dietary_notes",
-        "preparation",
-        "serving_note",
-      ]) {
-        if (input[f] !== undefined) updates[f] = input[f];
-      }
-      const item = await updateMenuItem(db, orgId, siteId, input.item_id, updates, userId);
-      return {
-        id: item.id,
-        name: item.name,
-        price_amount: item.price_amount,
-        available: item.available,
-        featured: item.featured,
-        featured_sort_order: item.featured_sort_order,
-        allergens: item.allergens,
-        ingredients: item.ingredients,
-        dietary_notes: item.dietary_notes,
-        preparation: item.preparation,
-        serving_note: item.serving_note,
-      };
-    }
-
-    case "delete_menu_item": {
-      const menuId = toSqlText(input.menu_id);
-      const itemId = toSqlText(input.item_id);
-      if (!menuId || !itemId)
-        return { error: "menu_id and item_id are required." };
-
-      const menu = await getMenuWithItems(db, orgId, siteId, menuId);
-      if (!menu) return { error: "Menu not found." };
-      const item = menu.items.find((menuItem) => menuItem.id === itemId);
-      if (!item) return { error: "Menu item not found." };
-
-      await deleteMenuItem(db, itemId, orgId, siteId, userId);
-      return {
-        menu_id: menuId,
-        item_id: itemId,
-        name: item.name,
-        deleted: true,
-      };
+    case "update_menu":
+    case "rename_menu_section":
+    case "delete_menu_section":
+    case "delete_menu_item":
+    case "delete_menu": {
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "publish_menu": {
-      const menu = await updateMenu(
-        db,
-        orgId,
-        siteId,
-        input.menu_id,
-        { status: "published" },
-        userId,
-      );
-      if (!menu) {
-        return { error: "Menu not found or access denied." };
-      }
-      return { menu_id: input.menu_id, status: "published" };
+      // ChowBot-only ergonomic name — delegates to update_menu's status field.
+      return runMcpExecutorToolForChowbot(executorSite, "update_menu", {
+        menu_id: input.menu_id,
+        status: "published",
+      });
     }
 
-    case "delete_menu": {
-      await deleteMenu(db, orgId, siteId, input.menu_id);
-      return { menu_id: input.menu_id, deleted: true };
-    }
-
-    case "list_locations": {
-      const rows = await queryAll(
-        db,
-        `SELECT id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
-                rating, review_count, description, short_description, price_level,
-                instagram_url, facebook_url, tiktok_url, hero_image_asset_id, hero_video_asset_id,
-                status, is_primary
-         FROM business_locations WHERE organization_id = ? AND site_id = ? ORDER BY is_primary DESC, title ASC`,
-        [orgId, siteId],
-      );
-      return rows ?? [];
-    }
-
-    case "create_location": {
-      const title = toSqlText(input.title)?.trim();
-      if (!title) return { error: "title is required." };
-      if (input.rating !== undefined && getToolNumber(input, "rating") === undefined)
-        return { error: "rating must be a valid number." };
-      const ratingCreate = getToolNumber(input, "rating");
-      if (ratingCreate !== undefined && ratingCreate !== null && (ratingCreate < 0 || ratingCreate > 5))
-        return { error: "rating must be between 0 and 5." };
-      if (input.review_count !== undefined && getToolInteger(input, "review_count") === undefined)
-        return { error: "review_count must be a valid integer." };
-      const reviewCountCreate = getToolInteger(input, "review_count");
-      if (reviewCountCreate !== undefined && reviewCountCreate !== null && reviewCountCreate < 0)
-        return { error: "review_count must be non-negative." };
-      if (input.max_capacity !== undefined && getToolInteger(input, "max_capacity") === undefined)
-        return { error: "max_capacity must be a valid integer." };
-      const maxCapacityCreate = getToolInteger(input, "max_capacity");
-      if (maxCapacityCreate !== undefined && maxCapacityCreate !== null && maxCapacityCreate < 0)
-        return { error: "max_capacity must be non-negative." };
-      const result = await createLocation(
-        env,
-        db,
-        orgId,
-        siteId,
-        {
-          title,
-          city: toSqlText(input.city) ?? null,
-          neighborhood: toSqlText(input.neighborhood) ?? null,
-          phone: toSqlText(input.phone) ?? null,
-          email: toSqlText(input.email) ?? null,
-          website_url: toSqlText(input.website_url) ?? null,
-          maps_url: toSqlText(input.maps_url) ?? null,
-          google_place_id: toSqlText(input.google_place_id) ?? null,
-          description: toSqlText(input.description) ?? null,
-          short_description: toSqlText(input.short_description) ?? null,
-          address: toSqlText(input.address) ?? null,
-          opening_hours: toSqlText(input.opening_hours) ?? null,
-          timezone: toSqlText(input.timezone) ?? null,
-          max_capacity: getToolInteger(input, "max_capacity") ?? null,
-          rating: getToolNumber(input, "rating") ?? null,
-          review_count: getToolInteger(input, "review_count") ?? null,
-          price_level: toSqlText(input.price_level) ?? null,
-          facebook_url: toSqlText(input.facebook_url) ?? null,
-          instagram_url: toSqlText(input.instagram_url) ?? null,
-          tiktok_url: toSqlText(input.tiktok_url) ?? null,
-          grab_url: toSqlText(input.grab_url) ?? null,
-          uber_eats_url: toSqlText(input.uber_eats_url) ?? null,
-          foodpanda_url: toSqlText(input.foodpanda_url) ?? null,
-          hero_image_asset_id: toSqlText(input.hero_image_asset_id) ?? null,
-          hero_video_asset_id: toSqlText(input.hero_video_asset_id) ?? null,
-          is_primary: getToolBoolean(input, "is_primary") === true,
-        },
-        userId,
-      );
-      if (result.status >= 400) return result.data;
-      const location = (
-        result.data as {
-          location?: {
-            id: string;
-            title: string;
-            slug: string;
-            status: string;
-          };
-        }
-      ).location;
-      return location ?? { error: "Location could not be created." };
-    }
-
-    case "update_location": {
-      const locationId = toSqlText(input.location_id);
-      if (!locationId) {
-        return { error: "location_id is required." };
-      }
-      if (input.rating !== undefined && getToolNumber(input, "rating") === undefined)
-        return { error: "rating must be a valid number." };
-      const ratingUpdate = getToolNumber(input, "rating");
-      if (ratingUpdate !== undefined && ratingUpdate !== null && (ratingUpdate < 0 || ratingUpdate > 5))
-        return { error: "rating must be between 0 and 5." };
-      if (input.review_count !== undefined && getToolInteger(input, "review_count") === undefined)
-        return { error: "review_count must be a valid integer." };
-      const reviewCountUpdate = getToolInteger(input, "review_count");
-      if (reviewCountUpdate !== undefined && reviewCountUpdate !== null && reviewCountUpdate < 0)
-        return { error: "review_count must be non-negative." };
-      if (input.max_capacity !== undefined && getToolInteger(input, "max_capacity") === undefined)
-        return { error: "max_capacity must be a valid integer." };
-      const maxCapacityUpdate = getToolInteger(input, "max_capacity");
-      if (maxCapacityUpdate !== undefined && maxCapacityUpdate !== null && maxCapacityUpdate < 0)
-        return { error: "max_capacity must be non-negative." };
-      const result = await updateLocation(
-        db,
-        orgId,
-        siteId,
-        locationId,
-        {
-          title: toSqlText(input.title) ?? undefined,
-          slug: toSqlText(input.slug) ?? undefined,
-          city: toSqlText(input.city) ?? undefined,
-          neighborhood: toSqlText(input.neighborhood) ?? undefined,
-          phone: input.phone !== undefined ? (toSqlText(input.phone) ?? null) : undefined,
-          email: input.email !== undefined ? (toSqlText(input.email) ?? null) : undefined,
-          notification_phone: toSqlText(input.notification_phone) ?? undefined,
-          description: toSqlText(input.description) ?? undefined,
-          short_description: toSqlText(input.short_description) ?? undefined,
-          price_level: toSqlText(input.price_level) ?? undefined,
-          facebook_url: toSqlText(input.facebook_url) ?? undefined,
-          instagram_url: toSqlText(input.instagram_url) ?? undefined,
-          tiktok_url: toSqlText(input.tiktok_url) ?? undefined,
-          grab_url: toSqlText(input.grab_url) ?? undefined,
-          uber_eats_url: toSqlText(input.uber_eats_url) ?? undefined,
-          foodpanda_url: toSqlText(input.foodpanda_url) ?? undefined,
-          website_url: toSqlText(input.website_url) ?? undefined,
-          maps_url: toSqlText(input.maps_url) ?? undefined,
-          google_place_id: toSqlText(input.google_place_id) ?? undefined,
-          hero_image_asset_id:
-            toSqlText(input.hero_image_asset_id) ?? undefined,
-          hero_video_asset_id:
-            toSqlText(input.hero_video_asset_id) ?? undefined,
-          address: toSqlText(input.address) ?? undefined,
-          opening_hours: toSqlText(input.opening_hours) ?? undefined,
-          timezone: toSqlText(input.timezone) ?? undefined,
-          max_capacity:
-            input.max_capacity !== undefined
-              ? (getToolInteger(input, "max_capacity") ?? null)
-              : undefined,
-          rating:
-            input.rating !== undefined
-              ? (getToolNumber(input, "rating") ?? null)
-              : undefined,
-          review_count:
-            input.review_count !== undefined
-              ? (getToolInteger(input, "review_count") ?? null)
-              : undefined,
-          is_primary: getToolBoolean(input, "is_primary"),
-          status:
-            typeof input.status === "string" &&
-            ["active", "inactive", "sync_error"].includes(input.status)
-              ? (input.status as "active" | "inactive" | "sync_error")
-              : undefined,
-        },
-        userId,
-      );
-
-      if (result.status >= 400) return result.data;
-      return (
-        (result.data as { location?: JsonSerializable }).location ?? {
-          error: "Location not found.",
-        }
-      );
-    }
-
+    // Regression note: create_location/update_location's rating/review_count/
+    // max_capacity range checks were duplicated here — createLocation/
+    // updateLocation already validate the same rules server-side, so this
+    // was redundant, not filling a gap.
+    case "list_locations":
+    case "create_location":
+    case "update_location":
     case "delete_location": {
-      const locationId = toSqlText(input.location_id);
-      if (!locationId) return { error: "location_id is required." };
-      const result = await deleteLocation(
-        env,
-        db,
-        orgId,
-        siteId,
-        locationId,
-        userId,
-      );
-      return result.status >= 400
-        ? result.data
-        : { location_id: locationId, deleted: true };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "import_from_maps": {
@@ -1416,34 +325,25 @@ async function executeTool(
         return { error: "URL does not appear to be a Google Maps link." };
       }
 
-      // Resolve one redirect hop safely for short URLs.
+      // Resolve short URLs (maps.app.goo.gl).
+      // Use redirect:follow GET instead of redirect:manual HEAD — Cloudflare
+      // Workers blocks manual redirect fetches against goo.gl (see the same
+      // fix in mcp-executor/index.ts's import_from_maps handling).
       let resolvedUrl = parsedRawUrl.toString();
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        const probe = await fetch(parsedRawUrl.toString(), {
-          method: "HEAD",
-          redirect: "manual",
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        const location = probe.headers.get("location");
-        if (location) {
-          const redirected = new URL(location, parsedRawUrl);
-          if (!isAllowedGoogleMapsHost(redirected.hostname)) {
-            return { error: "URL redirects to a non-Google host." };
+      if (parsedRawUrl.hostname === "maps.app.goo.gl") {
+        try {
+          const probe = await fetch(parsedRawUrl.toString(), {
+            method: "GET",
+            redirect: "follow",
+            signal: AbortSignal.timeout(8000),
+            headers: { "User-Agent": "Mozilla/5.0" },
+          });
+          if (probe.url && isAllowedGoogleMapsHost(new URL(probe.url).hostname)) {
+            resolvedUrl = probe.url;
           }
-          resolvedUrl = redirected.toString();
-        } else {
-          const probeUrl = probe.url || parsedRawUrl.toString();
-          const parsedProbeUrl = new URL(probeUrl);
-          if (!isAllowedGoogleMapsHost(parsedProbeUrl.hostname)) {
-            return { error: "Resolved URL is not a Google Maps host." };
-          }
-          resolvedUrl = parsedProbeUrl.toString();
+        } catch {
+          /* keep original — falls through to text search below */
         }
-      } catch {
-        /* keep rawUrl */
       }
 
       try {
@@ -1511,75 +411,31 @@ async function executeTool(
       };
     }
 
-    case "list_location_reviews": {
-      const loc = await queryFirst(
-        db,
-        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        [input.location_id, orgId, siteId],
-      );
-      if (!loc) return { error: "Location not found." };
-      const results = await queryAll(
-        db,
-        `SELECT id, author_name, reviewer_photo_url, rating, title, content, owner_reply,
-                owner_reply_at, photo_urls, source, status, created_at, updated_at
-         FROM reviews
-         WHERE site_id = ? AND location_id = ?
-         ORDER BY created_at DESC`,
-        [siteId, input.location_id],
-      );
-      return results ?? [];
-    }
-
+    // Both delegate to mcp-executor/reviews.ts. reply_to_review is MCP
+    // minimumRole 'owner' — the adapter now enforces that (previously
+    // ChowBot's own case body had no role check at all).
+    case "list_location_reviews":
     case "reply_to_review": {
-      const result = await replyToReview(
-        db,
-        orgId,
-        siteId,
-        input.review_id,
-        String(input.reply ?? ""),
-      );
-      return result.data;
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "get_site_media_assets": {
-      const conditions = [
-        `site_id = ?`,
-        `location_id = ?`,
-        `status = 'active'`,
-      ];
-      const params: SqlBindValue[] = [siteId, input.location_id];
-      if (input.kind) {
-        conditions.push(`kind = ?`);
-        params.push(input.kind);
-      }
-      params.push(50);
-      const results = await queryAll(
-        db,
-        `SELECT id, kind, provider, public_url, thumbnail_url, alt_text, mime_type, file_name, created_at
-         FROM media_assets WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC LIMIT ?`,
-        params,
-      );
-      return results ?? [];
-    }
-
+    case "get_site_media_assets":
     case "delete_media_asset": {
-      const { deleteMediaAsset } =
-        await import("~/server/utils/media-asset-manager");
-      await deleteMediaAsset(db, env, input.asset_id, siteId, userId);
-      return { asset_id: input.asset_id, deleted: true };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "import_menu_from_media": {
+      // ChowBot's variant resolves asset_id from WhatsApp's pending-media
+      // state rather than taking it as a direct argument (MCP's ChatGPT
+      // callers already have a resolved assetId from upload_user_media).
       if (!ctx.pendingMedia?.assetId || ctx.pendingMedia.siteId !== siteId) {
         return { error: "No pending WhatsApp media is available to import." };
       }
-      const result = await extractMenuFromMediaAsset(db, env, {
-        organizationId: orgId,
-        siteId,
-        userId,
-        assetId: ctx.pendingMedia.assetId,
-        menuName: toSqlText(input.menu_name)?.trim() || undefined,
-      });
+      const result = await runMcpExecutorToolForChowbot(executorSite, "import_menu_from_media", {
+        asset_id: ctx.pendingMedia.assetId,
+        menu_name: toSqlText(input.menu_name)?.trim() || undefined,
+      }) as { error?: string; menuId?: string; count?: number; warning?: unknown; creditsRemaining?: unknown };
+      if (result.error) return result;
       if (ctx.channel === "whatsapp") {
         await upsertChannelState(db, {
           userId,
@@ -1662,102 +518,47 @@ async function executeTool(
       return { asset_id: assetId, publicUrl, thumbnailUrl };
     }
 
-    case "list_location_qa": {
-      const loc = await queryFirst(
-        db,
-        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        [input.location_id, orgId, siteId],
-      );
-      if (!loc) return { error: "Location not found." };
-      return listLocationQa(db, siteId, input.location_id);
-    }
-
-    case "create_location_qa": {
-      const loc = await queryFirst(
-        db,
-        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        [input.location_id, orgId, siteId],
-      );
-      if (!loc) return { error: "Location not found." };
-      const result = await createLocationQa(
-        db,
-        orgId,
-        siteId,
-        input.location_id,
-        {
-          question: String(input.question ?? ""),
-          answer: toSqlText(input.answer) ?? null,
-          is_owner_answer: true,
-        },
-      );
-      return result.status >= 400
-        ? result.data
-        : { ...(result.data as object), added: true };
-    }
-
+    case "list_location_qa":
+    case "create_location_qa":
     case "delete_location_qa": {
-      const loc = await queryFirst(
-        db,
-        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        [input.location_id, orgId, siteId],
-      );
-      if (!loc) return { error: "Location not found." };
-      const result = await deleteLocationQa(
-        db,
-        siteId,
-        input.location_id,
-        input.qa_id,
-      );
-      return result.status >= 400
-        ? result.data
-        : { qa_id: input.qa_id, deleted: true };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "get_contact_inquiries": {
-      const results = await queryAll(
-        db,
-        `SELECT id, name, email, message, created_at FROM contact_submissions WHERE site_id = ? ORDER BY created_at DESC LIMIT 20`,
-        [siteId],
-      );
-      return results ?? [];
+      return runMcpExecutorToolForChowbot(executorSite, "get_contact_inquiries", input);
     }
 
     case "get_reservation_inquiries": {
-      const locationId = toSqlText(input.location_id) ?? ctx.locationId ?? null;
-      const results = await listReservationSubmissions(db, siteId, { locationId });
-      return results ?? [];
+      // ChowBot-only convenience: fall back to the dashboard's current page
+      // location when the model omits location_id.
+      return runMcpExecutorToolForChowbot(executorSite, "get_reservation_inquiries", {
+        ...input,
+        location_id: input.location_id ?? ctx.locationId ?? undefined,
+      });
     }
 
+    // Regression fix: update_page_content/delete_content_field used to
+    // maintain their own inline hero-field read-merge-write logic
+    // (readHeroContentState/heroColumnForField/isEmptyHeroState), duplicating
+    // what mcp-workflows.ts's updatePageContent/deleteContentField already
+    // do correctly via a CASE-based partial upsert — that shared function
+    // accepts the exact same "hero.title"/"hero.subtitle"/"hero.image"/
+    // "hero.video" field keys via HERO_FIELD_ALIASES. deleteContentField's
+    // hero handling didn't exist at all before this branch (see the fix in
+    // mcp-workflows.ts) — MCP's delete_content_field silently deleted
+    // nothing for hero sub-fields, since they live as columns on a single
+    // row keyed by field="hero", not their own row.
     case "get_page_fields": {
       const page = getToolString(input, "page", 40);
       if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
-
       const targetLocationId =
         typeof input.location_id === "string" && input.location_id.trim()
           ? input.location_id.trim()
           : (ctx.locationId ?? undefined);
-
-      const live = await getPageContent(
-        db,
-        orgId,
-        siteId,
+      return runMcpExecutorToolForChowbot(executorSite, "get_page_fields", {
         page,
-        targetLocationId,
-      );
-
-      return {
-        page,
-        location_id: targetLocationId ?? null,
-        fields: (contentRegistry[page]?.fields
-          ? Object.keys(contentRegistry[page].fields)
-          : []
-        ).map((field) => ({
-          field,
-          label: getFieldDef(page, field)?.label ?? field,
-          type: getFieldDef(page, field)?.type ?? "text",
-        })),
-        live,
-      };
+        location_id: targetLocationId,
+      });
     }
 
     case "update_page_content": {
@@ -1766,63 +567,15 @@ async function executeTool(
       const value = getToolString(input, "value", 20000);
       if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
       if (!field) return { error: "Field is required." };
-
-      const fieldDef = getFieldDef(page, field);
-      if (!fieldDef) return { error: `Unknown field: ${field}` };
-
       const targetLocationId =
         typeof input.location_id === "string" && input.location_id.trim()
           ? input.location_id.trim()
           : (ctx.locationId ?? undefined);
-
-      if (isHeroField(field)) {
-        const heroState = await readHeroContentState(
-          db,
-          orgId,
-          siteId,
-          page,
-          targetLocationId,
-        );
-        const nextState = { ...heroState };
-        nextState[heroColumnForField(field)] = value ?? null;
-        await upsertHeroContentState(
-          db,
-          orgId,
-          siteId,
-          page,
-          targetLocationId,
-          nextState,
-        );
-      } else {
-        const id = `${orgId}::${siteId}::${targetLocationId ?? "site"}::${page}::${field}`;
-        const component = getComponentFromField(field);
-
-        await upsertSiteContent(db, {
-          id,
-          organization_id: orgId,
-          site_id: siteId,
-          location_id: targetLocationId,
-          page,
-          field,
-          value: value ?? undefined,
-          type: fieldDef.type,
-          source: "manual",
-          content: value ?? undefined,
-          hero_title: undefined,
-          hero_subtitle: undefined,
-          hero_image_asset_id: undefined,
-          hero_video_asset_id: undefined,
-          component,
-        });
-      }
-
-      return {
+      return runMcpExecutorToolForChowbot(executorSite, "update_page_content", {
         page,
-        field,
-        value,
-        location_id: targetLocationId ?? null,
-        saved: true,
-      };
+        changes: { [field]: value ?? "" },
+        location_id: targetLocationId,
+      });
     }
 
     case "get_professional_service_content":
@@ -1849,58 +602,15 @@ async function executeTool(
       const field = getToolString(input, "field", 80);
       if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
       if (!field) return { error: "Field is required." };
-
       const targetLocationId =
         typeof input.location_id === "string" && input.location_id.trim()
           ? input.location_id.trim()
           : (ctx.locationId ?? undefined);
-
-      if (isHeroField(field)) {
-        const heroState = await readHeroContentState(
-          db,
-          orgId,
-          siteId,
-          page,
-          targetLocationId,
-        );
-        const nextState = { ...heroState };
-        nextState[heroColumnForField(field)] = null;
-        if (isEmptyHeroState(nextState)) {
-          await deleteSiteContentField(
-            db,
-            orgId,
-            siteId,
-            page,
-            "hero",
-            targetLocationId,
-          );
-        } else {
-          await upsertHeroContentState(
-            db,
-            orgId,
-            siteId,
-            page,
-            targetLocationId,
-            nextState,
-          );
-        }
-      } else {
-        await deleteSiteContentField(
-          db,
-          orgId,
-          siteId,
-          page,
-          field,
-          targetLocationId,
-        );
-      }
-
-      return {
+      return runMcpExecutorToolForChowbot(executorSite, "delete_content_field", {
         page,
         field,
-        location_id: targetLocationId ?? null,
-        deleted: true,
-      };
+        location_id: targetLocationId,
+      });
     }
 
     case "get_site_stats": {
@@ -2001,24 +711,7 @@ async function executeTool(
 
     case "set_default_currency": {
       const currency = toSqlText(input.currency)?.trim().toUpperCase();
-      const supportedCurrencies = new Set<string>(SUPPORTED_CURRENCIES);
-      if (!currency || !supportedCurrencies.has(currency)) {
-        return { error: "Unsupported currency." };
-      }
-      const result = await updateSiteSettingsFields(
-        db,
-        env,
-        siteId,
-        orgId,
-        { default_currency: currency as (typeof SUPPORTED_CURRENCIES)[number] },
-        userId,
-      );
-      if (result.status >= 400) {
-        return {
-          error: String(result.data.error ?? "Failed to update site settings."),
-        };
-      }
-      return { default_currency: currency, updated: true };
+      return runMcpExecutorToolForChowbot(executorSite, "set_default_currency", { currency });
     }
 
     case "update_site_social": {
@@ -2074,445 +767,132 @@ async function executeTool(
       return { updated };
     }
 
-    case "list_locales": {
-      return await listSiteLocales(db, orgId, siteId);
-    }
-
-    case "upsert_locale": {
-      const locale = toSqlText(input.locale)?.trim();
-      if (!locale) return { error: "locale is required." };
-      const saved = await upsertSiteLocale(db, orgId, siteId, {
-        locale,
-        label: toSqlText(input.label) ?? undefined,
-        status:
-          input.status === "published" ||
-          input.status === "disabled" ||
-          input.status === "draft"
-            ? input.status
-            : undefined,
-        fallback_enabled:
-          typeof input.fallback_enabled === "boolean"
-            ? input.fallback_enabled
-            : undefined,
-        is_source:
-          typeof input.is_source === "boolean" ? input.is_source : undefined,
-      });
-      return { locale: saved, updated: true };
-    }
-
+    // Same previously-unreachable-despite-the-feature-flag bug as the
+    // translations tools below, one mcp-executor domain over (locales).
+    case "list_locales":
+    case "upsert_locale":
     case "delete_locale": {
-      const locale = toSqlText(input.locale)?.trim();
-      if (!locale) return { error: "locale is required." };
-      return await deleteSiteLocale(db, orgId, siteId, locale);
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "get_translation_inventory": {
-      const locale = toSqlText(input.locale)?.trim();
-      if (!locale) return { error: "locale is required." };
-      const scopeInput = toSqlText(input.scope)?.trim();
-      const scope =
-        scopeInput && TRANSLATION_SCOPES.has(scopeInput)
-          ? (scopeInput as "site" | "content" | "menus" | "locations" | "posts")
-          : "site";
-      const inventory = await buildTranslationInventory(db, orgId, siteId, {
-        targetLocale: locale,
-        scope,
-        includePublished: input.include_published === true,
-      });
-      return {
-        estimate: inventory.estimate,
-        sample: inventory.items.slice(0, 12).map((item) => ({
-          entity_type: item.entity_type,
-          label: item.label,
-          chars: item.source_chars,
-          status: item.translation_status,
-        })),
-      };
+    // All six require the 'translation' entitlement on MCP (tool.
+    // requiredEntitlement), enforced generically by the adapter. These were
+    // previously unreachable from ChowBot even with
+    // CONVERSATIONAL_TOOLS_TRANSLATIONS_ENABLED=true — the case bodies
+    // existed but chowbot-tools/translations.ts never exposed their
+    // schemas, so filterConversationalTools had nothing to un-hide.
+    case "get_translation_inventory":
+    case "list_translation_jobs":
+    case "get_translation_job":
+    case "run_translation_job_batch": {
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "start_translation_job": {
-      const locale = toSqlText(input.locale)?.trim();
-      if (!locale) return { error: "locale is required." };
-      const scopeInput = toSqlText(input.scope)?.trim();
-      const scope =
-        scopeInput && TRANSLATION_SCOPES.has(scopeInput)
-          ? (scopeInput as "site" | "content" | "menus" | "locations" | "posts")
-          : "site";
-      return await createTranslationJob(db, orgId, siteId, userId, {
-        targetLocale: locale,
-        scope,
-        includePublished: input.include_published === true,
-      });
-    }
-
-    case "list_translation_jobs": {
-      const results = await queryAll(
-        db,
-        `
-        SELECT id, source_locale, target_locale, scope, status, total_items, total_chars,
-               estimated_credits, actual_credits, processed_items, failed_items, created_at, updated_at
-        FROM translation_jobs
-        WHERE organization_id = ? AND site_id = ?
-        ORDER BY created_at DESC
-        LIMIT 10
-      `,
-        [orgId, siteId],
-      );
-      return results ?? [];
-    }
-
-    case "get_translation_job": {
-      const jobId = toSqlText(input.job_id)?.trim();
-      if (!jobId) return { error: "job_id is required." };
-      const job = await queryFirst(
-        db,
-        `
-        SELECT *
-        FROM translation_jobs
-        WHERE id = ? AND organization_id = ? AND site_id = ?
-        LIMIT 1
-      `,
-        [jobId, orgId, siteId],
-      );
-      if (!job) return { error: "Translation job not found." };
-      const results = await queryAll(
-        db,
-        `
-        SELECT entity_type, entity_id, location_id, page, field, source_chars, status, error
-        FROM translation_job_items
-        WHERE job_id = ? AND organization_id = ? AND site_id = ?
-        ORDER BY entity_type, page, field
-        LIMIT 100
-      `,
-        [jobId, orgId, siteId],
-      );
-      return { job, items: results ?? [] };
-    }
-
-    case "run_translation_job_batch": {
-      const jobId = toSqlText(input.job_id)?.trim();
-      if (!jobId) return { error: "job_id is required." };
-      return await processTranslationJobBatch(db, env, orgId, siteId, jobId);
+      return runMcpExecutorToolForChowbot(executorSite, "start_translation_job", input);
     }
 
     case "publish_translations": {
-      const locale = toSqlText(input.locale)?.trim();
-      if (!locale) return { error: "locale is required." };
-      const scopeInput = toSqlText(input.scope)?.trim();
-      const scope =
-        scopeInput && TRANSLATION_SCOPES.has(scopeInput)
-          ? (scopeInput as "site" | "content" | "menus" | "locations" | "posts")
-          : "site";
-      const result = await publishTranslationDrafts(
-        db,
-        orgId,
-        siteId,
-        locale,
-        scope,
-        userId,
-      );
-      await upsertSiteLocale(db, orgId, siteId, {
-        locale: result.target_locale,
-        status: "published",
-        fallback_enabled: true,
-      });
+      const result = await runMcpExecutorToolForChowbot(executorSite, "publish_translations", input) as {
+        error?: string;
+        target_locale?: string;
+      };
+      if (result.error) return result;
+      // ChowBot-only extra step: MCP's publish_translations only marks
+      // drafts as published, it doesn't enable the site locale itself —
+      // ChowBot has historically done both in one call.
+      if (result.target_locale) {
+        await upsertSiteLocale(db, orgId, siteId, {
+          locale: result.target_locale,
+          status: "published",
+          fallback_enabled: true,
+        });
+      }
       return result;
     }
 
     // ── Experiences ────────────────────────────────────────────────────────
     case "list_experiences": {
-      const { listExperiences } = await import("~/server/utils/experiences");
-      const experiences = await listExperiences(db, siteId);
-      return { experiences };
+      return runMcpExecutorToolForChowbot(executorSite, "list_experiences", input);
     }
 
     case "create_experience": {
-      const { createExperience } = await import("~/server/utils/experiences");
-      const title = toSqlText(input.title);
-      if (!title) return { error: "title is required" };
-      const explicitLocationId = toSqlText(input.location_id);
-      let locationId = explicitLocationId;
-      if (explicitLocationId) {
-        const location = await queryFirst(
-          db,
-          `
-            SELECT 1 FROM business_locations
-            WHERE id = ? AND organization_id = ? AND site_id = ?
-            LIMIT 1
-          `,
-          [explicitLocationId, orgId, siteId],
-        );
-        if (!location) return { error: "Location not found or access denied" };
-      } else {
+      // ChowBot-only convenience: MCP's create_experience only falls back
+      // from explicit location_id to the site's primary_location_id. ChowBot
+      // additionally tries the dashboard's current-page location first, and
+      // (if the site has no primary set) the first location by is_primary/id
+      // order, before giving up — preserved here rather than narrowed to
+      // MCP's simpler fallback.
+      if (!toSqlText(input.location_id)) {
         const verifiedCtxLocationId = ctx.locationId
           ? (await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?`, [ctx.locationId, orgId, siteId]))?.id
           : null;
-        locationId = verifiedCtxLocationId
+        const fallbackLocationId = verifiedCtxLocationId
           ?? (await queryFirst<{ primary_location_id: string | null }>(db, `SELECT primary_location_id FROM sites WHERE id = ? AND organization_id = ?`, [siteId, orgId]))?.primary_location_id
           ?? (await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE site_id = ? AND organization_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1`, [siteId, orgId]))?.id
           ?? null;
+        if (fallbackLocationId) input.location_id = fallbackLocationId;
       }
-      if (!locationId) return { error: "location_id is required" };
-      let slots = Array.isArray(input.time_slots)
-        ? input.time_slots.map(String)
-        : null;
-      let recurringSlots = asValidRecurringSlots(input.recurring_slots);
-      const slotStart = typeof input.slot_start === 'string' ? input.slot_start : null;
-      const slotEnd = typeof input.slot_end === 'string' ? input.slot_end : null;
-      const slotIntervalMinutes = typeof input.slot_interval_minutes === 'number' ? input.slot_interval_minutes : null;
-      const slotWeekday = typeof input.slot_weekday === 'string' && ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].includes(input.slot_weekday)
-        ? input.slot_weekday
-        : null;
-
-      // Auto-generate slots from convenience parameters if provided
-      if (slotStart && slotEnd && slotIntervalMinutes) {
-        const { generateSlots } = await import("~/server/utils/experiences");
-        const generatedSlots = generateSlots(slotStart, slotEnd, slotIntervalMinutes);
-        if (slotWeekday) {
-          // Assign to recurring_slots for the specific weekday
-          recurringSlots = recurringSlots || {};
-          recurringSlots[slotWeekday as keyof RecurringSlots] = generatedSlots;
-        } else {
-          // Assign to flat time_slots
-          slots = generatedSlots;
-        }
-      }
-      const images = Array.isArray(input.images)
-        ? input.images.map((img: { url?: ApiValue; kind?: ApiValue }) => ({
-            url: toSqlText(img.url) ?? "",
-            kind: img.kind === "video" ? "video" : "image",
-          }))
-        : undefined;
-      const experience = await createExperience(
-        db,
-        orgId,
-        siteId,
-        {
-          title,
-          tagline: toSqlText(input.tagline) ?? null,
-          body: toSqlText(input.body) ?? null,
-          price: toSqlText(input.price) ?? null,
-          price_amount: typeof input.price_amount === "number" ? input.price_amount : null,
-          compare_at_price_amount: typeof input.compare_at_price_amount === "number" ? input.compare_at_price_amount : null,
-          sale_starts_at: toSqlText(input.sale_starts_at) ?? null,
-          sale_ends_at: toSqlText(input.sale_ends_at) ?? null,
-          duration_minutes:
-            typeof input.duration_minutes === "number"
-              ? Math.round(input.duration_minutes)
-              : null,
-          max_capacity:
-            typeof input.max_capacity === "number"
-              ? Math.round(input.max_capacity)
-              : null,
-          time_slots: slots,
-          recurring_slots: recurringSlots,
-          available_note: toSqlText(input.available_note) ?? null,
-          image_asset_id: toSqlText(input.image_asset_id) ?? null,
-          video_asset_id: toSqlText(input.video_asset_id) ?? null,
-          images,
-          location_id: locationId,
-          status: (["active", "inactive", "sold_out"].includes(
-            String(input.status ?? ""),
-          )
-            ? String(input.status)
-            : "active") as "active" | "inactive" | "sold_out",
-          sort_order:
-            typeof input.sort_order === "number"
-              ? Math.round(input.sort_order)
-              : 0,
-          featured:
-            typeof input.featured === "boolean" ? input.featured : false,
-          featured_sort_order:
-            typeof input.featured_sort_order === "number"
-              ? Math.round(input.featured_sort_order)
-              : 0,
-          seo_title: toSqlText(input.seo_title) ?? null,
-          seo_description: toSqlText(input.seo_description) ?? null,
-        },
-        userId,
-      );
-      return {
-        experience_id: experience.id,
-        slug: experience.slug,
-        title: experience.title,
-      };
+      return runMcpExecutorToolForChowbot(executorSite, "create_experience", input);
     }
 
     case "update_experience": {
-      const { updateExperience, getExperienceById } = await import("~/server/utils/experiences");
-      const id = toSqlText(input.experience_id);
-      if (!id) return { error: "experience_id is required" };
-      const updates: Record<string, ApiValue> = {};
-      if (input.title !== undefined) updates.title = toSqlText(input.title);
-      if (input.tagline !== undefined)
-        updates.tagline = toSqlText(input.tagline) ?? null;
-      if (input.body !== undefined)
-        updates.body = toSqlText(input.body) ?? null;
-      if (input.price !== undefined)
-        updates.price = toSqlText(input.price) ?? null;
-      if (input.price_amount !== undefined) {
-        if (input.price_amount !== null && typeof input.price_amount !== "number") {
-          return { error: "price_amount must be a number or null" };
-        }
-        updates.price_amount = typeof input.price_amount === "number" ? input.price_amount : null;
-      }
-      if (input.compare_at_price_amount !== undefined) {
-        if (input.compare_at_price_amount !== null && typeof input.compare_at_price_amount !== "number") {
-          return { error: "compare_at_price_amount must be a number or null" };
-        }
-        updates.compare_at_price_amount = typeof input.compare_at_price_amount === "number" ? input.compare_at_price_amount : null;
-      }
-      if (input.sale_starts_at !== undefined)
-        updates.sale_starts_at = toSqlText(input.sale_starts_at) ?? null;
-      if (input.sale_ends_at !== undefined)
-        updates.sale_ends_at = toSqlText(input.sale_ends_at) ?? null;
-      if (input.duration_minutes !== undefined)
-        updates.duration_minutes =
-          typeof input.duration_minutes === "number"
-            ? Math.round(input.duration_minutes)
-            : null;
-      if (input.max_capacity !== undefined)
-        updates.max_capacity =
-          typeof input.max_capacity === "number"
-            ? Math.round(input.max_capacity)
-            : null;
-      if (input.time_slots !== undefined)
-        updates.time_slots = Array.isArray(input.time_slots)
-          ? input.time_slots.map(String)
-          : null;
-      if (input.recurring_slots !== undefined)
-        updates.recurring_slots = asValidRecurringSlots(input.recurring_slots);
-
-      // Handle convenience slot generation parameters
-      const slotStart = typeof input.slot_start === 'string' ? input.slot_start : null;
-      const slotEnd = typeof input.slot_end === 'string' ? input.slot_end : null;
-      const slotIntervalMinutes = typeof input.slot_interval_minutes === 'number' ? input.slot_interval_minutes : null;
-      const slotWeekday = typeof input.slot_weekday === 'string' && ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].includes(input.slot_weekday)
+      // ChowBot-only convenience: when slot_weekday convenience args are
+      // used, MCP's expandSlotGeneratorArgs (mcp-executor/shared.ts) only
+      // merges against whatever recurring_slots was ALSO passed in the same
+      // call — if the caller reasonably sends just the one weekday's
+      // convenience params, every other weekday's schedule is silently
+      // dropped. Pre-merge against the experience's actual current state
+      // here instead, so the adapter call carries a fully-formed
+      // recurring_slots object and MCP's simpler merge is never exercised
+      // for this case.
+      const experienceId = toSqlText(input.experience_id);
+      const slotWeekday = typeof input.slot_weekday === "string" && WEEKDAY_NAMES.includes(input.slot_weekday as (typeof WEEKDAY_NAMES)[number])
         ? input.slot_weekday
         : null;
-
-      if (slotStart && slotEnd && slotIntervalMinutes) {
-        const { generateSlots } = await import("~/server/utils/experiences");
-        const generatedSlots = generateSlots(slotStart, slotEnd, slotIntervalMinutes);
-        if (slotWeekday) {
-          // Assign to recurring_slots for the specific weekday while preserving
-          // recurring slots for other weekdays.
-          const existingExperience = await getExperienceById(db, siteId, id);
-          const existingRecurring = existingExperience?.recurring_slots && typeof existingExperience.recurring_slots === 'object'
-            ? existingExperience.recurring_slots as Record<string, unknown>
-            : {};
-          const incomingRecurring = updates.recurring_slots && typeof updates.recurring_slots === 'object'
-            ? updates.recurring_slots as Record<string, unknown>
-            : (input.recurring_slots && typeof input.recurring_slots === 'object'
-                ? input.recurring_slots as Record<string, unknown>
-                : {});
-          updates.recurring_slots = {
-            ...existingRecurring,
-            ...incomingRecurring,
-            [slotWeekday]: generatedSlots,
-          };
-        } else {
-          // Assign to flat time_slots and clear recurring slots so the new
-          // flat schedule is the source of truth.
-          updates.time_slots = generatedSlots;
-          updates.recurring_slots = null;
-        }
-      }
-
-      // If flat time_slots are explicitly set without a weekday update, clear
-      // recurring slots to avoid schedule conflicts.
-      if (!slotWeekday && updates.time_slots !== undefined && input.recurring_slots === undefined) {
-        updates.recurring_slots = null;
-      }
-
-      if (input.available_note !== undefined)
-        updates.available_note = toSqlText(input.available_note) ?? null;
-      if (input.image_asset_id !== undefined)
-        updates.image_asset_id = toSqlText(input.image_asset_id) ?? null;
-      if (input.video_asset_id !== undefined)
-        updates.video_asset_id = toSqlText(input.video_asset_id) ?? null;
-      if (input.images !== undefined)
-        updates.images = Array.isArray(input.images)
-          ? input.images.map((img: { url?: ApiValue; kind?: ApiValue }) => ({
-              url: toSqlText(img.url) ?? "",
-              kind: img.kind === "video" ? "video" : "image",
-            }))
-          : null;
-      if (input.location_id !== undefined)
-        updates.location_id = toSqlText(input.location_id) ?? null;
       if (
-        input.status !== undefined &&
-        ["active", "inactive", "sold_out"].includes(String(input.status))
-      )
-        updates.status = String(input.status);
-      if (input.sort_order !== undefined)
-        updates.sort_order = Number(input.sort_order);
-      if (input.featured !== undefined) {
-        if (typeof input.featured !== "boolean")
-          return { error: "featured must be a boolean" };
-        updates.featured = input.featured;
+        experienceId &&
+        slotWeekday &&
+        typeof input.slot_start === "string" &&
+        typeof input.slot_end === "string" &&
+        typeof input.slot_interval_minutes === "number"
+      ) {
+        const { generateSlots } = await import("~/server/utils/experiences");
+        const generated = generateSlots(input.slot_start, input.slot_end, input.slot_interval_minutes);
+        const existingExperience = await getExperienceById(db, siteId, experienceId);
+        const existingRecurring = existingExperience?.recurring_slots && typeof existingExperience.recurring_slots === "object"
+          ? existingExperience.recurring_slots as Record<string, unknown>
+          : {};
+        const incomingRecurring = input.recurring_slots && typeof input.recurring_slots === "object"
+          ? input.recurring_slots as Record<string, unknown>
+          : {};
+        input = {
+          ...input,
+          recurring_slots: { ...existingRecurring, ...incomingRecurring, [slotWeekday]: generated },
+          slot_start: undefined,
+          slot_end: undefined,
+          slot_interval_minutes: undefined,
+          slot_weekday: undefined,
+        };
       }
-      if (input.featured_sort_order !== undefined) {
-        const parsed = Number(input.featured_sort_order);
-        if (!Number.isFinite(parsed))
-          return { error: "featured_sort_order must be a number" };
-        updates.featured_sort_order = parsed;
-      }
-      if (input.seo_title !== undefined)
-        updates.seo_title = toSqlText(input.seo_title) ?? null;
-      if (input.seo_description !== undefined)
-        updates.seo_description = toSqlText(input.seo_description) ?? null;
-      const updated = await updateExperience(
-        db,
-        siteId,
-        id,
-        updates as ApiValue,
-      );
-      if (!updated) return { error: "Experience not found" };
-      return { updated: true, experience_id: updated.id, slug: updated.slug };
+      return runMcpExecutorToolForChowbot(executorSite, "update_experience", input);
     }
 
     case "delete_experience": {
-      const { deleteExperience } = await import("~/server/utils/experiences");
-      const id = toSqlText(input.experience_id);
-      if (!id) return { error: "experience_id is required" };
-      const deleted = await deleteExperience(db, siteId, id, {
-        locationId: toSqlText(input.location_id) ?? null,
-      });
-      if (!deleted) return { error: "Experience not found" };
-      return { deleted: true };
+      return runMcpExecutorToolForChowbot(executorSite, "delete_experience", input);
     }
 
     case "list_experience_bookings": {
-      const { listExperienceBookings } =
-        await import("~/server/utils/experiences");
-      const id = toSqlText(input.experience_id);
-      if (!id) return { error: "experience_id is required" };
-      const bookings = await listExperienceBookings(db, siteId, id, {
-        locationId: toSqlText(input.location_id) ?? ctx.locationId ?? null,
+      // ChowBot-only convenience: fall back to the dashboard's current page
+      // location when the model omits location_id.
+      return runMcpExecutorToolForChowbot(executorSite, "list_experience_bookings", {
+        ...input,
+        location_id: input.location_id ?? ctx.locationId ?? undefined,
       });
-      return { bookings };
     }
 
     case "update_experience_booking": {
-      const { updateBookingStatus } =
-        await import("~/server/utils/experiences");
-      const expId = toSqlText(input.experience_id);
-      const bookingId = toSqlText(input.booking_id);
-      const status = toSqlText(input.status);
-      if (!expId || !bookingId || !status)
-        return { error: "experience_id, booking_id, and status are required" };
-      if (!["confirmed", "cancelled"].includes(status))
-        return { error: "status must be confirmed or cancelled" };
-      const ok = await updateBookingStatus(
-        db,
-        siteId,
-        expId,
-        bookingId,
-        status as "confirmed" | "cancelled",
-      );
-      if (!ok) return { error: "Booking not found" };
-      return { updated: true };
+      return runMcpExecutorToolForChowbot(executorSite, "update_experience_booking", input);
     }
 
     case "get_experience_availability": {
@@ -2578,55 +958,12 @@ async function executeTool(
       return { overrides };
     }
 
-    case "create_work_request": {
-      const type = toSqlText(input.type);
-      let title = toSqlText(input.title);
-      const description = toSqlText(input.description) ?? null;
-      const priority = toSqlText(input.priority) ?? "normal";
-
-      const validTypes = [
-        "content_update",
-        "menu_update",
-        "translation",
-        "seo",
-        "google_business",
-        "seasonal",
-        "photo_update",
-        "social_media",
-        "technical",
-        "other",
-      ];
-      const validPriorities = ["low", "normal", "high", "urgent"];
-
-      if (!type || !validTypes.includes(type))
-        return { error: `type must be one of: ${validTypes.join(", ")}` };
-      title = title?.trim();
-      if (!title) return { error: "title is required" };
-      if (title.length > 120)
-        return { error: "title must be at most 120 characters" };
-      if (!validPriorities.includes(priority))
-        return { error: "priority must be low, normal, high, or urgent" };
-
-      const result = await createWorkRequest(env, db, orgId, siteId, {
-        type,
-        title,
-        description,
-        priority,
-        source: "chowbot",
-      });
-      if (result.status >= 400) return result.data;
-
-      return {
-        created: true,
-        id: (result.data as { id: string }).id,
-        message:
-          "Work request submitted to the Paul & Julia queue. They'll take care of it.",
-      };
-    }
-
+    // Both require the managed_service entitlement on MCP (tool.requiredEntitlement),
+    // which the adapter now enforces — the old case bodies here had no
+    // entitlement check at all.
+    case "create_work_request":
     case "list_work_requests": {
-      const rows = await listWorkRequestsForOrganization(db, orgId);
-      return { work_requests: rows };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "search_public_resources": {
@@ -2644,381 +981,91 @@ async function executeTool(
       return { results };
     }
 
-    case "get_post": {
-      const postId = toSqlText(input.post_id);
-      if (!postId) return { error: "post_id is required." };
-      const post = await getPost(db, orgId, siteId, postId, env);
-      if (!post) return { error: "Post not found." };
-      return { post };
-    }
-
+    case "get_post":
     case "set_post_image": {
-      const postId = toSqlText(input.post_id);
-      const assetId = toSqlText(input.asset_id);
-      if (!postId || !assetId) return { error: "post_id and asset_id required." };
-      let result;
-      try {
-        result = await updatePost(db, orgId, siteId, postId, { image_asset_id: assetId }, userId, env);
-      } catch (error) {
-        if (error instanceof PostValidationError) return { error: error.message };
-        throw error;
-      }
-      if (!result) return { error: "Failed to update post image." };
-      return { updated: true, post_id: postId, asset_id: assetId };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "list_blog_posts": {
-      const status = typeof input.status === "string" ? input.status : undefined;
-      const posts = await listPlatformBlogPosts(db, status, siteId);
-      return { posts };
-    }
-
-    case "get_blog_post": {
-      const postId = toSqlText(input.post_id);
-      if (!postId) return { error: "post_id is required." };
-      const post = await getPlatformBlogPost(db, postId, siteId);
-      return { post };
-    }
-
-    case "create_blog_post": {
-      const result = await createPlatformBlogPost(
-        db,
-        userId,
-        {
-          title: input.title,
-          body: input.body,
-          excerpt: input.excerpt,
-          category: input.category,
-          components: input.components,
-          publish: input.publish,
-        },
-        { site_id: siteId, organization_id: orgId },
-      );
-      return { post: result.post };
-    }
-
-    case "update_blog_post": {
-      const postId = toSqlText(input.post_id);
-      if (!postId) return { error: "post_id is required." };
-      const result = await updatePlatformBlogPost(
-        db,
-        postId,
-        {
-          title: input.title,
-          body: input.body,
-          excerpt: input.excerpt,
-          category: input.category,
-          components: input.components,
-          publish: input.publish,
-          unpublish: input.unpublish,
-        },
-        siteId,
-      );
-      return { post: result.post };
-    }
-
-    case "set_blog_post_image": {
-      const postId = toSqlText(input.post_id);
-      const assetId = toSqlText(input.asset_id);
-      if (!postId || !assetId) return { error: "post_id and asset_id required." };
-      const result = await updatePlatformBlogPost(db, postId, { featured_image_asset_id: assetId }, siteId);
-      return { updated: true, post_id: postId, asset_id: assetId, post: result.post };
-    }
-
+    // Regression fix: seo_description/seo_keywords/canonical_url/robots were
+    // in ChowBot's old create/update schema but the case bodies never
+    // forwarded them to createPlatformBlogPost/updatePlatformBlogPost —
+    // silently dropped despite the underlying function fully supporting them.
+    case "list_blog_posts":
+    case "get_blog_post":
+    case "create_blog_post":
+    case "update_blog_post":
+    case "set_blog_post_image":
     case "delete_blog_post": {
-      const postId = toSqlText(input.post_id);
-      if (!postId) return { error: "post_id is required." };
-      await deletePlatformBlogPost(db, postId, siteId);
-      return { post_id: postId, deleted: true };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     case "list_menus": {
-      const locationId = typeof input.location_id === "string" ? input.location_id.trim() : undefined;
-      const menus = await getMenus(db, orgId, siteId, locationId || undefined);
-      return { menus };
+      return runMcpExecutorToolForChowbot(executorSite, "list_menus", input);
     }
 
-    case "reorder_menu_items": {
-      const menuId = toSqlText(input.menu_id);
-      if (!menuId) return { error: "menu_id is required." };
-      if (!Array.isArray(input.updates) || !input.updates.length)
-        return { error: "updates array is required." };
-      const updates = (input.updates as Array<{ id?: unknown; sort_order?: unknown }>).map((u) => ({
-        id: String(u.id ?? ""),
-        sort_order: Number(u.sort_order ?? 0),
-      }));
-      try {
-        await reorderMenuItems(db, orgId, siteId, menuId, updates);
-      } catch (error) {
-        if (error instanceof MenuNotFoundError) return { error: error.message };
-        throw error;
-      }
-      return { reordered: true, menu_id: menuId };
-    }
-
-    case "set_menu_item_image": {
-      const itemId = toSqlText(input.menu_item_id);
-      const assetId = toSqlText(input.asset_id);
-      if (!itemId || !assetId) return { error: "menu_item_id and asset_id required." };
-      const result = await updateMenuItem(db, orgId, siteId, itemId, { image_asset_id: assetId }, userId);
-      if (!result) return { error: "Failed to update menu item image." };
-      return { updated: true, menu_item_id: itemId, asset_id: assetId };
-    }
-
-    case "get_location": {
-      const locationId = toSqlText(input.location_id);
-      if (!locationId) return { error: "location_id is required." };
-      const row = await queryFirst(
-        db,
-        `SELECT * FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        [locationId, orgId, siteId],
-      );
-      if (!row) return { error: "Location not found." };
-      return { location: row };
-    }
-
-    case "set_location_hero_image": {
-      const locationId = toSqlText(input.location_id);
-      const assetId = toSqlText(input.asset_id);
-      if (!locationId || !assetId) return { error: "location_id and asset_id required." };
-      const result = await updateLocation(db, orgId, siteId, locationId, { hero_image_asset_id: assetId }, userId);
-      if (!result || result.status >= 400) return { error: "Failed to set location hero image." };
-      return { updated: true, location_id: locationId, asset_id: assetId };
-    }
-
+    case "get_location":
+    case "set_location_hero_image":
     case "set_location_hero_video": {
-      const locationId = toSqlText(input.location_id);
-      const assetId = toSqlText(input.asset_id);
-      if (!locationId || !assetId) return { error: "location_id and asset_id required." };
-      const result = await updateLocation(db, orgId, siteId, locationId, { hero_video_asset_id: assetId }, userId);
-      if (!result || result.status >= 400) return { error: "Failed to set location hero video." };
-      return { updated: true, location_id: locationId, asset_id: assetId };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "get_site_settings": {
-      try {
-        return { settings: await loadSettingsPayload(db, orgId, siteId) };
-      } catch (err) {
-        if (err instanceof SiteNotFoundError) {
-          return { error: "Site not found." };
-        }
-        throw err;
-      }
-    }
-
+    case "get_site_settings":
     case "set_logo": {
-      const assetId = toSqlText(input.asset_id);
-      if (!assetId) return { error: "asset_id is required." };
-      await updateSiteSettingsFields(db, env, siteId, orgId, { logo_asset_id: assetId }, userId);
-      return { updated: true, logo_asset_id: assetId };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
+    // Regression fix: this previously accepted title/caption fields that
+    // updateMediaAssetMetadata's signature never supported (only alt_text,
+    // location_id, category exist) — those were silently dropped, so
+    // "update the caption" always claimed success while doing nothing.
     case "update_media_asset": {
-      const assetId = toSqlText(input.asset_id);
-      if (!assetId) return { error: "asset_id is required." };
-      const updates: Record<string, string> = {};
-      if (typeof input.alt_text === "string") updates.alt_text = input.alt_text;
-      if (typeof input.title === "string") updates.title = input.title;
-      if (typeof input.caption === "string") updates.caption = input.caption;
-      if (!Object.keys(updates).length) return { error: "Provide at least one field to update." };
-      await updateMediaAssetMetadata(db, assetId, siteId, updates);
-      return { updated: true, asset_id: assetId };
+      return runMcpExecutorToolForChowbot(executorSite, "update_media_asset", input);
     }
 
-    case "set_home_hero_image": {
-      const assetId = toSqlText(input.asset_id);
-      if (!assetId) return { error: "asset_id is required." };
-      const locationId = typeof input.location_id === "string" && input.location_id.trim()
-        ? input.location_id.trim() : undefined;
-      const result = await updateHomeHero(db, orgId, siteId, { image_asset_id: assetId, location_id: locationId });
-      return { updated: true, ...result };
-    }
-
-    case "set_home_hero_video": {
-      const assetId = toSqlText(input.asset_id);
-      if (!assetId) return { error: "asset_id is required." };
-      const locationId = typeof input.location_id === "string" && input.location_id.trim()
-        ? input.location_id.trim() : undefined;
-      const result = await updateHomeHero(db, orgId, siteId, { video_asset_id: assetId, location_id: locationId });
-      return { updated: true, ...result };
-    }
-
-    case "update_home_hero": {
-      const locationId = typeof input.location_id === "string" && input.location_id.trim()
-        ? input.location_id.trim() : undefined;
-      const result = await updateHomeHero(db, orgId, siteId, {
-        title: typeof input.title === "string" ? input.title : undefined,
-        subtitle: typeof input.subtitle === "string" ? input.subtitle : undefined,
-        image_asset_id: typeof input.image_asset_id === "string" ? input.image_asset_id : undefined,
-        video_asset_id: typeof input.video_asset_id === "string" ? input.video_asset_id : undefined,
-        location_id: locationId,
-      });
-      return { updated: true, ...result };
-    }
-
-    case "set_about_story_image": {
-      const assetId = toSqlText(input.asset_id);
-      if (!assetId) return { error: "asset_id is required." };
-      const id = `${orgId}::${siteId}::site::about::story.image`;
-      const publicUrl = await resolveMediaAssetPublicUrl(db, env, siteId, assetId);
-      await upsertSiteContent(db, {
-        id,
-        organization_id: orgId,
-        site_id: siteId,
-        location_id: undefined,
-        page: "about",
-        field: "story.image",
-        value: publicUrl,
-        type: "image",
-        source: "manual",
-        content: publicUrl,
-        hero_title: undefined,
-        hero_subtitle: undefined,
-        hero_image_asset_id: undefined,
-        hero_video_asset_id: undefined,
-        component: "SayaBrandStory",
-      });
-      return { updated: true, asset_id: assetId, public_url: publicUrl };
-    }
-
+    // Regression fix: set_about_story_image/set_home_story_image stored a
+    // pre-resolved CDN public_url string directly in site_content.value.
+    // Every other media-typed content field (content-registry's
+    // 'story.image' is type: 'media') stores the raw asset_id and lets
+    // resolveMediaFieldUrls resolve it to a URL at read time — storing a
+    // frozen URL instead loses the asset_id linkage (can't tell which
+    // media_asset this came from) and won't reflect a future CDN URL
+    // rotation for that asset. MCP's set_about_story_image/
+    // set_home_story_image already used the correct asset_id-storing path.
+    case "set_home_hero_image":
+    case "set_home_hero_video":
+    case "update_home_hero":
+    case "set_about_story_image":
     case "set_home_story_image": {
-      const assetId = toSqlText(input.asset_id);
-      if (!assetId) return { error: "asset_id is required." };
-      const id = `${orgId}::${siteId}::site::home::story.image`;
-      const publicUrl = await resolveMediaAssetPublicUrl(db, env, siteId, assetId);
-      await upsertSiteContent(db, {
-        id,
-        organization_id: orgId,
-        site_id: siteId,
-        location_id: undefined,
-        page: "home",
-        field: "story.image",
-        value: publicUrl,
-        type: "image",
-        source: "manual",
-        content: publicUrl,
-        hero_title: undefined,
-        hero_subtitle: undefined,
-        hero_image_asset_id: undefined,
-        hero_video_asset_id: undefined,
-        component: "SayaBrandStory",
-      });
-      return { updated: true, asset_id: assetId, public_url: publicUrl };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "get_notification_settings": {
-      const settings = await getNotificationsSettings(db, orgId, siteId);
-      return { settings };
-    }
-
+    case "get_notification_settings":
     case "update_notification_settings": {
-      const phone = typeof input.whatsapp_phone === "string" && input.whatsapp_phone.trim()
-        ? input.whatsapp_phone.trim()
-        : undefined;
-      const channels = Array.isArray(input.channels)
-        ? input.channels.filter((value: unknown): value is string => value === "email" || value === "whatsapp")
-        : undefined;
-      if (!phone && !channels) return { error: "whatsapp_phone and/or channels are required." };
-      if (channels && channels.length === 0) return { error: "channels must contain at least one valid value (email or whatsapp)." };
-      const result = await updateNotificationsSettings(db, orgId, siteId, phone, channels);
-      return { updated: true, ...result };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "update_location_qa": {
-      const qaId = toSqlText(input.qa_id);
-      const locationId = toSqlText(input.location_id);
-      if (!qaId || !locationId) return { error: "qa_id and location_id required." };
-      const updates: Record<string, unknown> = {};
-      if (input.question !== undefined) updates.question = input.question;
-      if (input.answer !== undefined) updates.answer = input.answer;
-      if (input.status !== undefined) updates.status = input.status;
-      if (input.sort_order !== undefined) updates.sort_order = input.sort_order;
-      return await updateLocationQa(db, orgId, siteId, locationId, qaId, updates);
-    }
-
+    case "update_location_qa":
     case "reorder_location_qa": {
-      const locationId = toSqlText(input.location_id);
-      if (!locationId) return { error: "location_id is required." };
-      if (!Array.isArray(input.updates) || !input.updates.length)
-        return { error: "updates array is required." };
-      const updates = (input.updates as Array<{ id?: unknown; sort_order?: unknown }>).map((u) => ({
-        id: String(u.id ?? ""),
-        sort_order: Number(u.sort_order ?? 0),
-      }));
-      return await reorderLocationQa(db, orgId, siteId, locationId, updates);
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "get_experience": {
-      const experienceId = toSqlText(input.experience_id);
-      if (!experienceId) return { error: "experience_id is required." };
-      const experience = await getExperienceById(db, siteId, experienceId);
-      if (!experience) return { error: "Experience not found." };
-      return { experience };
-    }
-
-    case "set_experience_image": {
-      const experienceId = toSqlText(input.experience_id);
-      const assetId = toSqlText(input.asset_id);
-      if (!experienceId || !assetId) return { error: "experience_id and asset_id required." };
-      const updated = await updateExperience(db, siteId, experienceId, { image_asset_id: assetId });
-      if (!updated) return { error: "Failed to set experience image." };
-      return { updated: true, experience_id: experienceId, asset_id: assetId };
-    }
-
+    case "get_experience":
+    case "set_experience_image":
     case "set_experience_video": {
-      const experienceId = toSqlText(input.experience_id);
-      const assetId = toSqlText(input.asset_id);
-      if (!experienceId || !assetId) return { error: "experience_id and asset_id required." };
-      const updated = await updateExperience(db, siteId, experienceId, { video_asset_id: assetId });
-      if (!updated) return { error: "Failed to set experience video." };
-      return { updated: true, experience_id: experienceId, asset_id: assetId };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "get_translation_review_items": {
-      const locale = toSqlText(input.locale);
-      if (!locale) return { error: "locale is required." };
-      const scope = (toSqlText(input.scope) ?? undefined) as "site" | "content" | "menus" | "locations" | "posts" | undefined;
-      const status = (toSqlText(input.status) ?? undefined) as "missing" | "draft" | "published" | "stale" | "all" | undefined;
-      const result = await listTranslationReviewItems(db, orgId, siteId, { targetLocale: locale, scope, status });
-      return result;
-    }
-
+    case "get_translation_review_items":
     case "save_translation_review_item": {
-      const locale = toSqlText(input.locale);
-      const entityType = toSqlText(input.entity_type) as "site_content" | "menu" | "menu_item" | "business_location" | "post" | null;
-      const entityId = toSqlText(input.entity_id);
-      const field = toSqlText(input.field);
-      const fields = input.fields as Record<string, string> | null;
-      if (!locale || !entityType || !entityId || !field || !fields)
-        return { error: "locale, entity_type, entity_id, field, and fields are required." };
-      const result = await saveTranslationReviewItem(db, orgId, siteId, {
-        targetLocale: locale,
-        entityType,
-        entityId,
-        field,
-        fields,
-      });
-      return { updated: true, ...result };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
+    // Domain management (create_domain, sync_domain, etc.) also lives in
+    // mcp-executor/settings.ts but is intentionally not exposed to ChowBot —
+    // see CLAUDE.md's Custom Domains section on ACME token rotation risk.
+    // Only get_dashboard_link overlaps between the two surfaces.
     case "get_dashboard_link": {
-      const destination = toSqlText(input.destination) as DashboardDestination | null;
-      if (!destination || !Object.prototype.hasOwnProperty.call(DASHBOARD_DESTINATIONS, destination)) {
-        return {
-          error: `destination is required and must be one of: ${Object.keys(DASHBOARD_DESTINATIONS).join(", ")}`,
-        };
-      }
-      const org = await queryFirst<{ slug: string | null }>(
-        db,
-        `SELECT slug FROM organization WHERE id = ?`,
-        [orgId],
-      );
-      return {
-        url: buildDashboardUrl(
-          { env, organizationId: orgId, organizationSlug: org?.slug ?? undefined },
-          destination,
-        ),
-      };
+      return runMcpExecutorToolForChowbot(executorSite, "get_dashboard_link", input);
     }
 
     default:
