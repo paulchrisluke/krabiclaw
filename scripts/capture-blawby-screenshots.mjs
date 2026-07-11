@@ -101,6 +101,71 @@ async function markCaptureSections(page, routeName, expectedSections) {
       return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
     }
     const contentSection = element => visible(element) && !['HEADER', 'FOOTER'].includes(element.tagName)
+    const colorCanvas = document.createElement('canvas')
+    colorCanvas.width = 1
+    colorCanvas.height = 1
+    const colorContext = colorCanvas.getContext('2d', { willReadFrequently: true })
+    const normalizedColor = (value) => {
+      if (!colorContext || !value) return value
+      colorContext.clearRect(0, 0, 1, 1)
+      colorContext.fillStyle = value
+      colorContext.fillRect(0, 0, 1, 1)
+      const [red, green, blue, alpha] = colorContext.getImageData(0, 0, 1, 1).data
+      return `rgba(${red}, ${green}, ${blue}, ${(alpha / 255).toFixed(3)})`
+    }
+    const normalizedFont = (value) => {
+      const lower = value.toLowerCase()
+      if (lower.includes('bitter')) return 'Bitter'
+      if (lower.includes('marcellus')) return 'Marcellus'
+      if (lower.includes('poppins')) return 'Poppins'
+      return value.replaceAll('"', '')
+    }
+    const styleSnapshot = (element) => {
+      if (!element) return null
+      const style = getComputedStyle(element)
+      return {
+        background_color: normalizedColor(style.backgroundColor),
+        border_radius: style.borderRadius,
+        box_shadow: style.boxShadow === 'none' ? 'none' : 'present',
+        color: normalizedColor(style.color),
+        column_gap: style.columnGap,
+        display: style.display,
+        font_family: normalizedFont(style.fontFamily),
+        font_size: style.fontSize,
+        font_weight: style.fontWeight,
+        grid_columns: style.display === 'grid' ? style.gridTemplateColumns.split(/\s+/).filter(Boolean).length : null,
+        line_height: style.lineHeight,
+        max_width: style.maxWidth,
+        object_fit: style.objectFit,
+        overflow_x: style.overflowX,
+        overflow_y: style.overflowY,
+        padding_bottom: style.paddingBottom,
+        padding_left: style.paddingLeft,
+        padding_right: style.paddingRight,
+        padding_top: style.paddingTop,
+        row_gap: style.rowGap,
+        text_align: style.textAlign,
+      }
+    }
+    const firstVisible = (root, selector) => Array.from(root.querySelectorAll(selector)).find(visible) || null
+    const styleSignature = (element) => {
+      const descendants = Array.from(element.querySelectorAll('*')).filter(visible)
+      const grid = descendants.find((candidate) => getComputedStyle(candidate).display === 'grid') || null
+      const card = descendants.find((candidate) => {
+        const style = getComputedStyle(candidate)
+        return style.borderRadius !== '0px'
+          && style.boxShadow !== 'none'
+          && style.backgroundColor !== 'rgba(0, 0, 0, 0)'
+      }) || null
+      return {
+        section: styleSnapshot(element),
+        heading: styleSnapshot(firstVisible(element, 'h1, h2, h3')),
+        copy: styleSnapshot(firstVisible(element, 'p')),
+        grid: styleSnapshot(grid),
+        card: styleSnapshot(card),
+        media: styleSnapshot(firstVisible(element, 'img')),
+      }
+    }
     document.querySelectorAll('[data-parity-capture-slot]').forEach(element => {
       element.removeAttribute('data-parity-capture-slot')
     })
@@ -120,6 +185,7 @@ async function markCaptureSections(page, routeName, expectedSections) {
       targets.push({
         slot,
         name,
+        style_signature: styleSignature(element),
         clip: {
           x,
           y,
@@ -260,6 +326,9 @@ try {
         )
         await fs.mkdir(path.dirname(sectionPath), { recursive: true })
         try {
+          if (section.slot !== 'header') {
+            await page.locator('header').first().evaluate(element => { element.style.visibility = 'hidden' })
+          }
           await page.locator(`[data-parity-capture-slot="${section.slot}"]`).first().screenshot({
             path: sectionPath,
             animations: 'disabled',
@@ -269,6 +338,10 @@ try {
             `Section capture failed for ${routeName}/${viewportName}/${section.slot}-${section.name} `
             + `at ${JSON.stringify(section.clip)}: ${error instanceof Error ? error.message : String(error)}`,
           )
+        } finally {
+          if (section.slot !== 'header') {
+            await page.locator('header').first().evaluate(element => { element.style.visibility = '' })
+          }
         }
         manifest.sections.push({
           route_name: routeName,
@@ -276,6 +349,7 @@ try {
           viewport: viewportName,
           slot: section.slot,
           name: section.name,
+          style_signature: section.style_signature,
           file: portablePath(args.outDir, sectionPath),
         })
       }
@@ -287,7 +361,7 @@ try {
           await page.waitForTimeout(200)
           const statePath = path.resolve(args.outDir, 'screenshots', args.source, 'states', 'home-mobile-navigation-open-mobile.png')
           await fs.mkdir(path.dirname(statePath), { recursive: true })
-          await page.screenshot({ path: statePath, fullPage: true })
+          await page.locator('header').first().screenshot({ path: statePath, animations: 'disabled' })
           manifest.states.push({
             route_name: routeName,
             route: routeConfig.path,
@@ -308,4 +382,12 @@ try {
 const manifestPath = path.resolve(args.outDir, `screenshots-${args.source}.json`)
 await fs.mkdir(path.dirname(manifestPath), { recursive: true })
 await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
-process.stdout.write(`${JSON.stringify(manifest, null, 2)}\n`)
+process.stdout.write(`${JSON.stringify({
+  source: manifest.source,
+  source_revision: manifest.source_revision,
+  observed_reference_etag: manifest.observed_reference_etag,
+  screenshots: manifest.screenshots.length,
+  sections: manifest.sections.length,
+  states: manifest.states.length,
+  manifest: portablePath(process.cwd(), manifestPath),
+}, null, 2)}\n`)

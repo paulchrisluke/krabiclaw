@@ -7,7 +7,7 @@
             <div class="size-16 rounded-lg">
               <img v-if="feature.icon_url" :src="feature.icon_url" :alt="feature.title" width="64" height="64" loading="eager" class="size-16 rounded object-cover">
             </div>
-            <h2 class="mt-4 blawby-display text-xl font-bold uppercase text-[var(--blawby-primary)]">{{ feature.title }}</h2>
+            <h3 class="mt-4 blawby-display text-xl font-bold uppercase text-[var(--blawby-primary)]">{{ feature.title }}</h3>
             <p class="mt-4 text-sm text-[var(--blawby-primary)]">{{ feature.description }}</p>
           </article>
         </div>

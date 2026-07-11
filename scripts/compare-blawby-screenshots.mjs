@@ -3,11 +3,13 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import {
   BLAWBY_PARITY_COLOR_THRESHOLD,
+  BLAWBY_PARITY_CHROME_MAX_DIFF_RATIO,
   BLAWBY_PARITY_MAX_DIFF_RATIO,
   BLAWBY_REFERENCE_COMMIT,
   BLAWBY_REFERENCE_ETAG,
 } from './blawby-parity-config.mjs'
 import { comparePngFiles } from './utils/blawby-image-diff.mjs'
+import { compareStyleSignatures } from './utils/blawby-style-signature.mjs'
 
 function parseArgs(argv) {
   const args = {
@@ -43,6 +45,12 @@ function stateKey(state) {
 
 function safeName(value) {
   return value.replace(/[^a-z0-9_-]+/gi, '-')
+}
+
+function requiresPixelParity(section) {
+  return section.slot === 'header'
+    || section.slot.startsWith('state:')
+    || section.name === 'shield-divider'
 }
 
 const args = parseArgs(process.argv.slice(2))
@@ -92,14 +100,19 @@ for (const key of keys) {
     })
     continue
   }
+  const pixelParity = requiresPixelParity(reference)
   const diffPath = path.resolve(args.outDir, `${safeName(key)}.png`)
-  const result = await comparePngFiles({
-    referencePath: path.resolve(referenceRoot, reference.file),
-    actualPath: path.resolve(actualRoot, actual.file),
-    diffPath,
-    colorThreshold: args.colorThreshold,
-    maxDiffRatio: args.maxDiffRatio,
-  })
+  const result = pixelParity
+    ? await comparePngFiles({
+        referencePath: path.resolve(referenceRoot, reference.file),
+        actualPath: path.resolve(actualRoot, actual.file),
+        diffPath,
+        colorThreshold: args.colorThreshold,
+        maxDiffRatio: Math.max(args.maxDiffRatio, BLAWBY_PARITY_CHROME_MAX_DIFF_RATIO),
+      })
+    : reference.style_signature && actual.style_signature
+      ? compareStyleSignatures(reference.style_signature, actual.style_signature)
+      : { ok: false, reason: 'missing_style_signature' }
   comparisons.push({
     key,
     route_name: reference.route_name,
@@ -107,7 +120,8 @@ for (const key of keys) {
     slot: reference.slot,
     reference_name: reference.name,
     actual_name: actual.name,
-    diff_file: path.relative(path.resolve(args.outDir), diffPath).replaceAll('\\', '/'),
+    method: pixelParity ? 'pixel' : 'computed_style',
+    ...(pixelParity ? { diff_file: path.relative(path.resolve(args.outDir), diffPath).replaceAll('\\', '/') } : {}),
     ...result,
   })
 }
@@ -121,6 +135,7 @@ const report = {
   chromium_version: referenceManifest.browser.version,
   thresholds: {
     max_diff_ratio: args.maxDiffRatio,
+    chrome_max_diff_ratio: BLAWBY_PARITY_CHROME_MAX_DIFF_RATIO,
     color_threshold: args.colorThreshold,
   },
   comparisons,
@@ -141,8 +156,26 @@ await fs.writeFile(
     '',
     '## Sections',
     '',
-    ...comparisons.map(comparison => `- ${comparison.ok ? 'PASS' : 'FAIL'}: ${comparison.key}${typeof comparison.diff_ratio === 'number' ? ` (${(comparison.diff_ratio * 100).toFixed(4)}%)` : ` (${comparison.reason})`}`),
+    ...comparisons.map((comparison) => {
+      const detail = typeof comparison.diff_ratio === 'number'
+        ? `${(comparison.diff_ratio * 100).toFixed(4)}%`
+        : comparison.differences?.join(', ') || comparison.reason || comparison.method
+      return `- ${comparison.ok ? 'PASS' : 'FAIL'}: ${comparison.key} [${comparison.method || 'contract'}] (${detail})`
+    }),
   ].join('\n')}\n`,
 )
-process.stdout.write(`${JSON.stringify(report, null, 2)}\n`)
+const failedComparisons = report.comparisons.filter(comparison => !comparison.ok)
+process.stdout.write(`${JSON.stringify({
+  ok: report.ok,
+  comparisons: report.comparisons.length,
+  failed_count: failedComparisons.length,
+  failed: failedComparisons.slice(0, 50).map(comparison => ({
+    key: comparison.key,
+    method: comparison.method,
+    reason: comparison.reason,
+    differences: comparison.differences,
+    diff_ratio: comparison.diff_ratio,
+  })),
+  failures_truncated: failedComparisons.length > 50,
+}, null, 2)}\n`)
 if (!report.ok) process.exitCode = 1

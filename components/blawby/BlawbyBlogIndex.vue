@@ -3,7 +3,7 @@
     <BlawbyPageHero :title="heroTitle" :description="heroDescription" variant="blog" />
     <BlawbyShieldDivider variant="blog" />
 
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" data-parity-section="articles">
+    <div class="blawby-container" data-parity-section="articles">
       <div class="flex flex-col">
         <BlawbyBlogFilter v-if="tags.length" v-model="activeTags" :tags="tags" class="mb-4" />
         <BlawbyArticleGrid :posts="pagedPosts" compact />
@@ -11,7 +11,7 @@
       </div>
     </div>
 
-    <section v-if="disclaimerBlock?.content" class="mx-auto mb-6 max-w-7xl px-4 text-center md:text-left sm:px-6 lg:px-8" data-parity-section="disclaimer">
+    <section v-if="disclaimerBlock?.content" class="blawby-container mb-6 text-center md:text-left" data-parity-section="disclaimer">
       <p class="mt-8 text-sm italic text-gray-500">{{ disclaimerBlock.content }}</p>
     </section>
 

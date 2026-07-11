@@ -3,16 +3,16 @@
     <div v-if="post" data-parity-root>
       <div class="px-6 pb-12 pt-12 sm:pb-16" data-parity-section="article-content">
         <div class="mx-auto max-w-3xl text-base leading-6 text-gray-700">
-          <p v-if="displayTags.length" class="mt-6 inline-block rounded bg-[var(--blawby-accent)] px-2 text-sm font-semibold uppercase text-white">
+          <h3 v-if="displayTags.length" class="mt-6 inline-block rounded bg-[var(--blawby-accent)] px-2 text-sm font-semibold uppercase text-white">
             <template v-for="(tag, index) in displayTags" :key="tag">
               <span v-if="index" aria-hidden="true"> · </span>
               <NuxtLink :to="`/blog?tags[]=${encodeURIComponent(tag)}`" class="text-white no-underline">{{ tag }}</NuxtLink>
             </template>
-          </p>
+          </h3>
           <h1 class="mt-2 text-3xl font-bold text-[var(--blawby-primary)] sm:text-4xl">{{ post.title }}</h1>
           <div class="mb-4 mt-4 flex flex-wrap items-center justify-between gap-4">
             <div class="flex items-center">
-              <img v-if="post.author_image" :src="post.author_image" :alt="post.author_name || ''" width="48" height="48" class="mr-4 size-12 flex-none rounded-full bg-white/10 object-cover">
+              <img v-if="post.author_image" :src="post.author_image" :alt="post.author_name || ''" width="48" height="48" class="mr-4 size-12 flex-none rounded-full bg-white/10">
               <span v-else class="mr-4 flex size-12 flex-none items-center justify-center rounded-full bg-[var(--blawby-primary)] text-sm font-semibold text-white">{{ authorInitials }}</span>
               <span>
                 <span v-if="post.author_name" class="block text-base leading-6 text-[var(--blawby-primary)]">{{ post.author_name }}</span>

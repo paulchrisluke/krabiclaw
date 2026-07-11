@@ -17,7 +17,7 @@
           </h1>
           <div class="mt-6">
             <div class="prose">
-              <BlawbyRichText class="mx-auto mt-6 max-w-2xl text-left text-lg text-[var(--blawby-primary)]" :content="offering.body || offering.summary" />
+              <BlawbyRichText unstyled class="mx-auto mt-6 max-w-2xl text-left text-lg text-[var(--blawby-primary)]" :content="offering.body || offering.summary" />
             </div>
           </div>
           <div class="mt-10 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">

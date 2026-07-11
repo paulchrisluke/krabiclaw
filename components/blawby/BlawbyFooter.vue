@@ -5,7 +5,7 @@
       <div class="xl:grid xl:grid-cols-3 xl:gap-8">
         <div class="space-y-8">
           <NuxtLink to="/" class="inline-flex no-underline" :aria-label="`${brandName} home`">
-            <img v-if="footerLogo" :src="footerLogo" :alt="brandName" class="max-h-16 w-auto max-w-[248px] object-contain">
+            <img v-if="footerLogo" :src="footerLogo" :alt="brandName" class="max-h-16 w-auto max-w-[248px]">
             <span v-else class="blawby-display text-2xl text-white">{{ brandName }}</span>
           </NuxtLink>
           <BlawbyRichText

@@ -1,12 +1,12 @@
 <template>
   <section v-if="reviews.length" class="bg-slate-50 py-20 sm:py-32" data-parity-section="reviews">
     <div class="blawby-container">
-      <BlawbySectionHeading
-        title="What Clients"
-        accent="Say"
-        :description="description"
-        centered
-      />
+      <div class="mx-auto max-w-2xl md:text-center">
+        <h2 class="blawby-display text-3xl font-bold text-[var(--blawby-primary)] sm:text-4xl">
+          What Clients <span class="text-[var(--blawby-accent)]">Say</span>
+        </h2>
+        <p v-if="description" class="mt-4 text-lg text-slate-700">{{ description }}</p>
+      </div>
       <ul class="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-6 sm:gap-8 lg:mt-20 lg:max-w-none lg:grid-cols-3" role="list">
         <li v-for="(column, columnIndex) in columns" :key="columnIndex">
           <ul class="flex flex-col gap-y-6 sm:gap-y-8" role="list">
