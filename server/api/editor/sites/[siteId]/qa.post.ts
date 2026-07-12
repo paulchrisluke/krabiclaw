@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
     organizationId: site.organization_id,
     siteId,
     locationId: null,
-    pagePath: body?.page_path,
+    pagePath: typeof body?.page_path === 'string' ? String(body.page_path) : null,
   }, {
     question: body?.question ?? '',
     answer: body?.answer,

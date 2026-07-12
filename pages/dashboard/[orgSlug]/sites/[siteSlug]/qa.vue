@@ -77,12 +77,49 @@ const toast = useToast()
 const saving = ref(false)
 const editingId = ref<string | null>(null)
 const selectedPagePath = ref('general')
-const pageScopes = [
-  { label: 'General fallback', value: 'general' },
-  ...['/', '/about', '/services', '/pricing', '/contact', '/schedule', '/blog', '/donate'].map(path => ({ label: path === '/' ? 'Home' : path, value: path })),
-]
+
+const STANDARD_ROUTES = ['/', '/about', '/services', '/pricing', '/contact', '/schedule', '/blog', '/donate'] as const
+
+const { data: tenantPages } = await useAsyncData(
+  () => `dashboard-tenant-pages-${siteId}`,
+  () => $fetch<Array<{ path: string; title: string }>>(`/api/editor/sites/${siteId}/tenant-pages`, { headers }),
+)
+
+const { data: existingQaScopes } = await useAsyncData(
+  () => `dashboard-qa-scopes-${siteId}`,
+  () => $fetch<Array<{ page_path: string | null }>>(`/api/editor/sites/${siteId}/qa/scopes`, { headers }),
+)
+
+const pageScopes = computed(() => {
+  const scopes = new Map<string, string>()
+  scopes.set('general', 'General fallback')
+  
+  for (const path of STANDARD_ROUTES) {
+    scopes.set(path, path === '/' ? 'Home' : path)
+  }
+  
+  for (const page of tenantPages.value ?? []) {
+    if (page.path && !scopes.has(page.path)) {
+      scopes.set(page.path, page.title || page.path)
+    }
+  }
+  
+  for (const scope of existingQaScopes.value ?? []) {
+    if (scope.page_path && !scopes.has(scope.page_path)) {
+      scopes.set(scope.page_path, scope.page_path)
+    }
+  }
+  
+  return Array.from(scopes.entries()).map(([value, label]) => ({ label, value }))
+})
 const pagePath = computed(() => selectedPagePath.value === 'general' ? null : selectedPagePath.value)
 const form = reactive({ question: '', answer: '', published: true })
+watch(selectedPagePath, () => {
+  editingId.value = null
+  form.question = ''
+  form.answer = ''
+  form.published = true
+})
 const { data, pending, refresh } = await useAsyncData(
   () => `dashboard-site-qa-${siteId}-${selectedPagePath.value}`,
   () => $fetch<{ qa: QaRow[] }>(`/api/editor/sites/${siteId}/qa`, { headers, query: pagePath.value ? { page_path: pagePath.value } : undefined }),
