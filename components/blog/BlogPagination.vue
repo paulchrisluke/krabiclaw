@@ -38,8 +38,8 @@ const props = withDefaults(defineProps<{
 })
 const emit = defineEmits<{ 'update:modelValue': [value: number] }>()
 const visiblePages = computed(() => {
-  const start = Math.max(1, props.modelValue - 2)
-  const end = Math.min(props.totalPages, start + 4)
+  const end = Math.min(props.totalPages, props.modelValue + 2)
+  const start = Math.max(1, end - 4)
   return Array.from({ length: end - start + 1 }, (_, index) => start + index)
 })
 const activeClass = computed(() => props.variant === 'blawby'

@@ -4,9 +4,12 @@
       <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 class="text-lg font-semibold text-highlighted">Site Q&A</h1>
-          <p class="mt-1 text-sm text-muted">Questions shown across the firm rather than at one location.</p>
+          <p class="mt-1 text-sm text-muted">Manage general questions or questions tailored to a public page.</p>
         </div>
-        <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="pending" aria-label="Refresh Q&A" @click="refresh()" />
+        <div class="flex items-center gap-2">
+          <USelect v-model="selectedPagePath" :items="pageScopes" class="w-48" aria-label="Q&A page scope" />
+          <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="pending" aria-label="Refresh Q&A" @click="refresh()" />
+        </div>
       </div>
 
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
@@ -65,6 +68,7 @@ interface QaRow {
   answer: string | null
   status: 'published' | 'hidden'
   sort_order: number
+  page_path: string | null
 }
 
 const siteId = await useDashboardSiteId()
@@ -72,10 +76,17 @@ const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined
 const toast = useToast()
 const saving = ref(false)
 const editingId = ref<string | null>(null)
+const selectedPagePath = ref('general')
+const pageScopes = [
+  { label: 'General fallback', value: 'general' },
+  ...['/', '/about', '/services', '/pricing', '/contact', '/schedule', '/blog', '/donate'].map(path => ({ label: path === '/' ? 'Home' : path, value: path })),
+]
+const pagePath = computed(() => selectedPagePath.value === 'general' ? null : selectedPagePath.value)
 const form = reactive({ question: '', answer: '', published: true })
 const { data, pending, refresh } = await useAsyncData(
-  `dashboard-site-qa-${siteId}`,
-  () => $fetch<{ qa: QaRow[] }>(`/api/editor/sites/${siteId}/qa`, { headers }),
+  () => `dashboard-site-qa-${siteId}-${selectedPagePath.value}`,
+  () => $fetch<{ qa: QaRow[] }>(`/api/editor/sites/${siteId}/qa`, { headers, query: pagePath.value ? { page_path: pagePath.value } : undefined }),
+  { watch: [selectedPagePath] },
 )
 const qaRows = computed(() => data.value?.qa ?? [])
 
@@ -96,7 +107,7 @@ function edit(item: QaRow) {
 async function save() {
   saving.value = true
   try {
-    const body: Record<string, unknown> = { question: form.question, answer: form.answer || null, status: form.published ? 'published' : 'hidden' }
+    const body: Record<string, unknown> = { page_path: pagePath.value, question: form.question, answer: form.answer || null, status: form.published ? 'published' : 'hidden' }
     if (editingId.value) {
       await $fetch(`/api/editor/sites/${siteId}/qa/${editingId.value}`, { method: 'PATCH', body })
     } else {
@@ -118,14 +129,14 @@ async function move(item: QaRow, direction: -1 | 1) {
   if (!target) return
   await $fetch(`/api/editor/sites/${siteId}/qa/reorder`, {
     method: 'POST',
-    body: { updates: [{ id: item.id, sort_order: target.sort_order }, { id: target.id, sort_order: item.sort_order }] },
+    body: { page_path: pagePath.value, updates: [{ id: item.id, sort_order: target.sort_order }, { id: target.id, sort_order: item.sort_order }] },
   })
   await refresh()
 }
 
 async function remove(item: QaRow) {
   if (!confirm(`Delete this question?\n\n${item.question}`)) return
-  await $fetch(`/api/editor/sites/${siteId}/qa/${item.id}`, { method: 'DELETE' })
+  await $fetch(`/api/editor/sites/${siteId}/qa/${item.id}`, { method: 'DELETE', query: pagePath.value ? { page_path: pagePath.value } : undefined })
   if (editingId.value === item.id) reset()
   await refresh()
 }

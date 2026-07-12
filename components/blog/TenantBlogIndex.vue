@@ -77,9 +77,6 @@ const props = withDefaults(defineProps<{
   perPage: 9,
 })
 
-const postsRef = computed(() => props.posts)
-const { categories } = useTenantBlogNav(postsRef)
-
 // Featured post: an explicit featured_order wins (lower = more prominent,
 // same COALESCE(featured_order, 999999) convention the platform blog and the
 // backing queries already use), falling back to the most recently published
@@ -100,6 +97,8 @@ const activeCategory = ref<string | null>(null)
 const currentPage = ref(1)
 
 const remainingPosts = computed(() => props.posts.filter(post => post.id !== featuredPost.value?.id))
+const postsRef = computed(() => remainingPosts.value)
+const { categories } = useTenantBlogNav(postsRef)
 const filteredPosts = computed(() => activeCategory.value === null
   ? remainingPosts.value
   : remainingPosts.value.filter(post => (post.category?.trim() || 'Uncategorized') === activeCategory.value))

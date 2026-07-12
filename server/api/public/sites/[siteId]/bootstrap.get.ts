@@ -695,7 +695,7 @@ export default defineEventHandler(async (event) => {
         : `SELECT id, question, question_author, question_date,
                   answer, answer_author, answer_date, is_owner_answer, upvote_count
            FROM location_qa
-           WHERE site_id = ? AND status = 'published'
+           WHERE site_id = ? AND location_id IS NULL AND page_path IS NULL AND status = 'published'
            ORDER BY is_owner_answer DESC, upvote_count DESC, sort_order, created_at`,
       locationId ? [locationId, siteId] : [siteId],
     );

@@ -1,5 +1,5 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { listQa } from '~/server/utils/location-qa'
+import { listPageQa } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
 import type { SiteConversionEventName } from '~/utils/site-conversion-events'
@@ -477,7 +477,7 @@ export async function getPublicBlawbyRouteData(
     recipe === 'offering' && options.slug
       ? getPublicOfferingBySlug(db, siteId, options.slug)
       : Promise.resolve(null),
-    needsQa ? listQa(db, siteId, null, true) : Promise.resolve([]),
+    needsQa && pagePath ? listPageQa(db, siteId, pagePath, true) : Promise.resolve([]),
     needsReviews ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
     postLimit ? listPublicBlogSummaries(db, siteId, postLimit) : Promise.resolve([]),
     recipe === 'article' && options.slug

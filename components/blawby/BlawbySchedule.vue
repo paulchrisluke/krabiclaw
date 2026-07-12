@@ -103,8 +103,7 @@ const guidanceSections = computed(() => guidanceBlock.value ? [
   { title: String(guidanceBlock.value.trustTitle || ''), items: [], text: String(guidanceBlock.value.trustText || '') },
 ].filter(section => section.title) : [])
 const scheduleQa = computed<PublicSiteQa[]>(() => {
-  const items = block('schedule_qa')?.items
-  return Array.isArray(items) ? items.map((item: ApiRecord, index: number) => ({ id: `schedule-qa-${index}`, question: String(item.question || ''), answer: optionalString(item.answer), sort_order: index })) : []
+  return routeData.value.qa
 })
 
 function arrayStrings(value: unknown) {

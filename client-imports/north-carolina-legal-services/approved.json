@@ -1,7 +1,8 @@
 {
-  "approved": false,
-  "invalidated": true,
-  "invalidated_reason": "Media was uploaded and canonical artifacts changed; fresh human review is required.",
+  "approved": true,
+  "approved_by": "paulchrisluke",
+  "approved_at": "2026-07-12T03:31:20.555Z",
+  "manifest_hash": "b5870979631df9e3362083dd9654cd6e9e664e44f8f62ea61bdbe12f0a307689",
   "source_commit": "5908ab3e64f26f799de61ed55371d02f9ec7bc2f",
   "slug": "north-carolina-legal-services",
   "vertical": "service",

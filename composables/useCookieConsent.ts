@@ -58,6 +58,7 @@ function pushConsentCommand(command: 'default' | 'update', value: CookieConsentV
 // because browser module state is genuinely per-visitor — there's no
 // cross-request process to leak across.
 let defaultConsentPushed = false
+let lastBroadcastedConsent: CookieConsentValue = null
 
 export function useCookieConsent() {
   const consent = useCookie<CookieConsentValue>('kc_consent', {
@@ -70,14 +71,23 @@ export function useCookieConsent() {
   if (import.meta.client && !defaultConsentPushed) {
     defaultConsentPushed = true
     pushConsentCommand('default', consent.value)
+    lastBroadcastedConsent = consent.value
   }
 
+  watch(consent, (next) => {
+    if (!import.meta.client || next === lastBroadcastedConsent) return
+    lastBroadcastedConsent = next
+    pushConsentCommand('update', next)
+  })
+
   function accept() {
+    lastBroadcastedConsent = 'accepted'
     consent.value = 'accepted'
     pushConsentCommand('update', 'accepted')
   }
 
   function reject() {
+    lastBroadcastedConsent = 'rejected'
     consent.value = 'rejected'
     pushConsentCommand('update', 'rejected')
   }

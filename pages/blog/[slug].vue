@@ -10,7 +10,7 @@
   <div v-else-if="post" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8">
     <aside class="mb-8 lg:sticky lg:top-28 lg:mb-0 lg:h-fit">
       <PlatformCommandSearchTrigger surface="tenant_blog" variant="saya" label="Search stories..." aria-label="Open story search" class="mb-6" />
-      <BlogCategoryNav :categories="categories" base-path="/blog" :active-slug="post.slug" />
+      <BlogCategoryNav :categories="categories" base-path="/blog" :active-slug="activeCategorySlug" />
     </aside>
 
     <article class="min-w-0">
@@ -213,6 +213,11 @@ const { blogList } = useBootstrap()
 const allPosts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 const { categories } = useTenantBlogNav(allPosts)
 const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))
+function slugifyCategory(value: string) {
+  const slug = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return slug || 'uncategorized'
+}
+const activeCategorySlug = computed(() => slugifyCategory(post.value?.category?.trim() || 'Uncategorized'))
 const siteName = computed(() => site?.brand_name || 'Our Site')
 const authorName = computed(() => post.value?.author_name?.trim() || siteName.value)
 const authorInitial = computed(() => authorName.value.charAt(0).toUpperCase())

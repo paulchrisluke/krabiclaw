@@ -66,6 +66,7 @@ import {
   createLocationQa,
   deleteLocationQa,
   listQa,
+  listPageQa,
   createQa,
   deleteQa,
   updateQa,
@@ -1704,10 +1705,10 @@ async function executeTool(
     }
 
     case "list_site_qa":
-      return listQa(db, siteId, null);
+      return typeof input.page_path === "string" ? listPageQa(db, siteId, input.page_path) : listQa(db, siteId, null);
 
     case "create_site_qa": {
-      const result = await createQa(db, { organizationId: orgId, siteId, locationId: null }, {
+      const result = await createQa(db, { organizationId: orgId, siteId, locationId: null, pagePath: toSqlText(input.page_path) }, {
         question: String(input.question ?? ""),
         answer: toSqlText(input.answer),
         is_owner_answer: true,
@@ -1716,7 +1717,7 @@ async function executeTool(
     }
 
     case "delete_site_qa": {
-      const result = await deleteQa(db, { organizationId: orgId, siteId, locationId: null }, String(input.qa_id ?? ""));
+      const result = await deleteQa(db, { organizationId: orgId, siteId, locationId: null, pagePath: toSqlText(input.page_path) }, String(input.qa_id ?? ""));
       return result.data;
     }
 
@@ -2991,7 +2992,7 @@ async function executeTool(
       if (input.status !== undefined) updates.status = input.status;
       if (input.sort_order !== undefined) updates.sort_order = input.sort_order;
       try {
-        return await updateQa(db, { organizationId: orgId, siteId, locationId: null }, qaId, updates);
+        return await updateQa(db, { organizationId: orgId, siteId, locationId: null, pagePath: toSqlText(input.page_path) }, qaId, updates);
       } catch (error) {
         return { error: error instanceof Error ? error.message : "Failed to update Q&A." };
       }
@@ -3004,7 +3005,7 @@ async function executeTool(
         sort_order: Number(item.sort_order),
       }));
       try {
-        return await reorderQa(db, { organizationId: orgId, siteId, locationId: null }, updates);
+        return await reorderQa(db, { organizationId: orgId, siteId, locationId: null, pagePath: toSqlText(input.page_path) }, updates);
       } catch (error) {
         return { error: error instanceof Error ? error.message : "Failed to reorder Q&A." };
       }

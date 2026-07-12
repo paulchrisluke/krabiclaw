@@ -898,11 +898,14 @@ function attachPublished(record: ApiRecord, published: boolean) {
 }
 
 function normalizeNavVisibility<T extends Record<string, unknown>>(record: T) {
-  const tags = typeof record.tags_json === 'string'
-    ? (() => { try { return JSON.parse(record.tags_json) as string[] } catch { return [] } })()
-    : []
-  const normalized = { ...record, tags }
-  delete normalized.tags_json
+  const normalized = { ...record } as T & { tags?: string[]; tags_json?: unknown }
+  if ('tags_json' in record) {
+    const tags = typeof record.tags_json === 'string'
+      ? (() => { try { return JSON.parse(record.tags_json) as string[] } catch { return [] } })()
+      : []
+    normalized.tags = tags
+    delete normalized.tags_json
+  }
   if (!('hide_from_nav' in record)) return normalized
   return {
     ...normalized,

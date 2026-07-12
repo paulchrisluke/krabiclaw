@@ -7,6 +7,7 @@ export default defineEventHandler(async (event) => {
   const qaId = getRouterParam(event, 'qaId')
   if (!siteId || !qaId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
   const { db, site } = await requireSiteAccess(event, siteId)
-  const result = await deleteQa(db, { organizationId: site.organization_id, siteId, locationId: null }, qaId)
+  const pagePath = typeof getQuery(event).page_path === 'string' ? String(getQuery(event).page_path) : null
+  const result = await deleteQa(db, { organizationId: site.organization_id, siteId, locationId: null, pagePath }, qaId)
   return jsonResponse(result.data, { status: result.status })
 })

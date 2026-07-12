@@ -42,8 +42,8 @@ if (import.meta.dev) useDebugLCP()
 // cache-key coincidence to dedupe.
 const { config, locations, menu, hasExperiences, locales, error: bootstrapError } = useBootstrap()
 const { siteId, isTenant, isPlatform, site } = useTenantSite()
-// Called for its side effect: pushes the Consent Mode v2 default signal
-// before the gtag.js script tag below can execute.
+// Called for its side effect: keeps the consent ref in sync and lets the
+// head markup emit the default signal ahead of any analytics config.
 useCookieConsent()
 
 // The full bootstrap payload above is intentionally `lazy: true` (see
@@ -134,6 +134,10 @@ useHead(() => {
     })
   }
   if (validGoogleAnalyticsId.value) {
+    script.push({
+      key: 'saya-google-consent-default',
+      innerHTML: `window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('consent', 'default', {ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'denied'});`
+    })
     // Always load gtag.js once a valid ID exists — Consent Mode v2 (pushed by
     // useCookieConsent) tells it whether storage/ads signals are actually
     // granted, rather than withholding the script entirely.

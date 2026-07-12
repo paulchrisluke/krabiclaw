@@ -216,6 +216,7 @@ export const menuObject = {
     name: { type: 'string' },
     description: { type: ['string', 'null'] },
     location_id: { type: ['string', 'null'] },
+    page_path: { type: ['string', 'null'] },
     sort_order: { type: 'number' },
     sections: {
       type: 'array',
@@ -1088,6 +1089,8 @@ export const BOUNDED_WRITE_TOOL_NAMES = [
   'create_blog_post',
   'update_blog_post',
   'set_blog_post_image',
+  'publish_blog_post',
+  'unpublish_blog_post',
   'set_experience_image',
   'set_experience_video',
   'create_site',

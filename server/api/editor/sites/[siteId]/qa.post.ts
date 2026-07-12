@@ -13,11 +13,13 @@ export default defineEventHandler(async (event) => {
     is_owner_answer?: boolean
     sort_order?: number
     status?: 'published' | 'hidden'
+    page_path?: string | null
   }>(event)
   const result = await createQa(db, {
     organizationId: site.organization_id,
     siteId,
     locationId: null,
+    pagePath: body?.page_path,
   }, {
     question: body?.question ?? '',
     answer: body?.answer,

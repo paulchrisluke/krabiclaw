@@ -3,15 +3,15 @@ import type { AiTool } from '~/server/utils/ai-gateway'
 export const QA_CHOWBOT_TOOLS: AiTool[] = [
   {
     name: "list_site_qa",
-    description: "Get tenant-wide Q&A pairs that are not associated with a location.",
-    input_schema: { type: "object", properties: {} },
+    description: "Get general tenant Q&A, or page-specific Q&A with general fallback when page_path is provided.",
+    input_schema: { type: "object", properties: { page_path: { type: "string" } } },
   },
   {
     name: "create_site_qa",
     description: "Add a tenant-wide Q&A pair.",
     input_schema: {
       type: "object",
-      properties: { question: { type: "string" }, answer: { type: "string" } },
+      properties: { page_path: { type: "string" }, question: { type: "string" }, answer: { type: "string" } },
       required: ["question"],
     },
   },
@@ -21,7 +21,7 @@ export const QA_CHOWBOT_TOOLS: AiTool[] = [
     input_schema: {
       type: "object",
       properties: {
-        qa_id: { type: "string" }, question: { type: "string" }, answer: { type: "string" },
+        page_path: { type: "string" }, qa_id: { type: "string" }, question: { type: "string" }, answer: { type: "string" },
         status: { type: "string", enum: ["published", "hidden"] }, sort_order: { type: "integer" },
       },
       required: ["qa_id"],
@@ -32,14 +32,14 @@ export const QA_CHOWBOT_TOOLS: AiTool[] = [
     description: "Update sort orders for tenant-wide Q&A.",
     input_schema: {
       type: "object",
-      properties: { updates: { type: "array", items: { type: "object", properties: { id: { type: "string" }, sort_order: { type: "integer" } }, required: ["id", "sort_order"] } } },
+      properties: { page_path: { type: "string" }, updates: { type: "array", items: { type: "object", properties: { id: { type: "string" }, sort_order: { type: "integer" } }, required: ["id", "sort_order"] } } },
       required: ["updates"],
     },
   },
   {
     name: "delete_site_qa",
     description: "Delete a tenant-wide Q&A entry. Confirm with the user first.",
-    input_schema: { type: "object", properties: { qa_id: { type: "string" } }, required: ["qa_id"] },
+    input_schema: { type: "object", properties: { page_path: { type: "string" }, qa_id: { type: "string" } }, required: ["qa_id"] },
   },
   // ── Q&A ────────────────────────────────────────────────────────────────────
     {

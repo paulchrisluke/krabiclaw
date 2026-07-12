@@ -2,8 +2,11 @@
   <NuxtLink :to="`${basePath}/${post.slug}`" class="group block h-full no-underline">
     <div
       v-if="featured"
-      class="grid gap-0 overflow-hidden rounded-2xl border shadow-sm transition-shadow hover:shadow-md md:grid-cols-2"
-      :class="variant === 'blawby' ? 'border-[var(--blawby-border)] bg-white' : 'border-default bg-elevated'"
+      :class="[
+        'grid gap-0 overflow-hidden rounded-2xl border shadow-sm transition-shadow hover:shadow-md',
+        post.featured_image?.public_url ? 'md:grid-cols-2' : 'md:grid-cols-1',
+        variant === 'blawby' ? 'border-[var(--blawby-border)] bg-white' : 'border-default bg-elevated',
+      ]"
     >
       <div class="p-8">
         <div class="mb-4 flex flex-wrap items-center gap-2">

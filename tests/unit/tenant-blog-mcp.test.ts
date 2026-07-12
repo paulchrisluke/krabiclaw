@@ -14,6 +14,7 @@ test('tenant MCP exposes draft and approved publish blog workflows', () => {
   assert.match(draft, /get_blog_post/)
   assert.match(draft, /approval/i)
   assert.match(draft, /SEO/i)
+  assert.match(draft, /Choosing a family lawyer/)
 
   const publish = renderMcpPrompt('update_and_publish_blog_post', {
     identifier: 'choosing-a-family-lawyer',
@@ -21,6 +22,8 @@ test('tenant MCP exposes draft and approved publish blog workflows', () => {
   }).text
   assert.match(publish, /update_blog_post/)
   assert.match(publish, /publish_blog_post/)
+  assert.match(publish, /choosing-a-family-lawyer/)
+  assert.match(publish, /Approved body/)
 })
 
 test('tenant blog MCP contract exposes explicit publishing, tags, and AI assistance', async () => {

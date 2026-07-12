@@ -16,7 +16,8 @@ export default defineEventHandler(async (event) => {
       organizationId: site.organization_id,
       siteId,
       locationId: null,
-    }, qaId, body))
+      pagePath: typeof (body as ApiRecord).page_path === 'string' ? String((body as ApiRecord).page_path) : null,
+    }, qaId, Object.fromEntries(Object.entries(body).filter(([key]) => key !== 'page_path'))))
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Q&A update failed'
     return jsonResponse({ error: message }, { status: message.includes('not found') ? 404 : 400 })

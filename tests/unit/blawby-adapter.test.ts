@@ -76,6 +76,10 @@ export const northcarolinalegalservices: ISeedTenant = {
     features: [{ title: 'Custody', description: 'Custody help.', img: 'childcustody.webp' }],
     faqs: [{ question: 'How do I start?', answer: 'Schedule a consultation.' }],
   }],
+  faqs: [
+    { question: 'What do you handle?', answer: 'Civil legal issues.' },
+    { question: 'How long is the consultation?', answer: 'Thirty minutes.', pageType: 'schedule' },
+  ],
   articles: [{
     title: 'Preparing for your consultation',
     slug: 'preparing-for-your-consultation',
@@ -111,6 +115,7 @@ test('NCLS Blawby adapter normalizes source data into cutover artifacts', () => 
 
   assert.equal(payload.site.vertical, 'service')
   assert.equal(payload.site.theme_id, 'blawby-theme-v1')
+  assert.equal(payload.site.favicon_url, '/tenants/northcarolinalegalservices/favicon.svg')
   assert.equal(payload.consultation.external_url, 'https://ncls.cliogrow.com/book')
   assert.equal(payload.site.service_area.name, 'North Carolina')
   assert.doesNotMatch(payload.compliance.disclaimer, /^\s{4}/m)
@@ -147,6 +152,8 @@ test('NCLS Blawby adapter normalizes source data into cutover artifacts', () => 
     ['home_hero', 'services_intro', 'video_feature', 'qa', 'reviews', 'latest_articles', 'consultation_cta'],
   )
   assert.equal(payload.articles[0].canonical_url, '/article/preparing-for-your-consultation')
+  assert.deepEqual(payload.siteQa.map((faq: { page_path: string | null }) => faq.page_path), [null, '/schedule'])
+  assert.deepEqual(payload.offerings[0].faqs, [{ question: 'How do I start?', answer: 'Schedule a consultation.' }])
   assert.equal(payload.source_commit, '5908ab3e64f26f799de61ed55371d02f9ec7bc2f')
 
   assert.ok(payload.mediaInventory.files.some((file: { kind: string }) => file.kind === 'legal_file'))
