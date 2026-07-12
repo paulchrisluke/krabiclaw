@@ -4,7 +4,11 @@
     <BlawbyShieldDivider variant="blog" />
 
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" data-parity-section="articles">
-      <div class="flex flex-col gap-10">
+      <div v-if="categories.length === 0" class="py-24 text-center text-gray-500">
+        <p class="mb-2 text-xl">No posts yet</p>
+        <p class="text-sm">Check back soon — new articles are on the way.</p>
+      </div>
+      <div v-else class="flex flex-col gap-10">
         <BlogSearchBox class="max-w-md" placeholder="Search articles..." />
 
         <section

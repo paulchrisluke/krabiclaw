@@ -66,7 +66,7 @@ export default defineEventHandler(async (event) => {
       type: type as PublicSearchTypeFilter,
       surface: surface as 'public' | 'docs' | 'blog' | 'dashboard' | 'help' | 'chowbot' | 'tenant_blog',
       limit: 10,
-      siteId: isTenantRequest ? String(event.context.siteId) : null,
+      siteId: isTenantRequest && surface === 'tenant_blog' ? String(event.context.siteId) : null,
       dashboardContext: requiresDashboardAuth
         ? {
             orgSlug: orgSlug || null,
