@@ -1,13 +1,13 @@
-// Dynamic sitemap source for @nuxtjs/sitemap.
-// Emits one entry per menu item on a tenant site (/menu/[slug]). Does not gate
-// on `available` — an item being temporarily 86'd is a transient state, not a
-// removal, and excluding/re-including it from the sitemap on every stock
-// change would cause needless churn. Only robots="noindex" excludes an item.
+// Dynamic sitemap source for tenant menu items.
+// Temporary availability does not remove an item; robots="noindex" does.
+import { getRequestURL } from 'h3'
 import { queryAll } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
+import { isNonIndexableHost } from '~/server/utils/seo-policy'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 
 export default defineSitemapEventHandler(async (event) => {
+  if (isNonIndexableHost(getRequestURL(event).hostname)) return []
   if (event.context.tenantType !== TENANT_TYPES.TENANT) return []
 
   const siteId = event.context.siteId as string | undefined
