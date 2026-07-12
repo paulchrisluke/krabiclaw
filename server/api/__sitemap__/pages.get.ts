@@ -1,11 +1,16 @@
-// Dynamic sitemap source for tenant static pages.
-// Emits the standard tenant page routes, conditionally excluding /reservations
-// for pure experience-vertical sites (which redirect away from that page anyway).
+// Explicit static sitemap source for @nuxtjs/sitemap.
+// Platform and tenant hosts share one Nuxt pages tree, so route discovery must be
+// allowlist-based rather than inferred from files under pages/.
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
+import { PLATFORM_SITEMAP_ROUTES } from '~/server/utils/seo-policy'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 
 export default defineSitemapEventHandler(async (event) => {
+  if (event.context.tenantType === TENANT_TYPES.PLATFORM) {
+    return PLATFORM_SITEMAP_ROUTES.map(loc => ({ loc }))
+  }
+
   if (event.context.tenantType !== TENANT_TYPES.TENANT) return []
 
   const siteId = event.context.siteId as string | undefined
@@ -22,21 +27,17 @@ export default defineSitemapEventHandler(async (event) => {
   )
 
   const isExperienceSite = site?.vertical === 'experience'
-
-  // Static routes that all tenant sites expose
   const routes = [
     { loc: '/' },
-    { loc: '/menu' },
+    { loc: '/about' },
     { loc: '/contact' },
+    { loc: '/menu' },
     { loc: '/blog' },
     { loc: '/experiences' },
     { loc: '/locations' },
   ]
 
-  // /reservations is only meaningful for non-experience verticals
-  if (!isExperienceSite) {
-    routes.push({ loc: '/reservations' })
-  }
+  if (!isExperienceSite) routes.push({ loc: '/reservations' })
 
   return routes
 })
