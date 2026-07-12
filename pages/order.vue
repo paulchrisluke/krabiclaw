@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div v-if="!isPlatform">
+    <div>
       <!-- No order links configured — redirect feel -->
       <div v-if="!hasOrderLinks" class="flex min-h-96 flex-col items-center justify-center gap-6 px-4 py-24 text-center">
         <SayaIcon name="shopping-bag" class="size-12 text-muted" />
@@ -77,6 +77,8 @@
 definePageMeta({ layout: 'saya' })
 
 const { isPlatform, site } = useTenantSite()
+if (isPlatform) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+
 const { locale } = useI18n()
 const orderCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 const { getField, locations } = useBootstrap()
@@ -94,14 +96,13 @@ const orderableLocations = computed(() =>
 )
 
 const hasOrderLinks = computed(() => orderableLocations.value.length > 0)
-const sharedOgImage = useSharedOgImage()
 const route = useRoute()
 const requestURL = useRequestURL()
 
 useSeoMeta({
   title: computed(() => `Order Online | ${site?.brand_name || 'Our Site'}`),
   description: computed(() => orderCopy.value.seoOrderDescription(site?.brand_name || 'Our Site')),
-  ogImage: sharedOgImage,
+  ogImage: useTenantOgImage(),
   ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
 })
 </script>

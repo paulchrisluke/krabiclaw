@@ -19,13 +19,26 @@ export function createDb(client: D1Database): AppDb {
   return db
 }
 
+// Distinguish an already-wrapped AppDb from the raw D1Database binding via
+// $client, not query — Cloudflare's own D1Database binding has since grown a
+// native `query` method (part of its Sessions API), which made the old
+// `'query' in client` check a false positive: it misidentified the raw
+// binding as already-wrapped, skipped createDb()/drizzle(), and calls like
+// `.get()` crashed with "ensureDb(...).get is not a function". $client is a
+// Drizzle-only property (AppDb = DrizzleD1Database & { $client: D1Database })
+// that the raw binding will never carry, so this stays correct regardless of
+// what Cloudflare adds to D1Database next.
+function isWrappedDb(client: DbClient): client is AppDb {
+  return '$client' in client
+}
+
 function ensureDb(client: DbClient): AppDb {
-  if ('query' in client) return client as AppDb
+  if (isWrappedDb(client)) return client
   return createDb(client)
 }
 
 function rawClient(client: DbClient): D1Database {
-  return 'query' in client ? client.$client : client
+  return isWrappedDb(client) ? client.$client : client
 }
 
 export function bindSql(query: string, params: unknown[] = []): SQL {
