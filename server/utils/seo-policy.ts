@@ -1,5 +1,5 @@
 import { getRequestURL, type H3Event } from 'h3'
-import { TENANT_TYPES } from '../../utils/tenant-routing'
+import { TENANT_TYPES } from '../../utils/tenant-routing.ts'
 
 export interface SeoSitemapEntry {
   loc: string
