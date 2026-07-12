@@ -1,5 +1,5 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { listQa } from '~/server/utils/location-qa'
+import { listPageQa } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
 import type { SiteConversionEventName } from '~/utils/site-conversion-events'
@@ -197,13 +197,13 @@ export async function listPublicOfferingSummaries(db: DbClient, siteId: string):
 
 export async function listPublicBlogSummaries(db: DbClient, siteId: string, limit = 50): Promise<PublicBlogSummary[]> {
   const rows = await queryAll<ApiRecord>(db, `
-    SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.tags_json, p.published_at, p.canonical_url,
+    SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.tags_json, p.published_at, p.canonical_url, p.featured_order,
            u.name AS author_name, u.image AS author_image, media.public_url, media.width, media.height
       FROM blog_posts p
       LEFT JOIN user u ON u.id = p.author_id
       LEFT JOIN media_assets media ON media.id = p.featured_image_asset_id AND media.status = 'active'
      WHERE p.site_id = ? AND p.status = 'published'
-     ORDER BY p.published_at IS NULL, p.published_at DESC, p.id DESC
+     ORDER BY COALESCE(p.featured_order, 999999), p.published_at IS NULL, p.published_at DESC, p.id DESC
      LIMIT ?
   `, [siteId, Math.max(1, Math.min(50, Math.trunc(limit)))])
   return rows.map(row => ({
@@ -213,6 +213,7 @@ export async function listPublicBlogSummaries(db: DbClient, siteId: string, limi
     excerpt: typeof row.excerpt === 'string' ? row.excerpt : null,
     category: typeof row.category === 'string' ? row.category : null,
     tags: parseJson<string[]>(row.tags_json, []),
+    featured_order: Number.isFinite(Number(row.featured_order)) ? Number(row.featured_order) : null,
     author_name: typeof row.author_name === 'string' ? row.author_name : null,
     author_image: typeof row.author_image === 'string' ? row.author_image : null,
     published_at: typeof row.published_at === 'string' ? row.published_at : null,
@@ -438,6 +439,7 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
     excerpt: typeof row.excerpt === 'string' ? row.excerpt : null,
     category: typeof row.category === 'string' ? row.category : null,
     tags: parseJson<string[]>(row.tags_json, []),
+    featured_order: Number.isFinite(Number(row.featured_order)) ? Number(row.featured_order) : null,
     author_name: typeof row.author_name === 'string' ? row.author_name : null,
     published_at: typeof row.published_at === 'string' ? row.published_at : null,
     canonical_url: typeof row.canonical_url === 'string' && row.canonical_url ? row.canonical_url : `/article/${String(row.slug)}`,
@@ -475,7 +477,7 @@ export async function getPublicBlawbyRouteData(
     recipe === 'offering' && options.slug
       ? getPublicOfferingBySlug(db, siteId, options.slug)
       : Promise.resolve(null),
-    needsQa ? listQa(db, siteId, null, true) : Promise.resolve([]),
+    needsQa && pagePath ? listPageQa(db, siteId, pagePath, true) : Promise.resolve([]),
     needsReviews ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
     postLimit ? listPublicBlogSummaries(db, siteId, postLimit) : Promise.resolve([]),
     recipe === 'article' && options.slug

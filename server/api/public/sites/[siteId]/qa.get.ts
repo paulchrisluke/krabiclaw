@@ -1,6 +1,6 @@
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { listQa } from '~/server/utils/location-qa'
+import { listPageQa, listQa } from '~/server/utils/location-qa'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -9,5 +9,6 @@ export default defineEventHandler(async (event) => {
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
   const site = await queryFirst<{ id: string }>(db, "SELECT id FROM sites WHERE id = ? AND status IN ('active', 'live', 'draft')", [siteId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
-  return jsonResponse({ qa: await listQa(db, siteId, null, true) })
+  const pagePath = typeof getQuery(event).page_path === 'string' ? String(getQuery(event).page_path) : null
+  return jsonResponse({ qa: pagePath ? await listPageQa(db, siteId, pagePath, true) : await listQa(db, siteId, null, true) })
 })

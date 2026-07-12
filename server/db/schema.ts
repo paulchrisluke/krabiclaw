@@ -447,6 +447,7 @@ export const location_qa = sqliteTable("location_qa", {
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
 	location_id: text().references(() => business_locations.id, { onDelete: "cascade" } ),
+	page_path: text(),
 	google_question_id: text(),
 	question: text().notNull(),
 	question_author: text(),
@@ -465,6 +466,9 @@ export const location_qa = sqliteTable("location_qa", {
 	uniqueIndex("idx_location_qa_google_id").on(table.google_question_id).where(sql`google_question_id IS NOT NULL`),
 	index("idx_location_qa_location").on(table.location_id, table.status, table.sort_order),
 	index("idx_location_qa_site").on(table.site_id, table.status, table.sort_order).where(sql`location_id IS NULL`),
+	index("idx_location_qa_page").on(table.site_id, table.page_path, table.status, table.sort_order).where(sql`location_id IS NULL AND page_path IS NOT NULL`),
+	check("location_qa_scope_check", sql`location_id IS NULL OR page_path IS NULL`),
+	check("location_qa_page_path_check", sql`page_path IS NULL OR page_path LIKE '/%'`),
 	check("location_qa_source_check", sql`source IN ('gmb','google_maps','manual','llm_generated','manual_override','template','import')`),
 	check("location_qa_status_check", sql`status IN ('published','hidden')`),
 ]);

@@ -38,7 +38,7 @@ mock.module('../../server/db/index.ts', {
   namedExports: { execute, executeBatch, queryAll, queryFirst },
 })
 
-const { createQa, listQa, reorderQa } = await import('../../server/utils/location-qa.ts')
+const { createQa, listPageQa, listQa, reorderQa } = await import('../../server/utils/location-qa.ts')
 const { createOwnerEnteredSiteReview, listSiteReviews, updateOwnerEnteredSiteReview } = await import('../../server/utils/site-reviews.ts')
 
 function resetCalls() {
@@ -63,7 +63,7 @@ test('site Q&A writes a null location and site queries exclude location records'
   await listQa(db, 'site-1', null, true)
   const query = calls.execute[0]
   assert.ok(query)
-  assert.match(query.query, /site_id = \? AND location_id IS NULL AND status = 'published'/)
+  assert.match(query.query, /site_id = \? AND location_id IS NULL AND page_path IS NULL AND status = 'published'/)
   assert.deepEqual(query.params, ['site-1'])
 })
 
@@ -77,6 +77,21 @@ test('site Q&A reorder validates scope and writes atomically', async () => {
   assert.equal(calls.batch.length, 1)
   assert.equal(calls.batch[0]?.length, 2)
   assert.match(calls.batch[0]?.[0]?.query ?? '', /organization_id = \? AND site_id = \? AND location_id IS NULL/)
+})
+
+test('page Q&A prefers the normalized page scope and falls back to general site Q&A', async () => {
+  resetCalls()
+  calls.rows = [{ id: 'about-faq', page_path: '/about' }]
+  const scoped = await listPageQa(db, 'site-1', 'about', true)
+  assert.equal(scoped[0]?.id, 'about-faq')
+  assert.match(calls.execute[0]?.query ?? '', /page_path = \?/)
+  assert.deepEqual(calls.execute[0]?.params, ['site-1', '/about'])
+
+  resetCalls()
+  calls.rows = []
+  await listPageQa(db, 'site-1', '/pricing/', true)
+  assert.equal(calls.execute.length, 2)
+  assert.match(calls.execute[1]?.query ?? '', /page_path IS NULL/)
 })
 
 test('owner-entered reviews require authorization, provenance, and a 1-5 rating', async () => {

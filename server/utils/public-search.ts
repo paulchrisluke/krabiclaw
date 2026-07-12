@@ -21,6 +21,7 @@ const AI_SEARCH_CUSTOM_METADATA: AiSearchConfig['custom_metadata'] = [
   { field_name: 'surface', data_type: 'text' },
   { field_name: 'path', data_type: 'text' },
   { field_name: 'display', data_type: 'text' },
+  { field_name: 'site_id', data_type: 'text' },
 ]
 
 const DEFAULT_MATCH_THRESHOLD = 0.2
@@ -84,6 +85,20 @@ interface PlatformKnowledgeDocument {
   icon: string
   body: string
   surfaces: PlatformKnowledgeSurface[]
+  siteId?: string | null
+}
+
+interface TenantBlogDocRow {
+  id: string
+  site_id: string
+  title: string
+  slug: string
+  body: string
+  excerpt: string | null
+  category: string | null
+  tags_json: string | null
+  seo_description: string | null
+  seo_keywords: string | null
 }
 
 function platformKnowledgeInstanceId(env: CloudflareEnv) {
@@ -146,6 +161,7 @@ function recordMetadata(record: PlatformKnowledgeDocument): Record<string, strin
     type: record.type,
     surface: '',
     path: record.path,
+    site_id: record.siteId ?? '',
     display: JSON.stringify({
       title: record.title,
       snippet: truncateSnippet(record.snippet),
@@ -160,13 +176,20 @@ function resultTypeFilter(type: SearchOptions['type']) {
   return type && type !== 'all' ? type : undefined
 }
 
-function buildSearchFilters(surface: PlatformKnowledgeSurface, type?: PublicSearchType | 'all') {
+function buildSearchFilters(surface: PlatformKnowledgeSurface, type?: PublicSearchType | 'all', siteId?: string | null) {
   const clauses: Array<Record<string, { $eq: string }>> = [
     { surface: { $eq: surface } },
   ]
 
   if (type && type !== 'all') {
     clauses.push({ type: { $eq: type } })
+  }
+
+  // tenant_blog is one shared corpus across every tenant site — the surface
+  // filter alone isn't enough, results must also be pinned to one site_id or
+  // every tenant's posts would be searchable from every other tenant's blog.
+  if (surface === 'tenant_blog' && siteId) {
+    clauses.push({ site_id: { $eq: siteId } })
   }
 
   return (clauses.length === 1 ? clauses[0] : { $and: clauses }) as unknown as VectorizeVectorMetadataFilter
@@ -334,8 +357,43 @@ async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000) {
   throw new Error('Timed out waiting for AI Search indexing to complete')
 }
 
+async function buildTenantBlogDocuments(db: DbClient): Promise<PlatformKnowledgeDocument[]> {
+  const posts = await queryAll<TenantBlogDocRow>(db, `
+    SELECT id, site_id, title, slug, body, excerpt, category, tags_json, seo_description, seo_keywords
+    FROM blog_posts
+    WHERE status = 'published' AND site_id IS NOT NULL
+    ORDER BY site_id, published_at DESC, updated_at DESC
+  `)
+
+  return (posts ?? []).map((post) => {
+    const tags = (() => { try { return JSON.parse(post.tags_json || '[]') as string[] } catch { return [] } })()
+    const snippet = truncateSnippet(post.excerpt || post.seo_description || post.body || post.title)
+    const body = [
+      post.title,
+      post.category ?? '',
+      tags.join(' '),
+      post.seo_keywords ?? '',
+      post.excerpt ?? '',
+      stripMarkdown(post.body),
+    ].join('\n\n')
+    return {
+      id: `tenant-blog:${post.id}`,
+      key: `tenant-blog/${post.site_id}/${post.slug}.md`,
+      type: 'blog' as const,
+      title: post.title,
+      path: `/blog/${post.slug}`,
+      snippet,
+      section: post.category || 'Blog',
+      icon: 'newspaper',
+      body,
+      surfaces: ['tenant_blog' as const],
+      siteId: post.site_id,
+    }
+  })
+}
+
 async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<PlatformKnowledgeDocument[]> {
-  const [docs, posts] = await Promise.all([
+  const [docs, posts, tenantBlogRecords] = await Promise.all([
     queryAll<PlatformDocSearchRow>(db, `
       SELECT id, title, slug, body, excerpt, category, seo_description, seo_keywords
       FROM platform_docs
@@ -348,6 +406,7 @@ async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<PlatformKn
       WHERE status = 'published' AND site_id IS NULL
       ORDER BY category, published_at DESC, updated_at DESC
     `),
+    buildTenantBlogDocuments(db),
   ])
 
   const docRecords: PlatformKnowledgeDocument[] = (docs ?? []).flatMap((doc) => {
@@ -456,6 +515,7 @@ async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<PlatformKn
   return [
     ...docRecords,
     ...blogRecords,
+    ...tenantBlogRecords,
     ...faqRecords,
     ...routeRecords,
     ...pageRecords,
@@ -521,7 +581,7 @@ export async function searchPublicResources(
           max_num_results: Math.min(50, limit * 5),
           keyword_match_mode: 'or',
           return_on_failure: true,
-          filters: buildSearchFilters(surface, typeFilter),
+          filters: buildSearchFilters(surface, typeFilter, options.siteId),
         },
         query_rewrite: {
           enabled: false,

@@ -16,6 +16,7 @@ export type PlatformKnowledgeSurface =
   | 'dashboard'
   | 'help'
   | 'chowbot'
+  | 'tenant_blog'
 
 export interface PlatformKnowledgeFaqEntry {
   id: string

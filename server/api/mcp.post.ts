@@ -23,6 +23,7 @@ import { cloudflareEnv } from "~/server/utils/api-response";
 import { queryAll } from "~/server/db";
 import { purgeSiteKvCache } from "~/server/utils/edge-cache";
 import { purgeBootstrapCache } from "~/server/utils/bootstrap-cache";
+import { schedulePlatformKnowledgeIndexRebuild } from "~/server/utils/platform-search-rebuild";
 import {
   assertConversationalToolEnabled,
   filterConversationalTools,
@@ -159,7 +160,7 @@ Whenever an image is needed (hero, logo, post thumbnail, menu photo, experience 
 1. Call image_generation natively with model gpt-image-1 and a detailed prompt tailored to the business.
 2. Immediately call save_generated_image_file({ site_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
 3. Call show_generated_images with the assetId and publicUrl returned by save_generated_image_file.
-4. After the user approves, assign with the appropriate tool: set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, or set_experience_image.
+4. After the user approves, assign with the appropriate tool: set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, set_blog_post_image, or set_experience_image.
 5. If the user wants changes, call image_generation again with a revised prompt and repeat from step 2.
 
 This entire flow runs within the current conversation — do not tell the user to leave the app or use a different context.
@@ -171,7 +172,7 @@ This entire flow runs within the current conversation — do not tell the user t
 4. Do not upload media, assign an image, publish, or overwrite anything until the user explicitly confirms.
 5. After confirmation, call upload_user_photo({ site_id, file: <attached local file argument>, category, description }). upload_user_media is the newer generic path (image or video) and is also acceptable here if you already have a resolved file reference.
 6. The file argument is the primary contract. Pass the ChatGPT attachment through the file field and let the host rewrite it into an authorized file reference for KrabiClaw. Do not fabricate download URLs, wrap fake file objects, or suggest an in-app photo uploader.
-7. After upload_user_photo returns assetId/publicUrl, call the appropriate assignment tool such as set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, or set_experience_image.
+7. After upload_user_photo returns assetId/publicUrl, call the appropriate assignment tool such as set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, set_blog_post_image, or set_experience_image.
 8. Reply with the exact site, placement, assetId, and publicUrl that were updated.
 
 **Videos (and an alternative image path):**
@@ -552,6 +553,10 @@ Common workflows: update menus and items, create and publish site posts, triage 
             // purgeAsync already runs detached whether or not waitUntil is available
           }
         }
+      }
+      if (toolDef?.domain === "blog" && isMcpMutatingTool(toolDef)) {
+        const env = cloudflareEnv(event);
+        schedulePlatformKnowledgeIndexRebuild(event, env, `tenant MCP ${toolName}`);
       }
 
       return mcpSuccess(request.id, {

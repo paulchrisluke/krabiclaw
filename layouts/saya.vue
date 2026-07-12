@@ -27,10 +27,13 @@
       :menu="menu"
       :has-experiences="hasExperiences"
     />
+    <ConsentBanner />
   </div>
 </template>
 
 <script setup>
+import ConsentBanner from '~/components/ConsentBanner.vue'
+
 if (import.meta.dev) useDebugLCP()
 
 // Single owner of the shared bootstrap/tenant-site fetch for this tree —
@@ -39,6 +42,9 @@ if (import.meta.dev) useDebugLCP()
 // cache-key coincidence to dedupe.
 const { config, locations, menu, hasExperiences, locales, error: bootstrapError } = useBootstrap()
 const { siteId, isTenant, isPlatform, site } = useTenantSite()
+// Called for its side effect: keeps the consent ref in sync and lets the
+// head markup emit the default signal ahead of any analytics config.
+useCookieConsent()
 
 // The full bootstrap payload above is intentionally `lazy: true` (see
 // useBootstrap.ts) so SSR doesn't block the whole page on it. But that means
@@ -128,6 +134,13 @@ useHead(() => {
     })
   }
   if (validGoogleAnalyticsId.value) {
+    script.push({
+      key: 'saya-google-consent-default',
+      innerHTML: `window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('consent', 'default', {ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'denied'});`
+    })
+    // Always load gtag.js once a valid ID exists — Consent Mode v2 (pushed by
+    // useCookieConsent) tells it whether storage/ads signals are actually
+    // granted, rather than withholding the script entirely.
     const id = validGoogleAnalyticsId.value
     script.push({
       src: `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`,

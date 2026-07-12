@@ -216,6 +216,7 @@ export const menuObject = {
     name: { type: 'string' },
     description: { type: ['string', 'null'] },
     location_id: { type: ['string', 'null'] },
+    page_path: { type: ['string', 'null'] },
     sort_order: { type: 'number' },
     sections: {
       type: 'array',
@@ -260,7 +261,7 @@ const howToStepSchema = {
 export const blogComponentInputSchema = {
   type: 'object',
   properties: {
-    type: { type: 'string', enum: ['faq', 'how_to'] },
+    type: { type: 'string', enum: ['faq', 'how_to', 'ai_assistance'] },
     label: { type: ['string', 'null'] },
     status: { type: ['string', 'null'], enum: ['active', 'inactive', null] },
     render_enabled: { type: ['boolean', 'null'] },
@@ -326,6 +327,7 @@ export const blogPostObject = {
     body: { type: 'string' },
     excerpt: { type: ['string', 'null'] },
     category: { type: ['string', 'null'] },
+    tags: { type: 'array', items: { type: 'string' } },
     components: {
       type: 'array',
       items: blogComponentInputSchema,
@@ -1087,6 +1089,8 @@ export const BOUNDED_WRITE_TOOL_NAMES = [
   'create_blog_post',
   'update_blog_post',
   'set_blog_post_image',
+  'publish_blog_post',
+  'unpublish_blog_post',
   'set_experience_image',
   'set_experience_video',
   'create_site',

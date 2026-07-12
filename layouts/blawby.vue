@@ -10,11 +10,13 @@
       :compliance="compliance"
       :offering-links="offeringLinks"
     />
+    <ConsentBanner variant="blawby" privacy-path="/policies/privacy" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { serializeJsonLd } from '~/utils/json-ld'
+import ConsentBanner from '~/components/ConsentBanner.vue'
 
 const { identity, navigation, consultation, compliance, themeTokens, offeringLinks } = await useBlawbyShell()
 const hydrated = ref(false)

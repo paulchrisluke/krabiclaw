@@ -121,7 +121,7 @@ const blogRows = values((manifest.articles ?? []).map((article, index) => `(
 )`))
 
 const qaRows = values((manifest.siteQa ?? []).map((qa) => `(
-  ${sqlValue(qa.id)}, ${sqlValue(ORG_ID)}, ${sqlValue(SITE_ID)}, NULL, NULL,
+  ${sqlValue(qa.id)}, ${sqlValue(ORG_ID)}, ${sqlValue(SITE_ID)}, NULL, ${sqlValue(qa.page_path)}, NULL,
   ${sqlValue(qa.question)}, NULL, NULL, ${sqlValue(qa.answer)}, ${sqlValue(site.brand_name)}, NULL,
   1, 0, ${sqlValue(qa.source || 'import')}, ${sqlValue(qa.status || 'published')}, ${Number(qa.sort_order ?? 0)}, ${now}, ${now}
 )`))
@@ -173,14 +173,15 @@ INSERT INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain, public_url,
   brand_name, brand_description, contact_email, contact_phone,
   source_locale, default_currency, status, plan, onboarding_status,
-  url_structure, vertical, content_source, media_source, created_at, updated_at
+  url_structure, vertical, content_source, media_source, settings, created_at, updated_at
 ) VALUES (
   ${sqlValue(SITE_ID)}, ${sqlValue(ORG_ID)}, 'blawby-theme-v1', 'blawby',
   ${sqlValue(SLUG)}, ${sqlValue(SLUG)}, 'http://ncls.localhost:3000',
   ${sqlValue(site.brand_name)}, ${sqlValue(site.brand_description)},
   ${sqlValue(site.email)}, ${sqlValue(site.phone)},
   'en', 'USD', 'active', 'managed', 'active',
-  'brand_pages', 'service', 'client_supplied', 'client_photos', ${now}, ${now}
+  'brand_pages', 'service', 'client_supplied', 'client_photos',
+  ${sqlJson({ favicon_url: site.favicon_url || null })}, ${now}, ${now}
 );
 
 INSERT INTO site_domains (id, organization_id, site_id, domain, type, role, status, dns_status, activated_at, created_at, updated_at)
@@ -269,7 +270,7 @@ ${redirectRows ? `INSERT INTO tenant_redirects (
 ${redirectRows};` : '-- No tenant redirects in manifest.'}
 
 ${qaRows ? `INSERT INTO location_qa (
-  id, organization_id, site_id, location_id, google_question_id, question,
+  id, organization_id, site_id, location_id, page_path, google_question_id, question,
   question_author, question_date, answer, answer_author, answer_date,
   is_owner_answer, upvote_count, source, status, sort_order, created_at, updated_at
 ) VALUES

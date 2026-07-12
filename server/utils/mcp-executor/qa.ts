@@ -1,6 +1,6 @@
 import type { McpExecutorContext } from './shared'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
-import { createLocationQa, createQa, deleteLocationQa, deleteQa, listLocationQa, listQa, reorderQa, updateQa } from '~/server/utils/location-qa'
+import { createLocationQa, createQa, deleteLocationQa, deleteQa, listLocationQa, listPageQa, listQa, reorderQa, updateQa } from '~/server/utils/location-qa'
 import { reorderLocationQa, updateLocationQa } from '~/server/utils/mcp-workflows'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, objectArray, omit, requiredString } from './shared'
 
@@ -8,13 +8,14 @@ export async function handleQaTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
   switch (toolName) {
     case "list_site_qa":
-      return { items: await listQa(site.db, site.siteId, null) };
+      return { items: typeof args.page_path === "string" ? await listPageQa(site.db, site.siteId, args.page_path) : await listQa(site.db, site.siteId, null) };
     case "create_site_qa": {
       const result = await createQa(site.db, {
         organizationId: site.organizationId,
         siteId: site.siteId,
         locationId: null,
-      }, omit(args, []) as never);
+        pagePath: typeof args.page_path === "string" ? args.page_path : null,
+      }, omit(args, ["page_path"]) as never);
       assertDomainSuccess(result);
       return { ...result.data, context: await mutationContextPayload(site) };
     }
@@ -24,7 +25,8 @@ export async function handleQaTools(ctx: McpExecutorContext): Promise<unknown> {
         organizationId: site.organizationId,
         siteId: site.siteId,
         locationId: null,
-      }, qaId, omit(args, ["qa_id"]));
+        pagePath: typeof args.page_path === "string" ? args.page_path : null,
+      }, qaId, omit(args, ["qa_id", "page_path"]));
       return { ...result, context: await mutationContextPayload(site) };
     }
     case "delete_site_qa": {
@@ -32,6 +34,7 @@ export async function handleQaTools(ctx: McpExecutorContext): Promise<unknown> {
         organizationId: site.organizationId,
         siteId: site.siteId,
         locationId: null,
+        pagePath: typeof args.page_path === "string" ? args.page_path : null,
       }, requiredString(args, "qa_id"));
       assertDomainSuccess(result);
       return { ...result.data, context: await mutationContextPayload(site) };
@@ -41,6 +44,7 @@ export async function handleQaTools(ctx: McpExecutorContext): Promise<unknown> {
         organizationId: site.organizationId,
         siteId: site.siteId,
         locationId: null,
+        pagePath: typeof args.page_path === "string" ? args.page_path : null,
       }, objectArray(args.updates, "updates").map(item => {
         const sortOrder = Number(item.sort_order);
         if (!Number.isInteger(sortOrder)) throw mcpProtocolError(MCP_ERROR.invalidParams, "Each update must have an integer sort_order");

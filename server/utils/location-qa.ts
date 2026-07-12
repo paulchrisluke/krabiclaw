@@ -4,6 +4,7 @@ export interface QaScope {
   organizationId: string
   siteId: string
   locationId: string | null
+  pagePath?: string | null
 }
 
 export interface CreateQaInput {
@@ -25,9 +26,18 @@ export interface UpdateQaInput {
   sort_order?: unknown
 }
 
-function scopeSql(locationId: string | null) {
+function normalizePagePath(pagePath: string | null | undefined) {
+  if (!pagePath) return null
+  const normalized = `/${pagePath.trim().replace(/^\/+|\/+$/g, '')}`
+  return normalized === '/' ? '/' : normalized
+}
+
+function scopeSql(locationId: string | null, pagePath?: string | null) {
+  const normalizedPagePath = normalizePagePath(pagePath)
   return locationId === null
-    ? { clause: 'location_id IS NULL', params: [] as unknown[] }
+    ? normalizedPagePath
+      ? { clause: 'location_id IS NULL AND page_path = ?', params: [normalizedPagePath] as unknown[] }
+      : { clause: 'location_id IS NULL AND page_path IS NULL', params: [] as unknown[] }
     : { clause: 'location_id = ?', params: [locationId] as unknown[] }
 }
 
@@ -37,16 +47,21 @@ function stringOrNull(value: unknown, maxLength: number) {
   return normalized ? normalized.slice(0, maxLength) : null
 }
 
-export async function listQa(db: DbClient, siteId: string, locationId: string | null, publishedOnly = false) {
-  const scope = scopeSql(locationId)
+export async function listQa(db: DbClient, siteId: string, locationId: string | null, publishedOnly = false, pagePath?: string | null) {
+  const scope = scopeSql(locationId, pagePath)
   return await queryAll<Record<string, unknown>>(db, `
-    SELECT id, organization_id, site_id, location_id, google_question_id, question,
+    SELECT id, organization_id, site_id, location_id, page_path, google_question_id, question,
            question_author, question_date, answer, answer_author, answer_date,
            is_owner_answer, upvote_count, source, status, sort_order, created_at, updated_at
     FROM location_qa
     WHERE site_id = ? AND ${scope.clause}${publishedOnly ? " AND status = 'published'" : ''}
     ORDER BY sort_order ASC, is_owner_answer DESC, upvote_count DESC, created_at ASC
   `, [siteId, ...scope.params])
+}
+
+export async function listPageQa(db: DbClient, siteId: string, pagePath: string, publishedOnly = false) {
+  const scoped = await listQa(db, siteId, null, publishedOnly, pagePath)
+  return scoped.length ? scoped : listQa(db, siteId, null, publishedOnly)
 }
 
 export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInput) {
@@ -63,12 +78,14 @@ export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInpu
 
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
-  const scoped = scopeSql(scope.locationId)
+  const pagePath = scope.locationId === null ? normalizePagePath(scope.pagePath) : null
+  const scoped = scopeSql(scope.locationId, pagePath)
   const params = [
     id,
     scope.organizationId,
     scope.siteId,
     scope.locationId,
+    pagePath,
     question,
     stringOrNull(input.question_author, 120),
     answer,
@@ -87,17 +104,17 @@ export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInpu
   if (explicitSortOrder !== null) {
     await execute(db, `
       INSERT INTO location_qa (
-        id, organization_id, site_id, location_id, question, question_author,
+        id, organization_id, site_id, location_id, page_path, question, question_author,
         answer, is_owner_answer, source, status, sort_order, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [...params.slice(0, 10), explicitSortOrder, ...params.slice(10)])
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [...params.slice(0, 11), explicitSortOrder, ...params.slice(11)])
   } else {
     await execute(db, `
       INSERT INTO location_qa (
-        id, organization_id, site_id, location_id, question, question_author,
+        id, organization_id, site_id, location_id, page_path, question, question_author,
         answer, is_owner_answer, source, status, sort_order, created_at, updated_at
       )
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(sort_order), -1) + 1, ?, ?
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(sort_order), -1) + 1, ?, ?
       FROM location_qa
       WHERE organization_id = ? AND site_id = ? AND ${scoped.clause}
     `, [...params, scope.organizationId, scope.siteId, ...scoped.params])
@@ -112,6 +129,7 @@ export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInpu
       question,
       answer,
       location_id: scope.locationId,
+      page_path: pagePath,
       status,
       sort_order: sortOrder,
       created: true,
@@ -154,7 +172,7 @@ export async function updateQa(db: DbClient, scope: QaScope, qaId: string, updat
   }
   if (sets.length === 1) throw new Error('No update fields provided')
 
-  const scoped = scopeSql(scope.locationId)
+  const scoped = scopeSql(scope.locationId, scope.pagePath)
   params.push(qaId, scope.organizationId, scope.siteId, ...scoped.params)
   const result = await execute(db, `
     UPDATE location_qa
@@ -166,7 +184,7 @@ export async function updateQa(db: DbClient, scope: QaScope, qaId: string, updat
 }
 
 export async function deleteQa(db: DbClient, scope: QaScope, qaId: string) {
-  const scoped = scopeSql(scope.locationId)
+  const scoped = scopeSql(scope.locationId, scope.pagePath)
   const result = await execute(db, `
     DELETE FROM location_qa
     WHERE id = ? AND organization_id = ? AND site_id = ? AND ${scoped.clause}
@@ -187,7 +205,7 @@ export async function reorderQa(
     throw new Error('Q&A reorder ids must be distinct')
   }
 
-  const scoped = scopeSql(scope.locationId)
+  const scoped = scopeSql(scope.locationId, scope.pagePath)
   const placeholders = updates.map(() => '?').join(', ')
   const validation = await queryFirst<{ valid_count: number }>(db, `
     SELECT COUNT(*) AS valid_count

@@ -829,11 +829,11 @@ function buildPayload(config, sourcePath = null) {
     entry.person?.title || null,
   ]))
   const siteQa = (config.faqs || [])
-    .filter(faq => !faq.pageType)
     .map((faq, index) => ({
       id: `qa_ncls_site_${index + 1}`,
       question: faq.question,
       answer: faq.answer,
+      page_path: faq.pageType ? `/${faq.pageType}` : null,
       sort_order: index,
       source: 'import',
       status: 'published',
@@ -925,6 +925,7 @@ function buildPayload(config, sourcePath = null) {
           }
         : null,
       logo_asset_id: assetPointer('brand_logo', 'icons/logo.svg')?.asset_id || null,
+      favicon_url: '/tenants/northcarolinalegalservices/favicon.svg',
       author_image_url: assetPointer('article_author_image', 'rich-gittings-author.webp')?.url || null,
     },
     compliance: {
@@ -1022,6 +1023,37 @@ function writeJson(filePath, value) {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
 }
 
+function preserveVerifiedMedia(payload, outDir) {
+  const existingPath = path.join(outDir, 'client-manifest.json')
+  if (!fs.existsSync(existingPath)) return payload
+  const existing = JSON.parse(fs.readFileSync(existingPath, 'utf8'))
+  const verifiedBySource = new Map((existing.mediaInventory?.files || [])
+    .filter(file => file.upload_status === 'verified')
+    .map(file => [`${file.role || ''}:${file.source_path || file.source_name || file.file_name || ''}`, file]))
+  const replacements = new Map()
+  payload.mediaInventory.files = payload.mediaInventory.files.map(file => {
+    const key = `${file.role || ''}:${file.source_path || file.source_name || file.file_name || ''}`
+    const verified = verifiedBySource.get(key)
+    if (verified?.public_url && file.public_url && verified.public_url !== file.public_url) {
+      replacements.set(file.public_url, verified.public_url)
+    }
+    return verified ? { ...file, ...verified } : file
+  })
+  const replaceUrls = value => {
+    if (typeof value === 'string') {
+      let updated = value
+      for (const [from, to] of replacements) updated = updated.replaceAll(from, to)
+      return updated
+    }
+    if (Array.isArray(value)) return value.map(replaceUrls)
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, replaceUrls(nested)]))
+    }
+    return value
+  }
+  return replaceUrls(payload)
+}
+
 function generateSeedPreview(outDir) {
   const result = spawnSync(process.execPath, [
     path.join(repoRoot, 'scripts', 'generate-ncls-blawby-seed.mjs'),
@@ -1043,6 +1075,7 @@ function generateSeedPreview(outDir) {
 
 function writeClientImportArtifacts(payload, outDir) {
   fs.mkdirSync(outDir, { recursive: true })
+  payload = preserveVerifiedMedia(payload, outDir)
   writeJson(path.join(outDir, 'blawby-import.json'), payload)
   writeJson(path.join(outDir, 'client-manifest.json'), payload)
   writeJson(path.join(outDir, 'media-manifest.json'), payload.mediaInventory)

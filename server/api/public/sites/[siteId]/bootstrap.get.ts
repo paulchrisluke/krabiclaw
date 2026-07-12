@@ -657,14 +657,14 @@ export default defineEventHandler(async (event) => {
       // read_time_minutes approximates words as body length / 5 chars at 200wpm —
       // avoids shipping the full post body to list views just to estimate read time.
       `SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords,
-              p.canonical_url, p.robots, p.published_at, p.updated_at, u.name AS author_name, p.featured_image_asset_id,
+              p.canonical_url, p.robots, p.published_at, p.updated_at, p.featured_order, u.name AS author_name, p.featured_image_asset_id,
               ma.public_url, ma.kind, ma.width, ma.height,
               CAST(MAX(1, ROUND((LENGTH(COALESCE(p.body, '')) / 5.0) / 200.0)) AS INTEGER) AS read_time_minutes
        FROM blog_posts p
        LEFT JOIN user u ON u.id = p.author_id
        LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
        WHERE p.status = 'published' AND p.site_id = ?
-       ORDER BY p.published_at IS NULL, p.published_at DESC, p.id DESC
+       ORDER BY COALESCE(p.featured_order, 999999), p.published_at IS NULL, p.published_at DESC, p.id DESC
        LIMIT ?`,
       [siteId, page === "home" ? 3 : 50],
     );
@@ -695,7 +695,7 @@ export default defineEventHandler(async (event) => {
         : `SELECT id, question, question_author, question_date,
                   answer, answer_author, answer_date, is_owner_answer, upvote_count
            FROM location_qa
-           WHERE site_id = ? AND status = 'published'
+           WHERE site_id = ? AND location_id IS NULL AND page_path IS NULL AND status = 'published'
            ORDER BY is_owner_answer DESC, upvote_count DESC, sort_order, created_at`,
       locationId ? [locationId, siteId] : [siteId],
     );

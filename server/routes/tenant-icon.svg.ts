@@ -10,8 +10,13 @@ function escapeXml(value: string): string {
 }
 
 export default defineEventHandler((event) => {
-  const site = event.context.site as { logo_url?: string | null; brand_name?: string | null } | undefined
+  const site = event.context.site as { favicon_url?: string | null; logo_url?: string | null; brand_name?: string | null } | undefined
+  const faviconUrl = site?.favicon_url?.trim()
   const logoUrl = site?.logo_url?.trim()
+
+  if (faviconUrl) {
+    return sendRedirect(event, faviconUrl, 302)
+  }
 
   if (logoUrl) {
     return sendRedirect(event, logoUrl, 302)

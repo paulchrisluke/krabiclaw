@@ -78,6 +78,7 @@ export interface PublicBlogSummary {
   excerpt: string | null
   category: string | null
   tags: string[]
+  featured_order: number | null
   author_name: string | null
   author_image: string | null
   published_at: string | null

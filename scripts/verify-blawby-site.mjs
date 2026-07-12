@@ -171,6 +171,23 @@ function collectArtifactMediaUrls(value, urls = new Set()) {
   return urls
 }
 
+function collectKrabiClawMediaReferences(value, urls = new Set()) {
+  if (typeof value === 'string') {
+    for (const match of value.matchAll(/https:\/\/(?:media|images)\.krabiclaw\.com\/[^\s)'"<>]+/gi)) {
+      urls.add(match[0].replace(/[.,;:]$/, ''))
+    }
+    return urls
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectKrabiClawMediaReferences(item, urls)
+    return urls
+  }
+  if (value && typeof value === 'object') {
+    for (const nested of Object.values(value)) collectKrabiClawMediaReferences(nested, urls)
+  }
+  return urls
+}
+
 function checkMediaUrl(url) {
   if (url.startsWith('/') && !url.startsWith('//')) return { ok: true, reason: 'relative route' }
   let parsed
@@ -313,6 +330,16 @@ function validateArtifacts(checks, manifest) {
     pushCheck(checks, hasApprovedAsset, `Required media/file has approved asset URL: ${file.source_path || file.source_name || file.asset_id || 'unknown'}`)
     pushCheck(checks, file.upload_status === 'verified', `Required media/file upload is verified: ${file.source_path || file.source_name || file.asset_id || 'unknown'}`)
   }
+  const verifiedMediaUrls = new Set((manifest.mediaInventory?.files ?? [])
+    .filter(file => file.upload_status === 'verified' && typeof file.public_url === 'string')
+    .map(file => file.public_url))
+  const referencedMediaUrls = collectKrabiClawMediaReferences(manifest)
+  pushCheck(
+    checks,
+    [...referencedMediaUrls].every(url => verifiedMediaUrls.has(url)),
+    'Every nested KrabiClaw media/file reference resolves through verified inventory',
+    { unmatched: [...referencedMediaUrls].filter(url => !verifiedMediaUrls.has(url)) },
+  )
   const complianceAssetIds = new Set(manifest.compliance?.document_asset_ids ?? [])
   pushCheck(
     checks,

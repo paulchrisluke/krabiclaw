@@ -43,6 +43,13 @@ function loadGtmOnInteraction(containerId: string) {
   if (window.__blawbyGtmLoaded[containerId]) return
   window.__blawbyGtmLoaded[containerId] = true
   window.dataLayer = window.dataLayer || []
+  // This only ever runs when pushAnalyticsBridge's caller has already
+  // confirmed consent is accepted, so the container can be told signals are
+  // granted from the moment it initializes (Consent Mode v2) — no separate
+  // "default denied" phase is needed here the way Saya's always-loaded
+  // gtag.js needs one, since Blawby's GTM script is never even requested
+  // until consent is already accepted.
+  window.dataLayer.push(['consent', 'default', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted', analytics_storage: 'granted' }])
   window.dataLayer.push({ 'gtm.start': Date.now(), event: 'gtm.js' })
   const script = document.createElement('script')
   script.async = true
@@ -50,8 +57,8 @@ function loadGtmOnInteraction(containerId: string) {
   document.head.appendChild(script)
 }
 
-function pushAnalyticsBridge(consultation: PublicConsultationSettings, payload: BlawbyConversionPayload) {
-  if (!import.meta.client) return
+function pushAnalyticsBridge(consultation: PublicConsultationSettings, payload: BlawbyConversionPayload, consented: boolean) {
+  if (!import.meta.client || !consented) return
   const bridge = consultation.metadata?.analyticsBridge
   if (!bridge || typeof bridge !== 'object') return
   const record = bridge as ApiRecord
@@ -81,6 +88,7 @@ function pushAnalyticsBridge(consultation: PublicConsultationSettings, payload: 
 export function useBlawbyConversionTracking(consultationSource: MaybeRefOrGetter<PublicConsultationSettings>) {
   const { siteId, site } = useTenantSite()
   const consultation = computed(() => toValue(consultationSource))
+  const { consent } = useCookieConsent()
 
   function track(payload: BlawbyConversionPayload) {
     if (!siteId || !consultation.value.tracking_enabled) return
@@ -88,7 +96,10 @@ export function useBlawbyConversionTracking(consultationSource: MaybeRefOrGetter
       ...payload,
       tenant: payload.tenant ?? site?.brand_name ?? null,
     }
-    pushAnalyticsBridge(consultation.value, normalized)
+    // pushAnalyticsBridge is the only third-party (GTM) surface here — gated on
+    // consent. sendNativeConversion is KrabiClaw's own first-party conversion
+    // tracking and is intentionally NOT gated (see useCookieConsent.ts).
+    pushAnalyticsBridge(consultation.value, normalized, consent.value === 'accepted')
     sendNativeConversion(siteId, normalized)
   }
 
