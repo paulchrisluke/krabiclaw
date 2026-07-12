@@ -292,7 +292,6 @@ export default defineNuxtConfig({
           '/preview',
           '/transfer',
           '/accept-invitation',
-          '/billing',
           '/contact/confirmed',
           '/experiences/confirmed',
           '/forgot-password',
@@ -310,19 +309,11 @@ export default defineNuxtConfig({
     sitemap: '/sitemap.xml',
   },
 
-  // The shared pages tree is not an SEO inventory. Only host-scoped custom
-  // sources may publish URLs; adding a page file cannot add it to a sitemap.
+  // The shared pages tree is not an SEO inventory. All automatic application
+  // sources are disabled; server/plugins/sitemap.ts owns the complete URL set
+  // on the original host-aware request event.
   sitemap: {
-    sources: [
-      '/api/__sitemap__/docs',
-      '/api/__sitemap__/blog',
-      '/api/__sitemap__/pages',
-      '/api/__sitemap__/locations',
-      '/api/__sitemap__/menu-items',
-      '/api/__sitemap__/experiences',
-    ],
-    excludeAppSources: ['pages', 'route-rules', 'prerender'],
-    autoLastmod: true,
+    excludeAppSources: true,
   },
 
   // Components configuration
