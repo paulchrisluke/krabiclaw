@@ -145,35 +145,14 @@ const orgSettings = useOrgSettings()
 const upgrading = ref<string | null>(null)
 const checkoutError = ref<string>('')
 
-function getErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message) return error.message
-  return fallback
-}
-
 async function handleUpgrade(planId: string) {
+  const billingUrl = `${orgSettings.billing.value}?plan=${encodeURIComponent(planId)}`
   if (!isAuthenticated.value) {
-    const next = encodeURIComponent(`${orgSettings.billing.value}?plan=${planId}`)
+    const next = encodeURIComponent(billingUrl)
     await navigateTo(`/login?next=${next}`)
     return
   }
-  checkoutError.value = ''
-  upgrading.value = planId
-  try {
-    const res = await $fetch<{ checkoutUrl: string }>('/api/billing/checkout', {
-      method: 'POST',
-      body: { plan: planId, interval: 'month' }
-    })
-    if (res.checkoutUrl) {
-      await navigateTo(res.checkoutUrl, { external: true })
-    } else {
-      checkoutError.value = 'Unable to start checkout. Please try again.'
-    }
-  } catch (err) {
-    checkoutError.value = getErrorMessage(err, 'Checkout failed. Please try again.')
-    console.error('Checkout failed:', err)
-  } finally {
-    upgrading.value = null
-  }
+  await navigateTo(billingUrl)
 }
 
 type CellValue = boolean | string
