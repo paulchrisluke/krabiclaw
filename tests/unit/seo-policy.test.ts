@@ -7,7 +7,9 @@ import {
   PLATFORM_SITEMAP_ROUTES,
   PRIVATE_EXACT_ROUTES,
   PRIVATE_ROUTE_PREFIXES,
+  resolveRuntimeSeoSiteConfig,
 } from '../../server/utils/seo-policy.ts'
+import { TENANT_TYPES } from '../../utils/tenant-routing.ts'
 
 test('platform sitemap allowlist contains only intentional public content routes', () => {
   assert.deepEqual(PLATFORM_SITEMAP_ROUTES, [
@@ -91,6 +93,41 @@ test('preview and deployment-provider hosts are globally non-indexable', () => {
   assert.equal(isNonIndexableHost('krabiclaw.com'), false)
   assert.equal(isNonIndexableHost('www.krabiclaw.com'), false)
   assert.equal(isNonIndexableHost('potteryhousekrabi.com'), false)
+})
+
+test('runtime site config uses the active tenant origin', () => {
+  assert.deepEqual(resolveRuntimeSeoSiteConfig({
+    tenantType: TENANT_TYPES.TENANT,
+    origin: 'https://potteryhousekrabi.com',
+    hostname: 'potteryhousekrabi.com',
+    tenantName: 'Pottery House Krabi',
+  }), {
+    url: 'https://potteryhousekrabi.com',
+    indexable: true,
+    name: 'Pottery House Krabi',
+  })
+})
+
+test('runtime site config preserves the platform canonical and blocks preview', () => {
+  assert.deepEqual(resolveRuntimeSeoSiteConfig({
+    tenantType: TENANT_TYPES.PLATFORM,
+    origin: 'https://www.krabiclaw.com',
+    hostname: 'www.krabiclaw.com',
+  }), {
+    name: 'KrabiClaw',
+    url: 'https://krabiclaw.com',
+    indexable: true,
+  })
+
+  assert.deepEqual(resolveRuntimeSeoSiteConfig({
+    tenantType: TENANT_TYPES.PLATFORM,
+    origin: 'https://preview.krabiclaw.com',
+    hostname: 'preview.krabiclaw.com',
+  }), {
+    name: 'KrabiClaw',
+    url: 'https://preview.krabiclaw.com',
+    indexable: false,
+  })
 })
 
 test('all configured private routes are represented by the classifier', () => {
