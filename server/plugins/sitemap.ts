@@ -1,3 +1,4 @@
+import { getRequestURL } from 'h3'
 import { defineNitroPlugin } from 'nitropack/runtime'
 import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
