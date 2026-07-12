@@ -69,11 +69,9 @@ Non-production requests clear the complete URL list. New routes cannot enter a s
 
 ## Robots and response headers
 
-`@nuxtjs/robots` publishes production crawler guidance from the explicit groups in `nuxt.config.ts`. Robots exclusions conserve crawl activity but are not treated as an indexing control.
+`@nuxtjs/robots` publishes crawler guidance from the explicit groups in `nuxt.config.ts`. Runtime Site Config sets `indexable: false` on non-production hosts, causing the module to publish `Disallow: /` there. Robots exclusions conserve crawl activity but are not treated as an indexing control.
 
-On non-production hosts, `server/middleware/seo-indexing.ts` intercepts `/robots.txt` with `Disallow: /`.
-
-The same middleware is the indexing control. It applies `X-Robots-Tag` to every private route family and every non-production host, including responses that do not render a Vue page.
+`server/middleware/seo-indexing.ts` is the indexing control. It applies `X-Robots-Tag` to every private route family and every non-production host, including responses that do not render a Vue page.
 
 Private routes also receive `Cache-Control: private, no-store, max-age=0`.
 
