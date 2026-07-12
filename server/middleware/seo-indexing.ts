@@ -10,12 +10,6 @@ export default defineEventHandler((event) => {
 
   setHeader(event, 'x-robots-tag', 'noindex, nofollow, noarchive')
 
-  if (nonIndexableHost && url.pathname === '/robots.txt') {
-    setHeader(event, 'content-type', 'text/plain; charset=utf-8')
-    setHeader(event, 'cache-control', 'public, max-age=300, s-maxage=300')
-    return 'User-agent: *\nDisallow: /\n'
-  }
-
   if (privatePath) {
     setHeader(event, 'cache-control', 'private, no-store, max-age=0')
   }
