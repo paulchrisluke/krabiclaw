@@ -311,9 +311,12 @@ export default defineNuxtConfig({
 
   // The shared pages tree is not an SEO inventory. All automatic application
   // sources are disabled; server/plugins/sitemap.ts owns the complete URL set
-  // on the original host-aware request event.
+  // on the original host-aware request event. Shared runtime caching is disabled
+  // so a sitemap generated for one hostname can never be reused for another.
   sitemap: {
     excludeAppSources: true,
+    cacheMaxAgeSeconds: 0,
+    runtimeCacheStorage: false,
   },
 
   // Components configuration
