@@ -130,7 +130,8 @@ jobs:
         run: |
           yarn migrate:preview
           node --experimental-strip-types scripts/generate-demo-bundle.ts
-          node --experimental-strip-types scripts/generate-demo-seed.ts --preview --stdout > /tmp/preview-seed.sql
+          node --experimental-strip-types scripts/reset-e2e-artifacts.ts --preview --stdout > /tmp/preview-seed.sql
+          node --experimental-strip-types scripts/generate-demo-seed.ts --preview --stdout >> /tmp/preview-seed.sql
           node --experimental-strip-types scripts/generate-pottery-house-seed.ts --preview --stdout >> /tmp/preview-seed.sql
           node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview --stdout >> /tmp/preview-seed.sql
           npx wrangler d1 execute DB --env preview --remote --file /tmp/preview-seed.sql
@@ -247,6 +248,7 @@ jobs:
         run: |
           yarn migrate:staging
           node --experimental-strip-types scripts/generate-demo-bundle.ts
+          node --experimental-strip-types scripts/reset-e2e-artifacts.ts --staging
           node --experimental-strip-types scripts/generate-demo-seed.ts --staging
           node --experimental-strip-types scripts/generate-pottery-house-seed.ts --staging
           node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --staging
