@@ -115,6 +115,7 @@
     "better-sqlite3": "^12.11.1",
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.3.0",
+    "lighthouse": "^13.4.0",
     "nitro-cloudflare-dev": "^0.2.2",
     "nuxt": "^4.4.2",
     "postcss": "^8.5.13",
