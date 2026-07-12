@@ -7,7 +7,17 @@
       </button>
     </div>
     <div class="hidden space-x-4 md:-mt-px md:flex">
-      <button v-for="page in visiblePages" :key="page" type="button" class="inline-flex items-center border-t-2 px-4 pt-4 text-sm font-medium" :class="modelValue === page ? 'border-[var(--blawby-accent)] text-[var(--blawby-accent)]' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'" :aria-current="modelValue === page ? 'page' : undefined" @click="select(page)">{{ page }}</button>
+      <button
+        v-for="page in visiblePages"
+        :key="page"
+        type="button"
+        class="inline-flex items-center border-t-2 px-4 pt-4 text-sm font-medium"
+        :class="modelValue === page ? activeClass : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'"
+        :aria-current="modelValue === page ? 'page' : undefined"
+        @click="select(page)"
+      >
+        {{ page }}
+      </button>
     </div>
     <div class="-mt-px flex w-0 flex-1 justify-end">
       <button v-if="modelValue !== totalPages" type="button" class="inline-flex items-center border-t-2 border-transparent pl-1 pt-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700" @click="select(modelValue + 1)">
@@ -19,13 +29,22 @@
 </template>
 
 <script setup lang="ts">
-const props = defineProps<{ modelValue: number, totalPages: number }>()
+const props = withDefaults(defineProps<{
+  modelValue: number
+  totalPages: number
+  variant?: 'blawby' | 'saya'
+}>(), {
+  variant: 'saya',
+})
 const emit = defineEmits<{ 'update:modelValue': [value: number] }>()
 const visiblePages = computed(() => {
   const start = Math.max(1, props.modelValue - 2)
   const end = Math.min(props.totalPages, start + 4)
   return Array.from({ length: end - start + 1 }, (_, index) => start + index)
 })
+const activeClass = computed(() => props.variant === 'blawby'
+  ? 'border-[var(--blawby-accent)] text-[var(--blawby-accent)]'
+  : 'border-primary text-primary')
 function select(page: number) {
   emit('update:modelValue', Math.min(props.totalPages, Math.max(1, page)))
 }

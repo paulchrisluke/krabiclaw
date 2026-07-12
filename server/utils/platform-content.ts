@@ -1273,7 +1273,7 @@ export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slu
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
       p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.tags_json, p.seo_title, p.seo_description, p.seo_keywords,
-      p.canonical_url, p.robots,
+      p.canonical_url, p.robots, p.featured_order,
       p.published_at, p.created_at, p.updated_at,
       p.featured_image_asset_id,
       u.name AS author_name,

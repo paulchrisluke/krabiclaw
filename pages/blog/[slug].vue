@@ -141,6 +141,7 @@ interface TenantBlogPost {
   published_at?: string | null
   author_name?: string | null
   updated_at?: string | null
+  featured_order?: number | null
   featured_image?: { public_url: string | null; kind: string | null; width: number | null; height: number | null } | null
   components?: ContentComponent[]
 }

@@ -1,32 +1,14 @@
 <template>
   <div data-parity-root>
-    <BlawbyPageHero :title="heroTitle" :description="heroDescription" variant="blog" />
-    <BlawbyShieldDivider variant="blog" />
-
-    <section class="bg-white pb-16 pt-8 sm:pt-12" data-parity-section="articles">
+    <section class="bg-white pb-16 pt-12 sm:pt-16" data-parity-section="articles">
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div v-if="categories.length === 0" class="py-24 text-center text-gray-500">
-          <p class="mb-2 text-xl">No posts yet</p>
-          <p class="text-sm">Check back soon — new articles are on the way.</p>
-        </div>
-        <div v-else class="lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10">
-          <aside class="mb-8 lg:sticky lg:top-24 lg:mb-0 lg:h-fit">
-            <BlogSearchBox placeholder="Search articles..." class="mb-6" />
-            <BlogCategoryNav :categories="categories" base-path="/article" />
-          </aside>
-
-          <div class="flex flex-col gap-10">
-            <section
-              v-for="group in categories"
-              :id="group.categorySlug"
-              :key="group.categorySlug"
-              class="scroll-mt-28"
-            >
-              <h2 class="mb-4 blawby-display text-2xl font-bold text-[var(--blawby-primary)]">{{ group.category }}</h2>
-              <BlawbyArticleGrid :posts="group.posts" compact />
-            </section>
-          </div>
-        </div>
+        <TenantBlogIndex
+          variant="blawby"
+          :title="heroTitle"
+          :description="heroDescription"
+          :posts="routeData.posts"
+          base-path="/article"
+        />
       </div>
     </section>
 
@@ -54,7 +36,6 @@ const heroBlock = computed(() => block('page_hero'))
 const disclaimerBlock = computed(() => block('disclaimer'))
 const heroTitle = computed(() => String(heroBlock.value?.title || page.value?.title || 'Our Blog'))
 const heroDescription = computed(() => Array.isArray(heroBlock.value?.description) ? heroBlock.value.description.join('\n\n') : String(heroBlock.value?.description || page.value?.summary || ''))
-const { categories } = useTenantBlogNav(computed(() => routeData.value.posts))
 
 useSeoMeta({
   title: computed(() => page.value?.seo_title || `Articles | ${identity.value.brand_name || 'Professional services'}`),
