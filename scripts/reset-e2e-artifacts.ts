@@ -9,17 +9,21 @@ import { execWithRetry } from './wrangler-retry.ts'
 // Sweeps rows that Playwright E2E specs leave behind on preview/staging, so scheduled tasks and
 // manual queries against these environments don't scan an ever-growing table. Two categories:
 //
-// 1. Throwaway sites/orgs created via tests/e2e/helpers/ensure-site.ts, mcp.spec.ts's MCP-tool
-//    variant, or a direct POST /api/sites - every convention in use (e2e-site-*, e2e-throwaway-*,
-//    e2e-dashboard-pages-*, mcp-e2e-*) starts with either 'e2e-' or 'mcp-e2e-', so two literal-
-//    prefix LIKE patterns (index-eligible, unlike a leading-wildcard '%e2e-%' scan) cover all of
-//    them. sites.organization_id cascades from organization (ON DELETE CASCADE), and every
-//    org-scoped table cascades from organization in turn (same pattern already relied on by
+// 1. Every non-fixture organization. Preview/staging never hold legitimate customer data -
+//    everything in `organization` is either one of the fixed, named seed fixtures below (reset
+//    on every run by generate-*-seed.ts) or E2E-test-created throwaway state, so "not a known
+//    fixture" is sufficient to mark an org disposable - no naming-convention/pattern matching on
+//    `sites.subdomain` needed. That matters operationally, not just for simplicity: an earlier
+//    version matched orgs via a `sites.subdomain LIKE 'e2e-%'` GROUP BY/HAVING check, which -
+//    against preview's actual accumulated backlog - exceeded D1's per-call CPU budget and reset
+//    the DB before the sweep could run at all ("D1 DB exceeded its CPU time limit and was
+//    reset"). A plain `id NOT IN (<9 fixed ids>)` filter on `organization` is a single cheap
+//    linear scan of a small table, regardless of how large the disposable backlog has grown.
+//    sites.organization_id cascades from organization (ON DELETE CASCADE), and every org-scoped
+//    table cascades from organization in turn (same pattern already relied on by
 //    generate-demo-seed.ts's org reset), so deleting the organization row is sufficient for most
 //    child tables - except notification_events, whose organization_id/site_id columns are
 //    ON DELETE SET NULL rather than CASCADE, so it's swept explicitly before the org delete.
-//    An org is only eligible once every site it owns matches - preserves any org that also holds
-//    a fresh or non-E2E site.
 //
 // 2. Guest-submitted rows against the *persistent* Pottery House fixture (bookings, contact
 //    forms, reservations) - these specs already mark every guest email '...@playwright.example',
@@ -30,7 +34,26 @@ import { execWithRetry } from './wrangler-retry.ts'
 // window before its own data becomes sweepable by a concurrent run against the same shared
 // preview/staging DB (CI's concurrency group is per-PR, so multiple PRs' e2e-smoke runs can be
 // in flight at once). Observed e2e-smoke runtime is well under an hour; if that ever changes,
-// raise --older-than-hours to match rather than treating 2h as untouchable.
+// raise --older-than-hours to match rather than treating 2h as untouchable. For category 1, the
+// guard is "does this org own any site created after the cutoff" rather than checking every
+// site's age individually - an org that's still actively being built by an in-flight test run
+// gets skipped entirely, everything else disposable goes.
+
+// Every org a seed script creates under a fixed ID, kept in sync with each
+// `DELETE FROM organization WHERE id ...` in generate-demo-seed.ts,
+// generate-pottery-house-seed.ts, generate-kikuzuki-seed.ts, and
+// generate-ncls-blawby-seed.mjs. Add new fixtures here when adding a new seed script.
+const FIXTURE_ORG_IDS = [
+  'org-demo',
+  'org_demo',
+  'org-mcp-free',
+  'org-mcp-growth',
+  'org-mcp-managed',
+  'org-transfer-recipient',
+  'org-pottery-house',
+  'org-kikuzuki',
+  'org-ncls-blawby',
+]
 
 const isStaging = process.argv.includes('--staging')
 const isPreview = process.argv.includes('--preview')
@@ -62,26 +85,21 @@ if (Number.isNaN(cutoffDate.getTime())) {
 }
 const cutoff = cutoffDate.toISOString()
 
-// An org is eligible only when every site it owns matches the throwaway-E2E pattern - an org
-// that also holds a fresh or non-E2E site must survive. Single linear pass over sites, grouped
-// by organization_id, flagging whether any owned site fails the eligibility test - not a
-// per-organization correlated subquery (that re-scanned all of sites once per org and blew D1's
-// CPU budget against preview's actual backlog). Both subdomain prefixes are literal-anchored
-// (no leading wildcard) so they can use the index backing sites.subdomain's UNIQUE constraint.
+const fixtureOrgIdList = FIXTURE_ORG_IDS.map((id) => `'${id}'`).join(', ')
+
+// Two independent, unindexed-but-cheap linear scans (organization is small; sites is filtered
+// only by created_at, no pattern matching) - not a join, not a GROUP BY/aggregate.
 const eligibleOrgIds = `
-  SELECT organization_id FROM sites
-  GROUP BY organization_id
-  HAVING SUM(CASE
-    WHEN NOT ((subdomain LIKE 'e2e-%' OR subdomain LIKE 'mcp-e2e-%') AND created_at < '${cutoff}')
-    THEN 1 ELSE 0
-  END) = 0
+  SELECT id FROM organization
+  WHERE id NOT IN (${fixtureOrgIdList})
+    AND id NOT IN (SELECT organization_id FROM sites WHERE created_at >= '${cutoff}')
 `
 
 const sql = `-- Sweeps E2E-generated rows from preview/staging so they don't accumulate forever.
--- Safe to re-run: only ever targets the 'e2e-' subdomain convention and the
+-- Safe to re-run: only ever targets organizations outside the fixed fixture allowlist and the
 -- '@playwright.example' guest-email marker that tests/e2e specs already use. Curated fixtures
--- (Pottery House, Kikuzuki, demo, MCP plan fixtures) are untouched - they live under fixed IDs
--- reset separately by generate-*-seed.ts.
+-- (Pottery House, Kikuzuki, demo, MCP plan fixtures, NCLS/Blawby) are untouched - they live under
+-- fixed IDs reset separately by generate-*-seed.ts.
 
 PRAGMA foreign_keys = ON;
 
