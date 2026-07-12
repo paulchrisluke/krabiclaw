@@ -1,12 +1,12 @@
-// Dynamic sitemap source for @nuxtjs/sitemap.
-// Emits one entry per active location on a tenant site (/locations/[slug]).
-// hide_from_nav is a nav-UI-only concern and does not gate sitemap/indexing —
-// robots is the correct signal for search-engine inclusion.
+// Dynamic sitemap source for active tenant locations.
+import { getRequestURL } from 'h3'
 import { queryAll } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
+import { isNonIndexableHost } from '~/server/utils/seo-policy'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 
 export default defineSitemapEventHandler(async (event) => {
+  if (isNonIndexableHost(getRequestURL(event).hostname)) return []
   if (event.context.tenantType !== TENANT_TYPES.TENANT) return []
 
   const siteId = event.context.siteId as string | undefined
