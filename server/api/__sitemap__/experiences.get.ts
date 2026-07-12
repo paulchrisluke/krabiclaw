@@ -1,12 +1,13 @@
-// Dynamic sitemap source for @nuxtjs/sitemap.
-// Emits one entry per visible experience on a tenant site (/experiences/[slug]).
-// Gates on status != 'inactive' rather than status = 'active' so 'sold_out'
-// experiences stay in the sitemap — the page still exists and may reopen.
+// Dynamic sitemap source for visible tenant experiences.
+// Sold-out experiences remain indexable; inactive or noindex experiences do not.
+import { getRequestURL } from 'h3'
 import { queryAll } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
+import { isNonIndexableHost } from '~/server/utils/seo-policy'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 
 export default defineSitemapEventHandler(async (event) => {
+  if (isNonIndexableHost(getRequestURL(event).hostname)) return []
   if (event.context.tenantType !== TENANT_TYPES.TENANT) return []
 
   const siteId = event.context.siteId as string | undefined
