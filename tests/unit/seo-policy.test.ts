@@ -31,7 +31,7 @@ test('platform sitemap allowlist contains only intentional public content routes
     assert.equal(isTenantOnlySeoPath(route), false, `${route} must not be tenant-only`)
   }
 
-  assert.equal(PLATFORM_SITEMAP_ROUTES.includes('/billing' as never), false)
+  assert.equal(new Set<string>(PLATFORM_SITEMAP_ROUTES).has('/billing'), false)
   assert.equal(isPrivateSeoPath('/billing'), false, 'billing must remain crawlable so Google can process its 301')
 })
 
