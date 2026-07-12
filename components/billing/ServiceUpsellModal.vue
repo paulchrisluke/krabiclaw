@@ -204,9 +204,11 @@ async function handleCta() {
   loading.value = true
   try {
     if (RECURRING_TYPES.includes(type.value)) {
+      const siteId = dashboard.siteId.value
+      if (!siteId) throw new Error('Choose a site before starting checkout')
       const res = await $fetch<{ checkoutUrl: string }>('/api/billing/checkout', {
         method: 'POST',
-        body: { plan: type.value, interval: 'month' },
+        body: { siteId, plan: type.value, interval: 'month' },
       })
       if (res.checkoutUrl) {
         close()
