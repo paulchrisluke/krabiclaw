@@ -1,5 +1,5 @@
 import { getRequestURL, type H3Event } from 'h3'
-import { TENANT_TYPES } from '~/utils/tenant-routing'
+import { TENANT_TYPES } from '../../utils/tenant-routing'
 
 export interface SeoSitemapEntry {
   loc: string
@@ -47,9 +47,40 @@ export const PRIVATE_EXACT_ROUTES = new Set([
   '/tenant-setup-pending',
 ])
 
+export const TENANT_ONLY_EXACT_ROUTES = new Set([
+  '/contact',
+  '/experiences',
+  '/locations',
+  '/menu',
+  '/order',
+  '/photos',
+  '/posts',
+  '/qa',
+  '/reservations',
+  '/reviews',
+])
+
+export const TENANT_ONLY_ROUTE_PREFIXES = [
+  '/contact/',
+  '/experiences/',
+  '/locations/',
+  '/menu/',
+  '/order/',
+  '/photos/',
+  '/posts/',
+  '/qa/',
+  '/reservations/',
+  '/reviews/',
+] as const
+
 export function isPrivateSeoPath(pathname: string): boolean {
   if (PRIVATE_EXACT_ROUTES.has(pathname)) return true
   return PRIVATE_ROUTE_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))
+}
+
+export function isTenantOnlySeoPath(pathname: string): boolean {
+  return TENANT_ONLY_EXACT_ROUTES.has(pathname)
+    || TENANT_ONLY_ROUTE_PREFIXES.some(prefix => pathname.startsWith(prefix))
 }
 
 export function isNonIndexableHost(hostname: string): boolean {
