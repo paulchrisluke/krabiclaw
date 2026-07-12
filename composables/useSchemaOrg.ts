@@ -41,36 +41,28 @@ export function useWebSiteSchema() {
     '@type': 'WebSite',
     name: 'KrabiClaw',
     url: 'https://krabiclaw.com',
-    description: 'AI-powered website builder for local businesses',
-    potentialAction: {
-      '@type': 'SearchAction',
-      target: 'https://krabiclaw.com/search?q={search_term_string}',
-      'query-input': 'required name=search_term_string'
-    }
+    description: 'AI-powered website builder for local businesses'
   })
 }
 
 export function useBreadcrumbSchema(items: Array<{ name: string; url: string }>) {
-  // Validate items
-  if (!Array.isArray(items) || items.length === 0) {
-    return
-  }
-  
+  if (!Array.isArray(items) || items.length === 0) return
+
   const validItems = items.filter(item => {
     const name = typeof item?.name === 'string' ? item.name.trim() : ''
     const url = typeof item?.url === 'string' ? item.url.trim() : ''
     return name && url
   })
-  
-  if (validItems.length === 0) {
-    return
-  }
-  
-  // Convert relative URLs to absolute
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://krabiclaw.com'
+
+  if (validItems.length === 0) return
+
+  // Resolve relative breadcrumb URLs against the current SSR request. This keeps
+  // tenant structured data on the tenant's canonical custom domain instead of
+  // hardcoding the KrabiClaw platform origin.
+  const requestURL = useRequestURL()
   const itemListElement = validItems.reduce((acc: ApiRecord[], item) => {
     try {
-      const itemUrl = new URL(item.url, baseUrl).toString()
+      const itemUrl = new URL(item.url, requestURL.origin).toString()
       acc.push({
         '@type': 'ListItem',
         position: acc.length + 1,
@@ -83,10 +75,8 @@ export function useBreadcrumbSchema(items: Array<{ name: string; url: string }>)
     return acc
   }, [])
 
-  if (itemListElement.length === 0) {
-    return
-  }
-  
+  if (itemListElement.length === 0) return
+
   useSchemaOrg({
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
@@ -100,17 +90,15 @@ export function useArticleSchema(title: string, description: string, publishedAt
   const publishedAt = maybeAuthor === undefined ? undefined : publishedAtOrAuthor
   const author = maybeAuthor === undefined ? publishedAtOrAuthor : maybeAuthor
 
-  // Validate required fields
   const trimmedTitle = title?.trim()
   const trimmedDescription = description?.trim()
   const trimmedAuthor = author?.trim()
-  
+
   if (!trimmedTitle || !trimmedDescription || !trimmedAuthor) {
     console.warn('useArticleSchema: missing required fields (title, description, or author)')
     return
   }
-  
-  // Validate and normalize publishedAt to ISO 8601
+
   let normalizedDate = publishedAt
   if (publishedAt) {
     try {
@@ -120,12 +108,12 @@ export function useArticleSchema(title: string, description: string, publishedAt
         return
       }
       normalizedDate = date.toISOString()
-    } catch (e) {
-      console.warn('useArticleSchema: error parsing publishedAt', e)
+    } catch (error) {
+      console.warn('useArticleSchema: error parsing publishedAt', error)
       return
     }
   }
-  
+
   const articleSchema: ApiRecord = {
     '@context': 'https://schema.org',
     '@type': 'Article',
@@ -142,9 +130,7 @@ export function useArticleSchema(title: string, description: string, publishedAt
     }
   }
 
-  if (normalizedDate) {
-    articleSchema.datePublished = normalizedDate
-  }
+  if (normalizedDate) articleSchema.datePublished = normalizedDate
 
   useSchemaOrg(articleSchema)
 }
