@@ -1,11 +1,14 @@
 // Dynamic sitemap source for platform documentation.
-// Tenant hosts never publish KrabiClaw platform docs in their sitemap.
+// Tenant and non-production hosts never publish KrabiClaw platform docs.
+import { getRequestURL } from 'h3'
 import { queryAll } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
+import { isNonIndexableHost } from '~/server/utils/seo-policy'
 import { categoryToSlug } from '~/utils/docs-categories'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 
 export default defineSitemapEventHandler(async (event) => {
+  if (isNonIndexableHost(getRequestURL(event).hostname)) return []
   if (event.context.tenantType !== TENANT_TYPES.PLATFORM) return []
 
   const env = cloudflareEnv(event)
