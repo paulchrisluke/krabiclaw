@@ -2,8 +2,8 @@
   <NuxtLayout name="blawby">
     <div v-if="post" data-parity-root>
       <div class="mx-auto max-w-7xl px-6 pb-12 pt-12 sm:pb-16 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8" data-parity-section="article-content">
-        <aside class="mb-8 lg:sticky lg:top-24 lg:mb-0 lg:h-fit">
-          <BlogSearchBox placeholder="Search articles..." class="mb-6" />
+        <aside class="mb-8 lg:sticky lg:top-28 lg:mb-0 lg:h-fit lg:pt-6">
+          <PlatformCommandSearchTrigger surface="tenant_blog" variant="blawby" label="Search articles..." aria-label="Open article search" class="mb-6" />
           <BlogCategoryNav :categories="categories" base-path="/article" :active-slug="slug" />
         </aside>
 
@@ -57,11 +57,14 @@
         :featured-url="assetUrl(ctaBlock?.featured)"
         @click="trackConsultation"
       />
+      <PlatformCommandSearchModal surface="tenant_blog" variant="blawby" />
     </div>
   </NuxtLayout>
 </template>
 
 <script setup lang="ts">
+import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
+import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import { serializeJsonLd } from '~/utils/json-ld'
 import { stripLeadingTitleHeading } from '~/utils/markdown'
 

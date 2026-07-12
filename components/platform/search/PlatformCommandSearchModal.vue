@@ -11,12 +11,13 @@
         aria-modal="true"
         :aria-labelledby="dialogTitleId"
         tabindex="-1"
-        class="flex max-h-[min(80vh,720px)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-default bg-default shadow-[0_24px_80px_rgba(0,0,0,0.18)]"
+        class="flex max-h-[min(80vh,720px)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border shadow-[0_24px_80px_rgba(0,0,0,0.18)]"
+        :class="panelClass"
         @keydown.tab="onTabKeydown"
       >
         <h2 :id="dialogTitleId" class="sr-only">Search {{ surfaceLabel.toLowerCase() }}</h2>
-        <div class="flex items-center gap-3 border-b border-default px-4 py-3 sm:px-5">
-          <PlatformSearchGlyph name="search" class="size-4 shrink-0 text-muted" />
+        <div class="flex items-center gap-3 border-b px-4 py-3 sm:px-5" :class="headerBorderClass">
+          <PlatformSearchGlyph name="search" class="size-4 shrink-0" :class="mutedTextClass" />
           <input
             ref="inputRef"
             v-model="query"
@@ -24,7 +25,8 @@
             autocomplete="off"
             spellcheck="false"
             :placeholder="placeholder"
-            class="min-w-0 flex-1 bg-transparent text-base text-default outline-none placeholder:text-dimmed"
+            class="min-w-0 flex-1 bg-transparent text-base outline-none"
+            :class="[defaultTextClass, placeholderClass]"
             @keydown.down.prevent="moveSelection(1)"
             @keydown.up.prevent="moveSelection(-1)"
             @keydown.enter.prevent="void openSelectedResult()"
@@ -32,7 +34,8 @@
           >
           <button
             type="button"
-            class="rounded-lg border border-default px-2 py-1 text-xs text-dimmed transition hover:bg-elevated hover:text-default"
+            class="rounded-lg border px-2 py-1 text-xs transition"
+            :class="escButtonClass"
             @click="close"
           >
             Esc
@@ -40,25 +43,23 @@
         </div>
 
         <div class="min-h-0 overflow-y-auto">
-          <div v-if="query.trim() && loading" class="px-5 py-10 text-sm text-muted">
+          <div v-if="query.trim() && loading" class="px-5 py-10 text-sm" :class="mutedTextClass">
             Searching {{ surfaceLabel.toLowerCase() }}...
           </div>
 
           <div v-else-if="!query.trim()" class="px-5 py-10">
-            <p class="text-sm font-medium text-default">Search {{ surfaceLabel.toLowerCase() }}</p>
-            <p class="mt-2 text-sm leading-6 text-muted">
-              Search docs, blog posts, support answers, and{{ surface === 'dashboard' ? ' dashboard destinations.' : ' platform pages.' }}
-            </p>
+            <p class="text-sm font-medium" :class="defaultTextClass">Search {{ surfaceLabel.toLowerCase() }}</p>
+            <p class="mt-2 text-sm leading-6" :class="mutedTextClass">{{ emptyStateHint }}</p>
           </div>
 
           <div v-else-if="results.length === 0" class="px-5 py-10">
-            <p class="text-sm font-medium text-default">No results found</p>
-            <p class="mt-2 text-sm leading-6 text-muted">Try a more specific task, page, or support question.</p>
+            <p class="text-sm font-medium" :class="defaultTextClass">No results found</p>
+            <p class="mt-2 text-sm leading-6" :class="mutedTextClass">{{ noResultsHint }}</p>
           </div>
 
           <div v-else class="py-3">
             <section v-for="group in groupedResults" :key="group.label" class="px-2 pb-2">
-              <p class="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-dimmed">
+              <p class="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em]" :class="dimmedTextClass">
                 {{ group.label }}
               </p>
               <button
@@ -68,27 +69,25 @@
                 type="button"
                 :class="[
                   'flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left transition',
-                  selectedIndex === flatIndexById.get(result.id)
-                    ? 'bg-elevated text-default'
-                    : 'hover:bg-elevated/70',
+                  selectedIndex === flatIndexById.get(result.id) ? selectedResultClass : hoverResultClass,
                 ]"
                 @mouseenter="selectedIndex = flatIndexById.get(result.id) ?? selectedIndex"
                 @click="void openResult(result)"
               >
-                <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border border-default bg-default text-muted">
+                <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border" :class="resultIconClass">
                   <PlatformSearchGlyph :name="glyphName(result.icon)" class="size-4" />
                 </div>
                 <div class="min-w-0 flex-1">
                   <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
-                      <p class="truncate text-sm font-semibold text-default">{{ result.title }}</p>
-                      <p class="mt-1 line-clamp-2 text-sm leading-6 text-muted">{{ result.snippet }}</p>
+                      <p class="truncate text-sm font-semibold" :class="defaultTextClass">{{ result.title }}</p>
+                      <p class="mt-1 line-clamp-2 text-sm leading-6" :class="mutedTextClass">{{ result.snippet }}</p>
                     </div>
-                    <span class="shrink-0 rounded-full border border-default px-2 py-0.5 text-[11px] font-medium text-dimmed">
+                    <span class="shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium" :class="badgeClass">
                       {{ resultTypeLabel(result.type) }}
                     </span>
                   </div>
-                  <p class="mt-2 truncate text-xs text-dimmed">{{ result.path }}</p>
+                  <p class="mt-2 truncate text-xs" :class="dimmedTextClass">{{ result.path }}</p>
                 </div>
               </button>
             </section>
@@ -110,9 +109,28 @@ interface SearchResponse {
   results: PublicSearchResult[]
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   surface: PlatformSearchPaletteSurface
-}>()
+  variant?: 'platform' | 'blawby' | 'saya'
+}>(), {
+  variant: 'platform',
+})
+
+const isBlawby = computed(() => props.variant === 'blawby')
+
+const panelClass = computed(() => isBlawby.value ? 'border-[var(--blawby-border)] bg-white' : 'border-default bg-default')
+const headerBorderClass = computed(() => isBlawby.value ? 'border-[var(--blawby-border)]' : 'border-default')
+const defaultTextClass = computed(() => isBlawby.value ? 'text-[var(--blawby-primary)]' : 'text-default')
+const mutedTextClass = computed(() => isBlawby.value ? 'text-gray-600' : 'text-muted')
+const dimmedTextClass = computed(() => isBlawby.value ? 'text-gray-400' : 'text-dimmed')
+const placeholderClass = computed(() => isBlawby.value ? 'placeholder:text-gray-400' : 'placeholder:text-dimmed')
+const escButtonClass = computed(() => isBlawby.value
+  ? 'border-[var(--blawby-border)] text-gray-400 hover:bg-[var(--blawby-accent-100)] hover:text-[var(--blawby-primary)]'
+  : 'border-default text-dimmed hover:bg-elevated hover:text-default')
+const selectedResultClass = computed(() => isBlawby.value ? 'bg-[var(--blawby-accent-100)] text-[var(--blawby-primary)]' : 'bg-elevated text-default')
+const hoverResultClass = computed(() => isBlawby.value ? 'hover:bg-[var(--blawby-accent-100)]/70' : 'hover:bg-elevated/70')
+const resultIconClass = computed(() => isBlawby.value ? 'border-[var(--blawby-border)] bg-white text-gray-500' : 'border-default bg-default text-muted')
+const badgeClass = computed(() => isBlawby.value ? 'border-[var(--blawby-border)] text-gray-400' : 'border-default text-dimmed')
 
 const route = useRoute()
 const router = useRouter()
@@ -136,13 +154,25 @@ const resultTypeMeta: Record<PublicSearchResult['type'], { badge: string, group:
 
 const surfaceLabel = computed(() => {
   if (props.surface === 'docs') return 'Documentation'
-  if (props.surface === 'blog') return 'Blog'
+  if (props.surface === 'blog' || props.surface === 'tenant_blog') return 'Blog'
   return 'Dashboard'
 })
 
 const placeholder = computed(() => {
   if (props.surface === 'dashboard') return 'Search dashboard, docs, blog, help...'
+  if (props.surface === 'tenant_blog') return 'Search posts...'
   return 'Search docs, blog, help, platform pages...'
+})
+
+const emptyStateHint = computed(() => {
+  if (props.surface === 'tenant_blog') return 'Search by title, category, or keyword.'
+  if (props.surface === 'dashboard') return 'Search docs, blog posts, support answers, and dashboard destinations.'
+  return 'Search docs, blog posts, support answers, and platform pages.'
+})
+
+const noResultsHint = computed(() => {
+  if (props.surface === 'tenant_blog') return 'Try a different title, category, or keyword.'
+  return 'Try a more specific task, page, or support question.'
 })
 
 const groupedResults = computed(() => {

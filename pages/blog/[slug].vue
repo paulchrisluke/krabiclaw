@@ -8,8 +8,8 @@
   </div>
 
   <div v-else-if="post" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8">
-    <aside class="mb-8 lg:sticky lg:top-24 lg:mb-0 lg:h-fit">
-      <BlogSearchBox placeholder="Search stories..." class="mb-6" />
+    <aside class="mb-8 lg:sticky lg:top-28 lg:mb-0 lg:h-fit">
+      <PlatformCommandSearchTrigger surface="tenant_blog" variant="saya" label="Search stories..." aria-label="Open story search" class="mb-6" />
       <BlogCategoryNav :categories="categories" base-path="/blog" :active-slug="post.slug" />
     </aside>
 
@@ -111,9 +111,13 @@
     <p class="mt-3 text-muted">This post may have been moved or removed.</p>
     <PlatformButton to="/blog" variant="outline" size="sm" class="mt-6">More Posts</PlatformButton>
   </div>
+
+  <PlatformCommandSearchModal surface="tenant_blog" variant="saya" />
 </template>
 
 <script setup lang="ts">
+import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
+import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import { renderMarkdownToHtml, sanitizeHtmlForSsr, stripLeadingTitleHeading } from '~/utils/markdown'
 import { buildContentBlocks, normalizeContentComponent, type ContentComponent } from '~/utils/content-blocks'
 import { resolveContentComponent } from '~/utils/content-component-resolver'
