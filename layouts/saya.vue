@@ -27,10 +27,13 @@
       :menu="menu"
       :has-experiences="hasExperiences"
     />
+    <ConsentBanner />
   </div>
 </template>
 
 <script setup>
+import ConsentBanner from '~/components/ConsentBanner.vue'
+
 if (import.meta.dev) useDebugLCP()
 
 // Single owner of the shared bootstrap/tenant-site fetch for this tree —
@@ -39,6 +42,7 @@ if (import.meta.dev) useDebugLCP()
 // cache-key coincidence to dedupe.
 const { config, locations, menu, hasExperiences, locales, error: bootstrapError } = useBootstrap()
 const { siteId, isTenant, isPlatform, site } = useTenantSite()
+const { consent } = useCookieConsent()
 
 // The full bootstrap payload above is intentionally `lazy: true` (see
 // useBootstrap.ts) so SSR doesn't block the whole page on it. But that means
@@ -127,7 +131,7 @@ useHead(() => {
       content: googleSiteVerification.value
     })
   }
-  if (validGoogleAnalyticsId.value) {
+  if (validGoogleAnalyticsId.value && consent.value === 'accepted') {
     const id = validGoogleAnalyticsId.value
     script.push({
       src: `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`,

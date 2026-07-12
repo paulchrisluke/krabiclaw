@@ -50,8 +50,8 @@ function loadGtmOnInteraction(containerId: string) {
   document.head.appendChild(script)
 }
 
-function pushAnalyticsBridge(consultation: PublicConsultationSettings, payload: BlawbyConversionPayload) {
-  if (!import.meta.client) return
+function pushAnalyticsBridge(consultation: PublicConsultationSettings, payload: BlawbyConversionPayload, consented: boolean) {
+  if (!import.meta.client || !consented) return
   const bridge = consultation.metadata?.analyticsBridge
   if (!bridge || typeof bridge !== 'object') return
   const record = bridge as ApiRecord
@@ -81,6 +81,7 @@ function pushAnalyticsBridge(consultation: PublicConsultationSettings, payload: 
 export function useBlawbyConversionTracking(consultationSource: MaybeRefOrGetter<PublicConsultationSettings>) {
   const { siteId, site } = useTenantSite()
   const consultation = computed(() => toValue(consultationSource))
+  const { consent } = useCookieConsent()
 
   function track(payload: BlawbyConversionPayload) {
     if (!siteId || !consultation.value.tracking_enabled) return
@@ -88,7 +89,10 @@ export function useBlawbyConversionTracking(consultationSource: MaybeRefOrGetter
       ...payload,
       tenant: payload.tenant ?? site?.brand_name ?? null,
     }
-    pushAnalyticsBridge(consultation.value, normalized)
+    // pushAnalyticsBridge is the only third-party (GTM) surface here — gated on
+    // consent. sendNativeConversion is KrabiClaw's own first-party conversion
+    // tracking and is intentionally NOT gated (see useCookieConsent.ts).
+    pushAnalyticsBridge(consultation.value, normalized, consent.value === 'accepted')
     sendNativeConversion(siteId, normalized)
   }
 
