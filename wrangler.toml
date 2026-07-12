@@ -111,6 +111,14 @@ routes = [
   { pattern = "preview.krabiclaw.com/*", zone_name = "krabiclaw.com" }
 ]
 
+# Top-level [triggers] crons are inherited by named environments unless
+# overridden here. Preview is a CI-only, per-PR database — scheduled tasks
+# (translation-jobs-process, domain-reconciliation, etc.) must never run
+# against it; they drove a 93B-row D1 billing spike by scanning ever-growing,
+# never-cleaned E2E data every 5-10 minutes.
+[env.preview.triggers]
+crons = []
+
 [env.preview.vars]
 CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
 BETTER_AUTH_URL = "https://preview.krabiclaw.com"
@@ -162,6 +170,10 @@ enabled = false
 routes = [
   { pattern = "staging.krabiclaw.com/*", zone_name = "krabiclaw.com" }
 ]
+
+# See env.preview.triggers above — same rationale, same fix.
+[env.staging.triggers]
+crons = []
 
 [env.staging.vars]
 CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
