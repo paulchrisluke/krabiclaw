@@ -1,12 +1,15 @@
 // Explicit static sitemap source for @nuxtjs/sitemap.
 // Platform and tenant hosts share one Nuxt pages tree, so route discovery must be
 // allowlist-based rather than inferred from files under pages/.
+import { getRequestURL } from 'h3'
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
-import { PLATFORM_SITEMAP_ROUTES } from '~/server/utils/seo-policy'
+import { isNonIndexableHost, PLATFORM_SITEMAP_ROUTES } from '~/server/utils/seo-policy'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 
 export default defineSitemapEventHandler(async (event) => {
+  if (isNonIndexableHost(getRequestURL(event).hostname)) return []
+
   if (event.context.tenantType === TENANT_TYPES.PLATFORM) {
     return PLATFORM_SITEMAP_ROUTES.map(loc => ({ loc }))
   }
