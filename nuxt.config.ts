@@ -275,30 +275,50 @@ export default defineNuxtConfig({
     },
   },
 
-  // Robots.txt configuration
+  // Crawler guidance. Runtime X-Robots-Tag middleware remains the authoritative
+  // indexing control for private routes and non-production hosts.
   robots: {
-    allow: ['/'],
-    disallow: ['/dashboard', '/api/**'],
+    groups: [
+      {
+        userAgent: ['*'],
+        allow: ['/'],
+        disallow: [
+          '/admin',
+          '/api',
+          '/auth',
+          '/dashboard',
+          '/dev',
+          '/oauth',
+          '/preview',
+          '/transfer',
+          '/accept-invitation',
+          '/contact/confirmed',
+          '/experiences/confirmed',
+          '/forgot-password',
+          '/login',
+          '/reservations/cancel',
+          '/reservations/confirmed',
+          '/reset-password',
+          '/signup',
+          '/tenant-404',
+          '/tenant-setup-incomplete',
+          '/tenant-setup-pending',
+        ],
+      },
+    ],
     sitemap: '/sitemap.xml',
   },
 
-  // Sitemap configuration
+  // The shared pages tree is not an SEO inventory. All automatic application
+  // sources are disabled; server/plugins/sitemap.ts owns the complete URL set
+  // on the original host-aware request event. Shared runtime caching is disabled
+  // so a sitemap generated for one hostname can never be reused for another.
   sitemap: {
-    sources: [
-      '/api/__sitemap__/docs',
-      '/api/__sitemap__/blog',
-      '/api/__sitemap__/pages',
-      '/api/__sitemap__/locations',
-      '/api/__sitemap__/menu-items',
-      '/api/__sitemap__/experiences',
-    ],
-    // Static tenant routes are managed by the /pages source above which gates
-    // /reservations on vertical. Disable auto-discovery of app routes for tenant
-    // hosts to avoid /reservations appearing via crawl for experience sites.
-    autoLastmod: true,
+    excludeAppSources: true,
+    cacheMaxAgeSeconds: 0,
+    runtimeCacheStorage: false,
   },
 
-  
   // Components configuration
   components: [
     {

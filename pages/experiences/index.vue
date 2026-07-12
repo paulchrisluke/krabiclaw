@@ -86,15 +86,15 @@
 import type { Experience } from '~/server/utils/experiences'
 
 const { isPlatform, site } = useTenantSite()
+if (isPlatform) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 const { locale } = useI18n()
 const expCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
-const config = useRuntimeConfig()
-const siteUrl = config.public.siteUrl
 
 const { experiencesList, pending: bootstrapPending, getField } = useBootstrap()
 
-const pending = computed(() => !isPlatform && bootstrapPending.value)
+const pending = computed(() => bootstrapPending.value)
 const experiences = computed<Experience[]>(() => experiencesList.value)
 
 // availability_state is derived server-side from real slots/bookings/overrides
@@ -124,8 +124,8 @@ function formatDuration(minutes: number): string {
 }
 
 useBreadcrumbSchema([
-  { name: 'Home', url: `${siteUrl}/` },
-  { name: 'Experiences', url: `${siteUrl}/experiences` },
+  { name: 'Home', url: '/' },
+  { name: 'Experiences', url: '/experiences' },
 ])
 
 useSeoMeta({

@@ -83,11 +83,14 @@ const ogImage = computed(() =>
   config.value?.logo_url ||
   null
 )
-// useRequestURL() must be called eagerly at setup time, not inside the computed
-// getter below — the getter can run lazily during head serialization, after
-// which point Nuxt's request-scoped instance is no longer available and calling
-// a useNuxtApp()-dependent composable there throws "[nuxt] instance unavailable".
-const requestHostname = useRequestURL().hostname
+
+// Request-scoped URL state must be captured eagerly during setup. Tenant routing
+// already 301s alternate subdomains to the configured custom domain, so the
+// rendered request origin is the canonical origin for every indexable tenant page.
+const route = useRoute()
+const requestURL = useRequestURL()
+const requestHostname = requestURL.hostname
+const canonicalUrl = computed(() => new URL(route.path, requestURL.origin).toString())
 
 // Site-wide default only — individual pages set their own robots directive
 // when they have one; this is the fallback for pages that don't.
@@ -110,7 +113,6 @@ const validGoogleAnalyticsId = computed(() => {
 
 useHead(() => {
   const meta = []
-  const link = []
   const script = []
 
   meta.push({ property: 'og:type', content: 'website' })
@@ -154,7 +156,7 @@ useHead(() => {
 
   return {
     meta,
-    link,
+    link: [{ rel: 'canonical', href: canonicalUrl.value }],
     script,
     __dangerouslyDisableSanitizersByTagID: {
       'saya-google-analytics-init': ['innerHTML']
