@@ -7,7 +7,14 @@
     </div>
   </div>
 
-  <article v-else-if="post" class="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
+  <div v-else-if="post" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8">
+    <aside class="mb-8 lg:sticky lg:top-24 lg:mb-0 lg:h-fit">
+      <BlogSearchBox placeholder="Search stories..." class="mb-6" />
+      <BlogCategoryNav :categories="categories" base-path="/blog" :active-slug="post.slug" />
+    </aside>
+
+    <article class="min-w-0">
+    <div class="mx-auto max-w-4xl">
     <div class="mb-6 flex flex-wrap items-center gap-3">
       <span v-if="post.category" class="rounded bg-muted px-2 py-1 text-xs font-medium text-muted">
         {{ post.category }}
@@ -80,7 +87,24 @@
       </div>
       <PlatformButton to="/blog" variant="outline" size="sm">More Posts</PlatformButton>
     </div>
-  </article>
+    </div>
+
+    <div v-if="relatedPosts.length" class="mx-auto mt-16 max-w-4xl border-t border-default pt-10">
+      <h2 class="mb-6 text-xl font-bold text-default">More from {{ siteName }}</h2>
+      <div class="grid gap-6 sm:grid-cols-2">
+        <NuxtLink
+          v-for="relatedPost in relatedPosts"
+          :key="relatedPost.id"
+          :to="`/blog/${relatedPost.slug}`"
+          class="block rounded-xl border border-default bg-elevated p-5 no-underline transition-shadow hover:shadow-md"
+        >
+          <h3 class="text-base font-semibold text-default">{{ relatedPost.title }}</h3>
+          <p v-if="relatedPost.excerpt" class="mt-2 line-clamp-2 text-sm text-muted">{{ relatedPost.excerpt }}</p>
+        </NuxtLink>
+      </div>
+    </div>
+    </article>
+  </div>
 
   <div v-else class="mx-auto max-w-3xl px-4 py-32 text-center">
     <h1 class="text-2xl font-bold text-default">Post not found</h1>
@@ -180,6 +204,10 @@ if (!data.value?.post) {
 }
 
 const post = computed(() => data.value?.post ?? null)
+const { blogList } = useBootstrap()
+const allPosts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
+const { categories } = useTenantBlogNav(allPosts)
+const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))
 const siteName = computed(() => site?.brand_name || 'Our Site')
 const authorName = computed(() => post.value?.author_name?.trim() || siteName.value)
 const authorInitial = computed(() => authorName.value.charAt(0).toUpperCase())

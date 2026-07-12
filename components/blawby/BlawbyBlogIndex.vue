@@ -8,18 +8,23 @@
         <p class="mb-2 text-xl">No posts yet</p>
         <p class="text-sm">Check back soon — new articles are on the way.</p>
       </div>
-      <div v-else class="flex flex-col gap-10">
-        <BlogSearchBox class="max-w-md" placeholder="Search articles..." />
+      <div v-else class="lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10">
+        <aside class="mb-8 lg:sticky lg:top-24 lg:mb-0 lg:h-fit">
+          <BlogSearchBox placeholder="Search articles..." class="mb-6" />
+          <BlogCategoryNav :categories="categories" base-path="/article" />
+        </aside>
 
-        <section
-          v-for="group in categories"
-          :id="group.categorySlug"
-          :key="group.categorySlug"
-          class="scroll-mt-28"
-        >
-          <h2 class="mb-4 blawby-display text-2xl font-bold text-[var(--blawby-primary)]">{{ group.category }}</h2>
-          <BlawbyArticleGrid :posts="group.posts" compact />
-        </section>
+        <div class="flex flex-col gap-10">
+          <section
+            v-for="group in categories"
+            :id="group.categorySlug"
+            :key="group.categorySlug"
+            class="scroll-mt-28"
+          >
+            <h2 class="mb-4 blawby-display text-2xl font-bold text-[var(--blawby-primary)]">{{ group.category }}</h2>
+            <BlawbyArticleGrid :posts="group.posts" compact />
+          </section>
+        </div>
       </div>
     </div>
 
