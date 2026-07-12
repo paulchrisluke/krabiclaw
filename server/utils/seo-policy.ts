@@ -1,11 +1,3 @@
-import { getRequestURL, type H3Event } from 'h3'
-import { TENANT_TYPES } from '../../utils/tenant-routing.ts'
-
-export interface SeoSitemapEntry {
-  loc: string
-  lastmod?: string | null
-}
-
 export const PLATFORM_SITEMAP_ROUTES = [
   '/',
   '/about',
@@ -91,34 +83,4 @@ export function isNonIndexableHost(hostname: string): boolean {
     || host.endsWith('.pages.dev')
     || host.endsWith('.workers.dev')
     || host.endsWith('.trycloudflare.com')
-}
-
-export function isPlatformSeoRequest(event: H3Event): boolean {
-  return event.context.tenantType === TENANT_TYPES.PLATFORM
-}
-
-export function isTenantSeoRequest(event: H3Event): boolean {
-  return event.context.tenantType === TENANT_TYPES.TENANT
-}
-
-export function getSeoOrigin(event: H3Event): string {
-  if (isTenantSeoRequest(event)) {
-    const canonicalDomain = String(event.context.canonicalDomain || '').trim()
-    if (canonicalDomain) return `https://${canonicalDomain}`
-  }
-
-  return getRequestURL(event).origin
-}
-
-export function absoluteSeoUrl(event: H3Event, path: string): string {
-  return new URL(path, `${getSeoOrigin(event)}/`).toString()
-}
-
-export function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
 }
