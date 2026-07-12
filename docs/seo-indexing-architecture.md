@@ -28,7 +28,7 @@ These hosts receive:
 
 - `X-Robots-Tag: noindex, nofollow, noarchive`;
 - `robots.txt` with `Disallow: /`;
-- an empty sitemap.
+- an empty sitemap because every sitemap source suppresses non-production hosts.
 
 The `public/_headers` rule remains a deployment-provider fallback for Pages previews. Runtime middleware is authoritative for Worker custom domains.
 
@@ -41,13 +41,13 @@ Route classifications live in `server/utils/seo-policy.ts`.
 - `TENANT_ONLY_EXACT_ROUTES` and `TENANT_ONLY_ROUTE_PREFIXES` define routes that must return 404 on the platform host.
 - `isNonIndexableHost()` defines deployment hosts that must never be indexed.
 
-The same classifications are consumed by runtime middleware, robots generation, sitemap generation, Nuxt route rules, and tests. Do not duplicate route lists in page components.
+The same classifications are consumed by runtime middleware, sitemap generation, route boundaries, and tests. Do not duplicate route lists in page components.
 
 ## Sitemap contract
 
-`server/routes/sitemap.xml.get.ts` is the authoritative sitemap endpoint.
+`@nuxtjs/sitemap` serves the canonical `/sitemap.xml` endpoint. Its configuration in `nuxt.config.ts` disables automatic `pages`, route-rule, and prerender sources. Only the six explicit `server/api/__sitemap__/` sources may publish URLs.
 
-It generates absolute URLs for the active host and queries only records that are:
+The sources return URLs for the active host and query only records that are:
 
 - published or active;
 - owned by the current tenant when applicable;
@@ -55,13 +55,15 @@ It generates absolute URLs for the active host and queries only records that are
 
 Platform documentation overview records use `/docs/{category}` rather than the duplicate `/docs/{category}/{category}` form.
 
-The legacy `@nuxtjs/sitemap` source endpoints remain host-scoped and canonical so module behavior is safe. `modules/00-seo-policy.ts` disables automatic page, route-rule, and prerender ingestion. New routes cannot enter a sitemap merely by adding a Vue file.
+Every source returns an empty result on non-production hosts. New routes cannot enter a sitemap merely by adding a Vue file.
 
 ## Robots and response headers
 
-`server/routes/robots.txt.get.ts` publishes crawler guidance. Robots exclusions conserve crawl activity but are not treated as an indexing control.
+`@nuxtjs/robots` publishes production crawler guidance from the explicit groups in `nuxt.config.ts`. Robots exclusions conserve crawl activity but are not treated as an indexing control.
 
-`server/middleware/seo-indexing.ts` is the indexing control. It applies `X-Robots-Tag` to every private route family and every non-production host, including responses that do not render a Vue page.
+On non-production hosts, `server/middleware/seo-indexing.ts` intercepts `/robots.txt` with `Disallow: /`.
+
+The same middleware is the indexing control. It applies `X-Robots-Tag` to every private route family and every non-production host, including responses that do not render a Vue page.
 
 Private routes also receive `Cache-Control: private, no-store, max-age=0`.
 
@@ -89,7 +91,7 @@ Confirmation, cancellation, invitation, password, OAuth, admin, dashboard, previ
 2. Add canonical, title, and description through `usePlatformPageSeo()`.
 3. Add the route to `PLATFORM_SITEMAP_ROUTES` only when it should appear in search results.
 4. Add or update regression tests.
-5. Do not add the route to a sitemap by changing Nuxt route discovery settings.
+5. Do not enable automatic Nuxt route discovery for the sitemap.
 
 ## Adding a tenant route
 
@@ -103,11 +105,11 @@ Confirmation, cancellation, invitation, password, OAuth, admin, dashboard, previ
 
 The unit suite verifies the static allowlist, private route classification, tenant-only boundaries, and non-production hosts.
 
-E2E and deployment checks should verify:
+The PR smoke suite verifies:
 
-- production `robots.txt` advertises the canonical sitemap;
-- production sitemap contains no private route families;
-- non-production hosts return global noindex controls;
+- production-style `robots.txt` advertises the canonical sitemap;
+- sitemaps contain no private route families;
+- non-production hosts return global noindex controls and an empty sitemap;
 - tenant pages emit tenant-origin canonicals and schema URLs;
 - tenant-only platform requests return 404;
 - `/billing` redirects permanently to `/pricing`.
