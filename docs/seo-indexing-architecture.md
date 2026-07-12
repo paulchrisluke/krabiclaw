@@ -1,0 +1,115 @@
+# SEO indexing architecture
+
+KrabiClaw serves the platform application and many tenant websites from one Nuxt deployment. The file-based route tree is therefore not an SEO inventory. A route existing under `pages/` does not make it eligible for crawling or indexing.
+
+This document defines the permanent indexing contract.
+
+## Host classes
+
+### Production platform
+
+`https://krabiclaw.com` and its canonical `www` redirect expose KrabiClaw marketing content, platform documentation, and platform blog content.
+
+The platform sitemap is an explicit allowlist plus published platform docs and blog records. Admin, dashboard, authentication, OAuth, billing workflow, setup, preview, developer, and tenant-only routes are excluded.
+
+### Production tenant
+
+A tenant is served from its configured canonical custom domain or canonical KrabiClaw subdomain. Alternate active domains are redirected to the canonical domain before rendering.
+
+The tenant sitemap contains only that site's public static routes and its published locations, menu items, blog posts, and experiences. It never contains KrabiClaw platform docs, pricing, templates, or application routes.
+
+Tenant canonical tags and breadcrumb/schema URLs resolve against the rendered request origin. Because noncanonical tenant domains redirect first, the request origin is the canonical origin.
+
+### Non-production hosts
+
+Preview, staging, `pages.dev`, `workers.dev`, `trycloudflare.com`, and the local tunnel host are globally non-indexable.
+
+These hosts receive:
+
+- `X-Robots-Tag: noindex, nofollow, noarchive`;
+- `robots.txt` with `Disallow: /`;
+- an empty sitemap.
+
+The `public/_headers` rule remains a deployment-provider fallback for Pages previews. Runtime middleware is authoritative for Worker custom domains.
+
+## Source of truth
+
+Route classifications live in `server/utils/seo-policy.ts`.
+
+- `PLATFORM_SITEMAP_ROUTES` is the platform static allowlist.
+- `PRIVATE_ROUTE_PREFIXES` and `PRIVATE_EXACT_ROUTES` define non-content application surfaces.
+- `TENANT_ONLY_EXACT_ROUTES` and `TENANT_ONLY_ROUTE_PREFIXES` define routes that must return 404 on the platform host.
+- `isNonIndexableHost()` defines deployment hosts that must never be indexed.
+
+The same classifications are consumed by runtime middleware, robots generation, sitemap generation, Nuxt route rules, and tests. Do not duplicate route lists in page components.
+
+## Sitemap contract
+
+`server/routes/sitemap.xml.get.ts` is the authoritative sitemap endpoint.
+
+It generates absolute URLs for the active host and queries only records that are:
+
+- published or active;
+- owned by the current tenant when applicable;
+- not marked with a robots value containing `noindex`.
+
+Platform documentation overview records use `/docs/{category}` rather than the duplicate `/docs/{category}/{category}` form.
+
+The legacy `@nuxtjs/sitemap` source endpoints remain host-scoped and canonical so module behavior is safe. `modules/00-seo-policy.ts` disables automatic page, route-rule, and prerender ingestion. New routes cannot enter a sitemap merely by adding a Vue file.
+
+## Robots and response headers
+
+`server/routes/robots.txt.get.ts` publishes crawler guidance. Robots exclusions conserve crawl activity but are not treated as an indexing control.
+
+`server/middleware/seo-indexing.ts` is the indexing control. It applies `X-Robots-Tag` to every private route family and every non-production host, including responses that do not render a Vue page.
+
+Private routes also receive `Cache-Control: private, no-store, max-age=0`.
+
+Individual page-level `robots` metadata may be retained for defense in depth, but it must not be the only protection for an application route family.
+
+## Canonicals
+
+Platform marketing pages use `usePlatformPageSeo()` and platform content pages use `usePlatformSeoUrl()`.
+
+Tenant pages receive a canonical link from `layouts/saya.vue`. The canonical strips query parameters by using `route.path` and resolves against the current request origin.
+
+Do not use `runtimeConfig.public.siteUrl` for tenant canonical, Open Graph, breadcrumb, or structured-data URLs. That value is the platform origin.
+
+## Route behavior
+
+Tenant-only routes return an intentional 404 on the platform host through `server/middleware/zz-seo-route-boundaries.ts`. They must never render generic `Our Site`, loading, or empty-state content on `krabiclaw.com`.
+
+`/billing` is a legacy duplicate and permanently redirects to `/pricing`.
+
+Confirmation, cancellation, invitation, password, OAuth, admin, dashboard, preview, and setup routes are never indexable even when directly accessible.
+
+## Adding a public platform route
+
+1. Build the page with server-rendered primary content.
+2. Add canonical, title, and description through `usePlatformPageSeo()`.
+3. Add the route to `PLATFORM_SITEMAP_ROUTES` only when it should appear in search results.
+4. Add or update regression tests.
+5. Do not add the route to a sitemap by changing Nuxt route discovery settings.
+
+## Adding a tenant route
+
+1. Ensure the route requires a resolved tenant/site.
+2. Add a canonical through the Saya layout; page-specific SEO should use `useSeoUrl()` or `useTenantOgImage()`.
+3. Add the platform-host route classification when the path is tenant-only.
+4. Add the route to tenant sitemap generation only when it has durable public search value and can avoid empty/thin output.
+5. Query and filter tenant-owned records explicitly.
+
+## Verification
+
+The unit suite verifies the static allowlist, private route classification, tenant-only boundaries, and non-production hosts.
+
+E2E and deployment checks should verify:
+
+- production `robots.txt` advertises the canonical sitemap;
+- production sitemap contains no private route families;
+- non-production hosts return global noindex controls;
+- tenant pages emit tenant-origin canonicals and schema URLs;
+- tenant-only platform requests return 404;
+- `/billing` redirects permanently to `/pricing`.
+
+When Search Console reports old URLs after deployment, validate the live response first. Historical “discovered” URLs can remain in reports after they have been removed from current discovery paths.
