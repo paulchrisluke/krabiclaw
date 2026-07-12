@@ -98,6 +98,8 @@ export const northcarolinalegalservices: ISeedTenant = {
     cta: 'Request a Consultation',
     ctaLink: '/schedule',
   },
+  secondaryServicesComp: { content: 'More services.' },
+  ctaComponent: { content: 'Get legal help.' },
   contactRowComponent: {
     cardsContent: ['    # Call us\\n\\n    Phone support.'],
   },
@@ -166,7 +168,7 @@ test("NCLS Blawby adapter normalizes source data into cutover artifacts", () => 
     payload.tenantPages.find(
       (page: { path: string }) => page.path === "/donate",
     )?.cta_url,
-    "https://donate.stripe.com/bIY29UfAUec37GocMM",
+    "https://app.blawby.com/northcarolinalegalservices/pay/donate",
   );
   assert.deepEqual(
     payload.tenantPages
