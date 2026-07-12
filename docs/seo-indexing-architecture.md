@@ -16,7 +16,7 @@ The platform sitemap is an explicit allowlist plus published platform docs and b
 
 A tenant is served from its configured canonical custom domain or canonical KrabiClaw subdomain. Alternate active domains are redirected to the canonical domain before rendering.
 
-The tenant sitemap contains only that site's public static routes and its published locations, menu items, blog posts, and experiences. It never contains KrabiClaw platform docs, pricing, templates, or application routes.
+The tenant sitemap contains only that site's public static routes and its published locations, menu items, blog posts, and experiences. Aggregate routes such as `/menu`, `/blog`, `/experiences`, `/locations`, `/reservations`, and `/order` are included only when the tenant has corresponding substantive content. It never contains KrabiClaw platform docs, pricing, templates, or application routes.
 
 `server/middleware/zy-site-config.ts` updates Nuxt Site Config for every request after tenant resolution. This gives `@nuxtjs/sitemap`, `@nuxtjs/robots`, and other Nuxt SEO modules the active tenant origin and brand rather than the global platform URL.
 
@@ -30,7 +30,7 @@ These hosts receive:
 
 - `X-Robots-Tag: noindex, nofollow, noarchive`;
 - `robots.txt` with `Disallow: /`;
-- an empty sitemap because every sitemap source suppresses non-production hosts;
+- an empty sitemap;
 - runtime Site Config with `indexable: false`.
 
 The `public/_headers` rule remains a deployment-provider fallback for Pages previews. Runtime middleware is authoritative for Worker custom domains.
@@ -43,14 +43,17 @@ Route classifications live in `server/utils/seo-policy.ts`.
 - `PRIVATE_ROUTE_PREFIXES` and `PRIVATE_EXACT_ROUTES` define non-content application surfaces.
 - `TENANT_ONLY_EXACT_ROUTES` and `TENANT_ONLY_ROUTE_PREFIXES` define routes that must return 404 on the platform host.
 - `isNonIndexableHost()` defines deployment hosts that must never be indexed.
+- `resolveRuntimeSeoSiteConfig()` defines the canonical Site Config for platform, tenant, and non-production requests.
 
 The same classifications are consumed by runtime middleware, sitemap generation, route boundaries, and tests. Do not duplicate route lists in page components.
 
 ## Sitemap contract
 
-`@nuxtjs/sitemap` serves the canonical `/sitemap.xml` endpoint. Its configuration in `nuxt.config.ts` disables automatic `pages`, route-rule, and prerender sources. Only the six explicit `server/api/__sitemap__/` sources may publish URLs.
+`@nuxtjs/sitemap` serves the canonical `/sitemap.xml` endpoint. Its configuration in `nuxt.config.ts` sets `excludeAppSources: true`, disabling every automatic page, route-rule, prerender, i18n, and content source.
 
-The sources return URLs for the active host and query only records that are:
+`server/plugins/sitemap.ts` owns the complete URL inventory through the module's `sitemap:input` Nitro hook. The hook runs on the original sitemap request event, preserving the resolved host, tenant context, and Cloudflare database bindings. Runtime endpoint sources are cleared in `sitemap:sources`; synthetic self-fetch endpoints are not used.
+
+The hook queries only records that are:
 
 - published or active;
 - owned by the current tenant when applicable;
@@ -60,7 +63,7 @@ Runtime Site Config supplies the canonical platform or tenant origin used to tur
 
 Platform documentation overview records use `/docs/{category}` rather than the duplicate `/docs/{category}/{category}` form.
 
-Every source returns an empty result on non-production hosts. New routes cannot enter a sitemap merely by adding a Vue file.
+Non-production requests clear the complete URL list. New routes cannot enter a sitemap merely by adding a Vue file.
 
 ## Robots and response headers
 
@@ -80,13 +83,13 @@ Platform marketing pages use `usePlatformPageSeo()` and platform content pages u
 
 Tenant pages receive a canonical link from `layouts/saya.vue`. The canonical strips query parameters by using `route.path` and resolves against the current request origin.
 
-Do not use `runtimeConfig.public.siteUrl` for tenant canonical, Open Graph, breadcrumb, or structured-data URLs. That value is the platform origin.
+Do not use `runtimeConfig.public.siteUrl` for tenant canonical, Open Graph, breadcrumb, structured-data, or sitemap URLs. That value is the platform origin.
 
 ## Route behavior
 
 Tenant-only routes return an intentional 404 on the platform host through `server/middleware/zz-seo-route-boundaries.ts`. They must never render generic `Our Site`, loading, or empty-state content on `krabiclaw.com`.
 
-`/billing` is a legacy duplicate and permanently redirects to `/pricing`.
+`/billing` is a legacy duplicate and permanently redirects to `/pricing`. It is intentionally crawlable so search engines can process the redirect, but it is never emitted in a sitemap.
 
 Confirmation, cancellation, invitation, password, OAuth, admin, dashboard, preview, and setup routes are never indexable even when directly accessible.
 
@@ -103,12 +106,12 @@ Confirmation, cancellation, invitation, password, OAuth, admin, dashboard, previ
 1. Ensure the route requires a resolved tenant/site.
 2. Add a canonical through the Saya layout; page-specific SEO should use `useSeoUrl()` or `useTenantOgImage()`.
 3. Add the platform-host route classification when the path is tenant-only.
-4. Add the route to tenant sitemap generation only when it has durable public search value and can avoid empty/thin output.
+4. Add the route to `server/plugins/sitemap.ts` only when it has durable public search value and can avoid empty/thin output.
 5. Query and filter tenant-owned records explicitly.
 
 ## Verification
 
-The unit suite verifies the static allowlist, private route classification, tenant-only boundaries, and non-production hosts.
+The unit suite verifies the static allowlist, private route classification, tenant-only boundaries, runtime Site Config, and non-production hosts.
 
 The PR smoke suite verifies:
 
