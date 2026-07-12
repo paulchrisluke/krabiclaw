@@ -260,7 +260,7 @@ const howToStepSchema = {
 export const blogComponentInputSchema = {
   type: 'object',
   properties: {
-    type: { type: 'string', enum: ['faq', 'how_to'] },
+    type: { type: 'string', enum: ['faq', 'how_to', 'ai_assistance'] },
     label: { type: ['string', 'null'] },
     status: { type: ['string', 'null'], enum: ['active', 'inactive', null] },
     render_enabled: { type: ['boolean', 'null'] },
@@ -326,6 +326,7 @@ export const blogPostObject = {
     body: { type: 'string' },
     excerpt: { type: ['string', 'null'] },
     category: { type: ['string', 'null'] },
+    tags: { type: 'array', items: { type: 'string' } },
     components: {
       type: 'array',
       items: blogComponentInputSchema,

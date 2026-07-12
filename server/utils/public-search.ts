@@ -96,6 +96,7 @@ interface TenantBlogDocRow {
   body: string
   excerpt: string | null
   category: string | null
+  tags_json: string | null
   seo_description: string | null
   seo_keywords: string | null
 }
@@ -358,17 +359,19 @@ async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000) {
 
 async function buildTenantBlogDocuments(db: DbClient): Promise<PlatformKnowledgeDocument[]> {
   const posts = await queryAll<TenantBlogDocRow>(db, `
-    SELECT id, site_id, title, slug, body, excerpt, category, seo_description, seo_keywords
+    SELECT id, site_id, title, slug, body, excerpt, category, tags_json, seo_description, seo_keywords
     FROM blog_posts
     WHERE status = 'published' AND site_id IS NOT NULL
     ORDER BY site_id, published_at DESC, updated_at DESC
   `)
 
   return (posts ?? []).map((post) => {
+    const tags = (() => { try { return JSON.parse(post.tags_json || '[]') as string[] } catch { return [] } })()
     const snippet = truncateSnippet(post.excerpt || post.seo_description || post.body || post.title)
     const body = [
       post.title,
       post.category ?? '',
+      tags.join(' '),
       post.seo_keywords ?? '',
       post.excerpt ?? '',
       stripMarkdown(post.body),

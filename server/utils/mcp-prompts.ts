@@ -1,4 +1,4 @@
-import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
+import { mcpProtocolError, MCP_ERROR } from "./mcp-protocol.ts";
 
 export interface McpPromptArgument {
   name: string;
@@ -13,6 +13,24 @@ export interface McpPromptDefinition {
 }
 
 export const MCP_PROMPTS: McpPromptDefinition[] = [
+  {
+    name: "draft_blog_post",
+    description: "Study this tenant's existing articles and draft a new SEO-ready blog post for approval without publishing.",
+    arguments: [
+      { name: "topic", description: "What the article should be about.", required: true },
+      { name: "target_keyword", description: "Primary search phrase, if any.", required: false },
+      { name: "reference_post_id", description: "Existing tenant post id or slug whose voice should be followed.", required: false },
+    ],
+  },
+  {
+    name: "update_and_publish_blog_post",
+    description: "Apply writer-approved content to an existing tenant blog post and publish it.",
+    arguments: [
+      { name: "identifier", description: "Post id or slug.", required: true },
+      { name: "body", description: "Final writer-approved Markdown body.", required: true },
+      { name: "notes", description: "Additional editorial instructions.", required: false },
+    ],
+  },
   {
     name: "onboard_new_site",
     description: "Set up a brand-new KrabiClaw site end-to-end from a Google Maps listing.",
@@ -91,6 +109,36 @@ function requireArg(args: Record<string, string>, name: string): string {
 
 export function renderMcpPrompt(name: string, args: Record<string, string>): { description: string; text: string } {
   switch (name) {
+    case "draft_blog_post": {
+      const topic = requireArg(args, "topic");
+      const keyword = args.target_keyword?.trim();
+      const reference = args.reference_post_id?.trim();
+      return {
+        description: `Draft a tenant blog post about: ${topic}`,
+        text: [
+          "Call get_workspace_context to confirm the tenant site, then call list_blog_posts with status published.",
+          reference
+            ? `Call get_blog_post with post_id "${reference}" and use its voice, terminology, structure, and SEO field usage as the primary reference.`
+            : "Call get_blog_post for the 1-2 most relevant published articles and infer the tenant's established voice and terminology; do not copy KrabiClaw platform voice or invent a generic brand voice.",
+          `Draft a complete Markdown article about "${topic}"${keyword ? ` targeting "${keyword}"` : ""}. Include category, a short deduplicated tags list, excerpt, seo_title, seo_description, seo_keywords, and robots. Use FAQ or How-To components only when the article genuinely supports them; category controls public filtering, nav_section controls sidebar grouping, and featured_order controls featured/home placement.`,
+          "Present the full body and computed fields for explicit approval. Do not create or publish yet. After approval, call create_blog_post without publish so the writer can review the returned admin_edit_url. Publish only when explicitly requested.",
+        ].join(" "),
+      };
+    }
+    case "update_and_publish_blog_post": {
+      const identifier = requireArg(args, "identifier");
+      const body = requireArg(args, "body");
+      const notes = args.notes?.trim();
+      return {
+        description: `Update and publish tenant blog post: ${identifier}`,
+        text: [
+          `Call update_blog_post with post_id "${identifier}" and this writer-approved body: ${body}`,
+          "Compute and send the SEO fields and justified structured components. Preserve category, navigation, tags, and components unless the approved content requires changing them.",
+          notes ? `Additional instructions: ${notes}` : "",
+          `Immediately after the update succeeds, call publish_blog_post with post_id "${identifier}". Report the changed fields, public_url, and admin_edit_url.`,
+        ].filter(Boolean).join(" "),
+      };
+    }
     case "onboard_new_site": {
       const mapsUrl = requireArg(args, "maps_url");
       return {
