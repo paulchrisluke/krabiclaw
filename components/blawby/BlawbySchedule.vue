@@ -9,7 +9,7 @@
           </h1>
           <p class="mt-6 text-lg leading-8 text-gray-300 sm:text-xl min-[1920px]:text-2xl">{{ scheduleHero?.description || page.summary }}</p>
           <p v-if="scheduleHero?.priceLine" class="mt-6 text-lg font-bold text-[var(--blawby-accent)] sm:text-xl min-[1920px]:text-2xl">{{ scheduleHero.priceLine }}</p>
-          <BlawbyButton :to="consultation.external_url || String(scheduleHero?.buttonUrl || consultation.schedule_path)" class="mt-10 w-full px-8 py-4 text-lg min-[1920px]:px-4 min-[1920px]:py-4 min-[1920px]:text-base min-[2560px]:px-5 min-[2560px]:py-5 min-[2560px]:text-lg" @click="trackConsultation('schedule_hero')">
+          <BlawbyButton :to="scheduleHeroDestination" class="mt-10 w-full px-8 py-4 text-lg min-[1920px]:px-4 min-[1920px]:py-4 min-[1920px]:text-base min-[2560px]:px-5 min-[2560px]:py-5 min-[2560px]:text-lg" @click="trackConsultation('schedule_hero', scheduleHeroDestination)">
             <svg class="-ml-0.5 mr-2 size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 2v4m8-4v4M3 10h18" /><rect x="3" y="4" width="18" height="18" rx="2" /></svg>
             {{ scheduleHero?.buttonText || consultation.cta_label }}
           </BlawbyButton>
@@ -50,9 +50,9 @@
       :price-line="optionalString(scheduleCta.priceLine)"
       :notice="optionalString(scheduleCta.notice)"
       :label="String(scheduleCta.buttonText || consultation.cta_label)"
-      :destination="consultation.external_url || String(scheduleCta.buttonUrl || consultation.schedule_path)"
+      :destination="scheduleCtaDestination"
       :background-url="assetUrl(scheduleCta.background)"
-      @click="trackConsultation('schedule_cta')"
+      @click="trackConsultation('schedule_cta', scheduleCtaDestination)"
     />
   </div>
 </template>
@@ -78,6 +78,7 @@ function assetUrl(value: unknown) {
 }
 
 const scheduleHero = computed(() => block('schedule_hero'))
+const scheduleHeroDestination = computed(() => consultation.value.external_url || String(scheduleHero.value?.buttonUrl || consultation.value.schedule_path))
 const scheduleTitle = computed(() => {
   const title = String(scheduleHero.value?.title || page.value.title)
   const accent = 'Legal Consultation'
@@ -95,6 +96,7 @@ const guidanceParagraphs = computed(() => guidanceContent.value
   .filter(paragraph => paragraph && !paragraph.startsWith('#')))
 const guidanceDecoration = computed(() => assetUrl(guidanceBlock.value?.decoration))
 const scheduleCta = computed(() => block('schedule_cta'))
+const scheduleCtaDestination = computed(() => consultation.value.external_url || String(scheduleCta.value?.buttonUrl || consultation.value.schedule_path))
 const qaBlock = computed(() => block('schedule_qa'))
 const guidanceSections = computed(() => guidanceBlock.value ? [
   { title: String(guidanceBlock.value.prepTitle || ''), items: arrayStrings(guidanceBlock.value.prepItems), text: '' },
@@ -111,8 +113,8 @@ function arrayStrings(value: unknown) {
 }
 
 const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
-function trackConsultation(pageType: string) {
-  trackConsultationClick(pageType, '/schedule', consultation.value.external_url || consultation.value.schedule_path)
+function trackConsultation(pageType: string, destination: string) {
+  trackConsultationClick(pageType, '/schedule', destination)
 }
 
 useSeoMeta({

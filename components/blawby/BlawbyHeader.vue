@@ -77,6 +77,7 @@
                 :key="item.id"
                 :to="item.url"
                 class="block w-full p-2 no-underline"
+                :tabindex="mobileOpen ? undefined : -1"
                 @click="closeMobileNav"
               >
                 {{ item.label }}
@@ -118,10 +119,7 @@ const headerItems = computed(() => {
     { id: 'donate', area: 'header', label: 'Donate', url: '/donate', item_type: 'internal', sort_order: 60, metadata: {} },
   ] as PublicNavigationItem[]
 })
-const mobileItems = computed(() => {
-  const order = ['Services', 'Pricing', 'About', 'Donate', 'Contact', 'Blog']
-  return [...headerItems.value].sort((left, right) => order.indexOf(left.label) - order.indexOf(right.label))
-})
+const mobileItems = headerItems
 
 function trackConsultation() {
   trackConsultationClick('header', route.path, props.consultation.schedule_path)

@@ -32,12 +32,25 @@ export function useTenantBlogNav<T extends TenantBlogNavPost>(posts: Ref<T[]> | 
     const groups = new Map<string, TenantBlogNavGroup<T>>()
     for (const post of posts.value) {
       const category = post.category?.trim() || 'Uncategorized'
-      const categorySlug = slugifyCategory(category)
-      const group = groups.get(categorySlug) ?? { category, categorySlug, posts: [] }
+      const group = groups.get(category) ?? { category, categorySlug: '', posts: [] }
       group.posts.push(post)
-      groups.set(categorySlug, group)
+      groups.set(category, group)
     }
-    return [...groups.values()].sort((a, b) => a.category.localeCompare(b.category))
+
+    const usedSlugs = new Set<string>()
+    return [...groups.values()]
+      .sort((a, b) => a.category.localeCompare(b.category))
+      .map((group) => {
+        const baseSlug = slugifyCategory(group.category)
+        let categorySlug = baseSlug
+        let suffix = 2
+        while (usedSlugs.has(categorySlug)) {
+          categorySlug = `${baseSlug}-${suffix}`
+          suffix += 1
+        }
+        usedSlugs.add(categorySlug)
+        return { ...group, categorySlug }
+      })
   })
 
   return { categories }

@@ -52,9 +52,13 @@ useHead(() => ({
     url: canonicalUrl.value,
     mainEntity: {
       '@type': 'ItemList',
-      itemListElement: routeData.value.posts.map((post, index) => ({
-        '@type': 'ListItem', position: index + 1, name: post.title, url: new URL(post.canonical_url, canonicalUrl.value).toString(),
-      })),
+      itemListElement: routeData.value.posts.flatMap((post, index) => {
+        try {
+          return [{ '@type': 'ListItem', position: index + 1, name: post.title, url: new URL(post.canonical_url, canonicalUrl.value).toString() }]
+        } catch {
+          return []
+        }
+      }),
     },
   }) }],
 }))

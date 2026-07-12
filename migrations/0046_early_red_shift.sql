@@ -15,7 +15,7 @@ CREATE TABLE `__new_site_conversion_events` (
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "site_conversion_events_name_check" CHECK(event_name GLOB '[a-z][a-z0-9_]*' AND length(event_name) <= 64)
+	CONSTRAINT "site_conversion_events_name_check" CHECK((event_name GLOB '[a-z]' OR event_name GLOB '[a-z][a-z0-9_]*') AND length(event_name) <= 64)
 );
 --> statement-breakpoint
 INSERT INTO `__new_site_conversion_events`("id", "organization_id", "site_id", "event_name", "page_type", "page_path", "page_location", "cta_destination", "tenant", "metadata_json", "ip_hash", "user_agent", "created_at") SELECT "id", "organization_id", "site_id", "event_name", "page_type", "page_path", "page_location", "cta_destination", "tenant", "metadata_json", "ip_hash", "user_agent", "created_at" FROM `site_conversion_events`;--> statement-breakpoint

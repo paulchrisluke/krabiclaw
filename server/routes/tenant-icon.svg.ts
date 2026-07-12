@@ -1,4 +1,5 @@
 import { setHeader, sendRedirect } from 'h3'
+import { sanitizeUrl } from '~/utils/sanitize'
 
 function escapeXml(value: string): string {
   return value
@@ -11,8 +12,8 @@ function escapeXml(value: string): string {
 
 export default defineEventHandler((event) => {
   const site = event.context.site as { favicon_url?: string | null; logo_url?: string | null; brand_name?: string | null } | undefined
-  const faviconUrl = site?.favicon_url?.trim()
-  const logoUrl = site?.logo_url?.trim()
+  const faviconUrl = sanitizeUrl(site?.favicon_url)
+  const logoUrl = sanitizeUrl(site?.logo_url)
 
   if (faviconUrl) {
     return sendRedirect(event, faviconUrl, 302)

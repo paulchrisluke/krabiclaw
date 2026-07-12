@@ -20,7 +20,7 @@
           </div>
           <div class="w-full lg:w-2/5">
             <div class="mt-10 flex justify-start gap-x-6 min-[1920px]:mt-16 min-[2560px]:mt-20">
-              <BlawbyButton :to="heroDestination" class="gap-2" @click="trackConsultation('hero')">
+              <BlawbyButton :to="heroDestination" class="gap-2" @click="trackConsultation('hero', heroDestination)">
                 <svg class="size-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 4.5h9A4.5 4.5 0 0 1 21 9v3a4.5 4.5 0 0 1-4.5 4.5h-4.86L7.2 20.2a.75.75 0 0 1-1.2-.6v-3.35A4.5 4.5 0 0 1 3 12V9a4.5 4.5 0 0 1 4.5-4.5Z" /></svg>
                 {{ hero.label || consultation.cta_label }}
               </BlawbyButton>
@@ -72,7 +72,7 @@
       :destination="String(ctaBlock.url || consultation.schedule_path)"
       :background-url="assetUrl(ctaBlock.background)"
       :featured-url="assetUrl(ctaBlock.featured)"
-      @click="trackConsultation('cta_section')"
+      @click="trackConsultation('cta_section', String(ctaBlock.url || consultation.schedule_path))"
     />
   </div>
 </template>
@@ -126,8 +126,8 @@ const videoImages = computed(() => Array.isArray(videoFeature.value?.images)
 const reviewsDescription = computed(() => String(reviewsBlock.value?.description || ''))
 
 const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
-function trackConsultation(pageType: string) {
-  trackConsultationClick(pageType, '/', heroDestination.value)
+function trackConsultation(pageType: string, destination: string) {
+  trackConsultationClick(pageType, '/', destination)
 }
 
 useSeoMeta({

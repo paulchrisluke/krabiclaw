@@ -188,8 +188,10 @@ function buildSearchFilters(surface: PlatformKnowledgeSurface, type?: PublicSear
   // tenant_blog is one shared corpus across every tenant site — the surface
   // filter alone isn't enough, results must also be pinned to one site_id or
   // every tenant's posts would be searchable from every other tenant's blog.
-  if (surface === 'tenant_blog' && siteId) {
-    clauses.push({ site_id: { $eq: siteId } })
+  // A missing siteId must exclude every tenant_blog document, not just skip
+  // the predicate, or an unscoped request would search the entire corpus.
+  if (surface === 'tenant_blog') {
+    clauses.push({ site_id: { $eq: siteId || '__no_site__' } })
   }
 
   return (clauses.length === 1 ? clauses[0] : { $and: clauses }) as unknown as VectorizeVectorMetadataFilter

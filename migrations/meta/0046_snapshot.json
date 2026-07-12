@@ -12776,7 +12776,7 @@
       "checkConstraints": {
         "site_conversion_events_name_check": {
           "name": "site_conversion_events_name_check",
-          "value": "event_name GLOB '[a-z][a-z0-9_]*' AND length(event_name) <= 64"
+          "value": "(event_name GLOB '[a-z]' OR event_name GLOB '[a-z][a-z0-9_]*') AND length(event_name) <= 64"
         }
       }
     },
