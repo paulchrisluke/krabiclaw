@@ -275,14 +275,43 @@ export default defineNuxtConfig({
     },
   },
 
-  // Robots.txt configuration
+  // Crawler guidance. Runtime X-Robots-Tag middleware remains the authoritative
+  // indexing control for private routes and non-production hosts.
   robots: {
-    allow: ['/'],
-    disallow: ['/dashboard', '/api/**'],
+    groups: [
+      {
+        userAgent: ['*'],
+        allow: ['/'],
+        disallow: [
+          '/admin',
+          '/api',
+          '/auth',
+          '/dashboard',
+          '/dev',
+          '/oauth',
+          '/preview',
+          '/transfer',
+          '/accept-invitation',
+          '/billing',
+          '/contact/confirmed',
+          '/experiences/confirmed',
+          '/forgot-password',
+          '/login',
+          '/reservations/cancel',
+          '/reservations/confirmed',
+          '/reset-password',
+          '/signup',
+          '/tenant-404',
+          '/tenant-setup-incomplete',
+          '/tenant-setup-pending',
+        ],
+      },
+    ],
     sitemap: '/sitemap.xml',
   },
 
-  // Sitemap configuration
+  // The shared pages tree is not an SEO inventory. Only host-scoped custom
+  // sources may publish URLs; adding a page file cannot add it to a sitemap.
   sitemap: {
     sources: [
       '/api/__sitemap__/docs',
@@ -292,13 +321,10 @@ export default defineNuxtConfig({
       '/api/__sitemap__/menu-items',
       '/api/__sitemap__/experiences',
     ],
-    // Static tenant routes are managed by the /pages source above which gates
-    // /reservations on vertical. Disable auto-discovery of app routes for tenant
-    // hosts to avoid /reservations appearing via crawl for experience sites.
+    excludeAppSources: ['pages', 'route-rules', 'prerender'],
     autoLastmod: true,
   },
 
-  
   // Components configuration
   components: [
     {
