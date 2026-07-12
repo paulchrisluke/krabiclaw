@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
       setResponseHeader(event, 'x-robots-tag', 'noindex, nofollow')
     }
     if (tenantRedirect.behavior === 'redirect') {
-      if (!tenantRedirect.toPath || !/^\/(?!\/)/.test(tenantRedirect.toPath)) {
+      if (!tenantRedirect.toPath || !/^\/(?![/\\])/.test(tenantRedirect.toPath)) {
         throw createError({ statusCode: 500, statusMessage: 'Invalid tenant redirect target' })
       }
       const statusCode = [301, 302, 307, 308].includes(tenantRedirect.statusCode ?? 0)

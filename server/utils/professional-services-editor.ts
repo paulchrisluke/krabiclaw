@@ -26,6 +26,16 @@ function safeStoredUrl(value: unknown, maxLength: number) {
   return sanitizeUrl(cleanString(value, maxLength)) || null
 }
 
+// Unlike safeStoredUrl (which allows absolute http/https/mailto/tel URLs for
+// external links like cta_url), these columns are constrained by a DB CHECK
+// to site-relative paths (e.g. `schedule_path LIKE '/%'`) — accepting an
+// absolute URL here would pass sanitizeUrl but then fail the CHECK with a
+// raw D1 error instead of a clean validation message.
+function safeStoredPath(value: unknown, maxLength: number) {
+  const cleaned = cleanString(value, maxLength)
+  return cleaned && cleaned.startsWith('/') && !cleaned.startsWith('//') ? cleaned : null
+}
+
 function recordArray(value: unknown): ApiRecord[] {
   return Array.isArray(value) ? value.filter((item): item is ApiRecord => typeof item === 'object' && item !== null) : []
 }
@@ -48,9 +58,15 @@ const BLAWBY_THEME_COLOR_KEYS = new Set([
 ])
 
 function looksLikeExecutableCalculatorSyntax(value: string) {
+  // Deliberately narrow: this runs against every string in a calculator
+  // component, including free-text disclaimers/footnotes/citations that
+  // routinely contain semicolons, braces, or the word "return" (e.g. legal
+  // prose like "Rates set by the board; effective July 2026"). A blanket
+  // `[{};]|\breturn\b` match rejects that legitimate content, so only match
+  // actual code shapes (arrow functions, function/eval/Function calls,
+  // javascript: URIs, or a bare `identifier(...)` call expression).
   return (
-    /=>|\bfunction\b|\bnew Function\b|\bjavascript:/i.test(value) ||
-    /\breturn\b|[{};]/.test(value) ||
+    /=>|\bfunction\s*\(|\bnew Function\b|\beval\s*\(|\bjavascript:/i.test(value) ||
     /^\s*[A-Za-z_$][\w$]*\s*\([^)]*\)\s*$/.test(value)
   )
 }
@@ -204,7 +220,7 @@ export async function upsertProfessionalServiceContent(
         cleanString(item.schema_type, 120) || 'Service',
         cleanString(item.seo_title, 200) || null,
         cleanString(item.seo_description, 500) || null,
-        cleanString(item.canonical_path, 300) || `/services/${slug}`,
+        safeStoredPath(item.canonical_path, 300) || `/services/${slug}`,
         cleanString(item.status, 30) || 'published',
         Number(item.sort_order ?? 0),
         item.featured ? 1 : 0,
@@ -326,8 +342,8 @@ export async function upsertProfessionalServiceContent(
         mode,
         cleanString(item.cta_label, 120) || 'Book a consultation',
         externalUrl,
-        safeStoredUrl(item.schedule_path, 300) || '/schedule',
-        safeStoredUrl(item.confirmation_path, 300) || '/contact/confirmed',
+        safeStoredPath(item.schedule_path, 300) || '/schedule',
+        safeStoredPath(item.confirmation_path, 300) || '/contact/confirmed',
         item.tracking_enabled === false ? 0 : 1,
         json(typeof item.metadata === 'object' ? item.metadata : {}),
         updatedBy,
