@@ -1,8 +1,8 @@
 {
   "approved": true,
   "approved_by": "paulchrisluke",
-  "approved_at": "2026-07-12T03:31:20.555Z",
-  "manifest_hash": "b5870979631df9e3362083dd9654cd6e9e664e44f8f62ea61bdbe12f0a307689",
+  "approved_at": "2026-07-12T03:40:45.870Z",
+  "manifest_hash": "2405b70d87939b389771e001093551a8e6ce11c414307aa63d5c4032331a9e7c",
   "source_commit": "5908ab3e64f26f799de61ed55371d02f9ec7bc2f",
   "slug": "north-carolina-legal-services",
   "vertical": "service",

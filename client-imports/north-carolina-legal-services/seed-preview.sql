@@ -13,7 +13,7 @@ DELETE FROM site_domains WHERE domain IN ('ncls.localhost', 'ncls.krabiclaw.com'
 DELETE FROM user WHERE id = 'user-ncls-blawby';
 
 INSERT INTO user (id, name, email, emailVerified, image, role, createdAt, updatedAt)
-VALUES ('user-ncls-blawby', 'Rich Gittings', 'ncls-blawby@example.test', 1, 'https://images.krabiclaw.com/sites/site-ncls-blawby/media/images/rich-gittings-author.webp', 'admin', unixepoch(), unixepoch());
+VALUES ('user-ncls-blawby', 'Rich Gittings', 'ncls-blawby@example.test', 1, 'https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/c5293ac64f48747e7b4b.webp', 'admin', unixepoch(), unixepoch());
 
 INSERT INTO organization (id, name, slug, createdAt)
 VALUES ('org-ncls-blawby', 'North Carolina Legal Services', 'north-carolina-legal-services', unixepoch());
