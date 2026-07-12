@@ -1,33 +1,15 @@
 import { defineEventHandler, getRequestURL } from 'h3'
 import { updateSiteConfig } from '#site-config/server/composables'
-import { isNonIndexableHost } from '~/server/utils/seo-policy'
-import { TENANT_TYPES } from '~/utils/tenant-routing'
+import { resolveRuntimeSeoSiteConfig } from '~/server/utils/seo-policy'
 
 export default defineEventHandler((event) => {
   const requestURL = getRequestURL(event)
-  const indexable = !isNonIndexableHost(requestURL.hostname)
-
-  if (event.context.tenantType === TENANT_TYPES.TENANT) {
-    const tenantName = String(event.context.site?.brand_name || '').trim()
-    updateSiteConfig(event, {
-      url: requestURL.origin,
-      indexable,
-      ...(tenantName ? { name: tenantName } : {}),
-    })
-    return
-  }
-
-  if (event.context.tenantType === TENANT_TYPES.PLATFORM) {
-    updateSiteConfig(event, {
-      name: 'KrabiClaw',
-      url: indexable ? 'https://krabiclaw.com' : requestURL.origin,
-      indexable,
-    })
-    return
-  }
-
-  updateSiteConfig(event, {
-    url: requestURL.origin,
-    indexable: false,
+  const siteConfig = resolveRuntimeSeoSiteConfig({
+    tenantType: event.context.tenantType,
+    origin: requestURL.origin,
+    hostname: requestURL.hostname,
+    tenantName: event.context.site?.brand_name,
   })
+
+  updateSiteConfig(event, siteConfig)
 })
