@@ -43,6 +43,13 @@ function loadGtmOnInteraction(containerId: string) {
   if (window.__blawbyGtmLoaded[containerId]) return
   window.__blawbyGtmLoaded[containerId] = true
   window.dataLayer = window.dataLayer || []
+  // This only ever runs when pushAnalyticsBridge's caller has already
+  // confirmed consent is accepted, so the container can be told signals are
+  // granted from the moment it initializes (Consent Mode v2) — no separate
+  // "default denied" phase is needed here the way Saya's always-loaded
+  // gtag.js needs one, since Blawby's GTM script is never even requested
+  // until consent is already accepted.
+  window.dataLayer.push(['consent', 'default', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted', analytics_storage: 'granted' }])
   window.dataLayer.push({ 'gtm.start': Date.now(), event: 'gtm.js' })
   const script = document.createElement('script')
   script.async = true

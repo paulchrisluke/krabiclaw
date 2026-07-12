@@ -10,7 +10,7 @@
       :compliance="compliance"
       :offering-links="offeringLinks"
     />
-    <ConsentBanner privacy-path="/policies/privacy" />
+    <ConsentBanner variant="blawby" privacy-path="/policies/privacy" />
   </div>
 </template>
 

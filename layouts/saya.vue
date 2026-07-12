@@ -42,7 +42,9 @@ if (import.meta.dev) useDebugLCP()
 // cache-key coincidence to dedupe.
 const { config, locations, menu, hasExperiences, locales, error: bootstrapError } = useBootstrap()
 const { siteId, isTenant, isPlatform, site } = useTenantSite()
-const { consent } = useCookieConsent()
+// Called for its side effect: pushes the Consent Mode v2 default signal
+// before the gtag.js script tag below can execute.
+useCookieConsent()
 
 // The full bootstrap payload above is intentionally `lazy: true` (see
 // useBootstrap.ts) so SSR doesn't block the whole page on it. But that means
@@ -131,7 +133,10 @@ useHead(() => {
       content: googleSiteVerification.value
     })
   }
-  if (validGoogleAnalyticsId.value && consent.value === 'accepted') {
+  if (validGoogleAnalyticsId.value) {
+    // Always load gtag.js once a valid ID exists — Consent Mode v2 (pushed by
+    // useCookieConsent) tells it whether storage/ads signals are actually
+    // granted, rather than withholding the script entirely.
     const id = validGoogleAnalyticsId.value
     script.push({
       src: `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`,
