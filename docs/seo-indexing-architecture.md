@@ -61,6 +61,8 @@ The hook queries only records that are:
 
 Runtime Site Config supplies the canonical platform or tenant origin used to turn relative entries into absolute sitemap URLs.
 
+Runtime sitemap caching is disabled because every hostname uses the same `/sitemap.xml` path. This prevents any server-side or shared-cache key from reusing one tenant's URL inventory for another host.
+
 Platform documentation overview records use `/docs/{category}` rather than the duplicate `/docs/{category}/{category}` form.
 
 Non-production requests clear the complete URL list. New routes cannot enter a sitemap merely by adding a Vue file.
