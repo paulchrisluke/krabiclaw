@@ -18,6 +18,8 @@ A tenant is served from its configured canonical custom domain or canonical Krab
 
 The tenant sitemap contains only that site's public static routes and its published locations, menu items, blog posts, and experiences. It never contains KrabiClaw platform docs, pricing, templates, or application routes.
 
+`server/middleware/zy-site-config.ts` updates Nuxt Site Config for every request after tenant resolution. This gives `@nuxtjs/sitemap`, `@nuxtjs/robots`, and other Nuxt SEO modules the active tenant origin and brand rather than the global platform URL.
+
 Tenant canonical tags and breadcrumb/schema URLs resolve against the rendered request origin. Because noncanonical tenant domains redirect first, the request origin is the canonical origin.
 
 ### Non-production hosts
@@ -28,7 +30,8 @@ These hosts receive:
 
 - `X-Robots-Tag: noindex, nofollow, noarchive`;
 - `robots.txt` with `Disallow: /`;
-- an empty sitemap because every sitemap source suppresses non-production hosts.
+- an empty sitemap because every sitemap source suppresses non-production hosts;
+- runtime Site Config with `indexable: false`.
 
 The `public/_headers` rule remains a deployment-provider fallback for Pages previews. Runtime middleware is authoritative for Worker custom domains.
 
@@ -52,6 +55,8 @@ The sources return URLs for the active host and query only records that are:
 - published or active;
 - owned by the current tenant when applicable;
 - not marked with a robots value containing `noindex`.
+
+Runtime Site Config supplies the canonical platform or tenant origin used to turn relative entries into absolute sitemap URLs.
 
 Platform documentation overview records use `/docs/{category}` rather than the duplicate `/docs/{category}/{category}` form.
 
