@@ -30,6 +30,9 @@ test('platform sitemap allowlist contains only intentional public content routes
     assert.equal(isPrivateSeoPath(route), false, `${route} must not be private`)
     assert.equal(isTenantOnlySeoPath(route), false, `${route} must not be tenant-only`)
   }
+
+  assert.equal(PLATFORM_SITEMAP_ROUTES.includes('/billing' as never), false)
+  assert.equal(isPrivateSeoPath('/billing'), false, 'billing must remain crawlable so Google can process its 301')
 })
 
 test('private application route families are never sitemap candidates', () => {
@@ -41,7 +44,6 @@ test('private application route families are never sitemap candidates', () => {
     '/dev/notifications',
     '/oauth/consent',
     '/preview/site/example',
-    '/billing',
     '/forgot-password',
     '/login',
     '/reservations/cancel',
