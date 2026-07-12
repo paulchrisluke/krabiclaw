@@ -18,7 +18,7 @@ A tenant is served from its configured canonical custom domain or canonical Krab
 
 The tenant sitemap contains only that site's public static routes and its published locations, menu items, blog posts, and experiences. Aggregate routes such as `/menu`, `/blog`, `/experiences`, `/locations`, `/reservations`, and `/order` are included only when the tenant has corresponding substantive content. It never contains KrabiClaw platform docs, pricing, templates, or application routes.
 
-`server/middleware/zy-site-config.ts` updates Nuxt Site Config for every request after tenant resolution. This gives `@nuxtjs/sitemap`, `@nuxtjs/robots`, and other Nuxt SEO modules the active tenant origin and brand rather than the global platform URL.
+`server/middleware/zy-site-config.ts` updates Nuxt Site Config only for `/sitemap.xml` and `/robots.txt`, after tenant resolution. This gives the Nuxt SEO modules the active tenant origin and brand without touching page or API request state.
 
 Tenant canonical tags and breadcrumb/schema URLs resolve against the rendered request origin. Because noncanonical tenant domains redirect first, the request origin is the canonical origin.
 
@@ -31,7 +31,7 @@ These hosts receive:
 - `X-Robots-Tag: noindex, nofollow, noarchive`;
 - `robots.txt` with `Disallow: /`;
 - an empty sitemap;
-- runtime Site Config with `indexable: false`.
+- runtime Site Config with `indexable: false` on the SEO endpoints.
 
 The `public/_headers` rule remains a deployment-provider fallback for Pages previews. Runtime middleware is authoritative for Worker custom domains.
 
@@ -43,7 +43,7 @@ Route classifications live in `server/utils/seo-policy.ts`.
 - `PRIVATE_ROUTE_PREFIXES` and `PRIVATE_EXACT_ROUTES` define non-content application surfaces.
 - `TENANT_ONLY_EXACT_ROUTES` and `TENANT_ONLY_ROUTE_PREFIXES` define routes that must return 404 on the platform host.
 - `isNonIndexableHost()` defines deployment hosts that must never be indexed.
-- `resolveRuntimeSeoSiteConfig()` defines the canonical Site Config for platform, tenant, and non-production requests.
+- `resolveRuntimeSeoSiteConfig()` defines the canonical Site Config for platform, tenant, and non-production SEO endpoint requests.
 
 The same classifications are consumed by runtime middleware, sitemap generation, route boundaries, and tests. Do not duplicate route lists in page components.
 
@@ -69,7 +69,7 @@ Non-production requests clear the complete URL list. New routes cannot enter a s
 
 ## Robots and response headers
 
-`@nuxtjs/robots` publishes crawler guidance from the explicit groups in `nuxt.config.ts`. Runtime Site Config sets `indexable: false` on non-production hosts, causing the module to publish `Disallow: /` there. Robots exclusions conserve crawl activity but are not treated as an indexing control.
+`@nuxtjs/robots` publishes crawler guidance from the explicit groups in `nuxt.config.ts`. Runtime Site Config sets `indexable: false` on non-production `/robots.txt` requests, causing the module to publish `Disallow: /` there. Robots exclusions conserve crawl activity but are not treated as an indexing control.
 
 `server/middleware/seo-indexing.ts` is the indexing control. It applies `X-Robots-Tag` to every private route family and every non-production host, including responses that do not render a Vue page.
 
