@@ -27,7 +27,6 @@ export const PRIVATE_ROUTE_PREFIXES = [
 
 export const PRIVATE_EXACT_ROUTES = new Set([
   '/accept-invitation',
-  '/billing',
   '/contact/confirmed',
   '/experiences/confirmed',
   '/forgot-password',
