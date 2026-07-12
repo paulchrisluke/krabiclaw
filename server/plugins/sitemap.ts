@@ -1,3 +1,4 @@
+import type { SitemapUrlInput } from '#sitemap/types'
 import { getRequestURL } from 'h3'
 import { defineNitroPlugin } from 'nitropack/runtime'
 import { queryAll, queryFirst } from '~/server/db'
@@ -9,10 +10,10 @@ import { TENANT_TYPES } from '~/utils/tenant-routing'
 
 interface SitemapEntry {
   loc: string
-  lastmod?: string | null
+  lastmod?: string
 }
 
-function addUniqueEntries(target: Array<string | SitemapEntry>, entries: SitemapEntry[]) {
+function addUniqueEntries(target: SitemapUrlInput[], entries: SitemapEntry[]) {
   const existing = new Set(target.map(entry => typeof entry === 'string' ? entry : entry.loc))
   for (const entry of entries) {
     if (!entry.loc || existing.has(entry.loc)) continue
@@ -89,7 +90,7 @@ export default defineNitroPlugin((nitroApp) => {
       }
 
       ctx.urls.length = 0
-      addUniqueEntries(ctx.urls as Array<string | SitemapEntry>, entries)
+      addUniqueEntries(ctx.urls, entries)
       return
     }
 
@@ -183,6 +184,6 @@ export default defineNitroPlugin((nitroApp) => {
     )
 
     ctx.urls.length = 0
-    addUniqueEntries(ctx.urls as Array<string | SitemapEntry>, entries)
+    addUniqueEntries(ctx.urls, entries)
   })
 })
