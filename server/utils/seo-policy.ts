@@ -1,3 +1,5 @@
+import { TENANT_TYPES, type TenantType } from '../../utils/tenant-routing.ts'
+
 export const PLATFORM_SITEMAP_ROUTES = [
   '/',
   '/about',
@@ -65,6 +67,12 @@ export const TENANT_ONLY_ROUTE_PREFIXES = [
   '/reviews/',
 ] as const
 
+export interface RuntimeSeoSiteConfig {
+  url: string
+  indexable: boolean
+  name?: string
+}
+
 export function isPrivateSeoPath(pathname: string): boolean {
   if (PRIVATE_EXACT_ROUTES.has(pathname)) return true
   return PRIVATE_ROUTE_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))
@@ -83,4 +91,35 @@ export function isNonIndexableHost(hostname: string): boolean {
     || host.endsWith('.pages.dev')
     || host.endsWith('.workers.dev')
     || host.endsWith('.trycloudflare.com')
+}
+
+export function resolveRuntimeSeoSiteConfig(input: {
+  tenantType?: TenantType | null
+  origin: string
+  hostname: string
+  tenantName?: string | null
+}): RuntimeSeoSiteConfig {
+  const indexable = !isNonIndexableHost(input.hostname)
+
+  if (input.tenantType === TENANT_TYPES.TENANT) {
+    const name = String(input.tenantName || '').trim()
+    return {
+      url: input.origin,
+      indexable,
+      ...(name ? { name } : {}),
+    }
+  }
+
+  if (input.tenantType === TENANT_TYPES.PLATFORM) {
+    return {
+      name: 'KrabiClaw',
+      url: indexable ? 'https://krabiclaw.com' : input.origin,
+      indexable,
+    }
+  }
+
+  return {
+    url: input.origin,
+    indexable: false,
+  }
 }
