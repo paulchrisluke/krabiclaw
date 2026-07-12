@@ -11,8 +11,9 @@ import { execWithRetry } from './wrangler-retry.ts'
 //
 // 1. Throwaway sites/orgs created via tests/e2e/helpers/ensure-site.ts, mcp.spec.ts's MCP-tool
 //    variant, or a direct POST /api/sites - every convention in use (e2e-site-*, e2e-throwaway-*,
-//    e2e-dashboard-pages-*, mcp-e2e-*) contains 'e2e-' as a substring, so one LIKE pattern covers
-//    all of them. sites.organization_id cascades from organization (ON DELETE CASCADE), and every
+//    e2e-dashboard-pages-*, mcp-e2e-*) starts with either 'e2e-' or 'mcp-e2e-', so two literal-
+//    prefix LIKE patterns (index-eligible, unlike a leading-wildcard '%e2e-%' scan) cover all of
+//    them. sites.organization_id cascades from organization (ON DELETE CASCADE), and every
 //    org-scoped table cascades from organization in turn (same pattern already relied on by
 //    generate-demo-seed.ts's org reset), so deleting the organization row is sufficient for most
 //    child tables - except notification_events, whose organization_id/site_id columns are
@@ -62,12 +63,18 @@ if (Number.isNaN(cutoffDate.getTime())) {
 const cutoff = cutoffDate.toISOString()
 
 // An org is eligible only when every site it owns matches the throwaway-E2E pattern - an org
-// that also holds a fresh or non-E2E site must survive.
+// that also holds a fresh or non-E2E site must survive. Single linear pass over sites, grouped
+// by organization_id, flagging whether any owned site fails the eligibility test - not a
+// per-organization correlated subquery (that re-scanned all of sites once per org and blew D1's
+// CPU budget against preview's actual backlog). Both subdomain prefixes are literal-anchored
+// (no leading wildcard) so they can use the index backing sites.subdomain's UNIQUE constraint.
 const eligibleOrgIds = `
-  SELECT s.organization_id FROM sites s
-  WHERE s.subdomain LIKE '%e2e-%' AND s.created_at < '${cutoff}'
-  GROUP BY s.organization_id
-  HAVING COUNT(*) = (SELECT COUNT(*) FROM sites s2 WHERE s2.organization_id = s.organization_id)
+  SELECT organization_id FROM sites
+  GROUP BY organization_id
+  HAVING SUM(CASE
+    WHEN NOT ((subdomain LIKE 'e2e-%' OR subdomain LIKE 'mcp-e2e-%') AND created_at < '${cutoff}')
+    THEN 1 ELSE 0
+  END) = 0
 `
 
 const sql = `-- Sweeps E2E-generated rows from preview/staging so they don't accumulate forever.
