@@ -153,8 +153,21 @@ test('only directly collected review-request feedback is marked verified', async
 })
 
 test('migration preserves old review rows while adding provenance defaults', () => {
-  const sql = readFileSync('migrations/0042_fixed_master_chief.sql', 'utf8')
-  assert.match(sql, /SELECT "id"[\s\S]+"source", NULL, NULL, NULL, NULL, 0, "ip_hash"/)
+  // Was migrations/0042_fixed_master_chief.sql, which selected NULL/0 literals for the new
+  // provenance columns directly in the INSERT...SELECT. Renumbered to 0043_third_jackpot.sql when
+  // this branch's 0041a/0042(x2)/0043-0048 migrations were reconciled against staging's
+  // independently-generated 0042 (staging had already taken that number for an unrelated index) -
+  // see that commit for the full lineage-collision writeup. The regenerated migration takes a
+  // different but equivalent approach: explicit ALTER TABLE ADD for each new column before the
+  // reviews recreation, so existing rows get NULL (or publication_authorized's own NOT NULL
+  // DEFAULT 0) at ALTER time rather than via literal constants in the SELECT list - same end
+  // state, verified via a real seeded-data replay (13 location_qa / 27 reviews rows survived).
+  const sql = readFileSync('migrations/0043_third_jackpot.sql', 'utf8')
+  assert.match(sql, /ALTER TABLE `reviews` ADD `entered_by_user_id`/)
+  assert.match(sql, /ALTER TABLE `reviews` ADD `collection_method`/)
+  assert.match(sql, /ALTER TABLE `reviews` ADD `original_review_date`/)
+  assert.match(sql, /ALTER TABLE `reviews` ADD `original_reference`/)
+  assert.match(sql, /ALTER TABLE `reviews` ADD `publication_authorized` integer NOT NULL DEFAULT 0/)
   assert.match(sql, /reviews_owner_entered_provenance_check/)
   assert.match(sql, /idx_location_qa_site/)
   assert.match(sql, /tenant_redirects_redirect_to_path_check/)
