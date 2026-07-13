@@ -48,13 +48,30 @@ export default defineEventHandler(async (event) => {
       setResponseHeader(event, 'x-robots-tag', 'noindex, nofollow')
     }
     if (tenantRedirect.behavior === 'redirect') {
-      if (!tenantRedirect.toPath || !/^\/(?![/\\])/.test(tenantRedirect.toPath)) {
+      const isLocalTarget = Boolean(tenantRedirect.toPath && /^\/(?![/\\])/.test(tenantRedirect.toPath))
+      const isApprovedMediaTarget = (() => {
+        try {
+          const targetUrl = new URL(tenantRedirect.toPath || '')
+          return targetUrl.protocol === 'https:' && ['media.krabiclaw.com', 'images.krabiclaw.com'].includes(targetUrl.hostname)
+        } catch {
+          return false
+        }
+      })()
+      if (!isLocalTarget && !isApprovedMediaTarget) {
         throw createError({ statusCode: 500, statusMessage: 'Invalid tenant redirect target' })
       }
       const statusCode = [301, 302, 307, 308].includes(tenantRedirect.statusCode ?? 0)
         ? tenantRedirect.statusCode!
         : 301
-      return sendRedirect(event, `${tenantRedirect.toPath}${url.search}${url.hash}`, statusCode)
+      const target = isLocalTarget
+        ? `${tenantRedirect.toPath}${url.search}${url.hash}`
+        : (() => {
+            const external = new URL(tenantRedirect.toPath!)
+            external.search = url.search
+            external.hash = url.hash
+            return external.toString()
+          })()
+      return sendRedirect(event, target, statusCode)
     }
   }
 

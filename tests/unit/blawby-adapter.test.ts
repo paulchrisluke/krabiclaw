@@ -84,7 +84,7 @@ export const northcarolinalegalservices: ISeedTenant = {
     title: 'Preparing for your consultation',
     slug: 'preparing-for-your-consultation',
     description: 'How to prepare.',
-    content: 'Bring documents.',
+    content: "**Inequality isn't just about identity—it's woven into our systems. It shows up in **education, healthcare, and access to basic resources**. Yes, **communities of color, women, and LGBTQ+ folks** face barriers, but **diversity, equity, and inclusion (DEI) programs don’t stop there\\*\\*. Contact contact@northcarolinalegalservices.com. An attested written will is a type-written, signed will that is also signed by two competent witnesses and notarized.",
     tags: ['Legal Services'],
     keywords: ['consultation'],
     imageName: 'preparing-for-your-consultation.webp',
@@ -114,6 +114,11 @@ export const northcarolinalegalservices: ISeedTenant = {
 
 test("NCLS Blawby adapter normalizes source data into cutover artifacts", () => {
   const payload = runAdapter(sourceFixture);
+
+  assert.match(payload.articles[0].body, /\*\*Inequality isn't just about identity—it's woven into our systems\.\*\*/)
+  assert.doesNotMatch(payload.articles[0].body, /\\\*\\\*/)
+  assert.match(payload.articles[0].body, /contact@northcarolinalegalservices\.org/)
+  assert.match(payload.articles[0].body, /Notarization is not required for basic validity/)
 
   assert.equal(payload.site.vertical, "service");
   assert.equal(payload.site.theme_id, "blawby-theme-v1");

@@ -113,6 +113,20 @@ function htmlishToMarkdown(value, linkMap = new Map()) {
     .trim()
 }
 
+function normalizeNclsArticleContent(value) {
+  return value
+    .replace(
+      "**Inequality isn't just about identity—it's woven into our systems. It shows up in **",
+      "**Inequality isn't just about identity—it's woven into our systems.** It shows up in **",
+    )
+    .replace('programs don’t stop there\\*\\*.', 'programs don’t stop there**.')
+    .replaceAll('contact@northcarolinalegalservices.com', 'contact@northcarolinalegalservices.org')
+    .replace(
+      'An attested written will is a type-written, signed will that is also signed by two competent witnesses and notarized.',
+      'An attested written will is signed by the testator and by two competent witnesses. Notarization is not required for basic validity; it is used to make the will self-proved under N.C.G.S. § 31-11.6.',
+    )
+}
+
 function plainMdx(value) {
   return String(value || '')
     .replace(/<br\s*\/?>(?:<\/br>)?/gi, ' ')
@@ -454,6 +468,7 @@ function buildRouteInventory(offerings, pages, articles, redirects = []) {
       },
       {
         path: '/conference',
+        behavior: 'gone',
         handling: 'Out of cutover scope for the first Blawby/NCLS PR.',
       },
     ],
@@ -798,7 +813,7 @@ function buildPayload(config, sourcePath = null) {
       title: article.title,
       slug: article.slug,
       excerpt: article.description || null,
-      body: article.content || '',
+      body: normalizeNclsArticleContent(article.content || ''),
       category: Array.isArray(article.tags) ? article.tags[0] : null,
       tags: Array.isArray(article.tags) ? article.tags : [],
       author_name: [article.authorFirstName, article.authorSurname].filter(Boolean).join(' ') || null,
@@ -814,15 +829,44 @@ function buildPayload(config, sourcePath = null) {
       old_slugs: article.oldSlugs || [],
     }
   })
-  const redirects = articles.flatMap(article => article.old_slugs.map((oldSlug, index) => ({
-    id: `redirect_ncls_article_${article.slug}_${index}`,
-    from_path: `/article/${oldSlug}`,
-    to_path: article.canonical_url,
-    status_code: 301,
-    behavior: 'redirect',
-    reason: 'Pinned React article oldSlugs migration',
-    source: 'react-adapter',
-  })))
+  const redirects = [
+    ...articles.flatMap(article => article.old_slugs.map((oldSlug, index) => ({
+      id: `redirect_ncls_article_${article.slug}_${index}`,
+      from_path: `/article/${oldSlug}`,
+      to_path: article.canonical_url,
+      status_code: 301,
+      behavior: 'redirect',
+      reason: 'Pinned React article oldSlugs migration',
+      source: 'react-adapter',
+    }))),
+    {
+      id: 'redirect_ncls_conference_gone',
+      from_path: '/conference',
+      to_path: null,
+      status_code: 410,
+      behavior: 'gone',
+      reason: 'Explicitly retire the indexed conference route',
+      source: 'search-console-2026-07-13',
+    },
+    {
+      id: 'redirect_ncls_service_personal_injury',
+      from_path: '/services/personal-injury',
+      to_path: '/services',
+      status_code: 301,
+      behavior: 'redirect',
+      reason: 'Preserve the indexed source service URL after the offering was retired',
+      source: 'search-console-2026-07-13',
+    },
+    ...legalFiles.map((file, index) => ({
+      id: `redirect_ncls_legal_file_${index + 1}`,
+      from_path: file.source_path,
+      to_path: file.public_url,
+      status_code: 301,
+      behavior: 'redirect',
+      reason: 'Preserve the indexed legal document URL on approved storage',
+      source: 'search-console-2026-07-13',
+    })),
+  ]
   const externalConsultationUrl = consultationExternalUrl(config)
   const personTitles = new Map((config.peopleAndAccounts || []).map(entry => [
     `${entry.person?.firstName || ''} ${entry.person?.surname || ''}`.trim(),

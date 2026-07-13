@@ -148,6 +148,11 @@ const offeringQa = computed<PublicSiteQa[]>(() => offering.value.faqs.map((faq, 
   answer: faq.answer,
   sort_order: index,
 })))
+const validOfferingQa = computed(() => offeringQa.value.flatMap((item) => {
+  const question = item.question.trim()
+  const answer = item.answer?.trim()
+  return question && answer ? [{ ...item, question, answer }] : []
+}))
 
 function setTabRef(element: unknown, index: number) {
   tabRefs.value[index] = element as HTMLButtonElement | null
@@ -198,6 +203,15 @@ useHead(() => ({
         { '@type': 'ListItem', position: 3, name: offering.value.name, item: canonicalUrl.value },
       ],
     }) },
+    ...(validOfferingQa.value.length ? [{ type: 'application/ld+json', children: serializeJsonLd({
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: validOfferingQa.value.map(item => ({
+        '@type': 'Question',
+        name: item.question,
+        acceptedAnswer: { '@type': 'Answer', text: item.answer },
+      })),
+    }) }] : []),
   ],
 }))
 </script>
