@@ -1,1 +1,0 @@
-ALTER TABLE `blog_posts` ADD `tags_json` text;

@@ -1829,6 +1829,12 @@ export const sites = sqliteTable("sites", {
 	// (66.9M rows/9,778 executions and 17.2M rows/4,034 executions) - without this index those
 	// queries full-scan sites on every request.
 	index("sites_organization_id_idx").on(table.organization_id),
+	// scripts/reset-e2e-artifacts.ts's category-1 "is this org still in-flight" check does
+	// WHERE created_at >= ? against this table to decide whether to skip a disposable org - with
+	// no index, that's a full scan of sites on every sweep, which is what kept exceeding D1's CPU
+	// budget on staging even after both org-eligibility and the category-2 guest-row sweep were
+	// fixed to be cheap. Verified via EXPLAIN QUERY PLAN: SCAN sites -> SEARCH ... USING INDEX.
+	index("sites_created_at_idx").on(table.created_at),
 ]);
 
 export const stripe_webhook_events = sqliteTable("stripe_webhook_events", {
