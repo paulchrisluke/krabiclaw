@@ -3115,6 +3115,42 @@
       "behavior": "redirect",
       "reason": "Pinned React article oldSlugs migration",
       "source": "react-adapter"
+    },
+    {
+      "id": "redirect_ncls_conference_gone",
+      "from_path": "/conference",
+      "to_path": null,
+      "status_code": 410,
+      "behavior": "gone",
+      "reason": "Explicitly retire the indexed conference route",
+      "source": "search-console-2026-07-13"
+    },
+    {
+      "id": "redirect_ncls_service_personal_injury",
+      "from_path": "/services/personal-injury",
+      "to_path": "/services",
+      "status_code": 301,
+      "behavior": "redirect",
+      "reason": "Preserve the indexed source service URL after the offering was retired",
+      "source": "search-console-2026-07-13"
+    },
+    {
+      "id": "redirect_ncls_legal_file_1",
+      "from_path": "/files/NorthCarolinaLegalServices_DBA__Redacted.pdf",
+      "to_path": "https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9f06152ccd5d6f29c11a.pdf",
+      "status_code": 301,
+      "behavior": "redirect",
+      "reason": "Preserve the indexed legal document URL on approved storage",
+      "source": "search-console-2026-07-13"
+    },
+    {
+      "id": "redirect_ncls_legal_file_2",
+      "from_path": "/files/FinalLetter_88-0565637_BULLCITYLEGALSERVICESINC_Redacted.pdf",
+      "to_path": "https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/8de1e5793e0806ece163.pdf",
+      "status_code": 301,
+      "behavior": "redirect",
+      "reason": "Preserve the indexed legal document URL on approved storage",
+      "source": "search-console-2026-07-13"
     }
   ],
   "siteQa": [
@@ -6344,6 +6380,7 @@
       },
       {
         "path": "/conference",
+        "behavior": "gone",
         "handling": "Out of cutover scope for the first Blawby/NCLS PR."
       }
     ],
@@ -6383,6 +6420,42 @@
         "behavior": "redirect",
         "reason": "Pinned React article oldSlugs migration",
         "source": "react-adapter"
+      },
+      {
+        "id": "redirect_ncls_conference_gone",
+        "from_path": "/conference",
+        "to_path": null,
+        "status_code": 410,
+        "behavior": "gone",
+        "reason": "Explicitly retire the indexed conference route",
+        "source": "search-console-2026-07-13"
+      },
+      {
+        "id": "redirect_ncls_service_personal_injury",
+        "from_path": "/services/personal-injury",
+        "to_path": "/services",
+        "status_code": 301,
+        "behavior": "redirect",
+        "reason": "Preserve the indexed source service URL after the offering was retired",
+        "source": "search-console-2026-07-13"
+      },
+      {
+        "id": "redirect_ncls_legal_file_1",
+        "from_path": "/files/NorthCarolinaLegalServices_DBA__Redacted.pdf",
+        "to_path": "https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9f06152ccd5d6f29c11a.pdf",
+        "status_code": 301,
+        "behavior": "redirect",
+        "reason": "Preserve the indexed legal document URL on approved storage",
+        "source": "search-console-2026-07-13"
+      },
+      {
+        "id": "redirect_ncls_legal_file_2",
+        "from_path": "/files/FinalLetter_88-0565637_BULLCITYLEGALSERVICESINC_Redacted.pdf",
+        "to_path": "https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/8de1e5793e0806ece163.pdf",
+        "status_code": 301,
+        "behavior": "redirect",
+        "reason": "Preserve the indexed legal document URL on approved storage",
+        "source": "search-console-2026-07-13"
       }
     ]
   },

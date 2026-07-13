@@ -8,6 +8,7 @@
     },
     {
       "path": "/conference",
+      "behavior": "gone",
       "handling": "Out of cutover scope for the first Blawby/NCLS PR."
     }
   ]

@@ -198,6 +198,15 @@ useHead(() => ({
         { '@type': 'ListItem', position: 3, name: offering.value.name, item: canonicalUrl.value },
       ],
     }) },
+    ...(offeringQa.value.length ? [{ type: 'application/ld+json', children: serializeJsonLd({
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: offeringQa.value.map(item => ({
+        '@type': 'Question',
+        name: item.question,
+        acceptedAnswer: { '@type': 'Answer', text: item.answer },
+      })),
+    }) }] : []),
   ],
 }))
 </script>

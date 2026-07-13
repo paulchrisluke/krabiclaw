@@ -71,6 +71,7 @@
     "client:media:ncls:blawby": "node scripts/prepare-ncls-blawby-media.mjs",
     "client:approve:ncls:blawby": "node scripts/adapters/ncls-blawby.mjs --approve",
     "client:verify:blawby": "node scripts/verify-blawby-site.mjs",
+    "client:verify:ncls-seo": "node scripts/verify-ncls-seo-migration.mjs",
     "client:screenshots:blawby": "node scripts/capture-blawby-screenshots.mjs",
     "client:parity:blawby": "node scripts/compare-blawby-screenshots.mjs",
     "client:deploy": "node scripts/client-deploy.mjs",

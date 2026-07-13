@@ -82,6 +82,8 @@ jobs:
               - 'scripts/*blawby*.mjs'
               - 'scripts/adapters/ncls-blawby.mjs'
               - 'scripts/client-verify.mjs'
+              - 'scripts/verify-ncls-seo-migration.mjs'
+              - 'scripts/utils/seo-migration-contract.mjs'
               - 'server/api/editor/sites/**/professional-services*'
               - 'server/api/editor/sites/**/qa/**'
               - 'server/api/editor/sites/**/qa.*'
@@ -107,6 +109,7 @@ jobs:
               - 'tests/e2e/blawby.spec.ts'
               - 'tests/e2e/site-content-scopes.spec.ts'
               - 'tests/unit/blawby*.test.ts'
+              - 'tests/unit/ncls-seo-migration.test.ts'
               - 'tests/unit/site-content-scopes.test.ts'
 
   guardrails:
@@ -143,6 +146,7 @@ jobs:
             scripts/compare-blawby-screenshots.mjs \
             scripts/rollback-prod.mjs \
             scripts/verify-blawby-site.mjs \
+            scripts/verify-ncls-seo-migration.mjs \
             scripts/lint-seeds.mjs \
             scripts/lint-migrations.mjs \
             scripts/lint-tool-parity.mjs \
@@ -272,6 +276,13 @@ jobs:
             --vertical "professional_service" \
             --site-id "site-ncls-blawby" \
             --slug "north-carolina-legal-services" \
+            --tenant-slug "ncls"
+      - name: Verify NCLS SEO migration contract against owned preview
+        if: needs.changes.outputs.blawby == 'true'
+        run: |
+          yarn client:verify:ncls-seo \
+            --url "https://preview.krabiclaw.com" \
+            --expected-origin "https://preview.krabiclaw.com" \
             --tenant-slug "ncls"
       - name: Capture pinned Blawby reference
         if: needs.changes.outputs.blawby == 'true'
