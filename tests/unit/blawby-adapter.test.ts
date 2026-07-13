@@ -202,7 +202,7 @@ test("NCLS Blawby adapter normalizes source data into cutover artifacts", () => 
   ]);
   assert.equal(
     payload.source_commit,
-    "5908ab3e64f26f799de61ed55371d02f9ec7bc2f",
+    "f9470f44e15f98978b7f866da54782a6da95818d",
   );
 
   assert.ok(

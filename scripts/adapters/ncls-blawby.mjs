@@ -42,13 +42,15 @@ function resolveConsultationPriceUsd(sourcePath) {
 
 function evaluateTenantConfig(sourcePath) {
   let source = fs.readFileSync(sourcePath, 'utf8')
-  const consultationPriceUsd = resolveConsultationPriceUsd(sourcePath)
   source = source
     .replace(/^import[\s\S]*?^const domain/m, 'const domain')
     .replace(/export const northcarolinalegalservices\s*:\s*ISeedTenant\s*=/, 'const northcarolinalegalservices =')
     .replace(/DateTime\.fromObject\((\{[\s\S]*?\})\)\.toJSDate\(\)/g, 'new Date($1)')
     .replace(/\bE(AccountRole|MediaType|SocialPlatform)\.([A-Za-z0-9_]+)/g, (_, _enumName, value) => JSON.stringify(value))
-    .replace(/\bCONSULTATION_PRICE_USD\b/g, consultationPriceUsd)
+
+  if (/\bCONSULTATION_PRICE_USD\b/.test(source)) {
+    source = source.replace(/\bCONSULTATION_PRICE_USD\b/g, resolveConsultationPriceUsd(sourcePath))
+  }
 
   const context = {
     Date,
