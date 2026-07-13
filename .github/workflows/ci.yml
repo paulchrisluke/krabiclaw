@@ -317,7 +317,7 @@ jobs:
           node scripts/capture-blawby-screenshots.mjs \
             --url "https://www.northcarolinalegalservices.org" \
             --source reference \
-            --source-revision "5908ab3e64f26f799de61ed55371d02f9ec7bc2f" \
+            --source-revision "f9470f44e15f98978b7f866da54782a6da95818d" \
             --out-dir "artifacts/blawby-parity"
       - name: Capture owned Blawby preview
         if: needs.changes.outputs.blawby == 'true'
