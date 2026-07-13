@@ -1,6 +1,20 @@
 -- Compatibility prerequisite for merged migration lineages.
 -- The original 0042_youthful_blizzard.sql filename is already recorded in preview,
 -- while 0042_fixed_master_chief.sql now depends on these idempotent tables.
+--
+-- Intentionally absent from migrations/meta/_journal.json and has no
+-- meta/*_snapshot.json of its own: this is a deployment-only split of
+-- 0042's CREATE TABLE portion out of the D1-preview-CPU-limit-hitting
+-- generated migration (see "Split Blawby migration for D1 preview"), not
+-- an independent schema-lineage step. drizzle-kit's own generated
+-- migrations/meta/0042_snapshot.json already reflects the post-migration
+-- schema INCLUDING these tables (schema.ts is its source of truth, not
+-- this file's DDL), so `drizzle-kit generate` correctly sees no gap here
+-- — verified by running it against current schema.ts, which reports "No
+-- schema changes, nothing to migrate." Do not add a journal/snapshot
+-- entry for this file; that would introduce a phantom lineage step that
+-- doesn't match any snapshot's actual prevId chain. See
+-- 0042_youthful_blizzard.sql for the duplicate-content twin of this file.
 CREATE TABLE IF NOT EXISTS `client_import_artifacts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text,

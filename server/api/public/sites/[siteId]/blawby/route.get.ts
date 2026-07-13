@@ -2,6 +2,7 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getPublicBlawbyRouteData } from '~/server/utils/professional-services'
 import type { BlawbyRouteRecipe } from '~/types/blawby'
+import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
 
 const RECIPES = new Set<BlawbyRouteRecipe>([
   'home',
@@ -42,8 +43,7 @@ export default defineEventHandler(async (event) => {
      WHERE id = ? AND status = 'active' AND onboarding_status = 'active'
      LIMIT 1
   `, [siteId])
-  const supportsBlawby = site?.vertical === 'service' || site?.vertical === 'professional_service'
-  if (!supportsBlawby || site?.theme_id !== 'blawby-theme-v1') {
+  if (!siteSupportsBlawbyTemplate({ vertical: site?.vertical, themeId: site?.theme_id })) {
     return jsonResponse({ error: 'Blawby is not enabled for this site' }, { status: 404 })
   }
 

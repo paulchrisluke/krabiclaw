@@ -1,3 +1,17 @@
+-- Byte-for-byte duplicate of 0041a_youthful_blizzard_prerequisite.sql's CREATE
+-- TABLE statements, kept under this filename because some environments (e.g.
+-- preview) already recorded `0042_youthful_blizzard` as applied under the old
+-- pre-split migration numbering, before the CPU-limit split introduced
+-- 0041a's name. wrangler tracks applied migrations by filename, not content
+-- (see CLAUDE.md), so both filenames must keep existing and keep matching
+-- content — do not rename or delete either one.
+--
+-- Intentionally absent from migrations/meta/_journal.json, same reasoning as
+-- 0041a_youthful_blizzard_prerequisite.sql: this is a filename-compatibility
+-- twin, not an independent schema-lineage step, and drizzle-kit's snapshot
+-- chain already reflects the resulting schema without it (`drizzle-kit
+-- generate` reports "No schema changes, nothing to migrate" against current
+-- schema.ts). Do not add a journal/snapshot entry for this file.
 CREATE TABLE IF NOT EXISTS `client_import_artifacts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text,

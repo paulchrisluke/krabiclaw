@@ -1,6 +1,7 @@
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getPublicBlawbyShellData } from '~/server/utils/professional-services'
+import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -16,8 +17,7 @@ export default defineEventHandler(async (event) => {
      WHERE id = ? AND status = 'active' AND onboarding_status = 'active'
      LIMIT 1
   `, [siteId])
-  const supportsBlawby = site?.vertical === 'service' || site?.vertical === 'professional_service'
-  if (!supportsBlawby || site?.theme_id !== 'blawby-theme-v1') {
+  if (!siteSupportsBlawbyTemplate({ vertical: site?.vertical, themeId: site?.theme_id })) {
     return jsonResponse({ error: 'Blawby is not enabled for this site' }, { status: 404 })
   }
 

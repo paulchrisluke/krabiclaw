@@ -61,11 +61,16 @@ export function resolvePublicTemplate(input: {
   const themeId = String(input.themeId ?? '').toLowerCase()
   const vertical = String(input.vertical ?? '').toLowerCase()
 
-  if (theme === 'blawby' || themeId === 'blawby-theme-v1' || vertical === 'service' || vertical === 'professional_service') {
-    return publicTemplateRegistry.blawby
-  }
+  // Registry-driven: matches against each definition's own themeId/slug/verticals
+  // instead of a hardcoded per-template if-chain, so a third template only needs
+  // a new publicTemplateRegistry entry — no change here.
+  const match = Object.values(publicTemplateRegistry).find((definition) =>
+    definition.themeId.toLowerCase() === themeId ||
+    definition.slug === theme ||
+    definition.verticals.includes(vertical),
+  )
 
-  return publicTemplateRegistry.saya
+  return match ?? publicTemplateRegistry.saya
 }
 
 export function isBlawbyTemplate(input: {
@@ -74,4 +79,19 @@ export function isBlawbyTemplate(input: {
   vertical?: string | null
 }) {
   return resolvePublicTemplate(input).slug === 'blawby'
+}
+
+// Stricter than isBlawbyTemplate/resolvePublicTemplate's OR-based dispatch
+// match: the public Blawby API routes are a security gate, not just a
+// rendering-path decision, so they require BOTH a supported vertical AND
+// the exact blawby-theme-v1 theme_id — a site with vertical='service' but
+// some other theme_id should not pass. Shared here instead of duplicated
+// inline across server/api/public/sites/[siteId]/blawby*.get.ts.
+export function siteSupportsBlawbyTemplate(input: {
+  vertical?: string | null
+  themeId?: string | null
+}): boolean {
+  const vertical = String(input.vertical ?? '').toLowerCase()
+  const themeId = String(input.themeId ?? '').toLowerCase()
+  return publicTemplateRegistry.blawby.verticals.includes(vertical) && themeId === publicTemplateRegistry.blawby.themeId
 }
