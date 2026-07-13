@@ -10,7 +10,8 @@
 //           menuItemsBySection, location, locationReviews } = useBootstrap()
 //
 // No arguments needed — params are inferred from the route.
-import { onMounted, onBeforeUnmount } from "vue";
+import { onMounted, onBeforeUnmount, unref } from "vue";
+import type { Ref } from "vue";
 import {
   useBootstrapParams,
   useBootstrapKey,
@@ -87,13 +88,14 @@ const emptyBootstrap = (): BootstrapPayload => ({
   experienceDetail: null,
 });
 
-export const useBootstrap = () => {
+export const useBootstrap = (options: { enabled?: boolean | Ref<boolean> } = {}) => {
   const { isPlatform, siteId, draftId } = useTenantSite();
   const route = useRoute();
   const requestFetch = useRequestFetch()
   const params = useBootstrapParams();
   const entityId = computed(() => siteId || draftId || null)
   const key = computed(() => useBootstrapKey(entityId.value, params.value));
+  const enabled = computed(() => options.enabled === undefined ? true : Boolean(unref(options.enabled)))
 
   const url = computed(() => {
     return useBootstrapUrl(siteId, params.value);
@@ -103,7 +105,7 @@ export const useBootstrap = () => {
 
   const nuxtApp = useNuxtApp();
   const { data, error, pending } =
-    isPlatform || (!siteId && !draftId)
+    isPlatform || (!enabled.value) || (!siteId && !draftId)
       ? { data: ref<BootstrapPayload>(empty), error: ref<Error | null>(null), pending: ref(false) }
       : useAsyncData<BootstrapPayload>(
           key,

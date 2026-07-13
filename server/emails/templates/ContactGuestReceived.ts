@@ -19,6 +19,7 @@ export default defineComponent({
     message: { type: String, required: true },
     platformDomain: { type: String, required: true },
     experienceTitle: { type: String as PropType<string | null | undefined>, default: null },
+    consentAcknowledged: { type: Boolean, default: false },
   },
   setup(props) {
     return () => h(EmailShell, {
@@ -32,6 +33,7 @@ export default defineComponent({
         rows: [
           props.subject && ['Subject', SUBJECT_LABELS[props.subject] ?? props.subject],
           props.experienceTitle && ['Regarding', props.experienceTitle],
+          props.consentAcknowledged && ['Contact/privacy notice', 'Acknowledged'],
           ['Message', props.message],
         ].filter(Boolean) as [string, string][]
       }),

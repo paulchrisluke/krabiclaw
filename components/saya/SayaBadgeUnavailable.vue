@@ -6,7 +6,7 @@
       {{ text }}
     </span>
   </template>
-  
+
   <!-- When used inline -->
   <span v-else class="inline-flex shrink-0 items-center rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-widest text-white">
     {{ text }}

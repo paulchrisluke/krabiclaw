@@ -21,6 +21,7 @@ export default defineComponent({
     platformDomain: { type: String, required: true },
     replyUrl: { type: String as PropType<string | null>, default: null },
     experienceTitle: { type: String as PropType<string | null | undefined>, default: null },
+    consentAcknowledged: { type: Boolean, default: false },
   },
   setup(props) {
     return () => h(EmailShell, {
@@ -37,6 +38,7 @@ export default defineComponent({
           ['Email', props.email],
           props.subject && ['Subject', SUBJECT_LABELS[props.subject] ?? props.subject],
           props.experienceTitle && ['Regarding', props.experienceTitle],
+          props.consentAcknowledged && ['Contact/privacy notice', 'Acknowledged'],
         ].filter(Boolean) as [string, string][]
       }),
       h(EText, { class: 'email-title', style: 'margin:0 0 8px;font-size:15px;color:#18181b;font-weight:600' }, () => 'Message:'),

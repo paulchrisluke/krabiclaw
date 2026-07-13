@@ -17,6 +17,8 @@ const CONTENT_DOMAIN_TOOL_NAMES = new Set([
   'set_home_hero_video',
   'set_about_story_image',
   'set_home_story_image',
+  'get_professional_service_content',
+  'update_professional_service_content',
 ])
 
 export const CONTENT_CHOWBOT_TOOLS: AiTool[] = CONTENT_TOOLS

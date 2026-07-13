@@ -30,6 +30,8 @@ import { join, extname, basename } from "node:path";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { spawnYarn } from "./utils/spawn-yarn.mjs";
+import { prepareD1SeedFile } from "./utils/d1-seed-file.mjs";
 
 // ── Args ─────────────────────────────────────────────────────────────────────
 
@@ -71,6 +73,7 @@ const ALLOWED_VERTICALS = [
   "retail",
   "wellness",
   "service",
+  "professional_service",
 ];
 if (VERTICAL && !ALLOWED_VERTICALS.includes(VERTICAL)) {
   console.error(
@@ -483,6 +486,15 @@ const FORBIDDEN_BY_VERTICAL = {
   retail: [],
   wellness: [],
   service: [],
+  professional_service: [
+    "Come dine",
+    "From the kitchen",
+    "Reserve a table",
+    "chef's table",
+    "tasting menu",
+    "one kitchen philosophy",
+    "Also part of Saya",
+  ],
 };
 
 function scanForbiddenCopy(sql, vertical) {
@@ -653,6 +665,21 @@ function generateRouteManifest(places) {
     slug: SLUG,
     vertical: VERTICAL,
     locations,
+    services: VERTICAL === "professional_service" ? ["/services"] : [],
+    tenant_pages:
+      VERTICAL === "professional_service"
+        ? [
+            "/about",
+            "/pricing",
+            "/donate",
+            "/schedule",
+            "/contact",
+            "/blog",
+            "/policies/privacy",
+            "/policies/terms",
+            "/third-party-notices",
+          ]
+        : [],
     // Experience slugs come from the experiences table; verify via bootstrap post-seed.
     experiences: [],
   };
@@ -919,13 +946,17 @@ if (MODE === "apply") {
     `\n→ Executing seed SQL against ${REMOTE ? "remote" : "local"} D1...`,
   );
   const d1Flag = REMOTE ? "--remote" : "--local";
+  const preparedSeed = await prepareD1SeedFile(seedPath);
+  if (preparedSeed.splitCount) {
+    console.log(`  Split ${preparedSeed.splitCount} oversized INSERT statement chunk(s) for D1 execution.`);
+  }
+  let applyResult;
   try {
-    spawnSync(
-      "yarn",
-      ["wrangler", "d1", "execute", "DB", d1Flag, "--file", seedPath],
-      { stdio: "inherit", cwd: process.cwd() },
-    );
-  } catch {
+    applyResult = spawnYarn(["wrangler", "d1", "execute", "DB", d1Flag, "--file", preparedSeed.path]);
+  } finally {
+    await preparedSeed.cleanup();
+  }
+  if (applyResult.status !== 0) {
     console.error("\n✗ Seed execution failed — check wrangler output above.");
     process.exit(1);
   }

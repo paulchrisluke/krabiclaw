@@ -1,5 +1,5 @@
 <template>
-  <NuxtLayout :name="isPlatform ? 'platform' : 'saya'">
+  <NuxtLayout :name="isPlatform ? 'platform' : isBlawbyPage ? 'blawby' : 'saya'">
     <!-- KrabiClaw Platform Homepage -->
     <div v-if="isPlatform" class="bg-default">
 
@@ -150,7 +150,10 @@
       </section>
     </div>
 
-    <!-- Saya Restaurant Theme (Tenant Site) -->
+    <!-- Blawby tenant homepage -->
+    <BlawbyHome v-else-if="isBlawbyPage" />
+
+    <!-- Saya tenant homepage -->
     <div v-else class="saya-restaurant-theme">
 
       <!-- ── Brand hero ─────────────────────────────────────── -->
@@ -443,7 +446,10 @@ import { getActiveSpecialClosure } from '~/utils/formatters'
 definePageMeta({ layout: false })
 
 const { isPlatform, siteId, site } = useTenantSite()
+const { isBlawby } = usePublicTemplate()
 const { locale } = useI18n()
+const isBlawbyPage = computed(() => isBlawby.value)
+const shouldUseSayaBootstrap = computed(() => !isBlawbyPage.value)
 
 const platformPlans = isPlatform ? usePlans().plans : ref(null)
 const plans = computed(() => isPlatform ? platformPlans.value : null)
@@ -490,7 +496,7 @@ const {
   experiencesList,
   contentBlocks,
   blogList,
-} = useBootstrap()
+} = useBootstrap({ enabled: shouldUseSayaBootstrap })
 
 const locations = computed(() => bootstrapLocations.value)
 const hasOrderLinks = computed(() =>
@@ -575,7 +581,7 @@ if (isPlatform) {
 }
 
 // SEO for tenant sites: set ogUrl to the actual request URL so custom domains share correctly.
-if (!isPlatform && siteId) {
+if (!isPlatform && siteId && !isBlawbyPage.value) {
   const seoTitle = computed(() => {
     if (bootstrapConfig.value?.seo_title) return bootstrapConfig.value.seo_title
     const primary = (restaurantName.value || '').trim()

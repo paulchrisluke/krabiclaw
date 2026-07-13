@@ -75,6 +75,7 @@ interface ContactNotificationInput extends SiteContext {
   email: string
   subject?: string | null
   message: string
+  consentAcknowledged?: boolean
   experienceId?: string | null
   experienceTitle?: string | null
 }
@@ -941,11 +942,12 @@ export async function notifyContactSubmitted(
     message_preview: opts.message.slice(0, 200),
     site_name: restaurant,
     experience_title: opts.experienceTitle ?? '',
+    consent_acknowledged: opts.consentAcknowledged === true ? 'true' : 'false',
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(ContactOwnerNew, { props: { guestName: opts.guestName, email: opts.email, subject: opts.subject, message: opts.message, siteName: restaurant, platformDomain, replyUrl: inboxUrl, experienceTitle: opts.experienceTitle } }),
-    useRender(ContactGuestReceived, { props: { guestName: opts.guestName, siteName: restaurant, subject: opts.subject, message: opts.message, platformDomain, experienceTitle: opts.experienceTitle } }),
+    useRender(ContactOwnerNew, { props: { guestName: opts.guestName, email: opts.email, subject: opts.subject, message: opts.message, siteName: restaurant, platformDomain, replyUrl: inboxUrl, experienceTitle: opts.experienceTitle, consentAcknowledged: opts.consentAcknowledged } }),
+    useRender(ContactGuestReceived, { props: { guestName: opts.guestName, siteName: restaurant, subject: opts.subject, message: opts.message, platformDomain, experienceTitle: opts.experienceTitle, consentAcknowledged: opts.consentAcknowledged } }),
   ])
 
   const results = await Promise.allSettled([
@@ -961,7 +963,7 @@ export async function notifyContactSubmitted(
           guest_name: opts.guestName,
           email: opts.email,
           subject: opts.subject ? SUBJECT_LABELS[opts.subject] ?? opts.subject : '',
-          message_preview: opts.message,
+          message_preview: opts.consentAcknowledged ? `${opts.message}\n\nContact/privacy notice acknowledged.` : opts.message,
           reply_path: inboxUrlToWhatsAppReplyPath(inboxUrl),
         },
       },
@@ -1528,8 +1530,8 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
     useRender(ReservationGuestReceived, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', contactPhone: '+1 555 000 0000', contactEmail: 'hello@emberslice.example', cancelUrl: 'https://demo.krabiclaw.com/reservations/cancel?id=res-preview-1', platformDomain } }),
     useRender(ReservationGuestCancelled, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain } }),
     useRender(ReservationOwnerCancelled, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain } }),
-    useRender(ContactOwnerNew, { props: { guestName: 'Jordan Lee', email: 'jordan@example.com', message: 'Hi, do you have vegan options and parking nearby?', siteName: restaurant, platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/main/inbox?tab=contact&reply=contact-preview-1' } }),
-    useRender(ContactGuestReceived, { props: { guestName: 'Jordan Lee', siteName: restaurant, subject: 'general', message: 'Hi, do you have vegan options and parking nearby?', platformDomain } }),
+    useRender(ContactOwnerNew, { props: { guestName: 'Jordan Lee', email: 'jordan@example.com', message: 'Hi, do you have vegan options and parking nearby?', siteName: restaurant, platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/main/inbox?tab=contact&reply=contact-preview-1', consentAcknowledged: true } }),
+    useRender(ContactGuestReceived, { props: { guestName: 'Jordan Lee', siteName: restaurant, subject: 'general', message: 'Hi, do you have vegan options and parking nearby?', platformDomain, consentAcknowledged: true } }),
     useRender(BookingOwnerNew, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, email: 'mina@example.com', phone: '+66 76 000 0002', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/pottery-house-krabi/sites/pottery-house/main/inbox?tab=bookings&reply=booking-preview-1' } }),
     useRender(BookingGuestReceived, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, contactPhone: '+66 76 000 0001', contactEmail: 'hello@example.com', cancelUrl: 'https://demo.krabiclaw.com/experiences/cancel?id=booking-preview-1', platformDomain } }),
   ])

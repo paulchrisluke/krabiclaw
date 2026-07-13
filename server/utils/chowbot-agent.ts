@@ -398,6 +398,13 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
+    case "list_site_reviews":
+    case "create_owner_entered_site_review":
+    case "update_owner_entered_site_review":
+    case "delete_owner_entered_site_review": {
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
+    }
+
     case "get_site_media_assets":
     case "delete_media_asset": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
@@ -503,6 +510,12 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
+    case "list_site_qa":
+    case "create_site_qa":
+    case "delete_site_qa": {
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
+    }
+
     case "get_contact_inquiries": {
       return runMcpExecutorToolForChowbot(executorSite, "get_contact_inquiries", input);
     }
@@ -527,6 +540,16 @@ async function executeTool(
     // mcp-workflows.ts) — MCP's delete_content_field silently deleted
     // nothing for hero sub-fields, since they live as columns on a single
     // row keyed by field="hero", not their own row.
+
+    // Both delegate to mcp-executor/content.ts's get/update_professional_service_content
+    // cases, which call the same getProfessionalServiceContent/upsertProfessionalServiceContent
+    // functions the dashboard editor and MCP both use — see professional-services-editor.ts.
+    case "get_professional_service_content":
+      return runMcpExecutorToolForChowbot(executorSite, "get_professional_service_content", input);
+
+    case "update_professional_service_content":
+      return runMcpExecutorToolForChowbot(executorSite, "update_professional_service_content", input);
+
     case "get_page_fields": {
       const page = getToolString(input, "page", 40);
       if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
@@ -1006,6 +1029,11 @@ async function executeTool(
 
     case "update_location_qa":
     case "reorder_location_qa": {
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
+    }
+
+    case "update_site_qa":
+    case "reorder_site_qa": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 

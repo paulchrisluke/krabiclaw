@@ -48,6 +48,7 @@ jobs:
       pull-requests: read
     outputs:
       pottery_house: ${{ steps.filter.outputs.pottery_house }}
+      blawby: ${{ steps.filter.outputs.blawby }}
       seed_relevant: ${{ steps.filter.outputs.seed_relevant }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -59,9 +60,59 @@ jobs:
           filters: |
             pottery_house:
               - 'scripts/**'
+              - '!scripts/*blawby*.mjs'
+              - '!scripts/adapters/ncls-blawby.mjs'
               - 'components/saya/**'
               - 'pages/**'
               - 'utils/vertical-copy.ts'
+            blawby:
+              - 'client-imports/north-carolina-legal-services/**'
+              - 'components/blawby/**'
+              - 'composables/useBlawby**'
+              - 'layouts/blawby.vue'
+              - 'migrations/**'
+              - 'pages/about.vue'
+              - 'pages/article/**'
+              - 'pages/blog/**'
+              - 'pages/contact/**'
+              - 'pages/donate.vue'
+              - 'pages/policies/**'
+              - 'pages/pricing.vue'
+              - 'pages/schedule.vue'
+              - 'pages/services/**'
+              - 'pages/third-party-notices.vue'
+              - 'scripts/*blawby*.mjs'
+              - 'scripts/adapters/ncls-blawby.mjs'
+              - 'scripts/client-verify.mjs'
+              - 'scripts/verify-ncls-seo-migration.mjs'
+              - 'scripts/utils/seo-migration-contract.mjs'
+              - 'server/api/editor/sites/**/professional-services*'
+              - 'server/api/editor/sites/**/qa/**'
+              - 'server/api/editor/sites/**/qa.*'
+              - 'server/api/editor/sites/**/reviews/**'
+              - 'server/api/editor/sites/**/reviews.*'
+              - 'server/api/public/sites/**/blawby.get.ts'
+              - 'server/api/public/sites/**/blawby/**'
+              - 'server/api/public/sites/**/contact.post.ts'
+              - 'server/api/public/sites/**/conversion-events.post.ts'
+              - 'server/db/schema.ts'
+              - 'server/middleware/zz-redirects.ts'
+              - 'server/plugins/tenant-sitemap-filter.ts'
+              - 'server/utils/professional-services*.ts'
+              - 'server/utils/location-qa.ts'
+              - 'server/utils/site-reviews.ts'
+              - 'server/utils/platform-content.ts'
+              - 'server/utils/mcp-executor/qa.ts'
+              - 'server/utils/mcp-executor/reviews.ts'
+              - 'server/utils/mcp-workflows.ts'
+              - 'types/blawby.ts'
+              - 'utils/template-registry.ts'
+              - 'utils/blawby-pricing.ts'
+              - 'tests/e2e/blawby.spec.ts'
+              - 'tests/e2e/site-content-scopes.spec.ts'
+              - 'tests/unit/blawby*.test.ts'
+              - 'tests/unit/ncls-seo-migration.test.ts'
+              - 'tests/unit/site-content-scopes.test.ts'
             seed_relevant:
               - 'scripts/**'
               - 'seed-definitions/**'
@@ -96,7 +147,13 @@ jobs:
             scripts/client-deploy.mjs \
             scripts/canary-prod.mjs \
             scripts/canary-notifications.mjs \
+            scripts/generate-ncls-blawby-seed.mjs \
+            scripts/prepare-ncls-blawby-media.mjs \
+            scripts/capture-blawby-screenshots.mjs \
+            scripts/compare-blawby-screenshots.mjs \
             scripts/rollback-prod.mjs \
+            scripts/verify-blawby-site.mjs \
+            scripts/verify-ncls-seo-migration.mjs \
             scripts/lint-seeds.mjs \
             scripts/lint-migrations.mjs \
             scripts/lint-tool-parity.mjs \
@@ -106,9 +163,12 @@ jobs:
 
   e2e-smoke:
     name: E2E smoke
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.draft == false
     needs: [changes]
     runs-on: ubuntu-latest
+    concurrency:
+      group: shared-preview-deployment
+      cancel-in-progress: false
     env:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_TEST }}
@@ -130,7 +190,10 @@ jobs:
           node-version: "22"
           cache: yarn
       - run: yarn install --frozen-lockfile
-      - run: yarn build
+      - name: Build application
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: yarn build
       - name: Migrate preview database
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -161,6 +224,12 @@ jobs:
           node --experimental-strip-types scripts/generate-pottery-house-seed.ts --preview --stdout >> /tmp/preview-seed.sql
           node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview --stdout >> /tmp/preview-seed.sql
           npx wrangler d1 execute DB --env preview --remote --file /tmp/preview-seed.sql
+      - name: Seed NCLS/Blawby fixture
+        if: needs.changes.outputs.blawby == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/generate-ncls-blawby-seed.mjs --preview
       - name: Deploy preview Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -209,7 +278,39 @@ jobs:
       - name: Run smoke tests
         env:
           PLAYWRIGHT_PREVIEW_URL: https://preview.krabiclaw.com
-        run: yarn test:e2e:smoke
+          POTTERY_HOUSE_CHANGED: ${{ needs.changes.outputs.pottery_house }}
+          BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
+        run: |
+          yarn test:e2e:core
+          if [ "$POTTERY_HOUSE_CHANGED" = "true" ]; then
+            yarn test:e2e:pottery-house
+          fi
+          if [ "$BLAWBY_CHANGED" = "true" ]; then
+            yarn test:e2e:blawby
+          fi
+      - name: Run Pottery House fixture against owned preview
+        if: needs.changes.outputs.pottery_house == 'true'
+        run: |
+          yarn fixture:pottery-house \
+            --url "https://preview.krabiclaw.com" \
+            --site-id "site-pottery-house" \
+            --slug "pottery-house"
+      - name: Run Blawby NCLS fixture against owned preview
+        if: needs.changes.outputs.blawby == 'true'
+        run: |
+          node scripts/client-verify.mjs \
+            --url "https://preview.krabiclaw.com" \
+            --vertical "professional_service" \
+            --site-id "site-ncls-blawby" \
+            --slug "north-carolina-legal-services" \
+            --tenant-slug "ncls"
+      - name: Verify NCLS SEO migration contract against owned preview
+        if: needs.changes.outputs.blawby == 'true'
+        run: |
+          yarn client:verify:ncls-seo \
+            --url "https://preview.krabiclaw.com" \
+            --expected-origin "https://preview.krabiclaw.com" \
+            --tenant-slug "ncls"
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -219,27 +320,6 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
-
-  pottery-house-fixture:
-    name: Pottery House regression fixture
-    needs: [changes, e2e-smoke]
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false && needs.changes.outputs.pottery_house == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: "22"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - name: Run Pottery House fixture against preview
-        run: |
-          node scripts/fixtures/pottery-house-krabi.fixture.mjs \
-            --url "https://preview.krabiclaw.com" \
-            --site-id "site-pottery-house" \
-            --slug "pottery-house"
 
   e2e-staging:
     name: E2E staging

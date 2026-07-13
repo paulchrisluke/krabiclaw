@@ -1,13 +1,15 @@
 import { expect, type Page } from '@playwright/test'
-import { tenantTestBaseUrl, potteryHouseTestBaseUrl, tenantTestExtraHeaders, potteryHouseTestExtraHeaders } from './test-env'
+import { blawbyTestBaseUrl, blawbyTestExtraHeaders, tenantTestBaseUrl, potteryHouseTestBaseUrl, tenantTestExtraHeaders, potteryHouseTestExtraHeaders } from './test-env'
 
 export const tenantBaseURL = tenantTestBaseUrl()
 export const potteryHouseBaseURL = potteryHouseTestBaseUrl()
+export const blawbyBaseURL = blawbyTestBaseUrl()
 // Extra headers for tenant tests against *.workers.dev preview Workers.
 // Apply via test.use({ extraHTTPHeaders: tenantExtraHeaders }) in each describe
 // block that navigates to a tenant URL (not the platform/dashboard describes).
 export const tenantExtraHeaders = tenantTestExtraHeaders()
 export const potteryHouseExtraHeaders = potteryHouseTestExtraHeaders()
+export const blawbyExtraHeaders = blawbyTestExtraHeaders()
 
 // Third-party origins whose request failures are expected noise in CI:
 // no API keys, no allowlisted IP, headless browser blocked by CORS, etc.
