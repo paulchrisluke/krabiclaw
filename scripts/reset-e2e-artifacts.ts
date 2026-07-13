@@ -113,6 +113,24 @@ if (!Number.isInteger(batchSize) || batchSize <= 0) {
   process.exit(1)
 }
 
+// Category 1's "is this org eligible" check, capped with LIMIT so a single run can never be
+// asked to filter the entire backlog in one CPU-budgeted call - it makes bounded incremental
+// progress every run instead, draining a large existing backlog over several runs rather than
+// needing to clear it all at once. Every throwaway site creates exactly one throwaway org 1:1
+// (runSiteCreation only reuses an org while it still owns zero sites), so organization has grown
+// to roughly sites' scale. Intentionally interpolated twice below rather than factored into a
+// TEMP TABLE - D1's remote execute endpoint rejects CREATE TEMP TABLE/DROP TABLE with
+// "not authorized: SQLITE_AUTH" (its HTTP API restricts DDL beyond a plain wrangler d1 execute
+// --file), so each DELETE re-evaluates its own copy instead of sharing one materialized result -
+// more total scan work than a temp table would need, but each copy still terminates after
+// finding batchSize matches, so it stays cheap regardless of backlog size.
+const eligibleOrgIds = `
+  SELECT id FROM organization
+  WHERE id NOT IN (${fixtureOrgIdList})
+    AND id NOT IN (SELECT organization_id FROM sites WHERE created_at >= '${cutoff}')
+  LIMIT ${batchSize}
+`
+
 const sql = `-- Sweeps E2E-generated rows from preview/staging so they don't accumulate forever.
 -- Safe to re-run: only ever targets organizations outside the fixed fixture allowlist and the
 -- '@playwright.example' guest-email marker that tests/e2e specs already use. Curated fixtures
@@ -121,30 +139,16 @@ const sql = `-- Sweeps E2E-generated rows from preview/staging so they don't acc
 
 PRAGMA foreign_keys = ON;
 
--- Category 1: throwaway sites/orgs. Every throwaway site creates exactly one throwaway org
--- 1:1 (runSiteCreation only reuses an org while it still owns zero sites), so organization has
--- grown to roughly sites' scale - scanning it via this WHERE clause twice (once per DELETE
--- below) doubled that cost for no reason. Materialized once into a temp table instead, and
--- capped with LIMIT so a single run can never be asked to filter the entire backlog in one
--- CPU-budgeted call - it makes bounded incremental progress every run instead, draining a large
--- existing backlog over several runs rather than needing to clear it all at once.
-CREATE TEMP TABLE eligible_orgs AS
-  SELECT id FROM organization
-  WHERE id NOT IN (${fixtureOrgIdList})
-    AND id NOT IN (SELECT organization_id FROM sites WHERE created_at >= '${cutoff}')
-  LIMIT ${batchSize};
-
+-- Category 1: throwaway sites/orgs.
 -- notification_events.organization_id/site_id are ON DELETE SET NULL, not CASCADE, so they'd
 -- otherwise survive the org delete below as orphaned rows pointing at a submission_id whose
 -- parent row no longer exists. Delete them first, while organization_id is still populated.
-DELETE FROM notification_events WHERE organization_id IN (SELECT id FROM eligible_orgs);
+DELETE FROM notification_events WHERE organization_id IN (${eligibleOrgIds});
 
 -- Cascades through sites, content, translation_jobs, experiences, locations, guest_threads
 -- (and, via guest_threads' own cascading FK, submission_messages), etc. via
 -- organization_id -> organization(id) ON DELETE CASCADE.
-DELETE FROM organization WHERE id IN (SELECT id FROM eligible_orgs);
-
-DROP TABLE eligible_orgs;
+DELETE FROM organization WHERE id IN (${eligibleOrgIds});
 
 -- Category 2: guest-submitted rows on the persistent Pottery House/demo fixtures, marked by
 -- email. Every query below filters by the known fixture site_id/organization_id FIRST - via
