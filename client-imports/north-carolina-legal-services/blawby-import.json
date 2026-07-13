@@ -1,6 +1,6 @@
 {
   "source": "react-next-marketing-site-template/northcarolinalegalservices",
-  "source_commit": "5908ab3e64f26f799de61ed55371d02f9ec7bc2f",
+  "source_commit": "f9470f44e15f98978b7f866da54782a6da95818d",
   "expected_article_slugs": [
     "7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back",
     "disaster-relief-for-north-carolina-homeowners-after-hurricane-helene",
@@ -29,7 +29,7 @@
     "theme_id": "blawby-theme-v1",
     "domain": "northcarolinalegalservices.org",
     "email": "contact@northcarolinalegalservices.org",
-    "phone": "(919) 886-4134",
+    "phone": "(984) 777-8288",
     "service_area": {
       "name": "North Carolina",
       "region": "NC",
@@ -3193,7 +3193,7 @@
     {
       "id": "qa_ncls_site_5",
       "question": "Do you charge a consultation fee?",
-      "answer": "Yes, we charge a flat rate of $45 for a half-hour consultation.",
+      "answer": "Yes, we charge a flat rate of $80 for a half-hour consultation.",
       "page_path": null,
       "sort_order": 4,
       "source": "import",
@@ -3375,7 +3375,7 @@
   ],
   "mediaInventory": {
     "source": "react-next-marketing-site-template/tenants/northcarolinalegalservices",
-    "source_commit": "5908ab3e64f26f799de61ed55371d02f9ec7bc2f",
+    "source_commit": "f9470f44e15f98978b7f866da54782a6da95818d",
     "approved_hosts": [
       "media.krabiclaw.com",
       "images.krabiclaw.com",

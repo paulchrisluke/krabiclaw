@@ -30,7 +30,7 @@ INSERT INTO sites (
   'site-ncls-blawby', 'org-ncls-blawby', 'blawby-theme-v1', 'blawby',
   'ncls', 'ncls', 'http://ncls.localhost:3000',
   'North Carolina Legal Services', 'Access to Justice for All. North Carolina''s affordable legal services. We believe that access to the Justice System is a fundamental right. At North Carolina Legal Services we are committed to removing financial barriers that prevent many in our community from obtaining high-quality legal assistance.',
-  'contact@northcarolinalegalservices.org', '(919) 886-4134',
+  'contact@northcarolinalegalservices.org', '(984) 777-8288',
   'en', 'USD', 'active', 'managed', 'active',
   'brand_pages', 'service', 'client_supplied', 'client_photos',
   '{"favicon_url":"/tenants/northcarolinalegalservices/favicon.svg"}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -48,7 +48,7 @@ INSERT INTO business_locations (
 ) VALUES (
   'loc-ncls-blawby-main', 'org-ncls-blawby', 'site-ncls-blawby', 'main',
   'North Carolina Legal Services', 'North Carolina',
-  NULL, '(919) 886-4134', 'contact@northcarolinalegalservices.org', 'https://northcarolinalegalservices.org', NULL,
+  NULL, '(984) 777-8288', 'contact@northcarolinalegalservices.org', 'https://northcarolinalegalservices.org', NULL,
   '["LegalService","ProfessionalService"]', 1, 'active',
   'Access to Justice for All. North Carolina''s affordable legal services. We believe that access to the Justice System is a fundamental right. At North Carolina Legal Services we are committed to removing financial barriers that prevent many in our community from obtaining high-quality legal assistance.', 'America/New_York', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 );

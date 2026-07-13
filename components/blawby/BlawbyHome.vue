@@ -30,7 +30,7 @@
       </div>
     </section>
 
-    <section class="relative bg-white pb-14 pt-14 sm:pb-20 sm:pt-14 lg:pb-14" data-parity-section="services">
+    <section class="relative bg-(--blawby-bg) pb-14 pt-14 sm:pb-20 sm:pt-14 lg:pb-14" data-parity-section="services">
       <div class="blawby-container relative z-20">
         <BlawbySectionHeading
           :title="services.title || 'Our'"

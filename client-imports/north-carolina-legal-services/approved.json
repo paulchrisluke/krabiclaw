@@ -1,9 +1,9 @@
 {
   "approved": true,
   "approved_by": "paulchrisluke",
-  "approved_at": "2026-07-13T02:49:43.116Z",
-  "manifest_hash": "90d4604d3560f8fbfe12c04b5fb02e08b3021b24c3dcbe561c0c3fd5b7b5c571",
-  "source_commit": "5908ab3e64f26f799de61ed55371d02f9ec7bc2f",
+  "approved_at": "2026-07-13T09:02:51.169Z",
+  "manifest_hash": "ca4fe3c927c2b288100e5a692dbf12df40c72d847ad0ccdc39b80f8b21d463c7",
+  "source_commit": "f9470f44e15f98978b7f866da54782a6da95818d",
   "slug": "north-carolina-legal-services",
   "vertical": "service",
   "adapter": "ncls-blawby"

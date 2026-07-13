@@ -32,14 +32,23 @@ function parseArgs(argv) {
   return args
 }
 
+function resolveConsultationPriceUsd(sourcePath) {
+  const sharedConstPath = path.resolve(path.dirname(sourcePath), '..', '..', 'lib', 'const', 'shared.ts')
+  const sharedSource = fs.readFileSync(sharedConstPath, 'utf8')
+  const match = sharedSource.match(/export const CONSULTATION_PRICE_USD\s*=\s*(\d+(?:\.\d+)?)/)
+  if (!match) throw new Error(`Unable to resolve CONSULTATION_PRICE_USD from ${sharedConstPath}`)
+  return match[1]
+}
+
 function evaluateTenantConfig(sourcePath) {
   let source = fs.readFileSync(sourcePath, 'utf8')
+  const consultationPriceUsd = resolveConsultationPriceUsd(sourcePath)
   source = source
     .replace(/^import[\s\S]*?^const domain/m, 'const domain')
     .replace(/export const northcarolinalegalservices\s*:\s*ISeedTenant\s*=/, 'const northcarolinalegalservices =')
     .replace(/DateTime\.fromObject\((\{[\s\S]*?\})\)\.toJSDate\(\)/g, 'new Date($1)')
     .replace(/\bE(AccountRole|MediaType|SocialPlatform)\.([A-Za-z0-9_]+)/g, (_, _enumName, value) => JSON.stringify(value))
-    .replace(/\bCONSULTATION_PRICE_USD\b/g, '45')
+    .replace(/\bCONSULTATION_PRICE_USD\b/g, consultationPriceUsd)
 
   const context = {
     Date,
