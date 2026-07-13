@@ -146,7 +146,7 @@ test.describe('Blawby NCLS public site', () => {
     await page.goto(`${blawbyBaseURL}/blog`, { waitUntil: 'load' })
     await waitForHydration(page)
     await page.getByRole('button', { name: 'Divorce', exact: true }).click()
-    await expect(page.locator('[data-parity-section="articles"] article')).toHaveCount(1)
+    await expect(page.locator('[data-parity-section="articles"]').getByRole('link')).toHaveCount(2)
   })
 
   test('professional contact requires explicit consent', async ({ request }) => {
