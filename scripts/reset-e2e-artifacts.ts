@@ -106,13 +106,12 @@ const fixtureOrgIdList = FIXTURE_ORG_IDS.map((id) => `'${id}'`).join(', ')
 const guestBookingSiteIdList = GUEST_BOOKING_SITE_IDS.map((id) => `'${id}'`).join(', ')
 const guestBookingOrgIdList = GUEST_BOOKING_ORGANIZATION_IDS.map((id) => `'${id}'`).join(', ')
 
-// Two independent, unindexed-but-cheap linear scans (organization is small; sites is filtered
-// only by created_at, no pattern matching) - not a join, not a GROUP BY/aggregate.
-const eligibleOrgIds = `
-  SELECT id FROM organization
-  WHERE id NOT IN (${fixtureOrgIdList})
-    AND id NOT IN (SELECT organization_id FROM sites WHERE created_at >= '${cutoff}')
-`
+const batchArg = process.argv.find((arg) => arg.startsWith('--batch-size='))
+const batchSize = batchArg ? Number(batchArg.split('=')[1]) : 500
+if (!Number.isInteger(batchSize) || batchSize <= 0) {
+  console.error('--batch-size must be a positive integer.')
+  process.exit(1)
+}
 
 const sql = `-- Sweeps E2E-generated rows from preview/staging so they don't accumulate forever.
 -- Safe to re-run: only ever targets organizations outside the fixed fixture allowlist and the
@@ -122,16 +121,30 @@ const sql = `-- Sweeps E2E-generated rows from preview/staging so they don't acc
 
 PRAGMA foreign_keys = ON;
 
--- Category 1: throwaway sites/orgs.
+-- Category 1: throwaway sites/orgs. Every throwaway site creates exactly one throwaway org
+-- 1:1 (runSiteCreation only reuses an org while it still owns zero sites), so organization has
+-- grown to roughly sites' scale - scanning it via this WHERE clause twice (once per DELETE
+-- below) doubled that cost for no reason. Materialized once into a temp table instead, and
+-- capped with LIMIT so a single run can never be asked to filter the entire backlog in one
+-- CPU-budgeted call - it makes bounded incremental progress every run instead, draining a large
+-- existing backlog over several runs rather than needing to clear it all at once.
+CREATE TEMP TABLE eligible_orgs AS
+  SELECT id FROM organization
+  WHERE id NOT IN (${fixtureOrgIdList})
+    AND id NOT IN (SELECT organization_id FROM sites WHERE created_at >= '${cutoff}')
+  LIMIT ${batchSize};
+
 -- notification_events.organization_id/site_id are ON DELETE SET NULL, not CASCADE, so they'd
 -- otherwise survive the org delete below as orphaned rows pointing at a submission_id whose
 -- parent row no longer exists. Delete them first, while organization_id is still populated.
-DELETE FROM notification_events WHERE organization_id IN (${eligibleOrgIds});
+DELETE FROM notification_events WHERE organization_id IN (SELECT id FROM eligible_orgs);
 
 -- Cascades through sites, content, translation_jobs, experiences, locations, guest_threads
 -- (and, via guest_threads' own cascading FK, submission_messages), etc. via
 -- organization_id -> organization(id) ON DELETE CASCADE.
-DELETE FROM organization WHERE id IN (${eligibleOrgIds});
+DELETE FROM organization WHERE id IN (SELECT id FROM eligible_orgs);
+
+DROP TABLE eligible_orgs;
 
 -- Category 2: guest-submitted rows on the persistent Pottery House/demo fixtures, marked by
 -- email. Every query below filters by the known fixture site_id/organization_id FIRST - via
@@ -143,24 +156,39 @@ DELETE FROM organization WHERE id IN (${eligibleOrgIds});
 -- real FK to guest_threads (ON DELETE CASCADE), but it's deleted explicitly here too rather than
 -- relied on implicitly, so this block's correctness doesn't depend on the guest_threads delete
 -- below succeeding first.
+-- Each branch is LIMIT-bounded too, as its own derived table - SQLite rejects a bare
+-- parenthesized SELECT as a compound-query operand inside IN(...) ("near UNION: syntax error"),
+-- so each branch is wrapped as SELECT id FROM (SELECT ... LIMIT n) instead. Defensive: category 2
+-- is already site/org-scoped down to 2 fixtures, so its result sets should be small regardless,
+-- but every fix so far in this script underestimated backlog scale.
 DELETE FROM notification_events WHERE submission_id IN (
-  SELECT id FROM contact_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}'
+  SELECT id FROM (SELECT id FROM contact_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize})
   UNION ALL
-  SELECT id FROM reservation_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}'
+  SELECT id FROM (SELECT id FROM reservation_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize})
   UNION ALL
-  SELECT id FROM experience_bookings WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}'
+  SELECT id FROM (SELECT id FROM experience_bookings WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize})
 );
 
 DELETE FROM submission_messages WHERE thread_id IN (
-  SELECT id FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}'
+  SELECT id FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
 );
 
-DELETE FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}';
+DELETE FROM guest_threads WHERE id IN (
+  SELECT id FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
+);
 
-DELETE FROM contact_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}';
-DELETE FROM reservation_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}';
-DELETE FROM experience_bookings WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}';
-DELETE FROM notifications WHERE organization_id IN (${guestBookingOrgIdList}) AND recipient LIKE '%@playwright.example' AND created_at < '${cutoff}';
+DELETE FROM contact_submissions WHERE id IN (
+  SELECT id FROM contact_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
+);
+DELETE FROM reservation_submissions WHERE id IN (
+  SELECT id FROM reservation_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
+);
+DELETE FROM experience_bookings WHERE id IN (
+  SELECT id FROM experience_bookings WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
+);
+DELETE FROM notifications WHERE id IN (
+  SELECT id FROM notifications WHERE organization_id IN (${guestBookingOrgIdList}) AND recipient LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
+);
 `
 
 if (isStdout) {
