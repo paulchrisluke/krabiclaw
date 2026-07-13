@@ -25,9 +25,18 @@ import { execWithRetry } from './wrangler-retry.ts'
 //    child tables - except notification_events, whose organization_id/site_id columns are
 //    ON DELETE SET NULL rather than CASCADE, so it's swept explicitly before the org delete.
 //
-// 2. Guest-submitted rows against the *persistent* Pottery House fixture (bookings, contact
-//    forms, reservations) - these specs already mark every guest email '...@playwright.example',
-//    so they're swept by that marker instead, since there's no throwaway org/site to cascade from.
+// 2. Guest-submitted rows against the *persistent* Pottery House and demo fixtures (bookings,
+//    contact forms, reservations) - these specs already mark every guest email
+//    '...@playwright.example', so they're swept by that marker instead, since there's no
+//    throwaway org/site to cascade from. Every one of these queries scopes to the two known
+//    fixture site/org IDs FIRST, before the LIKE pattern - contact_submissions,
+//    experience_bookings, and reservation_submissions all already carry a site_id-leading index
+//    (idx_contact_submissions_site, idx_experience_bookings_site, idx_reservation_submissions_site)
+//    and notifications an organization_id-leading one (idx_notifications_org), hand-authored in
+//    the immutable migrations/0001_initial.sql and already live everywhere - but a bare
+//    `email LIKE '%@playwright.example'` with no site/org filter can't use any of them (leading
+//    wildcard forces a full scan regardless), which is what still exceeded D1's CPU budget on
+//    staging even after category 1 was fixed to be cheap.
 //
 // Age-guarded (default 2 hours) as a practical safety margin, not a hard guarantee: rows created
 // by an in-flight run are always fresher than the cutoff, so a run has to be stuck for the full
@@ -54,6 +63,14 @@ const FIXTURE_ORG_IDS = [
   'org-kikuzuki',
   'org-ncls-blawby',
 ]
+
+// The only two fixtures guest-booking/contact specs target: Pottery House (notifications.spec.ts,
+// pottery-house.spec.ts) and demo (reply-threading.spec.ts, public.spec.ts) - lets category 2
+// scope by an indexed column before the unindexable email LIKE pattern. Update this list if a
+// future spec targets a different fixture (grep tests/e2e/*.spec.ts for '@playwright.example' to
+// find every spec that needs to stay covered).
+const GUEST_BOOKING_SITE_IDS = ['site-pottery-house', 'site-demo']
+const GUEST_BOOKING_ORGANIZATION_IDS = ['org-pottery-house', 'org-demo']
 
 const isStaging = process.argv.includes('--staging')
 const isPreview = process.argv.includes('--preview')
@@ -86,6 +103,8 @@ if (Number.isNaN(cutoffDate.getTime())) {
 const cutoff = cutoffDate.toISOString()
 
 const fixtureOrgIdList = FIXTURE_ORG_IDS.map((id) => `'${id}'`).join(', ')
+const guestBookingSiteIdList = GUEST_BOOKING_SITE_IDS.map((id) => `'${id}'`).join(', ')
+const guestBookingOrgIdList = GUEST_BOOKING_ORGANIZATION_IDS.map((id) => `'${id}'`).join(', ')
 
 // Two independent, unindexed-but-cheap linear scans (organization is small; sites is filtered
 // only by created_at, no pattern matching) - not a join, not a GROUP BY/aggregate.
@@ -114,29 +133,34 @@ DELETE FROM notification_events WHERE organization_id IN (${eligibleOrgIds});
 -- organization_id -> organization(id) ON DELETE CASCADE.
 DELETE FROM organization WHERE id IN (${eligibleOrgIds});
 
--- Category 2: guest-submitted rows on the persistent Pottery House fixture, marked by email.
--- notification_events is polymorphic (submission_type/submission_id, no FK) so it must be swept
--- explicitly before its parent rows disappear. submission_messages has a real FK to guest_threads
--- (ON DELETE CASCADE), but it's deleted explicitly here too rather than relied on implicitly, so
--- this block's correctness doesn't depend on the guest_threads delete below succeeding first.
+-- Category 2: guest-submitted rows on the persistent Pottery House/demo fixtures, marked by
+-- email. Every query below filters by the known fixture site_id/organization_id FIRST - via
+-- idx_contact_submissions_site, idx_experience_bookings_site, idx_reservation_submissions_site,
+-- and idx_notifications_org (all hand-authored, already live, see comment above) - so the
+-- unindexable 'LIKE %@playwright.example' only has to scan a handful of fixture-scoped rows,
+-- not a full table scan. notification_events is polymorphic (submission_type/submission_id, no
+-- FK) so it must be swept explicitly before its parent rows disappear. submission_messages has a
+-- real FK to guest_threads (ON DELETE CASCADE), but it's deleted explicitly here too rather than
+-- relied on implicitly, so this block's correctness doesn't depend on the guest_threads delete
+-- below succeeding first.
 DELETE FROM notification_events WHERE submission_id IN (
-  SELECT id FROM contact_submissions WHERE email LIKE '%@playwright.example' AND created_at < '${cutoff}'
+  SELECT id FROM contact_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}'
   UNION ALL
-  SELECT id FROM reservation_submissions WHERE email LIKE '%@playwright.example' AND created_at < '${cutoff}'
+  SELECT id FROM reservation_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}'
   UNION ALL
-  SELECT id FROM experience_bookings WHERE guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}'
+  SELECT id FROM experience_bookings WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}'
 );
 
 DELETE FROM submission_messages WHERE thread_id IN (
-  SELECT id FROM guest_threads WHERE guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}'
+  SELECT id FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}'
 );
 
-DELETE FROM guest_threads WHERE guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}';
+DELETE FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}';
 
-DELETE FROM contact_submissions WHERE email LIKE '%@playwright.example' AND created_at < '${cutoff}';
-DELETE FROM reservation_submissions WHERE email LIKE '%@playwright.example' AND created_at < '${cutoff}';
-DELETE FROM experience_bookings WHERE guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}';
-DELETE FROM notifications WHERE recipient LIKE '%@playwright.example' AND created_at < '${cutoff}';
+DELETE FROM contact_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}';
+DELETE FROM reservation_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}';
+DELETE FROM experience_bookings WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}';
+DELETE FROM notifications WHERE organization_id IN (${guestBookingOrgIdList}) AND recipient LIKE '%@playwright.example' AND created_at < '${cutoff}';
 `
 
 if (isStdout) {
