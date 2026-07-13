@@ -137,7 +137,7 @@ useSeoMeta({
 useHead(() => review.value ? {
   script: [{
     type: 'application/ld+json',
-    children: JSON.stringify({
+    innerHTML: JSON.stringify({
       '@context': 'https://schema.org',
       '@type': 'Review',
       author: { '@type': 'Person', name: review.value.author_name || 'Guest' },

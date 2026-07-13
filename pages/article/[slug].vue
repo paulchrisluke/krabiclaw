@@ -110,7 +110,7 @@ useSeoMeta({ title: seoTitle, description: seoDescription, ogTitle: seoTitle, og
 useHead(() => ({
   link: [{ rel: 'canonical', href: canonicalUrl.value }],
   meta: post.value.robots ? [{ name: 'robots', content: post.value.robots }] : [],
-  script: [{ type: 'application/ld+json', children: serializeJsonLd({
+  script: [{ type: 'application/ld+json', innerHTML: serializeJsonLd({
     '@context': 'https://schema.org', '@type': 'Article', headline: post.value.title, description: seoDescription.value, url: canonicalUrl.value,
     datePublished: post.value.published_at || post.value.created_at || undefined, dateModified: post.value.updated_at || post.value.published_at || undefined,
     image: post.value.featured_image?.public_url ? [post.value.featured_image.public_url] : undefined,

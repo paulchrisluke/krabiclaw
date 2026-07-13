@@ -44,7 +44,7 @@ useSeoMeta({
 const canonicalUrl = useSeoUrl(() => '/blog')
 useHead(() => ({
   link: [{ rel: 'canonical', href: canonicalUrl.value }],
-  script: [{ type: 'application/ld+json', children: serializeJsonLd({
+  script: [{ type: 'application/ld+json', innerHTML: serializeJsonLd({
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
     name: heroTitle.value,

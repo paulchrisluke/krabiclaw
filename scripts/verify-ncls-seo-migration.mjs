@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs'
 import { auditSeoHtml, buildSeoMigrationContract, parseSearchConsoleCsv, parseSitemapXml } from './utils/seo-migration-contract.mjs'
+import { isNonIndexableHost } from '../server/utils/seo-policy.ts'
 
 function args(argv) {
   const result = { url: '', expectedOrigin: '', tenantSlug: '' }
@@ -62,19 +63,24 @@ for (const [path, outcome] of contract.outcomes) {
   }
 }
 
-const sitemapResponse = await request('/sitemap.xml', 'follow')
-const targetSitemap = sitemapResponse.ok ? parseSitemapXml(await sitemapResponse.text()).map(url => new URL(url).pathname) : []
-if (!sitemapResponse.ok) failures.push(`/sitemap.xml: received ${sitemapResponse.status}`)
-for (const [path, outcome] of contract.outcomes) {
-  if (outcome.behavior === 'preserve' && contract.sourceUrls.includes(path) && !targetSitemap.includes(path)) failures.push(`${path}: missing from target sitemap`)
-  if (outcome.behavior !== 'preserve' && targetSitemap.includes(path)) failures.push(`${path}: redirect/gone URL appears in target sitemap`)
-}
+// server/plugins/sitemap.ts and the app's robots policy both intentionally block indexing
+// on preview/staging/workers.dev hosts (server/utils/seo-policy.ts isNonIndexableHost) — an
+// empty sitemap and a blanket robots disallow there are correct, not a migration regression.
+if (!isNonIndexableHost(base.hostname)) {
+  const sitemapResponse = await request('/sitemap.xml', 'follow')
+  const targetSitemap = sitemapResponse.ok ? parseSitemapXml(await sitemapResponse.text()).map(url => new URL(url).pathname) : []
+  if (!sitemapResponse.ok) failures.push(`/sitemap.xml: received ${sitemapResponse.status}`)
+  for (const [path, outcome] of contract.outcomes) {
+    if (outcome.behavior === 'preserve' && contract.sourceUrls.includes(path) && !targetSitemap.includes(path)) failures.push(`${path}: missing from target sitemap`)
+    if (outcome.behavior !== 'preserve' && targetSitemap.includes(path)) failures.push(`${path}: redirect/gone URL appears in target sitemap`)
+  }
 
-const robotsResponse = await request('/robots.txt', 'follow')
-const robots = robotsResponse.ok ? await robotsResponse.text() : ''
-if (!robotsResponse.ok) failures.push(`/robots.txt: received ${robotsResponse.status}`)
-if (/disallow:\s*\//i.test(robots)) failures.push('/robots.txt: blocks the entire site')
-if (!/sitemap:/i.test(robots)) failures.push('/robots.txt: missing Sitemap directive')
+  const robotsResponse = await request('/robots.txt', 'follow')
+  const robots = robotsResponse.ok ? await robotsResponse.text() : ''
+  if (!robotsResponse.ok) failures.push(`/robots.txt: received ${robotsResponse.status}`)
+  if (/disallow:\s*\//i.test(robots)) failures.push('/robots.txt: blocks the entire site')
+  if (!/sitemap:/i.test(robots)) failures.push('/robots.txt: missing Sitemap directive')
+}
 
 const report = { checkedAt: new Date().toISOString(), baseUrl: base.origin, expectedOrigin, sourceUrlCount: contract.sourceUrls.length, indexedUrlCount: contract.indexedUrls.length, failures }
 console.log(JSON.stringify(report, null, 2))

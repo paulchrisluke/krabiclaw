@@ -47,7 +47,7 @@ useHead(() => ({
   htmlAttrs: { class: 'blawby-document' },
   script: [{
     type: 'application/ld+json',
-    children: serializeJsonLd({
+    innerHTML: serializeJsonLd({
       '@context': 'https://schema.org',
       '@type': ['ProfessionalService', 'Organization'],
       name: identity.value.brand_name || compliance.value?.entity_name || 'Professional services',

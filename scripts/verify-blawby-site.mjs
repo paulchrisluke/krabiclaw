@@ -8,6 +8,7 @@ import {
   BLAWBY_REFERENCE_ETAG,
   NCLS_ARTICLE_SLUGS,
 } from './blawby-parity-config.mjs'
+import { isNonIndexableHost } from '../server/utils/seo-policy.ts'
 
 const DEFAULT_ROUTES = [
   '/',
@@ -428,7 +429,14 @@ async function validateRemoteMedia(checks, ...sources) {
   }
 }
 
-function validateSitemap(checks, sitemap, manifest) {
+function validateSitemap(checks, sitemap, manifest, hostname) {
+  if (isNonIndexableHost(hostname)) {
+    // server/plugins/sitemap.ts intentionally zeroes the sitemap for preview/staging/workers.dev
+    // hosts (server/utils/seo-policy.ts isNonIndexableHost) so they never get indexed. An empty
+    // sitemap there is correct behavior, not a defect — skip rather than assert against it.
+    pushCheck(checks, true, `Sitemap checks skipped for non-indexable host: ${hostname}`)
+    return
+  }
   if (!sitemap) {
     pushCheck(checks, false, 'Sitemap is fetchable')
     return
@@ -629,7 +637,7 @@ validateArtifacts(checks, manifest)
 const publicData = await fetchBlawbyData(baseUrl, args.siteId)
 validatePublicData(checks, publicData, Boolean(args.siteId))
 if (baseUrl) await validateRemoteMedia(checks, manifest, publicData)
-if (baseUrl) validateSitemap(checks, await fetchSitemap(baseUrl), manifest)
+if (baseUrl) validateSitemap(checks, await fetchSitemap(baseUrl), manifest, new URL(baseUrl).hostname)
 validateScreenshots(checks, args.evidenceDir, args.requireScreenshots)
 
 const report = {

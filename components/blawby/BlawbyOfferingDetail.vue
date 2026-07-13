@@ -185,7 +185,7 @@ useSeoMeta({
 useHead(() => ({
   link: [{ rel: 'canonical', href: canonicalUrl.value }],
   script: [
-    { type: 'application/ld+json', children: serializeJsonLd({
+    { type: 'application/ld+json', innerHTML: serializeJsonLd({
       '@context': 'https://schema.org',
       '@type': offering.value.schema_type || 'LegalService',
       name: offering.value.name,
@@ -194,7 +194,7 @@ useHead(() => ({
       provider: { '@type': 'Organization', name: identity.value.brand_name || 'Professional services' },
       image: offering.value.hero_image_url || offering.value.thumbnail_url || undefined,
     }) },
-    { type: 'application/ld+json', children: serializeJsonLd({
+    { type: 'application/ld+json', innerHTML: serializeJsonLd({
       '@context': 'https://schema.org',
       '@type': 'BreadcrumbList',
       itemListElement: [
@@ -203,7 +203,7 @@ useHead(() => ({
         { '@type': 'ListItem', position: 3, name: offering.value.name, item: canonicalUrl.value },
       ],
     }) },
-    ...(validOfferingQa.value.length ? [{ type: 'application/ld+json', children: serializeJsonLd({
+    ...(validOfferingQa.value.length ? [{ type: 'application/ld+json', innerHTML: serializeJsonLd({
       '@context': 'https://schema.org',
       '@type': 'FAQPage',
       mainEntity: validOfferingQa.value.map(item => ({
