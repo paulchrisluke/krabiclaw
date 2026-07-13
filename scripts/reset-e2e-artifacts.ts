@@ -72,6 +72,24 @@ const FIXTURE_ORG_IDS = [
 const GUEST_BOOKING_SITE_IDS = ['site-pottery-house', 'site-demo']
 const GUEST_BOOKING_ORGANIZATION_IDS = ['org-pottery-house', 'org-demo']
 
+// Every fixture user a seed script creates under a fixed ID or that also happens to use
+// '@example.test' (server/api/dev/login.get.ts's auto-create path uses exactly this domain for
+// every dev-login test user, so several fixtures collide with it and must be excluded by ID, not
+// just by domain): user-mcp-free/growth/managed (scripts/generate-demo-seed.ts's
+// renderMcpFixtureOrg) and the site-transfer recipient both use @example.test. user-demo,
+// user-pottery-house, and user-kikuzuki use other domains and would never match anyway, but are
+// listed for clarity/future-proofing. Keep in sync with FIXTURE_ORG_IDS' seed scripts.
+const FIXTURE_USER_IDS = [
+  'user-demo',
+  'user_demo',
+  'user-mcp-free',
+  'user-mcp-growth',
+  'user-mcp-managed',
+  'Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re',
+  'user-pottery-house',
+  'user-kikuzuki',
+]
+
 const isStaging = process.argv.includes('--staging')
 const isPreview = process.argv.includes('--preview')
 const isStdout = process.argv.includes('--stdout')
@@ -101,8 +119,12 @@ if (Number.isNaN(cutoffDate.getTime())) {
   process.exit(1)
 }
 const cutoff = cutoffDate.toISOString()
+// Better Auth tables (user, member, session, invitation) store createdAt as a Unix-seconds
+// integer via unixepoch(), not the ISO8601 text app tables use - category 3 needs this variant.
+const cutoffUnixSeconds = Math.floor(cutoffDate.getTime() / 1000)
 
 const fixtureOrgIdList = FIXTURE_ORG_IDS.map((id) => `'${id}'`).join(', ')
+const fixtureUserIdList = FIXTURE_USER_IDS.map((id) => `'${id}'`).join(', ')
 const guestBookingSiteIdList = GUEST_BOOKING_SITE_IDS.map((id) => `'${id}'`).join(', ')
 const guestBookingOrgIdList = GUEST_BOOKING_ORGANIZATION_IDS.map((id) => `'${id}'`).join(', ')
 
@@ -192,6 +214,24 @@ DELETE FROM experience_bookings WHERE id IN (
 );
 DELETE FROM notifications WHERE id IN (
   SELECT id FROM notifications WHERE organization_id IN (${guestBookingOrgIdList}) AND recipient LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
+);
+
+-- Category 3: dev-login-created test users. server/api/dev/login.get.ts's userId-less path
+-- auto-creates a user under '<userId>@example.test' for every dev-login call that doesn't pass
+-- an explicit userId - the exact query that was reading 47.5M rows per execution (99.5% of all
+-- D1 rows read on preview/staging, per wrangler d1 insights) because it scanned this ever-growing
+-- table with 3 correlated EXISTS subqueries per row. That query is now fixed to a single indexed
+-- pass regardless of table size, but this table still grows unboundedly without a sweep, so it's
+-- covered here too. member/session/invitation(as inviter) all cascade from user.id
+-- (ON DELETE CASCADE), so deleting the user row is sufficient - it does NOT cascade up to
+-- organization/sites (organization isn't a child of user), but those are independently covered by
+-- category 1 above regardless of whether their owning user was already swept.
+DELETE FROM user WHERE id IN (
+  SELECT id FROM user
+  WHERE id NOT IN (${fixtureUserIdList})
+    AND email LIKE '%@example.test'
+    AND createdAt < ${cutoffUnixSeconds}
+  LIMIT ${batchSize}
 );
 `
 
