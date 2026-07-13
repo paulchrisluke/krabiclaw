@@ -3,6 +3,7 @@ name: CI
 on:
   pull_request:
     branches: [main, staging]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main, staging]
   schedule:
@@ -47,6 +48,7 @@ jobs:
       pull-requests: read
     outputs:
       pottery_house: ${{ steps.filter.outputs.pottery_house }}
+      seed_relevant: ${{ steps.filter.outputs.seed_relevant }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -60,6 +62,11 @@ jobs:
               - 'components/saya/**'
               - 'pages/**'
               - 'utils/vertical-copy.ts'
+            seed_relevant:
+              - 'scripts/**'
+              - 'seed-definitions/**'
+              - 'server/db/schema.ts'
+              - 'migrations/**'
 
   guardrails:
     name: CI guardrails
@@ -99,7 +106,8 @@ jobs:
 
   e2e-smoke:
     name: E2E smoke
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    needs: [changes]
     runs-on: ubuntu-latest
     env:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
@@ -127,13 +135,20 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SEED_RELEVANT: ${{ needs.changes.outputs.seed_relevant }}
         run: |
           yarn migrate:preview
-          node --experimental-strip-types scripts/generate-demo-bundle.ts
+          # The E2E-artifact sweep always runs (cleanup, not reseeding - skipping it defeats the
+          # point of keeping preview from accumulating an unswept backlog again). Only the fixture
+          # reseed below is conditional: DELETE-then-INSERT of demo/Pottery House/Kikuzuki is
+          # idempotent but wasted work on a PR that touched neither seed data nor schema.
           node --experimental-strip-types scripts/reset-e2e-artifacts.ts --preview --stdout > /tmp/preview-seed.sql
-          node --experimental-strip-types scripts/generate-demo-seed.ts --preview --stdout >> /tmp/preview-seed.sql
-          node --experimental-strip-types scripts/generate-pottery-house-seed.ts --preview --stdout >> /tmp/preview-seed.sql
-          node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview --stdout >> /tmp/preview-seed.sql
+          if [ "$SEED_RELEVANT" = "true" ]; then
+            node --experimental-strip-types scripts/generate-demo-bundle.ts
+            node --experimental-strip-types scripts/generate-demo-seed.ts --preview --stdout >> /tmp/preview-seed.sql
+            node --experimental-strip-types scripts/generate-pottery-house-seed.ts --preview --stdout >> /tmp/preview-seed.sql
+            node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview --stdout >> /tmp/preview-seed.sql
+          fi
           npx wrangler d1 execute DB --env preview --remote --file /tmp/preview-seed.sql
       - name: Deploy preview Worker
         env:
