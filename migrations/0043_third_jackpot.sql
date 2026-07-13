@@ -234,6 +234,19 @@ CREATE INDEX `review_requests_organization_id_idx` ON `review_requests` (`organi
 -- recreation in this file has completed, so it's never live during the DDL sequence at all.
 DROP TRIGGER `blog_posts_scope_org_site_insert`;--> statement-breakpoint
 DROP TRIGGER `blog_posts_scope_org_site_update`;--> statement-breakpoint
+-- page_path is a genuinely new column (staging's 0042 snapshot baseline has google_question_id
+-- already but not page_path - confirmed empirically: `SELECT page_path FROM location_qa` on the
+-- real preview DB errored "no such column: page_path" before this fix). drizzle-kit's generated
+-- INSERT INTO __new_location_qa(...) SELECT ... FROM location_qa referenced page_path in the
+-- SELECT list as if it already existed on the source table, which isn't true for any environment
+-- that only ever ran staging's migration lineage (i.e. every real environment right now, since
+-- preview/staging were just dropped and recreated on that lineage) - failed with
+-- "CHECK constraint failed: location_qa_scope_check" because SQLite evidently treated the
+-- unresolvable column reference as NULL-with-a-side-effect rather than erroring outright, which
+-- doesn't matter here: the real fix is adding it explicitly first, exactly like blog_posts.tags_json
+-- and contact_submissions.consent_at below. Existing rows get NULL, which satisfies both new CHECK
+-- constraints on this column trivially.
+ALTER TABLE `location_qa` ADD `page_path` text;--> statement-breakpoint
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
 CREATE TABLE `__new_location_qa` (
 	`id` text PRIMARY KEY NOT NULL,
@@ -277,6 +290,19 @@ ALTER TABLE `blog_posts` ADD `tags_json` text;--> statement-breakpoint
 CREATE INDEX `blog_posts_org_site_idx` ON `blog_posts` (`organization_id`,`site_id`);--> statement-breakpoint
 ALTER TABLE `contact_submissions` ADD `consent_at` text;--> statement-breakpoint
 CREATE INDEX `contact_submissions_org_site_idx` ON `contact_submissions` (`organization_id`,`site_id`);--> statement-breakpoint
+-- Same class of issue as location_qa.page_path above, caught by re-testing this migration
+-- against a pre-seeded database instead of an empty one: entered_by_user_id, collection_method,
+-- original_review_date, original_reference, and publication_authorized are all genuinely new
+-- columns (diffed staging's 0042 snapshot against __new_reviews' definition below) that
+-- drizzle-kit's generated SELECT list referenced as if they already existed on the source table.
+-- publication_authorized is NOT NULL DEFAULT 0, so existing rows get 0 explicitly (matches its
+-- own default and trivially satisfies reviews_publication_authorized_check); the rest are
+-- nullable with no default, so existing rows get NULL.
+ALTER TABLE `reviews` ADD `entered_by_user_id` text;--> statement-breakpoint
+ALTER TABLE `reviews` ADD `collection_method` text;--> statement-breakpoint
+ALTER TABLE `reviews` ADD `original_review_date` text;--> statement-breakpoint
+ALTER TABLE `reviews` ADD `original_reference` text;--> statement-breakpoint
+ALTER TABLE `reviews` ADD `publication_authorized` integer NOT NULL DEFAULT 0;--> statement-breakpoint
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
 CREATE TABLE `__new_reviews` (
 	`id` text PRIMARY KEY NOT NULL,
