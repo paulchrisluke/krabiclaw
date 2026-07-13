@@ -135,7 +135,7 @@ E2E_ALLOW_DEV_ROUTES = "true"
 [[env.preview.d1_databases]]
 binding = "DB"
 database_name = "krabiclaw-db-preview"
-database_id = "fba9d0aa-c6e2-411e-8cf5-ede43c15aae5"
+database_id = "abda2264-f84f-4cc7-8483-930fe9fc288d"
 migrations_dir = "migrations"
 remote = false
 
@@ -191,7 +191,7 @@ E2E_ALLOW_DEV_ROUTES = "true"
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "krabiclaw-db-staging"
-database_id = "757824d5-bdb2-4041-81a7-c30b9d1dc960"
+database_id = "b6e29548-155d-43ce-81ba-f6f6c5473069"
 migrations_dir = "migrations"
 remote = false
 
