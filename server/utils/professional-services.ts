@@ -438,7 +438,7 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
     body: String(row.body || ''),
     excerpt: typeof row.excerpt === 'string' ? row.excerpt : null,
     category: typeof row.category === 'string' ? row.category : null,
-    tags: parseJson<string[]>(row.tags_json, []),
+    tags: Array.isArray(row.tags) ? row.tags.map(String) : parseJson<string[]>(row.tags_json, []),
     featured_order: Number.isFinite(Number(row.featured_order)) ? Number(row.featured_order) : null,
     author_name: typeof row.author_name === 'string' ? row.author_name : null,
     published_at: typeof row.published_at === 'string' ? row.published_at : null,

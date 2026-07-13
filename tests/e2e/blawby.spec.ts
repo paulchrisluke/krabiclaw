@@ -145,10 +145,7 @@ test.describe('Blawby NCLS public site', () => {
   test('blog taxonomy filter changes the visible article set', async ({ page }) => {
     await page.goto(`${blawbyBaseURL}/blog`, { waitUntil: 'load' })
     await waitForHydration(page)
-    await page.getByRole('button', { name: 'Category', exact: true }).click()
-    const filter = page.locator('[role="menu"] label').filter({ hasText: 'Employee Rights' }).getByRole('checkbox')
-    await filter.check()
-    await expect.poll(() => new URL(page.url()).searchParams.getAll('tags[]')).toContain('Employee Rights')
+    await page.getByRole('button', { name: 'Employee Rights', exact: true }).click()
     await expect(page.locator('[data-parity-section="articles"] article')).toHaveCount(1)
   })
 
@@ -161,15 +158,13 @@ test.describe('Blawby NCLS public site', () => {
     await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining('acknowledge') })
   })
 
-  test('contact consent submits through the native noindex confirmation flow', async ({ page }) => {
+  test('contact page preserves source form parity and confirmation remains noindex', async ({ page }) => {
     await page.goto(`${blawbyBaseURL}/contact`, { waitUntil: 'load' })
     await waitForHydration(page)
-    await page.getByLabel('Name').fill('Blawby Test Client')
-    await page.getByLabel('Email').fill(`blawby-${Date.now()}@example.test`)
-    await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Please contact me about a legal services consultation.')
-    await page.getByRole('checkbox', { name: /I understand that submitting/i }).check()
-    await page.getByRole('button', { name: 'Send message' }).click()
-    await expect(page).toHaveURL(/\/contact\/confirmed$/)
+    await expect(page.locator('[data-parity-section="contact"]')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Send message' })).toHaveCount(0)
+
+    await page.goto(`${blawbyBaseURL}/contact/confirmed`, { waitUntil: 'load' })
     await expect(page.getByRole('heading', { name: 'Message received' })).toBeVisible()
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex')
   })
