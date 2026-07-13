@@ -1,6 +1,6 @@
 export const BLAWBY_REFERENCE_COMMIT = 'f9470f44e15f98978b7f866da54782a6da95818d'
 export const BLAWBY_REFERENCE_URL = 'https://www.northcarolinalegalservices.org'
-export const BLAWBY_REFERENCE_ETAG = '"eiotsi36fi3rcl"'
+export const BLAWBY_REFERENCE_ETAG = '"tssewjfnf43rg6"'
 
 export const NCLS_ARTICLE_SLUGS = [
   '7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back',
