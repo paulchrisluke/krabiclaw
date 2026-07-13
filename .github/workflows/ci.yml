@@ -131,24 +131,35 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - run: yarn build
-      - name: Migrate + seed preview database
+      - name: Migrate preview database
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          SEED_RELEVANT: ${{ needs.changes.outputs.seed_relevant }}
+        run: yarn migrate:preview
+      - name: Sweep E2E artifacts
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # Runs as its own wrangler d1 execute call, separate from the fixture reseed below - was
+        # previously concatenated into one combined file with the 3 seed scripts and executed as a
+        # single call with no retry logic (execWithRetry only applies inside this script's own
+        # self-executing mode, not a raw `wrangler d1 execute --file` in a workflow step), sharing
+        # one CPU budget across everything. That's the exact problem e2e-staging already avoided
+        # by running each script separately - confirmed as a real, reproducing failure here too
+        # ("D1 DB exceeded its CPU time limit and was reset", no retry, single attempt).
+        run: node --experimental-strip-types scripts/reset-e2e-artifacts.ts --preview
+      - name: Seed preview fixtures
+        if: needs.changes.outputs.seed_relevant == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # Skipped entirely on PRs touching neither seed data nor schema - DELETE-then-INSERT of
+        # demo/Pottery House/Kikuzuki is idempotent but wasted work otherwise.
         run: |
-          yarn migrate:preview
-          # The E2E-artifact sweep always runs (cleanup, not reseeding - skipping it defeats the
-          # point of keeping preview from accumulating an unswept backlog again). Only the fixture
-          # reseed below is conditional: DELETE-then-INSERT of demo/Pottery House/Kikuzuki is
-          # idempotent but wasted work on a PR that touched neither seed data nor schema.
-          node --experimental-strip-types scripts/reset-e2e-artifacts.ts --preview --stdout > /tmp/preview-seed.sql
-          if [ "$SEED_RELEVANT" = "true" ]; then
-            node --experimental-strip-types scripts/generate-demo-bundle.ts
-            node --experimental-strip-types scripts/generate-demo-seed.ts --preview --stdout >> /tmp/preview-seed.sql
-            node --experimental-strip-types scripts/generate-pottery-house-seed.ts --preview --stdout >> /tmp/preview-seed.sql
-            node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview --stdout >> /tmp/preview-seed.sql
-          fi
+          node --experimental-strip-types scripts/generate-demo-bundle.ts
+          node --experimental-strip-types scripts/generate-demo-seed.ts --preview --stdout > /tmp/preview-seed.sql
+          node --experimental-strip-types scripts/generate-pottery-house-seed.ts --preview --stdout >> /tmp/preview-seed.sql
+          node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview --stdout >> /tmp/preview-seed.sql
           npx wrangler d1 execute DB --env preview --remote --file /tmp/preview-seed.sql
       - name: Deploy preview Worker
         env:
