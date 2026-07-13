@@ -20,6 +20,10 @@ const expectedOrigin = new URL(options.expectedOrigin).origin
 const headers = options.tenantSlug ? { 'x-preview-tenant': options.tenantSlug, 'cache-control': 'no-store' } : {}
 const evidenceDir = new URL('../client-imports/north-carolina-legal-services/evidence/seo/', import.meta.url)
 const routeManifest = JSON.parse(readFileSync(new URL('../client-imports/north-carolina-legal-services/route-manifest.json', import.meta.url), 'utf8'))
+const clientManifest = JSON.parse(readFileSync(new URL('../client-imports/north-carolina-legal-services/client-manifest.json', import.meta.url), 'utf8'))
+const servicePathsWithFaqs = new Set((clientManifest.offerings ?? [])
+  .filter(offering => offering.faqs?.some(faq => faq.question?.trim() && faq.answer?.trim()))
+  .map(offering => offering.canonical_path || `/services/${offering.slug}`))
 const sourceSitemap = parseSitemapXml(readFileSync(new URL('source-sitemap-2026-07-13.xml', evidenceDir), 'utf8'))
 const indexedUrls = parseSearchConsoleCsv(readFileSync(new URL('search-console-valid-2026-07-13.csv', evidenceDir), 'utf8'))
 const contract = buildSeoMigrationContract({ sitemapUrls: sourceSitemap, searchConsoleUrls: indexedUrls, routeManifest })
@@ -43,7 +47,7 @@ for (const [path, outcome] of contract.outcomes) {
     const requiredTypes = path === '/'
       ? ['ProfessionalService']
       : /^\/services\/[^/]+$/.test(path)
-        ? ['LegalService', 'BreadcrumbList', 'FAQPage']
+        ? ['LegalService', 'BreadcrumbList', ...(servicePathsWithFaqs.has(path) ? ['FAQPage'] : [])]
         : path.startsWith('/article/') ? ['Article'] : []
     for (const type of requiredTypes) {
       if (!audit.schemaTypes.includes(type)) failures.push(`${path}: missing ${type} JSON-LD`)

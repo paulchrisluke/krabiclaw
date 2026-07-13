@@ -113,6 +113,20 @@ function htmlishToMarkdown(value, linkMap = new Map()) {
     .trim()
 }
 
+function normalizeNclsArticleContent(value) {
+  return value
+    .replace(
+      "**Inequality isn't just about identity—it's woven into our systems. It shows up in **",
+      "**Inequality isn't just about identity—it's woven into our systems.** It shows up in **",
+    )
+    .replace('programs don’t stop there\\*\\*.', 'programs don’t stop there**.')
+    .replaceAll('contact@northcarolinalegalservices.com', 'contact@northcarolinalegalservices.org')
+    .replace(
+      'An attested written will is a type-written, signed will that is also signed by two competent witnesses and notarized.',
+      'An attested written will is signed by the testator and by two competent witnesses. Notarization is not required for basic validity; it is used to make the will self-proved under N.C.G.S. § 31-11.6.',
+    )
+}
+
 function plainMdx(value) {
   return String(value || '')
     .replace(/<br\s*\/?>(?:<\/br>)?/gi, ' ')
@@ -799,7 +813,7 @@ function buildPayload(config, sourcePath = null) {
       title: article.title,
       slug: article.slug,
       excerpt: article.description || null,
-      body: article.content || '',
+      body: normalizeNclsArticleContent(article.content || ''),
       category: Array.isArray(article.tags) ? article.tags[0] : null,
       tags: Array.isArray(article.tags) ? article.tags : [],
       author_name: [article.authorFirstName, article.authorSurname].filter(Boolean).join(' ') || null,

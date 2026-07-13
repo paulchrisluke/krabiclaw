@@ -264,7 +264,7 @@ jobs:
       - name: Run Pottery House fixture against owned preview
         if: needs.changes.outputs.pottery_house == 'true'
         run: |
-          node scripts/fixtures/pottery-house-krabi.fixture.mjs \
+          yarn fixture:pottery-house \
             --url "https://preview.krabiclaw.com" \
             --site-id "site-pottery-house" \
             --slug "pottery-house"
