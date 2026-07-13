@@ -32,7 +32,7 @@ export const northcarolinalegalservices: ISeedTenant = {
     description: 'Affordable legal services for North Carolina.',
     domain,
     email: 'contact@northcarolinalegalservices.org',
-    phone: '(919) 886-4134',
+    phone: '(984) 777-8288',
     keywords: ['North Carolina Legal Services'],
     logo: '/logo.webp',
     footerDescription: 'See our <a href="/files/FinalLetter_88-0565637_BULLCITYLEGALSERVICESINC_Redacted.pdf">IRS Determination Letter</a>.',

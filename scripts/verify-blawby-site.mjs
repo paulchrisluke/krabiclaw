@@ -129,9 +129,6 @@ function collectRoutes(manifest, explicitRoutes) {
   for (const route of manifest?.routeInventory?.preservedRoutes ?? []) {
     routes.add(route)
   }
-  for (const redirect of manifest?.redirects ?? []) {
-    routes.add(redirect.from_path)
-  }
   return Array.from(routes).filter(Boolean).map((route) => {
     try {
       const parsed = new URL(route, 'https://verify-blawby.invalid/')
@@ -248,6 +245,7 @@ async function checkRoute(base, route, options = {}) {
     route,
     url,
     status: response.status,
+    location: response.headers?.get?.('location') ?? null,
     duration_ms: Date.now() - started,
     ok: response.status >= 200 && response.status < 400,
     has_blawby_signal: /Blawby|Legal Services|consultation|--blawby-primary|ProfessionalService|LegalService/.test(html),
@@ -596,6 +594,23 @@ for (const route of routes) {
   if (route === '/' || route.startsWith('/services')) {
     pushCheck(checks, result.has_professional_schema, `GET ${route} has professional-service schema signal`)
     pushCheck(checks, !result.has_restaurant_schema, `GET ${route} has no restaurant schema signal`)
+  }
+}
+
+if (baseUrl) {
+  for (const redirect of manifest?.redirects ?? []) {
+    const result = await checkRoute(baseUrl, redirect.from_path, { redirect: 'manual' })
+    pushCheck(checks, result.status === redirect.status_code, `GET ${redirect.from_path} returns declared ${redirect.status_code}`, {
+      status: result.status,
+    })
+    if (redirect.behavior === 'redirect') {
+      const actualDestination = result.location ? new URL(result.location, baseUrl).toString() : null
+      const expectedDestination = new URL(redirect.to_path, baseUrl).toString()
+      pushCheck(checks, actualDestination === expectedDestination, `GET ${redirect.from_path} redirects to declared destination`, {
+        location: result.location,
+        expectedLocation: redirect.to_path,
+      })
+    }
   }
 }
 
