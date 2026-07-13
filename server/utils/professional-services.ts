@@ -486,7 +486,7 @@ export async function getPublicBlawbyRouteData(
   ])
   let posts = initialPosts
   if (recipe === 'article' && postRow) {
-    const postTags = parseJson<string[]>(postRow.tags_json, [])
+    const postTags = Array.isArray(postRow.tags) ? postRow.tags.map(String) : parseJson<string[]>(postRow.tags_json, [])
     const summaries = await listPublicBlogSummaries(db, siteId, 50)
     posts = summaries
       .filter(summary => summary.slug !== options.slug && summary.tags.some(tag => postTags.includes(tag)))

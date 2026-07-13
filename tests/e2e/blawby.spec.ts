@@ -145,7 +145,7 @@ test.describe('Blawby NCLS public site', () => {
   test('blog taxonomy filter changes the visible article set', async ({ page }) => {
     await page.goto(`${blawbyBaseURL}/blog`, { waitUntil: 'load' })
     await waitForHydration(page)
-    await page.getByRole('button', { name: 'Employee Rights', exact: true }).click()
+    await page.getByRole('button', { name: 'Divorce', exact: true }).click()
     await expect(page.locator('[data-parity-section="articles"] article')).toHaveCount(1)
   })
 
