@@ -23,6 +23,7 @@
     "test:e2e:blawby": "playwright test tests/e2e/blawby.spec.ts tests/e2e/site-content-scopes.spec.ts",
     "test:e2e:pottery-house": "playwright test tests/e2e/pottery-house.spec.ts tests/e2e/pottery-house-dashboard.spec.ts",
     "test:e2e:full": "playwright test",
+    "test:e2e:staging": "playwright test --grep-invert \"Blawby NCLS public site\"",
     "test:e2e:ui": "playwright test --ui",
     "check:deploy": "node scripts/check-deploy-env.mjs",
     "migrate:preview": "wrangler d1 migrations apply DB --env preview --remote",

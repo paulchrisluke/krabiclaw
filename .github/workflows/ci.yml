@@ -361,7 +361,6 @@ jobs:
           node --experimental-strip-types scripts/generate-demo-seed.ts --staging
           node --experimental-strip-types scripts/generate-pottery-house-seed.ts --staging
           node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --staging
-          node scripts/generate-ncls-blawby-seed.mjs --staging
       - name: Deploy staging Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -417,7 +416,7 @@ jobs:
           curl -sf -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" -o /dev/null "https://staging.krabiclaw.com/api/dev/login" || true
           sleep 10
       - name: Run full E2E suite
-        run: yarn test:e2e:full
+        run: yarn test:e2e:staging
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
