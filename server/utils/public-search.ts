@@ -383,7 +383,10 @@ export async function buildTenantBlogDocuments(db: DbClient): Promise<PlatformKn
     ].join('\n\n')
     return {
       id: `tenant-blog:${post.id}`,
-      key: `tenant-blog/${post.site_id}/${post.slug}.md`,
+      // Keyed by id, not site_id+slug: AI Search enforces a filename length limit
+      // ("filename_exceeds_maximum_length"), and slugs are unbounded/human-authored —
+      // post.id is a stable, already-unique primary key regardless of site scoping.
+      key: `tenant-blog/${post.id}.md`,
       type: 'blog' as const,
       title: post.title,
       path: `/blog/${post.slug}`,
@@ -427,7 +430,9 @@ export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<Pla
     ].join('\n\n')
     return [{
       id: `doc:${doc.id}`,
-      key: `docs/${doc.slug}.md`,
+      // Keyed by id, not slug: AI Search enforces a filename length limit and
+      // slugs are unbounded/human-authored — see tenant-blog's key above.
+      key: `docs/${doc.id}.md`,
       type: 'doc',
       title: doc.title,
       path,
@@ -452,7 +457,9 @@ export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<Pla
     ].join('\n\n')
     return [{
       id: `blog:${post.id}`,
-      key: `blog/${post.slug}.md`,
+      // Keyed by id, not slug: AI Search enforces a filename length limit and
+      // slugs are unbounded/human-authored — see tenant-blog's key above.
+      key: `blog/${post.id}.md`,
       type: 'blog',
       title: post.title,
       path,
