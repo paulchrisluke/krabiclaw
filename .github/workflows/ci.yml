@@ -481,6 +481,16 @@ jobs:
         # Authenticates POST /api/internal/search/reindex (server/api/internal/search/reindex.post.ts).
         run: |
           echo "$PLATFORM_SEARCH_REINDEX_SECRET" | npx wrangler secret put PLATFORM_SEARCH_REINDEX_SECRET
+      - name: Check AI Search item count (diagnostic)
+        continue-on-error: true
+        env:
+          PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
+        # Temporary: several prior reindex runs failed from a raw connection timeout
+        # before ever reaching the delete-stale-items step, so orphaned items from
+        # earlier key formats may have accumulated. This reports the current item
+        # count/listing time without doing any uploads, so it's safe to fail without
+        # blocking the deploy (continue-on-error) — purely informational.
+        run: yarn ai-search:status:prod
       - name: Rebuild AI Search index (production)
         env:
           PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
