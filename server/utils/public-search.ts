@@ -155,7 +155,7 @@ function renderDocumentContent(record: PlatformKnowledgeDocument) {
   ].join('\n')
 }
 
-function recordMetadata(record: PlatformKnowledgeDocument): Record<string, string> {
+export function recordMetadata(record: PlatformKnowledgeDocument): Record<string, string> {
   return {
     record_id: record.id,
     type: record.type,
@@ -176,7 +176,7 @@ function resultTypeFilter(type: SearchOptions['type']) {
   return type && type !== 'all' ? type : undefined
 }
 
-function buildSearchFilters(surface: PlatformKnowledgeSurface, type?: PublicSearchType | 'all', siteId?: string | null) {
+export function buildSearchFilters(surface: PlatformKnowledgeSurface, type?: PublicSearchType | 'all', siteId?: string | null) {
   const clauses: Array<Record<string, { $eq: string }>> = [
     { surface: { $eq: surface } },
   ]
@@ -359,7 +359,7 @@ async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000) {
   throw new Error('Timed out waiting for AI Search indexing to complete')
 }
 
-async function buildTenantBlogDocuments(db: DbClient): Promise<PlatformKnowledgeDocument[]> {
+export async function buildTenantBlogDocuments(db: DbClient): Promise<PlatformKnowledgeDocument[]> {
   const posts = await queryAll<TenantBlogDocRow>(db, `
     SELECT id, site_id, title, slug, body, excerpt, category, tags_json, seo_description, seo_keywords
     FROM blog_posts
@@ -394,7 +394,7 @@ async function buildTenantBlogDocuments(db: DbClient): Promise<PlatformKnowledge
   })
 }
 
-async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<PlatformKnowledgeDocument[]> {
+export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<PlatformKnowledgeDocument[]> {
   const [docs, posts, tenantBlogRecords] = await Promise.all([
     queryAll<PlatformDocSearchRow>(db, `
       SELECT id, title, slug, body, excerpt, category, seo_description, seo_keywords
@@ -525,9 +525,13 @@ async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<PlatformKn
   ]
 }
 
-function expandDocumentsForSurfaces(records: PlatformKnowledgeDocument[]) {
+export interface ExpandedPlatformKnowledgeDocument extends PlatformKnowledgeDocument {
+  metadata: Record<string, string>
+}
+
+export function expandDocumentsForSurfaces(records: PlatformKnowledgeDocument[]): ExpandedPlatformKnowledgeDocument[] {
   return records.flatMap((record) =>
-    record.surfaces.map((surface) => ({
+    record.surfaces.map((surface): ExpandedPlatformKnowledgeDocument => ({
       ...record,
       key: `${surface}/${record.key}`,
       metadata: {
@@ -560,6 +564,103 @@ export async function rebuildPlatformKnowledgeIndex(env: CloudflareEnv, db: DbCl
   }
 }
 
+// Static navigation records (nav shortcuts, not authored content) must never crowd out
+// docs/articles/support answers just because they happen to score marginally higher —
+// see issue #254. Every other indexed type is treated as "content" and is never
+// candidate-starved by the nav cap below.
+const STATIC_NAV_TYPES = new Set<PublicSearchType>(['route', 'platform_page'])
+
+// When two records resolve to the same path (e.g. a `route` and a `platform_page` entry
+// both pointing at /pricing), keep the richer content record. dashboard_route is excluded:
+// its `path` is often the same unresolved fallback ("/dashboard") across many genuinely
+// different destinations whenever dashboardContext isn't fully known, so path-based
+// dedup would wrongly collapse distinct dashboard nav entries into one.
+const PATH_DEDUP_TYPES = new Set<PublicSearchType>(['route', 'platform_page', 'doc', 'blog', 'faq'])
+const TYPE_RICHNESS: Record<PublicSearchType, number> = {
+  doc: 4,
+  blog: 4,
+  faq: 3,
+  dashboard_route: 3,
+  platform_page: 2,
+  route: 1,
+}
+
+// Reward exact/partial lexical matches against the title and section so a query that
+// matches a doc/article's own words outranks a generic static page that only matched on
+// a loosely related embedding. This runs on top of (not instead of) the AI Search hybrid
+// score, which already handles semantic/multi-word concept queries.
+export function computeLexicalBoost(query: string, result: Pick<PublicSearchResult, 'title' | 'section'>) {
+  const q = query.toLowerCase().trim()
+  if (!q) return 0
+
+  const title = result.title.toLowerCase()
+  const section = result.section.toLowerCase()
+  let boost = 0
+
+  if (title === q) {
+    boost += 0.5
+  } else if (title.includes(q)) {
+    boost += 0.3
+  } else {
+    const queryWords = q.split(/\s+/).filter(Boolean)
+    const titleWords = new Set(title.split(/\s+/).filter(Boolean))
+    const overlap = queryWords.filter(word => titleWords.has(word)).length
+    if (queryWords.length > 0) {
+      boost += 0.15 * (overlap / queryWords.length)
+    }
+  }
+
+  if (section && q && section.includes(q)) {
+    boost += 0.1
+  }
+
+  return boost
+}
+
+export function dedupeByPath(results: PublicSearchResult[]) {
+  const deduped: PublicSearchResult[] = []
+  const indexByPath = new Map<string, number>()
+
+  for (const result of results) {
+    if (!PATH_DEDUP_TYPES.has(result.type)) {
+      deduped.push(result)
+      continue
+    }
+
+    const existingIndex = indexByPath.get(result.path)
+    if (existingIndex === undefined) {
+      indexByPath.set(result.path, deduped.length)
+      deduped.push(result)
+      continue
+    }
+
+    const current = deduped[existingIndex]!
+    const currentRank = TYPE_RICHNESS[current.type] ?? 0
+    const nextRank = TYPE_RICHNESS[result.type] ?? 0
+    if (nextRank > currentRank || (nextRank === currentRank && result.score > current.score)) {
+      deduped[existingIndex] = result
+    }
+  }
+
+  return deduped
+}
+
+// Guarantees static nav records (routes/platform pages) can fill at most half of the
+// result slots whenever there's enough non-nav content to fill the other half — so a
+// broad query like "google" can't come back as all static pages/links when matching
+// docs or articles exist, but a query that genuinely only matches nav destinations still
+// returns them instead of an artificially short list.
+export function balanceResultTypes(results: PublicSearchResult[], limit: number) {
+  const content = results.filter(result => !STATIC_NAV_TYPES.has(result.type))
+  const nav = results.filter(result => STATIC_NAV_TYPES.has(result.type))
+  const navSlots = Math.max(0, limit - Math.min(content.length, Math.ceil(limit / 2)))
+  const cappedNav = nav
+    .sort((a, b) => b.score - a.score)
+    .slice(0, navSlots)
+
+  return [...content, ...cappedNav]
+}
+
 export async function searchPublicResources(
   env: CloudflareEnv,
   query: string,
@@ -570,6 +671,10 @@ export async function searchPublicResources(
 
   const surface = options.surface ?? 'public'
   const limit = Math.max(1, Math.min(options.limit ?? 8, 20))
+  // Pull a wider candidate pool than the final result limit so dedup and type-balancing
+  // below have real docs/articles to promote instead of operating on an already-truncated,
+  // nav-heavy top-N.
+  const candidateLimit = Math.min(50, Math.max(limit * 4, 24))
   const typeFilter = resultTypeFilter(options.type ?? 'all')
   const instance = searchNamespace(env).get(platformKnowledgeInstanceId(env))
 
@@ -579,17 +684,22 @@ export async function searchPublicResources(
       ai_search_options: {
         retrieval: {
           retrieval_type: 'hybrid',
-          match_threshold: 0,
-          max_num_results: Math.min(50, limit * 5),
+          match_threshold: DEFAULT_MATCH_THRESHOLD,
+          max_num_results: candidateLimit,
           keyword_match_mode: 'or',
           return_on_failure: true,
           filters: buildSearchFilters(surface, typeFilter, options.siteId),
         },
+        // Restored: the AI Search instance itself is configured with rewrite_query/reranking
+        // enabled (see platformKnowledgeInstanceConfig above), but per-query options were
+        // explicitly turning both off and zeroing the match threshold, which is what let
+        // irrelevant static pages/routes crowd out doc/article results for broad queries —
+        // see issue #254.
         query_rewrite: {
-          enabled: false,
+          enabled: true,
         },
         reranking: {
-          enabled: false,
+          enabled: true,
         },
       },
     }),
@@ -623,7 +733,7 @@ export async function searchPublicResources(
             likePattern,
             likePattern,
             likePattern,
-            limit,
+            candidateLimit,
           ],
         )
       } catch {
@@ -633,12 +743,12 @@ export async function searchPublicResources(
   ])
 
   const platformResults = normalizeSearchResults(response.chunks ?? [], {
-    limit,
+    limit: candidateLimit,
     surface,
     dashboardContext: options.dashboardContext,
   })
   const tenantResults = normalizeTenantBlogSearchResults(tenantBlogRows ?? [], {
-    limit,
+    limit: candidateLimit,
     surface,
   })
 
@@ -646,10 +756,15 @@ export async function searchPublicResources(
   for (const result of [...tenantResults, ...platformResults]) {
     const key = `${result.type}:${result.id}:${result.path}`
     const current = merged.get(key)
-    if (!current || current.score < result.score) merged.set(key, result)
+    const boosted: PublicSearchResult = { ...result, score: result.score + computeLexicalBoost(normalized, result) }
+    if (!current || current.score < boosted.score) merged.set(key, boosted)
   }
 
-  return [...merged.values()]
+  const candidates = [...merged.values()].sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
+  const deduped = dedupeByPath(candidates)
+  const balanced = balanceResultTypes(deduped, limit)
+
+  return balanced
     .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
     .slice(0, limit)
 }
