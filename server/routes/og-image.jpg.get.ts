@@ -3,17 +3,15 @@ import ogImagePart2 from '~/server/assets/og-image-part-2'
 
 const OG_IMAGE_BASE64 = `${ogImagePart1}${ogImagePart2}`
 
-export default defineEventHandler((event) => {
+export default defineEventHandler(() => {
   const binary = atob(OG_IMAGE_BASE64)
-  const image = new Uint8Array(binary.length)
+  const image = Uint8Array.from(binary, character => character.charCodeAt(0))
 
-  for (let index = 0; index < binary.length; index += 1) {
-    image[index] = binary.charCodeAt(index)
-  }
-
-  setHeader(event, 'Content-Type', 'image/jpeg')
-  setHeader(event, 'Cache-Control', 'public, max-age=31536000, immutable')
-  setHeader(event, 'Content-Length', image.byteLength)
-
-  return image
+  return new Response(image, {
+    headers: {
+      'Content-Type': 'image/jpeg',
+      'Cache-Control': 'public, max-age=3600, s-maxage=86400',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  })
 })
