@@ -2,6 +2,7 @@ import { executeBatch, queryAll, type BatchQuery, type DbClient } from '~/server
 import { cleanString } from '~/server/utils/api-response'
 import { getPublicBlawbyData } from '~/server/utils/professional-services'
 import { sanitizeUrl } from '~/utils/sanitize'
+import { normalizeNonprofitStatus } from '~/utils/professional-service-schema'
 
 export class ProfessionalServiceValidationError extends Error {
   constructor(message: string) {
@@ -38,6 +39,26 @@ function safeStoredPath(value: unknown, maxLength: number) {
 
 function recordArray(value: unknown): ApiRecord[] {
   return Array.isArray(value) ? value.filter((item): item is ApiRecord => typeof item === 'object' && item !== null) : []
+}
+
+function sanitizedUrlArray(value: unknown, maxLength: number): string[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map(item => (typeof item === 'string' ? sanitizeUrl(cleanString(item, maxLength)) : ''))
+    .filter((url): url is string => Boolean(url))
+}
+
+function sanitizedContactPoints(value: unknown): ApiRecord[] {
+  return recordArray(value).map(point => ({
+    contact_type: cleanString(point.contact_type, 80) || null,
+    telephone: cleanString(point.telephone, 40) || null,
+    email: cleanString(point.email, 200) || null,
+    area_served: cleanString(point.area_served, 200) || null,
+    available_language: Array.isArray(point.available_language)
+      ? (point.available_language as unknown[]).map(item => cleanString(item, 40)).filter(Boolean)
+      : (cleanString(point.available_language, 40) || null),
+    url: safeStoredUrl(point.url, 500),
+  })).filter(point => point.telephone || point.email || point.url)
 }
 
 const BLAWBY_THEME_COLOR_KEYS = new Set([
@@ -282,18 +303,33 @@ export async function upsertProfessionalServiceContent(
 
   if (typeof data.compliance === 'object' && data.compliance) {
     const item = data.compliance as ApiRecord
+    // Canonical contract: nonprofit_status must be a recognized schema.org
+    // nonprofit enumeration value (e.g. https://schema.org/Nonprofit501c3),
+    // not free text like "501(c)(3)". Reject rather than silently store an
+    // invalid value — see utils/professional-service-schema.ts.
+    const nonprofitStatus = normalizeNonprofitStatus(cleanString(item.nonprofit_status, 120))
+    if (!nonprofitStatus.valid) {
+      validationError(
+        `compliance.nonprofit_status "${item.nonprofit_status}" is not a recognized schema.org nonprofit enumeration value (expected a form like "501(c)(3)" or "https://schema.org/Nonprofit501c3").`,
+      )
+    }
+    const addressVisibility = item.address_visibility === 'visible' ? 'visible' : 'hidden'
     statements.push({
       query: `
       INSERT INTO tenant_compliance
         (id, organization_id, site_id, entity_name, dba_name, entity_type, nonprofit_status,
-         registration_number, service_area, disclaimer, footer_disclaimer, document_asset_ids,
+         registration_number, service_area, service_area_type, disclaimer, footer_disclaimer, document_asset_ids,
+         founder_name, founding_date, same_as, contact_points, address_visibility,
          metadata_json, updated_at, updated_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
       ON CONFLICT(site_id) DO UPDATE SET
         entity_name = excluded.entity_name, dba_name = excluded.dba_name, entity_type = excluded.entity_type,
         nonprofit_status = excluded.nonprofit_status, registration_number = excluded.registration_number,
-        service_area = excluded.service_area, disclaimer = excluded.disclaimer,
-        footer_disclaimer = excluded.footer_disclaimer, document_asset_ids = excluded.document_asset_ids,
+        service_area = excluded.service_area, service_area_type = excluded.service_area_type,
+        disclaimer = excluded.disclaimer, footer_disclaimer = excluded.footer_disclaimer,
+        document_asset_ids = excluded.document_asset_ids, founder_name = excluded.founder_name,
+        founding_date = excluded.founding_date, same_as = excluded.same_as,
+        contact_points = excluded.contact_points, address_visibility = excluded.address_visibility,
         metadata_json = excluded.metadata_json, updated_at = CURRENT_TIMESTAMP, updated_by = excluded.updated_by
     `,
       params: [
@@ -303,12 +339,18 @@ export async function upsertProfessionalServiceContent(
         cleanString(item.entity_name, 200) || null,
         cleanString(item.dba_name, 200) || null,
         cleanString(item.entity_type, 120) || null,
-        cleanString(item.nonprofit_status, 120) || null,
+        nonprofitStatus.value,
         cleanString(item.registration_number, 120) || null,
         cleanString(item.service_area, 300) || null,
+        cleanString(item.service_area_type, 60) || null,
         typeof item.disclaimer === 'string' ? item.disclaimer : null,
         typeof item.footer_disclaimer === 'string' ? item.footer_disclaimer : null,
         json(Array.isArray(item.document_asset_ids) ? item.document_asset_ids : []),
+        cleanString(item.founder_name, 200) || null,
+        cleanString(item.founding_date, 40) || null,
+        json(sanitizedUrlArray(item.same_as, 500)),
+        json(sanitizedContactPoints(item.contact_points)),
+        addressVisibility,
         json(typeof item.metadata === 'object' ? item.metadata : {}),
         updatedBy,
       ],

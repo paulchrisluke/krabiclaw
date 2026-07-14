@@ -79,7 +79,8 @@
 
 <script setup lang="ts">
 const { data } = await useBlawbyRoute('home')
-const { identity, consultation } = await useBlawbyShell()
+const { identity, consultation, compliance } = await useBlawbyShell()
+const org = useBlawbyOrgIdentity(identity, compliance)
 const routeData = computed(() => data.value)
 
 if (!routeData.value.page) throw createError({ statusCode: 404, statusMessage: 'Homepage content not found' })
@@ -138,4 +139,19 @@ useSeoMeta({
 })
 const canonicalUrl = useSeoUrl(() => '/')
 useHead(() => ({ link: [{ rel: 'canonical', href: canonicalUrl.value }] }))
+
+useProfessionalServiceSchema(() => ({
+  recipe: 'home',
+  org: org.value,
+  pageUrl: canonicalUrl.value,
+  pageTitle: routeData.value.page?.seo_title || identity.value.brand_name || 'Professional services',
+  pageDescription: routeData.value.page?.seo_description || routeData.value.page?.summary || identity.value.brand_description || null,
+  imageUrl: heroBackground.value,
+  faqs: routeData.value.qa.map(item => ({ question: item.question, answer: item.answer })),
+  items: routeData.value.offerings.map(offering => ({
+    name: offering.name,
+    url: offering.canonical_path,
+    description: offering.short_description || offering.summary || undefined,
+  })),
+}))
 </script>

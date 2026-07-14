@@ -25,6 +25,37 @@ const clientManifest = JSON.parse(readFileSync(new URL('../client-imports/north-
 const servicePathsWithFaqs = new Set((clientManifest.offerings ?? [])
   .filter(offering => offering.faqs?.some(faq => faq.question?.trim() && faq.answer?.trim()))
   .map(offering => offering.canonical_path || `/services/${offering.slug}`))
+const sitePagesWithQa = new Set((clientManifest.siteQa ?? [])
+  .filter(qa => qa.question?.trim() && qa.answer?.trim())
+  .map(qa => qa.page_path))
+
+/**
+ * Route-specific required schema.org @types for every preserved, indexed
+ * professional-service route. `Organization`/`WebSite` (with stable, canonical
+ * `#organization`/`#website` IDs) are required on every route by the loop
+ * below regardless of what's listed here — this only adds the recipe-specific
+ * nodes from utils/professional-service-schema.ts. FAQPage is only required
+ * where the source client-manifest actually has visible Q&A for that path, so
+ * this never demands phantom FAQ schema.
+ */
+function requiredTypesForPath(path) {
+  if (path === '/') return withFaq('/', [])
+  if (path === '/services') return withFaq('/services', ['CollectionPage', 'BreadcrumbList', 'ItemList'])
+  if (/^\/services\/[^/]+$/.test(path)) return ['LegalService', 'BreadcrumbList', ...(servicePathsWithFaqs.has(path) ? ['FAQPage'] : [])]
+  if (path === '/about') return withFaq('/about', ['AboutPage', 'BreadcrumbList'])
+  if (path === '/contact') return withFaq('/contact', ['ContactPage', 'BreadcrumbList'])
+  if (path === '/schedule') return withFaq('/schedule', ['BreadcrumbList'])
+  if (path === '/pricing') return withFaq('/pricing', ['BreadcrumbList'])
+  if (path === '/donate') return withFaq('/donate', ['BreadcrumbList'])
+  if (path === '/blog') return ['CollectionPage', 'BreadcrumbList', 'ItemList']
+  if (path.startsWith('/article/')) return ['BlogPosting', 'BreadcrumbList']
+  if (['/policies/privacy', '/policies/terms', '/third-party-notices'].includes(path)) return ['BreadcrumbList']
+  return []
+}
+
+function withFaq(path, types) {
+  return sitePagesWithQa.has(path) ? [...types, 'FAQPage'] : types
+}
 const sourceSitemap = parseSitemapXml(readFileSync(new URL('source-sitemap-2026-07-13.xml', evidenceDir), 'utf8'))
 const indexedUrls = parseSearchConsoleCsv(readFileSync(new URL('search-console-valid-2026-07-13.csv', evidenceDir), 'utf8'))
 const contract = buildSeoMigrationContract({ sitemapUrls: sourceSitemap, searchConsoleUrls: indexedUrls, routeManifest })
@@ -45,14 +76,27 @@ for (const [path, outcome] of contract.outcomes) {
     if (/noindex/i.test(response.headers.get('x-robots-tag') || '')) failures.push(`${path}: X-Robots-Tag contains noindex`)
     const audit = auditSeoHtml(await response.text(), new URL(path, expectedOrigin).toString())
     failures.push(...audit.errors.map(error => `${path}: ${error}`))
-    const requiredTypes = path === '/'
-      ? ['ProfessionalService']
-      : /^\/services\/[^/]+$/.test(path)
-        ? ['LegalService', 'BreadcrumbList', ...(servicePathsWithFaqs.has(path) ? ['FAQPage'] : [])]
-        : path.startsWith('/article/') ? ['Article'] : []
+
+    // Every preserved professional-service route must carry the shared,
+    // stable-ID Organization/WebSite graph anchored at the canonical origin —
+    // this is what proves dashboard/ChowBot/MCP/import-authored compliance
+    // data and public rendering never drifted apart (see #253).
+    const organizationId = `${expectedOrigin}/#organization`
+    const websiteId = `${expectedOrigin}/#website`
+    if (!audit.schemaTypes.includes('Organization')) failures.push(`${path}: missing Organization JSON-LD`)
+    if (!audit.schemaTypes.includes('WebSite')) failures.push(`${path}: missing WebSite JSON-LD`)
+    if (!audit.schemaIds.includes(organizationId)) failures.push(`${path}: Organization node missing stable @id ${organizationId}`)
+    if (!audit.schemaIds.includes(websiteId)) failures.push(`${path}: WebSite node missing stable @id ${websiteId}`)
+
+    const requiredTypes = requiredTypesForPath(path)
     for (const type of requiredTypes) {
       if (!audit.schemaTypes.includes(type)) failures.push(`${path}: missing ${type} JSON-LD`)
     }
+    // Non-detail routes (everything except /services/<slug> and /article/<slug>)
+    // must never ship with zero schema at all — missing schema on those routes
+    // fails the cutover gate outright per #253's acceptance criteria.
+    const isDetailRoute = /^\/services\/[^/]+$/.test(path) || path.startsWith('/article/')
+    if (!isDetailRoute && !audit.schemaTypes.length) failures.push(`${path}: non-detail route has no structured data at all`)
   } else if (outcome.behavior === 'redirect') {
     if (response.status !== outcome.statusCode) failures.push(`${path}: expected ${outcome.statusCode}, received ${response.status}`)
     const expected = new URL(outcome.destination, expectedOrigin).toString()

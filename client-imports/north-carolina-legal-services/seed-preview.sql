@@ -2001,13 +2001,14 @@ Services include but are not limited to:
 
 INSERT INTO tenant_compliance (
   id, organization_id, site_id, entity_name, dba_name, entity_type, nonprofit_status,
-  registration_number, service_area, disclaimer, footer_disclaimer, document_asset_ids,
+  registration_number, service_area, service_area_type, disclaimer, footer_disclaimer, document_asset_ids,
+  founder_name, founding_date, same_as, contact_points, address_visibility,
   metadata_json, created_at, updated_at
 ) VALUES (
   'compliance_ncls', 'org-ncls-blawby', 'site-ncls-blawby',
   'North Carolina Legal Services', 'Bull City Legal Services', 'LegalService',
-  '501(c)(3)', NULL, 'North Carolina',
-  '*DISCLAIMER: The purpose of this website is informational - no
+  'https://schema.org/Nonprofit501c3', NULL, 'North Carolina',
+  'State', '*DISCLAIMER: The purpose of this website is informational - no
 attorney-client relationship is created by using this website or
 reading this blog. No legal advice is intended. If you have
 questions about a current or potential legal problem, you should
@@ -2020,7 +2021,11 @@ guaranteed. This website is provided "as is," without any warranty
 of any kind, express or implied.', 'Access to Justice for All. We believe that access to the justice system is a fundamental right. At North Carolina Legal Services, we are committed to removing financial barriers that prevent many in our community from obtaining high-quality legal assistance.
 
 North Carolina Legal Services is a registered [**DBA**](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9f06152ccd5d6f29c11a.pdf) of Bull City Legal Services. See our [**IRS Determination Letter**](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/8de1e5793e0806ece163.pdf). All rights reserved.',
-  '["asset_ncls_legal_northcarolinalegalservices-dba-redacted","asset_ncls_legal_finalletter-88-0565637-bullcitylegalservicesinc-redacted"]', '{"founder":"Rich Gittings","foundingDate":{},"languages":["English"],"keywords":["North Carolina Legal Services","North Carolina Lawyer","North Carolina Law Firm","Family Law Attorney","Employment Law Consultation","Probate Services NC","Tenant Rights Lawyer","Small Business Legal Advice","Legal Counsel NC"],"logo_dark_url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/3869491ea5373de6bb34.svg","header":{"banner_content":null,"banner_dismissible":false}}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+  '["asset_ncls_legal_northcarolinalegalservices-dba-redacted","asset_ncls_legal_finalletter-88-0565637-bullcitylegalservicesinc-redacted"]',
+  'Rich Gittings', NULL,
+  '["https://linkedin.com/company/north-carolina-legal-services","https://www.facebook.com/northcarolinalegalservices","https://www.instagram.com/northcarolinalegalservices"]', '[{"contact_type":"customer service","telephone":"(984) 777-8288","email":"contact@northcarolinalegalservices.org","area_served":"North Carolina"}]',
+  'hidden',
+  '{"founder":"Rich Gittings","foundingDate":{},"languages":["English"],"keywords":["North Carolina Legal Services","North Carolina Lawyer","North Carolina Law Firm","Family Law Attorney","Employment Law Consultation","Probate Services NC","Tenant Rights Lawyer","Small Business Legal Advice","Legal Counsel NC"],"logo_dark_url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/3869491ea5373de6bb34.svg","header":{"banner_content":null,"banner_dismissible":false}}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 );
 
 INSERT INTO site_consultation_settings (

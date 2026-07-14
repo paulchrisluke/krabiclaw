@@ -90,7 +90,8 @@ const routeData = computed(() => data.value)
 const page = computed(() => routeData.value.page)
 if (!page.value) throw createError({ statusCode: 404, statusMessage: 'Page content not found' })
 const resolvedPage = computed(() => page.value!)
-const { identity, consultation } = await useBlawbyShell()
+const { identity, consultation, compliance } = await useBlawbyShell()
+const org = useBlawbyOrgIdentity(identity, compliance)
 
 function block(type: string) {
   return page.value?.components.find(component => component.type === type) ?? null
@@ -199,5 +200,48 @@ useSeoMeta({
 useHead(() => ({
   link: [{ rel: 'canonical', href: canonicalUrl.value }],
   meta: page.value?.robots ? [{ name: 'robots', content: page.value.robots }] : [],
+}))
+
+const schemaRecipe = computed(() => (
+  recipe === 'about' || recipe === 'pricing' || recipe === 'donate' ? recipe : 'tenant-page'
+))
+// Only about/pricing/donate render a visible FAQ section on this component —
+// privacy/terms/third-party-notices must never carry phantom FAQ schema.
+const visibleFaqs = computed(() => (
+  recipe === 'about' || recipe === 'pricing' || recipe === 'donate'
+    ? routeData.value.qa.map(item => ({ question: item.question, answer: item.answer }))
+    : []
+))
+const schemaPeople = computed(() => (
+  recipe === 'about'
+    ? teamPeople.value
+        .map(person => ({ name: `${person.first_name} ${person.last_name}`.trim(), jobTitle: person.title, imageUrl: person.image_url }))
+        .filter(person => person.name)
+    : []
+))
+const schemaOfferCatalog = computed(() => (
+  recipe === 'pricing'
+    ? pricingPlans.value.map(plan => ({
+        name: typeof plan.description === 'string' ? plan.description : undefined,
+        price: typeof plan.price === 'string' ? plan.price.replace(/\*\*/g, '').trim() : undefined,
+        description: Array.isArray(plan.features) ? (plan.features as unknown[]).filter((item): item is string => typeof item === 'string').join('; ') : undefined,
+      }))
+    : []
+))
+
+useProfessionalServiceSchema(() => ({
+  recipe: schemaRecipe.value,
+  org: org.value,
+  pageUrl: canonicalUrl.value,
+  pageTitle: heroTitle.value,
+  pageDescription: page.value?.seo_description || page.value?.summary || null,
+  breadcrumbs: [
+    { name: 'Home', url: '/' },
+    { name: heroTitle.value, url: canonicalUrl.value },
+  ],
+  faqs: visibleFaqs.value,
+  people: schemaPeople.value,
+  offerCatalog: schemaOfferCatalog.value,
+  donationUrl: recipe === 'donate' ? (page.value?.cta_url || undefined) : undefined,
 }))
 </script>

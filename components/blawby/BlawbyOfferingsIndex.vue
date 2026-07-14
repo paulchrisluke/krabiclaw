@@ -23,7 +23,8 @@
 
 <script setup lang="ts">
 const { data } = await useBlawbyRoute('services')
-const { identity, consultation } = await useBlawbyShell()
+const { identity, consultation, compliance } = await useBlawbyShell()
+const org = useBlawbyOrgIdentity(identity, compliance)
 const routeData = computed(() => data.value)
 const page = computed(() => routeData.value.page)
 if (!page.value) throw createError({ statusCode: 404, statusMessage: 'Services content not found' })
@@ -55,5 +56,24 @@ useSeoMeta({
   description: computed(() => page.value?.seo_description || page.value?.summary || ''),
 })
 const canonicalUrl = useSeoUrl(() => '/services')
+const homeUrl = useSeoUrl(() => '/')
 useHead(() => ({ link: [{ rel: 'canonical', href: canonicalUrl.value }] }))
+
+useProfessionalServiceSchema(() => ({
+  recipe: 'services-index',
+  org: org.value,
+  pageUrl: canonicalUrl.value,
+  pageTitle: page.value?.seo_title || 'Services',
+  pageDescription: page.value?.seo_description || page.value?.summary || null,
+  breadcrumbs: [
+    { name: 'Home', url: homeUrl.value },
+    { name: 'Services', url: canonicalUrl.value },
+  ],
+  faqs: routeData.value.qa.map(item => ({ question: item.question, answer: item.answer })),
+  items: routeData.value.offerings.map(offering => ({
+    name: offering.name,
+    url: offering.canonical_path,
+    description: offering.short_description || offering.summary || undefined,
+  })),
+}))
 </script>

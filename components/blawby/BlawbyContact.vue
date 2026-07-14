@@ -64,7 +64,8 @@ if (error.value) throw error.value
 const routeData = computed(() => data.value)
 const page = computed(() => routeData.value.page)
 if (!page.value) throw createError({ statusCode: 404, statusMessage: 'Contact content not found' })
-const { identity, consultation } = await useBlawbyShell()
+const { identity, consultation, compliance } = await useBlawbyShell()
+const org = useBlawbyOrgIdentity(identity, compliance)
 
 function block(type: string) {
   return page.value?.components.find(component => component.type === type) ?? null
@@ -123,5 +124,19 @@ useSeoMeta({
   description: computed(() => page.value?.seo_description || page.value?.summary || ''),
 })
 const canonicalUrl = useSeoUrl(() => '/contact')
+const homeUrl = useSeoUrl(() => '/')
 useHead(() => ({ link: [{ rel: 'canonical', href: canonicalUrl.value }] }))
+
+useProfessionalServiceSchema(() => ({
+  recipe: 'contact',
+  org: org.value,
+  pageUrl: canonicalUrl.value,
+  pageTitle: page.value?.seo_title || heroTitle.value,
+  pageDescription: page.value?.seo_description || page.value?.summary || null,
+  breadcrumbs: [
+    { name: 'Home', url: homeUrl.value },
+    { name: 'Contact', url: canonicalUrl.value },
+  ],
+  faqs: routeData.value.qa.map(item => ({ question: item.question, answer: item.answer })),
+}))
 </script>

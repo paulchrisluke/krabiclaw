@@ -11,6 +11,7 @@ import type {
   PublicBlogSummary,
   PublicBlogPost,
   PublicCompliance,
+  PublicComplianceContactPoint,
   PublicConsultationSettings,
   PublicNavigationItem,
   PublicOffering,
@@ -313,6 +314,7 @@ export async function getPublicCompliance(db: DbClient, siteId: string): Promise
     nonprofit_status: typeof row.nonprofit_status === 'string' ? row.nonprofit_status : null,
     registration_number: typeof row.registration_number === 'string' ? row.registration_number : null,
     service_area: typeof row.service_area === 'string' ? row.service_area : null,
+    service_area_type: typeof row.service_area_type === 'string' ? row.service_area_type : null,
     disclaimer: typeof row.disclaimer === 'string' ? row.disclaimer : null,
     footer_disclaimer: typeof row.footer_disclaimer === 'string' ? row.footer_disclaimer : null,
     document_asset_ids: documentAssetIds,
@@ -322,6 +324,11 @@ export async function getPublicCompliance(db: DbClient, siteId: string): Promise
       label: typeof document.alt_text === 'string' ? document.alt_text : null,
       file_name: typeof document.file_name === 'string' ? document.file_name : null,
     })),
+    founder_name: typeof row.founder_name === 'string' ? row.founder_name : null,
+    founding_date: typeof row.founding_date === 'string' ? row.founding_date : null,
+    same_as: parseJson<string[]>(row.same_as as string | null, []),
+    contact_points: parseJson<PublicComplianceContactPoint[]>(row.contact_points as string | null, []),
+    address_visibility: row.address_visibility === 'visible' ? 'visible' : 'hidden',
     metadata: parseJson<ApiRecord>(row.metadata_json as string | null, {}),
   }
 }
