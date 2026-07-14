@@ -15,11 +15,16 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) return sendRedirect(event, '/login')
 
   const requestedRedirect = getQuery(event).redirect
-  const redirect = typeof requestedRedirect === 'string'
-    && requestedRedirect.startsWith('/')
-    && !requestedRedirect.startsWith('//')
-    ? requestedRedirect
-    : null
+  let redirect: string | null = null
+  if (typeof requestedRedirect === 'string' && !requestedRedirect.includes('\\')) {
+    try {
+      const internalOrigin = 'https://krabiclaw.internal'
+      const resolved = new URL(requestedRedirect, internalOrigin)
+      if (requestedRedirect.startsWith('/') && resolved.origin === internalOrigin) redirect = `${resolved.pathname}${resolved.search}${resolved.hash}`
+    } catch {
+      redirect = null
+    }
+  }
   if (redirect) return sendRedirect(event, redirect)
 
   const user = session.user as typeof session.user & { role?: string }

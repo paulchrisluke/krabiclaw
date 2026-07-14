@@ -15,17 +15,25 @@ const props = defineProps<{
   unstyled?: boolean
 }>()
 
-// Use the browser sanitizer for the initial client render, not only after mount.
-// Besides sanitizing, DOMPurify normalizes entities (for example &#39; to ')
-// exactly as the browser parses the SSR HTML, preventing false hydration drift.
-const DOMPurify = import.meta.client
-  ? (await import('isomorphic-dompurify')).default
-  : { sanitize: sanitizeHtmlForSsr }
+type HtmlSanitizer = { sanitize: (_html: string) => string }
+const clientSanitizer = shallowRef<HtmlSanitizer | null>(null)
 
-const sanitizeContent = (content?: string | null) => {
-  const rendered = renderMarkdownToHtml(content || '')
-  return DOMPurify.sanitize(rendered)
+function normalizeTextEntities(html: string) {
+  return html.replace(/(^|>)([^<]*)/g, (_, boundary: string, text: string) =>
+    boundary + text.replace(/&#39;/g, "'"))
 }
 
-const html = computed(() => sanitizeContent(props.content))
+const sanitizeContent = (content?: string | null) => {
+  const rendered = normalizeTextEntities(renderMarkdownToHtml(content || ''))
+  return (clientSanitizer.value || { sanitize: sanitizeHtmlForSsr }).sanitize(rendered)
+}
+
+const html = ref(sanitizeContent(props.content))
+watch(() => props.content, content => { html.value = sanitizeContent(content) })
+
+onMounted(async () => {
+  const { default: DOMPurify } = await import('dompurify')
+  clientSanitizer.value = DOMPurify as HtmlSanitizer
+  html.value = sanitizeContent(props.content)
+})
 </script>

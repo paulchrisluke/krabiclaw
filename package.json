@@ -152,6 +152,7 @@
     "@better-auth/cimd": "1.7.0-beta.10",
     "@better-auth/core": "1.7.0-beta.10",
     "@better-auth/oauth-provider": "1.7.0-beta.10",
+    "@noble/hashes": "^2.2.0",
     "@nuxt/ui": "^4.7.1",
     "@nuxtjs/i18n": "^10.3.0",
     "@nuxtjs/robots": "^6.0.8",

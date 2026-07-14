@@ -136,29 +136,19 @@ export async function createClaimRequest(
   const expiresAt = new Date(now.getTime() + CLAIM_TOKEN_TTL_MS)
   const claimId = crypto.randomUUID()
 
-  const existing = await queryFirst<{ id: string, status: string }>(db, `
-    SELECT id, status FROM customer_claims WHERE customer_id = ? AND user_id = ? LIMIT 1
-  `, [input.customerId, input.userId])
-
-  if (existing?.status === 'verified') return { ok: false, reason: 'already_linked' }
-
-  if (existing) {
-    await execute(db, `
-      UPDATE customer_claims
-      SET status = 'pending', token_hash = ?, token_expires_at = ?, email_at_claim = ?,
-          verified_at = NULL, updated_at = ?
-      WHERE id = ?
-    `, [tokenHash, expiresAt.getTime(), input.userEmail, now.toISOString(), existing.id])
-
-    return { ok: true, claimId: existing.id, rawToken, customerId: input.customerId }
-  }
-
-  await execute(db, `
+  const upserted = await queryFirst<{ id: string }>(db, `
     INSERT INTO customer_claims (
       id, customer_id, user_id, organization_id, site_id, email_at_claim,
       status, token_hash, token_expires_at, created_at, updated_at
     )
     VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+    ON CONFLICT(customer_id, user_id) DO UPDATE SET
+      status = 'pending', token_hash = excluded.token_hash,
+      token_expires_at = excluded.token_expires_at,
+      email_at_claim = excluded.email_at_claim, verified_at = NULL,
+      updated_at = excluded.updated_at
+    WHERE customer_claims.status <> 'verified'
+    RETURNING id
   `, [
     claimId,
     input.customerId,
@@ -172,7 +162,8 @@ export async function createClaimRequest(
     now.toISOString(),
   ])
 
-  return { ok: true, claimId, rawToken, customerId: input.customerId }
+  if (!upserted) return { ok: false, reason: 'already_linked' }
+  return { ok: true, claimId: upserted.id, rawToken, customerId: input.customerId }
 }
 
 // Step 2 of the explicit claim: the user clicks the emailed link. Only this call
@@ -194,10 +185,11 @@ export async function verifyClaimToken(
     id: string
     customer_id: string
     user_id: string
+    token_hash: string | null
     token_expires_at: number | null
     status: string
   }>(db, `
-    SELECT id, customer_id, user_id, token_expires_at, status
+    SELECT id, customer_id, user_id, token_hash, token_expires_at, status
     FROM customer_claims
     WHERE token_hash = ?
     LIMIT 1
@@ -230,22 +222,33 @@ export async function verifyClaimToken(
     UPDATE customers SET user_id = ?, updated_at = ? WHERE id = ? AND user_id IS NULL
   `, [claim.user_id, now.toISOString(), claim.customer_id])
 
-  if (!Number(assignment.meta.changes ?? 0)) {
-    // Someone else's claim won the race between our read and this write.
-    await execute(db, `UPDATE customer_claims SET status = 'rejected', updated_at = ? WHERE id = ?`, [now.toISOString(), claim.id])
-    return { ok: false, reason: 'already_claimed_by_other' }
+  const assignedCustomer = Number(assignment.meta.changes ?? 0) > 0
+  if (!assignedCustomer) {
+    const winner = await queryFirst<{ user_id: string | null }>(db, `SELECT user_id FROM customers WHERE id = ? LIMIT 1`, [claim.customer_id])
+    if (winner?.user_id !== claim.user_id) {
+      await execute(db, `UPDATE customer_claims SET status = 'rejected', updated_at = ? WHERE id = ?`, [now.toISOString(), claim.id])
+      return { ok: false, reason: 'already_claimed_by_other' }
+    }
   }
 
   try {
-    await execute(db, `
+    const verification = await execute(db, `
       UPDATE customer_claims
       SET status = 'verified', verified_at = ?, token_hash = NULL, token_expires_at = NULL, updated_at = ?
-      WHERE id = ?
-    `, [now.getTime(), now.toISOString(), claim.id])
+      WHERE id = ? AND status = 'pending' AND token_hash = ?
+    `, [now.getTime(), now.toISOString(), claim.id, claim.token_hash])
+    if (!Number(verification.meta.changes ?? 0)) {
+      if (assignedCustomer) {
+        await execute(db, `UPDATE customers SET user_id = NULL, updated_at = ? WHERE id = ? AND user_id = ?`, [now.toISOString(), claim.customer_id, claim.user_id])
+      }
+      return { ok: false, reason: 'invalid_or_expired' }
+    }
   } catch (error) {
     // Compensate: roll back only the assignment we just made (guarded by user_id
     // matching, so we never clobber a different, later-successful assignment).
-    await execute(db, `UPDATE customers SET user_id = NULL, updated_at = ? WHERE id = ? AND user_id = ?`, [now.toISOString(), claim.customer_id, claim.user_id]).catch(() => {})
+    if (assignedCustomer) {
+      await execute(db, `UPDATE customers SET user_id = NULL, updated_at = ? WHERE id = ? AND user_id = ?`, [now.toISOString(), claim.customer_id, claim.user_id]).catch(() => {})
+    }
     throw error
   }
 

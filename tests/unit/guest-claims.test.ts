@@ -40,6 +40,18 @@ function findCustomer(db: Store, id: unknown) {
 }
 
 async function queryFirst<T>(db: Store, query: string, params: unknown[] = []): Promise<T | undefined> {
+  if (query.includes('INSERT INTO customer_claims') && query.includes('ON CONFLICT')) {
+    const [id, customer_id, user_id, organization_id, site_id, email_at_claim, token_hash, token_expires_at, created_at, updated_at] = params
+    const existing = db.customerClaims.find(c => c.customer_id === customer_id && c.user_id === user_id)
+    if (existing?.status === 'verified') return undefined
+    if (existing) {
+      Object.assign(existing, { status: 'pending', token_hash, token_expires_at, email_at_claim, verified_at: null, updated_at })
+      return { id: existing.id } as T
+    }
+    db.customerClaims.push({ id, customer_id, user_id, organization_id, site_id, email_at_claim, status: 'pending', token_hash, token_expires_at, verified_at: null, created_at, updated_at })
+    return { id } as T
+  }
+
   if (query.includes('FROM customers') && query.includes('WHERE id = ?') && query.includes('user_id')) {
     const result = findCustomer(db, params[0]) as T | undefined
     const hook = db.raceHook
@@ -150,8 +162,8 @@ async function execute(db: Store, query: string, params: unknown[] = []) {
 
   if (query.includes('UPDATE customer_claims') && query.includes('status = \'verified\'')) {
     if (db.failVerifiedWrite) throw new Error('simulated D1 write failure')
-    const [verifiedAt, updatedAt, id] = params
-    const claim = db.customerClaims.find((c) => c.id === id)
+    const [verifiedAt, updatedAt, id, originalTokenHash] = params
+    const claim = db.customerClaims.find((c) => c.id === id && c.status === 'pending' && c.token_hash === originalTokenHash)
     if (claim) Object.assign(claim, { status: 'verified', verified_at: verifiedAt, token_hash: null, token_expires_at: null, updated_at: updatedAt })
     return { meta: { changes: claim ? 1 : 0 } }
   }
@@ -285,6 +297,18 @@ test('createClaimRequest issues a pending claim without linking the account yet'
   assert.equal(db.customers[0]?.user_id, null, 'requesting a claim must not link the row by itself')
   assert.equal(db.customerClaims.length, 1)
   assert.equal(db.customerClaims[0]?.status, 'pending')
+})
+
+test('createClaimRequest atomically rotates an existing pending claim', async () => {
+  const db = createStore()
+  seedUnclaimedCustomer(db)
+  const first = await createClaimRequest(db as unknown as D1Database, { customerId: 'customer-1', userId: 'user-1', userEmail: 'guest@example.com' })
+  const second = await createClaimRequest(db as unknown as D1Database, { customerId: 'customer-1', userId: 'user-1', userEmail: 'guest@example.com' })
+  assert.equal(first.ok, true)
+  assert.equal(second.ok, true)
+  if (!first.ok || !second.ok) return
+  assert.equal(second.claimId, first.claimId)
+  assert.equal(db.customerClaims.length, 1)
 })
 
 test('verifyClaimToken links the customer only when the token, expiry, and requesting user all match', async () => {

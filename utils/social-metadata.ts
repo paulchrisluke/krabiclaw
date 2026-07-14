@@ -28,6 +28,16 @@ export interface SocialImageSource {
   alt?: string
 }
 
+export function inferSocialImageMimeType(url: string): SocialImageMimeType | undefined {
+  const pathname = (() => {
+    try { return new URL(url, 'https://image.internal').pathname.toLowerCase() } catch { return '' }
+  })()
+  if (/\.jpe?g$/.test(pathname)) return 'image/jpeg'
+  if (/\.gif$/.test(pathname)) return 'image/gif'
+  if (/\.png$/.test(pathname)) return 'image/png'
+  return undefined
+}
+
 export interface SocialBrand {
   /** og:site_name and the name rendered on generated OG image cards. */
   siteName: string
@@ -145,19 +155,9 @@ export function composeSocialMetadata(
   }
 }
 
-/**
- * Deterministic, dependency-free hash used both to build the OG image render route's
- * query string cache key and as the KV cache key on the server — must stay pure/sync so
- * client (URL builder) and server (cache lookup) always agree without importing crypto.
- */
+/** Deterministic SHA-256 key shared by browser URL generation and server KV lookup. */
 export function hashOgImagePayload(value: string): string {
-  // FNV-1a, 32-bit.
-  let hash = 0x811c9dc5
-  for (let i = 0; i < value.length; i++) {
-    hash ^= value.charCodeAt(i)
-    hash = Math.imul(hash, 0x01000193)
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0')
+  return bytesToHex(sha256(new TextEncoder().encode(value)))
 }
 
 /** Payload the OG image render route/pipeline consumes. Kept separate from the page-level
@@ -219,12 +219,18 @@ export function buildOgImageUrl(origin: string, payload: OgImageRenderPayload): 
  * to the route and never needs to be encoded here.
  */
 export function resolveSocialOgImage(input: SocialPageMetadataInput, origin: string): SocialImageSource {
-  if (input.ogImageOverride?.url) return input.ogImageOverride
+  if (input.ogImageOverride?.url) {
+    return {
+      ...input.ogImageOverride,
+      url: new URL(input.ogImageOverride.url, origin).toString(),
+      type: input.ogImageOverride.type || inferSocialImageMimeType(input.ogImageOverride.url),
+    }
+  }
 
   const renderPayload: OgImageRenderPayload = {
     template: input.template,
     title: input.title,
-    description: input.description,
+    description: truncateForSeo(input.description, DESCRIPTION_MAX_LENGTH),
     siteName: input.brand.siteName,
     label: input.label,
     location: input.location,
@@ -263,3 +269,5 @@ export function parseOgImageQuery(query: Record<string, string | string[] | unde
     secondaryColor: get('secondaryColor') || null,
   }
 }
+import { sha256 } from '@noble/hashes/sha2.js'
+import { bytesToHex } from '@noble/hashes/utils.js'

@@ -32,8 +32,12 @@ export async function fetchImageAsDataUri(
     const contentType = response.headers.get('content-type')?.split(';')[0]?.trim() || ''
     if (!contentType.startsWith('image/')) return null
 
+    const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES
+    const contentLength = Number(response.headers.get('content-length'))
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) return null
+
     const buffer = new Uint8Array(await response.arrayBuffer())
-    if (buffer.byteLength === 0 || buffer.byteLength > (options.maxBytes ?? DEFAULT_MAX_BYTES)) return null
+    if (buffer.byteLength === 0 || buffer.byteLength > maxBytes) return null
 
     return `data:${contentType};base64,${uint8ArrayToBase64(buffer)}`
   } catch {

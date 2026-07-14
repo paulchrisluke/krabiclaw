@@ -43,6 +43,15 @@ function getFallbackBytes(): Uint8Array {
   return cachedFallbackBytes
 }
 
+export function createFallbackOgImageResult(payload: OgImageRenderPayload): OgImagePipelineResult {
+  return {
+    bytes: getFallbackBytes(),
+    contentType: 'image/png',
+    cacheKey: computeOgImageCacheKey(payload),
+    source: 'fallback',
+  }
+}
+
 /**
  * The one image-generation/fallback/cache/response pipeline every OG image request goes
  * through (#259). Order: KV cache hit → render via satori+resvg (cached in KV on success)
@@ -75,7 +84,8 @@ export async function resolveOgImage(
         const bytes = await renderOgImagePng(payload, { wasmBytes })
         if (SITE_CACHE) {
           try {
-            await SITE_CACHE.put(KV_KEY_PREFIX + cacheKey, bytes.buffer as ArrayBuffer, {
+            const activeBytes = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+            await SITE_CACHE.put(KV_KEY_PREFIX + cacheKey, activeBytes, {
               expirationTtl: KV_TTL_SECONDS,
             })
           } catch (error) {
@@ -89,5 +99,5 @@ export async function resolveOgImage(
     }
   }
 
-  return { bytes: getFallbackBytes(), contentType: 'image/png', cacheKey, source: 'fallback' }
+  return createFallbackOgImageResult(payload)
 }

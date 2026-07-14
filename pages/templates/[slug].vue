@@ -3,6 +3,7 @@
     <Teleport to="body">
       <div
         v-if="isDemoPreviewOpen"
+        ref="previewDialogRef"
         class="fixed inset-0 z-[100] bg-zinc-950"
         role="dialog"
         aria-modal="true"
@@ -11,6 +12,7 @@
         <div class="fixed inset-x-0 top-0 z-[101] border-b border-white/10 bg-zinc-950/95 backdrop-blur-md">
           <div class="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
             <button
+              ref="closePreviewButtonRef"
               type="button"
               class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/20 text-white transition hover:bg-white/10"
               aria-label="Close demo preview"
@@ -47,6 +49,8 @@
         />
       </div>
     </Teleport>
+
+    <div :inert="isDemoPreviewOpen">
 
     <!-- ── Page hero ─────────────────────────────────────────────────── -->
     <section class="relative overflow-hidden py-16 lg:py-20">
@@ -221,6 +225,7 @@
         </div>
       </div>
     </div>
+    </div>
   </div>
 </template>
 
@@ -244,6 +249,9 @@ if (!template) {
 const config = useRuntimeConfig()
 const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '') || 'krabiclaw.com'
 const isDemoPreviewOpen = ref(false)
+const previewDialogRef = ref<HTMLElement | null>(null)
+const closePreviewButtonRef = ref<HTMLButtonElement | null>(null)
+let previewTrigger: HTMLElement | null = null
 
 const isNclsShowcase = template.slug === 'blawby'
 
@@ -258,16 +266,32 @@ const demoUrl = computed(() => {
     : `https://demo.${platformHostname}`
 })
 
-function openDemoPreview() {
+function openDemoPreview(event: MouseEvent) {
+  previewTrigger = event.currentTarget as HTMLElement
   isDemoPreviewOpen.value = true
+  nextTick(() => closePreviewButtonRef.value?.focus())
 }
 
 function closeDemoPreview() {
   isDemoPreviewOpen.value = false
+  nextTick(() => previewTrigger?.focus())
 }
 
 function handlePreviewKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') closeDemoPreview()
+  if (event.key !== 'Tab' || !isDemoPreviewOpen.value || !previewDialogRef.value) return
+  const focusable = [...previewDialogRef.value.querySelectorAll<HTMLElement>('button, a[href], iframe, [tabindex]:not([tabindex="-1"])')]
+    .filter(element => !element.hasAttribute('disabled'))
+  if (!focusable.length) return
+  const first = focusable[0]!
+  const last = focusable[focusable.length - 1]!
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
 }
 
 watch(isDemoPreviewOpen, (isOpen) => {
@@ -319,7 +343,14 @@ usePlatformPageSeo({
       name: template.displayName,
       description: template.description,
       url: `${siteUrl}/templates/${template.slug}`,
-      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+      offers: {
+        '@type': 'Offer',
+        price: template.schemaOffer.price,
+        priceCurrency: template.schemaOffer.priceCurrency,
+        availability: template.status === 'coming_soon'
+          ? 'https://schema.org/PreOrder'
+          : 'https://schema.org/InStock',
+      },
     },
   ],
 })

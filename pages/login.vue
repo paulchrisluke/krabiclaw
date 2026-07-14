@@ -118,7 +118,7 @@ const route = useRoute()
 const isOAuthFlow = computed(() => !!route.query.client_id)
 const postLoginUrl = computed(() => {
   const redirect = route.query.redirect
-  return typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')
+  return typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//') && !redirect.includes('\\')
     ? `/api/post-login?redirect=${encodeURIComponent(redirect)}`
     : '/api/post-login'
 })

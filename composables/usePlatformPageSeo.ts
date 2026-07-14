@@ -2,7 +2,7 @@ import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import { resolveSeoUrl } from '~/composables/useSeoUrls'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import { useSocialMetadata } from '~/composables/useSocialMetadata'
-import type { SocialPageMetadataInput } from '~/utils/social-metadata'
+import { inferSocialImageMimeType, type SocialPageMetadataInput } from '~/utils/social-metadata'
 
 export interface PlatformBreadcrumb {
   name: string
@@ -73,7 +73,9 @@ export function usePlatformPageSeo(input: MaybeRefOrGetter<PlatformPageSeoInput>
       description: value.description,
       canonicalUrl: pageUrl.value,
       brand: { siteName: PLATFORM_NAME, logoUrl: resolveSeoUrl('/krabi-claw-logo.png', origin), primaryColor: '#1e1b4b', secondaryColor: '#4338ca' },
-      ogImageOverride: value.ogImage ? { url: resolveSeoUrl(value.ogImage, origin) } : null,
+      ogImageOverride: value.ogImage
+        ? { url: resolveSeoUrl(value.ogImage, origin), type: inferSocialImageMimeType(value.ogImage) }
+        : null,
       indexable: value.robots ? !/noindex/i.test(value.robots) : true,
       robots: value.robots ?? null,
     }

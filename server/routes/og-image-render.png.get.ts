@@ -1,6 +1,6 @@
 import { getQuery, setHeader } from 'h3'
 import { parseOgImageQuery } from '~/utils/social-metadata'
-import { resolveOgImage } from '~/server/utils/og-image/pipeline'
+import { createFallbackOgImageResult, resolveOgImage } from '~/server/utils/og-image/pipeline'
 
 /**
  * The dynamic, template-aware OG image render route (#259). Every page's og:image either
@@ -11,7 +11,10 @@ import { resolveOgImage } from '~/server/utils/og-image/pipeline'
 export default defineEventHandler(async (event) => {
   const query = getQuery(event) as Record<string, string | string[] | undefined>
   const payload = parseOgImageQuery(query)
-  const result = await resolveOgImage(event, payload)
+  const result = await resolveOgImage(event, payload).catch((error) => {
+    console.error('[og-image] pipeline failed, serving static fallback', error)
+    return createFallbackOgImageResult(payload)
+  })
 
   setHeader(event, 'Content-Type', result.contentType)
   setHeader(event, 'Content-Length', result.bytes.byteLength)
