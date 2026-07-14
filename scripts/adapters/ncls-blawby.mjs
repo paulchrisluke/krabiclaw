@@ -1110,22 +1110,29 @@ function preserveVerifiedMedia(payload, outDir) {
 }
 
 function generateSeedPreview(outDir) {
-  const result = spawnSync(process.execPath, [
-    path.join(repoRoot, 'scripts', 'generate-ncls-blawby-seed.mjs'),
-    '--stdout',
-    '--manifest',
-    path.join(outDir, 'client-manifest.json'),
-  ], {
-    cwd: repoRoot,
-    encoding: 'utf8',
-  })
+  const seedPath = path.join(outDir, 'seed-preview.sql')
+  const outFd = fs.openSync(seedPath, 'w')
+  let result
+  try {
+    result = spawnSync(process.execPath, [
+      path.join(repoRoot, 'scripts', 'generate-ncls-blawby-seed.mjs'),
+      '--stdout',
+      '--manifest',
+      path.join(outDir, 'client-manifest.json'),
+    ], {
+      cwd: repoRoot,
+      stdio: ['ignore', outFd, 'pipe'],
+      encoding: 'utf8',
+    })
+  } finally {
+    fs.closeSync(outFd)
+  }
   if (result.error) {
     throw new Error(`Failed to generate NCLS Blawby seed preview: ${result.error.message}`)
   }
   if (result.status !== 0) {
-    throw new Error(`Failed to generate NCLS Blawby seed preview:\n${result.stderr || result.stdout}`)
+    throw new Error(`Failed to generate NCLS Blawby seed preview:\n${result.stderr}`)
   }
-  fs.writeFileSync(path.join(outDir, 'seed-preview.sql'), result.stdout, 'utf8')
 }
 
 function writeClientImportArtifacts(payload, outDir) {
