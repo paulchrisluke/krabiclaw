@@ -561,7 +561,14 @@ export async function rebuildPlatformKnowledgeIndex(env: CloudflareEnv, db: DbCl
   const records = expandDocumentsForSurfaces(baseRecords)
   const nextKeys = new Set(records.map(record => record.key))
   for (const record of records) {
-    await uploadIndexItem(env, record.key, renderDocumentContent(record), record.metadata)
+    try {
+      await uploadIndexItem(env, record.key, renderDocumentContent(record), record.metadata)
+    } catch (error) {
+      // Temporary diagnostic: identify exactly which item key AI Search rejects
+      // (e.g. filename_exceeds_maximum_length) instead of failing generically.
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(`uploadIndexItem failed for key "${record.key}" (length ${record.key.length}): ${message}`)
+    }
   }
   const staleItems = existingItems.filter(item => !nextKeys.has(item.key))
   await Promise.all(staleItems.map(item => deleteIndexItem(env, item.id)))
