@@ -1,0 +1,34 @@
+# End-Customer/Guest Account Model, Kept Separate From Tenant Org Membership
+
+KrabiClaw's Better Auth `user` model currently has exactly one persona: a tenant operator who owns or manages an `organization` and its `sites` via the dashboard, reached through `member`/`organization` rows and `/dashboard/{orgSlug}` routing. Issue #195 asks for a second persona — an end-customer/guest who books a reservation or experience at a tenant's site and wants to view their own booking history, manage upcoming reservations, or track loyalty status, possibly across several unrelated tenant sites (analogous to an Airbnb guest spanning many hosts, not an "owner of an org").
+
+The `customers` table already exists (`server/db/schema.ts`), scoped to `organization_id` + `site_id`, keyed by email/phone with an optional `user_id` FK, holding booking history, loyalty points, and `stripe_customer_id`. Today it is populated only from public form submissions and never authenticates.
+
+## Decision
+
+1. **Guest identity is kept entirely out of the org/member/billing model.** A guest user never receives an `organization` or `member` row. The existing `member` role model (`owner`/`admin`/`editor`/`member`) remains dashboard-oriented only; it is not extended with a "guest" role, and `databaseHooks.user.create.after` (in `server/utils/auth.ts`) continues to do nothing tenant-oriented for a plain signup — no organization is created implicitly for anyone (this was already the fix landed for #193).
+
+2. **One Better Auth `user` may link to many tenant-scoped `customers` rows.** The existing `customers.user_id` FK (nullable, `onDelete: 'set null'`) is the link; no join/junction table is needed because `customers` is already the per-tenant, per-site record. A user with bookings at three different sites ends up with three `customers` rows, each `user_id`-linked to the same `user.id`, with no organization or member row anywhere in that chain.
+
+3. **Linking a `user` to a `customers` row requires verified identity plus an explicit claim step — not bare email match.** Better Auth already requires mailbox ownership to reach a verified session (`requireEmailVerification: true` for password signup, or a trusted OAuth email for Google). That alone is necessary but not sufficient: an attacker could still sign up first with a victim's email and pre-emptively see (or silently receive) the victim's booking history and PII the moment their own signup verification completes, and a "verified at signup, T1" fact says nothing about intent to claim a specific site's records added later, at T2. So claiming is a distinct, second verification: the signed-in user with a verified email is shown *candidate* unclaimed `customers` rows matching their normalized email (masked to organization/site name only, no PII), must explicitly select one to claim, and a claim-specific verification email (distinct from the signup verification email) is sent to that address with a single-use, time-limited token. Only clicking that link sets `customers.user_id` and marks the claim `verified`. This is implemented as a new `customer_claims` table (`server/db/schema.ts`) rather than reusing Better Auth's verification token table, so claims have their own per-tenant audit trail (`pending` / `verified` / `expired` / `rejected`, one row per `customer_id` + `user_id` pair) independent of session/login concerns.
+
+   The existing `anonymous()` plugin's `onLinkAccount` → `linkAnonymousCustomerToUser` path (`server/utils/customers.ts`) is a different, already-safe case: it re-points `customers` rows accrued *by that same anonymous session* to the newly-verified real user, which is continuity of one session's own data, not claiming a stranger's historical records by email — it does not change.
+
+4. **Guests land on their own customer-facing surface, structurally separate from `/dashboard/{orgSlug}`.** A new route tree (`pages/account/**`, its own layout) shows aggregated booking history, upcoming reservations, and claim management across every `customers` row linked to the signed-in user. It does not reuse dashboard layout/components/composables (`useDashboardSite`, `UPage`/`UPageBody` dashboard chrome, org-slug-based routing) and does not attempt org-level features (billing, member management, site editing).
+
+5. **Post-login routing is additive, not a behavior change for existing tenant operators.** `GET /api/post-login` (`server/api/post-login.get.ts`) still resolves organization membership first and preserves every existing branch (`platform admin` → `/admin`, `has org` → `/dashboard/{slug}`). Only the previously-uncovered case — authenticated, no organization membership — now checks whether the user has any linked `customers` rows before falling back to `/dashboard/onboarding`; if none, onboarding is unchanged. A brand-new tenant-operator signup has no linked `customers` rows and is routed exactly as before.
+
+## Consequences
+
+- No schema change to `organization`/`member`/`invitation`; existing tenant-operator signup, invite, and billing code paths are untouched.
+- `customers.user_id` remains the only cross-site linking mechanism; multi-tenant guest identity is a query concern (aggregate by `user_id`), not a new relationship table.
+- Claim verification adds one new table, one new email template, and a handful of API routes/pages; it does not touch Better Auth's own `verification` table or its plugins.
+- A guest who never completes the claim step keeps zero linked `customers` rows and sees an empty booking-history surface — never someone else's data.
+- Guest-facing routes must add their own auth guard (any authenticated user, no org check) distinct from `middleware/admin.ts`'s admin-only guard.
+
+## Considered Options
+
+- **Reuse Better Auth `organization`/`member` with a synthetic "guest org" per customer:** rejected — pollutes billing/org-membership semantics (#195's own issue body calls this out), and Better Auth's org plugin assumes management intent everywhere it's read (invitations, billing, dashboard routing).
+- **A dedicated `customer_users` junction table instead of relying on `customers.user_id`:** rejected — `customers` is already tenant-scoped per site, so one row per site per user *is* the fan-out; a junction table would just duplicate the FK that already exists.
+- **Link by verified-email match alone, no separate claim step:** rejected per the issue's explicit safeguard requirement — signup-time verification proves mailbox ownership at T1, not consent to attach records discovered at T2, and offers no per-claim audit trail or ability to reject a mismatch.
+- **Route guests through `/dashboard` with a restricted "guest" member role:** rejected — dashboard routing, layout, and every composable it uses assume an org context; a "guest" role would require exceptions scattered through dashboard code rather than a clean separate surface.
