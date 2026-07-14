@@ -43,9 +43,16 @@ function recordArray(value: unknown): ApiRecord[] {
 
 function sanitizedUrlArray(value: unknown, maxLength: number): string[] {
   if (!Array.isArray(value)) return []
-  return value
-    .map(item => (typeof item === 'string' ? sanitizeUrl(cleanString(item, maxLength)) : ''))
-    .filter((url): url is string => Boolean(url))
+  return value.map((item, index) => {
+    const cleaned = typeof item === 'string' ? cleanString(item, maxLength) : ''
+    try {
+      const parsed = new URL(cleaned)
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('unsupported protocol')
+      return parsed.toString()
+    } catch {
+      validationError(`compliance.same_as[${index}] must be an absolute HTTP(S) profile URL.`)
+    }
+  })
 }
 
 function sanitizedContactPoints(value: unknown): ApiRecord[] {
@@ -313,6 +320,21 @@ export async function upsertProfessionalServiceContent(
         `compliance.nonprofit_status "${item.nonprofit_status}" is not a recognized schema.org nonprofit enumeration value (expected a form like "501(c)(3)" or "https://schema.org/Nonprofit501c3").`,
       )
     }
+    const entityType = cleanString(item.entity_type, 120)
+    if (entityType && !/^[A-Z][A-Za-z0-9]*$/.test(entityType)) {
+      validationError('compliance.entity_type must be a schema.org type name such as LegalService or AccountingService.')
+    }
+    const serviceAreaType = cleanString(item.service_area_type, 60)
+    if (serviceAreaType && !new Set(['AdministrativeArea', 'City', 'Country', 'Place', 'State']).has(serviceAreaType)) {
+      validationError('compliance.service_area_type must be AdministrativeArea, City, Country, Place, or State.')
+    }
+    const foundingDate = cleanString(item.founding_date, 40)
+    if (foundingDate && !/^\d{4}-\d{2}-\d{2}$/.test(foundingDate)) {
+      validationError('compliance.founding_date must use YYYY-MM-DD format.')
+    }
+    if (item.address_visibility != null && !['visible', 'hidden'].includes(String(item.address_visibility))) {
+      validationError('compliance.address_visibility must be visible or hidden.')
+    }
     const addressVisibility = item.address_visibility === 'visible' ? 'visible' : 'hidden'
     statements.push({
       query: `
@@ -338,16 +360,16 @@ export async function upsertProfessionalServiceContent(
         siteId,
         cleanString(item.entity_name, 200) || null,
         cleanString(item.dba_name, 200) || null,
-        cleanString(item.entity_type, 120) || null,
+        entityType || null,
         nonprofitStatus.value,
         cleanString(item.registration_number, 120) || null,
         cleanString(item.service_area, 300) || null,
-        cleanString(item.service_area_type, 60) || null,
+        serviceAreaType || null,
         typeof item.disclaimer === 'string' ? item.disclaimer : null,
         typeof item.footer_disclaimer === 'string' ? item.footer_disclaimer : null,
         json(Array.isArray(item.document_asset_ids) ? item.document_asset_ids : []),
         cleanString(item.founder_name, 200) || null,
-        cleanString(item.founding_date, 40) || null,
+        foundingDate || null,
         json(sanitizedUrlArray(item.same_as, 500)),
         json(sanitizedContactPoints(item.contact_points)),
         addressVisibility,

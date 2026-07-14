@@ -53,3 +53,19 @@ test('SEO HTML audit rejects preview canonicals, noindex, duplicate canonicals, 
   assert.ok(result.errors.some(error => error.includes('noindex')))
   assert.ok(result.errors.some(error => error.includes('malformed JSON-LD')))
 })
+
+test('professional-service verifier treats general site Q&A as fallback only on current visible-Q&A recipes', () => {
+  const script = readFileSync('scripts/verify-ncls-seo-migration.mjs', 'utf8')
+  assert.match(script, /generalSiteQaExists/)
+  assert.match(script, /routesRenderingSiteQa = new Set\(\['\/', '\/services', '\/about', '\/contact', '\/schedule', '\/pricing', '\/donate'\]\)/)
+  assert.match(script, /if \(path === '\/blog'\) return \['CollectionPage', 'BreadcrumbList', 'ItemList'\]/)
+})
+
+test('0044 safely copies populated compliance rows and normalizes legacy nonprofit status', () => {
+  const sql = readFileSync('migrations/0044_fearless_spyke.sql', 'utf8')
+  const copy = sql.match(/INSERT INTO `__new_tenant_compliance`[\s\S]*?FROM `tenant_compliance`;/)?.[0] ?? ''
+  assert.match(copy, /THEN 'https:\/\/schema\.org\/Nonprofit501c'/)
+  assert.match(copy, /NULL, NULL, '\[\]', '\[\]', 'hidden'/)
+  assert.doesNotMatch(copy, /SELECT[\s\S]*"service_area_type"/)
+  assert.doesNotMatch(copy, /SELECT[\s\S]*"address_visibility"/)
+})

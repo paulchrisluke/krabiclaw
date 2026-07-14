@@ -120,6 +120,16 @@ export interface ProfessionalServiceSchemaInput {
     description?: string | null
     schemaType?: string | null
     offers?: ProfessionalServiceOffer[] | null
+    /**
+     * Real business_locations data for this offering's own location
+     * (offerings.location_id), when one is set and distinct from the org's
+     * primary location. LegalService/ProfessionalService types are valid
+     * schema.org LocalBusiness subtypes, so an offering-level `address` is
+     * legitimate — this does not touch the shared Organization node's address.
+     */
+    address?: ProfessionalServiceAddress | null
+    /** Same visibility contract as org.addressVisible — an offering's own location address must still be explicitly visible. Defaults to the org's addressVisible when omitted. */
+    addressVisible?: boolean | null
   } | null
 
   /** services-index / blog-index */
@@ -227,9 +237,18 @@ function buildContactPointNodes(contactPoints: ProfessionalServiceContactPoint[]
   return nodes.length ? nodes : undefined
 }
 
-function buildAddressNode(org: ProfessionalServiceOrgIdentity) {
-  if (!org.addressVisible || !org.address) return undefined
-  const address = org.address
+/**
+ * Builds a PostalAddress node from real business_locations data. Exported so
+ * both the shared Organization node (org-level primary location) and a
+ * service-detail offering's own node (offering-specific location) can turn a
+ * resolved address into schema.org markup without duplicating field mapping.
+ * Returns undefined when there's no address data at all — callers are
+ * responsible for the address-visibility check (see buildAddressNode below
+ * and the `offering.addressVisible` handling in buildProfessionalServiceGraph)
+ * so an org that has withheld its address never leaks one through a side door.
+ */
+export function buildPostalAddressNode(address: ProfessionalServiceAddress | null | undefined) {
+  if (!address) return undefined
   const hasAny = address.street_address || address.locality || address.region || address.postal_code || address.country
   if (!hasAny) return undefined
   const node: SchemaNode = { '@type': 'PostalAddress' }
@@ -239,6 +258,11 @@ function buildAddressNode(org: ProfessionalServiceOrgIdentity) {
   if (address.postal_code) node.postalCode = address.postal_code
   if (address.country) node.addressCountry = address.country
   return node
+}
+
+function buildAddressNode(org: ProfessionalServiceOrgIdentity) {
+  if (!org.addressVisible) return undefined
+  return buildPostalAddressNode(org.address)
 }
 
 /** Builds the shared Organization node. `@id` is stable per-origin (`${origin}/#organization`). */
@@ -387,6 +411,11 @@ export function buildProfessionalServiceGraph(input: ProfessionalServiceSchemaIn
       provider: { '@id': organizationId },
     }
     if (input.offering.description) mainEntityNode.description = input.offering.description
+    const offeringAddressVisible = input.offering.addressVisible ?? input.org.addressVisible ?? false
+    if (offeringAddressVisible) {
+      const offeringAddress = buildPostalAddressNode(input.offering.address)
+      if (offeringAddress) mainEntityNode.address = offeringAddress
+    }
     if (input.offering.offers?.length) {
       mainEntityNode.offers = input.offering.offers.map(offer => ({
         '@type': 'Offer',

@@ -25,9 +25,14 @@ const clientManifest = JSON.parse(readFileSync(new URL('../client-imports/north-
 const servicePathsWithFaqs = new Set((clientManifest.offerings ?? [])
   .filter(offering => offering.faqs?.some(faq => faq.question?.trim() && faq.answer?.trim()))
   .map(offering => offering.canonical_path || `/services/${offering.slug}`))
-const sitePagesWithQa = new Set((clientManifest.siteQa ?? [])
+const validSiteQa = (clientManifest.siteQa ?? [])
   .filter(qa => qa.question?.trim() && qa.answer?.trim())
-  .map(qa => qa.page_path))
+const generalSiteQaExists = validSiteQa.some(qa => !qa.page_path)
+const sitePagesWithQa = new Set(validSiteQa.filter(qa => qa.page_path).map(qa => qa.page_path))
+// This follows the current reviewed Blawby route recipes, not the legacy
+// source site's composition. The React pin is migration evidence; it must not
+// force approved KrabiClaw content/sections back into the launch site.
+const routesRenderingSiteQa = new Set(['/', '/services', '/about', '/contact', '/schedule', '/pricing', '/donate'])
 
 /**
  * Route-specific required schema.org @types for every preserved, indexed
@@ -54,7 +59,9 @@ function requiredTypesForPath(path) {
 }
 
 function withFaq(path, types) {
-  return sitePagesWithQa.has(path) ? [...types, 'FAQPage'] : types
+  const hasPageQa = sitePagesWithQa.has(path)
+  const fallsBackToGeneralQa = routesRenderingSiteQa.has(path) && generalSiteQaExists && !hasPageQa
+  return hasPageQa || fallsBackToGeneralQa ? [...types, 'FAQPage'] : types
 }
 const sourceSitemap = parseSitemapXml(readFileSync(new URL('source-sitemap-2026-07-13.xml', evidenceDir), 'utf8'))
 const indexedUrls = parseSearchConsoleCsv(readFileSync(new URL('search-console-valid-2026-07-13.csv', evidenceDir), 'utf8'))

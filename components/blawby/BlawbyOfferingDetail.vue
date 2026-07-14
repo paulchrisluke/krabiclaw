@@ -202,6 +202,12 @@ useProfessionalServiceSchema(() => ({
     name: offering.value.name,
     description: offering.value.seo_description || offering.value.summary || null,
     schemaType: offering.value.schema_type || 'LegalService',
+    // Real business_locations data for this offering's own location, when
+    // one is associated (offerings.location_id) — falls through to the
+    // org's addressVisible when the offering doesn't declare its own.
+    address: offering.value.location_address_street || offering.value.location_address_locality
+      ? { street_address: offering.value.location_address_street, locality: offering.value.location_address_locality }
+      : null,
   },
 }))
 </script>

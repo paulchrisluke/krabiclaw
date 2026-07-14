@@ -29,6 +29,9 @@ export interface PublicOffering {
   status: string
   sort_order: number
   featured: boolean
+  /** Real business_locations data for this offering's own location (offerings.location_id), when one is set. Null for site-wide offerings. */
+  location_address_street: string | null
+  location_address_locality: string | null
 }
 
 export type BlawbyShieldVariant = 'about' | 'blog' | 'contact' | 'pricing' | 'schedule' | 'confirmation' | 'donate' | 'privacy' | 'terms' | 'third-party-notices'
@@ -182,6 +185,13 @@ export interface PublicCompliance {
   same_as: string[]
   contact_points: PublicComplianceContactPoint[]
   address_visibility: 'visible' | 'hidden'
+  address: {
+    street_address: string | null
+    locality: string | null
+    region: string | null
+    postal_code: string | null
+    country: string | null
+  } | null
   metadata: ApiRecord
 }
 
@@ -202,6 +212,9 @@ export interface PublicBlawbyIdentity {
   phone: string | null
   banner_content: string | null
   banner_dismissible: boolean
+  /** The site's primary business_locations row's address, if any — org-level fallback address for the schema.org graph. */
+  primary_location_address_street: string | null
+  primary_location_address_locality: string | null
 }
 
 export interface PublicBlawbyShellData {

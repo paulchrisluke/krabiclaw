@@ -32,7 +32,7 @@ export function useBlawbyOrgIdentity(
       founderName: comp?.founder_name || null,
       foundingDate: comp?.founding_date || null,
       contactPoints: comp?.contact_points || null,
-      address: null,
+      address: comp?.address || null,
       addressVisible: comp?.address_visibility === 'visible',
     }
   })
