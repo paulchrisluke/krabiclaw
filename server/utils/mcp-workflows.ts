@@ -12,6 +12,7 @@ import {
   setOrgWhatsAppPhone,
 } from "~/server/utils/whatsapp";
 import {
+  clearSiteHeroField,
   deleteSiteContentField,
   getPageContent,
   upsertSiteContent,
@@ -826,14 +827,26 @@ export async function deleteContentField(
   actorId?: string | null,
 ) {
   const locationId = input.location_id ?? undefined;
-  await deleteSiteContentField(
-    db,
-    organizationId,
-    siteId,
-    input.page,
-    input.field,
-    locationId,
-  );
+  const heroAlias = HERO_FIELD_ALIASES[input.field];
+  if (heroAlias) {
+    await clearSiteHeroField(
+      db,
+      organizationId,
+      siteId,
+      input.page,
+      heroAlias,
+      locationId,
+    );
+  } else {
+    await deleteSiteContentField(
+      db,
+      organizationId,
+      siteId,
+      input.page,
+      input.field,
+      locationId,
+    );
+  }
   await fireSiteEventSafe({
     db,
     organizationId,
