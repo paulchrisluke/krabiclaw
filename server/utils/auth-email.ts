@@ -2,6 +2,9 @@ import { useRender } from 'vue-email'
 import { shouldSendRealEmail } from '~/server/utils/email-delivery'
 import AuthResetPassword from '~/server/emails/templates/AuthResetPassword'
 import AuthVerifyEmail from '~/server/emails/templates/AuthVerifyEmail'
+import GuestClaimVerify from '~/server/emails/templates/GuestClaimVerify'
+
+const AUTH_EMAIL_TIMEOUT_MS = 10_000
 
 export interface AuthEmailEnv {
   RESEND_API_KEY?: string
@@ -41,20 +44,28 @@ async function sendAuthEmail(
     return
   }
 
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: env.EMAIL_FROM || 'KrabiClaw <hello@krabiclaw.com>',
-      to: [opts.to],
-      subject: opts.subject,
-      html: opts.html,
-      text: opts.text,
-    }),
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), AUTH_EMAIL_TIMEOUT_MS)
+  let response: Response
+  try {
+    response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: env.EMAIL_FROM || 'KrabiClaw <hello@krabiclaw.com>',
+        to: [opts.to],
+        subject: opts.subject,
+        html: opts.html,
+        text: opts.text,
+      }),
+    })
+  } finally {
+    clearTimeout(timeout)
+  }
 
   if (!response.ok) {
     const body = await response.text().catch(() => '')
@@ -97,6 +108,30 @@ export async function sendVerificationEmail(
   await sendAuthEmail(env, {
     to: opts.email,
     subject: 'Verify your KrabiClaw email',
+    html,
+    text,
+  })
+}
+
+// Distinct from sendVerificationEmail above: this confirms an explicit request to
+// link an existing tenant's `customers` row to the signed-in account, not mailbox
+// ownership at signup. See docs/adr/0017-guest-account-model-separate-from-tenant-org-membership.md.
+export async function sendGuestClaimVerificationEmail(
+  env: AuthEmailEnv,
+  opts: { email: string, verifyUrl: string, siteName: string },
+) {
+  const currentPlatformDomain = platformDomain(env)
+  const { html, text } = await useRender(GuestClaimVerify, {
+    props: {
+      verifyUrl: opts.verifyUrl,
+      siteName: opts.siteName,
+      platformDomain: currentPlatformDomain,
+    },
+  })
+
+  await sendAuthEmail(env, {
+    to: opts.email,
+    subject: `Confirm your ${opts.siteName} booking history`,
     html,
     text,
   })

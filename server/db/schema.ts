@@ -53,6 +53,34 @@ export const customers = sqliteTable("customers", {
 	check("customers_status_check", sql`status IN ('active', 'merged', 'suppressed', 'deleted')`),
 ]);
 
+// A guest (end-customer) user's request to link their Better Auth account to an
+// existing tenant-scoped `customers` row discovered by verified email match.
+// Never created/verified silently — see docs/adr/0017-guest-account-model-separate-from-tenant-org-membership.md.
+// One row per (customer_id, user_id) pair; `token_hash` + `token_expires_at` back a
+// single-use claim-verification email distinct from Better Auth's own signup
+// verification email, so proving mailbox ownership at signup time never by itself
+// grants access to someone else's booking history.
+export const customer_claims = sqliteTable("customer_claims", {
+	id: text().primaryKey(),
+	customer_id: text().notNull().references(() => customers.id, { onDelete: "cascade" } ),
+	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	email_at_claim: text().notNull(),
+	status: text().default("pending").notNull(),
+	token_hash: text(),
+	token_expires_at: integer({ mode: "timestamp_ms" }),
+	verified_at: integer({ mode: "timestamp_ms" }),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	uniqueIndex("idx_customer_claims_customer_user_unique").on(table.customer_id, table.user_id),
+	index("idx_customer_claims_user_id").on(table.user_id),
+	index("idx_customer_claims_customer_id").on(table.customer_id),
+	index("idx_customer_claims_token_hash").on(table.token_hash),
+	check("customer_claims_status_check", sql`status IN ('pending', 'verified', 'expired', 'rejected')`),
+]);
+
 export const ai_credits = sqliteTable("ai_credits", {
 	organization_id: text().primaryKey().references(() => organization.id, { onDelete: "cascade" } ),
 	balance: integer().default(0).notNull(),

@@ -169,20 +169,24 @@ function onTabKeydown(event: KeyboardEvent) {
 }
 
 const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
-const canonicalUrl = useSeoUrl(() => offering.value.canonical_path || `/services/${offering.value.slug}`)
 const homeUrl = useSeoUrl(() => '/')
 const servicesUrl = useSeoUrl(() => '/services')
 function trackConsultation(destination: string) {
   trackConsultationClick('service', `/services/${offering.value.slug}`, destination)
 }
 
-useSeoMeta({
-  title: computed(() => offering.value.seo_title || `${offering.value.name} | ${identity.value.brand_name || 'Professional services'}`),
-  description: computed(() => offering.value.seo_description || offering.value.summary || ''),
-  ogImage: computed(() => offering.value.hero_image_url || offering.value.thumbnail_url || undefined),
-})
-useHead(() => ({
-  link: [{ rel: 'canonical', href: canonicalUrl.value }],
+const { canonicalUrl } = useTenantSocialMetadata(() => ({
+  path: offering.value.canonical_path || `/services/${offering.value.slug}`,
+  title: offering.value.seo_title || `${offering.value.name} | ${identity.value.brand_name || 'Professional services'}`,
+  description: offering.value.seo_description || offering.value.summary || '',
+  label: 'Service',
+  brand: {
+    siteName: identity.value.brand_name || 'Professional services',
+    logoUrl: identity.value.logo_url || null,
+  },
+  heroImage: (offering.value.hero_image_url || offering.value.thumbnail_url)
+    ? { url: offering.value.hero_image_url || offering.value.thumbnail_url! }
+    : null,
 }))
 
 useProfessionalServiceSchema(() => ({

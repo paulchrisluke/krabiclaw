@@ -53,10 +53,24 @@ async function assertDialogContrast(page: Page, minRatio = 4.5) {
   expect(ratio, `input text vs panel background contrast (${colors.text} on ${colors.background})`).toBeGreaterThanOrEqual(minRatio)
 }
 
+async function openSearchAfterHydration(page: Page, accessibleName: string) {
+  const trigger = page.getByRole('button', { name: accessibleName })
+  await page.waitForFunction(name => {
+    const element = [...document.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === name)
+    return Boolean(element && Object.getOwnPropertySymbols(element).some(symbol => String(symbol) === 'Symbol(_vei)'))
+  }, accessibleName)
+  await trigger.click()
+  await expect.poll(
+    () => page.getByRole('dialog').count(),
+    { message: `${accessibleName} should open after hydration` },
+  ).toBe(1)
+}
+
 test.describe('platform command search modal', () => {
   test('teleports to <body> and never shows storage-shaped labels', async ({ page, baseURL }) => {
     await page.goto(`${baseURL}/blog`, { waitUntil: 'load' })
-    await page.getByRole('button', { name: 'Open blog search' }).click()
+    await openSearchAfterHydration(page, 'Open blog search')
 
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
@@ -81,7 +95,7 @@ test.describe('Saya command search modal', () => {
 
   test('teleports into #saya-portal-root and keeps AA contrast in light and dark mode', async ({ page }) => {
     await page.goto(`${potteryHouseBaseURL}/blog/group-bookings-create-a-unique-pottery-experience-in-krabi`, { waitUntil: 'load' })
-    await page.getByRole('button', { name: 'Open story search' }).click()
+    await openSearchAfterHydration(page, 'Open story search')
 
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
@@ -112,7 +126,7 @@ test.describe('Blawby command search modal', () => {
   test('teleports into #blawby-portal-root, inherits tenant palette, and keeps AA contrast', async ({ page }) => {
     const response = await page.goto(`${blawbyBaseURL}/article/getting-a-divorce-in-north-carolina`, { waitUntil: 'load' })
     test.skip(response?.status() === 404, 'NCLS Blawby fixture is not seeded in the shared staging environment')
-    await page.getByRole('button', { name: 'Open article search' }).click()
+    await openSearchAfterHydration(page, 'Open article search')
 
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()

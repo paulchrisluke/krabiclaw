@@ -1,6 +1,8 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
+// truncateForSeo now lives in utils/social-metadata.ts (#259's canonical contract module) —
+// both are Nuxt auto-import directories, so it must only be defined in one place.
 
-export const SHARED_OG_IMAGE_PATH = '/og-image-v2.jpg'
+export const SHARED_OG_IMAGE_PATH = '/og-image-v2.png'
 
 export function resolveSeoUrl(value: string | null | undefined, origin: string) {
   const target = value?.trim() || SHARED_OG_IMAGE_PATH
@@ -52,10 +54,3 @@ export function useTenantOgImage(value?: MaybeRefOrGetter<string | null | undefi
   )
 }
 
-/** Truncate text to fit social/SERP preview limits, breaking on a word boundary. */
-export function truncateForSeo(text: string | null | undefined, maxLength: number): string | undefined {
-  if (!text) return undefined
-  const trimmed = text.trim()
-  if (trimmed.length <= maxLength) return trimmed
-  return `${trimmed.slice(0, maxLength - 1).replace(/\s+\S*$/, '')}…`
-}

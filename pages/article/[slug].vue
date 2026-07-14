@@ -57,7 +57,9 @@
         :featured-url="assetUrl(ctaBlock?.featured)"
         @click="trackConsultation"
       />
-      <PlatformCommandSearchModal surface="tenant_blog" variant="blawby" />
+      <ClientOnly>
+        <PlatformCommandSearchModal surface="tenant_blog" variant="blawby" />
+      </ClientOnly>
     </div>
   </NuxtLayout>
 </template>
@@ -88,7 +90,6 @@ const hasUpdatedDate = computed(() => Boolean(post.value.updated_at && post.valu
 const authorInitials = computed(() => String(post.value.author_name || 'NCLS Staff').split(/\s+/).map(part => part[0]).join('').slice(0, 2))
 const relatedPosts = computed(() => data.value.posts.filter(item => item.slug !== slug).slice(0, 3))
 const { categories } = useTenantBlogNav(computed(() => data.value.posts))
-const canonicalUrl = useSeoUrl(() => post.value.canonical_url || `/article/${post.value.slug}`)
 const seoTitle = computed(() => `${post.value.title} | ${identity.value.brand_name || 'Professional services'}`)
 const seoDescription = computed(() => post.value.seo_description || post.value.excerpt || '')
 const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
@@ -106,10 +107,26 @@ function trackConsultation() {
   trackConsultationClick('article', `/article/${slug}`, consultation.value.external_url || consultation.value.schedule_path)
 }
 
-useSeoMeta({ title: seoTitle, description: seoDescription, ogTitle: seoTitle, ogDescription: seoDescription, ogUrl: canonicalUrl, ogType: 'article', ogImage: computed(() => post.value.featured_image?.public_url || undefined) })
-useHead(() => ({
-  link: [{ rel: 'canonical', href: canonicalUrl.value }],
-  meta: post.value.robots ? [{ name: 'robots', content: post.value.robots }] : [],
+const { canonicalUrl } = useTenantSocialMetadata(() => ({
+  path: post.value.canonical_url || `/article/${post.value.slug}`,
+  title: seoTitle.value,
+  description: seoDescription.value,
+  pageType: 'article',
+  label: 'Article',
+  author: post.value.author_name || null,
+  publishedAt: post.value.published_at || null,
+  brand: {
+    siteName: identity.value.brand_name || 'Professional services',
+    logoUrl: identity.value.logo_url || null,
+  },
+  heroImage: post.value.featured_image?.public_url
+    ? {
+        url: post.value.featured_image.public_url,
+        width: post.value.featured_image.width || undefined,
+        height: post.value.featured_image.height || undefined,
+      }
+    : null,
+  robots: post.value.robots || null,
 }))
 
 const blogUrl = useSeoUrl(() => '/blog')

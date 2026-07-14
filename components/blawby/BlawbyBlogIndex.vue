@@ -36,15 +36,17 @@ const disclaimerBlock = computed(() => block('disclaimer'))
 const heroTitle = computed(() => String(heroBlock.value?.title || page.value?.title || 'Our Blog'))
 const heroDescription = computed(() => Array.isArray(heroBlock.value?.description) ? heroBlock.value.description.join('\n\n') : String(heroBlock.value?.description || page.value?.summary || ''))
 
-useSeoMeta({
-  title: computed(() => page.value?.seo_title || `Articles | ${identity.value.brand_name || 'Professional services'}`),
-  description: computed(() => page.value?.seo_description || page.value?.summary || ''),
-})
-const canonicalUrl = useSeoUrl(() => '/blog')
-const homeUrl = useSeoUrl(() => '/')
-useHead(() => ({
-  link: [{ rel: 'canonical', href: canonicalUrl.value }],
+const { canonicalUrl } = useTenantSocialMetadata(() => ({
+  path: '/blog',
+  title: page.value?.seo_title || `Articles | ${identity.value.brand_name || 'Professional services'}`,
+  description: page.value?.seo_description || page.value?.summary || '',
+  label: 'Blog',
+  brand: {
+    siteName: identity.value.brand_name || 'Professional services',
+    logoUrl: identity.value.logo_url || null,
+  },
 }))
+const homeUrl = useSeoUrl(() => '/')
 
 useProfessionalServiceSchema(() => ({
   recipe: 'blog-index',

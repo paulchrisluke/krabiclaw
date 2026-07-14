@@ -11,6 +11,8 @@ export const PLATFORM_SITEMAP_ROUTES = [
   '/pricing',
   '/privacy',
   '/templates',
+  '/templates/blawby',
+  '/templates/saya',
   '/terms',
 ] as const
 

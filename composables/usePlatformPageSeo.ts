@@ -1,6 +1,8 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
-import { resolveSeoUrl, useSharedOgImage, truncateForSeo } from '~/composables/useSeoUrls'
+import { resolveSeoUrl } from '~/composables/useSeoUrls'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
+import { useSocialMetadata } from '~/composables/useSocialMetadata'
+import { inferSocialImageMimeType, type SocialPageMetadataInput } from '~/utils/social-metadata'
 
 export interface PlatformBreadcrumb {
   name: string
@@ -17,6 +19,7 @@ export type PlatformPageType =
   | 'AboutPage'
   | 'ContactPage'
   | 'CollectionPage'
+  | 'ItemPage'
   | 'SoftwareApplication'
 
 interface PlatformPageSeoInput {
@@ -59,33 +62,27 @@ export function usePlatformPageSeo(input: MaybeRefOrGetter<PlatformPageSeoInput>
   const origin = config.public.siteUrl || requestURL.origin
 
   const pageUrl = computed(() => resolveSeoUrl(toValue(input).path, origin))
-  const sharedOgImage = useSharedOgImage(() => toValue(input).ogImage)
 
-  const title = computed(() => toValue(input).title)
-  const description = computed(() => truncateForSeo(toValue(input).description, 160))
-
-  useSeoMeta({
-    title,
-    description,
-    ogTitle: title,
-    ogDescription: description,
-    ogSiteName: PLATFORM_NAME,
-    ogUrl: pageUrl,
-    ogType: 'website',
-    ogImage: sharedOgImage,
-    twitterCard: 'summary_large_image',
-    twitterTitle: title,
-    twitterDescription: description,
-    twitterImage: sharedOgImage,
-  })
-
-  useHead(() => {
-    const robots = toValue(input).robots
+  // Thin adapter over the shared #259 contract/composer — platform pages provide data,
+  // useSocialMetadata emits the actual tag set (title/description/canonical/OG/Twitter).
+  const socialInput = computed<SocialPageMetadataInput>(() => {
+    const value = toValue(input)
     return {
-      link: [{ rel: 'canonical', href: pageUrl.value }],
-      meta: robots ? [{ name: 'robots', content: robots }] : [],
+      template: 'platform',
+      pageType: 'website',
+      title: value.title,
+      description: value.description,
+      canonicalUrl: pageUrl.value,
+      brand: { siteName: PLATFORM_NAME, logoUrl: resolveSeoUrl('/krabi-claw-logo.png', origin), primaryColor: '#1e1b4b', secondaryColor: '#4338ca' },
+      ogImageOverride: value.ogImage
+        ? { url: resolveSeoUrl(value.ogImage, origin), type: inferSocialImageMimeType(value.ogImage) }
+        : null,
+      indexable: value.robots ? !/noindex/i.test(value.robots) : true,
+      robots: value.robots ?? null,
     }
   })
+
+  const { ogImageUrl: sharedOgImage } = useSocialMetadata(socialInput, origin)
 
   useSchemaOrg(computed(() => {
     const value = toValue(input)

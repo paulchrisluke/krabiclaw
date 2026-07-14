@@ -124,6 +124,7 @@ test.describe('Blawby NCLS public site', () => {
 
   test('pricing calculator follows imported threshold boundaries', async ({ page }) => {
     await page.goto(`${blawbyBaseURL}/pricing`, { waitUntil: 'load' })
+    await waitForHydration(page)
     const income = page.getByLabel('Household Income')
     const displayedRate = page.getByText('Your Rate', { exact: true }).locator('..')
     await income.fill('39900')
