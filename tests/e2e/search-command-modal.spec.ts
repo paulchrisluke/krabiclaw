@@ -55,10 +55,16 @@ async function assertDialogContrast(page: Page, minRatio = 4.5) {
 
 async function openSearchAfterHydration(page: Page, accessibleName: string) {
   const trigger = page.getByRole('button', { name: accessibleName })
-  await expect.poll(async () => {
-    await trigger.click()
-    return page.getByRole('dialog').count()
-  }, { message: `${accessibleName} should open after hydration` }).toBe(1)
+  await page.waitForFunction(name => {
+    const element = [...document.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === name)
+    return Boolean(element && Object.getOwnPropertySymbols(element).some(symbol => String(symbol) === 'Symbol(_vei)'))
+  }, accessibleName)
+  await trigger.click()
+  await expect.poll(
+    () => page.getByRole('dialog').count(),
+    { message: `${accessibleName} should open after hydration` },
+  ).toBe(1)
 }
 
 test.describe('platform command search modal', () => {

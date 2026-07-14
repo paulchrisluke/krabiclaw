@@ -147,14 +147,10 @@ export interface TemplateMarketingMetadata {
   priceLabel: string
   priceNote: string
   /**
-   * Structured-data price backing `priceLabel`'s schema.org Offer on the
-   * /templates index (ItemList/Product/Offer). Both current templates are
-   * bundled at no direct charge (Saya: free; Blawby: included on Growth), so
-   * `price` is genuinely '0' for both today — but it's explicit per-template
-   * data, not a literal hardcoded in the page, so a future priced template
-   * can't silently emit a false '0' that contradicts its own priceLabel.
+   * Structured-data price backing `priceLabel`'s schema.org Offer. Null when
+   * the template is a paid-plan benefit rather than a separately free offer.
    */
-  schemaOffer: { price: string, priceCurrency: string }
+  schemaOffer: { price: string, priceCurrency: string } | null
   /**
    * Canonical live-demo destination.
    * - Blawby: the NCLS-approved production showcase, a literal URL —
@@ -269,7 +265,7 @@ export const publicTemplateMarketing: Record<PublicTemplateSlug, TemplateMarketi
     published: true,
     priceLabel: 'Included on Growth',
     priceNote: 'Approved customer showcase: North Carolina Legal Services',
-    schemaOffer: { price: '0', priceCurrency: 'USD' },
+    schemaOffer: null,
     demoUrl: 'https://ncls.krabiclaw.com',
     demoLabel: 'View live customer site',
     ctaLabel: 'Get started',

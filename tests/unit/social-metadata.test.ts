@@ -82,7 +82,12 @@ test('composeSocialMetadata omits width/height for an explicit override without 
 
   assert.equal(tags.ogImageWidth, undefined)
   assert.equal(tags.ogImageHeight, undefined)
-  assert.equal(tags.ogImageType, 'image/png', 'still defaults a MIME type for the tag even if dimensions are unknown')
+  assert.equal(tags.ogImageType, 'image/jpeg')
+})
+
+test('composeSocialMetadata omits a MIME type for extensionless overrides', () => {
+  const tags = composeSocialMetadata(basePayload(), { url: 'https://example.com/custom-image' })
+  assert.equal(tags.ogImageType, undefined)
 })
 
 test('resolveSocialOgImage: explicit override always wins over hero image/generated card', () => {

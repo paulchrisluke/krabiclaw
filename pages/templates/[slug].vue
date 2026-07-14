@@ -283,7 +283,7 @@ function closeDemoPreview() {
 }
 
 function handlePreviewKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') closeDemoPreview()
+  if (event.key === 'Escape' && isDemoPreviewOpen.value) closeDemoPreview()
   if (event.key !== 'Tab' || !isDemoPreviewOpen.value || !previewDialogRef.value) return
   const focusable = [...previewDialogRef.value.querySelectorAll<HTMLElement>('button, a[href], iframe, [tabindex]:not([tabindex="-1"])')]
     .filter(element => !element.hasAttribute('disabled'))
@@ -335,7 +335,7 @@ usePlatformPageSeo({
   // slug gets its own distinct generated OG image rather than falling back
   // to the static shared platform image. Same pattern as the isPlatform
   // branches in pages/index.vue and pages/about.vue.
-  pageType: 'CollectionPage',
+  pageType: 'ItemPage',
   breadcrumbs: [
     { name: 'Home', url: '/' },
     { name: 'Templates', url: '/templates' },
@@ -348,14 +348,14 @@ usePlatformPageSeo({
       name: template.displayName,
       description: template.description,
       url: `${siteUrl}/templates/${template.slug}`,
-      offers: {
+      offers: template.schemaOffer ? {
         '@type': 'Offer',
         price: template.schemaOffer.price,
         priceCurrency: template.schemaOffer.priceCurrency,
         availability: template.status === 'coming_soon'
           ? 'https://schema.org/PreOrder'
           : 'https://schema.org/InStock',
-      },
+      } : undefined,
     },
   ],
 })

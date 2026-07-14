@@ -19,6 +19,7 @@ export type PlatformPageType =
   | 'AboutPage'
   | 'ContactPage'
   | 'CollectionPage'
+  | 'ItemPage'
   | 'SoftwareApplication'
 
 interface PlatformPageSeoInput {

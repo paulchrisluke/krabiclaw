@@ -1,13 +1,4 @@
-/**
- * Fetches a remote image and inlines it as a data: URI so satori can composite it into
- * a rendered OG card. Satori does not fetch remote `src` URLs itself — it only accepts
- * already-resolved image buffers/data URIs — so this step is required for hero-image
- * backgrounds and logos.
- *
- * Never throws: any failure (network, timeout, non-image response, oversized payload)
- * resolves to null so the renderer can fall back to a solid brand-color background
- * rather than failing the whole OG image response.
- */
+/** Fetch and inline a bounded public HTTP(S) image for the OG renderer. */
 export interface FetchImageOptions {
   timeoutMs?: number
   maxBytes?: number
@@ -15,30 +6,105 @@ export interface FetchImageOptions {
 
 const DEFAULT_TIMEOUT_MS = 4000
 const DEFAULT_MAX_BYTES = 5_000_000
+const MAX_REDIRECTS = 5
+
+function isPrivateIpv4(hostname: string): boolean {
+  const parts = hostname.split('.').map(Number)
+  if (parts.length !== 4 || parts.some(part => !Number.isInteger(part) || part < 0 || part > 255)) return false
+  const a = parts[0]!
+  const b = parts[1]!
+  return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254)
+    || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+    || (a === 100 && b >= 64 && b <= 127) || a >= 224
+}
+
+function isPrivateIpv6(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase()
+  return host === '::' || host === '::1' || host.startsWith('fc') || host.startsWith('fd')
+    || /^fe[89ab]/.test(host) || host.startsWith('ff')
+    || (host.startsWith('::ffff:') && isPrivateIpv4(host.slice(7)))
+}
+
+function publicImageUrl(value: string, base?: URL): URL | null {
+  try {
+    const url = new URL(value, base)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+    const hostname = url.hostname.toLowerCase().replace(/\.$/, '')
+    if (!hostname || hostname === 'localhost' || hostname.endsWith('.localhost')
+      || hostname.endsWith('.local') || hostname.endsWith('.internal')
+      || isPrivateIpv4(hostname) || isPrivateIpv6(hostname)) return null
+    return url
+  } catch {
+    return null
+  }
+}
+
+async function cancelBody(response: Response): Promise<void> {
+  await response.body?.cancel().catch(() => undefined)
+}
 
 export async function fetchImageAsDataUri(
   url: string | null | undefined,
   options: FetchImageOptions = {},
 ): Promise<string | null> {
   if (!url) return null
+  let currentUrl = publicImageUrl(url)
+  if (!currentUrl) return null
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
 
   try {
-    const response = await fetch(url, { signal: controller.signal })
-    if (!response.ok) return null
+    let response: Response | null = null
+    for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount++) {
+      response = await fetch(currentUrl, { signal: controller.signal, redirect: 'manual' })
+      if (response.status < 300 || response.status >= 400) break
+      const location = response.headers.get('location')
+      await cancelBody(response)
+      if (!location || redirectCount === MAX_REDIRECTS) return null
+      currentUrl = publicImageUrl(location, currentUrl)
+      if (!currentUrl) return null
+    }
+    if (!response?.ok) {
+      if (response) await cancelBody(response)
+      return null
+    }
 
     const contentType = response.headers.get('content-type')?.split(';')[0]?.trim() || ''
-    if (!contentType.startsWith('image/')) return null
+    if (!contentType.startsWith('image/')) {
+      await cancelBody(response)
+      return null
+    }
 
     const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES
     const contentLength = Number(response.headers.get('content-length'))
-    if (Number.isFinite(contentLength) && contentLength > maxBytes) return null
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      await cancelBody(response)
+      return null
+    }
+    if (!response.body) return null
 
-    const buffer = new Uint8Array(await response.arrayBuffer())
-    if (buffer.byteLength === 0 || buffer.byteLength > maxBytes) return null
+    const reader = response.body.getReader()
+    const chunks: Uint8Array[] = []
+    let size = 0
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      size += value.byteLength
+      if (size > maxBytes) {
+        await reader.cancel()
+        return null
+      }
+      chunks.push(value)
+    }
+    if (size === 0) return null
 
+    const buffer = new Uint8Array(size)
+    let offset = 0
+    for (const chunk of chunks) {
+      buffer.set(chunk, offset)
+      offset += chunk.byteLength
+    }
     return `data:${contentType};base64,${uint8ArrayToBase64(buffer)}`
   } catch {
     return null

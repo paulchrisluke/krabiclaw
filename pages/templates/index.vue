@@ -135,14 +135,14 @@ usePlatformPageSeo({
           name: template.displayName,
           description: template.description,
           url: `${siteUrl}/templates/${template.slug}`,
-          offers: {
+          offers: template.schemaOffer ? {
             '@type': 'Offer',
             price: template.schemaOffer.price,
             priceCurrency: template.schemaOffer.priceCurrency,
             availability: template.status === 'coming_soon'
               ? 'https://schema.org/PreOrder'
               : 'https://schema.org/InStock',
-          },
+          } : undefined,
         },
       })),
     },

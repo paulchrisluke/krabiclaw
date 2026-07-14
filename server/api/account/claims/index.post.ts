@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: result.reason }, { status })
   }
 
-  const siteName = await getClaimSiteDisplayName(db, customerId)
+  const siteName = (await getClaimSiteDisplayName(db, customerId))?.trim() || 'your service provider'
 
   const platformDomain = (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com').replace(/^https?:\/\//, '').replace(/\/$/, '')
   const verifyUrl = `https://${platformDomain}/account/claims/verify?token=${result.rawToken}`

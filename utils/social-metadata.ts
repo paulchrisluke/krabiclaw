@@ -85,7 +85,7 @@ export interface ComposedSocialTags {
   ogImage: string
   ogImageWidth: number | undefined
   ogImageHeight: number | undefined
-  ogImageType: SocialImageMimeType
+  ogImageType: SocialImageMimeType | undefined
   ogImageAlt: string
   twitterCard: 'summary_large_image'
   twitterTitle: string
@@ -148,7 +148,7 @@ export function composeSocialMetadata(
     // rather than assert incorrect 1200x630 metadata for an arbitrary image).
     ogImageWidth: resolvedOgImage.width,
     ogImageHeight: resolvedOgImage.height,
-    ogImageType: resolvedOgImage.type || 'image/png',
+    ogImageType: resolvedOgImage.type || inferSocialImageMimeType(resolvedOgImage.url),
     ogImageAlt: alt,
     twitterCard: 'summary_large_image',
     twitterTitle: title,

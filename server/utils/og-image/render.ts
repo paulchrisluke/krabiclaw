@@ -37,8 +37,8 @@ export async function renderOgImagePng(
   await ensureResvgInitialized(deps.wasmBytes)
 
   const [backgroundImageDataUri, logoDataUri] = await Promise.all([
-    fetchImageAsDataUri(payload.backgroundImageUrl),
-    fetchImageAsDataUri(payload.logoUrl),
+    fetchImageAsDataUri(payload.backgroundImageUrl, { timeoutMs: 4000 }),
+    fetchImageAsDataUri(payload.logoUrl, { timeoutMs: 4000 }),
   ])
 
   const renderer = resolveOgImageRenderer(payload.template)

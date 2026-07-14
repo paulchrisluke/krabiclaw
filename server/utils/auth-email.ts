@@ -4,6 +4,8 @@ import AuthResetPassword from '~/server/emails/templates/AuthResetPassword'
 import AuthVerifyEmail from '~/server/emails/templates/AuthVerifyEmail'
 import GuestClaimVerify from '~/server/emails/templates/GuestClaimVerify'
 
+const AUTH_EMAIL_TIMEOUT_MS = 10_000
+
 export interface AuthEmailEnv {
   RESEND_API_KEY?: string
   EMAIL_FROM?: string
@@ -42,20 +44,28 @@ async function sendAuthEmail(
     return
   }
 
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: env.EMAIL_FROM || 'KrabiClaw <hello@krabiclaw.com>',
-      to: [opts.to],
-      subject: opts.subject,
-      html: opts.html,
-      text: opts.text,
-    }),
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), AUTH_EMAIL_TIMEOUT_MS)
+  let response: Response
+  try {
+    response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: env.EMAIL_FROM || 'KrabiClaw <hello@krabiclaw.com>',
+        to: [opts.to],
+        subject: opts.subject,
+        html: opts.html,
+        text: opts.text,
+      }),
+    })
+  } finally {
+    clearTimeout(timeout)
+  }
 
   if (!response.ok) {
     const body = await response.text().catch(() => '')

@@ -57,7 +57,9 @@
         :featured-url="assetUrl(ctaBlock?.featured)"
         @click="trackConsultation"
       />
-      <PlatformCommandSearchModal surface="tenant_blog" variant="blawby" />
+      <ClientOnly>
+        <PlatformCommandSearchModal surface="tenant_blog" variant="blawby" />
+      </ClientOnly>
     </div>
   </NuxtLayout>
 </template>
