@@ -159,6 +159,14 @@ const eligibleOrgIds = `
   LIMIT ${batchSize}
 `
 
+const eligibleUserIds = `
+  SELECT id FROM user
+  WHERE id NOT IN (${fixtureUserIdList})
+    AND email LIKE '%@example.test'
+    AND createdAt < ${cutoffUnixSeconds}
+  LIMIT ${batchSize}
+`
+
 const sql = `-- Sweeps E2E-generated rows from preview/staging so they don't accumulate forever.
 -- Safe to re-run: only ever targets organizations outside the fixed fixture allowlist and the
 -- '@playwright.example' guest-email marker that tests/e2e specs already use. Curated fixtures
@@ -232,13 +240,12 @@ DELETE FROM notifications WHERE id IN (
 -- (ON DELETE CASCADE), so deleting the user row is sufficient - it does NOT cascade up to
 -- organization/sites (organization isn't a child of user), but those are independently covered by
 -- category 1 above regardless of whether their owning user was already swept.
-DELETE FROM user WHERE id IN (
-  SELECT id FROM user
-  WHERE id NOT IN (${fixtureUserIdList})
-    AND email LIKE '%@example.test'
-    AND createdAt < ${cutoffUnixSeconds}
-  LIMIT ${batchSize}
-);
+-- site_transfer_requests deliberately restrict deletion of their initiating user. E2E transfer
+-- specs create both records, so remove the stale request before its stale test user. Requests
+-- tied to fixture users are untouched because the same protected-user selection is reused.
+DELETE FROM site_transfer_requests WHERE initiated_by_user_id IN (${eligibleUserIds});
+
+DELETE FROM user WHERE id IN (${eligibleUserIds});
 `
 
 if (isStdout) {
