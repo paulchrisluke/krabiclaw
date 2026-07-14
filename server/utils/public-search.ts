@@ -593,6 +593,27 @@ export function expandDocumentsForSurfaces(records: PlatformKnowledgeDocument[])
   )
 }
 
+// Records get expanded across every surface they support (a doc record alone spans 6:
+// public/docs/blog/help/chowbot/dashboard), so the real upload count for the full
+// corpus is a multiple of the base document count — sequential one-at-a-time uploads
+// (even with per-item retries) took ~5 minutes for production content, right at the
+// Workers platform's own request-duration ceiling, killing the whole request with a
+// raw "fetch failed" before the loop could finish. Bounded concurrency cuts wall-clock
+// time roughly by the batch factor without the instability of fully unbounded parallel
+// requests against a single AI Search instance.
+const UPLOAD_CONCURRENCY = 10
+
+async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
+  let nextIndex = 0
+  async function runNext(): Promise<void> {
+    const current = nextIndex++
+    if (current >= items.length) return
+    await worker(items[current]!)
+    await runNext()
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, runNext))
+}
+
 export async function rebuildPlatformKnowledgeIndex(env: CloudflareEnv, db: DbClient) {
   await ensurePlatformKnowledgeInstance(env)
   const [existingItems, baseRecords] = await Promise.all([
@@ -601,7 +622,7 @@ export async function rebuildPlatformKnowledgeIndex(env: CloudflareEnv, db: DbCl
   ])
   const records = expandDocumentsForSurfaces(baseRecords)
   const nextKeys = new Set(records.map(record => record.key))
-  for (const record of records) {
+  await runWithConcurrency(records, UPLOAD_CONCURRENCY, async (record) => {
     try {
       await uploadIndexItem(env, record.key, renderDocumentContent(record), record.metadata)
     } catch (error) {
@@ -612,9 +633,9 @@ export async function rebuildPlatformKnowledgeIndex(env: CloudflareEnv, db: DbCl
       const message = error instanceof Error ? error.message : String(error)
       throw new Error(`uploadIndexItem failed for key "${record.key}" (length ${record.key.length}): ${message}`)
     }
-  }
+  })
   const staleItems = existingItems.filter(item => !nextKeys.has(item.key))
-  await Promise.all(staleItems.map(item => deleteIndexItem(env, item.id)))
+  await runWithConcurrency(staleItems, UPLOAD_CONCURRENCY, (item) => deleteIndexItem(env, item.id))
 
   // Cloudflare processes indexing asynchronously regardless of whether this request
   // stays open to observe it, and the Workers platform enforces a request-duration
