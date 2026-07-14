@@ -13,7 +13,7 @@ export default defineEventHandler((event) => {
 
   setHeader(event, 'Content-Type', 'image/jpeg')
   setHeader(event, 'Cache-Control', 'public, max-age=31536000, immutable')
-  setHeader(event, 'Content-Length', String(image.byteLength))
+  setHeader(event, 'Content-Length', image.byteLength)
 
   return image
 })
