@@ -76,9 +76,14 @@ const GUEST_BOOKING_ORGANIZATION_IDS = ['org-pottery-house', 'org-demo']
 // '@example.test' (server/api/dev/login.get.ts's auto-create path uses exactly this domain for
 // every dev-login test user, so several fixtures collide with it and must be excluded by ID, not
 // just by domain): user-mcp-free/growth/managed (scripts/generate-demo-seed.ts's
-// renderMcpFixtureOrg) and the site-transfer recipient both use @example.test. user-demo,
-// user-pottery-house, and user-kikuzuki use other domains and would never match anyway, but are
-// listed for clarity/future-proofing. Keep in sync with FIXTURE_ORG_IDS' seed scripts.
+// renderMcpFixtureOrg) and the site-transfer recipient both use @example.test. user-ncls-blawby
+// (generate-ncls-blawby-seed.mjs) uses 'ncls-blawby@example.test' and does match the domain — it
+// must stay excluded by ID: it's entered_by_user_id on NCLS's owner-entered reviews, and deleting
+// it cascades entered_by_user_id to NULL (ON DELETE SET NULL), which violates
+// reviews_owner_entered_provenance_check (requires entered_by_user_id IS NOT NULL for
+// source='owner_entered'). user-demo, user-pottery-house, and user-kikuzuki use other domains and
+// would never match anyway, but are listed for clarity/future-proofing. Keep in sync with
+// FIXTURE_ORG_IDS' seed scripts.
 const FIXTURE_USER_IDS = [
   'user-demo',
   'user_demo',
@@ -88,6 +93,7 @@ const FIXTURE_USER_IDS = [
   'Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re',
   'user-pottery-house',
   'user-kikuzuki',
+  'user-ncls-blawby',
 ]
 
 const isStaging = process.argv.includes('--staging')
