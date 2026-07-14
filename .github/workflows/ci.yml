@@ -344,6 +344,11 @@ jobs:
     name: E2E staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
     runs-on: ubuntu-latest
+    # Every staging run migrates, resets, and reseeds the same remote D1 database.
+    # Queue pushes so fixture writes and deployment smoke tests cannot overlap.
+    concurrency:
+      group: shared-staging-deployment
+      cancel-in-progress: false
     env:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
