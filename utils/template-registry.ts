@@ -168,13 +168,17 @@ export interface TemplateMarketingMetadata {
   sortOrder: number
   /**
    * SEO copy for this template's detail page. Consumed as-is by
-   * usePlatformPageSeo (the existing shared platform SEO composer) —
-   * this is data, not a new metadata/OG pipeline.
+   * usePlatformPageSeo (the shared platform SEO composer, itself a thin
+   * adapter over the #259 composeSocialMetadata contract) — this is data,
+   * not a new metadata/OG pipeline.
    *
-   * TODO(#259): once the shared global OG-image composer lands, wire a
-   * per-template screenshot through it here instead of falling back to
-   * the generic shared platform OG image. Do not build a bespoke image
-   * pipeline in the meantime.
+   * No `ogImage` override is set on the /templates/[slug] page, so each
+   * detail page gets a real per-template 1200x630 card generated on the
+   * fly by the shared `platform` renderer (server/utils/og-image/renderers/
+   * platform.ts) from this title/description — see the resolveSocialOgImage
+   * fallback chain in utils/social-metadata.ts. This is the same pattern
+   * pages/index.vue and pages/about.vue already use for their platform
+   * branch; do not build a bespoke image pipeline here.
    */
   seo: TemplateMarketingSeo
 }

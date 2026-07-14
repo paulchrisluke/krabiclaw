@@ -8,6 +8,7 @@ import {
   publicTemplateRegistry,
   resolvePublicTemplate,
 } from '../../utils/template-registry.ts'
+import { buildOgImageUrl } from '../../utils/social-metadata.ts'
 
 test('resolvePublicTemplate treats professional_service as Blawby', () => {
   const template = resolvePublicTemplate({ vertical: 'professional_service' })
@@ -59,4 +60,28 @@ test('findPublishedTemplateMarketing resolves known slugs and 404s (returns null
 test('Blawby marketing metadata uses the NCLS-approved literal demo URL; Saya resolves its demo at runtime', () => {
   assert.equal(publicTemplateMarketing.blawby.demoUrl, 'https://ncls.krabiclaw.com')
   assert.equal(publicTemplateMarketing.saya.demoUrl, null)
+})
+
+// pages/templates/[slug].vue passes no `ogImage`/`ogImageOverride` for a template's detail
+// page — it relies on usePlatformPageSeo's shared #259 composer to generate a real
+// per-template 1200x630 card from `seo.title`/`seo.description` via the `platform` renderer
+// (see resolveSocialOgImage in utils/social-metadata.ts). These tests lock in that every
+// published template's seo copy actually produces a distinct generated-image URL, so a
+// future edit can't silently reintroduce a shared/static fallback image for every template.
+test('each published template seo entry resolves to a distinct generated platform OG image URL', () => {
+  const origin = 'https://krabiclaw.com'
+  const templates = listPublishedTemplateMarketing()
+  const urls = templates.map(template =>
+    buildOgImageUrl(origin, {
+      template: 'platform',
+      title: template.seo.title,
+      description: template.seo.description,
+      siteName: 'KrabiClaw',
+    }),
+  )
+
+  assert.equal(new Set(urls).size, urls.length, 'expected each template to resolve to a unique OG image URL')
+  for (const url of urls) {
+    assert.ok(url.startsWith(`${origin}/og-image-render.png?`))
+  }
 })
