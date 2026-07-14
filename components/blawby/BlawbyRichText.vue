@@ -2,7 +2,6 @@
   <!-- eslint-disable vue/no-v-html -->
   <div
     :class="unstyled ? '' : 'prose max-w-none prose-headings:text-[var(--blawby-primary)] prose-p:leading-8 prose-p:text-[var(--blawby-ink)] prose-a:text-[var(--blawby-accent-strong)]'"
-    data-allow-mismatch="children"
     v-html="html"
   />
   <!-- eslint-enable vue/no-v-html -->
@@ -16,26 +15,17 @@ const props = defineProps<{
   unstyled?: boolean
 }>()
 
-type HtmlSanitizer = {
-  sanitize: (_html: string) => string
-}
-
-const clientSanitizer = shallowRef<HtmlSanitizer | null>(null)
+// Use the browser sanitizer for the initial client render, not only after mount.
+// Besides sanitizing, DOMPurify normalizes entities (for example &#39; to ')
+// exactly as the browser parses the SSR HTML, preventing false hydration drift.
+const DOMPurify = import.meta.client
+  ? (await import('isomorphic-dompurify')).default
+  : { sanitize: sanitizeHtmlForSsr }
 
 const sanitizeContent = (content?: string | null) => {
   const rendered = renderMarkdownToHtml(content || '')
-  return (clientSanitizer.value || { sanitize: sanitizeHtmlForSsr }).sanitize(rendered)
+  return DOMPurify.sanitize(rendered)
 }
 
-const html = ref(sanitizeContent(props.content))
-
-watch(() => props.content, (content) => {
-  html.value = sanitizeContent(content)
-})
-
-onMounted(async () => {
-  const { default: DOMPurify } = await import('dompurify')
-  clientSanitizer.value = DOMPurify as HtmlSanitizer
-  html.value = sanitizeContent(props.content)
-})
+const html = computed(() => sanitizeContent(props.content))
 </script>
