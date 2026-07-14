@@ -1,5 +1,14 @@
 <template>
   <div class="blawby-shell min-h-screen bg-[var(--blawby-bg)] text-[var(--blawby-ink)]" :style="themeStyles" :data-hydrated="hydrated ? 'true' : 'false'">
+    <!-- Teleport target for components (e.g. PlatformCommandSearchModal) that need to
+         escape page overflow/stacking contexts but still must render inside this div to
+         inherit the --blawby-* tokens themeStyles sets above. Teleporting straight to
+         <body> puts them outside this scope entirely, which reads as the modal falling
+         back to the platform's default (non-Blawby) theme — mirrors #saya-portal-root
+         in layouts/saya.vue. Placed before the page content so it precedes any Teleport
+         source in document order during SSR. -->
+    <div id="blawby-portal-root" />
+
     <BlawbyHeader :site="identity" :navigation="navigation" :consultation="consultation" />
     <main>
       <slot />

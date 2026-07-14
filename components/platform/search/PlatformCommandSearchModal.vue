@@ -1,5 +1,5 @@
 <template>
-  <Teleport to="body">
+  <Teleport :to="teleportTarget">
     <div
       v-if="isOpen"
       class="fixed inset-0 z-[120] flex items-start justify-center bg-black/35 px-4 py-8 backdrop-blur-[2px] sm:py-12"
@@ -59,7 +59,11 @@
 
           <div v-else class="py-3">
             <section v-for="group in groupedResults" :key="group.label" class="px-2 pb-2">
-              <p class="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em]" :class="dimmedTextClass">
+              <p
+                v-if="groupedResults.length > 1"
+                class="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em]"
+                :class="dimmedTextClass"
+              >
                 {{ group.label }}
               </p>
               <button
@@ -116,21 +120,95 @@ const props = withDefaults(defineProps<{
   variant: 'platform',
 })
 
-const isBlawby = computed(() => props.variant === 'blawby')
+interface SearchPalette {
+  panel: string
+  headerBorder: string
+  text: string
+  muted: string
+  dimmed: string
+  placeholder: string
+  esc: string
+  selected: string
+  hover: string
+  icon: string
+  badge: string
+}
 
-const panelClass = computed(() => isBlawby.value ? 'border-[var(--blawby-border)] bg-white' : 'border-default bg-default')
-const headerBorderClass = computed(() => isBlawby.value ? 'border-[var(--blawby-border)]' : 'border-default')
-const defaultTextClass = computed(() => isBlawby.value ? 'text-[var(--blawby-primary)]' : 'text-default')
-const mutedTextClass = computed(() => isBlawby.value ? 'text-gray-600' : 'text-muted')
-const dimmedTextClass = computed(() => isBlawby.value ? 'text-gray-400' : 'text-dimmed')
-const placeholderClass = computed(() => isBlawby.value ? 'placeholder:text-gray-400' : 'placeholder:text-dimmed')
-const escButtonClass = computed(() => isBlawby.value
-  ? 'border-[var(--blawby-border)] text-gray-400 hover:bg-[var(--blawby-accent-100)] hover:text-[var(--blawby-primary)]'
-  : 'border-default text-dimmed hover:bg-elevated hover:text-default')
-const selectedResultClass = computed(() => isBlawby.value ? 'bg-[var(--blawby-accent-100)] text-[var(--blawby-primary)]' : 'bg-elevated text-default')
-const hoverResultClass = computed(() => isBlawby.value ? 'hover:bg-[var(--blawby-accent-100)]/70' : 'hover:bg-elevated/70')
-const resultIconClass = computed(() => isBlawby.value ? 'border-[var(--blawby-border)] bg-white text-gray-500' : 'border-default bg-default text-muted')
-const badgeClass = computed(() => isBlawby.value ? 'border-[var(--blawby-border)] text-gray-400' : 'border-default text-dimmed')
+// Nuxt UI's semantic `--ui-*` custom properties (text-default, bg-elevated, border-default,
+// etc.) are the platform's default palette.
+const PLATFORM_PALETTE: SearchPalette = {
+  panel: 'border-default bg-default',
+  headerBorder: 'border-default',
+  text: 'text-default',
+  muted: 'text-muted',
+  dimmed: 'text-dimmed',
+  placeholder: 'placeholder:text-dimmed',
+  esc: 'border-default text-dimmed hover:bg-elevated hover:text-default',
+  selected: 'bg-elevated text-default',
+  hover: 'hover:bg-elevated/70',
+  icon: 'border-default bg-default text-muted',
+  badge: 'border-default text-dimmed',
+}
+
+// Saya deliberately reuses the platform's semantic Nuxt UI utility classes rather than
+// bespoke Saya-only classes: assets/css/saya.css repoints the underlying --ui-* custom
+// properties to the tenant's brand tokens, scoped to `.saya-theme` (layouts/saya.vue).
+// Because this modal now teleports into #saya-portal-root — which renders inside
+// .saya-theme — those same utility classes automatically resolve to the Saya palette
+// instead of the platform default. This is an explicit branch, not a platform fallback;
+// the visual difference comes entirely from *where* the classes render, not from the
+// classes themselves.
+const SAYA_PALETTE: SearchPalette = PLATFORM_PALETTE
+
+// Blawby does not repoint --ui-*; it exposes its own --blawby-* custom properties
+// (layouts/blawby.vue). Ordinary text uses --blawby-ink, the shell's dedicated
+// foreground token that every Blawby surface already uses for body copy — not
+// --blawby-primary, which is a brand accent color a tenant can set to anything
+// (including a light/bright color) and is unsafe as text on a fixed white/surface
+// background. Selected/hover states tint the *background* with the accent color
+// instead of swapping text color, so contrast never depends on the tenant's brand
+// color value. See the `.search-blawby-*` rules below.
+const BLAWBY_PALETTE: SearchPalette = {
+  panel: 'search-blawby-panel',
+  headerBorder: 'search-blawby-border',
+  text: 'search-blawby-text',
+  muted: 'search-blawby-muted',
+  dimmed: 'search-blawby-dimmed',
+  placeholder: 'search-blawby-placeholder',
+  esc: 'search-blawby-esc',
+  selected: 'search-blawby-selected',
+  hover: 'search-blawby-hover',
+  icon: 'search-blawby-icon',
+  badge: 'search-blawby-badge',
+}
+
+const palette = computed<SearchPalette>(() => {
+  if (props.variant === 'blawby') return BLAWBY_PALETTE
+  if (props.variant === 'saya') return SAYA_PALETTE
+  return PLATFORM_PALETTE
+})
+
+// Platform search teleports straight to <body> (it has no tenant palette to escape).
+// Saya and Blawby must teleport inside their own theme-scoped portal root or the modal
+// silently falls back to the platform's default (non-tenant) look — see the comments
+// on #saya-portal-root (layouts/saya.vue) and #blawby-portal-root (layouts/blawby.vue).
+const teleportTarget = computed(() => {
+  if (props.variant === 'blawby') return '#blawby-portal-root'
+  if (props.variant === 'saya') return '#saya-portal-root'
+  return 'body'
+})
+
+const panelClass = computed(() => palette.value.panel)
+const headerBorderClass = computed(() => palette.value.headerBorder)
+const defaultTextClass = computed(() => palette.value.text)
+const mutedTextClass = computed(() => palette.value.muted)
+const dimmedTextClass = computed(() => palette.value.dimmed)
+const placeholderClass = computed(() => palette.value.placeholder)
+const escButtonClass = computed(() => palette.value.esc)
+const selectedResultClass = computed(() => palette.value.selected)
+const hoverResultClass = computed(() => palette.value.hover)
+const resultIconClass = computed(() => palette.value.icon)
+const badgeClass = computed(() => palette.value.badge)
 
 const route = useRoute()
 const router = useRouter()
@@ -143,12 +221,14 @@ const results = ref<PublicSearchResult[]>([])
 const selectedIndex = ref(0)
 const resultRefs = new Map<string, HTMLButtonElement>()
 const dialogTitleId = useId()
+// User-facing labels describe what the user is opening, not how it's stored —
+// never reintroduce "Platform Pages", "Routes", or "Route" here (see issue #254).
 const resultTypeMeta: Record<PublicSearchResult['type'], { badge: string, group: string }> = {
-  doc: { badge: 'Doc', group: 'Documentation' },
-  blog: { badge: 'Blog', group: 'Blog' },
-  faq: { badge: 'FAQ', group: 'Support FAQs' },
-  route: { badge: 'Route', group: 'Routes' },
-  platform_page: { badge: 'Page', group: 'Platform Pages' },
+  doc: { badge: 'Guide', group: 'Guides' },
+  blog: { badge: 'Article', group: 'Articles' },
+  faq: { badge: 'Answer', group: 'Help answers' },
+  route: { badge: 'Link', group: 'Quick links' },
+  platform_page: { badge: 'Page', group: 'Pages' },
   dashboard_route: { badge: 'Dashboard', group: 'Dashboard' },
 }
 
@@ -369,3 +449,64 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onGlobalKeydown)
 })
 </script>
+
+<style scoped>
+/* Blawby palette: every rule below reads --blawby-ink for text so contrast never
+   depends on the tenant-configurable --blawby-primary/--blawby-accent brand colors.
+   Vue's scoped attribute selectors still match after Teleport moves these elements
+   into #blawby-portal-root, since scoping is attribute-based, not DOM-position-based. */
+.search-blawby-panel {
+  border-color: var(--blawby-border);
+  background-color: var(--blawby-surface);
+}
+
+.search-blawby-border {
+  border-color: var(--blawby-border);
+}
+
+.search-blawby-text {
+  color: var(--blawby-ink);
+}
+
+.search-blawby-muted {
+  color: color-mix(in srgb, var(--blawby-ink) 72%, transparent);
+}
+
+.search-blawby-dimmed {
+  color: color-mix(in srgb, var(--blawby-ink) 48%, transparent);
+}
+
+.search-blawby-placeholder::placeholder {
+  color: color-mix(in srgb, var(--blawby-ink) 48%, transparent);
+}
+
+.search-blawby-esc {
+  border-color: var(--blawby-border);
+  color: color-mix(in srgb, var(--blawby-ink) 55%, transparent);
+}
+
+.search-blawby-esc:hover {
+  background-color: var(--blawby-accent-100);
+  color: var(--blawby-ink);
+}
+
+.search-blawby-selected {
+  background-color: var(--blawby-accent-100);
+  color: var(--blawby-ink);
+}
+
+.search-blawby-hover:hover {
+  background-color: color-mix(in srgb, var(--blawby-accent-100) 70%, transparent);
+}
+
+.search-blawby-icon {
+  border-color: var(--blawby-border);
+  background-color: var(--blawby-surface);
+  color: var(--blawby-ink);
+}
+
+.search-blawby-badge {
+  border-color: var(--blawby-border);
+  color: color-mix(in srgb, var(--blawby-ink) 60%, transparent);
+}
+</style>
