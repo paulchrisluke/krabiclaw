@@ -62,10 +62,9 @@ WHATSAPP_DELIVERY_MODE = "provider"
 #   yarn wrangler secret put EMAIL_REPLY_SECRET
 #   yarn wrangler secret put EMAIL_INBOUND_SECRET
 # PLATFORM_SEARCH_REINDEX_SECRET protects POST /api/internal/search/reindex and is required for
-# yarn ai-search:sync. CI syncs it from the PLATFORM_SEARCH_REINDEX_SECRET_PREVIEW /
-# PLATFORM_SEARCH_REINDEX_SECRET_STAGING / PLATFORM_SEARCH_REINDEX_SECRET (production) repo
-# secrets on every deploy and then runs the rebuild itself (see .github/workflows/ci.yml and
-# docs/ai-search.md). To set it by hand for local iteration:
+# yarn ai-search:sync. Production CI syncs it from the PLATFORM_SEARCH_REINDEX_SECRET repo
+# secret and rebuilds the production index. Preview and staging deploys do not rebuild search
+# automatically (see .github/workflows/ci.yml and docs/ai-search.md). To set it by hand:
 #   yarn wrangler secret put PLATFORM_SEARCH_REINDEX_SECRET
 
 [[d1_databases]]
