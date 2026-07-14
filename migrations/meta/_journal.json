@@ -260,6 +260,13 @@
       "when": 1783919534408,
       "tag": "0043_third_jackpot",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "6",
+      "when": 1783998505238,
+      "tag": "0044_invitation_pending_owner_unique_index",
+      "breakpoints": true
     }
   ]
 }

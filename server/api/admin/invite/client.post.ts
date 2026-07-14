@@ -59,10 +59,29 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Organization already has an owner' }, { status: 409 })
     }
 
-    await execute(db, `
-      INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt)
-      VALUES (?, ?, ?, 'owner', 'pending', ?, ?, ?)
-    `, [invitationId, org.id, email, expiresAt, session.user.id, now])
+    // Check if there's already a pending owner invitation for this organization
+    const existingPendingInvitation = await queryFirst<{ id: string }>(
+      db,
+      `SELECT id FROM invitation WHERE organizationId = ? AND role = 'owner' AND status = 'pending' LIMIT 1`,
+      [org.id],
+    )
+    if (existingPendingInvitation) {
+      return jsonResponse({ error: 'Organization already has a pending owner invitation' }, { status: 409 })
+    }
+
+    try {
+      await execute(db, `
+        INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt)
+        VALUES (?, ?, ?, 'owner', 'pending', ?, ?, ?)
+      `, [invitationId, org.id, email, expiresAt, session.user.id, now])
+    } catch (error) {
+      // Handle concurrent requests that hit the unique constraint
+      const message = error instanceof Error ? error.message : String(error || '')
+      if (/UNIQUE constraint failed/i.test(message)) {
+        return jsonResponse({ error: 'Organization already has a pending owner invitation' }, { status: 409 })
+      }
+      throw error
+    }
 
     const origin = getRequestURL(event).origin
     const inviteUrl = `${origin}/accept-invitation/${invitationId}`
