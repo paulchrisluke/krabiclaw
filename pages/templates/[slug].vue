@@ -288,10 +288,13 @@ const requestURL = useRequestURL()
 const siteUrl = requestURL.origin || config.public.siteUrl
 
 // Marketing-page schema only: a Product node describing the template
-// offering itself. This is intentionally not the ProfessionalService
-// business schema — that lives in layouts/blawby.vue for actual tenant
-// sites running the Blawby template (e.g. the NCLS production site linked
-// above) and must not be duplicated here.
+// offering itself. This is intentionally not the ProfessionalService/
+// LegalService business graph built by utils/professional-service-schema.ts
+// + composables/useProfessionalServiceSchema.ts (used by layouts/blawby.vue
+// for actual Blawby tenant sites, e.g. the linked NCLS production site) —
+// that builder needs a real tenant org identity and is not applicable to a
+// platform page describing the template product itself, so it is reused by
+// reference here, not duplicated.
 usePlatformPageSeo({
   path: `/templates/${template.slug}`,
   title: template.seo.title,
