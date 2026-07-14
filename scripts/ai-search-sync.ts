@@ -16,7 +16,12 @@ if (!secret) {
 
 try {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 30_000)
+  // rebuildPlatformKnowledgeIndex (server/utils/public-search.ts) uploads every
+  // platform doc/blog/FAQ/route/dashboard entry sequentially, then calls
+  // waitForIndexing(), which by design polls for up to 10 minutes. A 30s client
+  // timeout could never succeed against that — this must exceed the server's own
+  // worst-case budget, not just cover typical/fast-path latency.
+  const timeout = setTimeout(() => controller.abort(), 11 * 60 * 1000)
   const response = await fetch(`${baseUrl}/api/internal/search/reindex`, {
     method: 'POST',
     headers: {
