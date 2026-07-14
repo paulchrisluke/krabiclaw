@@ -615,12 +615,29 @@ export async function rebuildPlatformKnowledgeIndex(env: CloudflareEnv, db: DbCl
   }
   const staleItems = existingItems.filter(item => !nextKeys.has(item.key))
   await Promise.all(staleItems.map(item => deleteIndexItem(env, item.id)))
-  await waitForIndexing(env)
+
+  // Cloudflare processes indexing asynchronously regardless of whether this request
+  // stays open to observe it, and the Workers platform enforces a request-duration
+  // ceiling (~5 minutes, observed in production as a raw connection failure — "fetch
+  // failed" — not a thrown error our own try/catch could ever see) well under
+  // waitForIndexing's original 10-minute budget. Blocking on full confirmation here
+  // risks the whole Worker being killed mid-request before it can respond at all.
+  // The uploads/deletes above are the actual mutation — give indexing a short,
+  // safe courtesy window and return regardless of whether it confirms completion
+  // within that window; a not-yet-confirmed result is not a failed rebuild.
+  let indexingConfirmed = false
+  try {
+    await waitForIndexing(env, 45 * 1000)
+    indexingConfirmed = true
+  } catch (error) {
+    console.warn('[ai-search] indexing not confirmed complete within the courtesy window; it continues asynchronously on Cloudflare’s side', error)
+  }
 
   return {
     instanceId: platformKnowledgeInstanceId(env),
     indexed: records.length,
     deleted: staleItems.length,
+    indexingConfirmed,
   }
 }
 
