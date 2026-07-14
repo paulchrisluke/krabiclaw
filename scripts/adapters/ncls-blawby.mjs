@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import slugify from 'slugify'
 import { parse as parseYaml } from 'yaml'
 import { BLAWBY_REFERENCE_COMMIT, NCLS_ARTICLE_SLUGS } from '../blawby-parity-config.mjs'
+import { normalizeNonprofitStatus } from '../utils/nonprofit-status.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '..', '..')
@@ -983,36 +984,65 @@ function buildPayload(config, sourcePath = null) {
       favicon_url: '/tenants/northcarolinalegalservices/favicon.svg',
       author_image_url: assetPointer('article_author_image', 'rich-gittings-author.webp')?.url || null,
     },
-    compliance: {
-      id: 'compliance_ncls',
-      entity_name: tenant.legalName || tenant.name,
-      dba_name: 'Bull City Legal Services',
-      entity_type: tenant.type || 'LegalService',
-      nonprofit_status: tenant.nonProfitStatus || null,
-      registration_number: null,
-      service_area: config.serviceArea?.locality || 'North Carolina',
-      disclaimer: htmlishToMarkdown(tenant.disclaimer),
-      footer_disclaimer: htmlishToMarkdown(tenant.footerDescription, legalLinkMap),
-      document_asset_ids: legalFiles.map(file => file.asset_id),
-      documents: legalFiles.map(file => ({
-        asset_id: file.asset_id,
-        role: file.role,
-        label: file.role === 'irs_determination' ? 'IRS determination letter' : file.role === 'dba_registration' ? 'DBA registration' : file.file_name,
-        public_url: file.public_url,
-        file_name: file.file_name,
-      })),
-      metadata: {
-        founder: tenant.founder,
-        foundingDate: tenant.foundingDate,
-        languages: tenant.languages,
-        keywords: tenant.keywords,
-        logo_dark_url: assetPointer('brand_logo_dark', 'icons/logo-dark.svg')?.url || null,
-        header: {
-          banner_content: config.headerComponent?.bannerContent || null,
-          banner_dismissible: Boolean(config.headerComponent?.bannerIsDismissible),
+    compliance: (() => {
+      // Canonical contract: nonprofit_status must be a schema.org enum URL
+      // (e.g. https://schema.org/Nonprofit501c3), never free text like
+      // "501(c)(3)" — normalize here so the emitted seed/manifest is already
+      // valid, matching the reject/normalize rule enforced at the shared
+      // write layer (server/utils/professional-services-editor.ts).
+      const nonprofitStatus = normalizeNonprofitStatus(tenant.nonProfitStatus || null)
+      if (!nonprofitStatus.valid) {
+        throw new Error(`NCLS adapter: tenant.nonProfitStatus "${tenant.nonProfitStatus}" is not a recognized schema.org nonprofit enumeration value.`)
+      }
+      const sameAs = (config.socials || [])
+        .map(social => social.url)
+        .filter(Boolean)
+      const contactPoints = [
+        (tenant.phone || tenant.email) && {
+          contact_type: 'customer service',
+          telephone: tenant.phone || null,
+          email: tenant.email || null,
+          area_served: config.serviceArea?.name || config.serviceArea?.locality || 'North Carolina',
         },
-      },
-    },
+      ].filter(Boolean)
+      return {
+        id: 'compliance_ncls',
+        entity_name: tenant.legalName || tenant.name,
+        dba_name: 'Bull City Legal Services',
+        entity_type: tenant.type || 'LegalService',
+        nonprofit_status: nonprofitStatus.value,
+        registration_number: null,
+        service_area: config.serviceArea?.locality || 'North Carolina',
+        // NCLS is a statewide legal-aid nonprofit with no single public
+        // office address — service_area_type + address_visibility: hidden
+        // keeps the org graph honest instead of implying a storefront.
+        service_area_type: 'State',
+        address_visibility: 'hidden',
+        founder_name: tenant.founder || null,
+        founding_date: tenant.foundingDate || null,
+        same_as: sameAs,
+        contact_points: contactPoints,
+        disclaimer: htmlishToMarkdown(tenant.disclaimer),
+        footer_disclaimer: htmlishToMarkdown(tenant.footerDescription, legalLinkMap),
+        document_asset_ids: legalFiles.map(file => file.asset_id),
+        documents: legalFiles.map(file => ({
+          asset_id: file.asset_id,
+          role: file.role,
+          label: file.role === 'irs_determination' ? 'IRS determination letter' : file.role === 'dba_registration' ? 'DBA registration' : file.file_name,
+          public_url: file.public_url,
+          file_name: file.file_name,
+        })),
+        metadata: {
+          languages: tenant.languages,
+          keywords: tenant.keywords,
+          logo_dark_url: assetPointer('brand_logo_dark', 'icons/logo-dark.svg')?.url || null,
+          header: {
+            banner_content: config.headerComponent?.bannerContent || null,
+            banner_dismissible: Boolean(config.headerComponent?.bannerIsDismissible),
+          },
+        },
+      }
+    })(),
     consultation: {
       id: 'consultation_ncls',
       mode: 'external_url',

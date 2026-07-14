@@ -1,5 +1,14 @@
 <template>
   <div class="blawby-shell min-h-screen bg-[var(--blawby-bg)] text-[var(--blawby-ink)]" :style="themeStyles" :data-hydrated="hydrated ? 'true' : 'false'">
+    <!-- Teleport target for components (e.g. PlatformCommandSearchModal) that need to
+         escape page overflow/stacking contexts but still must render inside this div to
+         inherit the --blawby-* tokens themeStyles sets above. Teleporting straight to
+         <body> puts them outside this scope entirely, which reads as the modal falling
+         back to the platform's default (non-Blawby) theme — mirrors #saya-portal-root
+         in layouts/saya.vue. Placed before the page content so it precedes any Teleport
+         source in document order during SSR. -->
+    <div id="blawby-portal-root" />
+
     <BlawbyHeader :site="identity" :navigation="navigation" :consultation="consultation" />
     <main>
       <slot />
@@ -15,13 +24,17 @@
 </template>
 
 <script setup lang="ts">
-import { serializeJsonLd } from '~/utils/json-ld'
 import ConsentBanner from '~/components/ConsentBanner.vue'
 
 const { identity, navigation, consultation, compliance, themeTokens, offeringLinks } = await useBlawbyShell()
 const hydrated = ref(false)
 onMounted(() => { hydrated.value = true })
-const requestUrl = useRequestURL()
+
+// Every Blawby page/component builds and emits its own linked schema.org
+// @graph via useProfessionalServiceSchema (which always includes the shared
+// Organization/WebSite nodes) — see composables/useProfessionalServiceSchema.ts.
+// The layout no longer emits its own ad hoc JSON-LD so there's exactly one
+// canonical generation path for every route.
 
 const themeStyles = computed(() => {
   const tokens = themeTokens.value
@@ -45,19 +58,6 @@ const themeStyles = computed(() => {
 
 useHead(() => ({
   htmlAttrs: { class: 'blawby-document' },
-  script: [{
-    type: 'application/ld+json',
-    innerHTML: serializeJsonLd({
-      '@context': 'https://schema.org',
-      '@type': ['ProfessionalService', 'Organization'],
-      name: identity.value.brand_name || compliance.value?.entity_name || 'Professional services',
-      description: identity.value.brand_description || undefined,
-      url: requestUrl.origin,
-      logo: identity.value.logo_url || undefined,
-      areaServed: compliance.value?.service_area || undefined,
-      nonprofitStatus: compliance.value?.nonprofit_status || undefined,
-    }),
-  }],
 }))
 </script>
 

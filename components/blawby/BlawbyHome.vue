@@ -79,7 +79,8 @@
 
 <script setup lang="ts">
 const { data } = await useBlawbyRoute('home')
-const { identity, consultation } = await useBlawbyShell()
+const { identity, consultation, compliance } = await useBlawbyShell()
+const org = useBlawbyOrgIdentity(identity, compliance)
 const routeData = computed(() => data.value)
 
 if (!routeData.value.page) throw createError({ statusCode: 404, statusMessage: 'Homepage content not found' })
@@ -130,12 +131,34 @@ function trackConsultation(pageType: string, destination: string) {
   trackConsultationClick(pageType, '/', destination)
 }
 
-useSeoMeta({
-  title: computed(() => routeData.value.page?.seo_title || identity.value.brand_name || 'Professional services'),
-  description: computed(() => routeData.value.page?.seo_description || routeData.value.page?.summary || identity.value.brand_description || ''),
-  ogImage: computed(() => heroBackground.value || undefined),
-  ogType: 'website',
-})
-const canonicalUrl = useSeoUrl(() => '/')
-useHead(() => ({ link: [{ rel: 'canonical', href: canonicalUrl.value }] }))
+const seoTitle = computed(() => routeData.value.page?.seo_title || identity.value.brand_name || 'Professional services')
+const seoDescription = computed(() => routeData.value.page?.seo_description || routeData.value.page?.summary || identity.value.brand_description || '')
+
+const { canonicalUrl } = useTenantSocialMetadata(() => ({
+  path: '/',
+  title: seoTitle.value,
+  description: seoDescription.value,
+  brand: {
+    siteName: identity.value.brand_name || 'Professional services',
+    logoUrl: identity.value.logo_url || null,
+  },
+  heroImage: heroBackground.value ? { url: heroBackground.value } : null,
+}))
+
+useProfessionalServiceSchema(() => ({
+  recipe: 'home',
+  org: org.value,
+  pageUrl: canonicalUrl.value,
+  pageTitle: routeData.value.page?.seo_title || identity.value.brand_name || 'Professional services',
+  pageDescription: routeData.value.page?.seo_description || routeData.value.page?.summary || identity.value.brand_description || null,
+  imageUrl: heroBackground.value,
+  faqs: routeData.value.qa
+    .map(item => ({ question: item.question.trim(), answer: item.answer?.trim() ?? '' }))
+    .filter(item => item.question && item.answer),
+  items: routeData.value.offerings.map(offering => ({
+    name: offering.name,
+    url: offering.canonical_path,
+    description: offering.short_description || offering.summary || undefined,
+  })),
+}))
 </script>

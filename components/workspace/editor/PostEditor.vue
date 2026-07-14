@@ -227,7 +227,7 @@ const imageAssetId = defineModel<string | null>('imageAssetId', { default: null 
 const imagePreviewUrl = defineModel<string | null>('imagePreviewUrl', { default: null })
 const imageKind = defineModel<string | null>('imageKind', { default: 'image' })
 const galleryMedia = defineModel<PostGalleryItem[]>('galleryMedia', { default: () => [] })
-const selectedChannels = defineModel<string[]>('selectedChannels', { default: [] })
+const selectedChannels = defineModel<string[]>('selectedChannels', { default: () => [] })
 const locationId = defineModel<string>('locationId', { default: '' })
 const galleryPickerAssetId = ref<string | null>(null)
 

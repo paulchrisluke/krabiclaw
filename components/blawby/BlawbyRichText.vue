@@ -15,22 +15,21 @@ const props = defineProps<{
   unstyled?: boolean
 }>()
 
-type HtmlSanitizer = {
-  sanitize: (_html: string) => string
-}
-
+type HtmlSanitizer = { sanitize: (_html: string) => string }
 const clientSanitizer = shallowRef<HtmlSanitizer | null>(null)
 
+function normalizeTextEntities(html: string) {
+  return html.replace(/(^|>)([^<]*)/g, (_, boundary: string, text: string) =>
+    boundary + text.replace(/&#39;/g, "'"))
+}
+
 const sanitizeContent = (content?: string | null) => {
-  const rendered = renderMarkdownToHtml(content || '')
+  const rendered = normalizeTextEntities(renderMarkdownToHtml(content || ''))
   return (clientSanitizer.value || { sanitize: sanitizeHtmlForSsr }).sanitize(rendered)
 }
 
 const html = ref(sanitizeContent(props.content))
-
-watch(() => props.content, (content) => {
-  html.value = sanitizeContent(content)
-})
+watch(() => props.content, content => { html.value = sanitizeContent(content) })
 
 onMounted(async () => {
   const { default: DOMPurify } = await import('dompurify')

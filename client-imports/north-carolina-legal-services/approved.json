@@ -1,8 +1,7 @@
 {
-  "approved": true,
-  "approved_by": "paulchrisluke",
-  "approved_at": "2026-07-14T02:32:20.936Z",
-  "manifest_hash": "c784fde3f944330ef6d73e24295cc3b513eff51198b07544bba1c631ac099e68",
+  "approved": false,
+  "invalidated": true,
+  "invalidated_reason": "Compliance data model extended for #253 (service_area_type, address_visibility, founder_name, founding_date, same_as, contact_points) and nonprofit_status normalized to https://schema.org/Nonprofit501c3; requires fresh human hash-bound approval before re-apply.",
   "source_commit": "f9470f44e15f98978b7f866da54782a6da95818d",
   "slug": "north-carolina-legal-services",
   "vertical": "service",

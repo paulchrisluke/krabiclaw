@@ -26,10 +26,10 @@ Canonical metadata lives in [config/platform-knowledge.ts](../config/platform-kn
 
 ## Rebuild flow
 
-Run a full rebuild with:
+Run the production rebuild with:
 
 ```bash
-yarn ai-search:sync --base-url https://staging.krabiclaw.com
+yarn ai-search:sync:prod
 ```
 
 Required secret:
@@ -44,11 +44,19 @@ That endpoint rebuilds the full corpus from the current DB plus static platform 
 
 ## Automatic refresh
 
-Platform doc and platform blog admin writes trigger a full AI Search rebuild after the content mutation completes. Platform MCP blog/doc mutations do the same.
+Platform doc and platform blog admin writes trigger a full AI Search rebuild after the content mutation completes (`schedulePlatformKnowledgeIndexRebuild()` in `server/utils/platform-search-rebuild.ts`). Platform MCP blog/doc mutations do the same. Failures on this in-request path are logged with `console.error` (visible in Workers Logs); they do not retry automatically.
+
+Production deploys and client imports that write `blog_posts` directly do **not** go through that in-request hook, so production needs an explicit rebuild:
+
+- `yarn deploy` runs `yarn ai-search:sync:prod` as its last step.
+- Production CI (`.github/workflows/ci.yml`) syncs the `PLATFORM_SEARCH_REINDEX_SECRET` repo secret and runs a blocking "Rebuild AI Search index (production)" step. A failed production rebuild fails the deploy job instead of silently leaving production search stale.
+- Preview and staging deploys intentionally do not rebuild AI Search. Their deploy and smoke-test health is independent of indexing the non-production fixture corpus.
+
+Any new script that writes `blog_posts`, `platform_docs`, or NCLS/Blawby-style tenant blog fixtures directly (bypassing the admin/MCP write paths) must either call `POST /api/internal/search/reindex` itself or be followed by `yarn ai-search:sync` in whatever deploy/CI step runs it.
 
 ## Environment expectations
 
 - AI Search is required infrastructure for local, preview, staging, and production.
 - `wrangler.toml` must keep the `AI_SEARCH` namespace binding in every environment block.
 - Local development should run with the normal Cloudflare dev environment and remote AI Search bindings available.
-- An environment should not be treated as healthy after content changes until the AI Search rebuild has completed successfully.
+- Production should not be treated as healthy after indexed content changes until the AI Search rebuild has completed successfully.
