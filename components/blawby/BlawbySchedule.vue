@@ -65,7 +65,8 @@ if (error.value) throw error.value
 const routeData = computed(() => data.value)
 const page = computed(() => routeData.value.page!)
 if (!routeData.value.page) throw createError({ statusCode: 404, statusMessage: 'Schedule content not found' })
-const { identity, consultation } = await useBlawbyShell()
+const { identity, consultation, compliance } = await useBlawbyShell()
+const org = useBlawbyOrgIdentity(identity, compliance)
 
 function block(type: string) {
   return page.value.components.find(component => component.type === type) ?? null
@@ -122,5 +123,20 @@ useSeoMeta({
   description: computed(() => page.value.seo_description || page.value.summary || ''),
 })
 const canonicalUrl = useSeoUrl(() => '/schedule')
+const homeUrl = useSeoUrl(() => '/')
 useHead(() => ({ link: [{ rel: 'canonical', href: canonicalUrl.value }] }))
+
+useProfessionalServiceSchema(() => ({
+  recipe: 'schedule',
+  org: org.value,
+  pageUrl: canonicalUrl.value,
+  pageTitle: page.value.seo_title || page.value.title,
+  pageDescription: page.value.seo_description || page.value.summary || null,
+  breadcrumbs: [
+    { name: 'Home', url: homeUrl.value },
+    { name: 'Schedule', url: canonicalUrl.value },
+  ],
+  faqs: scheduleQa.value.map(item => ({ question: item.question, answer: item.answer })),
+  consultationUrl: scheduleHeroDestination.value,
+}))
 </script>

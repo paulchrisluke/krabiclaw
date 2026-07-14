@@ -5,7 +5,7 @@ type BlawbyShellPayload = PublicBlawbyShellData & { success: boolean }
 function emptyShellPayload(): BlawbyShellPayload {
   return {
     success: true,
-    identity: { brand_name: null, brand_description: null, logo_url: null, phone: null, banner_content: null, banner_dismissible: false },
+    identity: { brand_name: null, brand_description: null, logo_url: null, phone: null, banner_content: null, banner_dismissible: false, primary_location_address_street: null, primary_location_address_locality: null },
     navigation: [],
     consultation: {
       mode: 'external_url',
