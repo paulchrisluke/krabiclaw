@@ -24,13 +24,17 @@
 </template>
 
 <script setup lang="ts">
-import { serializeJsonLd } from '~/utils/json-ld'
 import ConsentBanner from '~/components/ConsentBanner.vue'
 
 const { identity, navigation, consultation, compliance, themeTokens, offeringLinks } = await useBlawbyShell()
 const hydrated = ref(false)
 onMounted(() => { hydrated.value = true })
-const requestUrl = useRequestURL()
+
+// Every Blawby page/component builds and emits its own linked schema.org
+// @graph via useProfessionalServiceSchema (which always includes the shared
+// Organization/WebSite nodes) — see composables/useProfessionalServiceSchema.ts.
+// The layout no longer emits its own ad hoc JSON-LD so there's exactly one
+// canonical generation path for every route.
 
 const themeStyles = computed(() => {
   const tokens = themeTokens.value
@@ -54,19 +58,6 @@ const themeStyles = computed(() => {
 
 useHead(() => ({
   htmlAttrs: { class: 'blawby-document' },
-  script: [{
-    type: 'application/ld+json',
-    innerHTML: serializeJsonLd({
-      '@context': 'https://schema.org',
-      '@type': ['ProfessionalService', 'Organization'],
-      name: identity.value.brand_name || compliance.value?.entity_name || 'Professional services',
-      description: identity.value.brand_description || undefined,
-      url: requestUrl.origin,
-      logo: identity.value.logo_url || undefined,
-      areaServed: compliance.value?.service_area || undefined,
-      nonprofitStatus: compliance.value?.nonprofit_status || undefined,
-    }),
-  }],
 }))
 </script>
 

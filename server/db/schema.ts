@@ -1450,17 +1450,25 @@ export const tenant_compliance = sqliteTable("tenant_compliance", {
 	nonprofit_status: text(),
 	registration_number: text(),
 	service_area: text(),
+	service_area_type: text(),
 	disclaimer: text(),
 	footer_disclaimer: text(),
 	privacy_page_id: text().references(() => tenant_pages.id, { onDelete: "set null" } ),
 	terms_page_id: text().references(() => tenant_pages.id, { onDelete: "set null" } ),
 	notice_page_id: text().references(() => tenant_pages.id, { onDelete: "set null" } ),
 	document_asset_ids: text(),
+	founder_name: text(),
+	founding_date: text(),
+	same_as: text(),
+	contact_points: text(),
+	address_visibility: text().default("hidden").notNull(),
 	metadata_json: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_by: text(),
-});
+}, (_table) => [
+	check("tenant_compliance_address_visibility_check", sql`address_visibility IN ('visible', 'hidden')`),
+]);
 
 export const site_consultation_settings = sqliteTable("site_consultation_settings", {
 	id: text().primaryKey(),

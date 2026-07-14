@@ -1,6 +1,6 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
-export const SHARED_OG_IMAGE_PATH = '/og-image.png'
+export const SHARED_OG_IMAGE_PATH = '/og-image-v2.jpg'
 
 export function resolveSeoUrl(value: string | null | undefined, origin: string) {
   const target = value?.trim() || SHARED_OG_IMAGE_PATH

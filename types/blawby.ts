@@ -29,6 +29,9 @@ export interface PublicOffering {
   status: string
   sort_order: number
   featured: boolean
+  /** Real business_locations data for this offering's own location (offerings.location_id), when one is set. Null for site-wide offerings. */
+  location_address_street: string | null
+  location_address_locality: string | null
 }
 
 export type BlawbyShieldVariant = 'about' | 'blog' | 'contact' | 'pricing' | 'schedule' | 'confirmation' | 'donate' | 'privacy' | 'terms' | 'third-party-notices'
@@ -154,17 +157,41 @@ export interface PublicConsultationSettings {
   metadata: ApiRecord
 }
 
+export interface PublicComplianceContactPoint {
+  contact_type: string | null
+  telephone: string | null
+  email: string | null
+  area_served: string | null
+  available_language: string[] | string | null
+  url: string | null
+}
+
 export interface PublicCompliance {
   entity_name: string | null
   dba_name: string | null
   entity_type: string | null
+  /** Raw stored value — already normalized to a schema.org enum URL (e.g. https://schema.org/Nonprofit501c3) by the canonical write layer. */
   nonprofit_status: string | null
   registration_number: string | null
   service_area: string | null
+  /** schema.org areaServed @type, e.g. 'State', 'City', 'Country'. */
+  service_area_type: string | null
   disclaimer: string | null
   footer_disclaimer: string | null
   document_asset_ids: string[]
   documents: Array<{ id: string; url: string | null; label: string | null; file_name: string | null }>
+  founder_name: string | null
+  founding_date: string | null
+  same_as: string[]
+  contact_points: PublicComplianceContactPoint[]
+  address_visibility: 'visible' | 'hidden'
+  address: {
+    street_address: string | null
+    locality: string | null
+    region: string | null
+    postal_code: string | null
+    country: string | null
+  } | null
   metadata: ApiRecord
 }
 
@@ -185,6 +212,9 @@ export interface PublicBlawbyIdentity {
   phone: string | null
   banner_content: string | null
   banner_dismissible: boolean
+  /** The site's primary business_locations row's address, if any — org-level fallback address for the schema.org graph. */
+  primary_location_address_street: string | null
+  primary_location_address_locality: string | null
 }
 
 export interface PublicBlawbyShellData {

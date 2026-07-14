@@ -19,14 +19,13 @@
 </template>
 
 <script setup lang="ts">
-import { serializeJsonLd } from '~/utils/json-ld'
-
 const { data, error } = await useBlawbyRoute('blog')
 if (error.value) throw error.value
 const routeData = computed(() => data.value)
 const page = computed(() => routeData.value.page)
 if (!page.value) throw createError({ statusCode: 404, statusMessage: 'Blog content not found' })
-const { identity } = await useBlawbyShell()
+const { identity, compliance } = await useBlawbyShell()
+const org = useBlawbyOrgIdentity(identity, compliance)
 
 function block(type: string) {
   return page.value?.components.find(component => component.type === type) ?? null
@@ -42,24 +41,21 @@ useSeoMeta({
   description: computed(() => page.value?.seo_description || page.value?.summary || ''),
 })
 const canonicalUrl = useSeoUrl(() => '/blog')
+const homeUrl = useSeoUrl(() => '/')
 useHead(() => ({
   link: [{ rel: 'canonical', href: canonicalUrl.value }],
-  script: [{ type: 'application/ld+json', innerHTML: serializeJsonLd({
-    '@context': 'https://schema.org',
-    '@type': 'CollectionPage',
-    name: heroTitle.value,
-    description: page.value?.seo_description || page.value?.summary || undefined,
-    url: canonicalUrl.value,
-    mainEntity: {
-      '@type': 'ItemList',
-      itemListElement: routeData.value.posts.flatMap((post, index) => {
-        try {
-          return [{ '@type': 'ListItem', position: index + 1, name: post.title, url: new URL(post.canonical_url, canonicalUrl.value).toString() }]
-        } catch {
-          return []
-        }
-      }),
-    },
-  }) }],
+}))
+
+useProfessionalServiceSchema(() => ({
+  recipe: 'blog-index',
+  org: org.value,
+  pageUrl: canonicalUrl.value,
+  pageTitle: heroTitle.value,
+  pageDescription: page.value?.seo_description || page.value?.summary || null,
+  breadcrumbs: [
+    { name: 'Home', url: homeUrl.value },
+    { name: 'Blog', url: canonicalUrl.value },
+  ],
+  items: routeData.value.posts.map(post => ({ name: post.title, url: post.canonical_url })),
 }))
 </script>

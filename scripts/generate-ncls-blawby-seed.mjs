@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { prepareD1SeedFile } from './utils/d1-seed-file.mjs'
+import { normalizeNonprofitStatus } from './utils/nonprofit-status.mjs'
 
 const isStdout = process.argv.includes('--stdout')
 const isRemote = process.argv.includes('--remote')
@@ -137,6 +138,11 @@ const reviewRows = values((manifest.reviews ?? []).map((review) => `(
 )`))
 
 const compliance = manifest.compliance ?? {}
+const nonprofitStatus = normalizeNonprofitStatus(compliance.nonprofit_status ?? null)
+if (!nonprofitStatus.valid) {
+  console.error(`[seed:ncls-blawby] compliance.nonprofit_status "${compliance.nonprofit_status}" is not a recognized schema.org nonprofit enumeration value. Fix the source manifest instead of seeding an invalid value.`)
+  process.exit(1)
+}
 const consultation = manifest.consultation ?? {}
 const mediaInsertSql = mediaRows ? `INSERT INTO media_assets (
   id, organization_id, site_id, location_id, kind, provider, source,
@@ -228,14 +234,19 @@ ${tenantPageRows};
 
 INSERT INTO tenant_compliance (
   id, organization_id, site_id, entity_name, dba_name, entity_type, nonprofit_status,
-  registration_number, service_area, disclaimer, footer_disclaimer, document_asset_ids,
+  registration_number, service_area, service_area_type, disclaimer, footer_disclaimer, document_asset_ids,
+  founder_name, founding_date, same_as, contact_points, address_visibility,
   metadata_json, created_at, updated_at
 ) VALUES (
   ${sqlValue(compliance.id || 'compliance_ncls')}, ${sqlValue(ORG_ID)}, ${sqlValue(SITE_ID)},
   ${sqlValue(compliance.entity_name)}, ${sqlValue(compliance.dba_name)}, ${sqlValue(compliance.entity_type)},
-  ${sqlValue(compliance.nonprofit_status)}, ${sqlValue(compliance.registration_number)}, ${sqlValue(compliance.service_area)},
-  ${sqlValue(compliance.disclaimer)}, ${sqlValue(compliance.footer_disclaimer)},
-  ${sqlJson(compliance.document_asset_ids ?? [])}, ${sqlJson(compliance.metadata ?? {})}, ${now}, ${now}
+  ${sqlValue(nonprofitStatus.value)}, ${sqlValue(compliance.registration_number)}, ${sqlValue(compliance.service_area)},
+  ${sqlValue(compliance.service_area_type)}, ${sqlValue(compliance.disclaimer)}, ${sqlValue(compliance.footer_disclaimer)},
+  ${sqlJson(compliance.document_asset_ids ?? [])},
+  ${sqlValue(compliance.founder_name)}, ${sqlValue(compliance.founding_date)},
+  ${sqlJson(compliance.same_as ?? [])}, ${sqlJson(compliance.contact_points ?? [])},
+  ${sqlValue(compliance.address_visibility === 'visible' ? 'visible' : 'hidden')},
+  ${sqlJson(compliance.metadata ?? {})}, ${now}, ${now}
 );
 
 INSERT INTO site_consultation_settings (

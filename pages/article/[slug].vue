@@ -65,7 +65,6 @@
 <script setup lang="ts">
 import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
-import { serializeJsonLd } from '~/utils/json-ld'
 import { stripLeadingTitleHeading } from '~/utils/markdown'
 
 const { isBlawby } = usePublicTemplate()
@@ -80,6 +79,7 @@ if (error.value) throw error.value
 if (!data.value.post) throw createError({ statusCode: 404, statusMessage: 'Article not found', fatal: true })
 
 const { identity, consultation, compliance } = await useBlawbyShell()
+const org = useBlawbyOrgIdentity(identity, compliance)
 const post = computed(() => data.value.post!)
 const ctaBlock = computed(() => data.value.page?.components.find(component => component.type === 'consultation_cta') ?? null)
 const body = computed(() => stripLeadingTitleHeading(post.value.body || '', post.value.title))
@@ -110,12 +110,30 @@ useSeoMeta({ title: seoTitle, description: seoDescription, ogTitle: seoTitle, og
 useHead(() => ({
   link: [{ rel: 'canonical', href: canonicalUrl.value }],
   meta: post.value.robots ? [{ name: 'robots', content: post.value.robots }] : [],
-  script: [{ type: 'application/ld+json', innerHTML: serializeJsonLd({
-    '@context': 'https://schema.org', '@type': 'Article', headline: post.value.title, description: seoDescription.value, url: canonicalUrl.value,
-    datePublished: post.value.published_at || post.value.created_at || undefined, dateModified: post.value.updated_at || post.value.published_at || undefined,
-    image: post.value.featured_image?.public_url ? [post.value.featured_image.public_url] : undefined,
-    author: post.value.author_name ? { '@type': 'Person', name: post.value.author_name } : undefined,
-    publisher: { '@type': 'Organization', name: identity.value.brand_name || 'Professional services' }, mainEntityOfPage: canonicalUrl.value,
-  }) }],
+}))
+
+const blogUrl = useSeoUrl(() => '/blog')
+const homeUrl = useSeoUrl(() => '/')
+
+useProfessionalServiceSchema(() => ({
+  recipe: 'article',
+  org: org.value,
+  pageUrl: canonicalUrl.value,
+  pageTitle: post.value.title,
+  pageDescription: seoDescription.value,
+  imageUrl: post.value.featured_image?.public_url || null,
+  imageWidth: post.value.featured_image?.width || null,
+  imageHeight: post.value.featured_image?.height || null,
+  breadcrumbs: [
+    { name: 'Home', url: homeUrl.value },
+    { name: 'Blog', url: blogUrl.value },
+    { name: post.value.title, url: canonicalUrl.value },
+  ],
+  article: {
+    headline: post.value.title,
+    datePublished: post.value.published_at || post.value.created_at || null,
+    dateModified: post.value.updated_at || post.value.published_at || null,
+    authorName: post.value.author_name || null,
+  },
 }))
 </script>
