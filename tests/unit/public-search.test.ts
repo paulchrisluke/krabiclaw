@@ -131,7 +131,10 @@ test('expandDocumentsForSurfaces + recordMetadata isolate tenant_blog records by
   const platformDocs = await buildPlatformKnowledgeDocuments({} as never)
   const platformDoc = platformDocs.find(doc => doc.type === 'doc')
   assert.ok(platformDoc)
-  assert.equal(recordMetadata(platformDoc).site_id, '')
+  const metadata = recordMetadata(platformDoc)
+  assert.equal(metadata.site_id, '')
+  assert.equal(Object.keys(metadata).length, 5)
+  assert.equal(JSON.parse(metadata.display!).path, platformDoc.path)
 })
 
 // ── Tenant site_id isolation in query filters ────────────────────────────────

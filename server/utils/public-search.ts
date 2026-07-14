@@ -19,7 +19,6 @@ const AI_SEARCH_CUSTOM_METADATA: AiSearchConfig['custom_metadata'] = [
   { field_name: 'record_id', data_type: 'text' },
   { field_name: 'type', data_type: 'text' },
   { field_name: 'surface', data_type: 'text' },
-  { field_name: 'path', data_type: 'text' },
   { field_name: 'display', data_type: 'text' },
   { field_name: 'site_id', data_type: 'text' },
 ]
@@ -160,10 +159,10 @@ export function recordMetadata(record: PlatformKnowledgeDocument): Record<string
     record_id: record.id,
     type: record.type,
     surface: '',
-    path: record.path,
     site_id: record.siteId ?? '',
     display: JSON.stringify({
       title: record.title,
+      path: record.path,
       snippet: truncateSnippet(record.snippet),
       section: record.section,
       icon: record.icon,
@@ -225,7 +224,11 @@ function normalizeSearchResults(
       : chunk.text.replace(/^#\s+/u, '').split('\n')[0]?.trim()
         || chunk.item.key
     const type = String(metadata.type ?? 'route') as PublicSearchType
-    const path = typeof metadata.path === 'string' && metadata.path.trim() ? metadata.path.trim() : '/'
+    const path = typeof metadata.path === 'string' && metadata.path.trim()
+      ? metadata.path.trim()
+      : typeof display.path === 'string' && display.path.trim()
+        ? display.path.trim()
+        : '/'
     const pathTemplate = typeof display.pathTemplate === 'string' && display.pathTemplate.trim() ? display.pathTemplate.trim() : null
     const snippet = typeof display.snippet === 'string' && display.snippet.trim()
       ? display.snippet.trim()
