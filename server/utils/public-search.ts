@@ -340,12 +340,29 @@ async function listAllItems(env: CloudflareEnv) {
   return items
 }
 
+// AI Search has shown transient errors in production (DownstreamConfigApiError timeouts,
+// AiSearchInternalError: unable_to_connect_to_ai_search) unrelated to the request's own
+// validity — a brief retry absorbs those without masking a real, deterministic failure
+// (which will still exhaust all attempts and throw).
+async function withRetries<T>(fn: () => Promise<T>, attempts = 3, delayMs = 500): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await fn()
+    } catch (error) {
+      lastError = error
+      if (attempt < attempts) await new Promise(resolve => setTimeout(resolve, delayMs * attempt))
+    }
+  }
+  throw lastError
+}
+
 async function deleteIndexItem(env: CloudflareEnv, itemId: string) {
-  await searchNamespace(env).get(platformKnowledgeInstanceId(env)).items.delete(itemId)
+  await withRetries(() => searchNamespace(env).get(platformKnowledgeInstanceId(env)).items.delete(itemId))
 }
 
 async function uploadIndexItem(env: CloudflareEnv, key: string, content: string, metadata: Record<string, string>) {
-  await searchNamespace(env).get(platformKnowledgeInstanceId(env)).items.upload(key, content, { metadata })
+  await withRetries(() => searchNamespace(env).get(platformKnowledgeInstanceId(env)).items.upload(key, content, { metadata }))
 }
 
 async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000) {
