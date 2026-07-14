@@ -15,8 +15,18 @@ onMounted(async () => {
     const { organization } = dashboard
     const slug = organization.value?.slug
 
-    // If no org, send to onboarding to create org + site
+    // If no org, this may be a guest/end-customer account rather than a
+    // brand-new tenant operator (see
+    // docs/adr/0017-guest-account-model-separate-from-tenant-org-membership.md).
+    // A genuinely new signup has no linked customers rows, so its onboarding
+    // redirect below is unchanged.
     if (!slug) {
+      const fetch = useRequestFetch()
+      const status = await fetch<{ isGuest?: boolean }>('/api/account/status').catch(() => null)
+      if (status?.isGuest) {
+        await navigateTo('/account', { replace: true })
+        return
+      }
       await navigateTo('/dashboard/onboarding', { replace: true })
       return
     }
