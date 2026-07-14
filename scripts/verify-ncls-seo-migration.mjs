@@ -78,7 +78,7 @@ if (!isNonIndexableHost(base.hostname)) {
   const robotsResponse = await request('/robots.txt', 'follow')
   const robots = robotsResponse.ok ? await robotsResponse.text() : ''
   if (!robotsResponse.ok) failures.push(`/robots.txt: received ${robotsResponse.status}`)
-  if (/disallow:\s*\//i.test(robots)) failures.push('/robots.txt: blocks the entire site')
+  if (/^disallow:\s*\/\s*$/im.test(robots)) failures.push('/robots.txt: blocks the entire site')
   if (!/sitemap:/i.test(robots)) failures.push('/robots.txt: missing Sitemap directive')
 }
 

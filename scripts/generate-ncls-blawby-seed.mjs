@@ -176,7 +176,7 @@ INSERT INTO sites (
   url_structure, vertical, content_source, media_source, settings, created_at, updated_at
 ) VALUES (
   ${sqlValue(SITE_ID)}, ${sqlValue(ORG_ID)}, 'blawby-theme-v1', 'blawby',
-  ${sqlValue(SLUG)}, ${sqlValue(SLUG)}, 'http://ncls.localhost:3000',
+  ${sqlValue(SLUG)}, ${sqlValue(SLUG)}, 'https://ncls.krabiclaw.com',
   ${sqlValue(site.brand_name)}, ${sqlValue(site.brand_description)},
   ${sqlValue(site.email)}, ${sqlValue(site.phone)},
   'en', 'USD', 'active', 'managed', 'active',
@@ -186,8 +186,8 @@ INSERT INTO sites (
 
 INSERT INTO site_domains (id, organization_id, site_id, domain, type, role, status, dns_status, activated_at, created_at, updated_at)
 VALUES
-  ('domain-ncls-localhost', ${sqlValue(ORG_ID)}, ${sqlValue(SITE_ID)}, 'ncls.localhost', 'subdomain', 'canonical', 'active', 'valid', ${now}, ${now}, ${now}),
-  ('domain-ncls-prod-subdomain', ${sqlValue(ORG_ID)}, ${sqlValue(SITE_ID)}, 'ncls.krabiclaw.com', 'subdomain', 'secondary', 'active', 'valid', ${now}, ${now}, ${now});
+  ('domain-ncls-localhost', ${sqlValue(ORG_ID)}, ${sqlValue(SITE_ID)}, 'ncls.localhost', 'subdomain', 'secondary', 'active', 'valid', ${now}, ${now}, ${now}),
+  ('domain-ncls-prod-subdomain', ${sqlValue(ORG_ID)}, ${sqlValue(SITE_ID)}, 'ncls.krabiclaw.com', 'subdomain', 'canonical', 'active', 'valid', ${now}, ${now}, ${now});
 
 INSERT INTO business_locations (
   id, organization_id, site_id, slug, title, city, address, phone, email,

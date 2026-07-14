@@ -28,7 +28,7 @@ INSERT INTO sites (
   url_structure, vertical, content_source, media_source, settings, created_at, updated_at
 ) VALUES (
   'site-ncls-blawby', 'org-ncls-blawby', 'blawby-theme-v1', 'blawby',
-  'ncls', 'ncls', 'http://ncls.localhost:3000',
+  'ncls', 'ncls', 'https://ncls.krabiclaw.com',
   'North Carolina Legal Services', 'Access to Justice for All. North Carolina''s affordable legal services. We believe that access to the Justice System is a fundamental right. At North Carolina Legal Services we are committed to removing financial barriers that prevent many in our community from obtaining high-quality legal assistance.',
   'contact@northcarolinalegalservices.org', '(984) 777-8288',
   'en', 'USD', 'active', 'managed', 'active',
@@ -38,8 +38,8 @@ INSERT INTO sites (
 
 INSERT INTO site_domains (id, organization_id, site_id, domain, type, role, status, dns_status, activated_at, created_at, updated_at)
 VALUES
-  ('domain-ncls-localhost', 'org-ncls-blawby', 'site-ncls-blawby', 'ncls.localhost', 'subdomain', 'canonical', 'active', 'valid', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-  ('domain-ncls-prod-subdomain', 'org-ncls-blawby', 'site-ncls-blawby', 'ncls.krabiclaw.com', 'subdomain', 'secondary', 'active', 'valid', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+  ('domain-ncls-localhost', 'org-ncls-blawby', 'site-ncls-blawby', 'ncls.localhost', 'subdomain', 'secondary', 'active', 'valid', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  ('domain-ncls-prod-subdomain', 'org-ncls-blawby', 'site-ncls-blawby', 'ncls.krabiclaw.com', 'subdomain', 'canonical', 'active', 'valid', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO business_locations (
   id, organization_id, site_id, slug, title, city, address, phone, email,
