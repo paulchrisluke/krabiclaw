@@ -125,10 +125,11 @@ test.describe('Blawby NCLS public site', () => {
   test('pricing calculator follows imported threshold boundaries', async ({ page }) => {
     await page.goto(`${blawbyBaseURL}/pricing`, { waitUntil: 'load' })
     const income = page.getByLabel('Household Income')
+    const displayedRate = page.getByText('Your Rate', { exact: true }).locator('..')
     await income.fill('39900')
-    await expect(page.getByText('$160/hr', { exact: true })).toBeVisible()
+    await expect(displayedRate.getByText('$160/hr', { exact: true })).toBeVisible()
     await income.fill('63841')
-    await expect(page.getByText('$320/hr', { exact: true })).toBeVisible()
+    await expect(displayedRate.getByText('$320/hr', { exact: true })).toBeVisible()
   })
 
   test('service feature tabs support arrow-key navigation', async ({ page }) => {
