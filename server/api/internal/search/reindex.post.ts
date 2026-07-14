@@ -51,6 +51,10 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ ok: true, ...result })
   } catch (error) {
     console.error('Failed to rebuild platform knowledge index:', error)
-    return jsonResponse({ error: 'Failed to rebuild platform knowledge index' }, { status: 500 })
+    // This route is internal and already secret-gated (same trust boundary as the
+    // CI caller), so surfacing the real error message — not a full stack trace —
+    // is a reasonable, minimal diagnostic aid rather than a public information leak.
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+    return jsonResponse({ error: 'Failed to rebuild platform knowledge index', detail }, { status: 500 })
   }
 })
