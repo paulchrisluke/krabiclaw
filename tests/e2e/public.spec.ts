@@ -275,7 +275,7 @@ test.describe('platform public site', () => {
     expect(response?.status()).toBeLessThan(400)
     await expect(page).toHaveTitle(/Saya/)
     await expect(page.getByRole('heading', { name: 'Saya' }).first()).toBeVisible()
-    await expect(page.locator('body')).toContainText('Free on all plans')
+    await expect(page.locator('body')).toContainText('No purchase needed — start building immediately')
 
     await expectHealthyPage(page, errors)
   })
