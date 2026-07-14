@@ -131,14 +131,19 @@ function trackConsultation(pageType: string, destination: string) {
   trackConsultationClick(pageType, '/', destination)
 }
 
-useSeoMeta({
-  title: computed(() => routeData.value.page?.seo_title || identity.value.brand_name || 'Professional services'),
-  description: computed(() => routeData.value.page?.seo_description || routeData.value.page?.summary || identity.value.brand_description || ''),
-  ogImage: computed(() => heroBackground.value || undefined),
-  ogType: 'website',
-})
-const canonicalUrl = useSeoUrl(() => '/')
-useHead(() => ({ link: [{ rel: 'canonical', href: canonicalUrl.value }] }))
+const seoTitle = computed(() => routeData.value.page?.seo_title || identity.value.brand_name || 'Professional services')
+const seoDescription = computed(() => routeData.value.page?.seo_description || routeData.value.page?.summary || identity.value.brand_description || '')
+
+const { canonicalUrl } = useTenantSocialMetadata(() => ({
+  path: '/',
+  title: seoTitle.value,
+  description: seoDescription.value,
+  brand: {
+    siteName: identity.value.brand_name || 'Professional services',
+    logoUrl: identity.value.logo_url || null,
+  },
+  heroImage: heroBackground.value ? { url: heroBackground.value } : null,
+}))
 
 useProfessionalServiceSchema(() => ({
   recipe: 'home',

@@ -563,8 +563,6 @@ const hero = computed(() => getHero({
   video: ''
 }))
 
-const currentPageUrl = useSeoUrl('/')
-
 // SEO for KrabiClaw Platform
 if (isPlatform) {
   const platformOgDescription = 'Beautiful local business websites edited through ChatGPT. Google Business sync, bookings, and real-time analytics included.'
@@ -596,25 +594,19 @@ if (!isPlatform && siteId && !isBlawbyPage.value) {
     truncateForSeo(bootstrapConfig.value?.seo_description || businessSubtitle.value || 'Professional business website with photos, updates and reviews.', 160)
   )
 
-  const canonicalUrl = useSeoUrl(() => bootstrapConfig.value?.canonical_url || '/')
-
-  useSeoMeta({
-    title: seoTitle,
-    description: seoDescription,
-    ogTitle: seoTitle,
-    ogDescription: seoDescription,
-    ogSiteName: computed(() => site?.brand_name || restaurantName.value),
-    twitterTitle: seoTitle,
-    twitterDescription: seoDescription,
-    ogImage: useSharedOgImage(() => bootstrapConfig.value?.og_image_url || hero.value.image),
-    ogUrl: currentPageUrl,
-    ogType: 'website',
-    robots: () => bootstrapConfig.value?.robots || undefined,
-  })
-
-  useHead({
-    link: [{ rel: 'canonical', href: canonicalUrl }],
-  })
+  useTenantSocialMetadata(() => ({
+    path: bootstrapConfig.value?.canonical_url || '/',
+    title: seoTitle.value,
+    description: seoDescription.value,
+    brand: {
+      siteName: site?.brand_name || restaurantName.value,
+      logoUrl: bootstrapConfig.value?.logo_url || null,
+      primaryColor: bootstrapConfig.value?.brand_color || null,
+    },
+    heroImage: hero.value.image ? { url: hero.value.image } : null,
+    ogImageOverride: bootstrapConfig.value?.og_image_url ? { url: bootstrapConfig.value.og_image_url } : null,
+    robots: bootstrapConfig.value?.robots || null,
+  }))
 }
 
 // Featured menu items from bootstrap menu

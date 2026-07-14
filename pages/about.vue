@@ -192,7 +192,7 @@ const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).de
 
 const { isPlatform, site } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
-const { getField, locations, contentBlocks } = useBootstrap()
+const { getField, locations, contentBlocks, config } = useBootstrap()
 const { resolveComponent } = useDynamicComponent()
 const { locale } = useI18n()
 const copy = computed(() => getVerticalCopy(site?.vertical, locale.value))
@@ -213,10 +213,6 @@ function isVideoUrl(url) {
   }
 }
 
-const route = useRoute()
-const requestURL = useRequestURL()
-const tenantOgImage = useTenantOgImage()
-
 if (isPlatform) {
   usePlatformPageSeo({
     path: '/about',
@@ -229,16 +225,17 @@ if (isPlatform) {
     ],
   })
 } else {
-  useSeoMeta({
-    title: computed(() => `About | ${site?.brand_name || 'KrabiClaw'}`),
-    description: computed(() => getField('seo.description', 'Learn about our business and our story.')),
-    ogTitle: computed(() => `About | ${site?.brand_name || 'KrabiClaw'}`),
-    ogDescription: computed(() => getField('seo.description', 'Learn about our business and our story.')),
-    ogSiteName: computed(() => site?.brand_name || 'KrabiClaw'),
-    twitterTitle: computed(() => `About | ${site?.brand_name || 'KrabiClaw'}`),
-    twitterDescription: computed(() => getField('seo.description', 'Learn about our business and our story.')),
-    ogImage: tenantOgImage,
-    ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
-  })
+  useTenantSocialMetadata(() => ({
+    path: '/about',
+    title: `About | ${site?.brand_name || 'KrabiClaw'}`,
+    description: getField('seo.description', 'Learn about our business and our story.'),
+    brand: {
+      siteName: site?.brand_name || 'KrabiClaw',
+      logoUrl: config.value?.logo_url || null,
+      primaryColor: config.value?.brand_color || null,
+    },
+    heroImage: locations.value[0]?.hero_image_public_url ? { url: locations.value[0].hero_image_public_url } : null,
+    ogImageOverride: config.value?.og_image_url ? { url: config.value.og_image_url } : null,
+  }))
 }
 </script>
