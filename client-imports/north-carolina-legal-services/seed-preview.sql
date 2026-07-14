@@ -2409,7 +2409,7 @@ Alimony can last for a year, a decade, or a lifetime. Essentially, there are no 
 
 ## Equitable Distribution
 
-Equitable distribution must be requested and properly filed before the divorce is finalized. Failing to do so will mean that you forever lose the right to have your property divided by the court. For a step-by-step guide to categorizing and valuing marital assets, see our article on [property division in North Carolina divorce](/article/property-division-in-north-carolina-divorce).
+Equitable distribution must be requested and properly filed before the divorce is finalized. Failing to do so will mean that you forever lose the right to have your property divided by the court. For a step-by-step guide to categorizing and valuing marital assets, see our article on [property division in North Carolina divorce](/article/property-division-in-north-carolina-divorce-protecting-whats-yours).
 
 Marital property in North Carolina is eligible for equitable distribution, while separate property is not. Classifying assets and debts into these categories is often complex, but the general rule is that separate property is anything owned prior to marriage, and marital property is acquired during the marriage with funds earned during the marriage by either spouse. There are numerous exceptions to this rule. A third category called divisible property may also be important if you or your spouse acquired relevant property after separating but before finalizing the divorce.
 
@@ -2493,7 +2493,7 @@ Lastly, divisible property may be subject to equitable distribution. This type o
 
 ## Marital Property Division in North Carolina
 
-North Carolina law states that marital property and the net value of divisible property shall be equally divided unless that solution is not equitable. For a practical step-by-step guide to identifying, valuing, and protecting your marital assets, see our article on [property division in North Carolina divorce](/article/property-division-in-north-carolina-divorce). Equitable distribution does not mean a 50/50 split will go to each spouse. Either spouse is entitled to request more than 50 percent of the marital estate but, oftentimes, the spouses’ reasons are not sufficient to cause the court to distribute the property other than 50/50. When deciding on marital property division in North Carolina, a court will consider the following factors:
+North Carolina law states that marital property and the net value of divisible property shall be equally divided unless that solution is not equitable. For a practical step-by-step guide to identifying, valuing, and protecting your marital assets, see our article on [property division in North Carolina divorce](/article/property-division-in-north-carolina-divorce-protecting-whats-yours). Equitable distribution does not mean a 50/50 split will go to each spouse. Either spouse is entitled to request more than 50 percent of the marital estate but, oftentimes, the spouses’ reasons are not sufficient to cause the court to distribute the property other than 50/50. When deciding on marital property division in North Carolina, a court will consider the following factors:
 
 - Income, assets, and liabilities of each spouse
 
@@ -2757,7 +2757,7 @@ So, the first step in [getting a divorce in North Carolina](https://www.northcar
 
 - A Domestic Civil Action Cover Sheet
 
-If you want the court to decide how your assets and debts will be divided, you must request what is called [equitable distribution](https://www.northcarolinalegalservices.org/article/equitable-distribution-in-north-carolina-divorces). This request needs to be made before a final divorce judgment is entered. For a practical breakdown of how property is categorized and divided, see our guide to [property division in North Carolina divorce](/article/property-division-in-north-carolina-divorce). Similarly, if you want the court to decide spousal support and alimony, a request must be properly filed prior to the divorce becoming final.
+If you want the court to decide how your assets and debts will be divided, you must request what is called [equitable distribution](https://www.northcarolinalegalservices.org/article/equitable-distribution-in-north-carolina-divorces). This request needs to be made before a final divorce judgment is entered. For a practical breakdown of how property is categorized and divided, see our guide to [property division in North Carolina divorce](/article/property-division-in-north-carolina-divorce-protecting-whats-yours). Similarly, if you want the court to decide spousal support and alimony, a request must be properly filed prior to the divorce becoming final.
 
 Spouses with children may also need the court’s assistance with custody, visitation, and support, and those matters can be included in the divorce complaint or as separate filings.
 

@@ -69,7 +69,9 @@ useProfessionalServiceSchema(() => ({
     { name: 'Home', url: homeUrl.value },
     { name: 'Services', url: canonicalUrl.value },
   ],
-  faqs: routeData.value.qa.map(item => ({ question: item.question, answer: item.answer })),
+  faqs: routeData.value.qa
+    .map(item => ({ question: item.question.trim(), answer: item.answer?.trim() ?? '' }))
+    .filter(item => item.question && item.answer),
   items: routeData.value.offerings.map(offering => ({
     name: offering.name,
     url: offering.canonical_path,

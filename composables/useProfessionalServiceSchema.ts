@@ -20,6 +20,15 @@ export function useBlawbyOrgIdentity(
   return computed<ProfessionalServiceOrgIdentity>(() => {
     const id = toValue(identity)
     const comp = toValue(compliance)
+    const identityAddress = id?.primary_location_address_street || id?.primary_location_address_locality
+      ? {
+          street_address: id.primary_location_address_street,
+          locality: id.primary_location_address_locality,
+          region: null,
+          postal_code: null,
+          country: null,
+        }
+      : null
     return {
       name: id?.brand_name || comp?.entity_name || null,
       description: id?.brand_description || null,
@@ -32,7 +41,7 @@ export function useBlawbyOrgIdentity(
       founderName: comp?.founder_name || null,
       foundingDate: comp?.founding_date || null,
       contactPoints: comp?.contact_points || null,
-      address: comp?.address || null,
+      address: comp?.address || identityAddress,
       addressVisible: comp?.address_visibility === 'visible',
     }
   })

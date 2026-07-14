@@ -228,6 +228,7 @@ const schemaOfferCatalog = computed(() => (
       }))
     : []
 ))
+const homeUrl = useSeoUrl(() => '/')
 
 useProfessionalServiceSchema(() => ({
   recipe: schemaRecipe.value,
@@ -236,7 +237,7 @@ useProfessionalServiceSchema(() => ({
   pageTitle: heroTitle.value,
   pageDescription: page.value?.seo_description || page.value?.summary || null,
   breadcrumbs: [
-    { name: 'Home', url: '/' },
+    { name: 'Home', url: homeUrl.value },
     { name: heroTitle.value, url: canonicalUrl.value },
   ],
   faqs: visibleFaqs.value,

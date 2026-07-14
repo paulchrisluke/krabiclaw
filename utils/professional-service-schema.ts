@@ -173,7 +173,7 @@ function resolveUrl(value: string, origin: string) {
 
 // --- nonprofit status normalization ---------------------------------------
 
-const NONPROFIT_501C_MAX = 29
+const NONPROFIT_501C_MAX = 28
 const NONPROFIT_STATUS_CANONICAL = new Set<string>([
   ...Array.from({ length: NONPROFIT_501C_MAX }, (_, index) => `https://schema.org/Nonprofit501c${index + 1}`),
   'https://schema.org/NonprofitANBI',
@@ -429,6 +429,8 @@ export function buildProfessionalServiceGraph(input: ProfessionalServiceSchemaIn
     webpageNode.mainEntity = { '@id': offeringId }
   }
 
+  if (input.recipe === 'home') webpageNode.mainEntity = { '@id': organizationId }
+
   if ((input.recipe === 'services-index' || input.recipe === 'blog-index' || input.recipe === 'home') && input.items?.length) {
     const listId = `${pageUrl}#itemlist`
     mainEntityNode = {
@@ -445,9 +447,7 @@ export function buildProfessionalServiceGraph(input: ProfessionalServiceSchemaIn
     // On the homepage the ItemList of offerings is supplementary — the page's
     // own mainEntity stays the Organization so home's WebPage node still
     // reads as "this page is about the org", matching recipe expectations.
-    if (input.recipe === 'home') {
-      webpageNode.mainEntity = { '@id': organizationId }
-    } else {
+    if (input.recipe !== 'home') {
       webpageNode.mainEntity = { '@id': listId }
     }
   }

@@ -40,6 +40,7 @@ test('normalizeNonprofitStatus rejects unrecognized values instead of silently p
   assert.equal(result.valid, false)
   const outOfRange = normalizeNonprofitStatus('501(c)(99)')
   assert.equal(outOfRange.valid, false)
+  assert.equal(normalizeNonprofitStatus('501(c)(29)').valid, false)
   const wrongDomain = normalizeNonprofitStatus('https://example.com/Nonprofit501c3')
   assert.equal(wrongDomain.valid, false)
 })
@@ -78,6 +79,8 @@ test('buildProfessionalServiceGraph emits a linked Organization/WebSite graph wi
   // The org node must emit the canonical enum URL, never the raw "501(c)(3)" free text.
   assert.equal(org.nonprofitStatus, 'https://schema.org/Nonprofit501c3')
   assert.deepEqual(org['@type'], ['Organization', 'LegalService'])
+  const webpage = graphByType(graph, 'WebPage')!
+  assert.deepEqual(webpage.mainEntity, { '@id': 'https://ncls.krabiclaw.com/#organization' })
 })
 
 test('service-detail recipe links LegalService back to the shared Organization node and includes breadcrumbs', () => {

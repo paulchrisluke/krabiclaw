@@ -37,11 +37,11 @@ INSERT INTO `__new_tenant_compliance`("id", "organization_id", "site_id", "entit
 SELECT "id", "organization_id", "site_id", "entity_name", "dba_name", "entity_type",
 	CASE
 		WHEN "nonprofit_status" IS NULL OR trim("nonprofit_status") = '' THEN NULL
-		WHEN lower(replace(replace(replace(replace(trim("nonprofit_status"), ' ', ''), '(', ''), ')', ''), '.', '')) IN ('501c1', '501c2', '501c3', '501c4', '501c5', '501c6', '501c7', '501c8', '501c9', '501c10', '501c11', '501c12', '501c13', '501c14', '501c15', '501c16', '501c17', '501c18', '501c19', '501c20', '501c21', '501c22', '501c23', '501c24', '501c25', '501c26', '501c27', '501c28', '501c29')
+		WHEN lower(replace(replace(replace(replace(trim("nonprofit_status"), ' ', ''), '(', ''), ')', ''), '.', '')) IN ('501c1', '501c2', '501c3', '501c4', '501c5', '501c6', '501c7', '501c8', '501c9', '501c10', '501c11', '501c12', '501c13', '501c14', '501c15', '501c16', '501c17', '501c18', '501c19', '501c20', '501c21', '501c22', '501c23', '501c24', '501c25', '501c26', '501c27', '501c28')
 			THEN 'https://schema.org/Nonprofit501c' || substr(lower(replace(replace(replace(replace(trim("nonprofit_status"), ' ', ''), '(', ''), ')', ''), '.', '')), 5)
 		WHEN "nonprofit_status" IN ('https://schema.org/NonprofitANBI', 'https://schema.org/NonprofitSBBI') THEN "nonprofit_status"
 		WHEN substr("nonprofit_status", 1, 32) = 'https://schema.org/Nonprofit501c'
-			AND substr("nonprofit_status", 33) IN ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29')
+			AND substr("nonprofit_status", 33) IN ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28')
 			THEN "nonprofit_status"
 		ELSE NULL
 	END,

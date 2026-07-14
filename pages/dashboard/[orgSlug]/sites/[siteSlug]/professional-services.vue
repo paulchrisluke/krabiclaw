@@ -112,6 +112,10 @@ async function save() {
       contact_type: nullable(form.contact_type), telephone: nullable(form.telephone), email: nullable(form.email),
       area_served: nullable(form.service_area), available_language: null, url: nullable(form.contact_url),
     }
+    const existingContacts = originalCompliance.value.contact_points ?? []
+    const contactPoints = contact.telephone || contact.email || contact.url
+      ? [{ ...(existingContacts[0] ?? {}), ...contact }, ...existingContacts.slice(1)]
+      : existingContacts.slice(1)
     const compliance: ComplianceRecord = {
       ...originalCompliance.value,
       entity_name: nullable(form.entity_name), dba_name: nullable(form.dba_name), entity_type: nullable(form.entity_type),
@@ -119,7 +123,7 @@ async function save() {
       founder_name: nullable(form.founder_name), founding_date: nullable(form.founding_date), service_area: nullable(form.service_area),
       service_area_type: nullable(form.service_area_type), address_visibility: form.address_visibility,
       same_as: form.same_as.split(/\r?\n/).map(value => value.trim()).filter(Boolean),
-      contact_points: contact.telephone || contact.email || contact.url ? [contact] : [],
+      contact_points: contactPoints,
       footer_disclaimer: nullable(form.footer_disclaimer),
     }
     // The shared PATCH route (server/utils/professional-services-editor.ts)

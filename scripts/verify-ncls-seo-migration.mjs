@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs'
 import { auditSeoHtml, buildSeoMigrationContract, parseSearchConsoleCsv, parseSitemapXml } from './utils/seo-migration-contract.mjs'
+import { createRequiredTypesForPath } from './utils/ncls-seo-schema-requirements.mjs'
 import { isNonIndexableHost } from '../server/utils/seo-policy.ts'
 
 function args(argv) {
@@ -32,37 +33,7 @@ const sitePagesWithQa = new Set(validSiteQa.filter(qa => qa.page_path).map(qa =>
 // This follows the current reviewed Blawby route recipes, not the legacy
 // source site's composition. The React pin is migration evidence; it must not
 // force approved KrabiClaw content/sections back into the launch site.
-const routesRenderingSiteQa = new Set(['/', '/services', '/about', '/contact', '/schedule', '/pricing', '/donate'])
-
-/**
- * Route-specific required schema.org @types for every preserved, indexed
- * professional-service route. `Organization`/`WebSite` (with stable, canonical
- * `#organization`/`#website` IDs) are required on every route by the loop
- * below regardless of what's listed here — this only adds the recipe-specific
- * nodes from utils/professional-service-schema.ts. FAQPage is only required
- * where the source client-manifest actually has visible Q&A for that path, so
- * this never demands phantom FAQ schema.
- */
-function requiredTypesForPath(path) {
-  if (path === '/') return withFaq('/', [])
-  if (path === '/services') return withFaq('/services', ['CollectionPage', 'BreadcrumbList', 'ItemList'])
-  if (/^\/services\/[^/]+$/.test(path)) return ['LegalService', 'BreadcrumbList', ...(servicePathsWithFaqs.has(path) ? ['FAQPage'] : [])]
-  if (path === '/about') return withFaq('/about', ['AboutPage', 'BreadcrumbList'])
-  if (path === '/contact') return withFaq('/contact', ['ContactPage', 'BreadcrumbList'])
-  if (path === '/schedule') return withFaq('/schedule', ['BreadcrumbList'])
-  if (path === '/pricing') return withFaq('/pricing', ['BreadcrumbList'])
-  if (path === '/donate') return withFaq('/donate', ['BreadcrumbList'])
-  if (path === '/blog') return ['CollectionPage', 'BreadcrumbList', 'ItemList']
-  if (path.startsWith('/article/')) return ['BlogPosting', 'BreadcrumbList']
-  if (['/policies/privacy', '/policies/terms', '/third-party-notices'].includes(path)) return ['BreadcrumbList']
-  return []
-}
-
-function withFaq(path, types) {
-  const hasPageQa = sitePagesWithQa.has(path)
-  const fallsBackToGeneralQa = routesRenderingSiteQa.has(path) && generalSiteQaExists && !hasPageQa
-  return hasPageQa || fallsBackToGeneralQa ? [...types, 'FAQPage'] : types
-}
+const requiredTypesForPath = createRequiredTypesForPath({ servicePathsWithFaqs, sitePagesWithQa, generalSiteQaExists })
 const sourceSitemap = parseSitemapXml(readFileSync(new URL('source-sitemap-2026-07-13.xml', evidenceDir), 'utf8'))
 const indexedUrls = parseSearchConsoleCsv(readFileSync(new URL('search-console-valid-2026-07-13.csv', evidenceDir), 'utf8'))
 const contract = buildSeoMigrationContract({ sitemapUrls: sourceSitemap, searchConsoleUrls: indexedUrls, routeManifest })

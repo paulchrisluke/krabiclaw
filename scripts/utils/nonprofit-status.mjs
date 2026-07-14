@@ -6,7 +6,7 @@
  * two in sync if the canonical enum list changes.
  */
 
-const NONPROFIT_501C_MAX = 29;
+const NONPROFIT_501C_MAX = 28;
 const NONPROFIT_STATUS_CANONICAL = new Set([
   ...Array.from({ length: NONPROFIT_501C_MAX }, (_, index) => `https://schema.org/Nonprofit501c${index + 1}`),
   "https://schema.org/NonprofitANBI",

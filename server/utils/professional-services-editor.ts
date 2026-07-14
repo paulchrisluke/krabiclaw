@@ -43,12 +43,13 @@ function recordArray(value: unknown): ApiRecord[] {
 
 function sanitizedUrlArray(value: unknown, maxLength: number): string[] {
   if (!Array.isArray(value)) return []
-  return value.map((item, index) => {
+  return value.flatMap((item, index) => {
     const cleaned = typeof item === 'string' ? cleanString(item, maxLength) : ''
+    if (!cleaned) return []
     try {
       const parsed = new URL(cleaned)
       if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('unsupported protocol')
-      return parsed.toString()
+      return [parsed.toString()]
     } catch {
       validationError(`compliance.same_as[${index}] must be an absolute HTTP(S) profile URL.`)
     }

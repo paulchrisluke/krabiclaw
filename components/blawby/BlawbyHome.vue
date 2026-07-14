@@ -147,7 +147,9 @@ useProfessionalServiceSchema(() => ({
   pageTitle: routeData.value.page?.seo_title || identity.value.brand_name || 'Professional services',
   pageDescription: routeData.value.page?.seo_description || routeData.value.page?.summary || identity.value.brand_description || null,
   imageUrl: heroBackground.value,
-  faqs: routeData.value.qa.map(item => ({ question: item.question, answer: item.answer })),
+  faqs: routeData.value.qa
+    .map(item => ({ question: item.question.trim(), answer: item.answer?.trim() ?? '' }))
+    .filter(item => item.question && item.answer),
   items: routeData.value.offerings.map(offering => ({
     name: offering.name,
     url: offering.canonical_path,

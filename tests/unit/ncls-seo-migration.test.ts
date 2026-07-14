@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
+import { DatabaseSync } from 'node:sqlite'
+import { createRequiredTypesForPath } from '../../scripts/utils/ncls-seo-schema-requirements.mjs'
 import { auditSeoHtml, buildSeoMigrationContract, parseSearchConsoleCsv, parseSitemapXml } from '../../scripts/utils/seo-migration-contract.mjs'
 
 const evidenceDir = 'client-imports/north-carolina-legal-services/evidence/seo'
@@ -55,17 +57,38 @@ test('SEO HTML audit rejects preview canonicals, noindex, duplicate canonicals, 
 })
 
 test('professional-service verifier treats general site Q&A as fallback only on current visible-Q&A recipes', () => {
-  const script = readFileSync('scripts/verify-ncls-seo-migration.mjs', 'utf8')
-  assert.match(script, /generalSiteQaExists/)
-  assert.match(script, /routesRenderingSiteQa = new Set\(\['\/', '\/services', '\/about', '\/contact', '\/schedule', '\/pricing', '\/donate'\]\)/)
-  assert.match(script, /if \(path === '\/blog'\) return \['CollectionPage', 'BreadcrumbList', 'ItemList'\]/)
+  const requiredTypesForPath = createRequiredTypesForPath({
+    servicePathsWithFaqs: new Set(['/services/family']),
+    sitePagesWithQa: new Set(['/contact']),
+    generalSiteQaExists: true,
+  })
+
+  assert.deepEqual(requiredTypesForPath('/'), ['FAQPage'])
+  assert.deepEqual(requiredTypesForPath('/services'), ['CollectionPage', 'BreadcrumbList', 'ItemList', 'FAQPage'])
+  assert.deepEqual(requiredTypesForPath('/contact'), ['ContactPage', 'BreadcrumbList', 'FAQPage'])
+  assert.deepEqual(requiredTypesForPath('/services/family'), ['LegalService', 'BreadcrumbList', 'FAQPage'])
+  assert.deepEqual(requiredTypesForPath('/blog'), ['CollectionPage', 'BreadcrumbList', 'ItemList'])
 })
 
 test('0044 safely copies populated compliance rows and normalizes legacy nonprofit status', () => {
-  const sql = readFileSync('migrations/0044_fearless_spyke.sql', 'utf8')
-  const copy = sql.match(/INSERT INTO `__new_tenant_compliance`[\s\S]*?FROM `tenant_compliance`;/)?.[0] ?? ''
-  assert.match(copy, /THEN 'https:\/\/schema\.org\/Nonprofit501c'/)
-  assert.match(copy, /NULL, NULL, '\[\]', '\[\]', 'hidden'/)
-  assert.doesNotMatch(copy, /SELECT[\s\S]*"service_area_type"/)
-  assert.doesNotMatch(copy, /SELECT[\s\S]*"address_visibility"/)
+  const db = new DatabaseSync(':memory:')
+  db.exec(`CREATE TABLE tenant_compliance (
+    id TEXT PRIMARY KEY, organization_id TEXT NOT NULL, site_id TEXT NOT NULL,
+    entity_name TEXT, dba_name TEXT, entity_type TEXT, nonprofit_status TEXT,
+    registration_number TEXT, service_area TEXT, disclaimer TEXT, footer_disclaimer TEXT,
+    privacy_page_id TEXT, terms_page_id TEXT, notice_page_id TEXT, document_asset_ids TEXT,
+    metadata_json TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by TEXT
+  );`)
+  const insert = db.prepare(`INSERT INTO tenant_compliance VALUES (?, 'org', ?, 'Example', NULL, 'LegalService', ?, NULL, 'NC', NULL, NULL, NULL, NULL, NULL, '[]', '{}', '2026-01-01', '2026-01-01', NULL)`)
+  insert.run('valid', 'site-valid', '501(c)(3)')
+  insert.run('invalid', 'site-invalid', '501(c)(29)')
+
+  db.exec(readFileSync('migrations/0044_fearless_spyke.sql', 'utf8').replaceAll('--> statement-breakpoint', ''))
+  const rows = db.prepare('SELECT id, nonprofit_status, service_area_type, founder_name, same_as, contact_points, address_visibility FROM tenant_compliance ORDER BY id').all().map(row => ({ ...row }))
+
+  assert.deepEqual(rows, [
+    { id: 'invalid', nonprofit_status: null, service_area_type: null, founder_name: null, same_as: '[]', contact_points: '[]', address_visibility: 'hidden' },
+    { id: 'valid', nonprofit_status: 'https://schema.org/Nonprofit501c3', service_area_type: null, founder_name: null, same_as: '[]', contact_points: '[]', address_visibility: 'hidden' },
+  ])
+  db.close()
 })
