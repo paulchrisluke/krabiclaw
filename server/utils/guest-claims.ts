@@ -277,35 +277,55 @@ export async function listLinkedCustomersForUser(db: DbClient, userId: string): 
     ORDER BY c.last_booking_at DESC
   `, [userId])
 
+  if (!rows || rows.length === 0) return []
+
   const today = new Date().toISOString().slice(0, 10)
+  const customerIds = rows.map((row) => row.id)
+  const placeholders = customerIds.map(() => '?').join(', ')
 
-  const summaries: LinkedCustomerSummary[] = []
-  for (const row of rows ?? []) {
-    const [reservationCount, experienceCount] = await Promise.all([
-      queryFirst<{ count: number }>(db, `
-        SELECT COUNT(*) AS count FROM reservation_submissions
-        WHERE customer_id = ? AND date >= ? AND status != 'cancelled'
-      `, [row.id, today]),
-      queryFirst<{ count: number }>(db, `
-        SELECT COUNT(*) AS count FROM experience_bookings
-        WHERE customer_id = ? AND booking_date >= ? AND status != 'cancelled'
-      `, [row.id, today]),
-    ])
+  // Batched GROUP BY across all linked customers instead of two queries per
+  // row — this list can span every tenant site a guest has ever booked at.
+  const [reservationCounts, experienceCounts] = await Promise.all([
+    queryAll<{ customer_id: string, count: number }>(db, `
+      SELECT customer_id, COUNT(*) AS count FROM reservation_submissions
+      WHERE customer_id IN (${placeholders}) AND date >= ? AND status != 'cancelled'
+      GROUP BY customer_id
+    `, [...customerIds, today]),
+    queryAll<{ customer_id: string, count: number }>(db, `
+      SELECT customer_id, COUNT(*) AS count FROM experience_bookings
+      WHERE customer_id IN (${placeholders}) AND booking_date >= ? AND status != 'cancelled'
+      GROUP BY customer_id
+    `, [...customerIds, today]),
+  ])
 
-    summaries.push({
-      customerId: row.id,
-      organizationId: row.organization_id,
-      organizationName: row.organization_name,
-      siteId: row.site_id,
-      siteName: row.site_name ?? 'Site',
-      loyaltyPointsBalance: row.loyalty_points_balance,
-      lastBookingAt: row.last_booking_at,
-      upcomingReservationCount: reservationCount?.count ?? 0,
-      upcomingExperienceBookingCount: experienceCount?.count ?? 0,
-    })
-  }
+  const reservationCountByCustomer = new Map((reservationCounts ?? []).map((row) => [row.customer_id, row.count]))
+  const experienceCountByCustomer = new Map((experienceCounts ?? []).map((row) => [row.customer_id, row.count]))
 
-  return summaries
+  return rows.map((row) => ({
+    customerId: row.id,
+    organizationId: row.organization_id,
+    organizationName: row.organization_name,
+    siteId: row.site_id,
+    siteName: row.site_name ?? 'Site',
+    loyaltyPointsBalance: row.loyalty_points_balance,
+    lastBookingAt: row.last_booking_at,
+    upcomingReservationCount: reservationCountByCustomer.get(row.id) ?? 0,
+    upcomingExperienceBookingCount: experienceCountByCustomer.get(row.id) ?? 0,
+  }))
+}
+
+// Display name for the site a candidate customer row belongs to — used to name
+// the site in the claim-verification email. Kept alongside the other
+// customer-row queries here rather than inline in the API route.
+export async function getClaimSiteDisplayName(db: DbClient, customerId: string): Promise<string> {
+  const site = await queryFirst<{ brand_name: string | null, slug: string }>(db, `
+    SELECT s.brand_name, s.slug
+    FROM customers c
+    JOIN sites s ON s.id = c.site_id
+    WHERE c.id = ?
+    LIMIT 1
+  `, [customerId])
+  return site?.brand_name || site?.slug || 'this site'
 }
 
 // Used by the post-login router to decide "operator dashboard" vs "guest surface"

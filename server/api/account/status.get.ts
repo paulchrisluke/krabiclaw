@@ -13,6 +13,6 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ isGuest: false })
 
-  const isGuest = await userHasLinkedCustomers(db, session.user.id)
+  const isGuest = await userHasLinkedCustomers(db, session.user.id).catch(() => false)
   return jsonResponse({ isGuest })
 })

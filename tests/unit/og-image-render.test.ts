@@ -1,12 +1,21 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import test, { mock } from 'node:test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { renderOgImagePng } from '~/server/utils/og-image/render.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '../..')
+
+// Stub the remote-image fetch so the "unresolvable background image" test below is
+// deterministic and offline — it exercises renderOgImagePng's fallback-on-failure
+// branch, not real DNS/network failure behavior against a .invalid host (which is
+// slow and can behave differently, or be entirely blocked, in CI).
+mock.module('../../server/utils/og-image/fetch-image.ts', {
+  namedExports: { fetchImageAsDataUri: async () => null },
+})
+
+const { renderOgImagePng } = await import('../../server/utils/og-image/render.ts')
 
 async function loadWasmBytes() {
   return await readFile(path.join(repoRoot, 'node_modules/@resvg/resvg-wasm/index_bg.wasm'))

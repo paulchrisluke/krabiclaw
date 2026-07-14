@@ -6,9 +6,8 @@
 import { readBody } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { createClaimRequest } from '~/server/utils/guest-claims'
+import { createClaimRequest, getClaimSiteDisplayName } from '~/server/utils/guest-claims'
 import { sendGuestClaimVerificationEmail } from '~/server/utils/auth-email'
-import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -36,13 +35,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: result.reason }, { status })
   }
 
-  const site = await queryFirst<{ brand_name: string | null, slug: string }>(db, `
-    SELECT s.brand_name, s.slug
-    FROM customers c
-    JOIN sites s ON s.id = c.site_id
-    WHERE c.id = ?
-    LIMIT 1
-  `, [customerId])
+  const siteName = await getClaimSiteDisplayName(db, customerId)
 
   const platformDomain = (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com').replace(/^https?:\/\//, '').replace(/\/$/, '')
   const verifyUrl = `https://${platformDomain}/account/claims/verify?token=${result.rawToken}`
@@ -51,7 +44,7 @@ export default defineEventHandler(async (event) => {
     await sendGuestClaimVerificationEmail(env, {
       email: session.user.email,
       verifyUrl,
-      siteName: site?.brand_name || site?.slug || 'this site',
+      siteName,
     })
   } catch (error) {
     // The claim row already exists (pending, with a live token) — don't report

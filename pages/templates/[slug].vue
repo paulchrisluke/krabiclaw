@@ -34,7 +34,7 @@
                 :to="template.ctaTo"
                 class="inline-flex min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-white px-4 text-[13px] font-semibold text-zinc-950 no-underline transition hover:bg-zinc-100 sm:px-5 sm:text-sm"
               >
-                <span class="sm:hidden">Start free</span>
+                <span class="sm:hidden">{{ template.ctaLabel }}</span>
                 <span class="hidden sm:inline">{{ template.ctaLabel }}</span>
                 <PlatformIcon name="arrow-right" class="size-4" />
               </NuxtLink>
@@ -232,7 +232,12 @@
 <script setup lang="ts">
 import { findPublishedTemplateMarketing } from '~/utils/template-registry'
 
-definePageMeta({ layout: 'platform' })
+// Keyed by full path so navigating directly between two template slugs (e.g.
+// /templates/saya -> /templates/blawby) remounts the page instead of Vue
+// Router reusing the instance — template/isNclsShowcase/demoUrl are all
+// computed once at setup from route.params.slug, so without this key a
+// same-component slug change would silently keep showing the old template.
+definePageMeta({ layout: 'platform', key: route => route.fullPath })
 
 const route = useRoute()
 const slug = String(route.params.slug ?? '')

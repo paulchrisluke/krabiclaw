@@ -50,7 +50,18 @@ export async function renderOgImagePng(
     fonts: getOgImageFonts(),
   })
 
+  // Resvg/RenderedImage hold WASM linear memory that isn't GC'd by JS — free()
+  // both regardless of outcome so repeated renders in the same Worker isolate
+  // (resvgInit is cached at module scope) don't leak memory across requests.
   const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: OG_IMAGE_WIDTH } })
-  const rendered = resvg.render()
-  return rendered.asPng()
+  try {
+    const rendered = resvg.render()
+    try {
+      return rendered.asPng()
+    } finally {
+      rendered.free()
+    }
+  } finally {
+    resvg.free()
+  }
 }

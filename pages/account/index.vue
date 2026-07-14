@@ -64,9 +64,14 @@ const { data, pending, error: loadError } = await useAsyncData('account-bookings
 
 const customers = computed(() => data.value?.customers ?? [])
 
+// Explicit locale + UTC timeZone (matches utils/formatters.ts's formatGoogleDate
+// convention) rather than the runtime default — this page aggregates bookings
+// across many tenant orgs/sites that may each be in a different timezone, so
+// there's no single "tenant timezone" to defer to, and an explicit UTC render
+// avoids SSR/client locale mismatches.
 function formatDate(value) {
   try {
-    return new Date(value).toLocaleDateString()
+    return new Date(value).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
   } catch {
     return value
   }

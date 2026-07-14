@@ -92,6 +92,9 @@ export interface ComposedSocialTags {
   twitterDescription: string | undefined
   twitterImage: string
   twitterImageAlt: string
+  /** Only set when pageType is 'article' and the corresponding input field is present. */
+  articleAuthor: string[] | undefined
+  articlePublishedTime: string | undefined
 }
 
 export const OG_IMAGE_WIDTH = 1200
@@ -152,6 +155,8 @@ export function composeSocialMetadata(
     twitterDescription: description,
     twitterImage: resolvedOgImage.url,
     twitterImageAlt: alt,
+    articleAuthor: pageType === 'article' && input.author ? [input.author] : undefined,
+    articlePublishedTime: pageType === 'article' && input.publishedAt ? input.publishedAt : undefined,
   }
 }
 
@@ -249,11 +254,19 @@ export function resolveSocialOgImage(input: SocialPageMetadataInput, origin: str
   }
 }
 
+// This route is public/unauthenticated (social-platform crawlers hit it directly), so
+// these caps bound the cost of processing a crafted, oversized query string before any
+// rendering work starts — independent of buildOgImageCard's own display-length clipping,
+// which only bounds what gets laid out, not what gets read/trimmed off the query first.
+const MAX_QUERY_TEXT_LENGTH = 500
+const MAX_QUERY_URL_LENGTH = 2000
+
 /** Server-side counterpart: parses the render route's query string back into a payload. */
 export function parseOgImageQuery(query: Record<string, string | string[] | undefined>): OgImageRenderPayload {
-  const get = (key: string): string | undefined => {
+  const get = (key: string, maxLength = MAX_QUERY_TEXT_LENGTH): string | undefined => {
     const value = query[key]
-    return Array.isArray(value) ? value[0] : value
+    const raw = Array.isArray(value) ? value[0] : value
+    return raw ? raw.slice(0, maxLength) : raw
   }
   const template = get('template')
   return {
@@ -263,8 +276,8 @@ export function parseOgImageQuery(query: Record<string, string | string[] | unde
     siteName: get('siteName') || 'KrabiClaw',
     label: get('label') || null,
     location: get('location') || null,
-    logoUrl: get('logoUrl') || null,
-    backgroundImageUrl: get('backgroundImageUrl') || null,
+    logoUrl: get('logoUrl', MAX_QUERY_URL_LENGTH) || null,
+    backgroundImageUrl: get('backgroundImageUrl', MAX_QUERY_URL_LENGTH) || null,
     primaryColor: get('primaryColor') || null,
     secondaryColor: get('secondaryColor') || null,
   }

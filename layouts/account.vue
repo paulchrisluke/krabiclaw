@@ -26,7 +26,10 @@ import { authClient } from '~/lib/auth-client'
 useSeoMeta({ robots: 'noindex, nofollow' })
 
 async function signOut() {
-  await authClient.signOut()
-  await navigateTo('/login')
+  try {
+    await authClient.signOut()
+  } finally {
+    await navigateTo('/login')
+  }
 }
 </script>

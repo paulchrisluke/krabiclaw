@@ -85,22 +85,6 @@ async function queryFirst<T>(db: Store, query: string, params: unknown[] = []): 
     return row as T | undefined
   }
 
-  if (query.includes('SELECT COUNT(*) AS count FROM reservation_submissions')) {
-    const [customerId, date] = params
-    const count = db.reservationSubmissions.filter((r) =>
-      r.customer_id === customerId && (r.date as string) >= (date as string) && r.status !== 'cancelled',
-    ).length
-    return { count } as T
-  }
-
-  if (query.includes('SELECT COUNT(*) AS count FROM experience_bookings')) {
-    const [customerId, date] = params
-    const count = db.experienceBookings.filter((r) =>
-      r.customer_id === customerId && (r.booking_date as string) >= (date as string) && r.status !== 'cancelled',
-    ).length
-    return { count } as T
-  }
-
   throw new Error(`Unexpected queryFirst query: ${query}`)
 }
 
@@ -140,6 +124,30 @@ async function queryAll<T>(db: Store, query: string, params: unknown[] = []): Pr
           last_booking_at: c.last_booking_at ?? null,
         }
       }) as T[]
+  }
+
+  if (query.includes('FROM reservation_submissions') && query.includes('GROUP BY customer_id')) {
+    const date = params[params.length - 1] as string
+    const customerIds = params.slice(0, -1) as string[]
+    const counts = new Map<string, number>()
+    for (const r of db.reservationSubmissions) {
+      if (!customerIds.includes(r.customer_id as string)) continue
+      if ((r.date as string) < date || r.status === 'cancelled') continue
+      counts.set(r.customer_id as string, (counts.get(r.customer_id as string) ?? 0) + 1)
+    }
+    return [...counts.entries()].map(([customer_id, count]) => ({ customer_id, count })) as T[]
+  }
+
+  if (query.includes('FROM experience_bookings') && query.includes('GROUP BY customer_id')) {
+    const date = params[params.length - 1] as string
+    const customerIds = params.slice(0, -1) as string[]
+    const counts = new Map<string, number>()
+    for (const r of db.experienceBookings) {
+      if (!customerIds.includes(r.customer_id as string)) continue
+      if ((r.booking_date as string) < date || r.status === 'cancelled') continue
+      counts.set(r.customer_id as string, (counts.get(r.customer_id as string) ?? 0) + 1)
+    }
+    return [...counts.entries()].map(([customer_id, count]) => ({ customer_id, count })) as T[]
   }
 
   throw new Error(`Unexpected queryAll query: ${query}`)
@@ -297,6 +305,60 @@ test('createClaimRequest issues a pending claim without linking the account yet'
   assert.equal(db.customers[0]?.user_id, null, 'requesting a claim must not link the row by itself')
   assert.equal(db.customerClaims.length, 1)
   assert.equal(db.customerClaims[0]?.status, 'pending')
+})
+
+test('createClaimRequest returns not_found for a nonexistent customerId', async () => {
+  const db = createStore()
+
+  const result = await createClaimRequest(db as unknown as D1Database, {
+    customerId: 'does-not-exist',
+    userId: 'user-1',
+    userEmail: 'guest@example.com',
+  })
+
+  assert.deepEqual(result, { ok: false, reason: 'not_found' })
+})
+
+test('createClaimRequest returns not_found for an inactive (e.g. suppressed) customer row', async () => {
+  const db = createStore()
+  seedUnclaimedCustomer(db, { status: 'suppressed' })
+
+  const result = await createClaimRequest(db as unknown as D1Database, {
+    customerId: 'customer-1',
+    userId: 'user-1',
+    userEmail: 'guest@example.com',
+  })
+
+  assert.deepEqual(result, { ok: false, reason: 'not_found' })
+})
+
+test('createClaimRequest rejects a new request once a prior claim for the same (customer, user) is already verified', async () => {
+  const db = createStore()
+  seedUnclaimedCustomer(db)
+
+  const request = await createClaimRequest(db as unknown as D1Database, {
+    customerId: 'customer-1',
+    userId: 'user-1',
+    userEmail: 'guest@example.com',
+  })
+  assert.equal(request.ok, true)
+  if (!request.ok) return
+
+  const verified = await verifyClaimToken(db as unknown as D1Database, request.rawToken, 'user-1')
+  assert.equal(verified.ok, true)
+
+  // Reset the customer's user_id to bypass createClaimRequest's earlier
+  // "already-linked customer row" check, so this second call actually reaches
+  // the INSERT ... ON CONFLICT(customer_id, user_id) ... WHERE status <> 'verified'
+  // clause — which is the code path this test targets.
+  db.customers[0]!.user_id = null
+  const result = await createClaimRequest(db as unknown as D1Database, {
+    customerId: 'customer-1',
+    userId: 'user-1',
+    userEmail: 'guest@example.com',
+  })
+
+  assert.deepEqual(result, { ok: false, reason: 'already_linked' })
 })
 
 test('createClaimRequest atomically rotates an existing pending claim', async () => {

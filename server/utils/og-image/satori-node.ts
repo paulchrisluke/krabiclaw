@@ -19,6 +19,7 @@ export function node(
   type: string,
   style: Record<string, string | number> = {},
   children?: SatoriNode['props']['children'],
+  attrs?: { src?: string, width?: number, height?: number },
 ): SatoriNode {
-  return { type, props: { style, children } }
+  return { type, props: { style, children, ...attrs } }
 }

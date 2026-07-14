@@ -590,8 +590,11 @@ if (!isPlatform && siteId && !isBlawbyPage.value) {
     return `${primary} | ${secondary}`
   })
 
+  // Full-length fallback-resolved description — composeSocialMetadata (the
+  // shared #259 composer) does its own platform-appropriate truncation, so
+  // this page shouldn't pre-truncate and risk drifting from that length.
   const seoDescription = computed(() =>
-    truncateForSeo(bootstrapConfig.value?.seo_description || businessSubtitle.value || 'Professional business website with photos, updates and reviews.', 160)
+    bootstrapConfig.value?.seo_description || businessSubtitle.value || 'Professional business website with photos, updates and reviews.'
   )
 
   useTenantSocialMetadata(() => ({

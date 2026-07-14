@@ -44,7 +44,7 @@ export function buildOgImageCard(payload: RenderInputs, variant: OgImageCardVari
         width: OG_IMAGE_WIDTH,
         height: OG_IMAGE_HEIGHT,
         objectFit: 'cover',
-      })
+      }, undefined, { src: payload.backgroundImageDataUri })
     : node('div', {
         position: 'absolute',
         top: 0,
@@ -54,10 +54,6 @@ export function buildOgImageCard(payload: RenderInputs, variant: OgImageCardVari
         backgroundImage: `linear-gradient(135deg, ${primary}, ${secondary})`,
         display: 'flex',
       })
-
-  if (payload.backgroundImageDataUri) {
-    background.props.src = payload.backgroundImageDataUri
-  }
 
   // Legibility overlay: always present so title/description text stays readable whether
   // the background is a photo or a flat gradient.
@@ -130,7 +126,7 @@ export function buildOgImageCard(payload: RenderInputs, variant: OgImageCardVari
     { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 36 },
     [
       payload.logoDataUri
-        ? node('img', { width: 44, height: 44, borderRadius: 8 }, undefined)
+        ? node('img', { width: 44, height: 44, borderRadius: 8 }, undefined, { src: payload.logoDataUri, width: 44, height: 44 })
         : node('div', {
             display: 'flex',
             width: 44,
@@ -145,10 +141,6 @@ export function buildOgImageCard(payload: RenderInputs, variant: OgImageCardVari
       ),
     ],
   )
-  if (payload.logoDataUri) {
-    const logoImg = (brandRow.props.children as SatoriNode[])[0]
-    if (logoImg) logoImg.props.src = payload.logoDataUri
-  }
 
   const content = node(
     'div',

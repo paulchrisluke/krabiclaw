@@ -44,6 +44,8 @@ export function useSocialMetadata(
     twitterDescription: computed(() => tags.value.twitterDescription),
     twitterImage: computed(() => tags.value.twitterImage),
     twitterImageAlt: computed(() => tags.value.twitterImageAlt),
+    articleAuthor: computed(() => tags.value.articleAuthor),
+    articlePublishedTime: computed(() => tags.value.articlePublishedTime),
   })
 
   useHead(() => ({
