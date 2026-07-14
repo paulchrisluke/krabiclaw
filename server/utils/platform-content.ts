@@ -217,6 +217,7 @@ export interface PlatformBlogCreateInput extends PlatformStructuredContentInput,
   body: string
   excerpt?: string | null
   category?: string | null
+  tags?: string[] | null
   seo_title?: string | null
   seo_description?: string | null
   seo_keywords?: string | null
@@ -231,6 +232,7 @@ export interface PlatformBlogUpdateInput extends PlatformStructuredContentInput,
   body?: string
   excerpt?: string | null
   category?: string | null
+  tags?: string[] | null
   seo_title?: string | null
   seo_description?: string | null
   seo_keywords?: string | null
@@ -896,9 +898,17 @@ function attachPublished(record: ApiRecord, published: boolean) {
 }
 
 function normalizeNavVisibility<T extends Record<string, unknown>>(record: T) {
-  if (!('hide_from_nav' in record)) return record
+  const normalized = { ...record } as T & { tags?: string[]; tags_json?: unknown }
+  if ('tags_json' in record) {
+    const tags = typeof record.tags_json === 'string'
+      ? (() => { try { return JSON.parse(record.tags_json) as string[] } catch { return [] } })()
+      : []
+    normalized.tags = tags
+    delete normalized.tags_json
+  }
+  if (!('hide_from_nav' in record)) return normalized
   return {
-    ...record,
+    ...normalized,
     hide_from_nav: Boolean(record.hide_from_nav),
   }
 }
@@ -989,7 +999,7 @@ function contentReviewUrls(record: ApiRecord, kind: 'blog' | 'doc', siteId: stri
 export async function getPublishedPlatformBlogPost(db: DbClient, category: string, slug: string) {
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
-      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_title, p.seo_description, p.seo_keywords,
+      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.tags_json, p.seo_title, p.seo_description, p.seo_keywords,
       p.canonical_url, p.robots,
       p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
       p.published_at, p.created_at, p.updated_at,
@@ -1091,6 +1101,10 @@ function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant = 
   if (input.category !== undefined) {
     assertStringLength(input.category ?? null, BLOG_CATEGORY_MAX, 'category')
     if (!isTenant) assertValidBlogCategory(input.category ?? null)
+  }
+  if (input.tags !== undefined && input.tags !== null) {
+    if (!Array.isArray(input.tags) || input.tags.some(tag => typeof tag !== 'string' || !tag.trim() || tag.length > 80)) badRequest('tags must be an array of non-empty strings up to 80 characters each')
+    input.tags = [...new Set(input.tags.map(tag => tag.trim()))].slice(0, 20)
   }
   if (input.seo_title !== undefined) assertStringLength(input.seo_title ?? null, BLOG_SEO_TITLE_MAX, 'seo_title')
   if (input.seo_description !== undefined) assertStringLength(input.seo_description ?? null, BLOG_SEO_DESCRIPTION_MAX, 'seo_description')
@@ -1272,8 +1286,8 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
 export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slug: string) {
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
-      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_title, p.seo_description, p.seo_keywords,
-      p.canonical_url, p.robots,
+      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.tags_json, p.seo_title, p.seo_description, p.seo_keywords,
+      p.canonical_url, p.robots, p.featured_order,
       p.published_at, p.created_at, p.updated_at,
       p.featured_image_asset_id,
       u.name AS author_name,
@@ -1323,8 +1337,8 @@ export async function createPlatformBlogPost(
     const slug = attempt === 0 ? slugBase : `${slugBase}-${randomSlugSuffix()}`
     try {
       await execute(db, `
-        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, nav_section, nav_title, nav_order, nav_section_order, hide_from_nav, featured_order, status, seo_title, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, author_id, published_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, tags_json, nav_section, nav_title, nav_order, nav_section_order, hide_from_nav, featured_order, status, seo_title, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, author_id, published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
         id,
         organizationId,
         siteId,
@@ -1333,6 +1347,7 @@ export async function createPlatformBlogPost(
         input.body,
         input.excerpt ?? null,
         input.category ?? null,
+        input.tags ? JSON.stringify(input.tags) : null,
         input.nav_section ?? null,
         input.nav_title ?? null,
         input.nav_order != null ? Number(input.nav_order) : null,
@@ -1409,13 +1424,10 @@ export async function updatePlatformBlogPost(
 
   if (input.title !== undefined) {
     if (!input.title?.trim()) badRequest('title cannot be blank')
-    const slug = normalizeSlugFromTitle(input.title, 'post')
-    const scopeClause = siteId ? 'site_id = ?' : 'site_id IS NULL'
-    const scopeParams = siteId ? [siteId] : []
-    const existing = await queryFirst(db, `SELECT id FROM blog_posts WHERE slug = ? AND id != ? AND ${scopeClause} LIMIT 1`, [slug, postId, ...scopeParams])
-    if (existing) badRequest('Slug already in use')
-    updates.push('title = ?', 'slug = ?')
-    params.push(input.title, slug)
+    // Published URLs are durable identifiers. A headline edit must not silently
+    // move the article and break inbound links, feeds, search, or tenant schema.
+    updates.push('title = ?')
+    params.push(input.title)
   }
 
   if (input.body !== undefined) {
@@ -1467,6 +1479,10 @@ export async function updatePlatformBlogPost(
       updates.push(`${field} = ?`)
       params.push(input[field] as ApiValue)
     }
+  }
+  if (input.tags !== undefined) {
+    updates.push('tags_json = ?')
+    params.push(input.tags ? JSON.stringify(input.tags) : null)
   }
   if (input.hide_from_nav !== undefined) {
     updates.push('hide_from_nav = ?')

@@ -15,8 +15,9 @@ export default defineEventHandler(async (event) => {
   const siteSlug = typeof query.siteSlug === 'string' ? query.siteSlug : ''
   const locationSlug = typeof query.locationSlug === 'string' ? query.locationSlug : ''
   const validTypes = new Set<string>(PUBLIC_SEARCH_TYPES)
-  const validSurfaces = new Set(['public', 'docs', 'blog', 'dashboard', 'help', 'chowbot'])
+  const validSurfaces = new Set(['public', 'docs', 'blog', 'dashboard', 'help', 'chowbot', 'tenant_blog'])
   const requiresDashboardAuth = surface === 'dashboard' || type === 'dashboard_route'
+  const isTenantRequest = event.context.tenantType === 'tenant' && Boolean(event.context.siteId)
 
   if (!q.trim()) {
     return jsonResponse({ error: 'q is required' }, { status: 400 })
@@ -25,7 +26,14 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'type must be one of all, doc, blog, faq, route, platform_page, dashboard_route' }, { status: 400 })
   }
   if (!validSurfaces.has(surface)) {
-    return jsonResponse({ error: 'surface must be one of public, docs, blog, dashboard, help, chowbot' }, { status: 400 })
+    return jsonResponse({ error: 'surface must be one of public, docs, blog, dashboard, help, chowbot, tenant_blog' }, { status: 400 })
+  }
+  // tenant_blog is a single shared corpus across every tenant, scoped by
+  // site_id at query time — without a resolved tenant site there is no safe
+  // site_id to scope by, and returning unscoped results would leak every
+  // other tenant's blog posts.
+  if (surface === 'tenant_blog' && !isTenantRequest) {
+    return jsonResponse({ error: 'tenant_blog surface requires a tenant site' }, { status: 400 })
   }
 
   const env = cloudflareEnv(event)
@@ -56,9 +64,9 @@ export default defineEventHandler(async (event) => {
 
     const results = await searchPublicResources(env, q, {
       type: type as PublicSearchTypeFilter,
-      surface: surface as 'public' | 'docs' | 'blog' | 'dashboard' | 'help' | 'chowbot',
+      surface: surface as 'public' | 'docs' | 'blog' | 'dashboard' | 'help' | 'chowbot' | 'tenant_blog',
       limit: 10,
-      siteId: event.context.tenantType === 'tenant' ? String(event.context.siteId || '') : null,
+      siteId: isTenantRequest && surface === 'tenant_blog' ? String(event.context.siteId) : null,
       dashboardContext: requiresDashboardAuth
         ? {
             orgSlug: orgSlug || null,

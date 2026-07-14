@@ -1,7 +1,8 @@
 // SEO 301 redirects for legacy legal URLs
-import { defineEventHandler, getMethod, getRequestHeader, getRequestURL, sendRedirect } from 'h3'
+import { createError, defineEventHandler, getMethod, getRequestHeader, getRequestURL, sendRedirect, setResponseHeader } from 'h3'
 import { queryAll } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
+import { isBlawbyTemplate } from '~/utils/template-registry'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 
 const redirects: Record<string, string> = {
@@ -34,10 +35,56 @@ export default defineEventHandler(async (event) => {
     return sendRedirect(event, targetWithParams, 301)
   }
 
+  const tenantRedirect = event.context.tenantRedirect as {
+    toPath: string | null
+    statusCode: number | null
+    behavior: string
+  } | null | undefined
+  if (event.context.tenantType === TENANT_TYPES.TENANT && tenantRedirect) {
+    if (tenantRedirect.behavior === 'gone') {
+      throw createError({ statusCode: 410, statusMessage: 'Gone' })
+    }
+    if (tenantRedirect.behavior === 'noindex') {
+      setResponseHeader(event, 'x-robots-tag', 'noindex, nofollow')
+    }
+    if (tenantRedirect.behavior === 'redirect') {
+      const isLocalTarget = Boolean(tenantRedirect.toPath && /^\/(?![/\\])/.test(tenantRedirect.toPath))
+      const isApprovedMediaTarget = (() => {
+        try {
+          const targetUrl = new URL(tenantRedirect.toPath || '')
+          return targetUrl.protocol === 'https:' && ['media.krabiclaw.com', 'images.krabiclaw.com'].includes(targetUrl.hostname)
+        } catch {
+          return false
+        }
+      })()
+      if (!isLocalTarget && !isApprovedMediaTarget) {
+        throw createError({ statusCode: 500, statusMessage: 'Invalid tenant redirect target' })
+      }
+      const statusCode = [301, 302, 307, 308].includes(tenantRedirect.statusCode ?? 0)
+        ? tenantRedirect.statusCode!
+        : 301
+      const target = isLocalTarget
+        ? `${tenantRedirect.toPath}${url.search}${url.hash}`
+        : (() => {
+            const external = new URL(tenantRedirect.toPath!)
+            external.search = url.search
+            external.hash = url.hash
+            return external.toString()
+          })()
+      return sendRedirect(event, target, statusCode)
+    }
+  }
+
   // Server-side redirect for single-location sites
   // Only run if tenant data is available (set by tenant-resolution middleware)
   // Use 302 (temporary) since the single-location condition can change over time
-  if (normalizedPathname === '/' && event.context.tenantType === TENANT_TYPES.TENANT && event.context.siteId) {
+  const isBlawbyTenant = isBlawbyTemplate({
+    theme: event.context.site?.theme,
+    themeId: event.context.themeId,
+    vertical: event.context.site?.vertical,
+  })
+
+  if (normalizedPathname === '/' && event.context.tenantType === TENANT_TYPES.TENANT && event.context.siteId && !isBlawbyTenant) {
     const env = cloudflareEnv(event)
     const db = env.db
     if (db) {

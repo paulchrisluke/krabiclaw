@@ -130,6 +130,17 @@
           </UCard>
         </div>
 
+        <div v-if="isProfessionalService" class="flex flex-wrap items-center justify-between gap-3 border-y border-default py-4">
+          <div>
+            <h2 class="text-sm font-semibold text-highlighted">Firm-wide content</h2>
+            <p class="mt-1 text-xs text-muted">Manage Q&A and reviews that apply to the whole site.</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <UButton icon="i-lucide-circle-help" color="neutral" variant="soft" :to="`${siteDashboardPath}/qa`">Q&A</UButton>
+            <UButton icon="i-lucide-star" color="neutral" variant="soft" :to="`${siteDashboardPath}/reviews`">Reviews</UButton>
+          </div>
+        </div>
+
         <!-- Locations header + new button -->
         <div class="flex items-center justify-between">
           <h2 class="text-sm font-semibold text-highlighted">Locations</h2>
@@ -255,6 +266,8 @@ const { data, pending } = await useAsyncData(
 )
 
 const locations = computed(() => data.value?.locations ?? [])
+const isProfessionalService = computed(() => ['service', 'professional_service'].includes(dashboardState.site.value?.vertical ?? ''))
+const siteDashboardPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}`)
 const credits = computed(() => data.value?.credits ?? null)
 const events = computed(() => data.value?.events ?? [])
 

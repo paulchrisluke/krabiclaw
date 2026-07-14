@@ -10,7 +10,7 @@ interface DashboardSite {
   id: string
   organization_id: string
   brand_name: string | null
-  vertical: 'restaurant' | 'experience' | null
+  vertical: 'restaurant' | 'experience' | 'service' | 'professional_service' | null
   subdomain: string | null
   custom_domain: string | null
   public_url: string | null

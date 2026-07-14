@@ -1,0 +1,3246 @@
+{
+  "schema_version": 2,
+  "captured_at": "2026-07-10T17:04:58.339Z",
+  "source": "blawby",
+  "source_revision": "working-tree",
+  "pinned_reference_revision": "5908ab3e64f26f799de61ed55371d02f9ec7bc2f",
+  "pinned_reference_etag": "\"no9z3zb5633rez\"",
+  "observed_reference_etag": null,
+  "base_url": "http://ncls.localhost:3000",
+  "browser": {
+    "name": "chromium",
+    "version": "147.0.7727.15",
+    "device_scale_factor": 1
+  },
+  "rendering": {
+    "color_scheme": "light",
+    "locale": "en-US",
+    "reduced_motion": true,
+    "timezone": "America/New_York"
+  },
+  "screenshots": [
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "mobile",
+      "status": 200,
+      "file": "screenshots/blawby/home-mobile.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "mobile",
+      "status": 200,
+      "file": "screenshots/blawby/services-mobile.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "mobile",
+      "status": 200,
+      "file": "screenshots/blawby/service-detail-mobile.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "mobile",
+      "status": 200,
+      "file": "screenshots/blawby/about-mobile.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "mobile",
+      "status": 200,
+      "file": "screenshots/blawby/pricing-mobile.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "mobile",
+      "status": 200,
+      "file": "screenshots/blawby/contact-mobile.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "mobile",
+      "status": 200,
+      "file": "screenshots/blawby/schedule-mobile.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "mobile",
+      "status": 200,
+      "file": "screenshots/blawby/blog-mobile.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "mobile",
+      "status": 200,
+      "file": "screenshots/blawby/article-mobile.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "mobile",
+      "status": 200,
+      "file": "screenshots/blawby/donate-mobile.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "mobile",
+      "status": 200,
+      "file": "screenshots/blawby/privacy-mobile.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "mobile",
+      "status": 200,
+      "file": "screenshots/blawby/terms-mobile.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "mobile",
+      "status": 200,
+      "file": "screenshots/blawby/notices-mobile.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "tablet",
+      "status": 200,
+      "file": "screenshots/blawby/home-tablet.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "tablet",
+      "status": 200,
+      "file": "screenshots/blawby/services-tablet.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "tablet",
+      "status": 200,
+      "file": "screenshots/blawby/service-detail-tablet.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "tablet",
+      "status": 200,
+      "file": "screenshots/blawby/about-tablet.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "tablet",
+      "status": 200,
+      "file": "screenshots/blawby/pricing-tablet.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "tablet",
+      "status": 200,
+      "file": "screenshots/blawby/contact-tablet.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "tablet",
+      "status": 200,
+      "file": "screenshots/blawby/schedule-tablet.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "tablet",
+      "status": 200,
+      "file": "screenshots/blawby/blog-tablet.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "tablet",
+      "status": 200,
+      "file": "screenshots/blawby/article-tablet.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "tablet",
+      "status": 200,
+      "file": "screenshots/blawby/donate-tablet.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "tablet",
+      "status": 200,
+      "file": "screenshots/blawby/privacy-tablet.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "tablet",
+      "status": 200,
+      "file": "screenshots/blawby/terms-tablet.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "tablet",
+      "status": 200,
+      "file": "screenshots/blawby/notices-tablet.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "desktop",
+      "status": 200,
+      "file": "screenshots/blawby/home-desktop.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "desktop",
+      "status": 200,
+      "file": "screenshots/blawby/services-desktop.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "desktop",
+      "status": 200,
+      "file": "screenshots/blawby/service-detail-desktop.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "desktop",
+      "status": 200,
+      "file": "screenshots/blawby/about-desktop.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "desktop",
+      "status": 200,
+      "file": "screenshots/blawby/pricing-desktop.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "desktop",
+      "status": 200,
+      "file": "screenshots/blawby/contact-desktop.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "desktop",
+      "status": 200,
+      "file": "screenshots/blawby/schedule-desktop.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "desktop",
+      "status": 200,
+      "file": "screenshots/blawby/blog-desktop.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "desktop",
+      "status": 200,
+      "file": "screenshots/blawby/article-desktop.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "desktop",
+      "status": 200,
+      "file": "screenshots/blawby/donate-desktop.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "desktop",
+      "status": 200,
+      "file": "screenshots/blawby/privacy-desktop.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "desktop",
+      "status": 200,
+      "file": "screenshots/blawby/terms-desktop.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "desktop",
+      "status": 200,
+      "file": "screenshots/blawby/notices-desktop.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "wide",
+      "status": 200,
+      "file": "screenshots/blawby/home-wide.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "wide",
+      "status": 200,
+      "file": "screenshots/blawby/services-wide.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "wide",
+      "status": 200,
+      "file": "screenshots/blawby/service-detail-wide.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "wide",
+      "status": 200,
+      "file": "screenshots/blawby/about-wide.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "wide",
+      "status": 200,
+      "file": "screenshots/blawby/pricing-wide.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "wide",
+      "status": 200,
+      "file": "screenshots/blawby/contact-wide.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "wide",
+      "status": 200,
+      "file": "screenshots/blawby/schedule-wide.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "wide",
+      "status": 200,
+      "file": "screenshots/blawby/blog-wide.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "wide",
+      "status": 200,
+      "file": "screenshots/blawby/article-wide.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "wide",
+      "status": 200,
+      "file": "screenshots/blawby/donate-wide.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "wide",
+      "status": 200,
+      "file": "screenshots/blawby/privacy-wide.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "wide",
+      "status": 200,
+      "file": "screenshots/blawby/terms-wide.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "wide",
+      "status": 200,
+      "file": "screenshots/blawby/notices-wide.png"
+    }
+  ],
+  "sections": [
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "mobile",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/home/mobile/header-header.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "mobile",
+      "slot": "main-01",
+      "name": "hero",
+      "file": "screenshots/blawby/sections/home/mobile/main-01-hero.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "mobile",
+      "slot": "main-02",
+      "name": "services",
+      "file": "screenshots/blawby/sections/home/mobile/main-02-services.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "mobile",
+      "slot": "main-03",
+      "name": "approach",
+      "file": "screenshots/blawby/sections/home/mobile/main-03-approach.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "mobile",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/home/mobile/main-04-qa.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "mobile",
+      "slot": "main-05",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/home/mobile/main-05-reviews.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "mobile",
+      "slot": "main-06",
+      "name": "articles",
+      "file": "screenshots/blawby/sections/home/mobile/main-06-articles.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "mobile",
+      "slot": "main-07",
+      "name": "articles-more",
+      "file": "screenshots/blawby/sections/home/mobile/main-07-articles-more.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "mobile",
+      "slot": "main-08",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/home/mobile/main-08-consultation.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "mobile",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/home/mobile/footer-footer.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "mobile",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/services/mobile/header-header.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "mobile",
+      "slot": "main-01",
+      "name": "services",
+      "file": "screenshots/blawby/sections/services/mobile/main-01-services.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "mobile",
+      "slot": "main-02",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/services/mobile/main-02-qa.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "mobile",
+      "slot": "main-03",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/services/mobile/main-03-consultation.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "mobile",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/services/mobile/footer-footer.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "mobile",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/service-detail/mobile/header-header.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "mobile",
+      "slot": "main-01",
+      "name": "service-overview",
+      "file": "screenshots/blawby/sections/service-detail/mobile/main-01-service-overview.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "mobile",
+      "slot": "main-02",
+      "name": "features",
+      "file": "screenshots/blawby/sections/service-detail/mobile/main-02-features.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "mobile",
+      "slot": "main-03",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/service-detail/mobile/main-03-reviews.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "mobile",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/service-detail/mobile/main-04-qa.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "mobile",
+      "slot": "main-05",
+      "name": "related-services",
+      "file": "screenshots/blawby/sections/service-detail/mobile/main-05-related-services.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "mobile",
+      "slot": "main-06",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/service-detail/mobile/main-06-consultation.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "mobile",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/service-detail/mobile/footer-footer.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "mobile",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/about/mobile/header-header.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "mobile",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/about/mobile/main-01-page-hero.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "mobile",
+      "slot": "main-02",
+      "name": "team",
+      "file": "screenshots/blawby/sections/about/mobile/main-02-team.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "mobile",
+      "slot": "main-03",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/about/mobile/main-03-shield-divider.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "mobile",
+      "slot": "main-04",
+      "name": "impact",
+      "file": "screenshots/blawby/sections/about/mobile/main-04-impact.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "mobile",
+      "slot": "main-05",
+      "name": "services",
+      "file": "screenshots/blawby/sections/about/mobile/main-05-services.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "mobile",
+      "slot": "main-06",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/about/mobile/main-06-qa.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "mobile",
+      "slot": "main-07",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/about/mobile/main-07-reviews.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "mobile",
+      "slot": "main-08",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/about/mobile/main-08-consultation.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "mobile",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/about/mobile/footer-footer.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "mobile",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/pricing/mobile/header-header.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "mobile",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/pricing/mobile/main-01-page-hero.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "mobile",
+      "slot": "main-02",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/pricing/mobile/main-02-shield-divider.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "mobile",
+      "slot": "main-03",
+      "name": "pricing",
+      "file": "screenshots/blawby/sections/pricing/mobile/main-03-pricing.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "mobile",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/pricing/mobile/main-04-qa.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "mobile",
+      "slot": "main-05",
+      "name": "services",
+      "file": "screenshots/blawby/sections/pricing/mobile/main-05-services.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "mobile",
+      "slot": "main-06",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/pricing/mobile/main-06-consultation.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "mobile",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/pricing/mobile/footer-footer.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "mobile",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/contact/mobile/header-header.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "mobile",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/contact/mobile/main-01-page-hero.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "mobile",
+      "slot": "main-02",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/contact/mobile/main-02-shield-divider.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "mobile",
+      "slot": "main-03",
+      "name": "contact",
+      "file": "screenshots/blawby/sections/contact/mobile/main-03-contact.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "mobile",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/contact/mobile/main-04-qa.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "mobile",
+      "slot": "main-05",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/contact/mobile/main-05-reviews.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "mobile",
+      "slot": "main-06",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/contact/mobile/main-06-consultation.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "mobile",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/contact/mobile/footer-footer.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "mobile",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/schedule/mobile/header-header.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "mobile",
+      "slot": "main-01",
+      "name": "schedule-hero",
+      "file": "screenshots/blawby/sections/schedule/mobile/main-01-schedule-hero.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "mobile",
+      "slot": "main-02",
+      "name": "guidance",
+      "file": "screenshots/blawby/sections/schedule/mobile/main-02-guidance.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "mobile",
+      "slot": "main-03",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/schedule/mobile/main-03-qa.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "mobile",
+      "slot": "main-04",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/schedule/mobile/main-04-reviews.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "mobile",
+      "slot": "main-05",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/schedule/mobile/main-05-consultation.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "mobile",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/schedule/mobile/footer-footer.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "mobile",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/blog/mobile/header-header.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "mobile",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/blog/mobile/main-01-page-hero.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "mobile",
+      "slot": "main-02",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/blog/mobile/main-02-shield-divider.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "mobile",
+      "slot": "main-03",
+      "name": "articles",
+      "file": "screenshots/blawby/sections/blog/mobile/main-03-articles.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "mobile",
+      "slot": "main-04",
+      "name": "disclaimer",
+      "file": "screenshots/blawby/sections/blog/mobile/main-04-disclaimer.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "mobile",
+      "slot": "main-05",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/blog/mobile/main-05-qa.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "mobile",
+      "slot": "main-06",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/blog/mobile/main-06-consultation.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "mobile",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/blog/mobile/footer-footer.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "mobile",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/article/mobile/header-header.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "mobile",
+      "slot": "main-01",
+      "name": "article-content",
+      "file": "screenshots/blawby/sections/article/mobile/main-01-article-content.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "mobile",
+      "slot": "main-02",
+      "name": "related-articles",
+      "file": "screenshots/blawby/sections/article/mobile/main-02-related-articles.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "mobile",
+      "slot": "main-03",
+      "name": "related-articles-more",
+      "file": "screenshots/blawby/sections/article/mobile/main-03-related-articles-more.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "mobile",
+      "slot": "main-04",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/article/mobile/main-04-consultation.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "mobile",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/article/mobile/footer-footer.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "mobile",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/donate/mobile/header-header.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "mobile",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/donate/mobile/main-01-page-hero.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "mobile",
+      "slot": "main-02",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/donate/mobile/main-02-shield-divider.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "mobile",
+      "slot": "main-03",
+      "name": "donation",
+      "file": "screenshots/blawby/sections/donate/mobile/main-03-donation.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "mobile",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/donate/mobile/main-04-qa.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "mobile",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/donate/mobile/footer-footer.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "mobile",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/privacy/mobile/header-header.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "mobile",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/privacy/mobile/main-01-page-hero.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "mobile",
+      "slot": "main-02",
+      "name": "legal-content",
+      "file": "screenshots/blawby/sections/privacy/mobile/main-02-legal-content.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "mobile",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/privacy/mobile/footer-footer.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "mobile",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/terms/mobile/header-header.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "mobile",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/terms/mobile/main-01-page-hero.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "mobile",
+      "slot": "main-02",
+      "name": "legal-content",
+      "file": "screenshots/blawby/sections/terms/mobile/main-02-legal-content.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "mobile",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/terms/mobile/footer-footer.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "mobile",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/notices/mobile/header-header.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "mobile",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/notices/mobile/main-01-page-hero.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "mobile",
+      "slot": "main-02",
+      "name": "notices",
+      "file": "screenshots/blawby/sections/notices/mobile/main-02-notices.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "mobile",
+      "slot": "main-03",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/notices/mobile/main-03-consultation.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "mobile",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/notices/mobile/footer-footer.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "tablet",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/home/tablet/header-header.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "tablet",
+      "slot": "main-01",
+      "name": "hero",
+      "file": "screenshots/blawby/sections/home/tablet/main-01-hero.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "tablet",
+      "slot": "main-02",
+      "name": "services",
+      "file": "screenshots/blawby/sections/home/tablet/main-02-services.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "tablet",
+      "slot": "main-03",
+      "name": "approach",
+      "file": "screenshots/blawby/sections/home/tablet/main-03-approach.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "tablet",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/home/tablet/main-04-qa.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "tablet",
+      "slot": "main-05",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/home/tablet/main-05-reviews.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "tablet",
+      "slot": "main-06",
+      "name": "articles",
+      "file": "screenshots/blawby/sections/home/tablet/main-06-articles.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "tablet",
+      "slot": "main-07",
+      "name": "articles-more",
+      "file": "screenshots/blawby/sections/home/tablet/main-07-articles-more.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "tablet",
+      "slot": "main-08",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/home/tablet/main-08-consultation.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "tablet",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/home/tablet/footer-footer.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "tablet",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/services/tablet/header-header.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "tablet",
+      "slot": "main-01",
+      "name": "services",
+      "file": "screenshots/blawby/sections/services/tablet/main-01-services.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "tablet",
+      "slot": "main-02",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/services/tablet/main-02-qa.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "tablet",
+      "slot": "main-03",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/services/tablet/main-03-consultation.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "tablet",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/services/tablet/footer-footer.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "tablet",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/service-detail/tablet/header-header.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "tablet",
+      "slot": "main-01",
+      "name": "service-overview",
+      "file": "screenshots/blawby/sections/service-detail/tablet/main-01-service-overview.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "tablet",
+      "slot": "main-02",
+      "name": "features",
+      "file": "screenshots/blawby/sections/service-detail/tablet/main-02-features.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "tablet",
+      "slot": "main-03",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/service-detail/tablet/main-03-reviews.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "tablet",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/service-detail/tablet/main-04-qa.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "tablet",
+      "slot": "main-05",
+      "name": "related-services",
+      "file": "screenshots/blawby/sections/service-detail/tablet/main-05-related-services.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "tablet",
+      "slot": "main-06",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/service-detail/tablet/main-06-consultation.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "tablet",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/service-detail/tablet/footer-footer.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "tablet",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/about/tablet/header-header.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "tablet",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/about/tablet/main-01-page-hero.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "tablet",
+      "slot": "main-02",
+      "name": "team",
+      "file": "screenshots/blawby/sections/about/tablet/main-02-team.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "tablet",
+      "slot": "main-03",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/about/tablet/main-03-shield-divider.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "tablet",
+      "slot": "main-04",
+      "name": "impact",
+      "file": "screenshots/blawby/sections/about/tablet/main-04-impact.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "tablet",
+      "slot": "main-05",
+      "name": "services",
+      "file": "screenshots/blawby/sections/about/tablet/main-05-services.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "tablet",
+      "slot": "main-06",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/about/tablet/main-06-qa.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "tablet",
+      "slot": "main-07",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/about/tablet/main-07-reviews.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "tablet",
+      "slot": "main-08",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/about/tablet/main-08-consultation.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "tablet",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/about/tablet/footer-footer.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "tablet",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/pricing/tablet/header-header.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "tablet",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/pricing/tablet/main-01-page-hero.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "tablet",
+      "slot": "main-02",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/pricing/tablet/main-02-shield-divider.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "tablet",
+      "slot": "main-03",
+      "name": "pricing",
+      "file": "screenshots/blawby/sections/pricing/tablet/main-03-pricing.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "tablet",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/pricing/tablet/main-04-qa.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "tablet",
+      "slot": "main-05",
+      "name": "services",
+      "file": "screenshots/blawby/sections/pricing/tablet/main-05-services.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "tablet",
+      "slot": "main-06",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/pricing/tablet/main-06-consultation.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "tablet",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/pricing/tablet/footer-footer.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "tablet",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/contact/tablet/header-header.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "tablet",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/contact/tablet/main-01-page-hero.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "tablet",
+      "slot": "main-02",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/contact/tablet/main-02-shield-divider.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "tablet",
+      "slot": "main-03",
+      "name": "contact",
+      "file": "screenshots/blawby/sections/contact/tablet/main-03-contact.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "tablet",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/contact/tablet/main-04-qa.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "tablet",
+      "slot": "main-05",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/contact/tablet/main-05-reviews.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "tablet",
+      "slot": "main-06",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/contact/tablet/main-06-consultation.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "tablet",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/contact/tablet/footer-footer.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "tablet",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/schedule/tablet/header-header.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "tablet",
+      "slot": "main-01",
+      "name": "schedule-hero",
+      "file": "screenshots/blawby/sections/schedule/tablet/main-01-schedule-hero.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "tablet",
+      "slot": "main-02",
+      "name": "guidance",
+      "file": "screenshots/blawby/sections/schedule/tablet/main-02-guidance.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "tablet",
+      "slot": "main-03",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/schedule/tablet/main-03-qa.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "tablet",
+      "slot": "main-04",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/schedule/tablet/main-04-reviews.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "tablet",
+      "slot": "main-05",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/schedule/tablet/main-05-consultation.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "tablet",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/schedule/tablet/footer-footer.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "tablet",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/blog/tablet/header-header.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "tablet",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/blog/tablet/main-01-page-hero.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "tablet",
+      "slot": "main-02",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/blog/tablet/main-02-shield-divider.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "tablet",
+      "slot": "main-03",
+      "name": "articles",
+      "file": "screenshots/blawby/sections/blog/tablet/main-03-articles.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "tablet",
+      "slot": "main-04",
+      "name": "disclaimer",
+      "file": "screenshots/blawby/sections/blog/tablet/main-04-disclaimer.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "tablet",
+      "slot": "main-05",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/blog/tablet/main-05-qa.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "tablet",
+      "slot": "main-06",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/blog/tablet/main-06-consultation.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "tablet",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/blog/tablet/footer-footer.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "tablet",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/article/tablet/header-header.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "tablet",
+      "slot": "main-01",
+      "name": "article-content",
+      "file": "screenshots/blawby/sections/article/tablet/main-01-article-content.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "tablet",
+      "slot": "main-02",
+      "name": "related-articles",
+      "file": "screenshots/blawby/sections/article/tablet/main-02-related-articles.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "tablet",
+      "slot": "main-03",
+      "name": "related-articles-more",
+      "file": "screenshots/blawby/sections/article/tablet/main-03-related-articles-more.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "tablet",
+      "slot": "main-04",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/article/tablet/main-04-consultation.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "tablet",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/article/tablet/footer-footer.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "tablet",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/donate/tablet/header-header.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "tablet",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/donate/tablet/main-01-page-hero.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "tablet",
+      "slot": "main-02",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/donate/tablet/main-02-shield-divider.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "tablet",
+      "slot": "main-03",
+      "name": "donation",
+      "file": "screenshots/blawby/sections/donate/tablet/main-03-donation.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "tablet",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/donate/tablet/main-04-qa.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "tablet",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/donate/tablet/footer-footer.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "tablet",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/privacy/tablet/header-header.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "tablet",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/privacy/tablet/main-01-page-hero.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "tablet",
+      "slot": "main-02",
+      "name": "legal-content",
+      "file": "screenshots/blawby/sections/privacy/tablet/main-02-legal-content.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "tablet",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/privacy/tablet/footer-footer.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "tablet",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/terms/tablet/header-header.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "tablet",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/terms/tablet/main-01-page-hero.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "tablet",
+      "slot": "main-02",
+      "name": "legal-content",
+      "file": "screenshots/blawby/sections/terms/tablet/main-02-legal-content.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "tablet",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/terms/tablet/footer-footer.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "tablet",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/notices/tablet/header-header.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "tablet",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/notices/tablet/main-01-page-hero.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "tablet",
+      "slot": "main-02",
+      "name": "notices",
+      "file": "screenshots/blawby/sections/notices/tablet/main-02-notices.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "tablet",
+      "slot": "main-03",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/notices/tablet/main-03-consultation.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "tablet",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/notices/tablet/footer-footer.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "desktop",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/home/desktop/header-header.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "desktop",
+      "slot": "main-01",
+      "name": "hero",
+      "file": "screenshots/blawby/sections/home/desktop/main-01-hero.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "desktop",
+      "slot": "main-02",
+      "name": "services",
+      "file": "screenshots/blawby/sections/home/desktop/main-02-services.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "desktop",
+      "slot": "main-03",
+      "name": "approach",
+      "file": "screenshots/blawby/sections/home/desktop/main-03-approach.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "desktop",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/home/desktop/main-04-qa.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "desktop",
+      "slot": "main-05",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/home/desktop/main-05-reviews.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "desktop",
+      "slot": "main-06",
+      "name": "articles",
+      "file": "screenshots/blawby/sections/home/desktop/main-06-articles.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "desktop",
+      "slot": "main-07",
+      "name": "articles-more",
+      "file": "screenshots/blawby/sections/home/desktop/main-07-articles-more.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "desktop",
+      "slot": "main-08",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/home/desktop/main-08-consultation.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "desktop",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/home/desktop/footer-footer.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "desktop",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/services/desktop/header-header.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "desktop",
+      "slot": "main-01",
+      "name": "services",
+      "file": "screenshots/blawby/sections/services/desktop/main-01-services.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "desktop",
+      "slot": "main-02",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/services/desktop/main-02-qa.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "desktop",
+      "slot": "main-03",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/services/desktop/main-03-consultation.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "desktop",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/services/desktop/footer-footer.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "desktop",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/service-detail/desktop/header-header.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "desktop",
+      "slot": "main-01",
+      "name": "service-overview",
+      "file": "screenshots/blawby/sections/service-detail/desktop/main-01-service-overview.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "desktop",
+      "slot": "main-02",
+      "name": "features",
+      "file": "screenshots/blawby/sections/service-detail/desktop/main-02-features.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "desktop",
+      "slot": "main-03",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/service-detail/desktop/main-03-reviews.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "desktop",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/service-detail/desktop/main-04-qa.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "desktop",
+      "slot": "main-05",
+      "name": "related-services",
+      "file": "screenshots/blawby/sections/service-detail/desktop/main-05-related-services.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "desktop",
+      "slot": "main-06",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/service-detail/desktop/main-06-consultation.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "desktop",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/service-detail/desktop/footer-footer.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "desktop",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/about/desktop/header-header.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "desktop",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/about/desktop/main-01-page-hero.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "desktop",
+      "slot": "main-02",
+      "name": "team",
+      "file": "screenshots/blawby/sections/about/desktop/main-02-team.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "desktop",
+      "slot": "main-03",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/about/desktop/main-03-shield-divider.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "desktop",
+      "slot": "main-04",
+      "name": "impact",
+      "file": "screenshots/blawby/sections/about/desktop/main-04-impact.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "desktop",
+      "slot": "main-05",
+      "name": "services",
+      "file": "screenshots/blawby/sections/about/desktop/main-05-services.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "desktop",
+      "slot": "main-06",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/about/desktop/main-06-qa.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "desktop",
+      "slot": "main-07",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/about/desktop/main-07-reviews.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "desktop",
+      "slot": "main-08",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/about/desktop/main-08-consultation.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "desktop",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/about/desktop/footer-footer.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "desktop",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/pricing/desktop/header-header.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "desktop",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/pricing/desktop/main-01-page-hero.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "desktop",
+      "slot": "main-02",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/pricing/desktop/main-02-shield-divider.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "desktop",
+      "slot": "main-03",
+      "name": "pricing",
+      "file": "screenshots/blawby/sections/pricing/desktop/main-03-pricing.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "desktop",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/pricing/desktop/main-04-qa.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "desktop",
+      "slot": "main-05",
+      "name": "services",
+      "file": "screenshots/blawby/sections/pricing/desktop/main-05-services.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "desktop",
+      "slot": "main-06",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/pricing/desktop/main-06-consultation.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "desktop",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/pricing/desktop/footer-footer.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "desktop",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/contact/desktop/header-header.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "desktop",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/contact/desktop/main-01-page-hero.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "desktop",
+      "slot": "main-02",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/contact/desktop/main-02-shield-divider.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "desktop",
+      "slot": "main-03",
+      "name": "contact",
+      "file": "screenshots/blawby/sections/contact/desktop/main-03-contact.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "desktop",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/contact/desktop/main-04-qa.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "desktop",
+      "slot": "main-05",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/contact/desktop/main-05-reviews.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "desktop",
+      "slot": "main-06",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/contact/desktop/main-06-consultation.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "desktop",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/contact/desktop/footer-footer.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "desktop",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/schedule/desktop/header-header.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "desktop",
+      "slot": "main-01",
+      "name": "schedule-hero",
+      "file": "screenshots/blawby/sections/schedule/desktop/main-01-schedule-hero.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "desktop",
+      "slot": "main-02",
+      "name": "guidance",
+      "file": "screenshots/blawby/sections/schedule/desktop/main-02-guidance.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "desktop",
+      "slot": "main-03",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/schedule/desktop/main-03-qa.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "desktop",
+      "slot": "main-04",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/schedule/desktop/main-04-reviews.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "desktop",
+      "slot": "main-05",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/schedule/desktop/main-05-consultation.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "desktop",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/schedule/desktop/footer-footer.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "desktop",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/blog/desktop/header-header.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "desktop",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/blog/desktop/main-01-page-hero.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "desktop",
+      "slot": "main-02",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/blog/desktop/main-02-shield-divider.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "desktop",
+      "slot": "main-03",
+      "name": "articles",
+      "file": "screenshots/blawby/sections/blog/desktop/main-03-articles.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "desktop",
+      "slot": "main-04",
+      "name": "disclaimer",
+      "file": "screenshots/blawby/sections/blog/desktop/main-04-disclaimer.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "desktop",
+      "slot": "main-05",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/blog/desktop/main-05-qa.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "desktop",
+      "slot": "main-06",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/blog/desktop/main-06-consultation.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "desktop",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/blog/desktop/footer-footer.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "desktop",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/article/desktop/header-header.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "desktop",
+      "slot": "main-01",
+      "name": "article-content",
+      "file": "screenshots/blawby/sections/article/desktop/main-01-article-content.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "desktop",
+      "slot": "main-02",
+      "name": "related-articles",
+      "file": "screenshots/blawby/sections/article/desktop/main-02-related-articles.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "desktop",
+      "slot": "main-03",
+      "name": "related-articles-more",
+      "file": "screenshots/blawby/sections/article/desktop/main-03-related-articles-more.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "desktop",
+      "slot": "main-04",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/article/desktop/main-04-consultation.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "desktop",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/article/desktop/footer-footer.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "desktop",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/donate/desktop/header-header.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "desktop",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/donate/desktop/main-01-page-hero.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "desktop",
+      "slot": "main-02",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/donate/desktop/main-02-shield-divider.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "desktop",
+      "slot": "main-03",
+      "name": "donation",
+      "file": "screenshots/blawby/sections/donate/desktop/main-03-donation.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "desktop",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/donate/desktop/main-04-qa.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "desktop",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/donate/desktop/footer-footer.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "desktop",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/privacy/desktop/header-header.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "desktop",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/privacy/desktop/main-01-page-hero.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "desktop",
+      "slot": "main-02",
+      "name": "legal-content",
+      "file": "screenshots/blawby/sections/privacy/desktop/main-02-legal-content.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "desktop",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/privacy/desktop/footer-footer.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "desktop",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/terms/desktop/header-header.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "desktop",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/terms/desktop/main-01-page-hero.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "desktop",
+      "slot": "main-02",
+      "name": "legal-content",
+      "file": "screenshots/blawby/sections/terms/desktop/main-02-legal-content.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "desktop",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/terms/desktop/footer-footer.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "desktop",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/notices/desktop/header-header.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "desktop",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/notices/desktop/main-01-page-hero.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "desktop",
+      "slot": "main-02",
+      "name": "notices",
+      "file": "screenshots/blawby/sections/notices/desktop/main-02-notices.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "desktop",
+      "slot": "main-03",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/notices/desktop/main-03-consultation.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "desktop",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/notices/desktop/footer-footer.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "wide",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/home/wide/header-header.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "wide",
+      "slot": "main-01",
+      "name": "hero",
+      "file": "screenshots/blawby/sections/home/wide/main-01-hero.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "wide",
+      "slot": "main-02",
+      "name": "services",
+      "file": "screenshots/blawby/sections/home/wide/main-02-services.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "wide",
+      "slot": "main-03",
+      "name": "approach",
+      "file": "screenshots/blawby/sections/home/wide/main-03-approach.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "wide",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/home/wide/main-04-qa.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "wide",
+      "slot": "main-05",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/home/wide/main-05-reviews.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "wide",
+      "slot": "main-06",
+      "name": "articles",
+      "file": "screenshots/blawby/sections/home/wide/main-06-articles.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "wide",
+      "slot": "main-07",
+      "name": "articles-more",
+      "file": "screenshots/blawby/sections/home/wide/main-07-articles-more.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "wide",
+      "slot": "main-08",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/home/wide/main-08-consultation.png"
+    },
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "wide",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/home/wide/footer-footer.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "wide",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/services/wide/header-header.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "wide",
+      "slot": "main-01",
+      "name": "services",
+      "file": "screenshots/blawby/sections/services/wide/main-01-services.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "wide",
+      "slot": "main-02",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/services/wide/main-02-qa.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "wide",
+      "slot": "main-03",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/services/wide/main-03-consultation.png"
+    },
+    {
+      "route_name": "services",
+      "route": "/services",
+      "viewport": "wide",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/services/wide/footer-footer.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "wide",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/service-detail/wide/header-header.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "wide",
+      "slot": "main-01",
+      "name": "service-overview",
+      "file": "screenshots/blawby/sections/service-detail/wide/main-01-service-overview.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "wide",
+      "slot": "main-02",
+      "name": "features",
+      "file": "screenshots/blawby/sections/service-detail/wide/main-02-features.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "wide",
+      "slot": "main-03",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/service-detail/wide/main-03-reviews.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "wide",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/service-detail/wide/main-04-qa.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "wide",
+      "slot": "main-05",
+      "name": "related-services",
+      "file": "screenshots/blawby/sections/service-detail/wide/main-05-related-services.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "wide",
+      "slot": "main-06",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/service-detail/wide/main-06-consultation.png"
+    },
+    {
+      "route_name": "service-detail",
+      "route": "/services/family",
+      "viewport": "wide",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/service-detail/wide/footer-footer.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "wide",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/about/wide/header-header.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "wide",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/about/wide/main-01-page-hero.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "wide",
+      "slot": "main-02",
+      "name": "team",
+      "file": "screenshots/blawby/sections/about/wide/main-02-team.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "wide",
+      "slot": "main-03",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/about/wide/main-03-shield-divider.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "wide",
+      "slot": "main-04",
+      "name": "impact",
+      "file": "screenshots/blawby/sections/about/wide/main-04-impact.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "wide",
+      "slot": "main-05",
+      "name": "services",
+      "file": "screenshots/blawby/sections/about/wide/main-05-services.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "wide",
+      "slot": "main-06",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/about/wide/main-06-qa.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "wide",
+      "slot": "main-07",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/about/wide/main-07-reviews.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "wide",
+      "slot": "main-08",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/about/wide/main-08-consultation.png"
+    },
+    {
+      "route_name": "about",
+      "route": "/about",
+      "viewport": "wide",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/about/wide/footer-footer.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "wide",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/pricing/wide/header-header.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "wide",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/pricing/wide/main-01-page-hero.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "wide",
+      "slot": "main-02",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/pricing/wide/main-02-shield-divider.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "wide",
+      "slot": "main-03",
+      "name": "pricing",
+      "file": "screenshots/blawby/sections/pricing/wide/main-03-pricing.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "wide",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/pricing/wide/main-04-qa.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "wide",
+      "slot": "main-05",
+      "name": "services",
+      "file": "screenshots/blawby/sections/pricing/wide/main-05-services.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "wide",
+      "slot": "main-06",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/pricing/wide/main-06-consultation.png"
+    },
+    {
+      "route_name": "pricing",
+      "route": "/pricing",
+      "viewport": "wide",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/pricing/wide/footer-footer.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "wide",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/contact/wide/header-header.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "wide",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/contact/wide/main-01-page-hero.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "wide",
+      "slot": "main-02",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/contact/wide/main-02-shield-divider.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "wide",
+      "slot": "main-03",
+      "name": "contact",
+      "file": "screenshots/blawby/sections/contact/wide/main-03-contact.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "wide",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/contact/wide/main-04-qa.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "wide",
+      "slot": "main-05",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/contact/wide/main-05-reviews.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "wide",
+      "slot": "main-06",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/contact/wide/main-06-consultation.png"
+    },
+    {
+      "route_name": "contact",
+      "route": "/contact",
+      "viewport": "wide",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/contact/wide/footer-footer.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "wide",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/schedule/wide/header-header.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "wide",
+      "slot": "main-01",
+      "name": "schedule-hero",
+      "file": "screenshots/blawby/sections/schedule/wide/main-01-schedule-hero.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "wide",
+      "slot": "main-02",
+      "name": "guidance",
+      "file": "screenshots/blawby/sections/schedule/wide/main-02-guidance.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "wide",
+      "slot": "main-03",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/schedule/wide/main-03-qa.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "wide",
+      "slot": "main-04",
+      "name": "reviews",
+      "file": "screenshots/blawby/sections/schedule/wide/main-04-reviews.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "wide",
+      "slot": "main-05",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/schedule/wide/main-05-consultation.png"
+    },
+    {
+      "route_name": "schedule",
+      "route": "/schedule",
+      "viewport": "wide",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/schedule/wide/footer-footer.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "wide",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/blog/wide/header-header.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "wide",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/blog/wide/main-01-page-hero.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "wide",
+      "slot": "main-02",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/blog/wide/main-02-shield-divider.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "wide",
+      "slot": "main-03",
+      "name": "articles",
+      "file": "screenshots/blawby/sections/blog/wide/main-03-articles.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "wide",
+      "slot": "main-04",
+      "name": "disclaimer",
+      "file": "screenshots/blawby/sections/blog/wide/main-04-disclaimer.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "wide",
+      "slot": "main-05",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/blog/wide/main-05-qa.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "wide",
+      "slot": "main-06",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/blog/wide/main-06-consultation.png"
+    },
+    {
+      "route_name": "blog",
+      "route": "/blog",
+      "viewport": "wide",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/blog/wide/footer-footer.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "wide",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/article/wide/header-header.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "wide",
+      "slot": "main-01",
+      "name": "article-content",
+      "file": "screenshots/blawby/sections/article/wide/main-01-article-content.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "wide",
+      "slot": "main-02",
+      "name": "related-articles",
+      "file": "screenshots/blawby/sections/article/wide/main-02-related-articles.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "wide",
+      "slot": "main-03",
+      "name": "related-articles-more",
+      "file": "screenshots/blawby/sections/article/wide/main-03-related-articles-more.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "wide",
+      "slot": "main-04",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/article/wide/main-04-consultation.png"
+    },
+    {
+      "route_name": "article",
+      "route": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "viewport": "wide",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/article/wide/footer-footer.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "wide",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/donate/wide/header-header.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "wide",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/donate/wide/main-01-page-hero.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "wide",
+      "slot": "main-02",
+      "name": "shield-divider",
+      "file": "screenshots/blawby/sections/donate/wide/main-02-shield-divider.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "wide",
+      "slot": "main-03",
+      "name": "donation",
+      "file": "screenshots/blawby/sections/donate/wide/main-03-donation.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "wide",
+      "slot": "main-04",
+      "name": "qa",
+      "file": "screenshots/blawby/sections/donate/wide/main-04-qa.png"
+    },
+    {
+      "route_name": "donate",
+      "route": "/donate",
+      "viewport": "wide",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/donate/wide/footer-footer.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "wide",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/privacy/wide/header-header.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "wide",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/privacy/wide/main-01-page-hero.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "wide",
+      "slot": "main-02",
+      "name": "legal-content",
+      "file": "screenshots/blawby/sections/privacy/wide/main-02-legal-content.png"
+    },
+    {
+      "route_name": "privacy",
+      "route": "/policies/privacy",
+      "viewport": "wide",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/privacy/wide/footer-footer.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "wide",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/terms/wide/header-header.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "wide",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/terms/wide/main-01-page-hero.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "wide",
+      "slot": "main-02",
+      "name": "legal-content",
+      "file": "screenshots/blawby/sections/terms/wide/main-02-legal-content.png"
+    },
+    {
+      "route_name": "terms",
+      "route": "/policies/terms",
+      "viewport": "wide",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/terms/wide/footer-footer.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "wide",
+      "slot": "header",
+      "name": "header",
+      "file": "screenshots/blawby/sections/notices/wide/header-header.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "wide",
+      "slot": "main-01",
+      "name": "page-hero",
+      "file": "screenshots/blawby/sections/notices/wide/main-01-page-hero.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "wide",
+      "slot": "main-02",
+      "name": "notices",
+      "file": "screenshots/blawby/sections/notices/wide/main-02-notices.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "wide",
+      "slot": "main-03",
+      "name": "consultation",
+      "file": "screenshots/blawby/sections/notices/wide/main-03-consultation.png"
+    },
+    {
+      "route_name": "notices",
+      "route": "/third-party-notices",
+      "viewport": "wide",
+      "slot": "footer",
+      "name": "footer",
+      "file": "screenshots/blawby/sections/notices/wide/footer-footer.png"
+    }
+  ],
+  "states": [
+    {
+      "route_name": "home",
+      "route": "/",
+      "viewport": "mobile",
+      "name": "mobile-navigation-open",
+      "file": "screenshots/blawby/states/home-mobile-navigation-open-mobile.png"
+    }
+  ]
+}

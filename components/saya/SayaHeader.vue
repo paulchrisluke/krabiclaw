@@ -60,7 +60,7 @@
             type="button"
             class="lg:hidden inline-flex size-8 items-center justify-center rounded-full text-muted transition hover:bg-muted hover:text-default"
             :aria-label="mobileMenuOpen ? $t('saya.header.close_navigation') : $t('saya.header.open_navigation')"
-            @click="mobileMenuOpen = !mobileMenuOpen"
+            @click="toggleMobileNav"
           >
             <svg viewBox="0 0 20 20" fill="currentColor" class="size-5"><path fill-rule="evenodd" d="M2.75 5.75a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13a.75.75 0 01-.75-.75zM2.75 10a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13A.75.75 0 012.75 10zM2.75 14.25a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13a.75.75 0 01-.75-.75z" clip-rule="evenodd" /></svg>
           </button>
@@ -77,7 +77,7 @@
             v-if="hasMenu"
             to="/menu"
             class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted"
-            @click="mobileMenuOpen = false"
+            @click="closeMobileNav"
           >
             {{ $t('saya.header.menu') }}
           </NuxtLink>
@@ -85,7 +85,7 @@
             v-if="locations.length > 1"
             to="/locations"
             class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
-            @click="mobileMenuOpen = false"
+            @click="closeMobileNav"
           >
             {{ $t('saya.header.locations') }}
           </NuxtLink>
@@ -94,7 +94,7 @@
             v-if="hasOrderLinks && !isExperienceSite"
             to="/order"
             class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted"
-            @click="mobileMenuOpen = false"
+            @click="closeMobileNav"
           >
             {{ $t('saya.header.order_now') }}
           </NuxtLink>
@@ -102,7 +102,7 @@
             v-if="!isExperienceSite"
             to="/reservations"
             class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
-            @click="mobileMenuOpen = false"
+            @click="closeMobileNav"
           >
             {{ $t('saya.header.reservations') }}
           </NuxtLink>
@@ -110,14 +110,14 @@
             v-if="hasExperiences"
             to="/experiences"
             class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
-            @click="mobileMenuOpen = false"
+            @click="closeMobileNav"
           >
             {{ $t('saya.header.experiences') }}
           </NuxtLink>
           <NuxtLink
             to="/contact"
             class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
-            @click="mobileMenuOpen = false"
+            @click="closeMobileNav"
           >
             {{ $t('saya.header.contact') }}
           </NuxtLink>
@@ -158,7 +158,7 @@ const props = defineProps<{
 const i18n = useI18n() as ApiValue as I18nComposable
 const { locale, t } = i18n
 const verticalCopy = computed(() => getVerticalCopy(props.site?.vertical, locale.value))
-const mobileMenuOpen = ref(false)
+const { isOpen: mobileMenuOpen, toggle: toggleMobileNav, close: closeMobileNav } = useMobileNavToggle()
 const headerRef = ref<HTMLElement | null>(null)
 let headerResizeObserver: ResizeObserver | null = null
 

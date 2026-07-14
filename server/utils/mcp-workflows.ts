@@ -12,9 +12,9 @@ import {
   setOrgWhatsAppPhone,
 } from "~/server/utils/whatsapp";
 import {
+  clearSiteHeroField,
   deleteSiteContentField,
   getPageContent,
-  getSiteContentField,
   upsertSiteContent,
 } from "~/server/utils/content-management";
 import type { SiteContent } from "~/server/utils/content-management";
@@ -24,6 +24,7 @@ import { updateLocation } from "~/server/utils/location-management";
 import { execute, queryAll, queryFirst } from "~/server/db";
 import { revokeReviewRequestForBooking } from "~/server/utils/review-requests";
 import { fireSiteEventSafe } from "~/server/utils/site-events";
+import { reorderQa, updateQa } from "~/server/utils/location-qa";
 
 export async function listSitesForUser(
   db: D1Database,
@@ -468,53 +469,7 @@ export async function updateLocationQa(
   qaId: string,
   updates: Record<string, unknown>,
 ) {
-  const sets: string[] = ["updated_at = ?"];
-  const params: Array<string | number | null> = [new Date().toISOString()];
-
-  if (updates.question !== undefined) {
-    const value = String(updates.question ?? "").trim();
-    if (!value) throw new Error("Question is required");
-    sets.push("question = ?");
-    params.push(value.slice(0, 500));
-  }
-  if (updates.answer !== undefined) {
-    sets.push("answer = ?");
-    params.push(stringOrNull(updates.answer, 2000));
-  }
-  if (updates.question_author !== undefined) {
-    sets.push("question_author = ?");
-    params.push(stringOrNull(updates.question_author, 120));
-  }
-  if (updates.is_owner_answer !== undefined) {
-    sets.push("is_owner_answer = ?");
-    params.push(booleanInt(updates.is_owner_answer));
-  }
-  if (updates.status !== undefined) {
-    const value = String(updates.status);
-    if (!["published", "hidden"].includes(value))
-      throw new Error("Invalid Q&A status");
-    sets.push("status = ?");
-    params.push(value);
-  }
-  if (updates.sort_order !== undefined) {
-    const value = Number(updates.sort_order);
-    if (!Number.isInteger(value))
-      throw new Error("sort_order must be an integer");
-    sets.push("sort_order = ?");
-    params.push(value);
-  }
-
-  if (sets.length === 1) throw new Error("No update fields provided");
-
-  params.push(qaId, locationId, siteId, organizationId);
-  const result = await execute(db, `
-    UPDATE location_qa
-    SET ${sets.join(", ")}
-    WHERE id = ? AND location_id = ? AND site_id = ? AND organization_id = ?
-  `, params);
-
-  if (!result.meta.changes) throw new Error("Q&A not found");
-  return { updated: true, qa_id: qaId };
+  return updateQa(db, { organizationId, siteId, locationId }, qaId, updates)
 }
 
 export async function reorderLocationQa(
@@ -524,51 +479,7 @@ export async function reorderLocationQa(
   locationId: string,
   updates: Array<{ id: string; sort_order: number }>,
 ) {
-  if (!updates.length) {
-    throw new Error("At least one Q&A update is required");
-  }
-
-  const placeholders = updates.map(() => "?").join(", ");
-  const validationResult = await queryFirst<{ valid_count: number }>(
-    db,
-    `SELECT COUNT(*) AS valid_count FROM location_qa
-       WHERE id IN (${placeholders}) AND location_id = ? AND site_id = ? AND organization_id = ?`,
-    [...updates.map((u) => u.id), locationId, siteId, organizationId],
-  );
-
-  const validCount = validationResult?.valid_count ?? 0;
-  if (validCount !== updates.length) {
-    throw new Error(
-      `Q&A reorder failed: ${updates.length - validCount} item(s) not found or do not belong to this location.`,
-    );
-  }
-
-  const now = new Date().toISOString();
-  let updated = 0;
-
-  for (const update of updates) {
-    const result = await execute(db, `
-      UPDATE location_qa
-      SET sort_order = ?, updated_at = ?
-      WHERE id = ? AND location_id = ? AND site_id = ? AND organization_id = ?
-    `, [
-      update.sort_order,
-      now,
-      update.id,
-      locationId,
-      siteId,
-      organizationId,
-    ]);
-    updated += Number(result.meta.changes ?? 0);
-  }
-
-  if (updated !== updates.length) {
-    throw new Error(
-      `Q&A reorder failed: expected ${updates.length} item(s) to update but only ${updated} matched. Some items may not exist or do not belong to this location.`,
-    );
-  }
-
-  return { updated };
+  return reorderQa(db, { organizationId, siteId, locationId }, updates)
 }
 
 export async function listLocationReviews(
@@ -908,16 +819,6 @@ export async function hydrateSeededLocationForOnboarding(
   };
 }
 
-const HERO_COLUMN_BY_ALIAS: Record<
-  "hero.title" | "hero.subtitle" | "hero.image" | "hero.video",
-  "hero_title" | "hero_subtitle" | "hero_image_asset_id" | "hero_video_asset_id"
-> = {
-  "hero.title": "hero_title",
-  "hero.subtitle": "hero_subtitle",
-  "hero.image": "hero_image_asset_id",
-  "hero.video": "hero_video_asset_id",
-};
-
 export async function deleteContentField(
   db: D1Database,
   organizationId: string,
@@ -927,40 +828,15 @@ export async function deleteContentField(
 ) {
   const locationId = input.location_id ?? undefined;
   const heroAlias = HERO_FIELD_ALIASES[input.field];
-
   if (heroAlias) {
-    // Hero sub-fields (hero.title/subtitle/image/video) all live as columns
-    // on a single row keyed by field="hero" — deleteSiteContentField(...,
-    // input.field, ...) would look for a row keyed by e.g. "hero.title",
-    // which never exists, and silently delete nothing. Clear just this
-    // column, and only delete the whole "hero" row once every column is
-    // empty — same merge-safety upsertSiteContent already gives
-    // updatePageContent for hero writes, applied to deletes too.
-    const current = await getSiteContentField(db, organizationId, siteId, locationId ?? null, input.page, "hero");
-    const nextState = {
-      hero_title: current?.hero_title ?? null,
-      hero_subtitle: current?.hero_subtitle ?? null,
-      hero_image_asset_id: current?.hero_image_asset_id ?? null,
-      hero_video_asset_id: current?.hero_video_asset_id ?? null,
-    };
-    nextState[HERO_COLUMN_BY_ALIAS[heroAlias]] = null;
-
-    if (!nextState.hero_title && !nextState.hero_subtitle && !nextState.hero_image_asset_id && !nextState.hero_video_asset_id) {
-      await deleteSiteContentField(db, organizationId, siteId, input.page, "hero", locationId);
-    } else {
-      await upsertSiteContent(db, {
-        id: buildContentId(organizationId, siteId, input.page, "hero", locationId),
-        organization_id: organizationId,
-        site_id: siteId,
-        location_id: locationId,
-        page: input.page,
-        field: "hero",
-        type: "text",
-        source: "manual",
-        content: undefined,
-        ...nextState,
-      });
-    }
+    await clearSiteHeroField(
+      db,
+      organizationId,
+      siteId,
+      input.page,
+      heroAlias,
+      locationId,
+    );
   } else {
     await deleteSiteContentField(
       db,
@@ -1146,15 +1022,4 @@ function safeJson(value: unknown) {
 function safeJsonArray(value: unknown) {
   const parsed = safeJson(value);
   return Array.isArray(parsed) ? parsed : [];
-}
-
-function stringOrNull(value: unknown, maxLength: number) {
-  const normalized = String(value ?? "").trim();
-  return normalized ? normalized.slice(0, maxLength) : null;
-}
-
-function booleanInt(value: unknown) {
-  if (value === true || value === 1 || value === "1") return 1;
-  if (value === false || value === 0 || value === "0") return 0;
-  throw new Error("Boolean value required");
 }

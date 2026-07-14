@@ -33,9 +33,9 @@ export function useDashboardLocation() {
     const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
 
     const parts = route.path.split('/').filter(Boolean)
-    const sitesIndex = parts.findIndex((part, i) => 
-      part === 'sites' && 
-      (orgSlug ? parts[i - 1] === orgSlug : true) && 
+    const sitesIndex = parts.findIndex((part, i) =>
+      part === 'sites' &&
+      (orgSlug ? parts[i - 1] === orgSlug : true) &&
       (siteSlug ? parts[i + 1] === siteSlug : true)
     )
 

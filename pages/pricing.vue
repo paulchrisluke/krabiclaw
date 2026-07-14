@@ -1,5 +1,14 @@
 <template>
-  <div class="relative overflow-hidden bg-default min-h-screen py-20 lg:py-28">
+  <NuxtLayout :name="isBlawby ? 'blawby' : 'platform'">
+  <BlawbyTenantPage
+    v-if="isBlawby"
+    path="/pricing"
+    fallback-eyebrow="Pricing"
+    fallback-title="Pricing"
+    fallback-summary="Review available service paths and use the optional calculator when it is configured."
+    fallback-body="Pricing and eligibility details vary by service area and case type. Request a consultation for confirmed next steps."
+  />
+  <div v-else class="relative overflow-hidden bg-default min-h-screen py-20 lg:py-28">
     <!-- Ambient Mesh Background Lights -->
     <div class="absolute top-0 right-1/4 -z-10 w-96 h-96 bg-primary/10 rounded-full blur-3xl opacity-50"></div>
     <div class="absolute bottom-1/3 left-1/4 -z-10 w-[500px] h-[500px] bg-(--kc-teal)/10 rounded-full blur-3xl opacity-40"></div>
@@ -72,12 +81,14 @@
 
     </div>
   </div>
+  </NuxtLayout>
 </template>
 
 <script setup lang="ts">
 const { plans } = usePlans()
+const { isBlawby } = usePublicTemplate()
 
-definePageMeta({ layout: 'platform' })
+definePageMeta({ layout: false })
 
 const openFaq = ref<string | null>(null)
 
@@ -121,6 +132,8 @@ const seoConfig = useRuntimeConfig()
 const seoRequestURL = useRequestURL()
 const pricingPageUrl = resolveSeoUrl('/pricing', seoConfig.public.siteUrl || seoRequestURL.origin)
 
+if (!isBlawby.value) {
+
 // Structured-data descriptions per plan — only plans usePlans() actually
 // returns (i.e. currently purchasable) get an Offer, so hidden tiers never
 // get advertised to crawlers/AI even though the visual table already hides them.
@@ -161,4 +174,5 @@ usePlatformPageSeo(() => ({
     },
   ],
 }))
+}
 </script>

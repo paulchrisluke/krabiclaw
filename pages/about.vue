@@ -1,7 +1,15 @@
 <template>
-  <NuxtLayout :name="isPlatform ? 'platform' : 'saya'">
+  <NuxtLayout :name="isPlatform ? 'platform' : isBlawby ? 'blawby' : 'saya'">
+    <BlawbyTenantPage
+      v-if="!isPlatform && isBlawby"
+      path="/about"
+      fallback-eyebrow="About"
+      fallback-title="About"
+      fallback-summary="Learn more about this organization, its mission, and the people it serves."
+    />
+
     <!-- ── TENANT: Restaurant about page ─────────────────── -->
-    <div v-if="!isPlatform">
+    <div v-else-if="!isPlatform">
 
       <!-- Page header -->
       <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
@@ -183,6 +191,7 @@ import { useDynamicComponent } from '~/composables/useDynamicComponent'
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s) => s }
 
 const { isPlatform, site } = useTenantSite()
+const { isBlawby } = usePublicTemplate()
 const { getField, locations, contentBlocks } = useBootstrap()
 const { resolveComponent } = useDynamicComponent()
 const { locale } = useI18n()

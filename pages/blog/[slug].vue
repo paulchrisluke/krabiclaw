@@ -7,7 +7,14 @@
     </div>
   </div>
 
-  <article v-else-if="post" class="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
+  <div v-else-if="post" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8">
+    <aside class="mb-8 lg:sticky lg:top-28 lg:mb-0 lg:h-fit">
+      <PlatformCommandSearchTrigger surface="tenant_blog" variant="saya" label="Search stories..." aria-label="Open story search" class="mb-6" />
+      <BlogCategoryNav :categories="categories" base-path="/blog" :active-slug="activeCategorySlug" />
+    </aside>
+
+    <article class="min-w-0">
+    <div class="mx-auto max-w-4xl">
     <div class="mb-6 flex flex-wrap items-center gap-3">
       <span v-if="post.category" class="rounded bg-muted px-2 py-1 text-xs font-medium text-muted">
         {{ post.category }}
@@ -80,16 +87,37 @@
       </div>
       <PlatformButton to="/blog" variant="outline" size="sm">More Posts</PlatformButton>
     </div>
-  </article>
+    </div>
+
+    <div v-if="relatedPosts.length" class="mx-auto mt-16 max-w-4xl border-t border-default pt-10">
+      <h2 class="mb-6 text-xl font-bold text-default">More from {{ siteName }}</h2>
+      <div class="grid gap-6 sm:grid-cols-2">
+        <NuxtLink
+          v-for="relatedPost in relatedPosts"
+          :key="relatedPost.id"
+          :to="`/blog/${relatedPost.slug}`"
+          class="block rounded-xl border border-default bg-elevated p-5 no-underline transition-shadow hover:shadow-md"
+        >
+          <h3 class="text-base font-semibold text-default">{{ relatedPost.title }}</h3>
+          <p v-if="relatedPost.excerpt" class="mt-2 line-clamp-2 text-sm text-muted">{{ relatedPost.excerpt }}</p>
+        </NuxtLink>
+      </div>
+    </div>
+    </article>
+  </div>
 
   <div v-else class="mx-auto max-w-3xl px-4 py-32 text-center">
     <h1 class="text-2xl font-bold text-default">Post not found</h1>
     <p class="mt-3 text-muted">This post may have been moved or removed.</p>
     <PlatformButton to="/blog" variant="outline" size="sm" class="mt-6">More Posts</PlatformButton>
   </div>
+
+  <PlatformCommandSearchModal surface="tenant_blog" variant="saya" />
 </template>
 
 <script setup lang="ts">
+import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
+import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import { renderMarkdownToHtml, sanitizeHtmlForSsr, stripLeadingTitleHeading } from '~/utils/markdown'
 import { buildContentBlocks, normalizeContentComponent, type ContentComponent } from '~/utils/content-blocks'
 import { resolveContentComponent } from '~/utils/content-component-resolver'
@@ -117,6 +145,7 @@ interface TenantBlogPost {
   published_at?: string | null
   author_name?: string | null
   updated_at?: string | null
+  featured_order?: number | null
   featured_image?: { public_url: string | null; kind: string | null; width: number | null; height: number | null } | null
   components?: ContentComponent[]
 }
@@ -180,6 +209,15 @@ if (!data.value?.post) {
 }
 
 const post = computed(() => data.value?.post ?? null)
+const { blogList } = useBootstrap()
+const allPosts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
+const { categories } = useTenantBlogNav(allPosts)
+const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))
+function slugifyCategory(value: string) {
+  const slug = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return slug || 'uncategorized'
+}
+const activeCategorySlug = computed(() => slugifyCategory(post.value?.category?.trim() || 'Uncategorized'))
 const siteName = computed(() => site?.brand_name || 'Our Site')
 const authorName = computed(() => post.value?.author_name?.trim() || siteName.value)
 const authorInitial = computed(() => authorName.value.charAt(0).toUpperCase())

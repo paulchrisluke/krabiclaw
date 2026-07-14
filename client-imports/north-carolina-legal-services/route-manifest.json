@@ -1,0 +1,131 @@
+{
+  "preservedRoutes": [
+    "/",
+    "/services",
+    "/services/family",
+    "/services/small-business-and-nonprofits",
+    "/services/employment",
+    "/services/tenant-rights",
+    "/services/probate-and-estate",
+    "/services/special-education-and-iep-advocacy",
+    "/schedule",
+    "/pricing",
+    "/donate",
+    "/blog",
+    "/article/getting-a-divorce-in-north-carolina",
+    "/article/equitable-distribution-in-north-carolina-divorces",
+    "/article/7-common-iep-violations-every-north-carolina-parent-should-recognize-and-how-to-fight-back",
+    "/article/disaster-relief-for-north-carolina-homeowners-after-hurricane-helene",
+    "/article/divorce-and-children-in-north-carolina",
+    "/article/employee-disability-rights-in-north-carolina",
+    "/article/fairness-is-not-a-zero-sum-game-why-dei-benefits-everyone",
+    "/article/hurricane-disaster-relief-for-north-carolina-renters",
+    "/article/iep-violations-in-north-carolina-how-to-recognize-them-and-protect-your-childs-rights",
+    "/article/know-your-rights-what-to-do-if-you-witness-an-ice-arrest",
+    "/article/pet-custody-in-nc-divorce-how-equitable-distribution-affects-your-dog-or-cat",
+    "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+    "/article/property-division-in-north-carolina-divorce-protecting-whats-yours",
+    "/article/protecting-your-freelance-business-in-north-carolina-contracts-compliance-and-best-practices",
+    "/article/the-legal-needs-of-small-businesses-in-north-carolina",
+    "/article/understanding-the-legal-process-preparing-for-court-without-a-lawyer",
+    "/article/when-schools-fail-to-follow-the-iep-what-north-carolina-parents-can-do",
+    "/article/writing-your-own-will-how-it-works",
+    "/article/your-landlord-cannot-evict-you-without-a-court-order-heres-what-to-do-when-they-try",
+    "/",
+    "/services",
+    "/about",
+    "/pricing",
+    "/contact",
+    "/schedule",
+    "/blog",
+    "/donate",
+    "/policies/privacy",
+    "/policies/terms",
+    "/third-party-notices"
+  ],
+  "intentionalExclusions": [
+    {
+      "path": "/thank-you",
+      "handling": "Use KrabiClaw native noindex confirmation pages instead of SEO content."
+    },
+    {
+      "path": "/conference",
+      "behavior": "gone",
+      "handling": "Out of cutover scope for the first Blawby/NCLS PR."
+    }
+  ],
+  "redirects": [
+    {
+      "id": "redirect_ncls_article_divorce-and-children-in-north-carolina_0",
+      "from_path": "/article/divorce-and-children-in-north-carolina-what-to-expect-and-how-to-prepare",
+      "to_path": "/article/divorce-and-children-in-north-carolina",
+      "status_code": 301,
+      "behavior": "redirect",
+      "reason": "Pinned React article oldSlugs migration",
+      "source": "react-adapter"
+    },
+    {
+      "id": "redirect_ncls_article_preparing-for-your-consultation-with-north-carolina-legal-services_0",
+      "from_path": "/article/preparing-for-your-consultation",
+      "to_path": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+      "status_code": 301,
+      "behavior": "redirect",
+      "reason": "Pinned React article oldSlugs migration",
+      "source": "react-adapter"
+    },
+    {
+      "id": "redirect_ncls_article_property-division-in-north-carolina-divorce-protecting-whats-yours_0",
+      "from_path": "/article/property-division-in-north-carolina-divorce",
+      "to_path": "/article/property-division-in-north-carolina-divorce-protecting-whats-yours",
+      "status_code": 301,
+      "behavior": "redirect",
+      "reason": "Pinned React article oldSlugs migration",
+      "source": "react-adapter"
+    },
+    {
+      "id": "redirect_ncls_article_writing-your-own-will-how-it-works_0",
+      "from_path": "/article/writing-your-own-will-how-it-works-in-north-carolina",
+      "to_path": "/article/writing-your-own-will-how-it-works",
+      "status_code": 301,
+      "behavior": "redirect",
+      "reason": "Pinned React article oldSlugs migration",
+      "source": "react-adapter"
+    },
+    {
+      "id": "redirect_ncls_conference_gone",
+      "from_path": "/conference",
+      "to_path": null,
+      "status_code": 410,
+      "behavior": "gone",
+      "reason": "Explicitly retire the indexed conference route",
+      "source": "search-console-2026-07-13"
+    },
+    {
+      "id": "redirect_ncls_service_personal_injury",
+      "from_path": "/services/personal-injury",
+      "to_path": "/services",
+      "status_code": 301,
+      "behavior": "redirect",
+      "reason": "Preserve the indexed source service URL after the offering was retired",
+      "source": "search-console-2026-07-13"
+    },
+    {
+      "id": "redirect_ncls_legal_file_1",
+      "from_path": "/files/NorthCarolinaLegalServices_DBA__Redacted.pdf",
+      "to_path": "https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9f06152ccd5d6f29c11a.pdf",
+      "status_code": 301,
+      "behavior": "redirect",
+      "reason": "Preserve the indexed legal document URL on approved storage",
+      "source": "search-console-2026-07-13"
+    },
+    {
+      "id": "redirect_ncls_legal_file_2",
+      "from_path": "/files/FinalLetter_88-0565637_BULLCITYLEGALSERVICESINC_Redacted.pdf",
+      "to_path": "https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/8de1e5793e0806ece163.pdf",
+      "status_code": 301,
+      "behavior": "redirect",
+      "reason": "Preserve the indexed legal document URL on approved storage",
+      "source": "search-console-2026-07-13"
+    }
+  ]
+}

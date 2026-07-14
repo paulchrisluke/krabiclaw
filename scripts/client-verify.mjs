@@ -21,14 +21,18 @@ import { parseArgs } from "node:util";
 import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 
 const { values: args } = parseArgs({
   options: {
     url: { type: "string" },
     vertical: { type: "string", default: "restaurant" },
     "site-id": { type: "string" },
+    "tenant-slug": { type: "string" },
     slug: { type: "string" },
     "out-dir": { type: "string" },
+    "evidence-dir": { type: "string" },
+    "require-screenshots": { type: "boolean", default: false },
     remote: { type: "boolean", default: false },
   },
   allowPositionals: false,
@@ -47,6 +51,43 @@ const SITE_ID = args["site-id"];
 const OUT_DIR =
   args["out-dir"] ??
   (args.slug ? join(process.cwd(), "client-imports", args.slug) : null);
+
+if (VERTICAL === "professional_service") {
+  const blawbyArgs = ["scripts/verify-blawby-site.mjs", "--url", BASE];
+  if (SITE_ID) blawbyArgs.push("--site-id", SITE_ID);
+  if (args["tenant-slug"]) blawbyArgs.push("--tenant-slug", args["tenant-slug"]);
+
+  const importManifest = OUT_DIR ? join(OUT_DIR, "blawby-import.json") : null;
+  if (importManifest && existsSync(importManifest)) {
+    blawbyArgs.push("--import-manifest", importManifest);
+  }
+
+  const evidenceDir = args["evidence-dir"] ?? (args["require-screenshots"] ? OUT_DIR : null);
+  if (evidenceDir) {
+    blawbyArgs.push("--evidence-dir", evidenceDir);
+  }
+  if (args["require-screenshots"]) {
+    blawbyArgs.push("--require-screenshots");
+  }
+  if (OUT_DIR) {
+    blawbyArgs.push("--out", join(OUT_DIR, "blawby-evidence-bundle.json"));
+  }
+
+  const result = spawnSync(process.execPath, blawbyArgs, {
+    cwd: process.cwd(),
+    stdio: "inherit",
+    timeout: 10 * 60 * 1000,
+  });
+  if (result.error?.code === "ETIMEDOUT") {
+    console.error("Blawby verifier timed out after 10 minutes.");
+    process.exit(124);
+  }
+  if (result.error) {
+    console.error(`Blawby verifier failed to launch: ${result.error.message}`);
+    process.exit(1);
+  }
+  process.exit(result.status ?? 1);
+}
 
 // ── Copy constraints ──────────────────────────────────────────────────────────
 

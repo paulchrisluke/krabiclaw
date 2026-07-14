@@ -5,11 +5,13 @@
       <slot />
     </main>
     <LazyPlatformFooter />
+    <ConsentBanner privacy-path="/privacy" />
   </div>
 </template>
 
 <script setup>
 import PlatformHeader from '~/components/platform/PlatformHeader.vue'
+import ConsentBanner from '~/components/ConsentBanner.vue'
 
 
 useHead({

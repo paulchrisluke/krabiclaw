@@ -1,0 +1,6 @@
+Reason,Source,Validation,Pages
+Page with redirect,Website,Not Started,6
+Alternate page with proper canonical tag,Website,Not Started,4
+Server error (5xx),Website,Not Started,1
+Crawled - currently not indexed,Google systems,Not Started,9
+Discovered - currently not indexed,Google systems,Not Started,1

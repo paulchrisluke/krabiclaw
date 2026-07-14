@@ -80,6 +80,18 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
     };
   }
 
+  const articleMatch = path.match(/^\/article\/([^/]+)\/?$/);
+  if (articleMatch) {
+    return {
+      page: "blog",
+      location: null,
+      experience: null,
+      menu: false,
+      data: "blogPost",
+      blogSlug: articleMatch[1] ?? null,
+    };
+  }
+
   // Top-level pages
   if (path === "/" || path === "")
     return {

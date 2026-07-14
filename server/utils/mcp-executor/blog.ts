@@ -72,6 +72,13 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         { post: hydratedUpdatedBlogPost },
       );
     }
+    case "publish_blog_post":
+    case "unpublish_blog_post": {
+      const publish = toolName === "publish_blog_post";
+      const result = await updatePlatformBlogPost(site.db, requiredString(args, "post_id"), publish ? { publish: true } : { unpublish: true }, site.siteId);
+      const post = attachViewUrlToRecord(result.post, site, {}, site.env);
+      return renderStructuredResponse({ ok: true, entity: "blog_post", id: result.post.id, slug: result.post.slug, public_url: post.public_url, updated_at: result.post.updated_at, context: await mutationContextPayload(site) }, `${publish ? "Published" : "Unpublished"} blog post "${result.post.title ?? result.post.id}".`, { post });
+    }
     case "set_blog_post_image": {
       const assetId = requiredString(args, "asset_id");
       await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");

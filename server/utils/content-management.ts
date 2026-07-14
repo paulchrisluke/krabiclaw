@@ -264,6 +264,40 @@ export const deleteSiteContentField = async (
   await execute(db, query, params)
 }
 
+const HERO_SUBFIELD_COLUMNS = {
+  'hero.title': 'hero_title',
+  'hero.subtitle': 'hero_subtitle',
+  'hero.image': 'hero_image_asset_id',
+  'hero.video': 'hero_video_asset_id',
+} as const
+
+/**
+ * Hero sub-fields live as columns on the single row keyed by field='hero', not their own
+ * row — deleteSiteContentField's literal `field = ?` DELETE can never match "hero.title"
+ * etc, so it silently no-ops. This nulls just the targeted column instead.
+ */
+export const clearSiteHeroField = async (
+  db: DbClient,
+  organizationId: string,
+  siteId: string,
+  page: string,
+  heroField: keyof typeof HERO_SUBFIELD_COLUMNS,
+  locationId?: string,
+) => {
+  const column = HERO_SUBFIELD_COLUMNS[heroField]
+  let query = `UPDATE site_content SET ${column} = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE organization_id = ? AND site_id = ? AND page = ? AND field = 'hero'`
+  const params: Array<string> = [organizationId, siteId, page]
+
+  if (locationId) {
+    query += ` AND location_id = ?`
+    params.push(locationId)
+  } else {
+    query += ` AND location_id IS NULL`
+  }
+
+  await execute(db, query, params)
+}
+
 export const upsertSiteContent = async (db: DbClient, content: Omit<SiteContent, 'updated_at'>) => {
   const hasHeroTitle = content.hero_title !== undefined
   const hasHeroSubtitle = content.hero_subtitle !== undefined

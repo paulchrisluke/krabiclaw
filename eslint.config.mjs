@@ -8,6 +8,7 @@ export default withNuxt(
       '.agents/skills/**',
       '**/.agents/skills/**',
       '.data/**',
+      '.tmp/**',
       '.nuxt/**',
       '.output/**',
       '.wrangler/**',

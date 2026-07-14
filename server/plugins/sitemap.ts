@@ -7,6 +7,7 @@ import { isNonIndexableHost, PLATFORM_SITEMAP_ROUTES } from '~/server/utils/seo-
 import { blogCategoryToSlug } from '~/utils/blog-categories'
 import { categoryToSlug } from '~/utils/docs-categories'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
+import { resolvePublicTemplate } from '~/utils/template-registry'
 
 interface SitemapEntry {
   loc: string
@@ -105,12 +106,74 @@ export default defineNitroPlugin((nitroApp) => {
       return
     }
 
-    const [site, locations, menuItems, posts, experiences] = await Promise.all([
-      queryFirst<{ vertical: string | null }>(
-        db,
-        `SELECT vertical FROM sites WHERE id = ? AND status = 'active' LIMIT 1`,
-        [siteId],
-      ),
+    const site = await queryFirst<{ vertical: string | null; theme_id: string | null }>(
+      db,
+      `SELECT vertical, theme_id FROM sites WHERE id = ? AND status = 'active' LIMIT 1`,
+      [siteId],
+    )
+
+    if (!site) {
+      ctx.urls.length = 0
+      return
+    }
+
+    const template = resolvePublicTemplate({ themeId: site.theme_id, vertical: site.vertical })
+
+    // Blawby/professional-services sites have a different route surface
+    // (offerings, tenant CMS pages, /article/ instead of /blog/) than the
+    // Saya restaurant/experience template below — kept as a separate branch
+    // rather than threading template-specific conditionals through the
+    // Saya-oriented queries.
+    if (template.slug === 'blawby') {
+      const [offerings, tenantPages, posts] = await Promise.all([
+        queryAll<{ slug: string; canonical_path: string | null; updated_at: string | null }>(db, `
+          SELECT slug, canonical_path, updated_at
+            FROM offerings
+           WHERE site_id = ? AND status = 'published'
+           ORDER BY sort_order ASC, name ASC
+        `, [siteId]),
+        queryAll<{ path: string; updated_at: string | null; robots: string | null }>(db, `
+          SELECT path, updated_at, robots
+            FROM tenant_pages
+           WHERE site_id = ? AND status = 'published'
+           ORDER BY sort_order ASC, title ASC
+        `, [siteId]),
+        queryAll<ApiRecord>(
+          db,
+          `SELECT slug, updated_at
+           FROM blog_posts
+           WHERE site_id = ?
+             AND status = 'published'
+             AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
+          [siteId],
+        ),
+      ])
+
+      for (const loc of template.sitemap.exactPaths) entries.push({ loc })
+      for (const offering of offerings ?? []) {
+        entries.push({
+          loc: offering.canonical_path || `${template.serviceRoutes.offeringDetailPrefix}/${offering.slug}`,
+          lastmod: offering.updated_at ?? undefined,
+        })
+      }
+      for (const page of tenantPages ?? []) {
+        if (!page.path || /noindex/i.test(page.robots || '')) continue
+        entries.push({ loc: page.path, lastmod: page.updated_at ?? undefined })
+      }
+      for (const post of posts ?? []) {
+        if (!post.slug) continue
+        entries.push({
+          loc: `${template.serviceRoutes.articleDetailPrefix}/${post.slug}`,
+          lastmod: post.updated_at as string | undefined,
+        })
+      }
+
+      ctx.urls.length = 0
+      addUniqueEntries(ctx.urls, entries)
+      return
+    }
+
+    const [locations, menuItems, posts, experiences] = await Promise.all([
       queryAll<ApiRecord>(
         db,
         `SELECT slug, updated_at, grab_url, uber_eats_url, foodpanda_url
@@ -149,11 +212,6 @@ export default defineNitroPlugin((nitroApp) => {
         [siteId],
       ),
     ])
-
-    if (!site) {
-      ctx.urls.length = 0
-      return
-    }
 
     entries.push({ loc: '/' }, { loc: '/about' }, { loc: '/contact' })
 

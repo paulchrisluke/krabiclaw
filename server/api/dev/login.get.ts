@@ -96,17 +96,25 @@ export default defineEventHandler(async (event) => {
       }
     }
   } else {
+    // Was 3 correlated EXISTS subqueries per row, each re-scanning `member` (and one re-joining
+    // `sites`) independently - with ORDER BY on the computed columns forcing SQLite to evaluate
+    // all three for every row in `user` before it could sort and apply LIMIT, so the LIMIT did
+    // nothing to reduce work. Confirmed via wrangler d1 insights as 99.5% of all D1 rows read on
+    // preview/staging (47.5M rows per execution against ~6K users, ~1,300 executions/week just on
+    // preview - this route only exists to find "any suitable E2E test user" for dev-login calls
+    // that don't pass an explicit userId, so it's hit on essentially every E2E test run).
+    // Rewritten as a single pass: one LEFT JOIN through member into sites, aggregated with
+    // COUNT(DISTINCT ...) instead of per-row correlated EXISTS. member_userId_organizationId_idx
+    // and sites_organization_id_idx (server/db/schema.ts) make both joins index-driven.
     const results = await queryAll<{ id: string; email: string; role?: string | null; has_org: number; is_owner: number; has_site: number }>(db, `
       SELECT u.id, u.email, u.role,
-             EXISTS(SELECT 1 FROM member m WHERE m.userId = u.id) AS has_org,
-             EXISTS(SELECT 1 FROM member m WHERE m.userId = u.id AND m.role = 'owner') AS is_owner,
-             EXISTS(
-               SELECT 1
-               FROM member m
-               JOIN sites s ON s.organization_id = m.organizationId
-               WHERE m.userId = u.id
-             ) AS has_site
+             COUNT(DISTINCT m.id) > 0 AS has_org,
+             COUNT(DISTINCT CASE WHEN m.role = 'owner' THEN m.id END) > 0 AS is_owner,
+             COUNT(DISTINCT CASE WHEN s.id IS NOT NULL THEN m.id END) > 0 AS has_site
       FROM user u
+      LEFT JOIN member m ON m.userId = u.id
+      LEFT JOIN sites s ON s.organization_id = m.organizationId
+      GROUP BY u.id
       ORDER BY has_site DESC, is_owner DESC, has_org DESC, u.createdAt ASC
       LIMIT 50
     `)

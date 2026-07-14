@@ -265,17 +265,17 @@ async function replacePostMedia(
   const now = new Date().toISOString()
   const rows: PostMediaInput[] = []
   if (coverAssetId) rows.push({ media_asset_id: coverAssetId, role: 'cover', sort_order: 0 })
-  
+
   // Deduplicate gallery input by media_asset_id and filter out cover asset
   const seenAssetIds = new Set<string>()
   if (coverAssetId) seenAssetIds.add(coverAssetId)
-  
+
   const deduplicatedGallery = galleryInput.filter(item => {
     if (seenAssetIds.has(item.media_asset_id)) return false
     seenAssetIds.add(item.media_asset_id)
     return true
   })
-  
+
   rows.push(...deduplicatedGallery)
 
   const queries = rows.map((item, index) => ({
@@ -677,7 +677,7 @@ export async function updatePost(
   }
 
   params.push(postId, organizationId, siteId)
-  
+
   // Retry slug update on unique constraint conflict (race condition)
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
