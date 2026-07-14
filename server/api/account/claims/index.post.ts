@@ -47,13 +47,19 @@ export default defineEventHandler(async (event) => {
   const platformDomain = (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com').replace(/^https?:\/\//, '').replace(/\/$/, '')
   const verifyUrl = `https://${platformDomain}/account/claims/verify?token=${result.rawToken}`
 
-  await sendGuestClaimVerificationEmail(env, {
-    email: session.user.email,
-    verifyUrl,
-    siteName: site?.brand_name || site?.slug || 'this site',
-  }).catch((error) => {
+  try {
+    await sendGuestClaimVerificationEmail(env, {
+      email: session.user.email,
+      verifyUrl,
+      siteName: site?.brand_name || site?.slug || 'this site',
+    })
+  } catch (error) {
+    // The claim row already exists (pending, with a live token) — don't report
+    // success when the user was never actually emailed a way to verify it.
+    // Re-requesting the claim rotates the token and retries the send.
     console.error('guest_claim_email_failed', { customerId, error })
-  })
+    return jsonResponse({ error: 'Could not send the verification email. Please try again.' }, { status: 502 })
+  }
 
   return jsonResponse({ ok: true, claimId: result.claimId })
 })

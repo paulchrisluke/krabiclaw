@@ -15,6 +15,13 @@ type Store = {
   customerClaims: Row[]
   reservationSubmissions: Row[]
   experienceBookings: Row[]
+  // Test-only hooks below — not part of the real D1 shape — used to model
+  // races/failures a real concurrent D1 caller could hit but a single-threaded
+  // mock can't produce on its own.
+  /** Fires (once) right after a `customers` row is read by id, before the caller's next write — models another writer completing in that gap. */
+  raceHook?: () => void
+  /** Forces the claim-verified write in verifyClaimToken to throw, to exercise its rollback path. */
+  failVerifiedWrite?: boolean
 }
 
 function createStore(): Store {
@@ -34,7 +41,13 @@ function findCustomer(db: Store, id: unknown) {
 
 async function queryFirst<T>(db: Store, query: string, params: unknown[] = []): Promise<T | undefined> {
   if (query.includes('FROM customers') && query.includes('WHERE id = ?') && query.includes('user_id')) {
-    return findCustomer(db, params[0]) as T | undefined
+    const result = findCustomer(db, params[0]) as T | undefined
+    const hook = db.raceHook
+    if (hook) {
+      db.raceHook = undefined
+      hook()
+    }
+    return result
   }
 
   if (query.includes('SELECT user_id FROM customers WHERE id = ?')) {
@@ -136,6 +149,7 @@ async function execute(db: Store, query: string, params: unknown[] = []) {
   }
 
   if (query.includes('UPDATE customer_claims') && query.includes('status = \'verified\'')) {
+    if (db.failVerifiedWrite) throw new Error('simulated D1 write failure')
     const [verifiedAt, updatedAt, id] = params
     const claim = db.customerClaims.find((c) => c.id === id)
     if (claim) Object.assign(claim, { status: 'verified', verified_at: verifiedAt, token_hash: null, token_expires_at: null, updated_at: updatedAt })
@@ -158,15 +172,28 @@ async function execute(db: Store, query: string, params: unknown[] = []) {
   if (query.includes('UPDATE customers SET user_id = ?')) {
     const [userId, updatedAt, id] = params
     const customer = findCustomer(db, id)
-    if (customer) Object.assign(customer, { user_id: userId, updated_at: updatedAt })
-    return { meta: { changes: customer ? 1 : 0 } }
+    // Mirrors the real compare-and-set guard (`AND user_id IS NULL`): only
+    // assign if the row is still unclaimed at write time, so two racing
+    // verifications can't both succeed against the same customer row.
+    const requiresNull = query.includes('AND user_id IS NULL')
+    if (customer && (!requiresNull || customer.user_id == null)) {
+      Object.assign(customer, { user_id: userId, updated_at: updatedAt })
+      return { meta: { changes: 1 } }
+    }
+    return { meta: { changes: 0 } }
   }
 
   if (query.includes('UPDATE customers SET user_id = NULL')) {
-    const [updatedAt, id] = params
+    const [updatedAt, id, expectedUserId] = params
     const customer = findCustomer(db, id)
-    if (customer) Object.assign(customer, { user_id: null, updated_at: updatedAt })
-    return { meta: { changes: customer ? 1 : 0 } }
+    // Mirrors the real rollback guard (`AND user_id = ?`): only clear the
+    // assignment this call itself made, never a different writer's.
+    const guardsUserId = query.includes('AND user_id = ?')
+    if (customer && (!guardsUserId || customer.user_id === expectedUserId)) {
+      Object.assign(customer, { user_id: null, updated_at: updatedAt })
+      return { meta: { changes: 1 } }
+    }
+    return { meta: { changes: 0 } }
   }
 
   throw new Error(`Unexpected execute query: ${query}`)
@@ -325,6 +352,64 @@ test('verifyClaimToken rejects an expired token and marks the claim expired', as
   assert.deepEqual(result, { ok: false, reason: 'invalid_or_expired' })
   assert.equal(claim.status, 'expired')
   assert.equal(db.customers[0]?.user_id, null)
+})
+
+test('verifyClaimToken: a competing verification that wins the race blocks the loser instead of being overwritten', async () => {
+  const db = createStore()
+  seedUnclaimedCustomer(db)
+
+  // Two different users each independently believe this unclaimed customer
+  // row is theirs and both requested a claim on it.
+  const claimA = await createClaimRequest(db as unknown as D1Database, {
+    customerId: 'customer-1',
+    userId: 'user-a',
+    userEmail: 'guest@example.com',
+  })
+  const claimB = await createClaimRequest(db as unknown as D1Database, {
+    customerId: 'customer-1',
+    userId: 'user-b',
+    userEmail: 'guest@example.com',
+  })
+  assert.equal(claimA.ok, true)
+  assert.equal(claimB.ok, true)
+  if (!claimA.ok || !claimB.ok) return
+
+  // Simulate user A's verification completing in the exact gap between user
+  // B's read of customers.user_id (still null) and B's conditional UPDATE —
+  // the race the `AND user_id IS NULL` compare-and-set guard exists to close.
+  db.raceHook = () => {
+    const customer = findCustomer(db, 'customer-1')
+    if (customer) customer.user_id = 'user-a'
+  }
+
+  const result = await verifyClaimToken(db as unknown as D1Database, claimB.rawToken, 'user-b')
+
+  assert.deepEqual(result, { ok: false, reason: 'already_claimed_by_other' })
+  assert.equal(db.customers[0]?.user_id, 'user-a', 'the winning assignment must not be clobbered by the losing race participant')
+  assert.equal(db.customerClaims.find((c) => c.id === claimB.claimId)?.status, 'rejected')
+})
+
+test('verifyClaimToken rolls back the customer assignment if the claim-verified write fails', async () => {
+  const db = createStore()
+  seedUnclaimedCustomer(db)
+
+  const request = await createClaimRequest(db as unknown as D1Database, {
+    customerId: 'customer-1',
+    userId: 'user-1',
+    userEmail: 'guest@example.com',
+  })
+  assert.equal(request.ok, true)
+  if (!request.ok) return
+
+  db.failVerifiedWrite = true
+
+  await assert.rejects(
+    () => verifyClaimToken(db as unknown as D1Database, request.rawToken, 'user-1'),
+    /simulated D1 write failure/,
+  )
+
+  assert.equal(db.customers[0]?.user_id, null, 'a failed claim-verified write must roll back the assignment this call just made')
+  assert.equal(db.customerClaims[0]?.status, 'pending', 'the claim record is untouched — only the compensating customers.user_id rollback ran')
 })
 
 test('verifyClaimToken cannot be replayed once a claim is verified', async () => {

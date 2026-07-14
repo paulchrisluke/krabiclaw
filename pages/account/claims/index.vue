@@ -8,6 +8,10 @@
 
     <div v-if="pending" class="text-sm text-muted">Loading…</div>
 
+    <div v-else-if="loadError" role="alert" class="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
+      Could not load your bookings. Please refresh the page.
+    </div>
+
     <div v-else-if="!claimable.length" class="rounded-xl border border-default bg-elevated/40 p-6 text-sm text-muted">
       No unclaimed bookings match your account email.
     </div>
@@ -37,22 +41,20 @@
 <script setup>
 definePageMeta({ layout: 'account', middleware: 'account' })
 
+// Server-side detail fetch: bypass the internal self-fetch entirely per
+// CLAUDE.md's "Nested SSR self-fetch loses Cloudflare bindings" rule — call the
+// exact same resolver GET /api/account/claims uses, directly against the request
+// event, instead of re-implementing its auth+query logic (and risking the two
+// drifting, as previously happened with the D1 binding name).
 const requestEvent = useRequestEvent()
-const { data, pending } = await useAsyncData('account-claimable', async () => {
+const { data, pending, error: loadError } = await useAsyncData('account-claimable', async () => {
   if (import.meta.server) {
     if (!requestEvent) return { claimable: [] }
-    const [{ cloudflareEnv }, { getAuthSession }, { findClaimableCustomersForEmail }] = await Promise.all([
-      import('~/server/utils/api-response'),
-      import('~/server/utils/auth'),
-      import('~/server/utils/guest-claims'),
-    ])
-    const env = cloudflareEnv(requestEvent)
-    const session = await getAuthSession(requestEvent, env)
-    if (!session?.user?.id || !session.user.emailVerified || !env.db) return { claimable: [] }
-    const claimable = await findClaimableCustomersForEmail(env.db, session.user.email)
-    return { claimable }
+    const { resolveClaimableCustomersForEvent } = await import('~/server/utils/account-surface')
+    const result = await resolveClaimableCustomersForEvent(requestEvent)
+    return { claimable: result.status === 'ok' ? result.data : [] }
   }
-  return await $fetch('/api/account/claims').catch(() => ({ claimable: [] }))
+  return await $fetch('/api/account/claims')
 })
 
 const claimable = computed(() => data.value?.claimable ?? [])
@@ -62,6 +64,10 @@ const error = ref(null)
 const notice = ref(null)
 
 async function requestClaim(customerId) {
+  // Guard re-entrancy explicitly rather than relying on the button's disabled
+  // state alone — Vue's DOM update is async, so a fast double-click/double-tap
+  // can otherwise fire this twice before the :loading-driven disable renders.
+  if (requesting.value) return
   requesting.value = customerId
   error.value = null
   notice.value = null

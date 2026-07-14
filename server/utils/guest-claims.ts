@@ -222,9 +222,19 @@ export async function verifyClaimToken(
     return { ok: false, reason: 'already_claimed_by_other' }
   }
 
-  await execute(db, `
-    UPDATE customers SET user_id = ?, updated_at = ? WHERE id = ?
+  // Conditional (compare-and-set) assignment: only claim the row if it is still
+  // unclaimed at write time. Without the `AND user_id IS NULL` guard, two pending
+  // claims for the same customer (from two different users) could both pass the
+  // read-time null check above and race to overwrite each other's assignment.
+  const assignment = await execute(db, `
+    UPDATE customers SET user_id = ?, updated_at = ? WHERE id = ? AND user_id IS NULL
   `, [claim.user_id, now.toISOString(), claim.customer_id])
+
+  if (!Number(assignment.meta.changes ?? 0)) {
+    // Someone else's claim won the race between our read and this write.
+    await execute(db, `UPDATE customer_claims SET status = 'rejected', updated_at = ? WHERE id = ?`, [now.toISOString(), claim.id])
+    return { ok: false, reason: 'already_claimed_by_other' }
+  }
 
   try {
     await execute(db, `
@@ -233,8 +243,9 @@ export async function verifyClaimToken(
       WHERE id = ?
     `, [now.toISOString(), now.toISOString(), claim.id])
   } catch (error) {
-    // Compensate: don't leave a linked customer with no corresponding verified claim record.
-    await execute(db, `UPDATE customers SET user_id = NULL, updated_at = ? WHERE id = ?`, [now.toISOString(), claim.customer_id]).catch(() => {})
+    // Compensate: roll back only the assignment we just made (guarded by user_id
+    // matching, so we never clobber a different, later-successful assignment).
+    await execute(db, `UPDATE customers SET user_id = NULL, updated_at = ? WHERE id = ? AND user_id = ?`, [now.toISOString(), claim.customer_id, claim.user_id]).catch(() => {})
     throw error
   }
 
@@ -302,3 +313,4 @@ export async function userHasLinkedCustomers(db: DbClient, userId: string): Prom
   `, [userId])
   return Boolean(row)
 }
+
