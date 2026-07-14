@@ -14,6 +14,7 @@
     "ai-search:sync:preview": "node --experimental-strip-types scripts/ai-search-sync.ts --base-url https://preview.krabiclaw.com",
     "ai-search:sync:staging": "node --experimental-strip-types scripts/ai-search-sync.ts --base-url https://staging.krabiclaw.com",
     "ai-search:sync:prod": "node --experimental-strip-types scripts/ai-search-sync.ts --base-url https://krabiclaw.com",
+    "ai-search:status:prod": "node --experimental-strip-types scripts/ai-search-status.ts --base-url https://krabiclaw.com",
     "typecheck": "nuxi typecheck",
     "lint": "eslint . --ignore-pattern '.agents/**' --ignore-pattern '.tmp/**' --ignore-pattern '**/.tmp/**'",
     "lint:fix": "eslint . --fix --ignore-pattern '.agents/**' --ignore-pattern '.tmp/**' --ignore-pattern '**/.tmp/**'",

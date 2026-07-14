@@ -1,13 +1,17 @@
+// Read-only diagnostic: reports how many items currently exist in the platform AI
+// Search instance and how long listing them takes, without doing any uploads/deletes.
+// Added to test whether listAllItems() (which runs before any upload in
+// rebuildPlatformKnowledgeIndex) is itself a bottleneck — several prior production
+// reindex runs died from a raw connection failure before ever reaching the
+// delete-stale-items step, so orphaned items from earlier key formats may have
+// accumulated without ever being cleaned up.
 import { getHeader } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { rebuildPlatformKnowledgeIndex } from '~/server/utils/public-search'
 import { secretsMatch } from '~/server/utils/internal-secret'
+import { listAllItems } from '~/server/utils/public-search'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
-  if (!env.db) {
-    return jsonResponse({ error: 'Database not available' }, { status: 500 })
-  }
 
   const expectedSecret = typeof env.PLATFORM_SEARCH_REINDEX_SECRET === 'string'
     ? env.PLATFORM_SEARCH_REINDEX_SECRET.trim()
@@ -24,15 +28,16 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const startedAt = Date.now()
   try {
-    const result = await rebuildPlatformKnowledgeIndex(env, env.db)
-    return jsonResponse({ ok: true, ...result })
+    const items = await listAllItems(env)
+    return jsonResponse({
+      ok: true,
+      itemCount: items.length,
+      elapsedMs: Date.now() - startedAt,
+    })
   } catch (error) {
-    console.error('Failed to rebuild platform knowledge index:', error)
-    // This route is internal and already secret-gated (same trust boundary as the
-    // CI caller), so surfacing the real error message — not a full stack trace —
-    // is a reasonable, minimal diagnostic aid rather than a public information leak.
     const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
-    return jsonResponse({ error: 'Failed to rebuild platform knowledge index', detail }, { status: 500 })
+    return jsonResponse({ error: 'Failed to list AI Search items', detail, elapsedMs: Date.now() - startedAt }, { status: 500 })
   }
 })

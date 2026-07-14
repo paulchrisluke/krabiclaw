@@ -324,7 +324,7 @@ async function ensurePlatformKnowledgeInstance(env: CloudflareEnv) {
   }
 }
 
-async function listAllItems(env: CloudflareEnv) {
+export async function listAllItems(env: CloudflareEnv) {
   const instance = searchNamespace(env).get(platformKnowledgeInstanceId(env))
   const items: AiSearchItemInfo[] = []
   let page = 1
@@ -603,7 +603,7 @@ export function expandDocumentsForSurfaces(records: PlatformKnowledgeDocument[])
 // requests against a single AI Search instance.
 const UPLOAD_CONCURRENCY = 10
 
-async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
+async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (_item: T) => Promise<void>): Promise<void> {
   let nextIndex = 0
   async function runNext(): Promise<void> {
     const current = nextIndex++
@@ -615,13 +615,31 @@ async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (i
 }
 
 export async function rebuildPlatformKnowledgeIndex(env: CloudflareEnv, db: DbClient) {
+  // Temporary phase timing: two identical "fetch failed" (raw connection death) results
+  // at ~5:01 elapsed survived a 10x concurrency change to the upload loop with no
+  // improvement — meaning uploads themselves are very unlikely to be the bottleneck.
+  // Leading theory: every earlier failed run died before reaching the delete-stale-items
+  // step, so orphaned items from several different key formats (raw slug, id-based,
+  // hash-based) have been accumulating across attempts, and listAllItems()'s pagination
+  // (which runs before any upload starts) may now be working through a much larger
+  // corpus than a normal rebuild would ever see. Logging elapsed time per phase to
+  // confirm where the time actually goes instead of guessing again.
+  const rebuildStartedAt = Date.now()
+  const elapsed = () => `${((Date.now() - rebuildStartedAt) / 1000).toFixed(1)}s`
+
   await ensurePlatformKnowledgeInstance(env)
+  console.warn(`[ai-search] ensurePlatformKnowledgeInstance done at ${elapsed()}`)
+
   const [existingItems, baseRecords] = await Promise.all([
     listAllItems(env),
     buildPlatformKnowledgeDocuments(db),
   ])
+  console.warn(`[ai-search] listAllItems + buildPlatformKnowledgeDocuments done at ${elapsed()}: ${existingItems.length} existing items, ${baseRecords.length} base records`)
+
   const records = expandDocumentsForSurfaces(baseRecords)
   const nextKeys = new Set(records.map(record => record.key))
+  console.warn(`[ai-search] expanded to ${records.length} records to upload`)
+
   await runWithConcurrency(records, UPLOAD_CONCURRENCY, async (record) => {
     try {
       await uploadIndexItem(env, record.key, renderDocumentContent(record), record.metadata)
@@ -634,8 +652,12 @@ export async function rebuildPlatformKnowledgeIndex(env: CloudflareEnv, db: DbCl
       throw new Error(`uploadIndexItem failed for key "${record.key}" (length ${record.key.length}): ${message}`)
     }
   })
+  console.warn(`[ai-search] uploads done at ${elapsed()}`)
+
   const staleItems = existingItems.filter(item => !nextKeys.has(item.key))
+  console.warn(`[ai-search] ${staleItems.length} stale items to delete`)
   await runWithConcurrency(staleItems, UPLOAD_CONCURRENCY, (item) => deleteIndexItem(env, item.id))
+  console.warn(`[ai-search] deletes done at ${elapsed()}`)
 
   // Cloudflare processes indexing asynchronously regardless of whether this request
   // stays open to observe it, and the Workers platform enforces a request-duration
