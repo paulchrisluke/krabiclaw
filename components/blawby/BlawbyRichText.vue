@@ -2,6 +2,7 @@
   <!-- eslint-disable vue/no-v-html -->
   <div
     :class="unstyled ? '' : 'prose max-w-none prose-headings:text-[var(--blawby-primary)] prose-p:leading-8 prose-p:text-[var(--blawby-ink)] prose-a:text-[var(--blawby-accent-strong)]'"
+    data-allow-mismatch="children"
     v-html="html"
   />
   <!-- eslint-enable vue/no-v-html -->
