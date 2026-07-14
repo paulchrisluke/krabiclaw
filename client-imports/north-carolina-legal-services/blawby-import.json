@@ -3193,7 +3193,7 @@
     {
       "id": "qa_ncls_site_5",
       "question": "Do you charge a consultation fee?",
-      "answer": "Yes, we charge a flat rate of $80 for a half-hour consultation.",
+      "answer": "Yes, our consultation fee is $80 for a half-hour or $160 for a full hour.",
       "page_path": null,
       "sort_order": 4,
       "source": "import",
