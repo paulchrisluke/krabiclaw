@@ -353,11 +353,20 @@ async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000) {
   const startedAt = Date.now()
 
   while (Date.now() - startedAt < timeoutMs) {
-    const stats = await instance.stats()
-    const queued = Number(stats.queued ?? 0)
-    const running = Number(stats.running ?? 0)
-    const outdated = Number(stats.outdated ?? 0)
-    if (queued === 0 && running === 0 && outdated === 0) return
+    try {
+      const stats = await instance.stats()
+      const queued = Number(stats.queued ?? 0)
+      const running = Number(stats.running ?? 0)
+      const outdated = Number(stats.outdated ?? 0)
+      if (queued === 0 && running === 0 && outdated === 0) return
+    } catch (error) {
+      // A single transient stats-fetch error (e.g. DownstreamConfigApiError timeout,
+      // observed in production) must not abort the whole wait — the actual documents
+      // were already uploaded successfully by this point; this loop only confirms
+      // completion. Keep polling on the same budget rather than failing the deploy
+      // over a confirmation hiccup unrelated to whether indexing itself is healthy.
+      console.warn('[ai-search] transient error polling indexing status, continuing to poll', error)
+    }
     await new Promise(resolve => setTimeout(resolve, 1000))
   }
 
