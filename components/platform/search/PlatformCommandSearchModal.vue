@@ -106,7 +106,7 @@
 import PlatformSearchGlyph, { PLATFORM_SEARCH_GLYPHS } from '~/components/platform/search/PlatformSearchGlyph.vue'
 import type { PlatformSearchGlyphName } from '~/components/platform/search/PlatformSearchGlyph.vue'
 import type { ComponentPublicInstance } from 'vue'
-import { PLATFORM_SEARCH_OPEN_EVENT, type PlatformSearchPaletteSurface } from '~/composables/usePlatformSearchPalette'
+import type { PlatformSearchPaletteSurface } from '~/composables/usePlatformSearchPalette'
 import type { PublicSearchResult } from '~/server/utils/public-search'
 
 interface SearchResponse {
@@ -440,21 +440,13 @@ function onGlobalKeydown(event: KeyboardEvent) {
   }
 }
 
-function onOpenRequest(event: Event) {
-  if ((event as CustomEvent<PlatformSearchPaletteSurface>).detail === props.surface) {
-    open()
-  }
-}
-
 onMounted(() => {
   window.addEventListener('keydown', onGlobalKeydown)
-  window.addEventListener(PLATFORM_SEARCH_OPEN_EVENT, onOpenRequest)
 })
 
 onBeforeUnmount(() => {
   if (debounceHandle) clearTimeout(debounceHandle)
   window.removeEventListener('keydown', onGlobalKeydown)
-  window.removeEventListener(PLATFORM_SEARCH_OPEN_EVENT, onOpenRequest)
 })
 </script>
 

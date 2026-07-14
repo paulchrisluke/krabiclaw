@@ -7,7 +7,8 @@
       compact ? 'justify-center px-2.5' : 'px-3',
     ]"
     :aria-label="ariaLabel"
-    @click="openSearch"
+    :disabled="!hydrated"
+    @click="open"
   >
     <PlatformSearchGlyph name="search" :class="`size-4 shrink-0 transition ${glyphClass}`" />
     <template v-if="!compact">
@@ -22,7 +23,7 @@
 
 <script setup lang="ts">
 import PlatformSearchGlyph from '~/components/platform/search/PlatformSearchGlyph.vue'
-import { requestPlatformSearchOpen, type PlatformSearchPaletteSurface } from '~/composables/usePlatformSearchPalette'
+import type { PlatformSearchPaletteSurface } from '~/composables/usePlatformSearchPalette'
 
 const props = withDefaults(defineProps<{
   surface: PlatformSearchPaletteSurface
@@ -38,11 +39,11 @@ const props = withDefaults(defineProps<{
 })
 
 const { open } = usePlatformSearchPalette(props.surface)
+const hydrated = ref(false)
 
-function openSearch() {
-  open()
-  requestPlatformSearchOpen(props.surface)
-}
+onMounted(() => {
+  hydrated.value = true
+})
 
 // Blawby text always reads --blawby-ink (the shell's AA-safe foreground token) rather
 // than --blawby-primary, which is a tenant-configurable brand accent that can be a
