@@ -23,6 +23,8 @@ test('platform sitemap allowlist contains only intentional public content routes
     '/pricing',
     '/privacy',
     '/templates',
+    '/templates/blawby',
+    '/templates/saya',
     '/terms',
   ])
 

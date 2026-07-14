@@ -253,4 +253,53 @@ test.describe('platform public site', () => {
     await expect(page.locator('body')).toContainText('Page not found')
     await expect(page.locator('body')).not.toContainText('Site Not Found')
   })
+
+  test('/templates is a published-template index linking to each detail page', async ({ page, baseURL }) => {
+    const errors = collectPageErrors(page)
+    const response = await page.goto(`${baseURL}/templates`, { waitUntil: 'load' })
+
+    expect(response?.status()).toBeLessThan(400)
+    await expect(page).toHaveTitle(/Templates/)
+    await expect(page.getByRole('heading', { name: 'Saya' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Blawby' })).toBeVisible()
+    await expect(page.locator(`a[href="/templates/saya"]`)).toBeVisible()
+    await expect(page.locator(`a[href="/templates/blawby"]`)).toBeVisible()
+
+    await expectHealthyPage(page, errors)
+  })
+
+  test('/templates/saya renders the Saya detail experience', async ({ page, baseURL }) => {
+    const errors = collectPageErrors(page)
+    const response = await page.goto(`${baseURL}/templates/saya`, { waitUntil: 'load' })
+
+    expect(response?.status()).toBeLessThan(400)
+    await expect(page).toHaveTitle(/Saya/)
+    await expect(page.getByRole('heading', { name: 'Saya' }).first()).toBeVisible()
+    await expect(page.locator('body')).toContainText('Free on all plans')
+
+    await expectHealthyPage(page, errors)
+  })
+
+  test('/templates/blawby renders the Blawby detail experience with the NCLS demo link', async ({ page, baseURL }) => {
+    const errors = collectPageErrors(page)
+    const response = await page.goto(`${baseURL}/templates/blawby`, { waitUntil: 'load' })
+
+    expect(response?.status()).toBeLessThan(400)
+    await expect(page).toHaveTitle(/Blawby/)
+    await expect(page.getByRole('heading', { name: 'Blawby' }).first()).toBeVisible()
+    await expect(page.locator('body')).toContainText('North Carolina Legal Services')
+
+    const iframeSrc = await page.locator('iframe').first().getAttribute('src')
+    expect(iframeSrc).toBe('https://ncls.krabiclaw.com')
+
+    await expectHealthyPage(page, errors)
+  })
+
+  test('unknown template slug 404s through error.vue', async ({ page, baseURL }) => {
+    const response = await page.goto(`${baseURL}/templates/not-a-real-template`, { waitUntil: 'load' })
+
+    expect(response?.status()).toBe(404)
+    await expect(page.locator('body')).toContainText('Error 404')
+    await expect(page.locator('body')).toContainText('Page not found')
+  })
 })
