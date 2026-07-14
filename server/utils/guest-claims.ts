@@ -241,7 +241,7 @@ export async function verifyClaimToken(
       UPDATE customer_claims
       SET status = 'verified', verified_at = ?, token_hash = NULL, token_expires_at = NULL, updated_at = ?
       WHERE id = ?
-    `, [now.toISOString(), now.toISOString(), claim.id])
+    `, [now.getTime(), now.toISOString(), claim.id])
   } catch (error) {
     // Compensate: roll back only the assignment we just made (guarded by user_id
     // matching, so we never clobber a different, later-successful assignment).
@@ -313,4 +313,3 @@ export async function userHasLinkedCustomers(db: DbClient, userId: string): Prom
   `, [userId])
   return Boolean(row)
 }
-

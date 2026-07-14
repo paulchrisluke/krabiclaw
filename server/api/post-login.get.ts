@@ -1,5 +1,6 @@
 // GET /api/post-login — server-side smart redirect after OAuth / sign-in.
 // Reads the session role and routes: admin → /admin, owner → /dashboard/[slug].
+import { getQuery } from 'h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
@@ -12,6 +13,14 @@ export default defineEventHandler(async (event) => {
 
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return sendRedirect(event, '/login')
+
+  const requestedRedirect = getQuery(event).redirect
+  const redirect = typeof requestedRedirect === 'string'
+    && requestedRedirect.startsWith('/')
+    && !requestedRedirect.startsWith('//')
+    ? requestedRedirect
+    : null
+  if (redirect) return sendRedirect(event, redirect)
 
   const user = session.user as typeof session.user & { role?: string }
 
@@ -41,7 +50,7 @@ export default defineEventHandler(async (event) => {
       // rather than a brand-new tenant operator — check for linked customers
       // rows before defaulting to tenant onboarding. A genuinely new signup has
       // none of these, so its onboarding redirect is unchanged.
-      const isGuest = await userHasLinkedCustomers(db, session.user.id)
+      const isGuest = await userHasLinkedCustomers(db, session.user.id).catch(() => false)
       if (isGuest) {
         return sendRedirect(event, '/account')
       }

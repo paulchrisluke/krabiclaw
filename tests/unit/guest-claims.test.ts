@@ -304,6 +304,7 @@ test('verifyClaimToken links the customer only when the token, expiry, and reque
   assert.deepEqual(result, { ok: true, customerId: 'customer-1', userId: 'user-1' })
   assert.equal(db.customers[0]?.user_id, 'user-1')
   assert.equal(db.customerClaims[0]?.status, 'verified')
+  assert.equal(typeof db.customerClaims[0]?.verified_at, 'number')
 })
 
 test('verifyClaimToken refuses to link when the requesting session is not the claim owner', async () => {

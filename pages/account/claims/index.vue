@@ -52,7 +52,13 @@ const { data, pending, error: loadError } = await useAsyncData('account-claimabl
     if (!requestEvent) return { claimable: [] }
     const { resolveClaimableCustomersForEvent } = await import('~/server/utils/account-surface')
     const result = await resolveClaimableCustomersForEvent(requestEvent)
-    return { claimable: result.status === 'ok' ? result.data : [] }
+    if (result.status !== 'ok') {
+      throw createError({
+        statusCode: result.status === 'unauthenticated' ? 401 : 503,
+        statusMessage: result.status === 'unauthenticated' ? 'Authentication required' : 'Database not available',
+      })
+    }
+    return { claimable: result.data }
   }
   return await $fetch('/api/account/claims')
 })

@@ -116,6 +116,12 @@ const inputClass = FORM_INPUT_CLASS
 
 const route = useRoute()
 const isOAuthFlow = computed(() => !!route.query.client_id)
+const postLoginUrl = computed(() => {
+  const redirect = route.query.redirect
+  return typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')
+    ? `/api/post-login?redirect=${encodeURIComponent(redirect)}`
+    : '/api/post-login'
+})
 
 const loading = ref(false)
 const error = ref(null)
@@ -141,14 +147,14 @@ if (route.query.signup === 'success') {
 
 onMounted(async () => {
   const session = await authClient.getSession()
-  if (session?.data?.user) window.location.href = '/api/post-login'
+  if (session?.data?.user) window.location.href = postLoginUrl.value
 })
 
 const handleGoogleSignIn = async () => {
   loading.value = true
   error.value = null
   try {
-    await authClient.signIn.social({ provider: 'google', callbackURL: '/api/post-login' })
+    await authClient.signIn.social({ provider: 'google', callbackURL: postLoginUrl.value })
   } catch {
     error.value = 'Google sign in failed. Please try again.'
   } finally {
@@ -186,7 +192,7 @@ const handleEmailSignIn = async () => {
       return
     }
 
-    window.location.href = '/api/post-login'
+    window.location.href = postLoginUrl.value
   } catch (err) {
     error.value = err?.message ?? 'Email sign in failed. Please try again.'
   } finally {
@@ -263,9 +269,9 @@ const handleVerifyOtp = async () => {
     await authClient.phoneNumber.verify({
       phoneNumber: normalizePhone(phone.value),
       code: code.value.trim(),
-      callbackURL: '/api/post-login',
+      callbackURL: postLoginUrl.value,
     })
-    window.location.href = '/api/post-login'
+    window.location.href = postLoginUrl.value
   } catch (err) {
     error.value = err?.message ?? 'Invalid or expired code. Please try again.'
     code.value = ''

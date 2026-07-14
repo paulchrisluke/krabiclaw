@@ -51,7 +51,13 @@ const { data, pending, error: loadError } = await useAsyncData('account-bookings
     if (!requestEvent) return { customers: [] }
     const { resolveLinkedCustomersForEvent } = await import('~/server/utils/account-surface')
     const result = await resolveLinkedCustomersForEvent(requestEvent)
-    return { customers: result.status === 'ok' ? result.data : [] }
+    if (result.status !== 'ok') {
+      throw createError({
+        statusCode: result.status === 'unauthenticated' ? 401 : 503,
+        statusMessage: result.status === 'unauthenticated' ? 'Authentication required' : 'Database not available',
+      })
+    }
+    return { customers: result.data }
   }
   return await $fetch('/api/account/bookings')
 })

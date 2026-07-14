@@ -15,7 +15,9 @@ export default defineEventHandler(async (event) => {
 
   setHeader(event, 'Content-Type', result.contentType)
   setHeader(event, 'Content-Length', result.bytes.byteLength)
-  setHeader(event, 'Cache-Control', 'public, max-age=3600, s-maxage=31536000, immutable')
+  setHeader(event, 'Cache-Control', result.source === 'fallback'
+    ? 'public, max-age=60, s-maxage=300, stale-while-revalidate=60'
+    : 'public, max-age=3600, s-maxage=31536000, immutable')
   setHeader(event, 'ETag', `"${result.cacheKey}"`)
   setHeader(event, 'X-Content-Type-Options', 'nosniff')
   setHeader(event, 'X-Og-Image-Source', result.source)

@@ -69,8 +69,8 @@ export const customer_claims = sqliteTable("customer_claims", {
 	email_at_claim: text().notNull(),
 	status: text().default("pending").notNull(),
 	token_hash: text(),
-	token_expires_at: integer({ mode: "timestamp" }),
-	verified_at: integer({ mode: "timestamp" }),
+	token_expires_at: integer({ mode: "timestamp_ms" }),
+	verified_at: integer({ mode: "timestamp_ms" }),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [

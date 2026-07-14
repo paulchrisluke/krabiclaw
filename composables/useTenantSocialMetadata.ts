@@ -9,9 +9,10 @@ export type TenantSocialMetadataInput = Omit<SocialPageMetadataInput, 'template'
   path: string
 }
 
-function resolveTemplate(themeId: string | null): SocialTemplate {
+function resolveTemplate(themeId: MaybeRefOrGetter<string | null>): SocialTemplate {
+  const resolvedThemeId = toValue(themeId)
   const match = (Object.values(publicTemplateRegistry) as Array<{ themeId: string; slug: PublicTemplateSlug }>)
-    .find(definition => definition.themeId === themeId)
+    .find(definition => definition.themeId === resolvedThemeId)
   return match?.slug === 'blawby' ? 'blawby' : 'saya'
 }
 
@@ -30,11 +31,9 @@ export function useTenantSocialMetadata(input: MaybeRefOrGetter<TenantSocialMeta
   const origin = requestURL.origin || config.public.siteUrl
 
   const canonicalUrl = useSeoUrl(() => toValue(input).path)
-  const template = resolveTemplate(themeId)
-
   const socialInput = computed<SocialPageMetadataInput>(() => ({
     ...toValue(input),
-    template,
+    template: resolveTemplate(themeId),
     canonicalUrl: canonicalUrl.value,
   }))
 

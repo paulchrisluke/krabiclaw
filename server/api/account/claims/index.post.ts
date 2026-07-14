@@ -57,7 +57,9 @@ export default defineEventHandler(async (event) => {
     // The claim row already exists (pending, with a live token) — don't report
     // success when the user was never actually emailed a way to verify it.
     // Re-requesting the claim rotates the token and retries the send.
-    console.error('guest_claim_email_failed', { customerId, error })
+    console.error('guest_claim_email_failed', {
+      errorType: error instanceof Error ? error.name : 'UnknownError',
+    })
     return jsonResponse({ error: 'Could not send the verification email. Please try again.' }, { status: 502 })
   }
 
