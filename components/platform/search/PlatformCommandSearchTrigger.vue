@@ -39,13 +39,17 @@ const props = withDefaults(defineProps<{
 
 const { open } = usePlatformSearchPalette(props.surface)
 
+// Blawby text always reads --blawby-ink (the shell's AA-safe foreground token) rather
+// than --blawby-primary, which is a tenant-configurable brand accent that can be a
+// light/bright color and is unsafe as text on a fixed surface — see the same rule
+// applied in PlatformCommandSearchModal.vue's Blawby palette.
 const themeClass = computed(() => {
-  if (props.variant === 'blawby') return 'border-[var(--blawby-border)] bg-white hover:border-[var(--blawby-primary)] hover:bg-[var(--blawby-accent-100)]'
+  if (props.variant === 'blawby') return 'border-[var(--blawby-border)] bg-[var(--blawby-surface)] hover:border-[var(--blawby-primary)] hover:bg-[var(--blawby-accent-100)]'
   if (props.variant === 'saya') return 'border-default bg-default/80 hover:border-muted hover:bg-elevated'
   return 'border-default bg-default/80 hover:border-muted hover:bg-elevated'
 })
-const glyphClass = computed(() => props.variant === 'blawby' ? 'text-gray-500 group-hover:text-[var(--blawby-primary)]' : 'text-muted group-hover:text-default')
-const labelClass = computed(() => props.variant === 'blawby' ? 'text-gray-500' : 'text-muted')
-const kbdWrapClass = computed(() => props.variant === 'blawby' ? 'text-gray-400' : 'text-dimmed')
-const kbdClass = computed(() => props.variant === 'blawby' ? 'border-[var(--blawby-border)] bg-white' : 'border-default bg-default')
+const glyphClass = computed(() => props.variant === 'blawby' ? 'text-[var(--blawby-ink)] opacity-60 group-hover:opacity-100' : 'text-muted group-hover:text-default')
+const labelClass = computed(() => props.variant === 'blawby' ? 'text-[var(--blawby-ink)] opacity-60' : 'text-muted')
+const kbdWrapClass = computed(() => props.variant === 'blawby' ? 'text-[var(--blawby-ink)] opacity-45' : 'text-dimmed')
+const kbdClass = computed(() => props.variant === 'blawby' ? 'border-[var(--blawby-border)] bg-[var(--blawby-surface)]' : 'border-default bg-default')
 </script>
