@@ -136,6 +136,7 @@
             <p class="mt-1 text-xs text-muted">Manage Q&A and reviews that apply to the whole site.</p>
           </div>
           <div class="flex flex-wrap gap-2">
+            <UButton icon="i-lucide-building-2" color="neutral" variant="soft" :to="`${siteDashboardPath}/professional-services`">Organization & SEO</UButton>
             <UButton icon="i-lucide-circle-help" color="neutral" variant="soft" :to="`${siteDashboardPath}/qa`">Q&A</UButton>
             <UButton icon="i-lucide-star" color="neutral" variant="soft" :to="`${siteDashboardPath}/reviews`">Reviews</UButton>
           </div>

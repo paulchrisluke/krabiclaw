@@ -113,13 +113,12 @@
 </template>
 
 <script setup lang="ts">
-import { serializeJsonLd } from '~/utils/json-ld'
-
 import type { PublicBlawbyRouteData, PublicSiteQa } from '~/types/blawby'
 
 const props = defineProps<{ routeData: PublicBlawbyRouteData }>()
 const offering = computed(() => props.routeData.offering!)
-const { identity, consultation } = await useBlawbyShell()
+const { identity, consultation, compliance } = await useBlawbyShell()
+const org = useBlawbyOrgIdentity(identity, compliance)
 const activeMedia = ref(0)
 const activeFeature = ref(0)
 const tabRefs = ref<Array<HTMLButtonElement | null>>([])
@@ -184,34 +183,31 @@ useSeoMeta({
 })
 useHead(() => ({
   link: [{ rel: 'canonical', href: canonicalUrl.value }],
-  script: [
-    { type: 'application/ld+json', innerHTML: serializeJsonLd({
-      '@context': 'https://schema.org',
-      '@type': offering.value.schema_type || 'LegalService',
-      name: offering.value.name,
-      description: offering.value.seo_description || offering.value.summary || undefined,
-      url: canonicalUrl.value,
-      provider: { '@type': 'Organization', name: identity.value.brand_name || 'Professional services' },
-      image: offering.value.hero_image_url || offering.value.thumbnail_url || undefined,
-    }) },
-    { type: 'application/ld+json', innerHTML: serializeJsonLd({
-      '@context': 'https://schema.org',
-      '@type': 'BreadcrumbList',
-      itemListElement: [
-        { '@type': 'ListItem', position: 1, name: 'Home', item: homeUrl.value },
-        { '@type': 'ListItem', position: 2, name: 'Services', item: servicesUrl.value },
-        { '@type': 'ListItem', position: 3, name: offering.value.name, item: canonicalUrl.value },
-      ],
-    }) },
-    ...(validOfferingQa.value.length ? [{ type: 'application/ld+json', innerHTML: serializeJsonLd({
-      '@context': 'https://schema.org',
-      '@type': 'FAQPage',
-      mainEntity: validOfferingQa.value.map(item => ({
-        '@type': 'Question',
-        name: item.question,
-        acceptedAnswer: { '@type': 'Answer', text: item.answer },
-      })),
-    }) }] : []),
+}))
+
+useProfessionalServiceSchema(() => ({
+  recipe: 'service-detail',
+  org: org.value,
+  pageUrl: canonicalUrl.value,
+  pageTitle: offering.value.name,
+  pageDescription: offering.value.seo_description || offering.value.summary || null,
+  imageUrl: offering.value.hero_image_url || offering.value.thumbnail_url || null,
+  breadcrumbs: [
+    { name: 'Home', url: homeUrl.value },
+    { name: 'Services', url: servicesUrl.value },
+    { name: offering.value.name, url: canonicalUrl.value },
   ],
+  faqs: validOfferingQa.value,
+  offering: {
+    name: offering.value.name,
+    description: offering.value.seo_description || offering.value.summary || null,
+    schemaType: offering.value.schema_type || 'LegalService',
+    // Real business_locations data for this offering's own location, when
+    // one is associated (offerings.location_id) — falls through to the
+    // org's addressVisible when the offering doesn't declare its own.
+    address: offering.value.location_address_street || offering.value.location_address_locality
+      ? { street_address: offering.value.location_address_street, locality: offering.value.location_address_locality }
+      : null,
+  },
 }))
 </script>

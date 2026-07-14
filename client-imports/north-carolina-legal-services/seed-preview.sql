@@ -2001,13 +2001,14 @@ Services include but are not limited to:
 
 INSERT INTO tenant_compliance (
   id, organization_id, site_id, entity_name, dba_name, entity_type, nonprofit_status,
-  registration_number, service_area, disclaimer, footer_disclaimer, document_asset_ids,
+  registration_number, service_area, service_area_type, disclaimer, footer_disclaimer, document_asset_ids,
+  founder_name, founding_date, same_as, contact_points, address_visibility,
   metadata_json, created_at, updated_at
 ) VALUES (
   'compliance_ncls', 'org-ncls-blawby', 'site-ncls-blawby',
   'North Carolina Legal Services', 'Bull City Legal Services', 'LegalService',
-  '501(c)(3)', NULL, 'North Carolina',
-  '*DISCLAIMER: The purpose of this website is informational - no
+  'https://schema.org/Nonprofit501c3', NULL, 'North Carolina',
+  'State', '*DISCLAIMER: The purpose of this website is informational - no
 attorney-client relationship is created by using this website or
 reading this blog. No legal advice is intended. If you have
 questions about a current or potential legal problem, you should
@@ -2020,7 +2021,11 @@ guaranteed. This website is provided "as is," without any warranty
 of any kind, express or implied.', 'Access to Justice for All. We believe that access to the justice system is a fundamental right. At North Carolina Legal Services, we are committed to removing financial barriers that prevent many in our community from obtaining high-quality legal assistance.
 
 North Carolina Legal Services is a registered [**DBA**](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/9f06152ccd5d6f29c11a.pdf) of Bull City Legal Services. See our [**IRS Determination Letter**](https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/8de1e5793e0806ece163.pdf). All rights reserved.',
-  '["asset_ncls_legal_northcarolinalegalservices-dba-redacted","asset_ncls_legal_finalletter-88-0565637-bullcitylegalservicesinc-redacted"]', '{"founder":"Rich Gittings","foundingDate":{},"languages":["English"],"keywords":["North Carolina Legal Services","North Carolina Lawyer","North Carolina Law Firm","Family Law Attorney","Employment Law Consultation","Probate Services NC","Tenant Rights Lawyer","Small Business Legal Advice","Legal Counsel NC"],"logo_dark_url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/3869491ea5373de6bb34.svg","header":{"banner_content":null,"banner_dismissible":false}}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+  '["asset_ncls_legal_northcarolinalegalservices-dba-redacted","asset_ncls_legal_finalletter-88-0565637-bullcitylegalservicesinc-redacted"]',
+  'Rich Gittings', NULL,
+  '["https://linkedin.com/company/north-carolina-legal-services","https://www.facebook.com/northcarolinalegalservices","https://www.instagram.com/northcarolinalegalservices"]', '[{"contact_type":"customer service","telephone":"(984) 777-8288","email":"contact@northcarolinalegalservices.org","area_served":"North Carolina"}]',
+  'hidden',
+  '{"founder":"Rich Gittings","foundingDate":{},"languages":["English"],"keywords":["North Carolina Legal Services","North Carolina Lawyer","North Carolina Law Firm","Family Law Attorney","Employment Law Consultation","Probate Services NC","Tenant Rights Lawyer","Small Business Legal Advice","Legal Counsel NC"],"logo_dark_url":"https://media.krabiclaw.com/sites/site-ncls-blawby/media/imports/3869491ea5373de6bb34.svg","header":{"banner_content":null,"banner_dismissible":false}}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 );
 
 INSERT INTO site_consultation_settings (
@@ -2404,7 +2409,7 @@ Alimony can last for a year, a decade, or a lifetime. Essentially, there are no 
 
 ## Equitable Distribution
 
-Equitable distribution must be requested and properly filed before the divorce is finalized. Failing to do so will mean that you forever lose the right to have your property divided by the court. For a step-by-step guide to categorizing and valuing marital assets, see our article on [property division in North Carolina divorce](/article/property-division-in-north-carolina-divorce).
+Equitable distribution must be requested and properly filed before the divorce is finalized. Failing to do so will mean that you forever lose the right to have your property divided by the court. For a step-by-step guide to categorizing and valuing marital assets, see our article on [property division in North Carolina divorce](/article/property-division-in-north-carolina-divorce-protecting-whats-yours).
 
 Marital property in North Carolina is eligible for equitable distribution, while separate property is not. Classifying assets and debts into these categories is often complex, but the general rule is that separate property is anything owned prior to marriage, and marital property is acquired during the marriage with funds earned during the marriage by either spouse. There are numerous exceptions to this rule. A third category called divisible property may also be important if you or your spouse acquired relevant property after separating but before finalizing the divorce.
 
@@ -2488,7 +2493,7 @@ Lastly, divisible property may be subject to equitable distribution. This type o
 
 ## Marital Property Division in North Carolina
 
-North Carolina law states that marital property and the net value of divisible property shall be equally divided unless that solution is not equitable. For a practical step-by-step guide to identifying, valuing, and protecting your marital assets, see our article on [property division in North Carolina divorce](/article/property-division-in-north-carolina-divorce). Equitable distribution does not mean a 50/50 split will go to each spouse. Either spouse is entitled to request more than 50 percent of the marital estate but, oftentimes, the spouses’ reasons are not sufficient to cause the court to distribute the property other than 50/50. When deciding on marital property division in North Carolina, a court will consider the following factors:
+North Carolina law states that marital property and the net value of divisible property shall be equally divided unless that solution is not equitable. For a practical step-by-step guide to identifying, valuing, and protecting your marital assets, see our article on [property division in North Carolina divorce](/article/property-division-in-north-carolina-divorce-protecting-whats-yours). Equitable distribution does not mean a 50/50 split will go to each spouse. Either spouse is entitled to request more than 50 percent of the marital estate but, oftentimes, the spouses’ reasons are not sufficient to cause the court to distribute the property other than 50/50. When deciding on marital property division in North Carolina, a court will consider the following factors:
 
 - Income, assets, and liabilities of each spouse
 
@@ -2752,7 +2757,7 @@ So, the first step in [getting a divorce in North Carolina](https://www.northcar
 
 - A Domestic Civil Action Cover Sheet
 
-If you want the court to decide how your assets and debts will be divided, you must request what is called [equitable distribution](https://www.northcarolinalegalservices.org/article/equitable-distribution-in-north-carolina-divorces). This request needs to be made before a final divorce judgment is entered. For a practical breakdown of how property is categorized and divided, see our guide to [property division in North Carolina divorce](/article/property-division-in-north-carolina-divorce). Similarly, if you want the court to decide spousal support and alimony, a request must be properly filed prior to the divorce becoming final.
+If you want the court to decide how your assets and debts will be divided, you must request what is called [equitable distribution](https://www.northcarolinalegalservices.org/article/equitable-distribution-in-north-carolina-divorces). This request needs to be made before a final divorce judgment is entered. For a practical breakdown of how property is categorized and divided, see our guide to [property division in North Carolina divorce](/article/property-division-in-north-carolina-divorce-protecting-whats-yours). Similarly, if you want the court to decide spousal support and alimony, a request must be properly filed prior to the divorce becoming final.
 
 Spouses with children may also need the court’s assistance with custody, visitation, and support, and those matters can be included in the divorce complaint or as separate filings.
 

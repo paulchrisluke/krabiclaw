@@ -1,3 +1,5 @@
+import { normalizeNonprofitStatus } from './nonprofit-status.mjs'
+
 const SOURCE_ORIGIN = 'https://www.northcarolinalegalservices.org'
 
 function normalizePath(value) {
@@ -50,6 +52,21 @@ export function buildSeoMigrationContract({ sitemapUrls, searchConsoleUrls, rout
   }
 }
 
+/**
+ * Flattens a parsed JSON-LD value into its constituent nodes, descending into
+ * top-level `@graph` arrays (the shape utils/professional-service-schema.ts
+ * emits) as well as bare top-level arrays/objects (used by legacy/platform
+ * schema composables).
+ */
+function flattenSchemaNodes(value) {
+  if (Array.isArray(value)) return value.flatMap(flattenSchemaNodes)
+  if (value && typeof value === 'object') {
+    if (Array.isArray(value['@graph'])) return value['@graph'].flatMap(flattenSchemaNodes)
+    return [value]
+  }
+  return []
+}
+
 export function auditSeoHtml(html, expectedCanonical) {
   const errors = []
   const canonicalUrls = [...html.matchAll(/<link\b(?=[^>]*\brel=["']canonical["'])[^>]*\bhref=["']([^"']+)["'][^>]*>/gi)].map(match => match[1])
@@ -63,18 +80,39 @@ export function auditSeoHtml(html, expectedCanonical) {
   if (!/<meta\b(?=[^>]*\bname=["']description["'])[^>]*\bcontent=["'][^"']+["'][^>]*>/i.test(html)) errors.push('missing meta description')
 
   const schemaTypes = []
+  const schemaIds = []
+  /** @type {Array<Record<string, unknown>>} */
+  const schemaNodes = []
   for (const match of html.matchAll(/<script\b[^>]*\btype=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
     try {
       const value = JSON.parse(match[1])
-      const nodes = Array.isArray(value) ? value : [value]
+      const nodes = flattenSchemaNodes(value)
       for (const node of nodes) {
         const types = Array.isArray(node?.['@type']) ? node['@type'] : [node?.['@type']]
         schemaTypes.push(...types.filter(Boolean))
+        if (typeof node?.['@id'] === 'string') schemaIds.push(node['@id'])
+        schemaNodes.push(node)
       }
     } catch {
       errors.push('malformed JSON-LD')
     }
   }
   if (!schemaTypes.length && !errors.includes('malformed JSON-LD')) errors.push('missing JSON-LD')
-  return { errors, canonicalUrls, schemaTypes }
+
+  // Canonical contract: any nonprofitStatus value emitted anywhere on the
+  // page must already be normalized to a schema.org enum URL (see
+  // utils/professional-service-schema.ts normalizeNonprofitStatus) — never
+  // free text like "501(c)(3)".
+  for (const node of schemaNodes) {
+    if (typeof node?.nonprofitStatus === 'string') {
+      const normalized = normalizeNonprofitStatus(node.nonprofitStatus)
+      if (!normalized.valid) {
+        errors.push(`invalid nonprofitStatus value "${node.nonprofitStatus}" (expected a schema.org enum URL like https://schema.org/Nonprofit501c3)`)
+      } else if (node.nonprofitStatus !== normalized.value) {
+        errors.push(`nonprofitStatus "${node.nonprofitStatus}" is not in canonical form (expected "${normalized.value}")`)
+      }
+    }
+  }
+
+  return { errors, canonicalUrls, schemaTypes, schemaIds, schemaNodes }
 }

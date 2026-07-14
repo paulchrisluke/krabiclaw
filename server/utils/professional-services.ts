@@ -11,6 +11,7 @@ import type {
   PublicBlogSummary,
   PublicBlogPost,
   PublicCompliance,
+  PublicComplianceContactPoint,
   PublicConsultationSettings,
   PublicNavigationItem,
   PublicOffering,
@@ -41,6 +42,8 @@ type OfferingRow = ApiRecord & {
   media_asset_ids: string | null
   thumbnail_url: string | null
   hero_image_url: string | null
+  location_address: string | null
+  location_city: string | null
 }
 
 type TenantPageRow = ApiRecord & {
@@ -113,6 +116,13 @@ function mapOfferingRow(row: OfferingRow, mediaById: Map<string, ApiRecord>): Pu
     status: String(row.status),
     sort_order: Number(row.sort_order ?? 0),
     featured: asBoolean(row.featured),
+    // Real business_locations data for the offering's own location, when one
+    // is associated (offerings.location_id) — used to populate a
+    // schema.org PostalAddress on the offering's own graph node rather than
+    // always falling back to the site's primary location. Null when the
+    // offering is site-wide (no location_id) or the location has no address.
+    location_address_street: typeof row.location_address === 'string' ? row.location_address : null,
+    location_address_locality: typeof row.location_city === 'string' ? row.location_city : null,
   }
 }
 
@@ -139,10 +149,13 @@ export async function listPublicOfferings(db: DbClient, siteId: string): Promise
   const rows = await queryAll<OfferingRow>(db, `
     SELECT o.*,
            thumb.public_url AS thumbnail_url,
-           hero.public_url AS hero_image_url
+           hero.public_url AS hero_image_url,
+           loc.address AS location_address,
+           loc.city AS location_city
       FROM offerings o
       LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
       LEFT JOIN media_assets hero ON o.hero_image_asset_id = hero.id AND hero.status = 'active'
+      LEFT JOIN business_locations loc ON o.location_id = loc.id AND loc.status = 'active'
      WHERE o.site_id = ? AND o.status = 'published'
      ORDER BY o.sort_order ASC, o.name ASC
   `, [siteId])
@@ -234,10 +247,13 @@ export async function getPublicOfferingBySlug(db: DbClient, siteId: string, slug
   const row = await queryFirst<OfferingRow>(db, `
     SELECT o.*,
            thumb.public_url AS thumbnail_url,
-           hero.public_url AS hero_image_url
+           hero.public_url AS hero_image_url,
+           loc.address AS location_address,
+           loc.city AS location_city
       FROM offerings o
       LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
       LEFT JOIN media_assets hero ON o.hero_image_asset_id = hero.id AND hero.status = 'active'
+      LEFT JOIN business_locations loc ON o.location_id = loc.id AND loc.status = 'active'
      WHERE o.site_id = ? AND o.slug = ? AND o.status = 'published'
      LIMIT 1
   `, [siteId, slug])
@@ -297,6 +313,16 @@ export async function getPublicCompliance(db: DbClient, siteId: string): Promise
      LIMIT 1
   `, [siteId])
   if (!row) return null
+  const visibleAddress = row.address_visibility === 'visible'
+    ? await queryFirst<ApiRecord>(db, `
+        SELECT address, city
+          FROM business_locations
+         WHERE site_id = ? AND status = 'active'
+           AND address IS NOT NULL AND trim(address) <> ''
+         ORDER BY is_primary DESC, title ASC, id ASC
+         LIMIT 1
+      `, [siteId])
+    : null
   const documentAssetIds = parseJson<string[]>(row.document_asset_ids as string | null, [])
   const documentRows = documentAssetIds.length
     ? await queryAll<ApiRecord>(db, `
@@ -313,6 +339,7 @@ export async function getPublicCompliance(db: DbClient, siteId: string): Promise
     nonprofit_status: typeof row.nonprofit_status === 'string' ? row.nonprofit_status : null,
     registration_number: typeof row.registration_number === 'string' ? row.registration_number : null,
     service_area: typeof row.service_area === 'string' ? row.service_area : null,
+    service_area_type: typeof row.service_area_type === 'string' ? row.service_area_type : null,
     disclaimer: typeof row.disclaimer === 'string' ? row.disclaimer : null,
     footer_disclaimer: typeof row.footer_disclaimer === 'string' ? row.footer_disclaimer : null,
     document_asset_ids: documentAssetIds,
@@ -322,6 +349,20 @@ export async function getPublicCompliance(db: DbClient, siteId: string): Promise
       label: typeof document.alt_text === 'string' ? document.alt_text : null,
       file_name: typeof document.file_name === 'string' ? document.file_name : null,
     })),
+    founder_name: typeof row.founder_name === 'string' ? row.founder_name : null,
+    founding_date: typeof row.founding_date === 'string' ? row.founding_date : null,
+    same_as: parseJson<string[]>(row.same_as as string | null, []),
+    contact_points: parseJson<PublicComplianceContactPoint[]>(row.contact_points as string | null, []),
+    address_visibility: row.address_visibility === 'visible' ? 'visible' : 'hidden',
+    address: visibleAddress
+      ? {
+          street_address: typeof visibleAddress.address === 'string' ? visibleAddress.address : null,
+          locality: typeof visibleAddress.city === 'string' ? visibleAddress.city : null,
+          region: null,
+          postal_code: null,
+          country: null,
+        }
+      : null,
     metadata: parseJson<ApiRecord>(row.metadata_json as string | null, {}),
   }
 }
@@ -356,9 +397,12 @@ export async function getPublicThemeTokens(db: DbClient, siteId: string, templat
 
 export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Promise<PublicBlawbyIdentity> {
   const row = await queryFirst<ApiRecord>(db, `
-    SELECT s.brand_name, s.brand_description, s.contact_phone, COALESCE(logo.public_url, s.logo_url) AS logo_url
+    SELECT s.brand_name, s.brand_description, s.contact_phone, COALESCE(logo.public_url, s.logo_url) AS logo_url,
+           primary_loc.address AS primary_location_address,
+           primary_loc.city AS primary_location_city
       FROM sites s
       LEFT JOIN media_assets logo ON s.logo_asset_id = logo.id AND logo.status = 'active'
+      LEFT JOIN business_locations primary_loc ON s.primary_location_id = primary_loc.id AND primary_loc.status = 'active'
      WHERE s.id = ?
      LIMIT 1
   `, [siteId])
@@ -370,6 +414,11 @@ export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Pro
     phone: typeof row?.contact_phone === 'string' ? row.contact_phone : null,
     banner_content: null,
     banner_dismissible: false,
+    // The site's primary business_locations row, if any — the seam for
+    // threading a real PostalAddress into the org-level schema.org graph
+    // node (see utils/professional-service-schema.ts / useBlawbyOrgIdentity).
+    primary_location_address_street: typeof row?.primary_location_address === 'string' ? row.primary_location_address : null,
+    primary_location_address_locality: typeof row?.primary_location_city === 'string' ? row.primary_location_city : null,
   }
 }
 
