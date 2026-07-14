@@ -7,7 +7,6 @@
       compact ? 'justify-center px-2.5' : 'px-3',
     ]"
     :aria-label="ariaLabel"
-    :disabled="!hydrated"
     @click="open"
   >
     <PlatformSearchGlyph name="search" :class="`size-4 shrink-0 transition ${glyphClass}`" />
@@ -39,12 +38,6 @@ const props = withDefaults(defineProps<{
 })
 
 const { open } = usePlatformSearchPalette(props.surface)
-const hydrated = ref(false)
-
-onMounted(() => {
-  hydrated.value = true
-})
-
 // Blawby text always reads --blawby-ink (the shell's AA-safe foreground token) rather
 // than --blawby-primary, which is a tenant-configurable brand accent that can be a
 // light/bright color and is unsafe as text on a fixed surface — see the same rule
