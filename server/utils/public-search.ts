@@ -1,3 +1,5 @@
+import { sha256 } from '@noble/hashes/sha2.js'
+import { bytesToHex } from '@noble/hashes/utils.js'
 import { queryAll, type DbClient } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import {
@@ -539,11 +541,24 @@ export interface ExpandedPlatformKnowledgeDocument extends PlatformKnowledgeDocu
   metadata: Record<string, string>
 }
 
+// AI Search enforces a filename length limit (AiSearchError: filename_exceeds_maximum_length),
+// hit in production by a real, long, human-authored blog slug embedded directly in its DB
+// primary key (blog_ncls_<full-descriptive-slug>, 129 chars once surface/type-prefixed) — so
+// this can't be fixed by picking a "shorter" source field, since even a DB id can be long by
+// design. The AI-Search-facing filename must be short and bounded independent of any record's
+// id/slug/title length. A fixed-length hash of the pre-expansion key is deterministic (stable
+// across rebuilds, so re-uploads correctly upsert rather than duplicate) and collision-resistant;
+// all human-readable display data (title, path, section, icon) already lives in metadata, not
+// parsed back out of the key, so this loses no information any reader depends on.
+function shortItemKeyHash(value: string): string {
+  return bytesToHex(sha256(new TextEncoder().encode(value))).slice(0, 24)
+}
+
 export function expandDocumentsForSurfaces(records: PlatformKnowledgeDocument[]): ExpandedPlatformKnowledgeDocument[] {
   return records.flatMap((record) =>
     record.surfaces.map((surface): ExpandedPlatformKnowledgeDocument => ({
       ...record,
-      key: `${surface}/${record.key}`,
+      key: `${surface}/${record.type}/${shortItemKeyHash(record.key)}.md`,
       metadata: {
         ...recordMetadata(record),
         surface,
@@ -564,8 +579,10 @@ export async function rebuildPlatformKnowledgeIndex(env: CloudflareEnv, db: DbCl
     try {
       await uploadIndexItem(env, record.key, renderDocumentContent(record), record.metadata)
     } catch (error) {
-      // Temporary diagnostic: identify exactly which item key AI Search rejects
-      // (e.g. filename_exceeds_maximum_length) instead of failing generically.
+      // Name the specific failing item/key rather than failing generically — this is
+      // what actually revealed the production filename_exceeds_maximum_length root
+      // cause (a real blog slug embedded in its DB id), surfaced via the error-detail
+      // passthrough in server/api/internal/search/reindex.post.ts.
       const message = error instanceof Error ? error.message : String(error)
       throw new Error(`uploadIndexItem failed for key "${record.key}" (length ${record.key.length}): ${message}`)
     }
