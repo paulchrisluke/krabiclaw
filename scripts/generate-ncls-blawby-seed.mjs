@@ -323,3 +323,36 @@ try {
 } finally {
   rmSync(dir, { recursive: true, force: true })
 }
+
+// This script writes blog_posts directly (see the INSERT above), bypassing the admin/MCP
+// blog write paths that already call schedulePlatformKnowledgeIndexRebuild() after a
+// mutation (server/utils/platform-search-rebuild.ts). Without an explicit rebuild here, the
+// NCLS/Blawby tenant blog posts this seed just wrote would stay unindexed until something
+// else happens to trigger a full sync — see docs/ai-search.md and issue #254. CI's preview
+// job also runs a dedicated, blocking "Rebuild AI Search index (preview)" step after deploy
+// (.github/workflows/ci.yml), so this call is a best-effort convenience for anyone running
+// this script by hand against `--preview`; it warns loudly rather than failing the whole
+// seed run if the secret isn't configured locally.
+if (isPreview) {
+  const reindexSecret = process.env.PLATFORM_SEARCH_REINDEX_SECRET ?? ''
+  const reindexBaseUrl = (process.env.KRABICLAW_BASE_URL ?? 'https://preview.krabiclaw.com').replace(/\/$/, '')
+  if (!reindexSecret) {
+    console.warn('[seed:ncls-blawby] Skipping AI Search rebuild — PLATFORM_SEARCH_REINDEX_SECRET is not set.')
+    console.warn(`[seed:ncls-blawby] Run \`yarn ai-search:sync --base-url ${reindexBaseUrl}\` once it is, or the new tenant blog posts above stay unindexed.`)
+  } else {
+    try {
+      const response = await fetch(`${reindexBaseUrl}/api/internal/search/reindex`, {
+        method: 'POST',
+        headers: { 'x-krabiclaw-search-secret': reindexSecret },
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        console.warn(`[seed:ncls-blawby] AI Search rebuild failed (${response.status})`, payload)
+      } else {
+        console.log('[seed:ncls-blawby] AI Search index rebuilt.', payload)
+      }
+    } catch (error) {
+      console.warn('[seed:ncls-blawby] AI Search rebuild failed (network)', error instanceof Error ? error.message : error)
+    }
+  }
+}

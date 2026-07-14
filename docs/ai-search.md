@@ -44,7 +44,15 @@ That endpoint rebuilds the full corpus from the current DB plus static platform 
 
 ## Automatic refresh
 
-Platform doc and platform blog admin writes trigger a full AI Search rebuild after the content mutation completes. Platform MCP blog/doc mutations do the same.
+Platform doc and platform blog admin writes trigger a full AI Search rebuild after the content mutation completes (`schedulePlatformKnowledgeIndexRebuild()` in `server/utils/platform-search-rebuild.ts`). Platform MCP blog/doc mutations do the same. Failures on this in-request path are logged with `console.error` (visible in Workers Logs); they do not retry automatically.
+
+Deploys and tenant client imports that write `blog_posts` directly do **not** go through that in-request hook, so they need an explicit rebuild:
+
+- `yarn deploy`, `yarn deploy:staging`, and `yarn deploy:preview` (`package.json`) each run `yarn ai-search:sync:<env>` as their last step.
+- CI (`.github/workflows/ci.yml`) runs a dedicated "Rebuild AI Search index (preview|staging|production)" step after every preview/staging/prod deploy, using a `PLATFORM_SEARCH_REINDEX_SECRET_PREVIEW` / `_STAGING` / (unsuffixed for prod) repo secret synced to the Worker just before it. This step has no `continue-on-error` — a failed rebuild fails the job instead of silently leaving that environment's search stale.
+- `scripts/generate-ncls-blawby-seed.mjs` (the NCLS/Blawby tenant blog fixture, which inserts into `blog_posts` directly) also makes a best-effort reindex call after a successful `--preview` apply, so running it by hand doesn't leave the fixture unindexed even before CI's own rebuild step runs.
+
+Any new script that writes `blog_posts`, `platform_docs`, or NCLS/Blawby-style tenant blog fixtures directly (bypassing the admin/MCP write paths) must either call `POST /api/internal/search/reindex` itself or be followed by `yarn ai-search:sync` in whatever deploy/CI step runs it.
 
 ## Environment expectations
 

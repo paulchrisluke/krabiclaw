@@ -268,6 +268,23 @@ jobs:
         run: |
           printf '%s' "$EMAIL_REPLY_SECRET_PREVIEW" | npx wrangler secret put EMAIL_REPLY_SECRET --env preview
           printf '%s' "$EMAIL_INBOUND_SECRET_PREVIEW" | npx wrangler secret put EMAIL_INBOUND_SECRET --env preview
+      - name: Sync preview AI Search secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PLATFORM_SEARCH_REINDEX_SECRET_PREVIEW: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET_PREVIEW }}
+        # Authenticates POST /api/internal/search/reindex (server/api/internal/search/reindex.post.ts).
+        # Must stay stable across runs so the rebuild step below always has a working secret.
+        run: |
+          printf '%s' "$PLATFORM_SEARCH_REINDEX_SECRET_PREVIEW" | npx wrangler secret put PLATFORM_SEARCH_REINDEX_SECRET --env preview
+      - name: Rebuild AI Search index (preview)
+        env:
+          PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET_PREVIEW }}
+        # Fixture/seed steps above (and any prior admin/MCP writes) can leave platform docs,
+        # platform blog posts, or NCLS/Blawby tenant blog posts unindexed — see docs/ai-search.md.
+        # This step intentionally has no continue-on-error: a failed rebuild must fail the job
+        # loudly rather than silently leaving preview search stale for E2E and manual QA.
+        run: yarn ai-search:sync --base-url https://preview.krabiclaw.com
       - run: npx playwright install --with-deps chromium
       - name: Warm up preview Worker
         run: |
@@ -407,6 +424,21 @@ jobs:
         # the E2E_DEV_ROUTE_SECRET env var above.
         run: |
           printf '%s' "$E2E_DEV_ROUTE_SECRET_STAGING" | npx wrangler secret put E2E_DEV_ROUTE_SECRET --env staging
+      - name: Sync staging AI Search secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PLATFORM_SEARCH_REINDEX_SECRET_STAGING: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET_STAGING }}
+        # Authenticates POST /api/internal/search/reindex (server/api/internal/search/reindex.post.ts).
+        run: |
+          printf '%s' "$PLATFORM_SEARCH_REINDEX_SECRET_STAGING" | npx wrangler secret put PLATFORM_SEARCH_REINDEX_SECRET --env staging
+      - name: Rebuild AI Search index (staging)
+        env:
+          PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET_STAGING }}
+        # Migration/seed steps above can leave platform docs, platform blog posts, or tenant
+        # blog posts unindexed — see docs/ai-search.md. No continue-on-error: a failed rebuild
+        # must fail the job loudly rather than silently leaving staging search stale.
+        run: yarn ai-search:sync --base-url https://staging.krabiclaw.com
       - run: npx playwright install --with-deps chromium
       - name: Warm up staging Worker
         run: |
@@ -468,6 +500,21 @@ jobs:
         run: |
           echo "$STRIPE_SECRET_KEY" | npx wrangler secret put STRIPE_SECRET_KEY
           echo "$STRIPE_WEBHOOK_SECRET" | npx wrangler secret put STRIPE_WEBHOOK_SECRET
+      - name: Sync production AI Search secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
+        # Authenticates POST /api/internal/search/reindex (server/api/internal/search/reindex.post.ts).
+        run: |
+          echo "$PLATFORM_SEARCH_REINDEX_SECRET" | npx wrangler secret put PLATFORM_SEARCH_REINDEX_SECRET
+      - name: Rebuild AI Search index (production)
+        env:
+          PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
+        # Migrations applied above can leave newly published platform docs/blog posts or tenant
+        # blog posts unindexed — see docs/ai-search.md. No continue-on-error: a failed rebuild
+        # must fail the deploy job loudly rather than silently leaving production search stale.
+        run: yarn ai-search:sync --base-url https://krabiclaw.com
 
   prod-smoke:
     name: Production smoke
