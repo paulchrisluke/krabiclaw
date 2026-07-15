@@ -140,6 +140,17 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         menuName: optionalString(args, "menu_name") ?? undefined,
       });
     }
+    case "analyze_document": {
+      const { analyzeDocumentAsset } =
+        await import("~/server/utils/chowbot-media");
+      return await analyzeDocumentAsset(site.db, site.env as never, {
+        organizationId: site.organizationId,
+        siteId: site.siteId,
+        userId: site.userId,
+        assetId: requiredString(args, "asset_id"),
+        question: optionalString(args, "question") ?? undefined,
+      });
+    }
     default:
       return NOT_HANDLED
   }

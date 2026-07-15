@@ -29,6 +29,20 @@ export const MEDIA_CHOWBOT_TOOLS: AiTool[] = [
         },
       },
     },
+  // analyze_document: MCP requires asset_id directly (ChatGPT already
+  // resolved one via upload_user_media). ChowBot instead resolves it from
+  // WhatsApp's pending-media state, matching import_menu_from_media above.
+    {
+      name: "analyze_document",
+      description:
+        "Summarize, answer a question about, or extract information from the currently pending WhatsApp Markdown document (.md/.markdown) — grounded strictly in that file's content. Use only when the user asks to summarize, ask about, or read the pending document. Pass a question to get a grounded answer; omit it for a summary.",
+      input_schema: {
+        type: "object",
+        properties: {
+          question: { type: "string", description: "Optional question to answer using only the document content. Omit for a summary." },
+        },
+      },
+    },
   // ── WhatsApp pending-media state (ChowBot-only, no MCP equivalent) ────────
     {
       name: "resolve_pending_media",

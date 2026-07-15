@@ -5,6 +5,13 @@ import { uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { buildR2Key, uploadToR2 } from '~/server/utils/cloudflare-r2'
 import { createMediaAsset, getMediaAsset, type MediaAsset } from '~/server/utils/media-asset-manager'
 import { CHOWBOT_MODEL } from '~/server/utils/ai-models'
+import {
+  MARKDOWN_MIME_TYPES,
+  assertMarkdownSize,
+  decodeMarkdownText,
+  parseMarkdownDocument,
+  resolveMarkdownMimeType,
+} from '~/server/utils/markdown-document'
 
 const EXTRACT_SYSTEM = `You are a restaurant menu data extractor. The user will provide a photo or scan of a restaurant menu. Extract ONLY text you can actually see — do not infer or hallucinate dishes.
 
@@ -33,6 +40,7 @@ function extensionForMime(mimeType: string): string {
   if (mimeType === 'image/gif') return 'gif'
   if (mimeType === 'image/webp') return 'webp'
   if (mimeType === 'image/avif') return 'avif'
+  if (MARKDOWN_MIME_TYPES.has(mimeType)) return 'md'
   throw new Error(`Unsupported media type: ${mimeType}`)
 }
 
@@ -58,8 +66,20 @@ export async function saveInboundMediaAsset(
     filename?: string
   }
 ): Promise<MediaAsset> {
+  // WhatsApp (and other generic upload paths) frequently report a generic
+  // or missing MIME type for plain-text attachments — fall back to the
+  // filename extension so a .md/.markdown upload is still recognized.
+  const normalizedMimeType = resolveMarkdownMimeType(opts.mimeType, opts.filename) ?? opts.mimeType
+
+  if (MARKDOWN_MIME_TYPES.has(normalizedMimeType)) {
+    // Fail fast with a clear error instead of persisting a file the ChowBot
+    // analysis pipeline can never actually read.
+    assertMarkdownSize(opts.bytes.byteLength)
+    decodeMarkdownText(opts.bytes)
+  }
+
   const assetId = crypto.randomUUID()
-  const ext = extensionForMime(opts.mimeType)
+  const ext = extensionForMime(normalizedMimeType)
   const filename = opts.filename ?? `whatsapp-${assetId}.${ext}`
 
   if (IMAGE_TYPES[opts.mimeType]) {
@@ -82,7 +102,7 @@ export async function saveInboundMediaAsset(
     })
   } else {
     const r2Key = buildR2Key(opts.siteId, assetId, filename)
-    const publicUrl = await uploadToR2(env, r2Key, opts.bytes, opts.mimeType)
+    const publicUrl = await uploadToR2(env, r2Key, opts.bytes, normalizedMimeType)
     await createMediaAsset(db, {
       id: assetId,
       organization_id: opts.organizationId,
@@ -92,7 +112,7 @@ export async function saveInboundMediaAsset(
       source: 'uploaded',
       r2_key: r2Key,
       public_url: publicUrl,
-      mime_type: opts.mimeType,
+      mime_type: normalizedMimeType,
       file_name: filename,
       file_size: opts.fileSize,
       status: 'active',
@@ -204,4 +224,83 @@ export async function extractMenuFromMediaAsset(
   }
 
   return { menuId: menu.id, count: createdItems.length, warning: parsed.warning ?? null, creditsRemaining: charged.newBalance }
+}
+
+const DOCUMENT_ANALYSIS_SYSTEM = `You are a document analysis assistant for a small-business owner's ChowBot assistant. The user has uploaded a Markdown document. You are given its content tagged with structural markers:
+- [HEADING level=N] marks a heading.
+- [LIST]...[/LIST] marks a bullet or numbered list.
+- [TABLE]...[/TABLE] marks a Markdown table.
+- [BLOCKQUOTE]...[/BLOCKQUOTE] marks a quoted block.
+- [CODE lang=x]...[/CODE] marks a fenced code block.
+
+Answer strictly using the document content provided — do not invent facts not present in it. If the document does not contain enough information to answer, say so plainly. When it helps the user, reference which section/heading an answer came from. If asked to summarize, produce a concise summary that reflects the document's actual structure (key sections, notable lists/tables), not generic filler.`
+
+export interface DocumentAnalysisResult {
+  answer: string
+  creditsRemaining: number
+  stats: ReturnType<typeof parseMarkdownDocument>['stats']
+}
+
+/**
+ * Analyzes an already-uploaded Markdown media asset for the ChowBot document
+ * pipeline: summarization, grounded Q&A, and extraction. Shared by both the
+ * MCP `analyze_document` tool (direct asset_id) and ChowBot's WhatsApp
+ * pending-media flow (server/utils/chowbot-agent.ts) — same code path, same
+ * credit accounting, same AI Gateway call as extractMenuFromMediaAsset above.
+ */
+export async function analyzeDocumentAsset(
+  db: D1Database,
+  env: ApiRecord,
+  opts: {
+    organizationId: string
+    siteId: string
+    userId: string
+    assetId: string
+    /** Optional question to ground-answer. Defaults to a summary request. */
+    question?: string
+  }
+): Promise<DocumentAnalysisResult> {
+  const asset = await getMediaAsset(db, opts.assetId, opts.siteId)
+  if (!asset?.public_url || !asset.mime_type) throw new Error('Media asset not found')
+
+  const resolvedMimeType = resolveMarkdownMimeType(asset.mime_type, asset.file_name)
+  if (!resolvedMimeType) {
+    throw new Error(`Unsupported media type for document analysis: ${asset.mime_type}`)
+  }
+
+  const mediaResponse = await fetch(asset.public_url)
+  if (!mediaResponse.ok) throw new Error(`Failed to read media asset: HTTP ${mediaResponse.status}`)
+  const bytes = await mediaResponse.arrayBuffer()
+
+  assertMarkdownSize(bytes.byteLength)
+  const text = decodeMarkdownText(bytes)
+  const parsed = parseMarkdownDocument(text)
+
+  const creditOk = await hasCredits(db, opts.organizationId)
+  if (!creditOk) throw new Error('No AI credits remaining.')
+
+  const question = opts.question?.trim() || 'Summarize this document.'
+  const aiResponse = await callAiGateway(
+    env,
+    [{ role: 'user', content: [textBlock(parsed.structuredText), textBlock(question)] }],
+    {
+      system: DOCUMENT_ANALYSIS_SYSTEM,
+      maxTokens: 2048,
+      metadata: { org_id: opts.organizationId, site_id: opts.siteId, action: 'document_analysis' },
+    }
+  )
+
+  const charged = await chargeCredits(db, opts.organizationId, {
+    siteId: opts.siteId,
+    action: 'document_analysis',
+    model: CHOWBOT_MODEL,
+    inputTokens: aiResponse.usage.input_tokens,
+    outputTokens: aiResponse.usage.output_tokens,
+    cfGatewayLogId: aiResponse.cfLogId,
+  })
+
+  const answer = aiResponse.content.find((b) => b.type === 'text')?.text?.trim() ?? ''
+  if (!answer) throw new Error('The document could not be analyzed — no response was generated.')
+
+  return { answer, creditsRemaining: charged.newBalance, stats: parsed.stats }
 }

@@ -440,6 +440,26 @@ async function executeTool(
       };
     }
 
+    case "analyze_document": {
+      // Unlike import_menu_from_media, analysis is read-only — the pending
+      // document stays available afterward so the user can ask follow-up
+      // questions about the same file without re-uploading it.
+      if (!ctx.pendingMedia?.assetId || ctx.pendingMedia.siteId !== siteId) {
+        return { error: "No pending WhatsApp document is available to analyze." };
+      }
+      const result = await runMcpExecutorToolForChowbot(executorSite, "analyze_document", {
+        asset_id: ctx.pendingMedia.assetId,
+        question: toSqlText(input.question)?.trim() || undefined,
+      }) as { error?: string; answer?: string; creditsRemaining?: unknown; stats?: unknown };
+      if (result.error) return result;
+      return {
+        asset_id: ctx.pendingMedia.assetId,
+        answer: result.answer,
+        credits_remaining: result.creditsRemaining,
+        stats: result.stats,
+      };
+    }
+
     case "resolve_pending_media": {
       if (!ctx.pendingMedia?.assetId || ctx.pendingMedia.siteId !== siteId) {
         return { error: "No pending WhatsApp media is available to resolve." };
@@ -1156,7 +1176,7 @@ ${SETUP_PREAMBLE}
 Site: ${siteName}
 Default menu currency: ${opts.defaultCurrency}
 Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?? locationId} (id: ${locationId})` : ""}
-${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. Use this asset_id directly in any tool that accepts image/media — update_menu_item (image_asset_id), create_menu_item (image_asset_id), add_menu_items_batch (image_asset_id), update_location or create_location (hero_image_asset_id / hero_video_asset_id), create_post (image_asset_id for the cover, or gallery_media for additional public post media). If the user wants to import/extract menu items from it, call import_menu_from_media. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call, also call resolve_pending_media with action=save_media to clear the pending state. If the user's intent is unclear, ask one short clarifying question.` : ""}
+${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. Use this asset_id directly in any tool that accepts image/media — update_menu_item (image_asset_id), create_menu_item (image_asset_id), add_menu_items_batch (image_asset_id), update_location or create_location (hero_image_asset_id / hero_video_asset_id), create_post (image_asset_id for the cover, or gallery_media for additional public post media). If the user wants to import/extract menu items from it, call import_menu_from_media. If it is a Markdown document (.md/.markdown) and the user wants a summary, wants to ask a question about it, or wants information extracted from it, call analyze_document (pass their question, or omit it for a summary) — you can call this multiple times to answer follow-up questions about the same document. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call that assigns or imports it, also call resolve_pending_media with action=save_media to clear the pending state — do not clear it after analyze_document unless the user is done with the file. If the user's intent is unclear, ask one short clarifying question.` : ""}
 
 Capabilities (always use tools — never say you can't do something the tools support):
 - Posts: list, create, update, delete, publish (standard/offer/event/update with CTA) — optionally location-scoped
