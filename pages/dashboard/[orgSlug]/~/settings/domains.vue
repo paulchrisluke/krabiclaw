@@ -70,12 +70,12 @@
                     </thead>
                     <tbody class="divide-y divide-default">
                       <!-- CNAME row -->
-                      <tr v-if="domain.instructions?.cname">
-                        <td class="py-1.5 font-mono text-highlighted">{{ domain.instructions.cname.type }}</td>
-                        <td class="py-1.5 pl-4 font-mono text-highlighted">{{ domain.instructions.cname.name }}</td>
-                        <td class="py-1.5 pl-4 font-mono text-muted max-w-48 truncate">{{ domain.instructions.cname.value }}</td>
+                      <tr v-if="domain.instructions?.dns">
+                        <td class="py-1.5 font-mono text-highlighted">{{ domain.instructions.dns.type }}</td>
+                        <td class="py-1.5 pl-4 font-mono text-highlighted">{{ domain.instructions.dns.name }}</td>
+                        <td class="py-1.5 pl-4 font-mono text-muted max-w-48 truncate">{{ domain.instructions.dns.value }}</td>
                         <td class="py-1.5 pl-4">
-                          <UButton icon="i-lucide-copy" color="neutral" variant="ghost" size="xs" @click="copy(domain.instructions.cname.value)" />
+                          <UButton icon="i-lucide-copy" color="neutral" variant="ghost" size="xs" @click="copy(domain.instructions.dns.value)" />
                         </td>
                       </tr>
                       <!-- SSL TXT rows (Cloudflare requires two values at the same name) -->
@@ -146,7 +146,7 @@
 definePageMeta({ layout: 'dashboard' })
 
 interface DomainInstructions {
-  cname?: { type: string; name: string; value: string }
+  dns?: { type: string; name: string; value: string }
   ssl?: { type: string; name: string; value: string }
   ssl_records?: Array<{ type: string; name: string; value: string }>
   ownership?: { type: string; name: string; value: string }
