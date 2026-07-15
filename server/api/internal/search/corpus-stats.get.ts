@@ -1,11 +1,11 @@
 // Read-only diagnostic: reports a breakdown of the platform knowledge corpus by record
 // type before any surface-expansion or upload happens, plus the raw static config array
-// lengths for comparison. Numeric counts only, no content — safe to leave unauthenticated.
-// Added to test whether static FAQ/route/page/dashboard entries (from
-// config/platform-knowledge.ts) actually make it into buildPlatformKnowledgeDocuments()'s
-// output at all, since every search result seen in production so far has been type
-// 'doc' or 'blog' (DB-driven) — never 'faq'/'route'/'platform_page'/'dashboard_route'.
+// lengths for comparison. Secret-gated like the other server/api/internal/search/* routes —
+// even though the counts alone are low-sensitivity, this still triggers a real D1 query
+// (buildPlatformKnowledgeDocuments) on every request and shouldn't be a public,
+// unauthenticated way to do that.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { validateInternalRequest } from '~/server/utils/internal-secret'
 import { buildPlatformKnowledgeDocuments } from '~/server/utils/public-search'
 import {
   PLATFORM_KNOWLEDGE_FAQ_ENTRIES,
@@ -17,6 +17,9 @@ import {
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   if (!env.db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
+
+  const validation = await validateInternalRequest(event, env)
+  if (!validation.ok) return jsonResponse({ error: validation.error }, { status: validation.status })
 
   const staticCounts = {
     faqEntries: PLATFORM_KNOWLEDGE_FAQ_ENTRIES.length,
@@ -33,7 +36,7 @@ export default defineEventHandler(async (event) => {
     }
     return jsonResponse({ ok: true, totalBaseRecords: baseRecords.length, byType, staticCounts })
   } catch (error) {
-    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
-    return jsonResponse({ error: 'Failed to build corpus', detail, staticCounts }, { status: 500 })
+    console.error('Failed to build corpus stats:', error)
+    return jsonResponse({ error: 'Failed to build corpus' }, { status: 500 })
   }
 })

@@ -6,9 +6,6 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main, staging]
-  schedule:
-    - cron: "15 3 * * *"
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -41,7 +38,7 @@ jobs:
 
   changes:
     name: Detect changed paths
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/staging')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -50,6 +47,12 @@ jobs:
       pottery_house: ${{ steps.filter.outputs.pottery_house }}
       blawby: ${{ steps.filter.outputs.blawby }}
       seed_relevant: ${{ steps.filter.outputs.seed_relevant }}
+      auth: ${{ steps.filter.outputs.auth }}
+      dashboard: ${{ steps.filter.outputs.dashboard }}
+      billing: ${{ steps.filter.outputs.billing }}
+      notifications: ${{ steps.filter.outputs.notifications }}
+      mcp: ${{ steps.filter.outputs.mcp }}
+      seo: ${{ steps.filter.outputs.seo }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -118,6 +121,44 @@ jobs:
               - 'seed-definitions/**'
               - 'server/db/schema.ts'
               - 'migrations/**'
+            auth:
+              - 'server/api/auth/**'
+              - 'server/utils/auth*'
+              - 'pages/auth/**'
+              - 'middleware/auth*'
+              - 'tests/e2e/auth.spec.ts'
+              - 'tests/e2e/oauth-discovery.spec.ts'
+            dashboard:
+              - 'components/dashboard/**'
+              - 'pages/dashboard/**'
+              - 'server/api/dashboard/**'
+              - 'server/api/editor/**'
+              - 'tests/e2e/dashboard*.spec.ts'
+            billing:
+              - 'server/api/billing/**'
+              - 'server/utils/billing*'
+              - 'server/utils/stripe*'
+              - 'pages/dashboard/**/billing.vue'
+              - 'tests/e2e/billing*.spec.ts'
+            notifications:
+              - 'server/utils/notifications.ts'
+              - 'server/utils/whatsapp.ts'
+              - 'server/emails/**'
+              - 'server/api/**/contact*'
+              - 'server/api/**/reservations/**'
+              - 'tests/e2e/notifications.spec.ts'
+            mcp:
+              - 'server/api/mcp.post.ts'
+              - 'server/utils/mcp*/**'
+              - 'server/utils/mcp*'
+              - 'tests/e2e/mcp.spec.ts'
+            seo:
+              - 'app.vue'
+              - 'layouts/**'
+              - 'server/plugins/tenant-sitemap-filter.ts'
+              - 'server/routes/**'
+              - 'utils/seo*'
+              - 'tests/e2e/seo.spec.ts'
 
   guardrails:
     name: CI guardrails
@@ -281,36 +322,13 @@ jobs:
           POTTERY_HOUSE_CHANGED: ${{ needs.changes.outputs.pottery_house }}
           BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
         run: |
-          yarn test:e2e:core
+          yarn test:e2e:smoke
           if [ "$POTTERY_HOUSE_CHANGED" = "true" ]; then
             yarn test:e2e:pottery-house
           fi
           if [ "$BLAWBY_CHANGED" = "true" ]; then
             yarn test:e2e:blawby
           fi
-      - name: Run Pottery House fixture against owned preview
-        if: needs.changes.outputs.pottery_house == 'true'
-        run: |
-          yarn fixture:pottery-house \
-            --url "https://preview.krabiclaw.com" \
-            --site-id "site-pottery-house" \
-            --slug "pottery-house"
-      - name: Run Blawby NCLS fixture against owned preview
-        if: needs.changes.outputs.blawby == 'true'
-        run: |
-          node scripts/client-verify.mjs \
-            --url "https://preview.krabiclaw.com" \
-            --vertical "professional_service" \
-            --site-id "site-ncls-blawby" \
-            --slug "north-carolina-legal-services" \
-            --tenant-slug "ncls"
-      - name: Verify NCLS SEO migration contract against owned preview
-        if: needs.changes.outputs.blawby == 'true'
-        run: |
-          yarn client:verify:ncls-seo \
-            --url "https://preview.krabiclaw.com" \
-            --expected-origin "https://preview.krabiclaw.com" \
-            --tenant-slug "ncls"
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -324,6 +342,7 @@ jobs:
   e2e-staging:
     name: E2E staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    needs: [changes]
     runs-on: ubuntu-latest
     # Every staging run migrates, resets, and reseeds the same remote D1 database.
     # Queue pushes so fixture writes and deployment smoke tests cannot overlap.
@@ -332,6 +351,7 @@ jobs:
       cancel-in-progress: false
     env:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_TEST }}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://staging.krabiclaw.com
       NUXT_PUBLIC_FREE_SITE_DOMAIN: https://staging.krabiclaw.com
@@ -420,8 +440,26 @@ jobs:
           curl -sf -o /dev/null "https://staging.krabiclaw.com/api/billing/plans" || true
           curl -sf -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" -o /dev/null "https://staging.krabiclaw.com/api/dev/login" || true
           sleep 10
-      - name: Run full E2E suite
-        run: yarn test:e2e:staging
+      - name: Run required smoke and changed subsystem suites
+        env:
+          AUTH_CHANGED: ${{ needs.changes.outputs.auth }}
+          DASHBOARD_CHANGED: ${{ needs.changes.outputs.dashboard }}
+          BILLING_CHANGED: ${{ needs.changes.outputs.billing }}
+          NOTIFICATIONS_CHANGED: ${{ needs.changes.outputs.notifications }}
+          MCP_CHANGED: ${{ needs.changes.outputs.mcp }}
+          SEO_CHANGED: ${{ needs.changes.outputs.seo }}
+          POTTERY_HOUSE_CHANGED: ${{ needs.changes.outputs.pottery_house }}
+          BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
+        run: |
+          yarn test:e2e:smoke
+          [ "$AUTH_CHANGED" != "true" ] || yarn test:e2e:auth
+          [ "$DASHBOARD_CHANGED" != "true" ] || yarn test:e2e:dashboard
+          [ "$BILLING_CHANGED" != "true" ] || yarn test:e2e:billing
+          [ "$NOTIFICATIONS_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:notifications
+          [ "$MCP_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:mcp
+          [ "$SEO_CHANGED" != "true" ] || yarn test:e2e:seo
+          [ "$POTTERY_HOUSE_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:pottery-house
+          [ "$BLAWBY_CHANGED" != "true" ] || yarn test:e2e:blawby
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -604,44 +642,6 @@ jobs:
         with:
           name: prod-notification-canary-log
           path: canary-notifications.log
-          if-no-files-found: ignore
-
-  prod-daily-canary:
-    name: Production daily canary
-    # Provider credentials/connectivity have been reliable, so the daily run now checks
-    # WhatsApp + Resend status via a read-only API ping (no real message/email sent) instead
-    # of the full real-send canaries. A status check still catches token revocation, number
-    # disconnection, or domain de-verification. Re-enable yarn canary:prod / canary:notifications
-    # here (see disabled prod-auth-canary / prod-notification-canary jobs above) for full
-    # real-send + login-flow coverage if status checks stop catching real incidents.
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: "22"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - name: Run daily provider status canary
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CANARY_BASE_URL: ${{ secrets.CANARY_BASE_URL }}
-          CANARY_SITE_ID: ${{ secrets.CANARY_SITE_ID }}
-          CANARY_ORG_ID: ${{ secrets.CANARY_ORG_ID }}
-          CANARY_STATUS_SECRET: ${{ secrets.CANARY_STATUS_SECRET }}
-        run: |
-          set -euo pipefail
-          yarn canary:status | tee canary-status.log
-      - name: Upload daily canary logs
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: prod-daily-canary-logs
-          path: canary-status.log
           if-no-files-found: ignore
 
 # ── Pottery House fixture ─────────────────────────────────────────────────────

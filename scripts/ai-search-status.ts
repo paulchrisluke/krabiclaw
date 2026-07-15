@@ -18,19 +18,19 @@ if (!secret) {
   process.exit(1)
 }
 
+const controller = new AbortController()
+const timeout = setTimeout(() => controller.abort(), 60 * 1000)
 try {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 60 * 1000)
   const response = await fetch(`${baseUrl}/api/internal/search/status`, {
     headers: {
       'x-krabiclaw-search-secret': secret,
     },
     signal: controller.signal,
   })
-  clearTimeout(timeout)
 
   const payload = await response.json().catch(() => null)
   console.log(`AI Search status (${response.status})`, JSON.stringify(payload, null, 2))
+  if (!response.ok) process.exitCode = 1
 } catch (error) {
   const message = error instanceof Error && error.name === 'AbortError'
     ? 'Request timed out'
@@ -38,4 +38,7 @@ try {
       ? error.message
       : 'Unknown request error'
   console.error('AI Search status check failed (network)', { error: message })
+  process.exitCode = 1
+} finally {
+  clearTimeout(timeout)
 }

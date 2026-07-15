@@ -1,5 +1,5 @@
-import satori from 'satori'
-import { Resvg, initWasm } from '@resvg/resvg-wasm'
+import satori, { init as initSatori } from 'satori/standalone'
+import { Resvg, initWasm, type InitInput } from '@resvg/resvg-wasm'
 import type { ReactNode } from 'react'
 import { OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, type OgImageRenderPayload } from '~/utils/social-metadata'
 import { getOgImageFonts } from './fonts.ts'
@@ -9,24 +9,49 @@ import { fetchImageAsDataUri } from './fetch-image.ts'
 // initWasm() may only run once per isolate. Cached at module scope so repeated renders in
 // the same Worker isolate (or the same test process) reuse the initialized module.
 let resvgInit: Promise<void> | null = null
+let satoriInit: Promise<void> | null = null
 
-async function ensureResvgInitialized(wasmBytes: ArrayBuffer | Uint8Array): Promise<void> {
+async function loadBundledResvgWasm(): Promise<WebAssembly.Module> {
+  const { default: wasmModule } = await import('@resvg/resvg-wasm/index_bg.wasm')
+  return wasmModule
+}
+
+async function loadBundledYogaWasm(): Promise<WebAssembly.Module> {
+  const { default: wasmModule } = await import('satori/yoga.wasm')
+  return wasmModule
+}
+
+async function ensureResvgInitialized(wasmModule?: InitInput): Promise<void> {
   if (!resvgInit) {
-    resvgInit = initWasm(wasmBytes as BufferSource).catch((error) => {
-      resvgInit = null
-      throw error
-    })
+    resvgInit = Promise.resolve(wasmModule ?? loadBundledResvgWasm())
+      .then(module => initWasm(module))
+      .catch((error) => {
+        resvgInit = null
+        throw error
+      })
   }
   await resvgInit
 }
 
+async function ensureSatoriInitialized(wasmModule?: InitInput): Promise<void> {
+  if (!satoriInit) {
+    satoriInit = Promise.resolve(wasmModule ?? loadBundledYogaWasm())
+      .then(module => initSatori(module))
+      .catch((error) => {
+        satoriInit = null
+        throw error
+      })
+  }
+  await satoriInit
+}
+
 export interface RenderOgImageDeps {
   /**
-   * The resvg-wasm binary. Never bundled into the Worker script (2.4MB is too large to
-   * inline safely) — server/utils/og-image/wasm-loader.ts fetches it from R2 in
-   * production, and tests/scripts load it straight from node_modules on disk.
+   * Tests and local scripts can provide raw bytes. Deployed Workers omit this so Wrangler
+   * supplies the statically imported file as a precompiled WebAssembly.Module.
    */
-  wasmBytes: ArrayBuffer | Uint8Array
+  wasmModule?: InitInput
+  yogaModule?: InitInput
 }
 
 /** Renders one OG image payload to real, decodable 1200×630 PNG bytes. */
@@ -34,10 +59,19 @@ export async function renderOgImagePng(
   payload: OgImageRenderPayload,
   deps: RenderOgImageDeps,
 ): Promise<Uint8Array> {
-  await ensureResvgInitialized(deps.wasmBytes)
+  await Promise.all([
+    ensureResvgInitialized(deps.wasmModule),
+    ensureSatoriInitialized(deps.yogaModule),
+  ])
 
   const [backgroundImageDataUri, logoDataUri] = await Promise.all([
-    fetchImageAsDataUri(payload.backgroundImageUrl, { timeoutMs: 4000 }),
+    // Satori 0.26's image decoder throws for WebP data URIs. A background is optional,
+    // so keep the page-specific title/branding on the template gradient instead of
+    // failing the whole card into the generic static fallback.
+    fetchImageAsDataUri(payload.backgroundImageUrl, {
+      timeoutMs: 4000,
+      acceptedContentTypes: ['image/png', 'image/jpeg'],
+    }),
     fetchImageAsDataUri(payload.logoUrl, { timeoutMs: 4000 }),
   ])
 

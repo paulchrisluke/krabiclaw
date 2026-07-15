@@ -46,13 +46,6 @@ interface SearchOptions {
   surface?: PlatformKnowledgeSurface
   dashboardContext?: DashboardRouteContext
   siteId?: string | null
-  // TEMPORARY diagnostic override for isolating vector vs keyword vs hybrid retrieval —
-  // to be removed once the actual root cause of single-keyword zero-result searches is found.
-  debugRetrievalType?: 'vector' | 'keyword' | 'hybrid'
-  // TEMPORARY diagnostic override: return_on_failure defaults to true (silently returns
-  // empty chunks on a retrieval failure instead of throwing). Setting this false surfaces
-  // any masked internal error as a real exception instead.
-  debugReturnOnFailure?: boolean
 }
 
 interface PlatformDocSearchRow {
@@ -825,7 +818,7 @@ export async function searchPublicResources(
       query: normalized,
       ai_search_options: {
         retrieval: {
-          retrieval_type: options.debugRetrievalType ?? 'hybrid',
+          retrieval_type: 'hybrid',
           // Standard hybrid retrieval, no reranking/query_rewrite (see
           // platformKnowledgeInstanceConfig above for why). match_threshold filters on the
           // raw vector score per Cloudflare's docs, so it's left at 0 — a single generic
@@ -835,7 +828,7 @@ export async function searchPublicResources(
           match_threshold: 0,
           max_num_results: candidateLimit,
           keyword_match_mode: 'or',
-          return_on_failure: options.debugReturnOnFailure ?? true,
+          return_on_failure: true,
           filters: buildSearchFilters(surface, typeFilter, options.siteId),
         },
       },

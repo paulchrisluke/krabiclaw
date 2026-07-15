@@ -2,6 +2,7 @@
 export interface FetchImageOptions {
   timeoutMs?: number
   maxBytes?: number
+  acceptedContentTypes?: readonly string[]
 }
 
 const DEFAULT_TIMEOUT_MS = 4000
@@ -72,6 +73,10 @@ export async function fetchImageAsDataUri(
 
     const contentType = response.headers.get('content-type')?.split(';')[0]?.trim() || ''
     if (!contentType.startsWith('image/')) {
+      await cancelBody(response)
+      return null
+    }
+    if (options.acceptedContentTypes && !options.acceptedContentTypes.includes(contentType)) {
       await cancelBody(response)
       return null
     }
