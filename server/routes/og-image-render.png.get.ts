@@ -24,6 +24,7 @@ export default defineEventHandler(async (event) => {
   setHeader(event, 'ETag', `"${result.cacheKey}"`)
   setHeader(event, 'X-Content-Type-Options', 'nosniff')
   setHeader(event, 'X-Og-Image-Source', result.source)
+  if (result.fallbackReason) setHeader(event, 'X-Og-Image-Fallback-Reason', result.fallbackReason)
 
   return result.bytes
 })

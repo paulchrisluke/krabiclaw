@@ -3,7 +3,6 @@ import ogImageFallbackBase64 from '~/server/assets/og-image-fallback'
 import type { OgImageRenderPayload } from '~/utils/social-metadata'
 import { computeOgImageCacheKey } from '~/utils/social-metadata'
 import { renderOgImagePng } from './render.ts'
-import { loadResvgWasmFromR2, type R2LikeBucket } from './wasm-loader.ts'
 
 const KV_KEY_PREFIX = 'og-image:v1:'
 // No content-edit-triggered purge exists yet for generated cards (unlike bootstrap-cache.ts's
@@ -18,10 +17,14 @@ export interface OgImagePipelineResult {
   contentType: string
   cacheKey: string
   source: OgImageSource
+  fallbackReason?: 'renderer_error'
+}
+
+export interface ResolveOgImageDeps {
+  render?: typeof renderOgImagePng
 }
 
 interface OgImageBindings {
-  MEDIA_BUCKET?: R2LikeBucket
   SITE_CACHE?: {
     get(_key: string, _type: 'arrayBuffer'): Promise<ArrayBuffer | null>
     put(_key: string, _value: ArrayBuffer, _options?: { expirationTtl?: number }): Promise<void>
@@ -55,16 +58,16 @@ export function createFallbackOgImageResult(payload: OgImageRenderPayload): OgIm
 /**
  * The one image-generation/fallback/cache/response pipeline every OG image request goes
  * through (#259). Order: KV cache hit → render via satori+resvg (cached in KV on success)
- * → static shared fallback image if rendering isn't possible (resvg-wasm not yet
- * provisioned in R2, or the render threw). Never lets a broken render surface as a 500 —
- * a generic but valid card is always better than a missing/broken og:image.
+ * → static shared fallback image if rendering throws. Never lets a broken render surface
+ * as a 500 — a generic but valid card is always better than a missing/broken og:image.
  */
 export async function resolveOgImage(
   event: H3Event,
   payload: OgImageRenderPayload,
+  deps: ResolveOgImageDeps = {},
 ): Promise<OgImagePipelineResult> {
   const cacheKey = computeOgImageCacheKey(payload)
-  const { MEDIA_BUCKET, SITE_CACHE } = getBindings(event)
+  const { SITE_CACHE } = getBindings(event)
 
   if (SITE_CACHE) {
     try {
@@ -77,27 +80,26 @@ export async function resolveOgImage(
     }
   }
 
-  if (MEDIA_BUCKET) {
-    const wasmBytes = await loadResvgWasmFromR2(MEDIA_BUCKET)
-    if (wasmBytes) {
+  try {
+    const bytes = await (deps.render ?? renderOgImagePng)(payload, {})
+    if (SITE_CACHE) {
       try {
-        const bytes = await renderOgImagePng(payload, { wasmBytes })
-        if (SITE_CACHE) {
-          try {
-            const activeBytes = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
-            await SITE_CACHE.put(KV_KEY_PREFIX + cacheKey, activeBytes, {
-              expirationTtl: KV_TTL_SECONDS,
-            })
-          } catch (error) {
-            console.warn('[og-image] KV cache write failed', error)
-          }
-        }
-        return { bytes, contentType: 'image/png', cacheKey, source: 'generated' }
+        const activeBytes = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+        await SITE_CACHE.put(KV_KEY_PREFIX + cacheKey, activeBytes, {
+          expirationTtl: KV_TTL_SECONDS,
+        })
       } catch (error) {
-        console.error('[og-image] render failed, serving static fallback', error)
+        console.warn('[og-image] KV cache write failed', error)
       }
     }
+    return { bytes, contentType: 'image/png', cacheKey, source: 'generated' }
+  } catch (error) {
+    console.error('[og-image]', {
+      stage: 'render',
+      cacheKey,
+      error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : String(error),
+    })
   }
 
-  return createFallbackOgImageResult(payload)
+  return { ...createFallbackOgImageResult(payload), fallbackReason: 'renderer_error' }
 }

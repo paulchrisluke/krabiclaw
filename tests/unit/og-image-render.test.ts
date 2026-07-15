@@ -21,6 +21,10 @@ async function loadWasmBytes() {
   return await readFile(path.join(repoRoot, 'node_modules/@resvg/resvg-wasm/index_bg.wasm'))
 }
 
+async function loadYogaWasmBytes() {
+  return await readFile(path.join(repoRoot, 'node_modules/satori/yoga.wasm'))
+}
+
 /** Reads just enough of a PNG's IHDR chunk to assert width/height without a decoder dependency. */
 function readPngDimensions(bytes: Uint8Array): { width: number; height: number } {
   const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
@@ -37,6 +41,7 @@ function readPngDimensions(bytes: Uint8Array): { width: number; height: number }
 
 test('renderOgImagePng produces real, decodable 1200x630 PNG bytes for the platform template', async () => {
   const wasmBytes = await loadWasmBytes()
+  const yogaBytes = await loadYogaWasmBytes()
   const bytes = await renderOgImagePng(
     {
       template: 'platform',
@@ -44,7 +49,7 @@ test('renderOgImagePng produces real, decodable 1200x630 PNG bytes for the platf
       description: 'Beautiful local business websites edited through ChatGPT.',
       siteName: 'KrabiClaw',
     },
-    { wasmBytes },
+    { wasmModule: wasmBytes, yogaModule: yogaBytes },
   )
 
   assert.ok(bytes.byteLength > 1000, 'rendered image should not be a trivially empty file')
@@ -55,6 +60,7 @@ test('renderOgImagePng produces real, decodable 1200x630 PNG bytes for the platf
 
 test('renderOgImagePng produces valid output for the saya and blawby templates too', async () => {
   const wasmBytes = await loadWasmBytes()
+  const yogaBytes = await loadYogaWasmBytes()
 
   for (const template of ['saya', 'blawby'] as const) {
     const bytes = await renderOgImagePng(
@@ -65,7 +71,7 @@ test('renderOgImagePng produces valid output for the saya and blawby templates t
         siteName: 'Example Business',
         label: 'Service',
       },
-      { wasmBytes },
+      { wasmModule: wasmBytes, yogaModule: yogaBytes },
     )
     const { width, height } = readPngDimensions(bytes)
     assert.equal(width, 1200, `${template} width`)
@@ -75,6 +81,7 @@ test('renderOgImagePng produces valid output for the saya and blawby templates t
 
 test('renderOgImagePng ignores an unresolvable background image URL rather than failing', async () => {
   const wasmBytes = await loadWasmBytes()
+  const yogaBytes = await loadYogaWasmBytes()
   const bytes = await renderOgImagePng(
     {
       template: 'blawby',
@@ -82,7 +89,7 @@ test('renderOgImagePng ignores an unresolvable background image URL rather than 
       siteName: 'North Carolina Legal Services',
       backgroundImageUrl: 'https://this-host-does-not-exist.invalid/hero.jpg',
     },
-    { wasmBytes },
+    { wasmModule: wasmBytes, yogaModule: yogaBytes },
   )
   const { width, height } = readPngDimensions(bytes)
   assert.equal(width, 1200)
