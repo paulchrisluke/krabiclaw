@@ -20,11 +20,16 @@ async function loginFreshUser(page: Page, baseURL: string, userId: string) {
 async function completeManualWizard(
   page: Page,
   businessName: string,
-  { skipVertical = false } = {},
+  { skipVertical = false, vertical = 'restaurant' as 'restaurant' | 'experience' | 'professional_service' } = {},
 ) {
   await page.getByRole('button', { name: 'Start building' }).click()
   if (!skipVertical) {
-    await page.getByRole('button', { name: /Restaurant, café or bar/ }).click()
+    const verticalLabel = vertical === 'professional_service'
+      ? /Legal or professional services/
+      : vertical === 'experience'
+        ? /Experience, class or activity/
+        : /Restaurant, café or bar/
+    await page.getByRole('button', { name: verticalLabel }).click()
   }
   await page.getByRole('button', { name: /Start manually/ }).click()
   const input = page.getByPlaceholder('Your business name…')
@@ -244,6 +249,39 @@ test.describe('onboarding wizard UI', () => {
     const { locations } = await locationsRes.json() as { locations: Array<{ title: string }> }
     expect(locations.length).toBeGreaterThanOrEqual(2)
     expect(orgSlug).toBeTruthy()
+  })
+
+  test('wizard shows all three business-type choices on mobile and desktop, and Legal/professional services creates a Blawby site', async ({ page, baseURL }) => {
+    test.setTimeout(90_000)
+    const suffix = Date.now()
+    const userId = `e2e-onboard-pro-${suffix}`
+    await loginFreshUser(page, baseURL!, userId)
+
+    // Mobile-first layout check: the picker must render cleanly (all three
+    // choices reachable) at a small viewport. Reload fresh at desktop size
+    // afterward so the actual completion flow below starts from "welcome"
+    // again rather than continuing mid-flow from this mobile-only check.
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
+    await page.getByRole('button', { name: 'Start building' }).click()
+    await expect(page.getByRole('button', { name: /Restaurant, café or bar/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Experience, class or activity/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Legal or professional services/ })).toBeVisible()
+
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
+    await completeManualWizard(page, `Onboard Test Firm ${suffix}`, { vertical: 'professional_service' })
+
+    const contextRes = await page.request.get(`${baseURL}/api/dashboard/context`)
+    expect(contextRes.status()).toBe(200)
+    const context = await contextRes.json() as { site?: { id?: string; vertical?: string } }
+    expect(context.site?.vertical).toBe('service')
+
+    const siteRes = await page.request.get(`${baseURL}/api/sites/${context.site?.id}`)
+    expect(siteRes.status()).toBe(200)
+    const site = await siteRes.json() as { theme_id: string; vertical: string }
+    expect(site.theme_id).toBe('blawby-theme-v1')
+    expect(site.vertical).toBe('service')
   })
 
   test('transfer handoff wizard saves free-plan notifications and skips paid-only steps', async ({ page, baseURL }) => {
