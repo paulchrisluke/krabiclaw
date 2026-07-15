@@ -475,6 +475,12 @@ export default defineNuxtConfig({
     externals: {
       inline: ['@opentelemetry/api']
     },
+    // Leave the resolved WASM import for Wrangler, which uploads .wasm as a precompiled
+    // module. Nitro's Rollup pass cannot parse the binary, and Workers cannot compile raw
+    // R2 bytes at runtime.
+    rollupConfig: {
+      external: [/index_bg\.wasm$/]
+    },
     serverAssets: [{
       baseName: 'docs',
       dir: './docs'

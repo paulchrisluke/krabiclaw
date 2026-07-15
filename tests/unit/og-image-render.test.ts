@@ -44,7 +44,7 @@ test('renderOgImagePng produces real, decodable 1200x630 PNG bytes for the platf
       description: 'Beautiful local business websites edited through ChatGPT.',
       siteName: 'KrabiClaw',
     },
-    { wasmBytes },
+    { wasmModule: wasmBytes },
   )
 
   assert.ok(bytes.byteLength > 1000, 'rendered image should not be a trivially empty file')
@@ -65,7 +65,7 @@ test('renderOgImagePng produces valid output for the saya and blawby templates t
         siteName: 'Example Business',
         label: 'Service',
       },
-      { wasmBytes },
+      { wasmModule: wasmBytes },
     )
     const { width, height } = readPngDimensions(bytes)
     assert.equal(width, 1200, `${template} width`)
@@ -82,7 +82,7 @@ test('renderOgImagePng ignores an unresolvable background image URL rather than 
       siteName: 'North Carolina Legal Services',
       backgroundImageUrl: 'https://this-host-does-not-exist.invalid/hero.jpg',
     },
-    { wasmBytes },
+    { wasmModule: wasmBytes },
   )
   const { width, height } = readPngDimensions(bytes)
   assert.equal(width, 1200)
