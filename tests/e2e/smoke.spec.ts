@@ -13,9 +13,15 @@ test.describe('representative tenant routes', () => {
   test.beforeEach(async ({ page }) => setupTenantHeaders(page, tenantBaseURL, tenantExtraHeaders))
 
   test('home and a deep route render without hydration errors', async ({ page }) => {
+    // Preview is a shared hostname redeployed on every PR. A unique query keeps
+    // Cloudflare from serving HTML cached before the current deploy, which can
+    // reference Nuxt asset hashes that no longer exist in the Assets binding.
+    const deployProbe = `e2e-deploy-${Date.now()}`
     for (const path of ['/', '/locations/brooklyn']) {
       const errors = collectPageErrors(page)
-      const response = await page.goto(`${tenantBaseURL}${path}`, { waitUntil: 'load' })
+      const url = new URL(path, `${tenantBaseURL}/`)
+      url.searchParams.set('e2e', deployProbe)
+      const response = await page.goto(url.toString(), { waitUntil: 'load' })
       expect(response?.status()).toBeLessThan(400)
       await expectHealthyPage(page, errors)
     }
