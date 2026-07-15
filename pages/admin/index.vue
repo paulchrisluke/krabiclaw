@@ -241,11 +241,15 @@
                   <div class="flex items-center justify-between gap-2 w-full">
                     <span class="truncate">{{ item.name }}<span class="text-muted"> · {{ item.slug || 'no slug' }}</span></span>
                     <UBadge v-if="item.hasOwner" label="has owner" color="warning" variant="soft" size="sm" />
+                    <UBadge v-else-if="item.hasPendingInvitation" label="invite pending" color="warning" variant="soft" size="sm" />
                   </div>
                 </template>
               </UInputMenu>
               <p v-if="selectedOrg?.hasOwner" class="mt-1 text-xs text-warning">
                 This organization already has an owner — sending an invite will fail.
+              </p>
+              <p v-else-if="selectedOrg?.hasPendingInvitation" class="mt-1 text-xs text-warning">
+                This organization already has a pending owner invitation — sending another will fail.
               </p>
             </UFormField>
 
@@ -816,7 +820,7 @@ const invitingClient = ref(false)
 const clientInviteResult = ref<{ inviteUrl?: string; restaurantName?: string; error?: string } | null>(null)
 
 // ── Invite Client: new-org vs existing-org mode ──────────────────────────────
-interface OrgSearchResult { id: string; name: string; slug: string | null; hasOwner: boolean }
+interface OrgSearchResult { id: string; name: string; slug: string | null; hasOwner: boolean; hasPendingInvitation: boolean }
 
 const inviteMode = ref<'new' | 'existing'>('new')
 const orgSearchTerm = ref('')
@@ -902,6 +906,9 @@ async function inviteClient() {
       })
       clientInviteResult.value = res
       clientEmail.value = ''
+      // Existing-org mode only: reset the org picker's search state and re-run the
+      // search so the just-invited org drops out of the "no owner" browse list. The
+      // new-org branch below has no equivalent search state to reset.
       selectedOrg.value = undefined
       orgSearchTerm.value = ''
       await runOrgSearch('')
