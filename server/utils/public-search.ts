@@ -313,22 +313,24 @@ function platformKnowledgeInstanceConfig(): Omit<AiSearchConfig, 'metadata'> {
   }
 }
 
+// TEMPORARY one-time recreation: pure keyword retrieval returns zero results even for
+// terms that literally appear in already-indexed content (e.g. "manage" in a real,
+// confirmed-indexed blog post title). Per Cloudflare's docs, an instance created without
+// keyword search enabled never gets a real keyword index from update() alone — it has to
+// be created with index_method.keyword set from the start. This instance predates that
+// config in our code, so update() has been silently accepting the setting without ever
+// actually building the keyword index. Force delete+recreate once, then the next line
+// below (the automatic post-deploy reindex) does a full fresh upload. Revert to the
+// normal update-or-create upsert once this is confirmed working.
 async function ensurePlatformKnowledgeInstance(env: CloudflareEnv) {
   const instanceId = platformKnowledgeInstanceId(env)
   const namespace = searchNamespace(env)
 
-  try {
-    const instance = namespace.get(instanceId)
-    await instance.update({
-      id: instanceId,
-      ...platformKnowledgeInstanceConfig(),
-    })
-  } catch {
-    await namespace.create({
-      id: platformKnowledgeInstanceId(env),
-      ...platformKnowledgeInstanceConfig(),
-    })
-  }
+  await namespace.delete(instanceId).catch(() => {})
+  await namespace.create({
+    id: instanceId,
+    ...platformKnowledgeInstanceConfig(),
+  })
 }
 
 export async function listAllItems(env: CloudflareEnv) {
