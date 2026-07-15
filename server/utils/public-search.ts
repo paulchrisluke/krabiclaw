@@ -49,6 +49,10 @@ interface SearchOptions {
   // TEMPORARY diagnostic override for isolating vector vs keyword vs hybrid retrieval —
   // to be removed once the actual root cause of single-keyword zero-result searches is found.
   debugRetrievalType?: 'vector' | 'keyword' | 'hybrid'
+  // TEMPORARY diagnostic override: return_on_failure defaults to true (silently returns
+  // empty chunks on a retrieval failure instead of throwing). Setting this false surfaces
+  // any masked internal error as a real exception instead.
+  debugReturnOnFailure?: boolean
 }
 
 interface PlatformDocSearchRow {
@@ -822,7 +826,7 @@ export async function searchPublicResources(
           match_threshold: 0,
           max_num_results: candidateLimit,
           keyword_match_mode: 'or',
-          return_on_failure: true,
+          return_on_failure: options.debugReturnOnFailure ?? true,
           filters: buildSearchFilters(surface, typeFilter, options.siteId),
         },
       },

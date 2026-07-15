@@ -65,12 +65,14 @@ export default defineEventHandler(async (event) => {
     const debugRetrievalType = ['vector', 'keyword', 'hybrid'].includes(String(query.debugRetrievalType))
       ? (query.debugRetrievalType as 'vector' | 'keyword' | 'hybrid')
       : undefined
+    const debugReturnOnFailure = query.debugReturnOnFailure === 'false' ? false : undefined
     const results = await searchPublicResources(env, q, {
       type: type as PublicSearchTypeFilter,
       surface: surface as 'public' | 'docs' | 'blog' | 'dashboard' | 'help' | 'chowbot' | 'tenant_blog',
       limit: 10,
       siteId: isTenantRequest && surface === 'tenant_blog' ? String(event.context.siteId) : null,
       debugRetrievalType,
+      debugReturnOnFailure,
       dashboardContext: requiresDashboardAuth
         ? {
             orgSlug: orgSlug || null,
@@ -82,6 +84,9 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ query: q, surface, results })
   } catch (error) {
     console.error('Failed to run public search:', error)
-    return jsonResponse({ error: 'Failed to search public resources' }, { status: 500 })
+    // TEMPORARY: surface the real error while debugging debugReturnOnFailure=false —
+    // this route is public, so revert to the generic message once root-caused.
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+    return jsonResponse({ error: 'Failed to search public resources', detail }, { status: 500 })
   }
 })
