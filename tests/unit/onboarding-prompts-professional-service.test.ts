@@ -17,7 +17,7 @@ function checklist(overrides: Partial<OnboardingChecklistResponse> = {}): Onboar
     items: {
       business_info: true,
       hero_image: true,
-      menu_or_experiences: false,
+      core_offering: false,
       story: true,
       post: true,
     },
@@ -27,7 +27,7 @@ function checklist(overrides: Partial<OnboardingChecklistResponse> = {}): Onboar
 
 test('professional_service checklist replaces "Menu added" with a services task using consultation/contact language', () => {
   const items = buildOnboardingChecklistItems(checklist())
-  const offeringItem = items.find(item => item.key === 'menu_or_experiences')
+  const offeringItem = items.find(item => item.key === 'core_offering')
   assert.equal(offeringItem?.label, 'Services added')
   assert.match(offeringItem!.prompt, /services|clients/i)
   assert.ok(!/menu|dish|dining/i.test(offeringItem!.prompt))
@@ -35,15 +35,15 @@ test('professional_service checklist replaces "Menu added" with a services task 
 
 test('restaurant/experience checklist labels remain unchanged', () => {
   const restaurantItems = buildOnboardingChecklistItems(checklist({ vertical: 'restaurant' }))
-  assert.equal(restaurantItems.find(item => item.key === 'menu_or_experiences')?.label, 'Menu added')
+  assert.equal(restaurantItems.find(item => item.key === 'core_offering')?.label, 'Menu added')
 
   const experienceItems = buildOnboardingChecklistItems(checklist({ vertical: 'experience' }))
-  assert.equal(experienceItems.find(item => item.key === 'menu_or_experiences')?.label, 'Experiences listed')
+  assert.equal(experienceItems.find(item => item.key === 'core_offering')?.label, 'Experiences listed')
 })
 
 test('starter prompt says "professional-service site", not "restaurant site", for professional_service', () => {
   const prompt = buildOnboardingStarterPrompt(checklist({
-    items: { business_info: true, hero_image: true, menu_or_experiences: false, story: true, post: true },
+    items: { business_info: true, hero_image: true, core_offering: false, story: true, post: true },
   }))
   assert.match(prompt, /professional-service site/)
   assert.ok(!/restaurant site/.test(prompt))
@@ -51,7 +51,7 @@ test('starter prompt says "professional-service site", not "restaurant site", fo
 
 test('starter prompt "all done" branch also uses professional-service wording', () => {
   const prompt = buildOnboardingStarterPrompt(checklist({
-    items: { business_info: true, hero_image: true, menu_or_experiences: true, story: true, post: true },
+    items: { business_info: true, hero_image: true, core_offering: true, story: true, post: true },
   }))
   assert.match(prompt, /professional-service site/)
 })

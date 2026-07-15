@@ -5,7 +5,7 @@ import { seedNewSite } from '~/server/utils/site-template'
 import { createSystemSubdomain } from '~/server/utils/domains'
 import { setSiteEntitlementsFromPlan } from '~/server/utils/billing'
 import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
-import type { SiteVertical } from '~/utils/vertical-copy'
+import { ALL_VERTICALS, type SiteVertical } from '~/utils/vertical-copy'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 
 type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
@@ -18,7 +18,11 @@ interface UserOrganizationSiteRow {
   onboarding_status: string | null
 }
 
-export const VALID_VERTICALS: SiteVertical[] = ['restaurant', 'experience', 'professional_service']
+// Re-exported for existing callers (endpoint validation, tests) — the
+// canonical list itself lives in utils/vertical-copy.ts (ALL_VERTICALS) so a
+// third supported vertical only needs one array to update, not a duplicate
+// here plus one in every UI vertical picker.
+export const VALID_VERTICALS: SiteVertical[] = ALL_VERTICALS
 
 export interface SiteCreationResult {
   status: number

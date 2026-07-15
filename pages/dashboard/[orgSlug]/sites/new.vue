@@ -14,7 +14,7 @@
           <UInput v-model="subdomain" placeholder="my-second-business" />
         </UFormField>
         <UFormField label="Vertical">
-          <USelect v-model="vertical" :items="['restaurant', 'experience']" />
+          <USelect v-model="vertical" :items="VERTICAL_OPTIONS" value-key="value" label-key="label" />
         </UFormField>
         <UAlert v-if="error" color="error" variant="soft" :description="error" />
       </form>
@@ -32,7 +32,20 @@
 </template>
 
 <script setup lang="ts">
+import type { SiteVertical } from '~/utils/vertical-copy'
+
 definePageMeta({ layout: 'dashboard' })
+
+// Options list, not a bare ALL_VERTICALS import — the picker needs
+// human-readable labels, but the *values* are still driven by the single
+// canonical vertical list (utils/vertical-copy.ts's ALL_VERTICALS /
+// server/utils/site-creation.ts's VALID_VERTICALS) so a future vertical only
+// needs a label added here, not a whole new value union.
+const VERTICAL_OPTIONS: { label: string; value: SiteVertical }[] = [
+  { label: 'Restaurant, café or bar', value: 'restaurant' },
+  { label: 'Experience, class or activity', value: 'experience' },
+  { label: 'Legal or professional services', value: 'professional_service' },
+]
 
 const route = useRoute()
 const router = useRouter()
@@ -41,7 +54,7 @@ const { offerSubscribe } = useSiteSubscribe()
 const orgSlug = route.params.orgSlug as string
 const name = ref('')
 const subdomain = ref('')
-const vertical = ref<'restaurant' | 'experience'>('restaurant')
+const vertical = ref<SiteVertical>('restaurant')
 const creating = ref(false)
 const error = ref<string | null>(null)
 

@@ -6,7 +6,7 @@ export interface OnboardingChecklistResponse {
   items: {
     business_info: boolean
     hero_image: boolean
-    menu_or_experiences: boolean
+    core_offering: boolean
     story: boolean
     post: boolean
   }
@@ -51,14 +51,14 @@ export function buildOnboardingChecklistItems(
       complete: completed?.hero_image ?? false,
     },
     {
-      key: 'menu_or_experiences',
+      key: 'core_offering',
       label: isProfessionalService ? 'Services added' : isExperience ? 'Experiences listed' : 'Menu added',
       prompt: isProfessionalService
         ? `Add our core services to ${name} — include a short description of each and how prospective clients can get in touch`
         : isExperience
           ? `Add our signature experience to ${name} — include a description, duration, price per person, and max capacity`
           : `Build a menu for ${name}. Ask me about our sections and dishes.`,
-      complete: completed?.menu_or_experiences ?? false,
+      complete: completed?.core_offering ?? false,
     },
     {
       key: 'story',

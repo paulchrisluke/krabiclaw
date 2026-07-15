@@ -162,6 +162,13 @@ watch(() => props.iframeSrc, (newSrc, oldSrc) => {
   if (newSrc && newSrc !== oldSrc) iframeLoading.value = true
 }, { immediate: true })
 
+// Deliberately static, not vertical-aware: this always shows a Saya-shaped
+// (menu/location) tab list, even for a professional_service/Blawby preview
+// where the equivalent page is site-level /services, not a location-scoped
+// /menu. Fixing this means deriving tabs from the resolved
+// PublicTemplateDefinition (utils/template-registry.ts's
+// resolvePublicTemplate) instead — tracked as #285, deferred to #278's
+// vertical-aware CMS/preview registry work rather than solved ad hoc here.
 const locationScopedPages = new Set(['location', 'menu'])
 
 const tabs = computed(() => [

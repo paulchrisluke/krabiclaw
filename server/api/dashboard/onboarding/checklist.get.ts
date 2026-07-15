@@ -12,7 +12,7 @@ const EMPTY_CHECKLIST = {
   items: {
     business_info: false,
     hero_image: false,
-    menu_or_experiences: false,
+    core_offering: false,
     story: false,
     post: false,
   },
@@ -128,7 +128,16 @@ export default defineEventHandler(async (event) => {
       items: {
         business_info: (businessInfo?.c ?? 0) > 0,
         hero_image: heroIsReal,
-        menu_or_experiences: normalizedVertical === 'experience'
+        // Renamed from menu_or_experiences (#277) since this key isn't
+        // menu-shaped — but the completion check itself is still only wired
+        // for restaurant (menuItems) and experience (experiences).
+        // professional_service falls into the menuItems branch and can
+        // never complete, because #276 intentionally seeds no menu for it
+        // and there is no offerings/practice-areas content model yet to
+        // check instead. This is a known, tracked gap, not a silent
+        // restaurant coercion — see #284, which depends on the offerings
+        // model from #194/#278.
+        core_offering: normalizedVertical === 'experience'
           ? (experiences?.c ?? 0) > 0
           : (menuItems?.c ?? 0) > 0,
         story: (story?.c ?? 0) > 0,
