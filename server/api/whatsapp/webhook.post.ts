@@ -356,7 +356,7 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
         role: 'user',
         channel: 'whatsapp',
         content: text || `Uploaded ${message.type}`,
-        media: { asset_id: asset.id, mime_type: media.mimeType },
+        media: { asset_id: asset.id, mime_type: asset.mime_type },
         metaMessageId: message.id,
       }, user.id)
 

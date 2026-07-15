@@ -123,7 +123,13 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'analyze_document',
-      description: 'Summarize, answer questions about, or extract information from an already-uploaded Markdown document (.md/.markdown) — grounded strictly in that file\'s content. Use get_site_media_assets or upload_user_media first to get an asset_id. Pass a question to get a grounded answer; omit it to get a summary.',
+      // NOTE: upload_user_media (and the shared magic-byte sniffing pipeline it uses)
+      // only accepts image/video content and hard-rejects Markdown files, so a Markdown
+      // asset_id cannot be obtained through this MCP surface today. The only current
+      // ingestion path is a document sent over WhatsApp, which lands in pending_media
+      // state and is analyzed via the ChowBot pending-media flow, not this tool.
+      // Full MCP upload support for documents is a follow-up.
+      description: 'Summarize, answer questions about, or extract information from an already-uploaded Markdown document (.md/.markdown) — grounded strictly in that file\'s content. Use get_site_media_assets to find the asset_id of a Markdown document already in the site media library. There is currently no way to upload a new Markdown document through this MCP surface — upload_user_media only accepts images and video. Markdown documents are ingested via the WhatsApp ChowBot pending-media flow. Pass a question to get a grounded answer; omit it to get a summary.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
