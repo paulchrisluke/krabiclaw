@@ -306,8 +306,6 @@ async function cloudflareRequest<T>(
 
 async function createCloudflareHostname(
   env: DomainEnv,
-  siteId: string,
-  organizationId: string,
   hostname: string,
   signal?: AbortSignal
 ): Promise<CloudflareCustomHostname> {
@@ -315,7 +313,6 @@ async function createCloudflareHostname(
     method: 'POST',
     body: JSON.stringify({
       hostname,
-      custom_metadata: { site_id: siteId, organization_id: organizationId },
       ssl: {
         method: 'txt',
         type: 'dv',
@@ -547,7 +544,7 @@ export async function createCustomDomainPair(
   try {
     // External side-effect first: provision both hostnames before DB commit.
     for (const entry of entries) {
-      const hostname = await createCloudflareHostname(env, opts.siteId, opts.organizationId, entry.domain)
+      const hostname = await createCloudflareHostname(env, entry.domain)
       cloudflareByDomainId.set(entry.id, hostname)
       if (hostname.id) createdHostnameIds.push(hostname.id)
     }
@@ -668,7 +665,7 @@ export async function syncDomainWithCloudflare(
     if (!domain) throw new Error('Domain not found')
 
     if (!domain.cloudflare_hostname_id) {
-      const hostname = await createCloudflareHostname(env, domain.site_id, domain.organization_id, domain.domain, signal)
+      const hostname = await createCloudflareHostname(env, domain.domain, signal)
       signal?.throwIfAborted()
       return persistCloudflareState(env, db, domainId, hostname, { incrementRetry: true, actorType, actorId })
     }
