@@ -19,12 +19,22 @@ export interface OnboardingChecklistItem {
   complete: boolean
 }
 
+// Label for the vertical used in generic sentences ("Help me finish {name}'s
+// ___ site"). Kept centralized so onboarding copy across the checklist,
+// starter prompt, and quick actions can't drift per-callsite.
+function verticalNoun(vertical: string | null | undefined): 'experience' | 'professional-service' | 'restaurant' {
+  if (vertical === 'experience') return 'experience'
+  if (vertical === 'professional_service') return 'professional-service'
+  return 'restaurant'
+}
+
 export function buildOnboardingChecklistItems(
   checklist: OnboardingChecklistResponse | null | undefined
 ): OnboardingChecklistItem[] {
   const name = checklist?.brandName ?? 'your business'
   const city = checklist?.city ? ` in ${checklist.city}` : ''
   const isExperience = checklist?.vertical === 'experience'
+  const isProfessionalService = checklist?.vertical === 'professional_service'
   const completed = checklist?.items
 
   return [
@@ -42,10 +52,12 @@ export function buildOnboardingChecklistItems(
     },
     {
       key: 'menu_or_experiences',
-      label: isExperience ? 'Experiences listed' : 'Menu added',
-      prompt: isExperience
-        ? `Add our signature experience to ${name} — include a description, duration, price per person, and max capacity`
-        : `Build a menu for ${name}. Ask me about our sections and dishes.`,
+      label: isProfessionalService ? 'Services added' : isExperience ? 'Experiences listed' : 'Menu added',
+      prompt: isProfessionalService
+        ? `Add our core services to ${name} — include a short description of each and how prospective clients can get in touch`
+        : isExperience
+          ? `Add our signature experience to ${name} — include a description, duration, price per person, and max capacity`
+          : `Build a menu for ${name}. Ask me about our sections and dishes.`,
       complete: completed?.menu_or_experiences ?? false,
     },
     {
@@ -68,16 +80,14 @@ export function buildOnboardingStarterPrompt(
   items: OnboardingChecklistItem[] = buildOnboardingChecklistItems(checklist)
 ): string {
   const name = checklist?.brandName ?? 'my business'
-  const isExperience = checklist?.vertical === 'experience'
+  const noun = verticalNoun(checklist?.vertical)
   const firstMissing = items.find(item => !item.complete) ?? null
 
   if (!firstMissing) {
-    return isExperience
-      ? `Help me review ${name}'s experience site and suggest the next highest-impact improvement. Ask me one question at a time.`
-      : `Help me review ${name}'s restaurant site and suggest the next highest-impact improvement. Ask me one question at a time.`
+    return `Help me review ${name}'s ${noun} site and suggest the next highest-impact improvement. Ask me one question at a time.`
   }
 
-  return `Help me finish ${name}'s ${isExperience ? 'experience' : 'restaurant'} site. Start with "${firstMissing.label}" first. Ask me one question at a time and then help me complete this: ${firstMissing.prompt}`
+  return `Help me finish ${name}'s ${noun} site. Start with "${firstMissing.label}" first. Ask me one question at a time and then help me complete this: ${firstMissing.prompt}`
 }
 
 /** Short, evergreen quick-action prompts — used wherever we need a starter chip outside the task checklist (ChowBot empty state, MCP edit card examples). Outcome-based phrasing over internal terms, per the ChatGPT MCP fuzzy-intent guidance. */
@@ -89,6 +99,16 @@ export function getQuickActionPrompts(vertical: string | null | undefined): stri
       'Tell me what my site still needs',
       'What experiences do we offer?',
       'Help me get more bookings',
+    ]
+  }
+
+  if (vertical === 'professional_service') {
+    return [
+      'Make my homepage look more inviting',
+      'Help me add my best photos to the site',
+      'Tell me what my site still needs',
+      'What services do we offer?',
+      'Help me get more consultation requests',
     ]
   }
 

@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-type Vertical = 'restaurant' | 'experience'
+type Vertical = 'restaurant' | 'experience' | 'professional_service'
 
 const props = withDefaults(defineProps<{
   title?: string
@@ -77,10 +77,16 @@ const props = withDefaults(defineProps<{
 const items = computed(() => [
   {
     icon: 'i-lucide-file-text',
-    title: props.vertical === 'experience' ? 'Add your headline experiences' : 'Add your core menu or offerings',
+    title: props.vertical === 'experience'
+      ? 'Add your headline experiences'
+      : props.vertical === 'professional_service'
+        ? 'Add your core services'
+        : 'Add your core menu or offerings',
     body: props.vertical === 'experience'
       ? 'Start with the signature experiences people book first, then expand the catalog.'
-      : 'Start with the best sellers and key sections, then fill in the rest once the structure feels right.',
+      : props.vertical === 'professional_service'
+        ? 'Start with the services or practice areas clients ask about most, then fill in the rest.'
+        : 'Start with the best sellers and key sections, then fill in the rest once the structure feels right.',
   },
   {
     icon: 'i-lucide-message-square-text',

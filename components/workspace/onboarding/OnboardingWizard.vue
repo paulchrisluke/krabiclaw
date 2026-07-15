@@ -273,7 +273,7 @@ interface DraftSavedPayload {
 }
 
 type WizardStep = 'welcome' | 'vertical' | 'source' | 'awaiting_url' | 'awaiting_manual_name' | 'confirm' | 'details' | 'importing' | 'imported'
-type Vertical = 'restaurant' | 'experience'
+type Vertical = 'restaurant' | 'experience' | 'professional_service'
 type DetailsSource = 'imported' | 'manual'
 
 const props = defineProps<{
@@ -456,6 +456,10 @@ const chatgptStarterPrompt = computed(() => {
     return 'Help me finish my experience site. First ask me for my hero headline, brand story, and signature experiences.'
   }
 
+  if (selectedVertical.value === 'professional_service') {
+    return 'Help me finish my professional-service site. First ask me for my hero headline, brand story, and core services.'
+  }
+
   return 'Help me finish my restaurant site. First ask me for my hero headline, brand story, and top menu sections.'
 })
 
@@ -547,6 +551,7 @@ async function advance(target: WizardStep) {
     replies.value = [
       { label: 'Restaurant, café or bar', icon: 'i-lucide-flame', primary: true, action: 'set_vertical_restaurant' },
       { label: 'Experience, class or activity', icon: 'i-lucide-graduation-cap', action: 'set_vertical_experience' },
+      { label: 'Legal or professional services', sub: 'Law firms, consultancies, and similar practices', icon: 'i-lucide-briefcase', action: 'set_vertical_professional_service' },
     ]
   }
 
@@ -598,6 +603,13 @@ async function handleReply(reply: QuickReply) {
 
   if (reply.action === 'set_vertical_experience') {
     selectedVertical.value = 'experience'
+    pushUser(reply.label)
+    await advance('source')
+    return
+  }
+
+  if (reply.action === 'set_vertical_professional_service') {
+    selectedVertical.value = 'professional_service'
     pushUser(reply.label)
     await advance('source')
     return
@@ -966,7 +978,11 @@ async function finishCreation(orgSlug: string | null | undefined, siteSlug: stri
   await sleep(300)
   const domainSlug = siteSlug ?? orgSlug
   const domain = domainSlug ? `**${domainSlug}.krabiclaw.com**` : 'your new workspace'
-  const offerLabel = selectedVertical.value === 'experience' ? 'experiences' : 'menu'
+  const offerLabel = selectedVertical.value === 'experience'
+    ? 'experiences'
+    : selectedVertical.value === 'professional_service'
+      ? 'services'
+      : 'menu'
   await pushBot(`Done. Your workspace is live at ${domain}.`)
   if (!props.isAddingLocation && importedSiteId.value) {
     await pushBot(
