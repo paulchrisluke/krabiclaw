@@ -162,7 +162,7 @@ export const ONBOARDING_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         file: chatgptFileInput,
         file_id: { type: 'string', description: 'Resolved file identifier for a user-uploaded image (e.g. file_abc123). Prefer this when the host can supply it directly.' },
-        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this photo will be used for.' },
+        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'blog', 'other'], description: 'What this photo will be used for.' },
         description: { type: 'string', description: 'Description of the photo (stored as alt text).' },
         oneOf: [
           { required: ['file'] },

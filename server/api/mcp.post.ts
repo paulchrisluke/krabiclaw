@@ -38,7 +38,7 @@ import {
   mcpAuthRequiredResult,
   setMcpAuthChallenge,
 } from "~/server/utils/mcp-route-helpers";
-import { logMcpToolCallEvent } from "~/server/utils/mcp-telemetry";
+import { describeErrorForTelemetry, logMcpToolCallEvent } from "~/server/utils/mcp-telemetry";
 
 // Fires a telemetry write without ever blocking or failing the MCP response.
 function logMcpEventDetached(
@@ -465,7 +465,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
           arguments: rawArgs,
           status: "error",
           errorCode: mcpErr.code,
-          errorMessage: mcpErr.message,
+          errorMessage: describeErrorForTelemetry(toolError),
           durationMs: Date.now() - toolStartedAt,
         });
         throw toolError;

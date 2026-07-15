@@ -83,6 +83,36 @@ export function truncateText(value: string | null | undefined, maxLength = 500):
   return value.length > maxLength ? `${value.slice(0, maxLength)}…[truncated]` : value;
 }
 
+// SQL wrappers commonly put the useful provider/constraint failure in `cause`,
+// after a long query and params preamble. Keep both ends so production telemetry
+// retains the operation context and the actionable root cause.
+export function describeErrorForTelemetry(error: unknown, maxLength = 1000): string {
+  const messages: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+
+  while (current != null && !seen.has(current) && messages.length < 4) {
+    seen.add(current);
+    const rawMessage = current instanceof Error ? current.message : String(current);
+    // Drizzle includes every bound value after `params:`. Those values may
+    // contain URLs, filenames, or customer data and are not needed once the
+    // nested D1 cause is retained.
+    const message = rawMessage.replace(/\nparams:[\s\S]*$/i, "\nparams: [redacted]");
+    if (message && !messages.includes(message)) messages.push(message);
+    current = typeof current === "object" && "cause" in current
+      ? (current as { cause?: unknown }).cause
+      : null;
+  }
+
+  const combined = messages.join("\nCaused by: ") || "Unknown error";
+  if (combined.length <= maxLength) return combined;
+
+  const marker = "\n…[middle truncated]…\n";
+  const available = Math.max(0, maxLength - marker.length);
+  const headLength = Math.ceil(available / 2);
+  return combined.slice(0, headLength) + marker + combined.slice(-Math.floor(available / 2));
+}
+
 export type McpToolCallStatus = "success" | "error" | "auth_required" | "blocked";
 
 export interface LogMcpToolCallEventInput {
@@ -137,7 +167,7 @@ export async function logMcpToolCallEvent(
         summarizeForTelemetry(input.result),
         input.status,
         input.errorCode == null ? null : String(input.errorCode),
-        truncateText(input.errorMessage),
+        truncateText(input.errorMessage, 1000),
         input.durationMs ?? null,
       ],
     );

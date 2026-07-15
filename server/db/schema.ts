@@ -545,7 +545,7 @@ export const media_assets = sqliteTable("media_assets", {
 	height: integer(),
 	duration: integer(),
 	alt_text: text(),
-	category: text(),
+	category: text().$type<'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo' | 'blog'>(),
 	status: text().default("active").notNull(),
 	created_by_user_id: text().references(() => user.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -557,7 +557,9 @@ export const media_assets = sqliteTable("media_assets", {
 	// immutable migrations/0001_initial.sql (pre-dates schema.ts as source of truth) and were
 	// never mirrored back here. organization_id adds no separate selectivity once site_id is
 	// fixed (a site belongs to exactly one org), so no additional index is needed.
-});
+}, () => [
+	check("media_assets_category_check", sql`category IS NULL OR category IN ('exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo', 'blog')`),
+]);
 
 export const media_assets_old = sqliteTable("media_assets_old", {
 	id: text().primaryKey(),
