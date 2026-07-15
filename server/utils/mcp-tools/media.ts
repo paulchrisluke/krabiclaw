@@ -121,4 +121,35 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
         required: ['menu'],
       },
     }),
+  siteTool({
+      name: 'analyze_document',
+      description: 'Summarize, answer questions about, or extract information from an already-uploaded Markdown document (.md/.markdown) — grounded strictly in that file\'s content. Use get_site_media_assets or upload_user_media first to get an asset_id. Pass a question to get a grounded answer; omit it to get a summary.',
+      domain: 'media',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        asset_id: { type: 'string', description: 'Media asset ID of the uploaded Markdown document.' },
+        question: { type: 'string', description: 'Optional question to answer using only the document content. Omit for a summary.' },
+      },
+      required: ['asset_id'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          answer: { type: 'string', description: 'Grounded answer or summary.' },
+          stats: {
+            type: 'object',
+            description: 'Structural stats detected in the document.',
+            properties: {
+              headings: { type: 'number' },
+              listItems: { type: 'number' },
+              tableRows: { type: 'number' },
+              codeBlocks: { type: 'number' },
+              blockquotes: { type: 'number' },
+              links: { type: 'number' },
+            },
+          },
+        },
+        required: ['answer'],
+      },
+    }),
 ]
