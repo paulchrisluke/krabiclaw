@@ -324,7 +324,7 @@ function ownerEmailQuery() {
     FROM user u
     JOIN member m ON u.id = m.userId
     WHERE m.organizationId = ? AND m.role IN ('owner', 'admin')
-    ORDER BY m.role = 'owner' DESC, m.createdAt ASC
+    ORDER BY m.role = 'owner' DESC, u.email LIKE '%@example.test' ASC, m.createdAt DESC
     LIMIT 1
   `
 }

@@ -12,13 +12,24 @@ const isStaging = process.argv.includes('--staging')
 const isPreview = process.argv.includes('--preview')
 const manifestArgIndex = process.argv.indexOf('--manifest')
 const explicitManifestPath = manifestArgIndex >= 0 ? process.argv[manifestArgIndex + 1] : null
-const envFlag = isStaging ? '--env staging' : isPreview ? '--env preview' : isRemote ? '' : '--local'
-const remoteFlag = isRemote || isStaging || isPreview ? '--remote' : ''
-
 if ([isRemote, isStaging, isPreview].filter(Boolean).length > 1) {
   console.error('Only one of --remote, --staging, or --preview may be provided.')
   process.exit(1)
 }
+
+// --remote with no --env targets wrangler's default (top-level) d1_databases entry, which is
+// production (krabiclaw-db). This script inserts a fixture user (USER_ID/example.test email)
+// directly via raw SQL - it must never run against production. A bare `--remote` previously did
+// exactly that and left a placeholder "owner" in prod (org-ncls-blawby) that shadowed the real
+// owner in every owner-lookup query until it was manually cleaned up. --remote is only valid
+// paired with --staging or --preview now; production seeding isn't a supported path for this script.
+if (isRemote) {
+  console.error('--remote alone targets production. Use --staging or --preview instead.')
+  process.exit(1)
+}
+
+const envFlag = isStaging ? '--env staging' : isPreview ? '--env preview' : '--local'
+const remoteFlag = isStaging || isPreview ? '--remote' : ''
 
 const clientImportDir = join(process.cwd(), 'client-imports', 'north-carolina-legal-services')
 const clientManifestPath = join(clientImportDir, 'client-manifest.json')
