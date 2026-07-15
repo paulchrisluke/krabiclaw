@@ -5,16 +5,22 @@ KrabiClaw is a multi-tenant platform for local business websites managed through
 ## Language
 
 **Professional-service tenant**:
-A tenant whose public site sells expertise, consultation, representation, care, or advisory work rather than food, hospitality, retail inventory, or bookable activities. Legal-services tenants are one kind of professional-service tenant. In the current DB schema, Blawby tenants store the existing `service` vertical and select professional-service rendering with `theme_id = 'blawby-theme-v1'`; do not rebuild the historical `sites` table just to add a narrower vertical string.
-_Avoid_: legal_service vertical, fake professional_service DB migration, restaurant/experience wording
+A tenant whose public site sells expertise, consultation, representation, care, or advisory work rather than food, hospitality, retail inventory, or bookable activities. Legal-services tenants are one kind of professional-service tenant.
+
+**Tenant vertical (canonical contract)**:
+The business category that controls public copy, route expectations, schema defaults, onboarding language, and verification rules for a tenant. A vertical is broader than a template and must not be used to hardcode one client.
+
+There is exactly one canonical app-level vertical value set — `SiteVertical` in `utils/vertical-copy.ts` (`ALL_VERTICALS`: `restaurant` | `experience` | `professional_service`) — and exactly one normalization boundary bridging it to the narrower DB `sites_vertical_check` constraint, which does not have a `professional_service` value:
+
+- **Write direction**: `server/utils/site-creation.ts`'s `toStoredVertical()` maps app-level `professional_service` → DB-stored `service` at the single place that writes `sites.vertical` (`runSiteCreation()`). Every other stored value (`restaurant`, `experience`) passes through unchanged.
+- **Read direction**: `utils/vertical-copy.ts`'s `normalizeVertical()` maps stored `service` → app-level `professional_service` for every reader. `checklist.get.ts` and the public template registry (`utils/template-registry.ts`) already funnel through this.
+- `service` is a legacy/DB-storage alias for `professional_service`, not a second first-class vertical. Do not add a `legal_service` vertical, and do not attempt a migration to rename `sites_vertical_check` to accept `professional_service` directly — that CHECK constraint is part of the immutable historical migration baseline (see the Database Schema Workflow rules) and the two-value bridge above already fully resolves the mismatch without touching it.
+- Any new code that reads a raw `sites.vertical`/`site.vertical` value must either call `normalizeVertical()` first, or explicitly check both the app value and its DB alias (the pattern already used in `server/api/public/sites/[siteId]/contact.post.ts`) — never narrow it to a local `'restaurant' | 'experience'` (or similar two-value) union. That exact narrowing previously caused the transfer-onboarding flow to silently display every `service`/`professional_service` site as `restaurant`; #277 fixed the known instances and added a repository-search test guard (`tests/unit/vertical-union-guard.test.ts`) against reintroducing one in shared onboarding/dashboard code.
+_Avoid_: legal_service vertical, a DB migration to add a literal `professional_service` CHECK value, a local `'restaurant' | 'experience'` (or similar) two-value vertical union outside the allowlisted legacy files, theme, template, industry flag
 
 **Professional-service empty state**:
 Fallback or edit-mode copy shown when professional-service tenant content is missing. It may use neutral professional examples in owner-facing edit mode, but public production pages must not leak restaurant, hospitality, retail, or experience wording.
 _Avoid_: restaurant fallback, experience fallback, demo tenant copy
-
-**Tenant vertical**:
-The business category that controls public copy, route expectations, schema defaults, onboarding language, and verification rules for a tenant. A vertical is broader than a template and must not be used to hardcode one client.
-_Avoid_: theme, template, industry flag
 
 **Template**:
 A reusable public-site presentation system for a tenant vertical or family of tenant needs. A template may read shared platform content models, but it must not create a separate business model for the same concept.
