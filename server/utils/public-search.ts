@@ -25,8 +25,6 @@ const AI_SEARCH_CUSTOM_METADATA: AiSearchConfig['custom_metadata'] = [
   { field_name: 'site_id', data_type: 'text' },
 ]
 
-const DEFAULT_MATCH_THRESHOLD = 0.2
-
 export type PublicSearchType = PlatformKnowledgeResultType
 
 export interface PublicSearchResult {
@@ -285,10 +283,17 @@ function normalizeTenantBlogSearchResults(
     }))
 }
 
+// Standard hybrid search (vector + keyword via RRF), no query_rewrite/reranking. Both were
+// removed: they add a full extra model round-trip per search (the reported latency), and
+// per Cloudflare's own docs, match_threshold/score_threshold filters on the raw vector
+// score even when reranking is enabled — a semantic reranker also scores a single bare
+// keyword poorly against paragraph-length content, so layering it on top didn't fix (and
+// wasn't the tool for fixing) single-keyword queries returning nothing. The application
+// layer already guards the actual symptom reranking was added for (nav/route results
+// crowding out real content, issue #254) via balanceResultTypes/STATIC_NAV_TYPES below —
+// that is the correct place for this, not an extra AI Search model pass.
 function platformKnowledgeInstanceConfig(): Omit<AiSearchConfig, 'metadata'> {
   return {
-    rewrite_query: true,
-    reranking: true,
     index_method: {
       vector: true,
       keyword: true,
@@ -300,7 +305,6 @@ function platformKnowledgeInstanceConfig(): Omit<AiSearchConfig, 'metadata'> {
     retrieval_options: {
       keyword_match_mode: 'or',
     },
-    score_threshold: DEFAULT_MATCH_THRESHOLD,
     max_num_results: 20,
     custom_metadata: AI_SEARCH_CUSTOM_METADATA,
   }
@@ -804,32 +808,17 @@ export async function searchPublicResources(
       ai_search_options: {
         retrieval: {
           retrieval_type: 'hybrid',
-          // Per Cloudflare's docs (developers.cloudflare.com/ai-search/configuration/retrieval/result-controls/),
-          // retrieval.match_threshold filters on the raw VECTOR similarity score, not the
-          // fused hybrid score — even in hybrid mode. A single generic keyword (e.g. "menu")
-          // has a weak vector/semantic similarity to a whole paragraph embedding even when it's
-          // a perfect literal keyword match, so a non-zero threshold here silently discards
-          // strong keyword-only candidates before they ever reach fusion or reranking. Set to 0
-          // so every hybrid candidate (vector OR keyword) survives retrieval; the real relevance
-          // floor now lives on reranking.match_threshold below, which applies to the actual
-          // fused/reranked score.
+          // Standard hybrid retrieval, no reranking/query_rewrite (see
+          // platformKnowledgeInstanceConfig above for why). match_threshold filters on the
+          // raw vector score per Cloudflare's docs, so it's left at 0 — a single generic
+          // keyword ("menu") has weak vector similarity to a whole document embedding even
+          // when it's a perfect keyword match; any non-zero threshold here would discard
+          // that before RRF fusion ever combines it with the (strong) keyword-side score.
           match_threshold: 0,
           max_num_results: candidateLimit,
           keyword_match_mode: 'or',
           return_on_failure: true,
           filters: buildSearchFilters(surface, typeFilter, options.siteId),
-        },
-        // The AI Search instance itself is configured with rewrite_query/reranking enabled
-        // (see platformKnowledgeInstanceConfig above); reranking.match_threshold (not
-        // retrieval.match_threshold) is what keeps irrelevant static pages/routes from
-        // crowding out doc/article results for broad queries — see issue #254 — while still
-        // letting exact single-keyword matches through the earlier hybrid retrieval stage.
-        query_rewrite: {
-          enabled: true,
-        },
-        reranking: {
-          enabled: true,
-          match_threshold: DEFAULT_MATCH_THRESHOLD,
         },
       },
     }),
