@@ -22,7 +22,10 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  workers: process.env.CI ? 1 : undefined,
+  // Remote D1 write suites can opt back down with PLAYWRIGHT_WORKERS=1. Two
+  // workers keeps the read-heavy smoke/path-gated suites quick without placing
+  // unbounded pressure on the shared preview and staging databases.
+  workers: process.env.CI ? Number(process.env.PLAYWRIGHT_WORKERS || 2) : undefined,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL,
