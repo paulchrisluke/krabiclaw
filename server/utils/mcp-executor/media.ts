@@ -51,7 +51,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
 
       const provider = resolved.kind === "image"
         ? resolveImageUploadProvider(resolved.contentType, site.env)
-        : undefined;
+        : resolved.kind === "file" ? "cloudflare_r2" : undefined;
 
       let poster: { buffer: ArrayBuffer; contentType: string; filename: string } | undefined;
       if (resolved.kind === "video" && posterReference) {
@@ -85,8 +85,9 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         thumbnailUrl: uploaded.thumbnailUrl,
         kind: resolved.kind,
         posterWarning: uploaded.posterWarning,
-        nextStep:
-          "Upload complete. This asset is in the media library but not assigned yet. Call the matching assignment tool next (e.g. set_home_hero_image, set_home_hero_video, set_experience_image, set_experience_video).",
+        nextStep: resolved.kind === "file"
+          ? "Upload complete. Call analyze_document with this assetId to summarize it or answer questions grounded in it."
+          : "Upload complete. This asset is in the media library but not assigned yet. Call the matching assignment tool next (e.g. set_home_hero_image, set_home_hero_video, set_experience_image, set_experience_video).",
         context: await mutationContextPayload(site),
       };
     }

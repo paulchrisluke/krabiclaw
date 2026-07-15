@@ -835,11 +835,13 @@ async function runOrgSearch(term: string) {
     const res = await $fetch<{ organizations: OrgSearchResult[] }>('/api/admin/organizations', {
       query: { q: term },
     })
+    if (term !== orgSearchTerm.value) return
     orgSearchResults.value = res.organizations
   } catch {
+    if (term !== orgSearchTerm.value) return
     toast.add({ title: 'Failed to search organizations', color: 'error' })
   } finally {
-    orgSearchLoading.value = false
+    if (term === orgSearchTerm.value) orgSearchLoading.value = false
   }
 }
 

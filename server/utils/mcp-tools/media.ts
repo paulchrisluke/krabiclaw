@@ -18,13 +18,13 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'upload_user_media',
-      description: 'Canonical inline upload path for user-provided images and videos — "add photos", "upload my pictures", "add this video". Accepts a ChatGPT file reference for either an image or a video; the content type is auto-detected from the file bytes, not from a hint. For a video, you may also pass poster_file (an image) to use as its thumbnail. This tool only uploads into the site media library; it does not place the asset on a page. After upload succeeds, call the matching assignment tool (set_home_hero_image, set_home_hero_video, set_logo, set_location_hero_image, set_location_hero_video, set_post_image, set_experience_image, set_experience_video, etc.). Only call this tool directly once the host has actually resolved a `file`/`file_id` value for you (this reliably happens for files sent through the explicit attach/paperclip control). An image the user merely pastes or drops inline into the chat message is NOT guaranteed to come with a resolvable file reference even though you can see it — do not guess or invent a file/file_id value for it. If you do not have a real resolved reference, call open_media_upload (or the scoped variant, e.g. open_experience_media_upload) instead so the user can supply the image through the upload widget.',
+      description: 'Canonical inline upload path for user-provided images, videos, and Markdown documents (.md/.markdown). Accepts a resolved ChatGPT file reference and validates the actual bytes. Markdown files are stored in the media library; after upload, call analyze_document with the returned assetId. Images and videos remain available to the matching assignment tools. For a video, poster_file may provide a thumbnail. Only call this tool when the host supplied a real file/file_id reference; never invent one.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
       inputSchema: {
         file: chatgptFileInput,
-        file_id: { type: 'string', description: 'Resolved file identifier for a user-uploaded image or video (e.g. file_abc123). Prefer file when the host can supply it directly.' },
+        file_id: { type: 'string', description: 'Resolved file identifier for a user-uploaded image, video, or Markdown document (e.g. file_abc123). Prefer file when the host can supply the filename directly.' },
         poster_file: { ...chatgptFileInput, description: 'Optional poster/thumbnail image for a video upload. Ignored for image uploads.' },
         category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'blog', 'other'], description: 'What this media will be used for.' },
         description: { type: 'string', description: 'Description of the media (stored as alt text).' },
@@ -41,7 +41,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
           assetId: { type: 'string' },
           publicUrl: { type: 'string' },
           thumbnailUrl: { type: ['string', 'null'] },
-          kind: { type: 'string', enum: ['image', 'video'] },
+          kind: { type: 'string', enum: ['image', 'video', 'file'] },
           posterWarning: { type: ['string', 'null'] },
           nextStep: { type: 'string' },
         },
@@ -123,13 +123,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'analyze_document',
-      // NOTE: upload_user_media (and the shared magic-byte sniffing pipeline it uses)
-      // only accepts image/video content and hard-rejects Markdown files, so a Markdown
-      // asset_id cannot be obtained through this MCP surface today. The only current
-      // ingestion path is a document sent over WhatsApp, which lands in pending_media
-      // state and is analyzed via the ChowBot pending-media flow, not this tool.
-      // Full MCP upload support for documents is a follow-up.
-      description: 'Summarize, answer questions about, or extract information from an already-uploaded Markdown document (.md/.markdown) — grounded strictly in that file\'s content. Use get_site_media_assets to find the asset_id of a Markdown document already in the site media library. There is currently no way to upload a new Markdown document through this MCP surface — upload_user_media only accepts images and video. Markdown documents are ingested via the WhatsApp ChowBot pending-media flow. Pass a question to get a grounded answer; omit it to get a summary.',
+      description: 'Summarize, answer questions about, or extract information from an uploaded Markdown document (.md/.markdown), grounded strictly in that file. Use upload_user_media with the attached Markdown file or get_site_media_assets to obtain its asset_id. Pass a question for grounded Q&A; omit it for a summary.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,

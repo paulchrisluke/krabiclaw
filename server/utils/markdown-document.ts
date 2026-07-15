@@ -8,10 +8,10 @@
 export const MARKDOWN_MIME_TYPES = new Set(["text/markdown", "text/x-markdown"]);
 export const MARKDOWN_EXTENSIONS = [".md", ".markdown"] as const;
 
-/** 5 MB of Markdown source text is generous for a real document without risking
- *  pathological AI-gateway payloads; oversized files must fail with a clear error
- *  rather than being silently truncated. */
-export const MAX_MARKDOWN_BYTES = 5 * 1024 * 1024;
+/** Keep a single grounded analysis request safely below the model context window.
+ * Oversized files fail explicitly rather than being truncated or rejected later
+ * by the AI provider with an opaque context-length error. */
+export const MAX_MARKDOWN_BYTES = 256 * 1024;
 
 export class MarkdownDocumentError extends Error {
   constructor(message: string) {
@@ -174,7 +174,7 @@ export function parseMarkdownDocument(text: string): ParsedMarkdownDocument {
     }
 
     if (TABLE_ROW_RE.test(line) && i + 1 < lines.length && TABLE_SEPARATOR_RE.test(lines[i + 1] ?? "")) {
-      const tableLines = [line];
+      const tableLines = [line, lines[i + 1]!];
       i += 2; // header + separator
       while (i < lines.length && TABLE_ROW_RE.test(lines[i] ?? "")) {
         tableLines.push(lines[i]!);
@@ -236,7 +236,7 @@ export function parseMarkdownDocument(text: string): ParsedMarkdownDocument {
       .reduce((sum, b) => sum + b.raw.split("\n").filter((l) => LIST_ITEM_RE.test(l)).length, 0),
     tableRows: blocks
       .filter((b) => b.type === "table")
-      .reduce((sum, b) => sum + b.raw.split("\n").filter((l) => l.trim() !== "").length - 1, 0), // minus separator row
+      .reduce((sum, b) => sum + b.raw.split("\n").filter((l) => l.trim() !== "").length - 2, 0), // minus header + separator rows
     codeBlocks: blocks.filter((b) => b.type === "code").length,
     blockquotes: blocks.filter((b) => b.type === "blockquote").length,
     links: links.length,

@@ -158,7 +158,7 @@ test('saveInboundMediaAsset rejects an oversized Markdown file before touching s
   createdAssets.length = 0
   uploadedToR2.length = 0
 
-  const oversized = new ArrayBuffer(5 * 1024 * 1024 + 1)
+  const oversized = new ArrayBuffer(256 * 1024 + 1)
   await assert.rejects(
     () =>
       saveInboundMediaAsset(FAKE_DB, FAKE_ENV as never, {

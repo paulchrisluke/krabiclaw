@@ -112,6 +112,9 @@ const x = 1;
   assert.equal(codeBlock?.language, 'js')
   assert.equal(codeBlock?.raw.trim(), 'const x = 1;')
 
+  const tableBlock = parsed.blocks.find((b) => b.type === 'table')
+  assert.match(tableBlock?.raw ?? '', /\| --- \| --- \|/)
+
   // Structural cues must survive into the LLM-facing text, not just the
   // internal block list.
   assert.match(parsed.structuredText, /\[HEADING level=1\] Title/)
