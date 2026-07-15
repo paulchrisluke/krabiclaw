@@ -17,3 +17,4 @@ The migration included `PRAGMA foreign_keys=OFF`, but that did not prevent D1 fr
 - Category validation is enforced with insert/update triggers in `0048`, which is safe on both the restored production schema and environments where `0047` already rebuilt the table.
 - Future protected parent tables must be added to the migration safety checker before they acquire widespread foreign-key consumers.
 - Recovery requires a current export, a pre-incident Time Travel bookmark, selective replay of legitimate later writes, and `PRAGMA foreign_key_check` verification.
+- When the staging path filter selects the Blawby suite, CI runs the NCLS fixture generator with the explicit `--staging` target before deployment. The generator continues to reject bare `--remote`, which targets production; staging uses test identities and is reset with the other E2E fixtures.

@@ -21,8 +21,8 @@ if ([isRemote, isStaging, isPreview].filter(Boolean).length > 1) {
 // production (krabiclaw-db). This script inserts a fixture user (USER_ID/example.test email)
 // directly via raw SQL - it must never run against production. A bare `--remote` previously did
 // exactly that and left a placeholder "owner" in prod (org-ncls-blawby) that shadowed the real
-// owner in every owner-lookup query until it was manually cleaned up. --remote is only valid
-// paired with --staging or --preview now; production seeding isn't a supported path for this script.
+// owner in every owner-lookup query until it was manually cleaned up. Staging and preview are
+// explicit non-production fixture targets; production seeding isn't supported by this script.
 if (isRemote) {
   console.error('--remote alone targets production. Use --staging or --preview instead.')
   process.exit(1)
@@ -320,8 +320,8 @@ if (isStdout) {
   process.exit(0)
 }
 
-if (isRemote || isStaging) {
-  console.error('NCLS Blawby seed is limited to local and preview evidence. Production/staging cutover is out of scope.')
+if (isRemote) {
+  console.error('NCLS Blawby fixture seed cannot target production. Use --staging or --preview.')
   process.exit(1)
 }
 
