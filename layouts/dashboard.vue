@@ -520,6 +520,7 @@ const mainNavigation = computed(() => [
     { label: 'Translations', icon: 'i-lucide-languages', to: siteBase.value ? `${siteBase.value}/translations` : '/dashboard' },
     { label: 'Activity', icon: 'i-lucide-activity', to: orgBase.value ? `${orgBase.value}/activity` : '/dashboard' },
   ],
+  ...(orgSettingsBase.value ? [[{ label: 'Settings', icon: 'i-lucide-settings', to: orgSettingsBase.value }]] : []),
 ])
 
 const locationNavigation = computed(() => {

@@ -26,7 +26,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
         file: chatgptFileInput,
         file_id: { type: 'string', description: 'Resolved file identifier for a user-uploaded image or video (e.g. file_abc123). Prefer file when the host can supply it directly.' },
         poster_file: { ...chatgptFileInput, description: 'Optional poster/thumbnail image for a video upload. Ignored for image uploads.' },
-        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this media will be used for.' },
+        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'blog', 'other'], description: 'What this media will be used for.' },
         description: { type: 'string', description: 'Description of the media (stored as alt text).' },
         oneOf: [
           { required: ['file'] },
@@ -56,7 +56,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       confirmRequired: false,
       uiResourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
       inputSchema: {
-        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this media will be used for.' },
+        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'blog', 'other'], description: 'What this media will be used for.' },
         accept: { type: 'string', enum: ['image', 'video', 'both'], description: 'Restrict the widget file picker. Defaults to both.' },
       },
       outputSchema: {

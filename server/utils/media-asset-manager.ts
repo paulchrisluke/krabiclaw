@@ -26,7 +26,7 @@ export interface MediaAsset {
   height: number | null
   duration: number | null
   alt_text: string | null
-  category: 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo' | null
+  category: 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo' | 'blog' | null
   status: 'pending' | 'active' | 'deleted' | 'failed'
   created_by_user_id: string | null
   created_at: string

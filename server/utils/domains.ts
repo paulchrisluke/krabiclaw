@@ -306,8 +306,6 @@ async function cloudflareRequest<T>(
 
 async function createCloudflareHostname(
   env: DomainEnv,
-  siteId: string,
-  organizationId: string,
   hostname: string,
   signal?: AbortSignal
 ): Promise<CloudflareCustomHostname> {
@@ -315,12 +313,10 @@ async function createCloudflareHostname(
     method: 'POST',
     body: JSON.stringify({
       hostname,
-      custom_metadata: { site_id: siteId, organization_id: organizationId },
       ssl: {
         method: 'txt',
         type: 'dv',
-        bundle_method: 'ubiquitous',
-        certificate_authority: 'google'
+        bundle_method: 'ubiquitous'
       }
     })
   }, signal)
@@ -548,7 +544,7 @@ export async function createCustomDomainPair(
   try {
     // External side-effect first: provision both hostnames before DB commit.
     for (const entry of entries) {
-      const hostname = await createCloudflareHostname(env, opts.siteId, opts.organizationId, entry.domain)
+      const hostname = await createCloudflareHostname(env, entry.domain)
       cloudflareByDomainId.set(entry.id, hostname)
       if (hostname.id) createdHostnameIds.push(hostname.id)
     }
@@ -633,10 +629,14 @@ export async function createCustomDomainPair(
     }
 
     for (const entry of entries) {
+      // domainId is intentionally omitted: by this point the site_domains row for
+      // entry.id has either never been inserted or was just deleted by the cleanup
+      // above, and domain_id is a foreign key — referencing a nonexistent row here
+      // throws inside the catch block itself, silently swallowing the real error
+      // and leaving zero rows in site_domain_events.
       await logDomainEvent(db, {
         organizationId: opts.organizationId,
         siteId: opts.siteId,
-        domainId: entry.id,
         eventType: 'cloudflare_create_failed',
         actorType: 'cloudflare',
         message: `${entry.domain}: ${message}`,
@@ -665,7 +665,7 @@ export async function syncDomainWithCloudflare(
     if (!domain) throw new Error('Domain not found')
 
     if (!domain.cloudflare_hostname_id) {
-      const hostname = await createCloudflareHostname(env, domain.site_id, domain.organization_id, domain.domain, signal)
+      const hostname = await createCloudflareHostname(env, domain.domain, signal)
       signal?.throwIfAborted()
       return persistCloudflareState(env, db, domainId, hostname, { incrementRetry: true, actorType, actorId })
     }

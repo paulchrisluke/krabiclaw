@@ -26,6 +26,6 @@ export interface DashboardLinkOrgContext {
 export function buildDashboardUrl(site: DashboardLinkOrgContext, destination: DashboardDestination): string {
   const platformDomain = site.env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'https://krabiclaw.com'
   const orgSlug = site.organizationSlug || site.organizationId
-  const path = DASHBOARD_DESTINATIONS[destination].replace(/^~\/?/, '').replace(/^\/+/, '')
+  const path = DASHBOARD_DESTINATIONS[destination].replace(/^\/+/, '')
   return `${platformDomain}/dashboard/${orgSlug}/${path}`
 }
