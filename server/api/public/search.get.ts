@@ -62,11 +62,15 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    const debugRetrievalType = ['vector', 'keyword', 'hybrid'].includes(String(query.debugRetrievalType))
+      ? (query.debugRetrievalType as 'vector' | 'keyword' | 'hybrid')
+      : undefined
     const results = await searchPublicResources(env, q, {
       type: type as PublicSearchTypeFilter,
       surface: surface as 'public' | 'docs' | 'blog' | 'dashboard' | 'help' | 'chowbot' | 'tenant_blog',
       limit: 10,
       siteId: isTenantRequest && surface === 'tenant_blog' ? String(event.context.siteId) : null,
+      debugRetrievalType,
       dashboardContext: requiresDashboardAuth
         ? {
             orgSlug: orgSlug || null,
