@@ -3,12 +3,20 @@ import { setupTenantHeaders } from './helpers'
 import { devLoginHeaders, devLoginUrl } from './test-env'
 
 test.describe('pottery house dashboard', () => {
-  test('workspace routes are healthy for owner, otherwise site access is denied', async ({ page, baseURL }) => {
+  test('workspace routes are healthy for owner, otherwise site access is denied', async ({ page, request, baseURL }) => {
     await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
     const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'load' })
     expect(login?.status()).toBeLessThan(400)
 
-    const contextRes = await page.request.get(`${baseURL}/api/dashboard/context`)
+    // Keep API setup and assertions on Playwright's dedicated request context.
+    // page.request has repeatedly stalled after the browser dev-login redirect
+    // on deployed preview Workers, while the same request-fixture flow is stable.
+    const apiLogin = await request.get(devLoginUrl(baseURL!), {
+      headers: devLoginHeaders(),
+    })
+    expect(apiLogin.status()).toBeLessThan(400)
+
+    const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json() as {
       organization?: { slug?: string | null }
@@ -35,13 +43,13 @@ test.describe('pottery house dashboard', () => {
     }
 
     // Otherwise, assert tenant isolation: this logged-in user cannot write to Pottery House directly.
-    const deniedLogin = await page.request.get(devLoginUrl(baseURL!, `deny-${Date.now()}`), {
+    const deniedLogin = await request.get(devLoginUrl(baseURL!, `deny-${Date.now()}`), {
       headers: devLoginHeaders() || {},
       maxRedirects: 0,
     })
     expect(deniedLogin.status()).toBe(302)
 
-    const saveRes = await page.request.post(`${baseURL}/api/editor/sites/site-pottery-house/content/save`, {
+    const saveRes = await request.post(`${baseURL}/api/editor/sites/site-pottery-house/content/save`, {
       data: {
         page: 'home',
         changes: { 'hero.title': `Unauthorized test ${Date.now()}` },
