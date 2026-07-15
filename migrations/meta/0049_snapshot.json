@@ -1,8 +1,8 @@
 {
-  "id": "efd6e8bd-a29f-4d68-8c82-6a1ac96c6148",
-  "prevId": "81cb29e0-2bf2-418c-bed2-65dd570dea95",
   "version": "6",
   "dialect": "sqlite",
+  "id": "32457a5c-d8db-4e1c-9890-1fe6031d5192",
+  "prevId": "efd6e8bd-a29f-4d68-8c82-6a1ac96c6148",
   "tables": {
     "account": {
       "name": "account",
@@ -121,15 +121,15 @@
         "account_userId_user_id_fk": {
           "name": "account_userId_user_id_fk",
           "tableFrom": "account",
+          "tableTo": "user",
           "columnsFrom": [
             "userId"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -183,15 +183,15 @@
         "ai_credits_organization_id_organization_id_fk": {
           "name": "ai_credits_organization_id_organization_id_fk",
           "tableFrom": "ai_credits",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -289,28 +289,28 @@
         "ai_usage_log_organization_id_organization_id_fk": {
           "name": "ai_usage_log_organization_id_organization_id_fk",
           "tableFrom": "ai_usage_log",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "ai_usage_log_site_id_sites_id_fk": {
           "name": "ai_usage_log_site_id_sites_id_fk",
           "tableFrom": "ai_usage_log",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -520,8 +520,8 @@
           "columns": [
             "slug"
           ],
-          "where": "site_id IS NULL",
-          "isUnique": true
+          "isUnique": true,
+          "where": "site_id IS NULL"
         },
         "blog_posts_site_slug_idx": {
           "name": "blog_posts_site_slug_idx",
@@ -529,8 +529,8 @@
             "site_id",
             "slug"
           ],
-          "where": "site_id IS NOT NULL",
-          "isUnique": true
+          "isUnique": true,
+          "where": "site_id IS NOT NULL"
         },
         "blog_posts_org_site_idx": {
           "name": "blog_posts_org_site_idx",
@@ -545,54 +545,54 @@
         "blog_posts_organization_id_organization_id_fk": {
           "name": "blog_posts_organization_id_organization_id_fk",
           "tableFrom": "blog_posts",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "blog_posts_site_id_sites_id_fk": {
           "name": "blog_posts_site_id_sites_id_fk",
           "tableFrom": "blog_posts",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "blog_posts_author_id_user_id_fk": {
           "name": "blog_posts_author_id_user_id_fk",
           "tableFrom": "blog_posts",
+          "tableTo": "user",
           "columnsFrom": [
             "author_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "blog_posts_featured_image_asset_id_media_assets_old_id_fk": {
           "name": "blog_posts_featured_image_asset_id_media_assets_old_id_fk",
           "tableFrom": "blog_posts",
+          "tableTo": "media_assets_old",
           "columnsFrom": [
             "featured_image_asset_id"
           ],
-          "tableTo": "media_assets_old",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -793,40 +793,40 @@
           "columns": [
             "site_id"
           ],
-          "where": "policy_type = 'reservation' AND scope_type = 'site'",
-          "isUnique": true
+          "isUnique": true,
+          "where": "policy_type = 'reservation' AND scope_type = 'site'"
         },
         "booking_policies_reservation_location_unique": {
           "name": "booking_policies_reservation_location_unique",
           "columns": [
             "location_id"
           ],
-          "where": "policy_type = 'reservation' AND scope_type = 'location' AND location_id IS NOT NULL",
-          "isUnique": true
+          "isUnique": true,
+          "where": "policy_type = 'reservation' AND scope_type = 'location' AND location_id IS NOT NULL"
         },
         "booking_policies_experience_site_unique": {
           "name": "booking_policies_experience_site_unique",
           "columns": [
             "site_id"
           ],
-          "where": "policy_type = 'experience' AND scope_type = 'site'",
-          "isUnique": true
+          "isUnique": true,
+          "where": "policy_type = 'experience' AND scope_type = 'site'"
         },
         "booking_policies_experience_location_unique": {
           "name": "booking_policies_experience_location_unique",
           "columns": [
             "location_id"
           ],
-          "where": "policy_type = 'experience' AND scope_type = 'location' AND location_id IS NOT NULL",
-          "isUnique": true
+          "isUnique": true,
+          "where": "policy_type = 'experience' AND scope_type = 'location' AND location_id IS NOT NULL"
         },
         "booking_policies_experience_scope_unique": {
           "name": "booking_policies_experience_scope_unique",
           "columns": [
             "experience_id"
           ],
-          "where": "policy_type = 'experience' AND scope_type = 'experience' AND experience_id IS NOT NULL",
-          "isUnique": true
+          "isUnique": true,
+          "where": "policy_type = 'experience' AND scope_type = 'experience' AND experience_id IS NOT NULL"
         },
         "booking_policies_organization_id_idx": {
           "name": "booking_policies_organization_id_idx",
@@ -840,54 +840,54 @@
         "booking_policies_organization_id_organization_id_fk": {
           "name": "booking_policies_organization_id_organization_id_fk",
           "tableFrom": "booking_policies",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "booking_policies_site_id_sites_id_fk": {
           "name": "booking_policies_site_id_sites_id_fk",
           "tableFrom": "booking_policies",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "booking_policies_location_id_business_locations_id_fk": {
           "name": "booking_policies_location_id_business_locations_id_fk",
           "tableFrom": "booking_policies",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "booking_policies_experience_id_experiences_id_fk": {
           "name": "booking_policies_experience_id_experiences_id_fk",
           "tableFrom": "booking_policies",
+          "tableTo": "experiences",
           "columnsFrom": [
             "experience_id"
           ],
-          "tableTo": "experiences",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1037,41 +1037,41 @@
         "business_location_translations_organization_id_organization_id_fk": {
           "name": "business_location_translations_organization_id_organization_id_fk",
           "tableFrom": "business_location_translations",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "business_location_translations_site_id_sites_id_fk": {
           "name": "business_location_translations_site_id_sites_id_fk",
           "tableFrom": "business_location_translations",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "business_location_translations_location_id_business_locations_id_fk": {
           "name": "business_location_translations_location_id_business_locations_id_fk",
           "tableFrom": "business_location_translations",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1458,93 +1458,93 @@
         "business_locations_organization_id_organization_id_fk": {
           "name": "business_locations_organization_id_organization_id_fk",
           "tableFrom": "business_locations",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "business_locations_site_id_sites_id_fk": {
           "name": "business_locations_site_id_sites_id_fk",
           "tableFrom": "business_locations",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "business_locations_google_connection_id_google_business_connections_id_fk": {
           "name": "business_locations_google_connection_id_google_business_connections_id_fk",
           "tableFrom": "business_locations",
+          "tableTo": "google_business_connections",
           "columnsFrom": [
             "google_connection_id"
           ],
-          "tableTo": "google_business_connections",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "business_locations_facebook_connection_id_facebook_pages_connections_id_fk": {
           "name": "business_locations_facebook_connection_id_facebook_pages_connections_id_fk",
           "tableFrom": "business_locations",
+          "tableTo": "facebook_pages_connections",
           "columnsFrom": [
             "facebook_connection_id"
           ],
-          "tableTo": "facebook_pages_connections",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "business_locations_hero_image_asset_id_media_assets_old_id_fk": {
           "name": "business_locations_hero_image_asset_id_media_assets_old_id_fk",
           "tableFrom": "business_locations",
+          "tableTo": "media_assets_old",
           "columnsFrom": [
             "hero_image_asset_id"
           ],
-          "tableTo": "media_assets_old",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "business_locations_hero_video_asset_id_media_assets_old_id_fk": {
           "name": "business_locations_hero_video_asset_id_media_assets_old_id_fk",
           "tableFrom": "business_locations",
+          "tableTo": "media_assets_old",
           "columnsFrom": [
             "hero_video_asset_id"
           ],
-          "tableTo": "media_assets_old",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "business_locations_og_image_asset_id_media_assets_id_fk": {
           "name": "business_locations_og_image_asset_id_media_assets_id_fk",
           "tableFrom": "business_locations",
+          "tableTo": "media_assets",
           "columnsFrom": [
             "og_image_asset_id"
           ],
-          "tableTo": "media_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1618,28 +1618,28 @@
         "canary_runs_organization_id_organization_id_fk": {
           "name": "canary_runs_organization_id_organization_id_fk",
           "tableFrom": "canary_runs",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "canary_runs_site_id_sites_id_fk": {
           "name": "canary_runs_site_id_sites_id_fk",
           "tableFrom": "canary_runs",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1720,41 +1720,41 @@
         "chowbot_channel_state_user_id_user_id_fk": {
           "name": "chowbot_channel_state_user_id_user_id_fk",
           "tableFrom": "chowbot_channel_state",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "chowbot_channel_state_selected_site_id_sites_id_fk": {
           "name": "chowbot_channel_state_selected_site_id_sites_id_fk",
           "tableFrom": "chowbot_channel_state",
+          "tableTo": "sites",
           "columnsFrom": [
             "selected_site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "chowbot_channel_state_active_conversation_id_chowbot_conversations_id_fk": {
           "name": "chowbot_channel_state_active_conversation_id_chowbot_conversations_id_fk",
           "tableFrom": "chowbot_channel_state",
+          "tableTo": "chowbot_conversations",
           "columnsFrom": [
             "active_conversation_id"
           ],
-          "tableTo": "chowbot_conversations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1861,54 +1861,54 @@
         "chowbot_conversations_organization_id_organization_id_fk": {
           "name": "chowbot_conversations_organization_id_organization_id_fk",
           "tableFrom": "chowbot_conversations",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "chowbot_conversations_site_id_sites_id_fk": {
           "name": "chowbot_conversations_site_id_sites_id_fk",
           "tableFrom": "chowbot_conversations",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "chowbot_conversations_user_id_user_id_fk": {
           "name": "chowbot_conversations_user_id_user_id_fk",
           "tableFrom": "chowbot_conversations",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "chowbot_conversations_selected_location_id_business_locations_id_fk": {
           "name": "chowbot_conversations_selected_location_id_business_locations_id_fk",
           "tableFrom": "chowbot_conversations",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "selected_location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2047,54 +2047,54 @@
         "chowbot_messages_conversation_id_chowbot_conversations_id_fk": {
           "name": "chowbot_messages_conversation_id_chowbot_conversations_id_fk",
           "tableFrom": "chowbot_messages",
+          "tableTo": "chowbot_conversations",
           "columnsFrom": [
             "conversation_id"
           ],
-          "tableTo": "chowbot_conversations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "chowbot_messages_organization_id_organization_id_fk": {
           "name": "chowbot_messages_organization_id_organization_id_fk",
           "tableFrom": "chowbot_messages",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "chowbot_messages_site_id_sites_id_fk": {
           "name": "chowbot_messages_site_id_sites_id_fk",
           "tableFrom": "chowbot_messages",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "chowbot_messages_user_id_user_id_fk": {
           "name": "chowbot_messages_user_id_user_id_fk",
           "tableFrom": "chowbot_messages",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2200,28 +2200,28 @@
         "client_import_artifacts_organization_id_organization_id_fk": {
           "name": "client_import_artifacts_organization_id_organization_id_fk",
           "tableFrom": "client_import_artifacts",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "client_import_artifacts_site_id_sites_id_fk": {
           "name": "client_import_artifacts_site_id_sites_id_fk",
           "tableFrom": "client_import_artifacts",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2337,41 +2337,41 @@
         "contact_submissions_organization_id_organization_id_fk": {
           "name": "contact_submissions_organization_id_organization_id_fk",
           "tableFrom": "contact_submissions",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "contact_submissions_site_id_sites_id_fk": {
           "name": "contact_submissions_site_id_sites_id_fk",
           "tableFrom": "contact_submissions",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "contact_submissions_experience_id_experiences_id_fk": {
           "name": "contact_submissions_experience_id_experiences_id_fk",
           "tableFrom": "contact_submissions",
+          "tableTo": "experiences",
           "columnsFrom": [
             "experience_id"
           ],
-          "tableTo": "experiences",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2469,15 +2469,15 @@
         "content_blocks_document_id_content_documents_id_fk": {
           "name": "content_blocks_document_id_content_documents_id_fk",
           "tableFrom": "content_blocks",
+          "tableTo": "content_documents",
           "columnsFrom": [
             "document_id"
           ],
-          "tableTo": "content_documents",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2640,28 +2640,28 @@
         "content_revisions_document_id_content_documents_id_fk": {
           "name": "content_revisions_document_id_content_documents_id_fk",
           "tableFrom": "content_revisions",
+          "tableTo": "content_documents",
           "columnsFrom": [
             "document_id"
           ],
-          "tableTo": "content_documents",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "content_revisions_created_by_user_id_fk": {
           "name": "content_revisions_created_by_user_id_fk",
           "tableFrom": "content_revisions",
+          "tableTo": "user",
           "columnsFrom": [
             "created_by"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2794,54 +2794,54 @@
         "customer_claims_customer_id_customers_id_fk": {
           "name": "customer_claims_customer_id_customers_id_fk",
           "tableFrom": "customer_claims",
+          "tableTo": "customers",
           "columnsFrom": [
             "customer_id"
           ],
-          "tableTo": "customers",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "customer_claims_user_id_user_id_fk": {
           "name": "customer_claims_user_id_user_id_fk",
           "tableFrom": "customer_claims",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "customer_claims_organization_id_organization_id_fk": {
           "name": "customer_claims_organization_id_organization_id_fk",
           "tableFrom": "customer_claims",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "customer_claims_site_id_sites_id_fk": {
           "name": "customer_claims_site_id_sites_id_fk",
           "tableFrom": "customer_claims",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3008,16 +3008,16 @@
             "site_id",
             "email_normalized"
           ],
-          "where": "email_normalized IS NOT NULL",
-          "isUnique": true
+          "isUnique": true,
+          "where": "email_normalized IS NOT NULL"
         },
         "idx_customers_stripe_customer_id_unique": {
           "name": "idx_customers_stripe_customer_id_unique",
           "columns": [
             "stripe_customer_id"
           ],
-          "where": "stripe_customer_id IS NOT NULL",
-          "isUnique": true
+          "isUnique": true,
+          "where": "stripe_customer_id IS NOT NULL"
         },
         "idx_customers_organization_id": {
           "name": "idx_customers_organization_id",
@@ -3054,41 +3054,41 @@
         "customers_organization_id_organization_id_fk": {
           "name": "customers_organization_id_organization_id_fk",
           "tableFrom": "customers",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "customers_site_id_sites_id_fk": {
           "name": "customers_site_id_sites_id_fk",
           "tableFrom": "customers",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "customers_user_id_user_id_fk": {
           "name": "customers_user_id_user_id_fk",
           "tableFrom": "customers",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3166,41 +3166,41 @@
         "dashboard_preferences_user_id_user_id_fk": {
           "name": "dashboard_preferences_user_id_user_id_fk",
           "tableFrom": "dashboard_preferences",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "dashboard_preferences_organization_id_organization_id_fk": {
           "name": "dashboard_preferences_organization_id_organization_id_fk",
           "tableFrom": "dashboard_preferences",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "dashboard_preferences_selected_location_id_business_locations_id_fk": {
           "name": "dashboard_preferences_selected_location_id_business_locations_id_fk",
           "tableFrom": "dashboard_preferences",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "selected_location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3284,15 +3284,15 @@
         "domain_reconciliation_jobs_domain_id_site_domains_id_fk": {
           "name": "domain_reconciliation_jobs_domain_id_site_domains_id_fk",
           "tableFrom": "domain_reconciliation_jobs",
+          "tableTo": "site_domains",
           "columnsFrom": [
             "domain_id"
           ],
-          "tableTo": "site_domains",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3529,80 +3529,80 @@
         "experience_bookings_experience_id_experiences_id_fk": {
           "name": "experience_bookings_experience_id_experiences_id_fk",
           "tableFrom": "experience_bookings",
+          "tableTo": "experiences",
           "columnsFrom": [
             "experience_id"
           ],
-          "tableTo": "experiences",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "experience_bookings_organization_id_organization_id_fk": {
           "name": "experience_bookings_organization_id_organization_id_fk",
           "tableFrom": "experience_bookings",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "experience_bookings_site_id_sites_id_fk": {
           "name": "experience_bookings_site_id_sites_id_fk",
           "tableFrom": "experience_bookings",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "experience_bookings_customer_id_customers_id_fk": {
           "name": "experience_bookings_customer_id_customers_id_fk",
           "tableFrom": "experience_bookings",
+          "tableTo": "customers",
           "columnsFrom": [
             "customer_id"
           ],
-          "tableTo": "customers",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "experience_bookings_location_id_business_locations_id_fk": {
           "name": "experience_bookings_location_id_business_locations_id_fk",
           "tableFrom": "experience_bookings",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "experience_bookings_review_id_reviews_id_fk": {
           "name": "experience_bookings_review_id_reviews_id_fk",
           "tableFrom": "experience_bookings",
+          "tableTo": "reviews",
           "columnsFrom": [
             "review_id"
           ],
-          "tableTo": "reviews",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3719,41 +3719,41 @@
         "experience_slot_overrides_experience_id_experiences_id_fk": {
           "name": "experience_slot_overrides_experience_id_experiences_id_fk",
           "tableFrom": "experience_slot_overrides",
+          "tableTo": "experiences",
           "columnsFrom": [
             "experience_id"
           ],
-          "tableTo": "experiences",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "experience_slot_overrides_organization_id_organization_id_fk": {
           "name": "experience_slot_overrides_organization_id_organization_id_fk",
           "tableFrom": "experience_slot_overrides",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "experience_slot_overrides_site_id_sites_id_fk": {
           "name": "experience_slot_overrides_site_id_sites_id_fk",
           "tableFrom": "experience_slot_overrides",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -4058,80 +4058,80 @@
         "experiences_organization_id_organization_id_fk": {
           "name": "experiences_organization_id_organization_id_fk",
           "tableFrom": "experiences",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "experiences_site_id_sites_id_fk": {
           "name": "experiences_site_id_sites_id_fk",
           "tableFrom": "experiences",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "experiences_location_id_business_locations_id_fk": {
           "name": "experiences_location_id_business_locations_id_fk",
           "tableFrom": "experiences",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "experiences_image_asset_id_media_assets_id_fk": {
           "name": "experiences_image_asset_id_media_assets_id_fk",
           "tableFrom": "experiences",
+          "tableTo": "media_assets",
           "columnsFrom": [
             "image_asset_id"
           ],
-          "tableTo": "media_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "experiences_video_asset_id_media_assets_id_fk": {
           "name": "experiences_video_asset_id_media_assets_id_fk",
           "tableFrom": "experiences",
+          "tableTo": "media_assets",
           "columnsFrom": [
             "video_asset_id"
           ],
-          "tableTo": "media_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "experiences_og_image_asset_id_media_assets_id_fk": {
           "name": "experiences_og_image_asset_id_media_assets_id_fk",
           "tableFrom": "experiences",
+          "tableTo": "media_assets",
           "columnsFrom": [
             "og_image_asset_id"
           ],
-          "tableTo": "media_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -4262,41 +4262,41 @@
         "facebook_pages_connections_organization_id_organization_id_fk": {
           "name": "facebook_pages_connections_organization_id_organization_id_fk",
           "tableFrom": "facebook_pages_connections",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "facebook_pages_connections_site_id_sites_id_fk": {
           "name": "facebook_pages_connections_site_id_sites_id_fk",
           "tableFrom": "facebook_pages_connections",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "facebook_pages_connections_connected_by_user_id_user_id_fk": {
           "name": "facebook_pages_connections_connected_by_user_id_user_id_fk",
           "tableFrom": "facebook_pages_connections",
+          "tableTo": "user",
           "columnsFrom": [
             "connected_by_user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -4436,41 +4436,41 @@
         "google_analytics_connections_organization_id_organization_id_fk": {
           "name": "google_analytics_connections_organization_id_organization_id_fk",
           "tableFrom": "google_analytics_connections",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "google_analytics_connections_site_id_sites_id_fk": {
           "name": "google_analytics_connections_site_id_sites_id_fk",
           "tableFrom": "google_analytics_connections",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "google_analytics_connections_connected_by_user_id_user_id_fk": {
           "name": "google_analytics_connections_connected_by_user_id_user_id_fk",
           "tableFrom": "google_analytics_connections",
+          "tableTo": "user",
           "columnsFrom": [
             "connected_by_user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -4582,8 +4582,8 @@
             "organization_id",
             "site_id"
           ],
-          "where": "location_id IS NULL",
-          "isUnique": true
+          "isUnique": true,
+          "where": "location_id IS NULL"
         },
         "google_business_connections_organization_id_site_id_location_id_unique": {
           "name": "google_business_connections_organization_id_site_id_location_id_unique",
@@ -4599,54 +4599,54 @@
         "google_business_connections_organization_id_organization_id_fk": {
           "name": "google_business_connections_organization_id_organization_id_fk",
           "tableFrom": "google_business_connections",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "google_business_connections_site_id_sites_id_fk": {
           "name": "google_business_connections_site_id_sites_id_fk",
           "tableFrom": "google_business_connections",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "google_business_connections_location_id_business_locations_id_fk": {
           "name": "google_business_connections_location_id_business_locations_id_fk",
           "tableFrom": "google_business_connections",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "google_business_connections_connected_by_user_id_user_id_fk": {
           "name": "google_business_connections_connected_by_user_id_user_id_fk",
           "tableFrom": "google_business_connections",
+          "tableTo": "user",
           "columnsFrom": [
             "connected_by_user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -4735,28 +4735,28 @@
         "google_business_events_organization_id_organization_id_fk": {
           "name": "google_business_events_organization_id_organization_id_fk",
           "tableFrom": "google_business_events",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "google_business_events_site_id_sites_id_fk": {
           "name": "google_business_events_site_id_sites_id_fk",
           "tableFrom": "google_business_events",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -4822,28 +4822,28 @@
         "google_place_snapshots_site_id_sites_id_fk": {
           "name": "google_place_snapshots_site_id_sites_id_fk",
           "tableFrom": "google_place_snapshots",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "google_place_snapshots_location_id_business_locations_id_fk": {
           "name": "google_place_snapshots_location_id_business_locations_id_fk",
           "tableFrom": "google_place_snapshots",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -5030,41 +5030,41 @@
         "guest_threads_organization_id_organization_id_fk": {
           "name": "guest_threads_organization_id_organization_id_fk",
           "tableFrom": "guest_threads",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "guest_threads_site_id_sites_id_fk": {
           "name": "guest_threads_site_id_sites_id_fk",
           "tableFrom": "guest_threads",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "guest_threads_location_id_business_locations_id_fk": {
           "name": "guest_threads_location_id_business_locations_id_fk",
           "tableFrom": "guest_threads",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -5155,36 +5155,36 @@
           "columns": [
             "organizationId"
           ],
-          "where": "role = 'owner' AND status = 'pending'",
-          "isUnique": true
+          "isUnique": true,
+          "where": "role = 'owner' AND status = 'pending'"
         }
       },
       "foreignKeys": {
         "invitation_organizationId_organization_id_fk": {
           "name": "invitation_organizationId_organization_id_fk",
           "tableFrom": "invitation",
+          "tableTo": "organization",
           "columnsFrom": [
             "organizationId"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "invitation_inviterId_user_id_fk": {
           "name": "invitation_inviterId_user_id_fk",
           "tableFrom": "invitation",
+          "tableTo": "user",
           "columnsFrom": [
             "inviterId"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -5400,8 +5400,8 @@
           "columns": [
             "google_question_id"
           ],
-          "where": "google_question_id IS NOT NULL",
-          "isUnique": true
+          "isUnique": true,
+          "where": "google_question_id IS NOT NULL"
         },
         "idx_location_qa_location": {
           "name": "idx_location_qa_location",
@@ -5419,8 +5419,8 @@
             "status",
             "sort_order"
           ],
-          "where": "location_id IS NULL",
-          "isUnique": false
+          "isUnique": false,
+          "where": "location_id IS NULL"
         },
         "idx_location_qa_page": {
           "name": "idx_location_qa_page",
@@ -5430,8 +5430,8 @@
             "status",
             "sort_order"
           ],
-          "where": "location_id IS NULL AND page_path IS NOT NULL",
-          "isUnique": false
+          "isUnique": false,
+          "where": "location_id IS NULL AND page_path IS NOT NULL"
         },
         "location_qa_organization_id_idx": {
           "name": "location_qa_organization_id_idx",
@@ -5445,41 +5445,41 @@
         "location_qa_organization_id_organization_id_fk": {
           "name": "location_qa_organization_id_organization_id_fk",
           "tableFrom": "location_qa",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "location_qa_site_id_sites_id_fk": {
           "name": "location_qa_site_id_sites_id_fk",
           "tableFrom": "location_qa",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "location_qa_location_id_business_locations_id_fk": {
           "name": "location_qa_location_id_business_locations_id_fk",
           "tableFrom": "location_qa",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -5672,54 +5672,54 @@
         "mcp_tool_call_events_organization_id_organization_id_fk": {
           "name": "mcp_tool_call_events_organization_id_organization_id_fk",
           "tableFrom": "mcp_tool_call_events",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "mcp_tool_call_events_site_id_sites_id_fk": {
           "name": "mcp_tool_call_events_site_id_sites_id_fk",
           "tableFrom": "mcp_tool_call_events",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "mcp_tool_call_events_location_id_business_locations_id_fk": {
           "name": "mcp_tool_call_events_location_id_business_locations_id_fk",
           "tableFrom": "mcp_tool_call_events",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "mcp_tool_call_events_user_id_user_id_fk": {
           "name": "mcp_tool_call_events_user_id_user_id_fk",
           "tableFrom": "mcp_tool_call_events",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -5779,54 +5779,54 @@
         "mcp_workspace_preferences_user_id_user_id_fk": {
           "name": "mcp_workspace_preferences_user_id_user_id_fk",
           "tableFrom": "mcp_workspace_preferences",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "mcp_workspace_preferences_organization_id_organization_id_fk": {
           "name": "mcp_workspace_preferences_organization_id_organization_id_fk",
           "tableFrom": "mcp_workspace_preferences",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "mcp_workspace_preferences_site_id_sites_id_fk": {
           "name": "mcp_workspace_preferences_site_id_sites_id_fk",
           "tableFrom": "mcp_workspace_preferences",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "mcp_workspace_preferences_location_id_business_locations_id_fk": {
           "name": "mcp_workspace_preferences_location_id_business_locations_id_fk",
           "tableFrom": "mcp_workspace_preferences",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -6020,54 +6020,54 @@
         "media_assets_organization_id_organization_id_fk": {
           "name": "media_assets_organization_id_organization_id_fk",
           "tableFrom": "media_assets",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "media_assets_site_id_sites_id_fk": {
           "name": "media_assets_site_id_sites_id_fk",
           "tableFrom": "media_assets",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "media_assets_location_id_business_locations_id_fk": {
           "name": "media_assets_location_id_business_locations_id_fk",
           "tableFrom": "media_assets",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "media_assets_created_by_user_id_user_id_fk": {
           "name": "media_assets_created_by_user_id_user_id_fk",
           "tableFrom": "media_assets",
+          "tableTo": "user",
           "columnsFrom": [
             "created_by_user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -6322,28 +6322,28 @@
         "member_organizationId_organization_id_fk": {
           "name": "member_organizationId_organization_id_fk",
           "tableFrom": "member",
+          "tableTo": "organization",
           "columnsFrom": [
             "organizationId"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "member_userId_user_id_fk": {
           "name": "member_userId_user_id_fk",
           "tableFrom": "member",
+          "tableTo": "user",
           "columnsFrom": [
             "userId"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -6512,41 +6512,41 @@
         "menu_item_translations_organization_id_organization_id_fk": {
           "name": "menu_item_translations_organization_id_organization_id_fk",
           "tableFrom": "menu_item_translations",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "menu_item_translations_site_id_sites_id_fk": {
           "name": "menu_item_translations_site_id_sites_id_fk",
           "tableFrom": "menu_item_translations",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "menu_item_translations_menu_item_id_menu_items_id_fk": {
           "name": "menu_item_translations_menu_item_id_menu_items_id_fk",
           "tableFrom": "menu_item_translations",
+          "tableTo": "menu_items",
           "columnsFrom": [
             "menu_item_id"
           ],
-          "tableTo": "menu_items",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -6788,41 +6788,41 @@
         "menu_items_menu_id_menus_id_fk": {
           "name": "menu_items_menu_id_menus_id_fk",
           "tableFrom": "menu_items",
+          "tableTo": "menus",
           "columnsFrom": [
             "menu_id"
           ],
-          "tableTo": "menus",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "menu_items_image_asset_id_media_assets_old_id_fk": {
           "name": "menu_items_image_asset_id_media_assets_old_id_fk",
           "tableFrom": "menu_items",
+          "tableTo": "media_assets_old",
           "columnsFrom": [
             "image_asset_id"
           ],
-          "tableTo": "media_assets_old",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "menu_items_og_image_asset_id_media_assets_id_fk": {
           "name": "menu_items_og_image_asset_id_media_assets_id_fk",
           "tableFrom": "menu_items",
+          "tableTo": "media_assets",
           "columnsFrom": [
             "og_image_asset_id"
           ],
-          "tableTo": "media_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -6961,41 +6961,41 @@
         "menu_translations_organization_id_organization_id_fk": {
           "name": "menu_translations_organization_id_organization_id_fk",
           "tableFrom": "menu_translations",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "menu_translations_site_id_sites_id_fk": {
           "name": "menu_translations_site_id_sites_id_fk",
           "tableFrom": "menu_translations",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "menu_translations_menu_id_menus_id_fk": {
           "name": "menu_translations_menu_id_menus_id_fk",
           "tableFrom": "menu_translations",
+          "tableTo": "menus",
           "columnsFrom": [
             "menu_id"
           ],
-          "tableTo": "menus",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -7135,41 +7135,41 @@
         "menus_organization_id_organization_id_fk": {
           "name": "menus_organization_id_organization_id_fk",
           "tableFrom": "menus",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "menus_site_id_sites_id_fk": {
           "name": "menus_site_id_sites_id_fk",
           "tableFrom": "menus",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "menus_location_id_business_locations_id_fk": {
           "name": "menus_location_id_business_locations_id_fk",
           "tableFrom": "menus",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -7318,41 +7318,41 @@
         "notification_events_organization_id_organization_id_fk": {
           "name": "notification_events_organization_id_organization_id_fk",
           "tableFrom": "notification_events",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "notification_events_site_id_sites_id_fk": {
           "name": "notification_events_site_id_sites_id_fk",
           "tableFrom": "notification_events",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "notification_events_location_id_business_locations_id_fk": {
           "name": "notification_events_location_id_business_locations_id_fk",
           "tableFrom": "notification_events",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -7476,41 +7476,41 @@
         "notifications_organization_id_organization_id_fk": {
           "name": "notifications_organization_id_organization_id_fk",
           "tableFrom": "notifications",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "notifications_site_id_sites_id_fk": {
           "name": "notifications_site_id_sites_id_fk",
           "tableFrom": "notifications",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "notifications_location_id_business_locations_id_fk": {
           "name": "notifications_location_id_business_locations_id_fk",
           "tableFrom": "notifications",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -7955,28 +7955,28 @@
         "oauthClientResource_clientId_oauthClient_id_fk": {
           "name": "oauthClientResource_clientId_oauthClient_id_fk",
           "tableFrom": "oauthClientResource",
+          "tableTo": "oauthClient",
           "columnsFrom": [
             "clientId"
           ],
-          "tableTo": "oauthClient",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "oauthClientResource_resourceId_oauthResource_id_fk": {
           "name": "oauthClientResource_resourceId_oauthResource_id_fk",
           "tableFrom": "oauthClientResource",
+          "tableTo": "oauthResource",
           "columnsFrom": [
             "resourceId"
           ],
-          "tableTo": "oauthResource",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -8581,67 +8581,67 @@
         "offerings_organization_id_organization_id_fk": {
           "name": "offerings_organization_id_organization_id_fk",
           "tableFrom": "offerings",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "offerings_site_id_sites_id_fk": {
           "name": "offerings_site_id_sites_id_fk",
           "tableFrom": "offerings",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "offerings_location_id_business_locations_id_fk": {
           "name": "offerings_location_id_business_locations_id_fk",
           "tableFrom": "offerings",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "offerings_thumbnail_asset_id_media_assets_id_fk": {
           "name": "offerings_thumbnail_asset_id_media_assets_id_fk",
           "tableFrom": "offerings",
+          "tableTo": "media_assets",
           "columnsFrom": [
             "thumbnail_asset_id"
           ],
-          "tableTo": "media_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "offerings_hero_image_asset_id_media_assets_id_fk": {
           "name": "offerings_hero_image_asset_id_media_assets_id_fk",
           "tableFrom": "offerings",
+          "tableTo": "media_assets",
           "columnsFrom": [
             "hero_image_asset_id"
           ],
-          "tableTo": "media_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -8758,8 +8758,8 @@
           "columns": [
             "user_id"
           ],
-          "where": "status = 'active'",
-          "isUnique": true
+          "isUnique": true,
+          "where": "status = 'active'"
         },
         "onboarding_drafts_user_id_idx": {
           "name": "onboarding_drafts_user_id_idx",
@@ -8773,41 +8773,41 @@
         "onboarding_drafts_user_id_user_id_fk": {
           "name": "onboarding_drafts_user_id_user_id_fk",
           "tableFrom": "onboarding_drafts",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "onboarding_drafts_organization_id_organization_id_fk": {
           "name": "onboarding_drafts_organization_id_organization_id_fk",
           "tableFrom": "onboarding_drafts",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "onboarding_drafts_committed_site_id_sites_id_fk": {
           "name": "onboarding_drafts_committed_site_id_sites_id_fk",
           "tableFrom": "onboarding_drafts",
+          "tableTo": "sites",
           "columnsFrom": [
             "committed_site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -9009,15 +9009,15 @@
         "organization_billing_organization_id_organization_id_fk": {
           "name": "organization_billing_organization_id_organization_id_fk",
           "tableFrom": "organization_billing",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -9094,15 +9094,15 @@
         "organization_entitlements_organization_id_organization_id_fk": {
           "name": "organization_entitlements_organization_id_organization_id_fk",
           "tableFrom": "organization_entitlements",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -9408,15 +9408,15 @@
         "platform_content_updated_by_user_id_fk": {
           "name": "platform_content_updated_by_user_id_fk",
           "tableFrom": "platform_content",
+          "tableTo": "user",
           "columnsFrom": [
             "updated_by"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -9734,28 +9734,28 @@
         "platform_docs_author_id_user_id_fk": {
           "name": "platform_docs_author_id_user_id_fk",
           "tableFrom": "platform_docs",
+          "tableTo": "user",
           "columnsFrom": [
             "author_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "platform_docs_featured_image_asset_id_media_assets_old_id_fk": {
           "name": "platform_docs_featured_image_asset_id_media_assets_old_id_fk",
           "tableFrom": "platform_docs",
+          "tableTo": "media_assets_old",
           "columnsFrom": [
             "featured_image_asset_id"
           ],
-          "tableTo": "media_assets_old",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -9939,28 +9939,28 @@
         "post_channel_jobs_post_id_posts_id_fk": {
           "name": "post_channel_jobs_post_id_posts_id_fk",
           "tableFrom": "post_channel_jobs",
+          "tableTo": "posts",
           "columnsFrom": [
             "post_id"
           ],
-          "tableTo": "posts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "post_channel_jobs_organization_id_organization_id_fk": {
           "name": "post_channel_jobs_organization_id_organization_id_fk",
           "tableFrom": "post_channel_jobs",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -10074,8 +10074,8 @@
           "columns": [
             "post_id"
           ],
-          "where": "role = 'cover'",
-          "isUnique": true
+          "isUnique": true,
+          "where": "role = 'cover'"
         },
         "post_media_org_site_idx": {
           "name": "post_media_org_site_idx",
@@ -10090,54 +10090,54 @@
         "post_media_organization_id_organization_id_fk": {
           "name": "post_media_organization_id_organization_id_fk",
           "tableFrom": "post_media",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "post_media_site_id_sites_id_fk": {
           "name": "post_media_site_id_sites_id_fk",
           "tableFrom": "post_media",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "post_media_post_id_posts_id_fk": {
           "name": "post_media_post_id_posts_id_fk",
           "tableFrom": "post_media",
+          "tableTo": "posts",
           "columnsFrom": [
             "post_id"
           ],
-          "tableTo": "posts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "post_media_media_asset_id_media_assets_id_fk": {
           "name": "post_media_media_asset_id_media_assets_id_fk",
           "tableFrom": "post_media",
+          "tableTo": "media_assets",
           "columnsFrom": [
             "media_asset_id"
           ],
-          "tableTo": "media_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -10283,41 +10283,41 @@
         "post_translations_organization_id_organization_id_fk": {
           "name": "post_translations_organization_id_organization_id_fk",
           "tableFrom": "post_translations",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "post_translations_site_id_sites_id_fk": {
           "name": "post_translations_site_id_sites_id_fk",
           "tableFrom": "post_translations",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "post_translations_post_id_posts_id_fk": {
           "name": "post_translations_post_id_posts_id_fk",
           "tableFrom": "post_translations",
+          "tableTo": "posts",
           "columnsFrom": [
             "post_id"
           ],
-          "tableTo": "posts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -10544,67 +10544,67 @@
         "posts_organization_id_organization_id_fk": {
           "name": "posts_organization_id_organization_id_fk",
           "tableFrom": "posts",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "posts_site_id_sites_id_fk": {
           "name": "posts_site_id_sites_id_fk",
           "tableFrom": "posts",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "posts_location_id_business_locations_id_fk": {
           "name": "posts_location_id_business_locations_id_fk",
           "tableFrom": "posts",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "posts_image_asset_id_media_assets_old_id_fk": {
           "name": "posts_image_asset_id_media_assets_old_id_fk",
           "tableFrom": "posts",
+          "tableTo": "media_assets_old",
           "columnsFrom": [
             "image_asset_id"
           ],
-          "tableTo": "media_assets_old",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "posts_og_image_asset_id_media_assets_id_fk": {
           "name": "posts_og_image_asset_id_media_assets_id_fk",
           "tableFrom": "posts",
+          "tableTo": "media_assets",
           "columnsFrom": [
             "og_image_asset_id"
           ],
-          "tableTo": "media_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -10778,41 +10778,41 @@
         "reservation_slot_overrides_location_id_business_locations_id_fk": {
           "name": "reservation_slot_overrides_location_id_business_locations_id_fk",
           "tableFrom": "reservation_slot_overrides",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "reservation_slot_overrides_organization_id_organization_id_fk": {
           "name": "reservation_slot_overrides_organization_id_organization_id_fk",
           "tableFrom": "reservation_slot_overrides",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "reservation_slot_overrides_site_id_sites_id_fk": {
           "name": "reservation_slot_overrides_site_id_sites_id_fk",
           "tableFrom": "reservation_slot_overrides",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -11046,67 +11046,67 @@
         "reservation_submissions_organization_id_organization_id_fk": {
           "name": "reservation_submissions_organization_id_organization_id_fk",
           "tableFrom": "reservation_submissions",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "reservation_submissions_site_id_sites_id_fk": {
           "name": "reservation_submissions_site_id_sites_id_fk",
           "tableFrom": "reservation_submissions",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "reservation_submissions_customer_id_customers_id_fk": {
           "name": "reservation_submissions_customer_id_customers_id_fk",
           "tableFrom": "reservation_submissions",
+          "tableTo": "customers",
           "columnsFrom": [
             "customer_id"
           ],
-          "tableTo": "customers",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "reservation_submissions_location_id_business_locations_id_fk": {
           "name": "reservation_submissions_location_id_business_locations_id_fk",
           "tableFrom": "reservation_submissions",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "reservation_submissions_review_id_reviews_id_fk": {
           "name": "reservation_submissions_review_id_reviews_id_fk",
           "tableFrom": "reservation_submissions",
+          "tableTo": "reviews",
           "columnsFrom": [
             "review_id"
           ],
-          "tableTo": "reviews",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -11223,54 +11223,54 @@
         "review_media_review_id_reviews_id_fk": {
           "name": "review_media_review_id_reviews_id_fk",
           "tableFrom": "review_media",
+          "tableTo": "reviews",
           "columnsFrom": [
             "review_id"
           ],
-          "tableTo": "reviews",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "review_media_review_request_id_review_requests_id_fk": {
           "name": "review_media_review_request_id_review_requests_id_fk",
           "tableFrom": "review_media",
+          "tableTo": "review_requests",
           "columnsFrom": [
             "review_request_id"
           ],
-          "tableTo": "review_requests",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "review_media_customer_id_customers_id_fk": {
           "name": "review_media_customer_id_customers_id_fk",
           "tableFrom": "review_media",
+          "tableTo": "customers",
           "columnsFrom": [
             "customer_id"
           ],
-          "tableTo": "customers",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "review_media_media_asset_id_media_assets_id_fk": {
           "name": "review_media_media_asset_id_media_assets_id_fk",
           "tableFrom": "review_media",
+          "tableTo": "media_assets",
           "columnsFrom": [
             "media_asset_id"
           ],
-          "tableTo": "media_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -11448,8 +11448,8 @@
             "booking_type",
             "booking_id"
           ],
-          "where": "revoked_at IS NULL AND submitted_at IS NULL",
-          "isUnique": true
+          "isUnique": true,
+          "where": "revoked_at IS NULL AND submitted_at IS NULL"
         },
         "idx_review_requests_send_due": {
           "name": "idx_review_requests_send_due",
@@ -11474,80 +11474,80 @@
         "review_requests_organization_id_organization_id_fk": {
           "name": "review_requests_organization_id_organization_id_fk",
           "tableFrom": "review_requests",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "review_requests_site_id_sites_id_fk": {
           "name": "review_requests_site_id_sites_id_fk",
           "tableFrom": "review_requests",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "review_requests_location_id_business_locations_id_fk": {
           "name": "review_requests_location_id_business_locations_id_fk",
           "tableFrom": "review_requests",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "review_requests_customer_id_customers_id_fk": {
           "name": "review_requests_customer_id_customers_id_fk",
           "tableFrom": "review_requests",
+          "tableTo": "customers",
           "columnsFrom": [
             "customer_id"
           ],
-          "tableTo": "customers",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "review_requests_anonymous_user_id_user_id_fk": {
           "name": "review_requests_anonymous_user_id_user_id_fk",
           "tableFrom": "review_requests",
+          "tableTo": "user",
           "columnsFrom": [
             "anonymous_user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "review_requests_user_id_user_id_fk": {
           "name": "review_requests_user_id_user_id_fk",
           "tableFrom": "review_requests",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -11817,8 +11817,8 @@
             "status",
             "created_at"
           ],
-          "where": "location_id IS NULL",
-          "isUnique": false
+          "isUnique": false,
+          "where": "location_id IS NULL"
         },
         "reviews_organization_id_idx": {
           "name": "reviews_organization_id_idx",
@@ -11832,93 +11832,93 @@
         "reviews_organization_id_organization_id_fk": {
           "name": "reviews_organization_id_organization_id_fk",
           "tableFrom": "reviews",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "reviews_site_id_sites_id_fk": {
           "name": "reviews_site_id_sites_id_fk",
           "tableFrom": "reviews",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "reviews_location_id_business_locations_id_fk": {
           "name": "reviews_location_id_business_locations_id_fk",
           "tableFrom": "reviews",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "reviews_customer_id_customers_id_fk": {
           "name": "reviews_customer_id_customers_id_fk",
           "tableFrom": "reviews",
+          "tableTo": "customers",
           "columnsFrom": [
             "customer_id"
           ],
-          "tableTo": "customers",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "reviews_review_request_id_review_requests_id_fk": {
           "name": "reviews_review_request_id_review_requests_id_fk",
           "tableFrom": "reviews",
+          "tableTo": "review_requests",
           "columnsFrom": [
             "review_request_id"
           ],
-          "tableTo": "review_requests",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "reviews_user_id_user_id_fk": {
           "name": "reviews_user_id_user_id_fk",
           "tableFrom": "reviews",
+          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "reviews_entered_by_user_id_user_id_fk": {
           "name": "reviews_entered_by_user_id_user_id_fk",
           "tableFrom": "reviews",
+          "tableTo": "user",
           "columnsFrom": [
             "entered_by_user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -12006,15 +12006,15 @@
         "service_addon_purchases_organization_id_organization_id_fk": {
           "name": "service_addon_purchases_organization_id_organization_id_fk",
           "tableFrom": "service_addon_purchases",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -12124,15 +12124,15 @@
         "session_userId_user_id_fk": {
           "name": "session_userId_user_id_fk",
           "tableFrom": "session",
+          "tableTo": "user",
           "columnsFrom": [
             "userId"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -12248,15 +12248,15 @@
         "site_analytics_daily_site_id_sites_id_fk": {
           "name": "site_analytics_daily_site_id_sites_id_fk",
           "tableFrom": "site_analytics_daily",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -12404,28 +12404,28 @@
         "site_billing_site_id_sites_id_fk": {
           "name": "site_billing_site_id_sites_id_fk",
           "tableFrom": "site_billing",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_billing_organization_id_organization_id_fk": {
           "name": "site_billing_organization_id_organization_id_fk",
           "tableFrom": "site_billing",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -12486,28 +12486,28 @@
         "site_config_organization_id_organization_id_fk": {
           "name": "site_config_organization_id_organization_id_fk",
           "tableFrom": "site_config",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_config_site_id_sites_id_fk": {
           "name": "site_config_site_id_sites_id_fk",
           "tableFrom": "site_config",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -12645,28 +12645,28 @@
         "site_consultation_settings_organization_id_organization_id_fk": {
           "name": "site_consultation_settings_organization_id_organization_id_fk",
           "tableFrom": "site_consultation_settings",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_consultation_settings_site_id_sites_id_fk": {
           "name": "site_consultation_settings_site_id_sites_id_fk",
           "tableFrom": "site_consultation_settings",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -12821,8 +12821,8 @@
             "page",
             "field"
           ],
-          "where": "location_id IS NULL",
-          "isUnique": true
+          "isUnique": true,
+          "where": "location_id IS NULL"
         },
         "site_content_organization_id_site_id_location_id_page_field_unique": {
           "name": "site_content_organization_id_site_id_location_id_page_field_unique",
@@ -12840,67 +12840,67 @@
         "site_content_organization_id_organization_id_fk": {
           "name": "site_content_organization_id_organization_id_fk",
           "tableFrom": "site_content",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_content_site_id_sites_id_fk": {
           "name": "site_content_site_id_sites_id_fk",
           "tableFrom": "site_content",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_content_location_id_business_locations_id_fk": {
           "name": "site_content_location_id_business_locations_id_fk",
           "tableFrom": "site_content",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_content_hero_image_asset_id_media_assets_old_id_fk": {
           "name": "site_content_hero_image_asset_id_media_assets_old_id_fk",
           "tableFrom": "site_content",
+          "tableTo": "media_assets_old",
           "columnsFrom": [
             "hero_image_asset_id"
           ],
-          "tableTo": "media_assets_old",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "site_content_hero_video_asset_id_media_assets_old_id_fk": {
           "name": "site_content_hero_video_asset_id_media_assets_old_id_fk",
           "tableFrom": "site_content",
+          "tableTo": "media_assets_old",
           "columnsFrom": [
             "hero_video_asset_id"
           ],
-          "tableTo": "media_assets_old",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -13057,8 +13057,8 @@
             "page",
             "field"
           ],
-          "where": "location_id IS NULL",
-          "isUnique": true
+          "isUnique": true,
+          "where": "location_id IS NULL"
         },
         "site_content_translations_organization_id_site_id_location_id_locale_page_field_unique": {
           "name": "site_content_translations_organization_id_site_id_location_id_locale_page_field_unique",
@@ -13077,41 +13077,41 @@
         "site_content_translations_organization_id_organization_id_fk": {
           "name": "site_content_translations_organization_id_organization_id_fk",
           "tableFrom": "site_content_translations",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_content_translations_site_id_sites_id_fk": {
           "name": "site_content_translations_site_id_sites_id_fk",
           "tableFrom": "site_content_translations",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_content_translations_location_id_business_locations_id_fk": {
           "name": "site_content_translations_location_id_business_locations_id_fk",
           "tableFrom": "site_content_translations",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -13243,28 +13243,28 @@
         "site_conversion_events_organization_id_organization_id_fk": {
           "name": "site_conversion_events_organization_id_organization_id_fk",
           "tableFrom": "site_conversion_events",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_conversion_events_site_id_sites_id_fk": {
           "name": "site_conversion_events_site_id_sites_id_fk",
           "tableFrom": "site_conversion_events",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -13379,41 +13379,41 @@
         "site_domain_events_organization_id_organization_id_fk": {
           "name": "site_domain_events_organization_id_organization_id_fk",
           "tableFrom": "site_domain_events",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_domain_events_site_id_sites_id_fk": {
           "name": "site_domain_events_site_id_sites_id_fk",
           "tableFrom": "site_domain_events",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_domain_events_domain_id_site_domains_id_fk": {
           "name": "site_domain_events_domain_id_site_domains_id_fk",
           "tableFrom": "site_domain_events",
+          "tableTo": "site_domains",
           "columnsFrom": [
             "domain_id"
           ],
-          "tableTo": "site_domains",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -13640,28 +13640,28 @@
         "site_domains_organization_id_organization_id_fk": {
           "name": "site_domains_organization_id_organization_id_fk",
           "tableFrom": "site_domains",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_domains_site_id_sites_id_fk": {
           "name": "site_domains_site_id_sites_id_fk",
           "tableFrom": "site_domains",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -13752,28 +13752,28 @@
         "site_entitlements_site_id_sites_id_fk": {
           "name": "site_entitlements_site_id_sites_id_fk",
           "tableFrom": "site_entitlements",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_entitlements_organization_id_organization_id_fk": {
           "name": "site_entitlements_organization_id_organization_id_fk",
           "tableFrom": "site_entitlements",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -13869,54 +13869,54 @@
         "site_events_organization_id_organization_id_fk": {
           "name": "site_events_organization_id_organization_id_fk",
           "tableFrom": "site_events",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_events_site_id_sites_id_fk": {
           "name": "site_events_site_id_sites_id_fk",
           "tableFrom": "site_events",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_events_location_id_business_locations_id_fk": {
           "name": "site_events_location_id_business_locations_id_fk",
           "tableFrom": "site_events",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "site_events_actor_id_user_id_fk": {
           "name": "site_events_actor_id_user_id_fk",
           "tableFrom": "site_events",
+          "tableTo": "user",
           "columnsFrom": [
             "actor_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -14009,8 +14009,8 @@
             "organization_id",
             "site_id"
           ],
-          "where": "is_source = 1",
-          "isUnique": true
+          "isUnique": true,
+          "where": "is_source = 1"
         },
         "site_locales_organization_id_site_id_locale_unique": {
           "name": "site_locales_organization_id_site_id_locale_unique",
@@ -14026,28 +14026,28 @@
         "site_locales_organization_id_organization_id_fk": {
           "name": "site_locales_organization_id_organization_id_fk",
           "tableFrom": "site_locales",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_locales_site_id_sites_id_fk": {
           "name": "site_locales_site_id_sites_id_fk",
           "tableFrom": "site_locales",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -14171,28 +14171,28 @@
         "site_pageview_events_site_id_sites_id_fk": {
           "name": "site_pageview_events_site_id_sites_id_fk",
           "tableFrom": "site_pageview_events",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_pageview_events_location_id_business_locations_id_fk": {
           "name": "site_pageview_events_location_id_business_locations_id_fk",
           "tableFrom": "site_pageview_events",
+          "tableTo": "business_locations",
           "columnsFrom": [
             "location_id"
           ],
-          "tableTo": "business_locations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -14290,28 +14290,28 @@
         "site_theme_tokens_organization_id_organization_id_fk": {
           "name": "site_theme_tokens_organization_id_organization_id_fk",
           "tableFrom": "site_theme_tokens",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_theme_tokens_site_id_sites_id_fk": {
           "name": "site_theme_tokens_site_id_sites_id_fk",
           "tableFrom": "site_theme_tokens",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -14513,54 +14513,54 @@
         "site_transfer_requests_site_id_sites_id_fk": {
           "name": "site_transfer_requests_site_id_sites_id_fk",
           "tableFrom": "site_transfer_requests",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "site_transfer_requests_initiated_by_user_id_user_id_fk": {
           "name": "site_transfer_requests_initiated_by_user_id_user_id_fk",
           "tableFrom": "site_transfer_requests",
+          "tableTo": "user",
           "columnsFrom": [
             "initiated_by_user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "site_transfer_requests_accepted_by_user_id_user_id_fk": {
           "name": "site_transfer_requests_accepted_by_user_id_user_id_fk",
           "tableFrom": "site_transfer_requests",
+          "tableTo": "user",
           "columnsFrom": [
             "accepted_by_user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "site_transfer_requests_claiming_user_id_user_id_fk": {
           "name": "site_transfer_requests_claiming_user_id_user_id_fk",
           "tableFrom": "site_transfer_requests",
+          "tableTo": "user",
           "columnsFrom": [
             "claiming_user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -14862,54 +14862,54 @@
         "sites_organization_id_organization_id_fk": {
           "name": "sites_organization_id_organization_id_fk",
           "tableFrom": "sites",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "sites_theme_id_themes_id_fk": {
           "name": "sites_theme_id_themes_id_fk",
           "tableFrom": "sites",
+          "tableTo": "themes",
           "columnsFrom": [
             "theme_id"
           ],
-          "tableTo": "themes",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "sites_logo_asset_id_media_assets_id_fk": {
           "name": "sites_logo_asset_id_media_assets_id_fk",
           "tableFrom": "sites",
+          "tableTo": "media_assets",
           "columnsFrom": [
             "logo_asset_id"
           ],
-          "tableTo": "media_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "sites_og_image_asset_id_media_assets_id_fk": {
           "name": "sites_og_image_asset_id_media_assets_id_fk",
           "tableFrom": "sites",
+          "tableTo": "media_assets",
           "columnsFrom": [
             "og_image_asset_id"
           ],
-          "tableTo": "media_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -15155,54 +15155,54 @@
         "submission_messages_thread_id_guest_threads_id_fk": {
           "name": "submission_messages_thread_id_guest_threads_id_fk",
           "tableFrom": "submission_messages",
+          "tableTo": "guest_threads",
           "columnsFrom": [
             "thread_id"
           ],
-          "tableTo": "guest_threads",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "submission_messages_organization_id_organization_id_fk": {
           "name": "submission_messages_organization_id_organization_id_fk",
           "tableFrom": "submission_messages",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "submission_messages_site_id_sites_id_fk": {
           "name": "submission_messages_site_id_sites_id_fk",
           "tableFrom": "submission_messages",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "submission_messages_sender_user_id_user_id_fk": {
           "name": "submission_messages_sender_user_id_user_id_fk",
           "tableFrom": "submission_messages",
+          "tableTo": "user",
           "columnsFrom": [
             "sender_user_id"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -15417,67 +15417,67 @@
         "tenant_compliance_organization_id_organization_id_fk": {
           "name": "tenant_compliance_organization_id_organization_id_fk",
           "tableFrom": "tenant_compliance",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "tenant_compliance_site_id_sites_id_fk": {
           "name": "tenant_compliance_site_id_sites_id_fk",
           "tableFrom": "tenant_compliance",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "tenant_compliance_privacy_page_id_tenant_pages_id_fk": {
           "name": "tenant_compliance_privacy_page_id_tenant_pages_id_fk",
           "tableFrom": "tenant_compliance",
+          "tableTo": "tenant_pages",
           "columnsFrom": [
             "privacy_page_id"
           ],
-          "tableTo": "tenant_pages",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "tenant_compliance_terms_page_id_tenant_pages_id_fk": {
           "name": "tenant_compliance_terms_page_id_tenant_pages_id_fk",
           "tableFrom": "tenant_compliance",
+          "tableTo": "tenant_pages",
           "columnsFrom": [
             "terms_page_id"
           ],
-          "tableTo": "tenant_pages",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "tenant_compliance_notice_page_id_tenant_pages_id_fk": {
           "name": "tenant_compliance_notice_page_id_tenant_pages_id_fk",
           "tableFrom": "tenant_compliance",
+          "tableTo": "tenant_pages",
           "columnsFrom": [
             "notice_page_id"
           ],
-          "tableTo": "tenant_pages",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -15612,28 +15612,28 @@
         "tenant_navigation_items_organization_id_organization_id_fk": {
           "name": "tenant_navigation_items_organization_id_organization_id_fk",
           "tableFrom": "tenant_navigation_items",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "tenant_navigation_items_site_id_sites_id_fk": {
           "name": "tenant_navigation_items_site_id_sites_id_fk",
           "tableFrom": "tenant_navigation_items",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -15844,28 +15844,28 @@
         "tenant_pages_organization_id_organization_id_fk": {
           "name": "tenant_pages_organization_id_organization_id_fk",
           "tableFrom": "tenant_pages",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "tenant_pages_site_id_sites_id_fk": {
           "name": "tenant_pages_site_id_sites_id_fk",
           "tableFrom": "tenant_pages",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -15988,28 +15988,28 @@
         "tenant_redirects_organization_id_organization_id_fk": {
           "name": "tenant_redirects_organization_id_organization_id_fk",
           "tableFrom": "tenant_redirects",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "tenant_redirects_site_id_sites_id_fk": {
           "name": "tenant_redirects_site_id_sites_id_fk",
           "tableFrom": "tenant_redirects",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -16303,41 +16303,41 @@
         "translation_job_items_job_id_translation_jobs_id_fk": {
           "name": "translation_job_items_job_id_translation_jobs_id_fk",
           "tableFrom": "translation_job_items",
+          "tableTo": "translation_jobs",
           "columnsFrom": [
             "job_id"
           ],
-          "tableTo": "translation_jobs",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "translation_job_items_organization_id_organization_id_fk": {
           "name": "translation_job_items_organization_id_organization_id_fk",
           "tableFrom": "translation_job_items",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "translation_job_items_site_id_sites_id_fk": {
           "name": "translation_job_items_site_id_sites_id_fk",
           "tableFrom": "translation_job_items",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -16537,28 +16537,28 @@
         "translation_jobs_organization_id_organization_id_fk": {
           "name": "translation_jobs_organization_id_organization_id_fk",
           "tableFrom": "translation_jobs",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "translation_jobs_site_id_sites_id_fk": {
           "name": "translation_jobs_site_id_sites_id_fk",
           "tableFrom": "translation_jobs",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -16869,43 +16869,67 @@
         "work_requests_organization_id_organization_id_fk": {
           "name": "work_requests_organization_id_organization_id_fk",
           "tableFrom": "work_requests",
+          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "work_requests_site_id_sites_id_fk": {
           "name": "work_requests_site_id_sites_id_fk",
           "tableFrom": "work_requests",
+          "tableTo": "sites",
           "columnsFrom": [
             "site_id"
           ],
-          "tableTo": "sites",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "work_requests_assigned_to_user_id_fk": {
           "name": "work_requests_assigned_to_user_id_fk",
           "tableFrom": "work_requests",
+          "tableTo": "user",
           "columnsFrom": [
             "assigned_to"
           ],
-          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "zaraz_sync_lock": {
+      "name": "zaraz_sync_lock",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "locked_at": {
+          "name": "locked_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -16914,9 +16938,9 @@
   "views": {},
   "enums": {},
   "_meta": {
-    "columns": {},
     "schemas": {},
-    "tables": {}
+    "tables": {},
+    "columns": {}
   },
   "internal": {
     "indexes": {}
