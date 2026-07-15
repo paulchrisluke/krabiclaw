@@ -188,8 +188,7 @@ export function parseMarkdownDocument(text: string): ParsedMarkdownDocument {
 
     if (BLOCKQUOTE_RE.test(line)) {
       const quoteLines: string[] = [];
-      while (i < lines.length && (BLOCKQUOTE_RE.test(lines[i] ?? "") || (lines[i] ?? "").trim() !== "")) {
-        if (!BLOCKQUOTE_RE.test(lines[i] ?? "")) break;
+      while (i < lines.length && BLOCKQUOTE_RE.test(lines[i] ?? "")) {
         quoteLines.push(lines[i]!);
         i += 1;
       }

@@ -1033,6 +1033,7 @@ export const READ_ONLY_TOOL_NAMES = [
   'list_blog_posts',
   'get_blog_post',
   'get_site_media_assets',
+  'analyze_document',
   'open_media_upload',
   'open_experience_media_upload',
   'open_home_hero_media_upload',
