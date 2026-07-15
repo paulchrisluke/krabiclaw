@@ -32,7 +32,7 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
 
 ## CI env parity (required for dashboard E2E)
 
-`e2e-smoke` and `e2e-full` must include:
+`e2e-smoke`, `e2e-staging`, and `e2e-full` must include:
 
 - `STRIPE_SECRET_KEY` (use test key in CI)
 - `STRIPE_WEBHOOK_SECRET`

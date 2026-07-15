@@ -5,28 +5,15 @@
 // reindex runs died from a raw connection failure before ever reaching the
 // delete-stale-items step, so orphaned items from earlier key formats may have
 // accumulated without ever being cleaned up.
-import { getHeader } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { secretsMatch } from '~/server/utils/internal-secret'
+import { validateInternalRequest } from '~/server/utils/internal-secret'
 import { listAllItems } from '~/server/utils/public-search'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
 
-  const expectedSecret = typeof env.PLATFORM_SEARCH_REINDEX_SECRET === 'string'
-    ? env.PLATFORM_SEARCH_REINDEX_SECRET.trim()
-    : ''
-  if (!expectedSecret) {
-    return jsonResponse({ error: 'PLATFORM_SEARCH_REINDEX_SECRET is not configured' }, { status: 500 })
-  }
-
-  const providedSecret = getHeader(event, 'x-krabiclaw-search-secret')
-    ?? getHeader(event, 'authorization')?.replace(/^Bearer\s+/i, '')
-    ?? ''
-
-  if (!(await secretsMatch(expectedSecret, providedSecret))) {
-    return jsonResponse({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const validation = await validateInternalRequest(event, env)
+  if (!validation.ok) return jsonResponse({ error: validation.error }, { status: validation.status })
 
   const startedAt = Date.now()
   try {

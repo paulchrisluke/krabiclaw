@@ -17,13 +17,11 @@ mock.module('../../server/utils/og-image/fetch-image.ts', {
 
 const { renderOgImagePng } = await import('../../server/utils/og-image/render.ts')
 
-async function loadWasmBytes() {
-  return await readFile(path.join(repoRoot, 'node_modules/@resvg/resvg-wasm/index_bg.wasm'))
-}
-
-async function loadYogaWasmBytes() {
-  return await readFile(path.join(repoRoot, 'node_modules/satori/yoga.wasm'))
-}
+// Read once at module scope (matches tests/unit/og-image-pipeline.test.ts) rather than
+// per-test — these are static, unchanging binaries, so there's no reason to re-read them
+// from disk for every test in this file.
+const wasmBytes = await readFile(path.join(repoRoot, 'node_modules/@resvg/resvg-wasm/index_bg.wasm'))
+const yogaBytes = await readFile(path.join(repoRoot, 'node_modules/satori/yoga.wasm'))
 
 /** Reads just enough of a PNG's IHDR chunk to assert width/height without a decoder dependency. */
 function readPngDimensions(bytes: Uint8Array): { width: number; height: number } {
@@ -40,8 +38,6 @@ function readPngDimensions(bytes: Uint8Array): { width: number; height: number }
 }
 
 test('renderOgImagePng produces real, decodable 1200x630 PNG bytes for the platform template', async () => {
-  const wasmBytes = await loadWasmBytes()
-  const yogaBytes = await loadYogaWasmBytes()
   const bytes = await renderOgImagePng(
     {
       template: 'platform',
@@ -59,9 +55,6 @@ test('renderOgImagePng produces real, decodable 1200x630 PNG bytes for the platf
 })
 
 test('renderOgImagePng produces valid output for the saya and blawby templates too', async () => {
-  const wasmBytes = await loadWasmBytes()
-  const yogaBytes = await loadYogaWasmBytes()
-
   for (const template of ['saya', 'blawby'] as const) {
     const bytes = await renderOgImagePng(
       {
@@ -80,8 +73,6 @@ test('renderOgImagePng produces valid output for the saya and blawby templates t
 })
 
 test('renderOgImagePng ignores an unresolvable background image URL rather than failing', async () => {
-  const wasmBytes = await loadWasmBytes()
-  const yogaBytes = await loadYogaWasmBytes()
   const bytes = await renderOgImagePng(
     {
       template: 'blawby',

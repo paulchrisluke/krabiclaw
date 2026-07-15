@@ -25,7 +25,7 @@
     "test:e2e:smoke": "playwright test tests/e2e/smoke.spec.ts tests/e2e/billing.spec.ts tests/e2e/billing-webhook.spec.ts",
     "test:e2e:auth": "playwright test tests/e2e/auth.spec.ts tests/e2e/oauth-discovery.spec.ts",
     "test:e2e:dashboard": "playwright test tests/e2e/dashboard.spec.ts tests/e2e/dashboard-api.spec.ts tests/e2e/dashboard-workflows.spec.ts",
-    "test:e2e:billing": "playwright test tests/e2e/billing.spec.ts tests/e2e/billing-webhook.spec.ts tests/e2e/billing-webhook-signed.spec.ts",
+    "test:e2e:billing": "playwright test tests/e2e/billing-webhook-signed.spec.ts",
     "test:e2e:notifications": "playwright test tests/e2e/notifications.spec.ts",
     "test:e2e:seo": "playwright test tests/e2e/seo.spec.ts",
     "test:e2e:mcp": "playwright test tests/e2e/mcp.spec.ts tests/e2e/oauth-discovery.spec.ts",
