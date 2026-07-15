@@ -804,22 +804,32 @@ export async function searchPublicResources(
       ai_search_options: {
         retrieval: {
           retrieval_type: 'hybrid',
-          match_threshold: DEFAULT_MATCH_THRESHOLD,
+          // Per Cloudflare's docs (developers.cloudflare.com/ai-search/configuration/retrieval/result-controls/),
+          // retrieval.match_threshold filters on the raw VECTOR similarity score, not the
+          // fused hybrid score — even in hybrid mode. A single generic keyword (e.g. "menu")
+          // has a weak vector/semantic similarity to a whole paragraph embedding even when it's
+          // a perfect literal keyword match, so a non-zero threshold here silently discards
+          // strong keyword-only candidates before they ever reach fusion or reranking. Set to 0
+          // so every hybrid candidate (vector OR keyword) survives retrieval; the real relevance
+          // floor now lives on reranking.match_threshold below, which applies to the actual
+          // fused/reranked score.
+          match_threshold: 0,
           max_num_results: candidateLimit,
           keyword_match_mode: 'or',
           return_on_failure: true,
           filters: buildSearchFilters(surface, typeFilter, options.siteId),
         },
-        // Restored: the AI Search instance itself is configured with rewrite_query/reranking
-        // enabled (see platformKnowledgeInstanceConfig above), but per-query options were
-        // explicitly turning both off and zeroing the match threshold, which is what let
-        // irrelevant static pages/routes crowd out doc/article results for broad queries —
-        // see issue #254.
+        // The AI Search instance itself is configured with rewrite_query/reranking enabled
+        // (see platformKnowledgeInstanceConfig above); reranking.match_threshold (not
+        // retrieval.match_threshold) is what keeps irrelevant static pages/routes from
+        // crowding out doc/article results for broad queries — see issue #254 — while still
+        // letting exact single-keyword matches through the earlier hybrid retrieval stage.
         query_rewrite: {
           enabled: true,
         },
         reranking: {
           enabled: true,
+          match_threshold: DEFAULT_MATCH_THRESHOLD,
         },
       },
     }),
