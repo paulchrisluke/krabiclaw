@@ -106,6 +106,23 @@ const VERTICAL_QA: Partial<
       3,
     ],
   ],
+  professional_service: [
+    [
+      "How do I request a consultation?",
+      "You can request a consultation through our contact page or by reaching out directly.",
+      1,
+    ],
+    [
+      "What services do you offer?",
+      "Update this with the services or practice areas your organization provides.",
+      2,
+    ],
+    [
+      "How can I get in touch?",
+      "See our contact page for phone, email, and office details.",
+      3,
+    ],
+  ],
 };
 
 // Per-vertical site_content seeds. No stock story image: SayaBrandStory already
@@ -157,6 +174,28 @@ const VERTICAL_SITE_CONTENT: Partial<
       `${name} is a hands-on studio focused on doing a small number of things exceptionally well.\n\nAdd the milestones that shaped your studio: where you started, what changed along the way, and what guests can expect when they arrive.`,
     ],
     ["about", "cta.title", "Book a class"],
+  ],
+  professional_service: (name) => [
+    ["home", "cta.title", "Talk with our team."],
+    ["about", "hero.title", "About Us"],
+    [
+      "about",
+      "hero.subtitle",
+      `${name} is built around clear guidance, responsive service, and a team clients can rely on.`,
+    ],
+    ["about", "story.headline", "Our Story"],
+    [
+      "about",
+      "story.body",
+      `${name} started with a simple idea: offer dependable, professional service and keep clients informed every step of the way.\n\nAdd your organization's own story here — who you serve, how you work, and what clients can expect when they reach out.`,
+    ],
+    ["about", "journey.title", "Our Journey"],
+    [
+      "about",
+      "journey.body",
+      `${name} is a professional-service organization focused on doing right by the people it serves.\n\nAdd the milestones that shaped your organization: where you started, what changed along the way, and what clients can expect when they get in touch. Replace this placeholder with your own services or practice areas — none are assumed here.`,
+    ],
+    ["about", "cta.title", "Talk with our team"],
   ],
 };
 
@@ -293,7 +332,9 @@ export async function seedNewSite(
   const postBody =
     vertical === "restaurant"
       ? "We just launched our new site — you can now browse our full menu, check our hours, and book a table online. More updates coming soon."
-      : "We just launched our new site — you can now browse what we offer, check our hours, and get in touch. More updates coming soon.";
+      : vertical === "professional_service"
+        ? "We just launched our new site — you can now learn about our services and get in touch with our team. More updates coming soon."
+        : "We just launched our new site — you can now browse what we offer, check our hours, and get in touch. More updates coming soon.";
   statements.push({
     query: `
     INSERT OR IGNORE INTO posts
