@@ -38,6 +38,7 @@ export interface CloudflareEnv {
   CLOUDFLARE_IMAGES_API_TOKEN?: string
   CF_ZONE_ID?: string
   CF_CUSTOM_HOSTNAMES_API_TOKEN?: string
+  CF_ZARAZ_API_TOKEN?: string
   CF_SAAS_CNAME_TARGET?: string
   NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string

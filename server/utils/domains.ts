@@ -7,6 +7,7 @@ import { fireSiteEventSafe } from '~/server/utils/site-events'
 export interface DomainEnv {
   CF_ZONE_ID?: string
   CF_CUSTOM_HOSTNAMES_API_TOKEN?: string
+  CF_ZARAZ_API_TOKEN?: string
   CF_SAAS_CNAME_TARGET?: string
   CF_ACCOUNT_ID?: string
   CF_PAGES_PROJECT_NAME?: string
@@ -82,6 +83,32 @@ interface CloudflareCustomHostname {
 
 const CF_API_BASE = 'https://api.cloudflare.com/client/v4'
 const MAX_RETRY_COUNT = 12
+
+async function syncZarazForActiveConnection(
+  env: DomainEnv,
+  db: D1Database,
+  siteId: string,
+  organizationId: string,
+): Promise<void> {
+  const connection = await queryFirst<{ ga4_measurement_id: string | null }>(db, `
+    SELECT ga4_measurement_id
+    FROM google_analytics_connections
+    WHERE site_id = ? AND organization_id = ? AND status = 'active'
+    LIMIT 1
+  `, [siteId, organizationId])
+  if (!connection?.ga4_measurement_id) return
+
+  try {
+    const { syncTenantZarazAnalytics } = await import('~/server/utils/zaraz-analytics')
+    await syncTenantZarazAnalytics(env, db, {
+      siteId,
+      organizationId,
+      measurementId: connection.ga4_measurement_id,
+    })
+  } catch (error) {
+    console.error('zaraz_sync_failed', { siteId, error })
+  }
+}
 
 const reservedDomains = [
   'app', 'api', 'admin', 'dashboard', 'login', 'signup',
@@ -476,6 +503,10 @@ async function persistCloudflareState(
 
   const after = await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ?`, [domainId]) as DomainRecord
 
+  if (before.status !== after.status && (before.status === 'active' || after.status === 'active')) {
+    await syncZarazForActiveConnection(env, db, after.site_id, after.organization_id)
+  }
+
   if (!before || before.status !== after.status || before.cloudflare_ssl_status !== after.cloudflare_ssl_status) {
     await logDomainEvent(db, {
       organizationId: after.organization_id,
@@ -743,6 +774,10 @@ export async function deleteCustomDomain(
     SET status = 'deleted', role = 'secondary', updated_at = ?
     WHERE id = ?
   `, [now, domainId])
+
+  if (domain.status === 'active') {
+    await syncZarazForActiveConnection(env, db, domain.site_id, domain.organization_id)
+  }
   await execute(db, `DELETE FROM domain_reconciliation_jobs WHERE domain_id = ?`, [domainId])
   await logDomainEvent(db, {
     organizationId: domain.organization_id,

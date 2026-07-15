@@ -11,6 +11,7 @@ declare global {
   interface Window {
     zaraz?: {
       track: (_eventName: string, _params?: Record<string, unknown>) => void
+      set: (_key: string, _value: Record<string, string>) => void
     }
   }
 }

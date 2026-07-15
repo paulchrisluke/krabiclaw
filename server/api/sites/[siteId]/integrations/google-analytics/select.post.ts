@@ -7,6 +7,7 @@ import {
 } from '~/server/utils/google-analytics'
 import { deleteConfig, setConfig } from '~/server/utils/site-config'
 import { execute, queryFirst } from '~/server/db'
+import { removeTenantZarazAnalytics, syncTenantZarazAnalytics } from '~/server/utils/zaraz-analytics'
 
 interface SelectBody {
   ga4_property_id?: string | null
@@ -85,6 +86,20 @@ export default defineEventHandler(async (event) => {
       await setConfig(db, site.organization_id, site.id, 'search_console_site_url', searchConsoleSiteUrl)
     } else {
       await deleteConfig(db, site.organization_id, site.id, 'search_console_site_url')
+    }
+
+    try {
+      if (measurementId) {
+        await syncTenantZarazAnalytics(env, db, {
+          siteId: site.id,
+          organizationId: site.organization_id,
+          measurementId,
+        })
+      } else {
+        await removeTenantZarazAnalytics(env, db, site.id)
+      }
+    } catch (error) {
+      console.error('zaraz_sync_failed', { siteId: site.id, error })
     }
 
     return jsonResponse({ success: true, ga4_measurement_id: measurementId })

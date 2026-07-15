@@ -2078,6 +2078,11 @@ export const google_analytics_connections = sqliteTable("google_analytics_connec
 	unique("google_analytics_connections_organization_id_site_id_unique").on(table.organization_id, table.site_id),
 ]);
 
+export const zaraz_sync_lock = sqliteTable("zaraz_sync_lock", {
+	id: text().primaryKey(),
+	locked_at: text(),
+});
+
 export const platform_content_components = sqliteTable("platform_content_components", {
 	id: text().primaryKey(),
 	content_type: text().notNull(),

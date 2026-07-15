@@ -221,3 +221,5 @@ enabled = true
 
 [env.staging.observability.traces]
 enabled = true
+# CF_ZARAZ_API_TOKEN is a secret scoped to Zone > Zaraz > Edit. Configure it
+# with `wrangler secret put CF_ZARAZ_API_TOKEN` for each deployed environment.

@@ -52,6 +52,15 @@ function pushConsentCommand(command: 'default' | 'update', value: CookieConsentV
   window.dataLayer = window.dataLayer || []
   const state = consentState(value)
   window.dataLayer.push(['consent', command, Object.fromEntries(CONSENT_CATEGORIES.map(key => [key, state]))])
+  pushZarazConsentCommand(command, value)
+}
+
+function pushZarazConsentCommand(command: 'default' | 'update', value: CookieConsentValue) {
+  const state = consentState(value)
+  window.zaraz?.set(
+    command === 'default' ? 'google_consent_default' : 'google_consent_update',
+    Object.fromEntries(CONSENT_CATEGORIES.map(key => [key, state])),
+  )
 }
 
 // Module-level, client-only guard: fine here (unlike server-side state)

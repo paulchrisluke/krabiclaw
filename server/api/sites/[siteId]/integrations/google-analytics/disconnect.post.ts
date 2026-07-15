@@ -2,6 +2,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { deleteConfig } from '~/server/utils/site-config'
 import { execute, queryFirst } from '~/server/db'
+import { removeTenantZarazAnalytics } from '~/server/utils/zaraz-analytics'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -41,6 +42,12 @@ export default defineEventHandler(async (event) => {
   await deleteConfig(db, site.organization_id, site.id, 'ga4_property_id')
   await deleteConfig(db, site.organization_id, site.id, 'google_analytics_measurement_id')
   await deleteConfig(db, site.organization_id, site.id, 'search_console_site_url')
+
+  try {
+    await removeTenantZarazAnalytics(env, db, site.id)
+  } catch (error) {
+    console.error('zaraz_sync_failed', { siteId: site.id, error })
+  }
 
   return jsonResponse({ success: true })
 })

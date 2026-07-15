@@ -1,0 +1,169 @@
+import { execute } from '~/server/db'
+import { getSiteDomains, type DomainEnv } from '~/server/utils/domains'
+
+export interface ZarazEnv extends DomainEnv {
+  CF_ZARAZ_API_TOKEN?: string
+}
+
+interface ZarazAction {
+  actionType: string
+  firingTriggers: string[]
+  enabled: boolean
+}
+
+interface ZarazTool {
+  component: string
+  name: string
+  enabled: boolean
+  settings: Record<string, unknown>
+  actions: Record<string, ZarazAction>
+}
+
+interface ZarazTrigger {
+  loadRules: Array<{ match: string; op: string; value: string }>
+}
+
+export interface ZarazConfig {
+  tools: Record<string, ZarazTool>
+  triggers: Record<string, ZarazTrigger | Record<string, unknown>>
+  variables?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+type CloudflareEnvelope<T> = {
+  success: boolean
+  result: T
+  errors?: Array<{ message?: string }>
+}
+
+const CF_API_BASE = 'https://api.cloudflare.com/client/v4'
+const LOCK_ID = 'zone'
+const LOCK_STALE_MS = 30_000
+const LOCK_RETRY_DELAYS_MS = [100, 250, 500, 1_000, 2_000]
+
+function requireZarazEnv(env: ZarazEnv) {
+  if (!env.CF_ZONE_ID) throw new Error('CF_ZONE_ID is required')
+  if (!env.CF_ZARAZ_API_TOKEN) throw new Error('CF_ZARAZ_API_TOKEN is required')
+}
+
+async function zarazRequest<T>(env: ZarazEnv, init: RequestInit = {}): Promise<T> {
+  requireZarazEnv(env)
+  const response = await fetch(`${CF_API_BASE}/zones/${env.CF_ZONE_ID}/settings/zaraz/config`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${env.CF_ZARAZ_API_TOKEN}`,
+      'Content-Type': 'application/json',
+      ...init.headers,
+    },
+  })
+  const payload = await response.json() as CloudflareEnvelope<T>
+  if (!response.ok || !payload.success) {
+    const message = payload.errors?.map(error => error.message).filter(Boolean).join('; ')
+    throw new Error(message || `Cloudflare Zaraz API request failed (${response.status})`)
+  }
+  return payload.result
+}
+
+export async function getZarazConfig(env: ZarazEnv): Promise<ZarazConfig> {
+  return await zarazRequest<ZarazConfig>(env)
+}
+
+export async function putZarazConfig(env: ZarazEnv, config: ZarazConfig): Promise<ZarazConfig> {
+  return await zarazRequest<ZarazConfig>(env, { method: 'PUT', body: JSON.stringify(config) })
+}
+
+async function acquireLock(db: D1Database): Promise<string> {
+  await execute(db, `INSERT OR IGNORE INTO zaraz_sync_lock (id, locked_at) VALUES (?, NULL)`, [LOCK_ID])
+  for (const delay of LOCK_RETRY_DELAYS_MS) {
+    const now = new Date()
+    const staleBefore = new Date(now.getTime() - LOCK_STALE_MS).toISOString()
+    const result = await execute(db, `
+      UPDATE zaraz_sync_lock
+      SET locked_at = ?
+      WHERE id = ? AND (locked_at IS NULL OR locked_at < ?)
+    `, [now.toISOString(), LOCK_ID, staleBefore])
+    if ((result.meta?.changes ?? 0) > 0) return now.toISOString()
+    await new Promise(resolve => setTimeout(resolve, delay))
+  }
+  throw new Error('Timed out waiting for Zaraz configuration sync lock')
+}
+
+async function releaseLock(db: D1Database, lockedAt: string): Promise<void> {
+  await execute(db, `UPDATE zaraz_sync_lock SET locked_at = NULL WHERE id = ? AND locked_at = ?`, [LOCK_ID, lockedAt])
+}
+
+function tenantKey(siteId: string): string {
+  return `ga-tenant-${siteId}`
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+export function tenantPageLocationRegex(hostnames: string[]): string {
+  return `^https://(${hostnames.map(escapeRegex).join('|')})/`
+}
+
+export async function syncTenantZarazAnalytics(
+  env: ZarazEnv,
+  db: D1Database,
+  input: { siteId: string; organizationId: string; measurementId: string | null | undefined },
+): Promise<void> {
+  if (!input.measurementId) {
+    console.info('zaraz_sync_skipped', { siteId: input.siteId, reason: 'missing_measurement_id' })
+    return
+  }
+  const hostnames = (await getSiteDomains(db, input.siteId))
+    .filter(domain => domain.status === 'active')
+    .map(domain => domain.domain.toLowerCase())
+    .sort()
+  if (hostnames.length === 0) {
+    console.info('zaraz_sync_skipped', { siteId: input.siteId, reason: 'no_active_hostnames' })
+    return
+  }
+
+  const lockedAt = await acquireLock(db)
+  try {
+    const config = await getZarazConfig(env)
+    const key = tenantKey(input.siteId)
+    config.triggers ||= {}
+    config.tools ||= {}
+    config.triggers[key] = {
+      loadRules: [{
+        match: '{{ client.pageLocation }}',
+        op: 'MATCH_REGEX',
+        value: tenantPageLocationRegex(hostnames),
+      }],
+    }
+    config.tools[key] = {
+      component: 'google-analytics_v4',
+      name: `Tenant GA4 (${input.siteId})`,
+      enabled: true,
+      settings: { tid: input.measurementId },
+      actions: {
+        AllPageviews: { actionType: 'pageview', firingTriggers: [key], enabled: true },
+      },
+    }
+    await putZarazConfig(env, config)
+  } finally {
+    await releaseLock(db, lockedAt)
+  }
+}
+
+export async function removeTenantZarazAnalytics(
+  env: ZarazEnv,
+  db: D1Database,
+  siteId: string,
+): Promise<void> {
+  const lockedAt = await acquireLock(db)
+  try {
+    const config = await getZarazConfig(env)
+    const key = tenantKey(siteId)
+    if (!config.tools?.[key] && !config.triggers?.[key]) return
+    Reflect.deleteProperty(config.tools, key)
+    Reflect.deleteProperty(config.triggers, key)
+    await putZarazConfig(env, config)
+  } finally {
+    await releaseLock(db, lockedAt)
+  }
+}

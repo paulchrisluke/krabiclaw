@@ -72,7 +72,6 @@ const themeStyles = computed(() => {
   }
 })
 
-const googleAnalyticsId = computed(() => config.value?.google_analytics_measurement_id || null)
 const googleSiteVerification = computed(() => config.value?.google_site_verification || null)
 
 const ogTitle = computed(() => config.value?.seo_title || config.value?.brand_name || null)
@@ -101,19 +100,8 @@ const siteRobots = computed(() => {
   return config.value?.robots || null
 })
 
-function isValidGoogleAnalyticsId(id) {
-  if (!id || typeof id !== 'string') return false
-  return /^G-[A-Z0-9]+$/.test(id) || /^UA-\d+-\d+$/.test(id)
-}
-
-const validGoogleAnalyticsId = computed(() => {
-  const id = googleAnalyticsId.value
-  return isValidGoogleAnalyticsId(id) ? id : null
-})
-
 useHead(() => {
   const meta = []
-  const script = []
 
   meta.push({ property: 'og:type', content: 'website' })
   meta.push({ name: 'twitter:card', content: 'summary_large_image' })
@@ -135,32 +123,9 @@ useHead(() => {
       content: googleSiteVerification.value
     })
   }
-  if (validGoogleAnalyticsId.value) {
-    script.push({
-      key: 'saya-google-consent-default',
-      innerHTML: `window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('consent', 'default', {ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'denied'});`
-    })
-    // Always load gtag.js once a valid ID exists — Consent Mode v2 (pushed by
-    // useCookieConsent) tells it whether storage/ads signals are actually
-    // granted, rather than withholding the script entirely.
-    const id = validGoogleAnalyticsId.value
-    script.push({
-      src: `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`,
-      async: true
-    })
-    script.push({
-      key: 'saya-google-analytics-init',
-      innerHTML: `window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', '${id}');`
-    })
-  }
-
   return {
     meta,
     link: [{ rel: 'canonical', href: canonicalUrl.value }],
-    script,
-    __dangerouslyDisableSanitizersByTagID: {
-      'saya-google-analytics-init': ['innerHTML']
-    }
   }
 })
 </script>
