@@ -140,17 +140,20 @@ test('expandDocumentsForSurfaces + recordMetadata isolate tenant_blog records by
 // ── Tenant site_id isolation in query filters ────────────────────────────────
 
 test('buildSearchFilters pins tenant_blog queries to the resolved site_id', () => {
-  const filters = buildSearchFilters('tenant_blog', 'all', 'site-ncls') as { $and: Array<Record<string, unknown>> }
-  const siteClause = filters.$and.find(clause => 'site_id' in clause) as { site_id: { $eq: string } }
-  assert.equal(siteClause.site_id.$eq, 'site-ncls')
+  // AI Search's filters field has no $and/$or grouping operator — multiple keys in one
+  // flat object are implicitly ANDed (see developers.cloudflare.com/ai-search/configuration/
+  // retrieval/filtering/). A previous $and-wrapped shape passed our own types via an unsafe
+  // cast but was rejected by AI Search at runtime ("AiSearchError: Invalid input") for every
+  // tenant_blog query, since that's the one surface that always has 2+ filter keys.
+  const filters = buildSearchFilters('tenant_blog', 'all', 'site-ncls') as { site_id: { $eq: string } }
+  assert.equal(filters.site_id.$eq, 'site-ncls')
 })
 
 test('buildSearchFilters excludes every tenant_blog document when siteId is missing', () => {
-  const filters = buildSearchFilters('tenant_blog', 'all', null) as { $and: Array<Record<string, unknown>> }
-  const siteClause = filters.$and.find(clause => 'site_id' in clause) as { site_id: { $eq: string } }
+  const filters = buildSearchFilters('tenant_blog', 'all', null) as { site_id: { $eq: string } }
   // An unscoped request must resolve to a sentinel no site can ever match, not skip the
   // predicate entirely — otherwise it would search every tenant's blog at once.
-  assert.equal(siteClause.site_id.$eq, '__no_site__')
+  assert.equal(filters.site_id.$eq, '__no_site__')
 })
 
 test('buildSearchFilters does not add a site_id clause for non-tenant surfaces', () => {
