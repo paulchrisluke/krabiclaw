@@ -1,0 +1,74 @@
+diff --git a/node_modules/@better-auth/cimd/dist/index.mjs b/node_modules/@better-auth/cimd/dist/index.mjs
+index f080b6f..6e69f8c 100644
+--- a/node_modules/@better-auth/cimd/dist/index.mjs
++++ b/node_modules/@better-auth/cimd/dist/index.mjs
+@@ -212,6 +212,7 @@ function validateCimdMetadata(fetchUrl, raw, originBoundFields) {
+ //#region src/client-store.ts
+ const FETCH_TIMEOUT_MS = 5e3;
+ const MAX_RESPONSE_BYTES = 5 * 1024;
++const MAX_REDIRECTS = 3;
+ /**
+ * Accepts `application/json` and the draft's `application/<AS-defined>+json`
+ * form. Parameters (charset, etc.) are allowed after the subtype.
+@@ -407,6 +408,40 @@ async function refreshMetadataDocumentClient(ctx, clientIdUrl, existing, cimdOpt
+ * Fetch a Client ID Metadata Document, validate it against the spec,
+ * and return the parsed metadata.
+ */
++async function fetchMetadataDocument(clientIdUrl, cimdOptions) {
++	let currentUrl = clientIdUrl;
++	for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
++		const urlError = validateClientIdUrl(currentUrl, { allowLoopback: cimdOptions.allowLoopback });
++		if (urlError) throw new APIError("BAD_REQUEST", {
++			error: "invalid_client",
++			error_description: `Metadata document redirect rejected: ${urlError}`
++		});
++		let response;
++		try {
++			response = await fetch(currentUrl, {
++				headers: { Accept: "application/json" },
++				redirect: "manual",
++				signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
++			});
++		} catch (err) {
++			throw new APIError("BAD_REQUEST", {
++				error: "invalid_client",
++				error_description: err instanceof DOMException && err.name === "TimeoutError" ? `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms` : "Failed to fetch metadata document (network error)"
++			});
++		}
++		if (response.status < 300 || response.status > 399) return response;
++		const location = response.headers.get("location");
++		if (!location) throw new APIError("BAD_REQUEST", {
++			error: "invalid_client",
++			error_description: "Metadata document redirect is missing a Location header"
++		});
++		if (redirects === MAX_REDIRECTS) throw new APIError("BAD_REQUEST", {
++			error: "invalid_client",
++			error_description: `Metadata document exceeded ${MAX_REDIRECTS} redirects`
++		});
++		currentUrl = new URL(location, currentUrl).href;
++	}
++}
+ async function fetchAndValidateMetadataDocument(ctx, clientIdUrl, cimdOptions) {
+ 	const urlError = validateClientIdUrl(clientIdUrl, { allowLoopback: cimdOptions.allowLoopback });
+ 	if (urlError) throw new APIError("BAD_REQUEST", {
+@@ -419,19 +454,7 @@ async function fetchAndValidateMetadataDocument(ctx, clientIdUrl, cimdOptions) {
+ 			error_description: "client_id URL is not permitted by the server's fetch policy"
+ 		});
+ 	}
+-	let response;
+-	try {
+-		response = await fetch(clientIdUrl, {
+-			headers: { Accept: "application/json" },
+-			redirect: "error",
+-			signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+-		});
+-	} catch (err) {
+-		throw new APIError("BAD_REQUEST", {
+-			error: "invalid_client",
+-			error_description: err instanceof DOMException && err.name === "TimeoutError" ? `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms` : "Failed to fetch metadata document (network error or redirect blocked)"
+-		});
+-	}
++	const response = await fetchMetadataDocument(clientIdUrl, cimdOptions);
+ 	if (!response.ok) throw new APIError("BAD_REQUEST", {
+ 		error: "invalid_client",
+ 		error_description: `Metadata document fetch returned HTTP ${response.status}`
