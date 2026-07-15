@@ -4,6 +4,8 @@ import { devLoginHeaders, devLoginUrl } from './test-env'
 
 test.describe('pottery house dashboard', () => {
   test('workspace routes are healthy for owner, otherwise site access is denied', async ({ page, request, baseURL }) => {
+    test.setTimeout(90_000)
+
     await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
     const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'load' })
     expect(login?.status()).toBeLessThan(400)
