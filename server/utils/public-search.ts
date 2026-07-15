@@ -182,13 +182,22 @@ function resultTypeFilter(type: SearchOptions['type']) {
   return type && type !== 'all' ? type : undefined
 }
 
-export function buildSearchFilters(surface: PlatformKnowledgeSurface, type?: PublicSearchType | 'all', siteId?: string | null) {
-  const clauses: Array<Record<string, { $eq: string }>> = [
-    { surface: { $eq: surface } },
-  ]
+// AI Search's `filters` field (typed as VectorizeVectorMetadataFilter — see
+// node_modules/@cloudflare/workers-types, which declares it as a flat
+// `{ [field]: value | { $eq/$gt/... } }` map) has no $and/$or grouping operator.
+// Per Cloudflare's docs (developers.cloudflare.com/ai-search/configuration/retrieval/filtering/),
+// multiple keys in the same object are implicitly ANDed — wrapping them in `{ $and: [...] }`
+// (as this used to) sends a shape the type itself doesn't declare, which AI Search rejects
+// at runtime with "AiSearchError: Invalid input". That previously broke every tenant_blog
+// query (surface + site_id is always 2 keys), while the single-key public/blog/docs surfaces
+// happened to never hit the broken branch.
+export function buildSearchFilters(surface: PlatformKnowledgeSurface, type?: PublicSearchType | 'all', siteId?: string | null): VectorizeVectorMetadataFilter {
+  const filters: VectorizeVectorMetadataFilter = {
+    surface: { $eq: surface },
+  }
 
   if (type && type !== 'all') {
-    clauses.push({ type: { $eq: type } })
+    filters.type = { $eq: type }
   }
 
   // tenant_blog is one shared corpus across every tenant site — the surface
@@ -197,10 +206,10 @@ export function buildSearchFilters(surface: PlatformKnowledgeSurface, type?: Pub
   // A missing siteId must exclude every tenant_blog document, not just skip
   // the predicate, or an unscoped request would search the entire corpus.
   if (surface === 'tenant_blog') {
-    clauses.push({ site_id: { $eq: siteId || '__no_site__' } })
+    filters.site_id = { $eq: siteId || '__no_site__' }
   }
 
-  return (clauses.length === 1 ? clauses[0] : { $and: clauses }) as unknown as VectorizeVectorMetadataFilter
+  return filters
 }
 
 function normalizeChunkPath(path: string, pathTemplate: string | null | undefined, surface: PlatformKnowledgeSurface, dashboardContext?: DashboardRouteContext) {
