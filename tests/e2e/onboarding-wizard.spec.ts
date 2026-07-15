@@ -11,9 +11,11 @@ async function loginFreshUser(page: Page, baseURL: string, userId: string) {
 
 // Drives the chat-style OnboardingWizard from "Start building" through the
 // manual (no Google Maps) path, since that path has no third-party dependency.
-// `skipVertical` must match the wizard's own skip-vertical prop at the call
-// site (true on the add-location flow) — the vertical step never renders
-// there, so waiting on it would hang.
+// This test's own `skipVertical` option must match whether the wizard itself
+// skips the vertical step for the mode under test (add-location mode always
+// skips it — see OnboardingWizard.vue's `skipVertical` computed, derived from
+// `mode="add-location"`) — the vertical step never renders there, so waiting
+// on it would hang.
 // The add-location flow (pages/dashboard/[orgSlug]/sites/[siteSlug]/new.vue) stays on /new and
 // shows a live preview of the new location instead of navigating away, so
 // every call site waits on the wizard's own "Done" message.

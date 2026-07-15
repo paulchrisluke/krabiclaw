@@ -22,13 +22,10 @@
       style="grid-template-columns: minmax(24rem, 45%) 1fr; grid-template-rows: minmax(0, 1fr)"
     >
       <OnboardingWizard
+        mode="add-location"
         :site-id="null"
         :existing-org-slug="orgSlug"
         :existing-site-slug="siteSlug"
-        setup-endpoint="/api/dashboard/locations/add"
-        setup-manual-endpoint="/api/dashboard/locations/add"
-        skip-vertical
-        is-adding-location
         @site-created="onLocationCreated"
       />
       <OnboardingPreviewPane
