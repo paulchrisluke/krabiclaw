@@ -66,6 +66,7 @@ Dashboard CMS pages remain supported. When changing editing behavior, prefer sha
 9. Any schema change must be checked against current server queries.
 10. Never define `d1_migrations` in `schema.ts`.
 11. After `db:generate`, wipe `.wrangler/state/v3/d1`, run `yarn schema:local`, then run the relevant seed command.
+12. `yarn migrate:check` must pass before applying migrations. Never rebuild a referenced parent table such as `media_assets` with `DROP TABLE`; D1 may execute foreign-key actions even when generated SQL includes `PRAGMA foreign_keys=OFF`, clearing references or cascading child rows. Use additive columns, indexes, or triggers. If a table rebuild is unavoidable, design and test an explicit relationship-preserving migration and recovery plan first.
 
 ### D1 does not support raw transactions
 

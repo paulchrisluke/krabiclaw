@@ -288,6 +288,13 @@
       "when": 1784090290046,
       "tag": "0047_free_molecule_man",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "6",
+      "when": 1784093134916,
+      "tag": "0048_media_assets_category_guard",
+      "breakpoints": true
     }
   ]
 }
