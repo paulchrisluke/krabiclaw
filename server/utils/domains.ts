@@ -319,8 +319,7 @@ async function createCloudflareHostname(
       ssl: {
         method: 'txt',
         type: 'dv',
-        bundle_method: 'ubiquitous',
-        certificate_authority: 'google'
+        bundle_method: 'ubiquitous'
       }
     })
   }, signal)
@@ -633,10 +632,14 @@ export async function createCustomDomainPair(
     }
 
     for (const entry of entries) {
+      // domainId is intentionally omitted: by this point the site_domains row for
+      // entry.id has either never been inserted or was just deleted by the cleanup
+      // above, and domain_id is a foreign key — referencing a nonexistent row here
+      // throws inside the catch block itself, silently swallowing the real error
+      // and leaving zero rows in site_domain_events.
       await logDomainEvent(db, {
         organizationId: opts.organizationId,
         siteId: opts.siteId,
-        domainId: entry.id,
         eventType: 'cloudflare_create_failed',
         actorType: 'cloudflare',
         message: `${entry.domain}: ${message}`,
