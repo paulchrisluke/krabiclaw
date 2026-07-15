@@ -32,7 +32,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
         properties: {
           name: { type: 'string' },
           subdomain: { type: 'string' },
-          vertical: { type: 'string', enum: ['restaurant', 'experience'] },
+          vertical: { type: 'string', enum: ['restaurant', 'experience', 'professional_service'] },
         },
         required: ['name', 'subdomain', 'vertical'],
         additionalProperties: true,

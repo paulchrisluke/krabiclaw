@@ -26,9 +26,12 @@ export default defineEventHandler(async (event) => {
   const name = typeof body?.name === 'string' ? body.name.trim() : ''
   if (!name) return jsonResponse({ error: 'name is required' }, { status: 400 })
 
-  const vertical: SiteVertical = typeof body?.vertical === 'string' && VALID_VERTICALS.includes(body.vertical as never)
-    ? (body.vertical as SiteVertical)
-    : 'restaurant'
+  if (typeof body?.vertical !== 'string' || !VALID_VERTICALS.includes(body.vertical as SiteVertical)) {
+    return jsonResponse({
+      error: `vertical is required and must be one of: ${VALID_VERTICALS.join(', ')}`,
+    }, { status: 400 })
+  }
+  const vertical = body.vertical as SiteVertical
 
   const details = body.details && typeof body.details === 'object' ? body.details : null
   const detailName = typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : name

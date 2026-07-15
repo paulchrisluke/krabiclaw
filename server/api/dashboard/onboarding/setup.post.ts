@@ -10,6 +10,7 @@ import { updateLocation } from '~/server/utils/location-management'
 import { setConfig } from '~/server/utils/site-config'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { execute, queryFirst } from '~/server/db'
+import type { SiteVertical } from '~/utils/vertical-copy'
 
 type SiteEnv = Parameters<typeof runSiteCreation>[0]
 
@@ -40,11 +41,20 @@ export default defineEventHandler(async (event) => {
   if (!mapsUrl && !placeId) return jsonResponse({ error: 'mapsUrl or placeId is required' }, { status: 400 })
   const details = body.details && typeof body.details === 'object' ? body.details : null
 
-  const vertical = typeof body?.vertical === 'string' && VALID_VERTICALS.includes(body.vertical as never)
-    ? (body.vertical as 'restaurant' | 'experience')
-    : 'restaurant'
-
   const previewOnly = body?.previewOnly === true
+
+  // previewOnly requests happen before the user has chosen a vertical (it only
+  // renders the Google Maps place preview card) — vertical becomes required
+  // once we're actually about to create a site below.
+  let vertical: SiteVertical = 'restaurant'
+  if (!previewOnly) {
+    if (typeof body?.vertical !== 'string' || !VALID_VERTICALS.includes(body.vertical as SiteVertical)) {
+      return jsonResponse({
+        error: `vertical is required and must be one of: ${VALID_VERTICALS.join(', ')}`,
+      }, { status: 400 })
+    }
+    vertical = body.vertical as SiteVertical
+  }
 
   let place
   try {

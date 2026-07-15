@@ -2,6 +2,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryFirst } from '~/server/db'
+import { normalizeVertical } from '~/utils/vertical-copy'
 
 const EMPTY_CHECKLIST = {
   success: true,
@@ -112,15 +113,22 @@ export default defineEventHandler(async (event) => {
       SELECT COUNT(*) as c FROM posts WHERE site_id = ? AND status = 'published' AND source != 'template'
     `, [siteId])
 
+    // sites.vertical stores 'service' for professional-service tenants (see
+    // sites_vertical_check + utils/template-registry.ts); normalize to the
+    // canonical 'professional_service' app-level value here so every caller
+    // of this endpoint (wizard, checklist UI, useOnboardingPrompts) can do a
+    // simple string comparison without re-deriving the storage alias.
+    const normalizedVertical = normalizeVertical(vertical?.vertical)
+
     return jsonResponse({
       success: true,
-      vertical: vertical?.vertical ?? 'restaurant',
+      vertical: normalizedVertical,
       brandName: vertical?.brand_name ?? brandName,
       city: location?.city ?? null,
       items: {
         business_info: (businessInfo?.c ?? 0) > 0,
         hero_image: heroIsReal,
-        menu_or_experiences: vertical?.vertical === 'experience'
+        menu_or_experiences: normalizedVertical === 'experience'
           ? (experiences?.c ?? 0) > 0
           : (menuItems?.c ?? 0) > 0,
         story: (story?.c ?? 0) > 0,

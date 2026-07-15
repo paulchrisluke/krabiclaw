@@ -697,7 +697,7 @@ registry.th.professional_service = registry.en.professional_service!
 // `sites.vertical` stores 'service' for Blawby/professional-service tenants (see
 // sites_vertical_check + utils/template-registry.ts); 'professional_service' is the
 // copy-registry key, so callers passing either value must resolve to the same copy.
-function normalizeVertical(vertical: string | null | undefined): string {
+export function normalizeVertical(vertical: string | null | undefined): string {
   const v = String(vertical ?? "restaurant")
   return v === "service" ? "professional_service" : v
 }
