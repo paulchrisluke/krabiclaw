@@ -22,8 +22,12 @@ function fakeEvent(env: Record<string, unknown>) {
 }
 
 const wasmBytes = await readFile(path.join(repoRoot, 'node_modules/@resvg/resvg-wasm/index_bg.wasm'))
+const yogaBytes = await readFile(path.join(repoRoot, 'node_modules/satori/yoga.wasm'))
 const deps = {
-  render: (payload: OgImageRenderPayload) => renderOgImagePng(payload, { wasmModule: wasmBytes }),
+  render: (payload: OgImageRenderPayload) => renderOgImagePng(payload, {
+    wasmModule: wasmBytes,
+    yogaModule: yogaBytes,
+  }),
 }
 
 class FakeKv {
