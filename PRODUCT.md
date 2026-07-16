@@ -29,7 +29,7 @@ Internal ChatGPT app for KrabiClaw operators only.
 - MCP endpoint at `/api/mcp/platform` (`server/api/mcp/platform.post.ts`)
 - Scope: `platform_admin`
 - Auth requires global Better Auth `user.role = 'admin'`
-- Tools limited to platform blog/docs operations for `krabiclaw.com/blog` and `krabiclaw.com/docs`
+- Tools limited to platform blog/docs operations for `krabiclaw.com/blog` and `krabiclaw.com/docs`, plus read-only categorized release data from merged GitHub pull requests
 
 The dashboard is still the home for billing, org settings, unified inbox (contact, reservations, bookings, reviews), and analytics. MCP and dashboard operate on the same D1 backend with no forked business logic.
 
