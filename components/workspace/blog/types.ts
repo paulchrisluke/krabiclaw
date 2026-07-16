@@ -27,6 +27,7 @@ export interface BlogPost {
   seo_title?: string | null
   social_image_asset_id?: string | null
   social_image?: { public_url?: string | null; thumbnail_url?: string | null } | null
+  featured_image?: { public_url?: string | null; kind?: string | null } | null
   edit_url?: string | null
   content_document?: {
     document: { id: string; updated_at: string; draft_revision_id: string | null; published_revision_id: string | null }
@@ -35,6 +36,10 @@ export interface BlogPost {
   editor_template?: 'saya' | 'blawby' | 'platform'
   editor_theme_tokens?: Record<string, unknown>
   author_name?: string | null
+  author_image?: string | null
+  created_at?: string | null
+  editor_site_name?: string | null
+  editor_brand_color?: string | null
   public_path?: string | null
   components?: BlogComponent[]
 }

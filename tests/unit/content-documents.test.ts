@@ -14,6 +14,7 @@ type Store = {
   contentRevisions: Row[]
   blogPosts: Row[]
   platformDocs: Row[]
+  beforeBatch?: (() => void) | null
 }
 
 function createStore(): Store {
@@ -46,6 +47,12 @@ async function execute(db: Store, query: string, params: unknown[] = []) {
   }
 
   if (query.startsWith('INSERT INTO content_blocks')) {
+    if (query.includes('__content_document_concurrency_guard__')) {
+      const [, , , , documentId, expectedUpdatedAt] = params
+      const current = db.contentDocuments.find(row => row.id === documentId && row.updated_at === expectedUpdatedAt)
+      if (!current) throw new Error('CHECK constraint failed: content_blocks_type_check')
+      return { meta: { changes: 0 } }
+    }
     const [id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at] = params
     db.contentBlocks.push({ id, document_id, parent_block_id, type, position: Number(position), level, data_json, created_at, updated_at })
     return { meta: { changes: 1 } }
@@ -110,6 +117,9 @@ async function execute(db: Store, query: string, params: unknown[] = []) {
 }
 
 async function executeBatch(db: Store, queries: Array<{ query: string; params: unknown[] }>) {
+  const beforeBatch = db.beforeBatch
+  db.beforeBatch = null
+  beforeBatch?.()
   const results: Array<{ meta: { changes: number } }> = []
   for (const item of queries) results.push(await execute(db, item.query, item.params))
   return results
@@ -162,6 +172,8 @@ const {
   publishContentDocumentRevision,
   renderContentPreview,
   replaceContentBlock,
+  replaceContentDocumentBlocks,
+  replacePublishedContentDocumentBlocks,
   syncContentDocumentFromMarkdown,
 } = await import('../../server/utils/content-documents.ts')
 
@@ -272,4 +284,51 @@ test('legacy structured backfill replaces placeholders in place and reports dupl
   assert.equal(result.blocks.some(block => String(block.data.markdown || '').includes('{{component type="how_to"}}')), true)
   assert.ok(result.findings.some(finding => finding.action === 'unmatched_placeholder'))
   assert.ok(result.findings.some(finding => finding.action === 'duplicate'))
+})
+
+test('whole-document replacement rejects a stale token after every prior block id was replaced', async () => {
+  const db = createStore()
+  const d1 = db as unknown as D1Database
+  const initial = await syncContentDocumentFromMarkdown(d1, {
+    ownerType: 'platform_blog', ownerId: 'post-race', bodyMarkdown: 'Original',
+  })
+  const token = initial.document.updated_at
+
+  db.beforeBatch = () => {
+    const document = db.contentDocuments[0]!
+    document.updated_at = 'newer-document-token'
+    db.contentBlocks = [{
+      id: 'replacement-id', document_id: document.id, parent_block_id: null,
+      type: 'markdown', position: 0, level: null, data_json: JSON.stringify({ markdown: 'Concurrent replacement' }),
+      created_at: '', updated_at: 'newer-block-token',
+    }]
+  }
+
+  await assert.rejects(
+    () => replaceContentDocumentBlocks(d1, 'platform_blog', 'post-race', [{ type: 'markdown', data: { markdown: 'Stale writer' } }], { expected_document_updated_at: token }),
+    (error: unknown) => typeof error === 'object' && error !== null && (error as { statusCode?: number }).statusCode === 409,
+  )
+  assert.equal(db.contentDocuments[0]?.updated_at, 'newer-document-token')
+  assert.equal(db.contentBlocks.some(block => String(block.data_json).includes('Stale writer')), false)
+})
+
+test('published-snapshot backfill preserves a distinct unpublished draft', async () => {
+  const db = createStore()
+  const d1 = db as unknown as D1Database
+  const published = await syncContentDocumentFromMarkdown(d1, {
+    ownerType: 'platform_blog', ownerId: 'post-published', bodyMarkdown: 'Published prose', publish: true,
+  })
+  await appendContentBlock(d1, published.document.id, { type: 'markdown', data: { markdown: 'Unpublished draft addition' } })
+  const document = db.contentDocuments[0]!
+  const draftRevisionId = document.draft_revision_id
+  const liveDraftIds = db.contentBlocks.map(block => block.id)
+
+  await replacePublishedContentDocumentBlocks(d1, 'platform_blog', 'post-published', [
+    { type: 'markdown', data: { markdown: 'Published prose' } },
+    { type: 'faq', data: { items: [{ question: 'Q', answer: 'A' }] } },
+  ], { expected_document_updated_at: String(document.updated_at) })
+
+  assert.equal(document.draft_revision_id, draftRevisionId)
+  assert.notEqual(document.published_revision_id, published.revision_id)
+  assert.deepEqual(db.contentBlocks.map(block => block.id), liveDraftIds)
 })

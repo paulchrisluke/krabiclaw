@@ -250,9 +250,6 @@ const breadcrumbs = computed(() => [
   ...(post.value ? [{ name: post.value.title, url: postPath.value }] : []),
 ])
 
-const seoTitle = computed(() => post.value?.seo_title?.trim() || post.value?.title || 'Blog')
-const seoDescription = computed(() => post.value?.seo_description || truncateForSeo(post.value?.excerpt ?? 'Business tips and insights from KrabiClaw.', 160))
-
 // useSocialMetadata directly (not usePlatformPageSeo) — this page already emits its own
 // complete schema.org @graph via useContentPageSchema below; usePlatformPageSeo would add
 // a second WebSite/WebPage graph with the same @id values, so only the OG/tag layer is
@@ -260,18 +257,24 @@ const seoDescription = computed(() => post.value?.seo_description || truncateFor
 const runtimeConfig = useRuntimeConfig()
 const requestURL = useRequestURL()
 const platformOrigin = computed(() => runtimeConfig.public.siteUrl || requestURL.origin)
+const resolvedSeo = computed(() => resolveBlogSeo({
+  title: post.value?.title || 'Blog', seoTitle: post.value?.seo_title, excerpt: post.value?.excerpt,
+  seoDescription: post.value?.seo_description, slug: post.value?.slug || '', canonicalUrl: post.value?.canonical_url,
+  baseUrl: platformOrigin.value, publicPath: postPath.value, siteName: 'KrabiClaw',
+  robots: post.value?.visibility === 'unlisted' ? 'noindex,follow' : post.value?.robots,
+}))
 const { canonicalUrl } = useSocialMetadata(() => ({
   template: 'platform' as const,
   pageType: 'article' as const,
-  title: seoTitle.value,
-  description: seoDescription.value,
-  canonicalUrl: resolveSeoUrl(post.value ? (post.value.canonical_url || postPath.value) : '/blog', platformOrigin.value),
+  title: resolvedSeo.value.title,
+  description: resolvedSeo.value.description,
+  canonicalUrl: resolvedSeo.value.canonicalUrl,
   brand: { siteName: 'KrabiClaw', logoUrl: resolveSeoUrl('/krabi-claw-logo.png', platformOrigin.value), primaryColor: '#1e1b4b', secondaryColor: '#4338ca' },
   label: post.value?.category || null,
   author: post.value?.author_name || null,
   publishedAt: post.value?.published_at || null,
   heroImage: postMedia.value.thumb ? { url: postMedia.value.thumb } : null,
-  robots: post.value?.visibility === 'unlisted' ? 'noindex,follow' : post.value?.robots?.trim() || null,
+  robots: resolvedSeo.value.robots,
   indexable: post.value?.visibility !== 'unlisted' && (!post.value?.robots || !/noindex/i.test(post.value.robots)),
 }), platformOrigin)
 
@@ -287,7 +290,7 @@ useContentPageSchema(computed(() => {
     articleType: 'BlogPosting' as const,
     url: canonicalUrl.value,
     title: post.value.title,
-    description: seoDescription.value,
+    description: resolvedSeo.value.description,
     imageUrl: postMedia.value.url || undefined,
     imageWidth: post.value.featured_image?.width ?? undefined,
     imageHeight: post.value.featured_image?.height ?? undefined,

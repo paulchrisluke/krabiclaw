@@ -36,7 +36,10 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       required: ['post_id'],
       outputSchema: {
         type: 'object',
-        properties: { post: blogPostObject },
+        properties: {
+          post: blogPostObject,
+          expected_document_updated_at: { type: ['string', 'null'], description: 'Concurrency token required when update_blog_post replaces content_blocks.' },
+        },
         required: ['post'],
       },
     }),
@@ -78,6 +81,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         category: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.' },
         content_blocks: { type: 'array', description: 'Canonical ordered article blocks. Sending this replaces the complete draft block snapshot.', items: blogContentBlockSchema },
+        expected_document_updated_at: { type: 'string', description: 'Required with content_blocks. Use the token returned by get_blog_post; stale tokens are rejected with a conflict.' },
         seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         seo_description: { type: 'string' },
         canonical_url: { type: 'string' },

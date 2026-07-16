@@ -1456,7 +1456,7 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
     db,
     `SELECT
        p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.tags_json, p.status, p.visibility, p.scheduled_for,
-       p.first_published_at, p.slug_manually_overridden, p.social_image_asset_id, u.name AS author_name,
+       p.first_published_at, p.slug_manually_overridden, p.social_image_asset_id, u.name AS author_name, u.image AS author_image,
        p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
        p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
        p.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
@@ -1474,8 +1474,9 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
   const slug = typeof post.slug === 'string' ? post.slug : ''
   const publicPath = siteId && slug ? await resolveTenantBlogPostPath(db, siteId, slug) : null
   const context = await resolveTenantContext(db, siteId)
-  const editorTheme = siteId ? await queryFirst<{ theme: string | null; theme_id: string | null; vertical: string | null; tokens_json: string | null } | null>(db, `
-    SELECT s.theme, s.theme_id, s.vertical, t.tokens_json
+  const editorTheme = siteId ? await queryFirst<{ theme: string | null; theme_id: string | null; vertical: string | null; brand_name: string | null; brand_color: string | null; tokens_json: string | null } | null>(db, `
+    SELECT s.theme, s.theme_id, s.vertical, s.brand_name, t.tokens_json,
+           (SELECT sc.value FROM site_config sc WHERE sc.site_id = s.id AND sc.key = 'brand_color' LIMIT 1) AS brand_color
       FROM sites s
       LEFT JOIN site_theme_tokens t ON t.site_id = s.id AND t.status = 'active'
      WHERE s.id = ? LIMIT 1
@@ -1494,6 +1495,8 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
     content_document: contentDocument,
     editor_template: siteId ? resolvePublicTemplate({ theme: editorTheme?.theme, themeId: editorTheme?.theme_id, vertical: editorTheme?.vertical }).slug : 'platform',
     editor_theme_tokens: editorThemeTokens,
+    editor_site_name: siteId ? editorTheme?.brand_name || 'Our Site' : 'KrabiClaw',
+    editor_brand_color: editorTheme?.brand_color ?? null,
     social_image: socialImage,
   }
 }
@@ -1704,6 +1707,11 @@ export async function updatePlatformBlogPost(
   })
   const requestedSlug = input.slug !== undefined || input.reset_slug_override ? slugMutation.slug : null
   if (requestedSlug && requestedSlug !== current?.slug) {
+    const postCollision = await queryFirst<{ id: string } | null>(db, `
+      SELECT id FROM blog_posts
+       WHERE slug = ? AND id != ? AND ${siteId ? 'site_id = ?' : 'site_id IS NULL'} LIMIT 1
+    `, siteId ? [requestedSlug, postId, siteId] : [requestedSlug, postId])
+    if (postCollision) badRequest('Slug already in use')
     const redirectCollision = await queryFirst<{ id: string } | null>(db, `
       SELECT id FROM blog_post_redirects
        WHERE old_slug = ? AND ${siteId ? 'site_id = ?' : 'site_id IS NULL'} LIMIT 1

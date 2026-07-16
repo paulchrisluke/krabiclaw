@@ -76,9 +76,16 @@ CREATE TABLE `__new_blog_posts` (
 	CONSTRAINT "blog_posts_category_check" CHECK(site_id IS NOT NULL OR category IS NOT NULL)
 );
 --> statement-breakpoint
-INSERT INTO `__new_blog_posts`("id", "organization_id", "site_id", "title", "slug", "body", "excerpt", "category", "tags_json", "nav_section", "nav_title", "nav_order", "nav_section_order", "hide_from_nav", "featured_order", "status", "visibility", "author_id", "featured_image_asset_id", "social_image_asset_id", "published_at", "first_published_at", "scheduled_for", "scheduled_revision_id", "slug_manually_overridden", "created_at", "updated_at", "seo_title", "seo_description", "seo_keywords", "canonical_url", "robots") SELECT "id", "organization_id", "site_id", "title", "slug", "body", "excerpt", "category", "tags_json", "nav_section", "nav_title", "nav_order", "nav_section_order", "hide_from_nav", "featured_order", "status", 'public', "author_id", "featured_image_asset_id", NULL, "published_at", "published_at", "scheduled_for", NULL, 0, "created_at", "updated_at", "seo_title", "seo_description", "seo_keywords", "canonical_url", "robots" FROM `blog_posts`;--> statement-breakpoint
+INSERT INTO `__new_blog_posts`("id", "organization_id", "site_id", "title", "slug", "body", "excerpt", "category", "tags_json", "nav_section", "nav_title", "nav_order", "nav_section_order", "hide_from_nav", "featured_order", "status", "visibility", "author_id", "featured_image_asset_id", "social_image_asset_id", "published_at", "first_published_at", "scheduled_for", "scheduled_revision_id", "slug_manually_overridden", "created_at", "updated_at", "seo_title", "seo_description", "seo_keywords", "canonical_url", "robots") SELECT "id", "organization_id", "site_id", "title", "slug", "body", "excerpt", "category", "tags_json", "nav_section", "nav_title", "nav_order", "nav_section_order", "hide_from_nav", "featured_order", "status", 'public', "author_id", "featured_image_asset_id", NULL, "published_at", "published_at", "scheduled_for", CASE WHEN "status" = 'scheduled' THEN (SELECT r."id" FROM "content_documents" d JOIN "content_revisions" r ON r."id" = d."draft_revision_id" AND r."document_id" = d."id" WHERE d."owner_id" = "blog_posts"."id" AND d."owner_type" = CASE WHEN "blog_posts"."site_id" IS NULL THEN 'platform_blog' ELSE 'tenant_blog' END ORDER BY d."updated_at" DESC LIMIT 1) ELSE NULL END, 0, "created_at", "updated_at", "seo_title", "seo_description", "seo_keywords", "canonical_url", "robots" FROM `blog_posts`;--> statement-breakpoint
 DROP TABLE `blog_posts`;--> statement-breakpoint
 ALTER TABLE `__new_blog_posts` RENAME TO `blog_posts`;--> statement-breakpoint
 CREATE UNIQUE INDEX `blog_posts_platform_slug_idx` ON `blog_posts` (`slug`) WHERE site_id IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX `blog_posts_site_slug_idx` ON `blog_posts` (`site_id`,`slug`) WHERE site_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX `blog_posts_org_site_idx` ON `blog_posts` (`organization_id`,`site_id`);
+--> statement-breakpoint
+-- Abort instead of silently stranding a scheduled row when no canonical draft
+-- revision could be pinned. The duplicate primary key is attempted only for
+-- invalid rows, making the migration itself the final validation report.
+INSERT INTO `blog_posts` ("id", "title", "slug", "body", "status", "visibility")
+SELECT "id", "title", "slug", "body", "status", "visibility" FROM `blog_posts`
+ WHERE "status" = 'scheduled' AND "scheduled_revision_id" IS NULL;

@@ -138,6 +138,7 @@ export const locationMutationSummaryObject = {
     slug: { type: 'string' },
     changed_fields: { type: 'array', items: { type: 'string' } },
     updated_at: { type: 'string' },
+    expected_document_updated_at: { type: ['string', 'null'], description: 'Current content-document concurrency token for the next complete block replacement.' },
     context: { type: 'object' },
   },
   required: ['ok', 'entity', 'id'],
@@ -331,6 +332,23 @@ export const blogPostObject = {
     components: {
       type: 'array',
       items: blogComponentInputSchema,
+    },
+    content_document: {
+      type: ['object', 'null'],
+      properties: {
+        document: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            updated_at: { type: 'string', description: 'Pass this value as expected_document_updated_at when replacing content_blocks.' },
+            draft_revision_id: { type: ['string', 'null'] },
+            published_revision_id: { type: ['string', 'null'] },
+          },
+          required: ['id', 'updated_at'],
+        },
+        blocks: { type: 'array', items: { type: 'object' } },
+      },
+      required: ['document', 'blocks'],
     },
     ...BLOG_NAV_FIELDS_SCHEMA,
     seo_title: { type: ['string', 'null'] },

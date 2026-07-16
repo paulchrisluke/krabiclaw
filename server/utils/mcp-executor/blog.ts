@@ -31,6 +31,9 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         );
         return {
           post: post ? attachViewUrlToRecord(post, site, {}, site.env) : null,
+          expected_document_updated_at: typeof post?.content_document === 'object' && post.content_document
+            ? (post.content_document as { document?: { updated_at?: unknown } }).document?.updated_at ?? null
+            : null,
         };
       }
     case "create_blog_post": {
@@ -51,6 +54,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
           edit_url: editUrl(hydratedBlogPost.admin_edit_url, site.env),
           public_url: hydratedBlogPost.public_url,
           updated_at: result.post.updated_at,
+          expected_document_updated_at: (result.post.content_document as { document?: { updated_at?: unknown } } | null | undefined)?.document?.updated_at ?? null,
           context: createBlogContext,
         },
         `Created blog post "${result.post.title ?? result.post.id}". Please review the draft at edit_url before publishing.`,
@@ -76,6 +80,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
           public_url: hydratedUpdatedBlogPost.public_url,
           changed_fields: Object.keys(omit(args, ["post_id"])),
           updated_at: result.post.updated_at,
+          expected_document_updated_at: (result.post.content_document as { document?: { updated_at?: unknown } } | null | undefined)?.document?.updated_at ?? null,
           context: updateBlogContext,
         },
         `Updated blog post "${result.post.title ?? result.post.id}". Please review the draft at edit_url before publishing.`,

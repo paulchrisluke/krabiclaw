@@ -104,8 +104,14 @@ const hasUpdatedDate = computed(() => Boolean(post.value.updated_at && post.valu
 const relatedPosts = computed(() => data.value.posts.filter(item => item.slug !== slug).slice(0, 3))
 const { categories } = useTenantBlogNav(computed(() => data.value.posts))
 const browseTopicsOpen = ref(false)
-const seoTitle = computed(() => post.value.seo_title?.trim() || post.value.title)
-const seoDescription = computed(() => post.value.seo_description || post.value.excerpt || '')
+const requestURL = useRequestURL()
+const articlePath = computed(() => `/article/${post.value.slug}`)
+const resolvedSeo = computed(() => resolveBlogSeo({
+  title: post.value.title, seoTitle: post.value.seo_title, excerpt: post.value.excerpt,
+  seoDescription: post.value.seo_description, slug: post.value.slug, canonicalUrl: post.value.canonical_url,
+  baseUrl: requestURL.origin, publicPath: articlePath.value, siteName: identity.value.brand_name || 'Professional services',
+  robots: post.value.visibility === 'unlisted' ? 'noindex,follow' : post.value.robots,
+}))
 const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
 
 function optionalString(value: unknown) {
@@ -119,9 +125,9 @@ function trackConsultation() {
 }
 
 const { canonicalUrl } = useTenantSocialMetadata(() => ({
-  path: post.value.canonical_url || `/article/${post.value.slug}`,
-  title: seoTitle.value,
-  description: seoDescription.value,
+  path: resolvedSeo.value.canonicalUrl,
+  title: resolvedSeo.value.title,
+  description: resolvedSeo.value.description,
   pageType: 'article',
   label: 'Article',
   author: post.value.author_name || null,
@@ -138,7 +144,7 @@ const { canonicalUrl } = useTenantSocialMetadata(() => ({
         height: post.value.social_image?.height || post.value.featured_image?.height || undefined,
       }
     : null,
-  robots: post.value.visibility === 'unlisted' ? 'noindex,follow' : post.value.robots || null,
+  robots: resolvedSeo.value.robots,
 }))
 
 const blogUrl = useSeoUrl(() => '/blog')
@@ -149,7 +155,7 @@ useProfessionalServiceSchema(() => ({
   org: org.value,
   pageUrl: canonicalUrl.value,
   pageTitle: post.value.title,
-  pageDescription: seoDescription.value,
+  pageDescription: resolvedSeo.value.description,
   imageUrl: post.value.social_image?.public_url || post.value.featured_image?.public_url || null,
   imageWidth: post.value.social_image?.width || post.value.featured_image?.width || null,
   imageHeight: post.value.social_image?.height || post.value.featured_image?.height || null,

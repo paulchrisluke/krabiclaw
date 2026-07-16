@@ -223,18 +223,23 @@ const postMedia = computed(() => resolveMedia({
 }))
 
 const postPath = computed(() => `/blog/${post.value?.slug ?? ''}`)
-const seoTitle = computed(() => post.value?.seo_title?.trim() || post.value?.title || 'Blog')
-const seoDescription = computed(() => post.value?.seo_description || post.value?.excerpt || `A post from ${siteName.value}.`)
+const requestURL = useRequestURL()
+const resolvedSeo = computed(() => resolveBlogSeo({
+  title: post.value?.title || 'Blog', seoTitle: post.value?.seo_title, excerpt: post.value?.excerpt,
+  seoDescription: post.value?.seo_description, slug: post.value?.slug || '', canonicalUrl: post.value?.canonical_url,
+  baseUrl: requestURL.origin, publicPath: postPath.value, siteName: siteName.value,
+  robots: post.value?.visibility === 'unlisted' ? 'noindex,follow' : post.value?.robots,
+}))
 
 const { canonicalUrl } = useTenantSocialMetadata(() => ({
-  path: post.value ? (post.value.canonical_url || postPath.value) : '/blog',
-  title: seoTitle.value,
-  description: seoDescription.value,
+  path: resolvedSeo.value.canonicalUrl,
+  title: resolvedSeo.value.title,
+  description: resolvedSeo.value.description,
   pageType: 'article',
   label: post.value?.category || null,
   author: authorName.value,
   publishedAt: post.value?.published_at || null,
-  robots: post.value?.visibility === 'unlisted' ? 'noindex,follow' : post.value?.robots || null,
+  robots: resolvedSeo.value.robots,
   brand: {
     siteName: siteName.value,
     logoUrl: config.value?.logo_url || null,
@@ -256,7 +261,7 @@ useContentPageSchema(computed(() => {
     articleType: 'BlogPosting' as const,
     url: canonicalUrl.value,
     title: post.value.title,
-    description: seoDescription.value,
+    description: resolvedSeo.value.description,
     imageUrl: postMedia.value.url || undefined,
     imageWidth: post.value.featured_image?.width ?? undefined,
     imageHeight: post.value.featured_image?.height ?? undefined,

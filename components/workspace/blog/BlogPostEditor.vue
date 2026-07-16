@@ -16,6 +16,15 @@
       <BlogArticleView
         v-model:title="form.title"
         :excerpt="form.excerpt || resolvedExcerpt"
+        :category="form.category || null"
+        :published-at="post?.published_at || post?.created_at || null"
+        :updated-at="post?.updated_at || null"
+        :author-name="resolvedAuthorName"
+        :author-image="post?.author_image || null"
+        :site-name="resolvedSiteName"
+        :media-url="resolvedSocialImageUrl"
+        :media-kind="resolvedMediaKind"
+        :read-minutes="readMinutes"
         :blocks="blocks"
         :template="templateName"
         editable
@@ -136,7 +145,18 @@ const publishTiming = ref<'Now' | 'Scheduled'>('Now')
 const templateName = computed(() => post.value?.editor_template || (route.path.includes('/admin/') ? 'platform' : 'saya'))
 const editorCanvasStyle = computed(() => {
   const tokens = post.value?.editor_theme_tokens ?? {}
-  if (templateName.value !== 'blawby') return {}
+  if (templateName.value === 'saya') {
+    const primary = String(tokens.primary || post.value?.editor_brand_color || '#8F1D21')
+    const background = String(tokens.bg || '#FFFFFF')
+    const foreground = String(tokens.ink || '#18181B')
+    return {
+      '--editor-canvas': background, '--editor-ink': foreground, '--brand-color': primary,
+      '--saya-primary': primary, '--saya-bg': background, '--saya-bg-alt': String(tokens.surface || '#FAFAFA'),
+      '--saya-fg': foreground, '--saya-fg-muted': String(tokens.muted || '#52525B'), '--saya-border': String(tokens.border || '#E4E4E7'),
+      '--ui-primary': primary, '--ui-bg': background, '--ui-bg-elevated': String(tokens.surface || '#FAFAFA'), '--ui-text': foreground,
+    }
+  }
+  if (templateName.value !== 'blawby') return { '--editor-canvas': '#fff', '--editor-ink': '#1f2937' }
   return {
     '--editor-canvas': String(tokens.bg || '#fbfaf7'), '--editor-ink': String(tokens.ink || '#162033'),
     '--blawby-bg': String(tokens.bg || '#fbfaf7'), '--blawby-surface': String(tokens.surface || '#fff'),
@@ -147,12 +167,25 @@ const editorCanvasStyle = computed(() => {
 const statusLabel = computed(() => post.value?.status === 'scheduled' ? 'Scheduled' : post.value?.published_at ? 'Published' : 'Draft')
 const generatedSlug = computed(() => normalizeBlogSlug(form.title))
 const resolvedExcerpt = computed(() => generatedExcerpt(blocks.value))
+const resolvedSiteName = computed(() => post.value?.editor_site_name || (props.siteId ? 'Our Site' : 'KrabiClaw'))
+const resolvedAuthorName = computed(() => post.value?.author_name?.trim() || resolvedSiteName.value)
+const readMinutes = computed(() => Math.max(1, Math.ceil(serializeBody().trim().split(/\s+/).filter(Boolean).length / 200)))
 const publicPath = computed(() => resolveBlogPublicPath({ scope: props.siteId ? 'tenant' : 'platform', template: templateName.value, slug: slugResetRequested.value ? generatedSlug.value : form.slug || generatedSlug.value, category: form.category }))
-const resolvedSeo = computed(() => resolveBlogSeo({ title: form.title, seoTitle: form.seo_title, excerpt: form.excerpt || resolvedExcerpt.value, seoDescription: form.seo_description, slug: form.slug || generatedSlug.value, canonicalUrl: form.canonical_url, baseUrl: windowOrigin(), pathPrefix: publicPath.value.replace(/\/[^/]+$/, ''), robots: form.robots }))
+const resolvedSeo = computed(() => resolveBlogSeo({ title: form.title, seoTitle: form.seo_title, excerpt: form.excerpt || resolvedExcerpt.value, seoDescription: form.seo_description, slug: form.slug || generatedSlug.value, canonicalUrl: form.canonical_url, baseUrl: windowOrigin(), publicPath: publicPath.value, siteName: resolvedSiteName.value, robots: form.robots }))
 const resolvedSocialImageUrl = computed<string | null>(() => {
   const block = blocks.value.find(item => item.type === 'image')
-  const candidate = post.value?.social_image?.thumbnail_url || post.value?.social_image?.public_url || block?.data.thumbnail_url || block?.data.public_url
+  const candidate = post.value?.social_image?.thumbnail_url || post.value?.social_image?.public_url || block?.data.thumbnail_url || block?.data.public_url || post.value?.featured_image?.public_url
   return typeof candidate === 'string' && candidate ? candidate : null
+})
+const resolvedMediaKind = computed(() => {
+  const block = blocks.value.find(item => item.type === 'image')
+  const hasImageOverride = Boolean(
+    post.value?.social_image?.thumbnail_url
+    || post.value?.social_image?.public_url
+    || block?.data.thumbnail_url
+    || block?.data.public_url,
+  )
+  return !hasImageOverride && post.value?.featured_image?.kind === 'video' ? 'video' : 'image'
 })
 const saveLabel = computed(() => {
   if (saveState.value === 'saving') return 'Saving…'

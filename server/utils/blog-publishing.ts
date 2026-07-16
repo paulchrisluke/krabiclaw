@@ -3,6 +3,14 @@ import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import type { ContentBlockSnapshot } from '~/server/utils/content-documents'
 
 export async function publishDueBlogPosts(db: D1Database, now = new Date()) {
+  const revisionIssues = await queryAll<{ id: string }>(db, `
+    SELECT p.id
+      FROM blog_posts p
+      LEFT JOIN content_documents d ON d.owner_id = p.id AND d.owner_type IN ('platform_blog', 'tenant_blog')
+      LEFT JOIN content_revisions r ON r.id = p.scheduled_revision_id AND r.document_id = d.id
+     WHERE p.status = 'scheduled' AND (p.scheduled_revision_id IS NULL OR r.id IS NULL)
+     ORDER BY p.scheduled_for, p.id
+  `)
   const due = await queryAll<{ id: string; document_id: string; scheduled_revision_id: string; body_markdown: string }>(db, `
     SELECT p.id, d.id AS document_id, p.scheduled_revision_id, r.body_markdown
       FROM blog_posts p
@@ -30,7 +38,7 @@ export async function publishDueBlogPosts(db: D1Database, now = new Date()) {
     ])
     published++
   }
-  return { published }
+  return { published, scheduled_revision_issues: (revisionIssues ?? []).map(row => row.id) }
 }
 
 export async function resolveBlogRedirect(db: DbClient, siteId: string | null, slug: string) {

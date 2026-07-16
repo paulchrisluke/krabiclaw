@@ -86,3 +86,31 @@ test('serialized snapshot queue coalesces pending writes and only applies the ne
   assert.deepEqual(persisted, ['first', 'latest'])
   assert.deepEqual(applied, ['LATEST'])
 })
+
+test('shared SEO resolver applies site fallback, truncation, and canonical paths consistently', () => {
+  const fallback = resolveBlogSeo({ title: 'Post', slug: 'post', baseUrl: 'https://tenant.test', publicPath: '/article/post', siteName: 'Tenant Name' })
+  assert.equal(fallback.description, 'A post from Tenant Name.')
+  assert.equal(fallback.canonicalUrl, 'https://tenant.test/article/post')
+
+  const long = resolveBlogSeo({ title: 'Post', slug: 'post', baseUrl: 'https://tenant.test', publicPath: '/blog/post', seoDescription: 'word '.repeat(50), descriptionMaxLength: 80 })
+  assert.ok(long.description.length <= 80)
+  assert.match(long.description, /…$/)
+})
+
+test('serialized snapshot queue retains failed work for a navigation retry', async () => {
+  let attempts = 0
+  const applied: string[] = []
+  const queue = new SerializedSnapshotQueue<string, string>(async (value) => {
+    attempts++
+    if (attempts === 1) throw new Error('temporary failure')
+    return value.toUpperCase()
+  }, result => applied.push(result))
+
+  queue.mark('still-dirty')
+  await assert.rejects(() => queue.flush(), /temporary failure/)
+  assert.deepEqual(applied, [])
+
+  await queue.flush()
+  assert.equal(attempts, 2)
+  assert.deepEqual(applied, ['STILL-DIRTY'])
+})

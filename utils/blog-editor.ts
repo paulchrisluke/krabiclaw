@@ -61,8 +61,17 @@ export class SerializedSnapshotQueue<TSnapshot, TResult> {
     while (this.pending) {
       const task = this.pending
       this.pending = null
-      const result = await this.persist(task.snapshot)
-      if (task.generation === this.generation) this.applyCurrent(result, task.snapshot)
+      try {
+        const result = await this.persist(task.snapshot)
+        if (task.generation === this.generation) this.applyCurrent(result, task.snapshot)
+      } catch (error) {
+        // A failed request must remain retryable. Keep a newer snapshot when
+        // one arrived while the request was in flight; otherwise restore the
+        // failed task so the next explicit flush/back-navigation retries it.
+        const pending = this.pending as { generation: number; snapshot: TSnapshot } | null
+        if (!pending || pending.generation < task.generation) this.pending = task
+        throw error
+      }
     }
   }
 }
@@ -109,13 +118,21 @@ export function resolveBlogSeo(input: {
   slug: string
   canonicalUrl?: string | null
   baseUrl: string
-  pathPrefix: string
+  pathPrefix?: string
+  publicPath?: string
+  siteName?: string | null
+  descriptionMaxLength?: number
   robots?: string | null
 }) {
-  const path = `${input.pathPrefix.replace(/\/$/, '')}/${encodeURIComponent(input.slug)}`
+  const path = input.publicPath || `${(input.pathPrefix || '/blog').replace(/\/$/, '')}/${encodeURIComponent(input.slug)}`
+  const maxLength = input.descriptionMaxLength ?? 160
+  const rawDescription = input.seoDescription?.trim() || input.excerpt?.trim() || `A post from ${input.siteName?.trim() || 'this site'}.`
+  const description = rawDescription.length <= maxLength
+    ? rawDescription
+    : `${rawDescription.slice(0, maxLength - 1).replace(/\s+\S*$/, '').trim()}…`
   return {
     title: input.seoTitle?.trim() || input.title.trim(),
-    description: input.seoDescription?.trim() || input.excerpt?.trim() || '',
+    description,
     canonicalUrl: input.canonicalUrl?.trim() || new URL(path, input.baseUrl).toString(),
     robots: input.robots?.trim() || 'index, follow',
   }
