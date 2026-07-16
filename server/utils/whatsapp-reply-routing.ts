@@ -84,25 +84,24 @@ export type RoutingDecision =
   // Resuming a pending collect_reply — any text becomes the reply body:
   | { action: 'collect_reply_body' }
 
-const AFFIRMATIVE_WORDS = new Set([
-  'yes', 'y', 'yep', 'yeah', 'yup', 'confirm', 'confirmed', 'send', 'ok', 'okay', 'sure', 'go',
+const AFFIRMATIVE_PHRASES = new Set([
+  'yes', 'y', 'yep', 'yeah', 'yup', 'confirm', 'confirmed', 'send', 'send it', 'ok', 'okay',
+  'sure', 'go', 'go ahead', 'yes send', 'yes confirm', 'yes confirmed', 'yes please',
+  'confirm send', 'send yes', 'ok send', 'ok confirm',
 ])
 
 /**
- * Lenient-but-bounded affirmative matcher for the "reply YES to send" confirmation step.
- * A short (<=3 word) message whose first word is a recognized affirmative token counts as
- * confirmation. Longer messages are treated as a *new* reply body / unrelated message
- * instead, even if they happen to start with "yes" — e.g. "yes but change the date to
- * Friday instead" must not silently fire the send. This intentionally does not try to be
- * a general sentiment classifier; it only needs to recognize the manager confirming the
- * exact prompt this flow just sent them.
+ * Bounded affirmative matcher for the "reply YES to send" confirmation step. The FULL
+ * normalized message must exactly match a known affirmative phrase — not just its first
+ * word — so contradictory replies like "yes but change the date to Friday instead", "yes
+ * no", or "sure don't" are never treated as confirmation. This intentionally does not try
+ * to be a general sentiment classifier; it only needs to recognize the manager confirming
+ * the exact prompt this flow just sent them.
  */
 export function isAffirmativeReply(text: string): boolean {
   const normalized = text.trim().toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
   if (!normalized) return false
-  const words = normalized.split(' ')
-  if (words.length > 3) return false
-  return AFFIRMATIVE_WORDS.has(words[0]!)
+  return AFFIRMATIVE_PHRASES.has(normalized)
 }
 
 /** True when `text` is (only) the "ChowBot" directive, with or without a trailing colon/message. */

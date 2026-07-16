@@ -34,12 +34,12 @@ export default defineEventHandler(async (event) => {
     SELECT i.id, i.email, i.role, i.status, i.expiresAt, i.createdAt,
            u.name as inviterName,
            (
-             SELECT n.status FROM notifications n
+             SELECT COALESCE(n.whatsapp_delivery_status, n.status) FROM notifications n
              WHERE n.related_submission_type = 'invitation' AND n.related_submission_id = i.id
              ORDER BY n.created_at DESC LIMIT 1
            ) AS deliveryStatus,
            (
-             SELECT n.error FROM notifications n
+             SELECT COALESCE(n.whatsapp_delivery_error, n.error) FROM notifications n
              WHERE n.related_submission_type = 'invitation' AND n.related_submission_id = i.id
              ORDER BY n.created_at DESC LIMIT 1
            ) AS deliveryError

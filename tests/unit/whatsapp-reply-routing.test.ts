@@ -220,6 +220,12 @@ test('isAffirmativeReply is bounded to short, recognized tokens', () => {
   assert.equal(isAffirmativeReply('yes but actually let us change the reservation date to Friday'), false)
 })
 
+test('isAffirmativeReply rejects contradictory short replies, not just long ones', () => {
+  assert.equal(isAffirmativeReply('go away'), false)
+  assert.equal(isAffirmativeReply('yes no'), false)
+  assert.equal(isAffirmativeReply("sure don't"), false)
+})
+
 test('parseNumericSelection rejects anything outside a bare in-range integer', () => {
   assert.equal(parseNumericSelection('1', 3), 1)
   assert.equal(parseNumericSelection('3', 3), 3)
