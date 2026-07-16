@@ -1,7 +1,8 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --experimental-strip-types
 import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
+import { parsePhoneOrThrow } from '../utils/phone.ts'
 
 const args = process.argv.slice(2)
 const targetCount = ['--local', '--staging', '--remote'].filter(flag => args.includes(flag)).length
@@ -51,11 +52,7 @@ function run(sql) {
   return parsed.flatMap(entry => entry.results ?? entry.result?.[0]?.results ?? [])
 }
 function normalizePhone(value) {
-  const digits = String(value).replace(/\D/g, '')
-  if (digits.startsWith('0') && digits.length >= 9) return `+66${digits.slice(1)}`
-  if (digits.startsWith('66') && digits.length >= 11) return `+${digits}`
-  if (digits.length >= 10) return `+${digits}`
-  throw new Error(`Invalid configured phone: ${value}`)
+  return parsePhoneOrThrow(String(value), { defaultCountry: 'TH' })
 }
 
 const configured = run(`

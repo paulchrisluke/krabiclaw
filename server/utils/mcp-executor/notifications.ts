@@ -1,3 +1,4 @@
+import { getHeaders } from 'h3'
 import type { McpExecutorContext } from './shared'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { getNotificationsSettings, updateNotificationsSettings } from '~/server/utils/mcp-workflows'
@@ -38,6 +39,7 @@ export async function handleNotificationsTools(ctx: McpExecutorContext): Promise
           whatsappPhone,
           channels,
           site.env,
+          ctx.event ? (getHeaders(ctx.event) as HeadersInit) : undefined,
         );
         return {
           notifications,

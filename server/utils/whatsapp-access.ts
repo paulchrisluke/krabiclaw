@@ -1,6 +1,8 @@
-import { execute, queryFirst, type DbClient } from '~/server/db'
+import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { isOperationalRole, isOrganizationWideRole, LOCATION_MANAGER_ROLE } from '~/server/utils/member-access'
-import { normalizePhone, sendWhatsAppNotification } from '~/server/utils/whatsapp'
+import { sendWhatsAppNotification } from '~/server/utils/whatsapp'
+import { isPhoneInvitationEmail, phoneDigitsFromInvitationEmail, phoneTemporaryEmail } from '~/server/utils/phone-invitations'
+import { parsePhoneOrThrow } from '~/utils/phone'
 
 export interface WhatsAppAccessTarget {
   organizationId: string
@@ -36,16 +38,14 @@ export async function sendWhatsAppAccessInvitation(
     toPhone: target.phone,
     template: 'dashboard_access_invitation',
     vars: { site_name: site?.name || 'your site', invitation_path: invitationPath },
+    relatedSubmissionType: 'invitation',
+    relatedSubmissionId: target.invitationId,
   })
   if (!result.success) throw new Error(result.error || 'Failed to send WhatsApp access invitation')
 }
 
-export function phoneTemporaryEmail(phone: string): string {
-  return `phone-${normalizePhone(phone).replace(/\D/g, '')}@phone.krabiclaw.local`
-}
-
 export async function ensureWhatsAppRecipientAccess(db: DbClient, target: WhatsAppAccessTarget): Promise<WhatsAppAccessResult> {
-  const normalizedPhone = normalizePhone(target.phone)
+  const normalizedPhone = parsePhoneOrThrow(target.phone, { defaultCountry: 'TH' })
   const existing = await queryFirst<{ userId: string; email: string; memberId: string | null; role: string | null }>(db, `
     SELECT u.id AS userId, u.email, m.id AS memberId, m.role
     FROM user u
@@ -114,4 +114,64 @@ export async function ensureWhatsAppRecipientAccess(db: DbClient, target: WhatsA
   `, [crypto.randomUUID(), invitation.id, target.organizationId, target.siteId, target.locationId, new Date().toISOString()])
 
   return { status: 'invitation_pending', normalizedPhone, invitationId: invitation.id, shouldDeliverInvitation }
+}
+
+export interface PendingPhoneInvitation {
+  id: string
+  organizationId: string
+  email: string
+  role: string | null
+  status: string
+  expiresAt: number
+  phone: string
+  scopes: Array<{ site_id: string; location_id: string | null }>
+}
+
+/**
+ * Loads a pending WhatsApp/phone-activated manager invitation scoped to an
+ * organization, for the retry/replace/clear dashboard actions (issue #293
+ * Section A.4). Returns null if the invitation doesn't exist, doesn't belong
+ * to this org, isn't pending, isn't a `location_manager` role, or isn't a
+ * phone-shaped invite — callers should treat any of those as "not found" for
+ * these WhatsApp-specific actions rather than distinguishing further.
+ */
+export async function loadPendingPhoneInvitation(db: DbClient, organizationId: string, invitationId: string): Promise<PendingPhoneInvitation | null> {
+  const invitation = await queryFirst<{
+    id: string
+    organizationId: string
+    email: string
+    role: string | null
+    status: string
+    expiresAt: number
+  }>(db, `
+    SELECT id, organizationId, email, role, status, expiresAt
+    FROM invitation
+    WHERE id = ? AND organizationId = ?
+    LIMIT 1
+  `, [invitationId, organizationId])
+  if (!invitation) return null
+  if (invitation.status !== 'pending') return null
+  if (invitation.role !== LOCATION_MANAGER_ROLE) return null
+  if (!isPhoneInvitationEmail(invitation.email)) return null
+
+  const digits = phoneDigitsFromInvitationEmail(invitation.email)
+  if (!digits) return null
+  let phone: string
+  try {
+    phone = parsePhoneOrThrow(`+${digits}`)
+  } catch {
+    return null
+  }
+
+  const scopes = await queryAll<{ site_id: string; location_id: string | null }>(db, `
+    SELECT site_id, location_id FROM invitation_access_scope WHERE invitation_id = ? ORDER BY created_at ASC
+  `, [invitationId])
+
+  return { ...invitation, phone, scopes }
+}
+
+/** Picks the scope row that best represents "where to deliver this invite" — prefers a site-wide scope over a location-specific one. */
+export function pickPrimaryInvitationScope(scopes: Array<{ site_id: string; location_id: string | null }>): { site_id: string; location_id: string | null } | null {
+  if (scopes.length === 0) return null
+  return scopes.find(scope => scope.location_id === null) ?? scopes[0]!
 }

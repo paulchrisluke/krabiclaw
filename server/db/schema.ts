@@ -33,6 +33,7 @@ export const customers = sqliteTable("customers", {
 	email_hash: text(),
 	phone: text(),
 	phone_normalized: text(),
+	phone_metadata_version: text(),
 	source: text().notNull(),
 	status: text().default("active").notNull(),
 	review_request_opted_out_at: text(),
@@ -761,11 +762,41 @@ export const notifications = sqliteTable("notifications", {
 	read_at: text(),
 	sent_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	// Resolves a WhatsApp quoted reply's context.id back to the guest thread it
+	// originated from (see docs/plan for issue #293's reply-routing contract).
+	related_submission_type: text(),
+	related_submission_id: text(),
+	// Meta Cloud API delivery status ingestion (value.statuses[]), kept separate
+	// from `status` (our own send-attempt lifecycle) since Meta's delivery
+	// lifecycle (accepted < sent < delivered < read, or failed) is a distinct,
+	// out-of-order-tolerant state machine layered on top of a message we already
+	// recorded as sent.
+	whatsapp_delivery_status: text(),
+	whatsapp_delivery_error: text(),
 }, (table) => [
 	index("notifications_scope_created_at_idx").on(table.scope, table.created_at),
 	index("notifications_organization_created_at_idx").on(table.organization_id, table.created_at),
 	index("notifications_site_created_at_idx").on(table.site_id, table.created_at),
 	index("notifications_target_user_created_at_idx").on(table.target_user_id, table.created_at),
+	check("notifications_whatsapp_delivery_status_check", sql`whatsapp_delivery_status IS NULL OR whatsapp_delivery_status IN ('accepted', 'sent', 'delivered', 'read', 'failed')`),
+	check("notifications_related_submission_type_check", sql`related_submission_type IS NULL OR related_submission_type IN ('contact', 'reservation', 'experience_booking', 'invitation')`),
+]);
+
+// App-owned mirror of Better Auth's `user.phoneNumberVerified`, kept as a
+// separate companion table (rather than columns bolted onto Better Auth's
+// `user` table) so app-domain verification state stays independent of a
+// table Better Auth migrates on its own schedule. One row per user.
+export const user_phone_verification = sqliteTable("user_phone_verification", {
+	id: text().primaryKey(),
+	user_id: text().notNull().unique().references(() => user.id, { onDelete: "cascade" } ),
+	format_valid: integer().default(0).notNull(),
+	ownership_verified: integer().default(0).notNull(),
+	whatsapp_observed_at: text(),
+	phone_metadata_version: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	uniqueIndex("user_phone_verification_user_id_unique").on(table.user_id),
 ]);
 
 export const notification_reads = sqliteTable("notification_reads", {

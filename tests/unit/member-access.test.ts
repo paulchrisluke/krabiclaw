@@ -7,7 +7,7 @@ import {
   isOrganizationWideRole,
   type MemberAccessScope,
 } from '../../server/utils/member-access.ts'
-import { phoneTemporaryEmail } from '../../server/utils/whatsapp-access.ts'
+import { phoneTemporaryEmail } from '../../server/utils/phone-invitations.ts'
 import { buildWhatsAppTemplatePayload } from '../../server/utils/whatsapp.ts'
 
 const scopes: MemberAccessScope[] = [

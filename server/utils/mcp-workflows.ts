@@ -286,12 +286,13 @@ export async function updateNotificationsSettings(
   whatsappPhone?: string,
   channels?: string[],
   env?: ApiRecord,
+  actorHeaders?: HeadersInit,
 ) {
   const ops: Promise<unknown>[] = []
   const trimmedPhone = whatsappPhone?.trim()
   // Explicit null or empty string means clear the phone
   if (whatsappPhone !== undefined) {
-    ops.push(setOrgWhatsAppPhone(db, organizationId, siteId, trimmedPhone || '', env))
+    ops.push(setOrgWhatsAppPhone(db, organizationId, siteId, trimmedPhone || '', env, { actorHeaders }))
   }
   if (channels) {
     const defaultPhone = trimmedPhone || await getOrgWhatsAppPhone(db, organizationId, siteId)
@@ -781,14 +782,15 @@ export async function updateHomeHero(
 }
 
 export async function hydrateSeededLocationForOnboarding(
+  env: CloudflareEnv,
   db: D1Database,
   organizationId: string,
   siteId: string,
   userId: string,
   updates: Record<string, unknown>,
 ) {
-  const locations = await queryAll<{ id: string; slug: string }>(db, `
-    SELECT id, slug
+  const locations = await queryAll<{ id: string; slug: string; notification_phone: string | null }>(db, `
+    SELECT id, slug, notification_phone
     FROM business_locations
     WHERE organization_id = ? AND site_id = ? AND status = 'active'
     ORDER BY is_primary DESC, created_at ASC
@@ -800,6 +802,9 @@ export async function hydrateSeededLocationForOnboarding(
   }
 
   const location = locations[0]!;
+  const touchesNotificationPhone = Object.prototype.hasOwnProperty.call(updates, "notification_phone");
+  const previousNotificationPhone = location.notification_phone;
+
   const result = await updateLocation(
     db,
     organizationId,
@@ -813,10 +818,36 @@ export async function hydrateSeededLocationForOnboarding(
     return result;
   }
 
+  // Sync WhatsApp access if notification_phone was updated. This is
+  // onboarding-time hydration of a pre-seeded location, not a
+  // user-initiated interactive save — a WhatsApp provisioning hiccup
+  // shouldn't block the rest of onboarding, so this logs and continues
+  // (matching other non-critical steps in this file, e.g. fireSiteEventSafe)
+  // rather than throwing, but the caller still needs to know the location
+  // itself saved successfully while WhatsApp access needs attention.
+  let whatsAppSyncWarning: string | undefined
+  if (touchesNotificationPhone) {
+    const { syncLocationWhatsAppAccess } = await import('~/server/utils/location-management')
+    const syncResult = await syncLocationWhatsAppAccess(env, db, {
+      organizationId,
+      siteId,
+      locationId: location.id,
+      previousPhone: previousNotificationPhone,
+      newPhone: (updates.notification_phone as string | null | undefined) ?? null,
+      inviterUserId: userId,
+    })
+    if (!syncResult.ok) {
+      const detail = syncResult.provisioningError || syncResult.scopeRecalcError || 'unknown error'
+      console.warn('hydrate_seeded_location_whatsapp_sync_failed', { organizationId, siteId, locationId: location.id, error: detail })
+      whatsAppSyncWarning = `The location was saved, but syncing WhatsApp manager access failed: ${detail}. Retry updating the notification phone to re-sync it.`
+    }
+  }
+
   return {
     ...result.data,
     hydrated_seed_location: true,
     previous_slug: location.slug,
+    ...(whatsAppSyncWarning ? { warning: whatsAppSyncWarning } : {}),
   };
 }
 

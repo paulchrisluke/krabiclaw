@@ -13,6 +13,7 @@ import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking }
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { getAuthSession } from '~/server/utils/auth'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
+import { parsePhone } from '~/utils/phone'
 
 // Fallback used only when a location has no structured opening_hours (e.g. Google Places imports,
 // which store hours as free-text weekday descriptions that can't be parsed into slots).
@@ -37,10 +38,10 @@ export default defineEventHandler(async (event) => {
   const email      = cleanString(body.email, 200)
   let phone = cleanString(body.phone, 30)
   if (phone) {
-    try {
-      const { normalizePhone } = await import('~/server/utils/whatsapp')
-      phone = normalizePhone(phone)
-    } catch { /* fallback to raw if unparseable */ }
+    const parsedPhone = parsePhone(phone, { defaultCountry: 'TH' })
+    if (parsedPhone.valid && parsedPhone.e164) phone = parsedPhone.e164
+    // else: fall back to the raw value — this is a guest-facing form field, not an
+    // identity path, so an unparseable phone shouldn't block the reservation.
   }
   const date       = cleanString(body.date, 10)
   const time       = cleanString(body.time, 5)

@@ -1,6 +1,6 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { hashIdentifier } from '~/server/utils/hourly-rate-limit'
-import { normalizePhone } from '~/server/utils/whatsapp'
+import { parsePhone, PHONE_METADATA_VERSION } from '~/utils/phone'
 
 export type CustomerSource =
   | 'reservation'
@@ -33,6 +33,7 @@ export interface CustomerRow {
   email_hash: string | null
   phone: string | null
   phone_normalized: string | null
+  phone_metadata_version: string | null
   source: CustomerSource
   status: 'active' | 'merged' | 'suppressed' | 'deleted'
   created?: boolean
@@ -40,7 +41,7 @@ export interface CustomerRow {
 
 const CUSTOMER_SELECT = `
   SELECT id, organization_id, site_id, user_id, stripe_customer_id, name, email,
-         email_normalized, email_hash, phone, phone_normalized, source, status
+         email_normalized, email_hash, phone, phone_normalized, phone_metadata_version, source, status
   FROM customers
 `
 
@@ -52,11 +53,16 @@ export function normalizeCustomerEmail(email: string | null | undefined): string
 export function normalizeCustomerPhone(phone: string | null | undefined): string | null {
   const trimmed = phone?.trim()
   if (!trimmed) return null
-  try {
-    return normalizePhone(trimmed)
-  } catch {
-    return trimmed
-  }
+  const parsed = parsePhone(trimmed, { defaultCountry: 'TH' })
+  return parsed.valid && parsed.e164 ? parsed.e164 : trimmed
+}
+
+/** Metadata version to stamp alongside `normalizeCustomerPhone`'s output — null when the
+ * input didn't parse to a valid E.164 number (raw value was kept as a fallback instead). */
+export function customerPhoneMetadataVersion(phone: string | null | undefined): string | null {
+  const trimmed = phone?.trim()
+  if (!trimmed) return null
+  return parsePhone(trimmed, { defaultCountry: 'TH' }).valid ? PHONE_METADATA_VERSION : null
 }
 
 function isUniqueCustomerConflict(error: unknown): boolean {
@@ -118,6 +124,7 @@ export async function findOrCreateCustomer(
   const emailNormalized = normalizeCustomerEmail(email)
   const phone = input.phone?.trim() || null
   const phoneNormalized = normalizeCustomerPhone(phone)
+  const phoneMetadataVersion = customerPhoneMetadataVersion(phone)
   const emailHash = emailNormalized ? await hashIdentifier(emailNormalized) : null
   const name = input.name?.trim() || null
   const bookingAt = input.bookingAt ?? new Date().toISOString()
@@ -136,9 +143,9 @@ export async function findOrCreateCustomer(
     await execute(db, `
       INSERT INTO customers (
         id, organization_id, site_id, user_id, name, email, email_normalized, email_hash,
-        phone, phone_normalized, source, status, last_booking_at, created_at, updated_at
+        phone, phone_normalized, phone_metadata_version, source, status, last_booking_at, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
     `, [
       id,
       input.organizationId,
@@ -150,6 +157,7 @@ export async function findOrCreateCustomer(
       emailHash,
       phone,
       phoneNormalized,
+      phoneMetadataVersion,
       input.source,
       bookingAt,
       now,
@@ -174,6 +182,7 @@ export async function findOrCreateCustomer(
     email_hash: emailHash,
     phone,
     phone_normalized: phoneNormalized,
+    phone_metadata_version: phoneMetadataVersion,
     source: input.source,
     status: 'active',
     created: true,
@@ -190,11 +199,13 @@ async function updateCustomerBooking(
   const emailNormalized = normalizeCustomerEmail(email)
   const phone = input.phone?.trim() || null
   const phoneNormalized = normalizeCustomerPhone(phone)
+  const phoneMetadataVersion = customerPhoneMetadataVersion(phone)
   const emailHash = includeEmail && emailNormalized ? await hashIdentifier(emailNormalized) : null
   const name = input.name?.trim() || null
   const bookingAt = input.bookingAt ?? new Date().toISOString()
 
   if (includeEmail) {
+    const phoneSupplied = input.phone !== undefined && input.phone !== null
     await execute(db, `
       UPDATE customers
       SET name = COALESCE(NULLIF(?, ''), name),
@@ -203,6 +214,7 @@ async function updateCustomerBooking(
           email_hash = COALESCE(?, email_hash),
           phone = COALESCE(NULLIF(?, ''), phone),
           phone_normalized = COALESCE(?, phone_normalized),
+          phone_metadata_version = CASE WHEN ? THEN ? ELSE phone_metadata_version END,
           source = CASE WHEN source = 'manual' THEN source ELSE ? END,
           last_booking_at = ?,
           updated_at = ?
@@ -214,6 +226,8 @@ async function updateCustomerBooking(
       emailHash,
       phone,
       phoneNormalized,
+      phoneSupplied ? 1 : 0,
+      phoneMetadataVersion,
       input.source,
       bookingAt,
       new Date().toISOString(),
@@ -222,11 +236,13 @@ async function updateCustomerBooking(
     return
   }
 
+  const phoneSupplied = input.phone !== undefined && input.phone !== null
   await execute(db, `
     UPDATE customers
     SET name = COALESCE(NULLIF(?, ''), name),
         phone = COALESCE(NULLIF(?, ''), phone),
         phone_normalized = COALESCE(?, phone_normalized),
+        phone_metadata_version = CASE WHEN ? THEN ? ELSE phone_metadata_version END,
         source = CASE WHEN source = 'manual' THEN source ELSE ? END,
         last_booking_at = ?,
         updated_at = ?
@@ -235,6 +251,8 @@ async function updateCustomerBooking(
     name,
     phone,
     phoneNormalized,
+    phoneSupplied ? 1 : 0,
+    phoneMetadataVersion,
     input.source,
     bookingAt,
     new Date().toISOString(),

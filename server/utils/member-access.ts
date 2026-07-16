@@ -1,5 +1,5 @@
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
-import { normalizePhone } from '~/server/utils/whatsapp'
+import { parsePhoneOrThrow } from '~/utils/phone'
 
 export const LOCATION_MANAGER_ROLE = 'location_manager' as const
 
@@ -95,7 +95,7 @@ export async function assertMemberSiteAccess(db: DbClient, input: Omit<ResourceS
 }
 
 export async function isAuthorizedWhatsAppRecipient(db: DbClient, input: ResourceScope & { phone: string; requireSiteWide?: boolean }): Promise<boolean> {
-  const phone = normalizePhone(input.phone)
+  const phone = parsePhoneOrThrow(input.phone, { defaultCountry: 'TH' })
   const siteWideClause = input.requireSiteWide
     ? 'mas.location_id IS NULL'
     : '(mas.location_id IS NULL OR mas.location_id = ?)'
