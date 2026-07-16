@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "8e13ddae-e55c-47a0-a1a6-a3ce3e5f8e79",
-  "prevId": "61b33169-683f-4540-a53d-b4fe478857a3",
+  "id": "f54e427f-4e4e-4d90-8e97-a5f4187eaafc",
+  "prevId": "063b9b7c-1d38-4fea-973b-cb781c66720a",
   "tables": {
     "account": {
       "name": "account",
@@ -317,6 +317,104 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "blog_post_redirects": {
+      "name": "blog_post_redirects",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "post_id": {
+          "name": "post_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "old_slug": {
+          "name": "old_slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "blog_post_redirects_platform_slug_idx": {
+          "name": "blog_post_redirects_platform_slug_idx",
+          "columns": [
+            "old_slug"
+          ],
+          "isUnique": true,
+          "where": "site_id IS NULL"
+        },
+        "blog_post_redirects_site_slug_idx": {
+          "name": "blog_post_redirects_site_slug_idx",
+          "columns": [
+            "site_id",
+            "old_slug"
+          ],
+          "isUnique": true,
+          "where": "site_id IS NOT NULL"
+        },
+        "blog_post_redirects_post_idx": {
+          "name": "blog_post_redirects_post_idx",
+          "columns": [
+            "post_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "blog_post_redirects_post_id_blog_posts_id_fk": {
+          "name": "blog_post_redirects_post_id_blog_posts_id_fk",
+          "tableFrom": "blog_post_redirects",
+          "tableTo": "blog_posts",
+          "columnsFrom": [
+            "post_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "blog_post_redirects_site_id_sites_id_fk": {
+          "name": "blog_post_redirects_site_id_sites_id_fk",
+          "tableFrom": "blog_post_redirects",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "blog_posts": {
       "name": "blog_posts",
       "columns": {
@@ -434,6 +532,14 @@
           "autoincrement": false,
           "default": "'draft'"
         },
+        "visibility": {
+          "name": "visibility",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'public'"
+        },
         "author_id": {
           "name": "author_id",
           "type": "text",
@@ -448,8 +554,22 @@
           "notNull": false,
           "autoincrement": false
         },
+        "social_image_asset_id": {
+          "name": "social_image_asset_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "published_at": {
           "name": "published_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "first_published_at": {
+          "name": "first_published_at",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -461,6 +581,21 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "scheduled_revision_id": {
+          "name": "scheduled_revision_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "slug_manually_overridden": {
+          "name": "slug_manually_overridden",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
         },
         "created_at": {
           "name": "created_at",
@@ -593,6 +728,19 @@
           ],
           "onDelete": "set null",
           "onUpdate": "no action"
+        },
+        "blog_posts_social_image_asset_id_media_assets_id_fk": {
+          "name": "blog_posts_social_image_asset_id_media_assets_id_fk",
+          "tableFrom": "blog_posts",
+          "tableTo": "media_assets",
+          "columnsFrom": [
+            "social_image_asset_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -605,6 +753,10 @@
         "blog_posts_status_check": {
           "name": "blog_posts_status_check",
           "value": "status IN ('draft', 'published', 'scheduled', 'archived')"
+        },
+        "blog_posts_visibility_check": {
+          "name": "blog_posts_visibility_check",
+          "value": "visibility IN ('public', 'unlisted')"
         },
         "blog_posts_category_check": {
           "name": "blog_posts_category_check",
@@ -2485,7 +2637,7 @@
       "checkConstraints": {
         "content_blocks_type_check": {
           "name": "content_blocks_type_check",
-          "value": "type IN ('heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'ai_assistance', 'cta', 'callout')"
+          "value": "type IN ('heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout')"
         }
       }
     },
