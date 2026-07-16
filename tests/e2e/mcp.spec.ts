@@ -292,11 +292,11 @@ test.describe('stateless MCP server', () => {
     const notifications = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'update_notification_settings',
-      args: { site_id: siteId, whatsapp_phone: '+1 555 555 0101' },
+      args: { site_id: siteId, whatsapp_phone: '+1 415 555 2671' },
     })
     expect(notifications.status()).toBe(200)
     const notificationsBody = await notifications.json()
-    expect(mcpData<{ notifications: { whatsapp_phone: string } }>(notificationsBody).notifications.whatsapp_phone).toContain('+15555550101')
+    expect(mcpData<{ notifications: { whatsapp_phone: string } }>(notificationsBody).notifications.whatsapp_phone).toContain('+14155552671')
 
     const notificationsRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
