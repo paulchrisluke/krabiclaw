@@ -17,7 +17,6 @@ export const organizationRoles = {
     member: [],
     invitation: [],
     team: [],
-    ac: ['read'],
     operations: ['read', 'reply', 'update'],
   }),
 }

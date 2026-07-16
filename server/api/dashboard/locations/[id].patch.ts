@@ -59,7 +59,7 @@ export default defineEventHandler(async (event) => {
       phone: body.notification_phone,
       inviterUserId: session.user.id,
     })
-    if (access.status === 'invitation_pending' && access.createdInvitation && access.invitationId) {
+    if (access.status === 'invitation_pending' && access.invitationId) {
       await sendWhatsAppAccessInvitation(env, db, {
         organizationId,
         siteId,

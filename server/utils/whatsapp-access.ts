@@ -1,5 +1,5 @@
 import { execute, queryFirst, type DbClient } from '~/server/db'
-import { isOperationalRole, isOrganizationWideRole, LOCATION_MANAGER_ROLE } from '~/server/utils/member-access'
+import { isOperationalRole, isOrganizationWideRole } from '~/server/utils/member-access'
 import { normalizePhone, sendWhatsAppNotification } from '~/server/utils/whatsapp'
 
 export interface WhatsAppAccessTarget {
@@ -55,11 +55,7 @@ export async function ensureWhatsAppRecipientAccess(db: DbClient, target: WhatsA
   `, [target.organizationId, normalizedPhone])
 
   if (existing?.memberId && existing.role) {
-    const role = existing.role === 'member' ? LOCATION_MANAGER_ROLE : existing.role
-    if (!isOperationalRole(role)) throw new Error(`Existing member role ${existing.role} cannot receive operational notifications`)
-    if (role !== existing.role) {
-      await execute(db, `UPDATE member SET role = ? WHERE id = ?`, [role, existing.memberId])
-    }
+    if (!isOperationalRole(existing.role)) throw new Error(`Existing member role ${existing.role} cannot receive operational notifications`)
     if (!isOrganizationWideRole(existing.role)) {
       await execute(db, `
         INSERT OR IGNORE INTO member_access_scope (id, member_id, organization_id, site_id, location_id, created_at)
@@ -79,19 +75,29 @@ export async function ensureWhatsAppRecipientAccess(db: DbClient, target: WhatsA
   if (!inviter) throw new Error('An owner or admin is required to invite the WhatsApp recipient')
 
   const email = existing?.email || phoneTemporaryEmail(normalizedPhone)
-  let invitation = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM invitation
-    WHERE organizationId = ? AND lower(email) = lower(?) AND status = 'pending' AND expiresAt > unixepoch()
+  let invitation = await queryFirst<{ id: string; expiresAt: number }>(db, `
+    SELECT id, expiresAt FROM invitation
+    WHERE organizationId = ? AND lower(email) = lower(?) AND status = 'pending'
     ORDER BY createdAt DESC LIMIT 1
   `, [target.organizationId, email])
   let createdInvitation = false
+  const expiresAt = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60
   if (!invitation) {
-    invitation = { id: crypto.randomUUID() }
+    const invitationId = crypto.randomUUID()
     await execute(db, `
-      INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt)
+      INSERT OR IGNORE INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt)
       VALUES (?, ?, ?, 'location_manager', 'pending', ?, ?, ?)
-    `, [invitation.id, target.organizationId, email, Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60, inviter.id, Math.floor(Date.now() / 1000)])
-    createdInvitation = true
+    `, [invitationId, target.organizationId, email, expiresAt, inviter.id, Math.floor(Date.now() / 1000)])
+    invitation = await queryFirst<{ id: string; expiresAt: number }>(db, `
+      SELECT id, expiresAt FROM invitation
+      WHERE organizationId = ? AND lower(email) = lower(?) AND status = 'pending'
+      ORDER BY createdAt DESC LIMIT 1
+    `, [target.organizationId, email])
+    if (!invitation) throw new Error('Failed to create or reuse WhatsApp access invitation')
+    createdInvitation = invitation.id === invitationId
+  }
+  if (invitation.expiresAt <= Math.floor(Date.now() / 1000)) {
+    await execute(db, `UPDATE invitation SET expiresAt = ? WHERE id = ?`, [expiresAt, invitation.id])
   }
   await execute(db, `
     INSERT OR IGNORE INTO invitation_access_scope (id, invitation_id, organization_id, site_id, location_id, created_at)

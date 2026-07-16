@@ -673,15 +673,16 @@ export async function setOrgWhatsAppPhone(
     return
   }
   const normalized = normalizePhone(phone)
-  const { ensureWhatsAppRecipientAccess, sendWhatsAppAccessInvitation } = await import('~/server/utils/whatsapp-access')
-  const access = await ensureWhatsAppRecipientAccess(db, { organizationId, siteId, locationId: null, phone: normalized })
   const now = new Date().toISOString()
   await execute(db, `
     INSERT INTO site_config (organization_id, site_id, key, value, updated_at)
     VALUES (?, ?, 'whatsapp_phone', ?, ?)
     ON CONFLICT(organization_id, site_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
   `, [organizationId, siteId, normalized, now])
-  if (env && access.status === 'invitation_pending' && access.createdInvitation && access.invitationId) {
+  if (env) {
+    const { ensureWhatsAppRecipientAccess, sendWhatsAppAccessInvitation } = await import('~/server/utils/whatsapp-access')
+    const access = await ensureWhatsAppRecipientAccess(db, { organizationId, siteId, locationId: null, phone: normalized })
+    if (access.status !== 'invitation_pending' || !access.invitationId) return
     await sendWhatsAppAccessInvitation(env, db, { organizationId, siteId, locationId: null, phone: normalized, invitationId: access.invitationId })
   }
 }

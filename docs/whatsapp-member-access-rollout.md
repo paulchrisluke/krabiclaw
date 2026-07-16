@@ -4,7 +4,7 @@ Operational WhatsApp recipients must have an active organization membership and 
 
 ## Staging
 
-1. Deploy migration `0051` and `0052` before application code.
+1. Deploy migrations `0051` and `0052` before application code.
 2. Run `yarn site:backfill-whatsapp-members --staging --dry-run` and review every configured recipient and proposed action.
 3. Run `yarn site:backfill-whatsapp-members --staging --apply`.
 4. Confirm Meta has approved `dashboard_access_invitation`. Production apply refuses to run while it is missing or pending. Normal operational messages remain blocked until acceptance.

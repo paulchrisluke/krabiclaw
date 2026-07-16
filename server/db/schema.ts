@@ -481,6 +481,7 @@ export const invitation = sqliteTable("invitation", {
 }, (table) => [
 	index("invitation_organizationId_idx").on(table.organizationId),
 	uniqueIndex("idx_invitation_org_pending_owner").on(table.organizationId).where(sql`role = 'owner' AND status = 'pending'`),
+	uniqueIndex("idx_invitation_org_email_pending_unique").on(table.organizationId, sql`lower(${table.email})`).where(sql`status = 'pending'`),
 ]);
 
 export const invitation_access_scope = sqliteTable("invitation_access_scope", {

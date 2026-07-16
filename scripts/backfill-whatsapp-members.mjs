@@ -92,14 +92,15 @@ for (const group of groups.values()) {
   const pending = run(`SELECT id FROM invitation WHERE organizationId = '${q(group.organizationId)}' AND lower(email) = lower('${q(email)}') AND status = 'pending' AND expiresAt > unixepoch() ORDER BY createdAt DESC LIMIT 1`)[0] ?? null
   const existingScopes = identity?.member_id ? run(`SELECT site_id, location_id FROM member_access_scope WHERE member_id = '${q(identity.member_id)}' ORDER BY site_id, location_id`) : []
   const pendingScopes = pending ? run(`SELECT site_id, location_id FROM invitation_access_scope WHERE invitation_id = '${q(pending.id)}' ORDER BY site_id, location_id`) : []
-  const active = identity?.member_id && ['owner', 'admin', 'editor', 'member', 'location_manager'].includes(identity.role)
-  const action = active ? (identity.role === 'member' ? 'promote_member_and_ensure_scopes' : 'ensure_scopes') : pending ? 'reuse_invitation' : 'create_invitation'
+  const active = identity?.member_id && ['owner', 'admin', 'editor', 'location_manager'].includes(identity.role)
+  const unsupportedMember = identity?.member_id && !active
+  const action = unsupportedMember ? `reject_non_operational_role:${identity.role}` : active ? 'ensure_scopes' : pending ? 'reuse_invitation' : 'create_invitation'
   const item = { ...group, identity, existingScopes, pendingInvitationId: pending?.id ?? null, pendingScopes, proposedAction: action }
   report.push(item)
   if (!args.includes('--apply')) continue
+  if (unsupportedMember) throw new Error(`Existing member role ${identity.role} is not operational for ${group.organizationName}`)
 
   if (active) {
-    if (identity.role === 'member') run(`UPDATE member SET role = 'location_manager' WHERE id = '${q(identity.member_id)}'`)
     if (!['owner', 'admin'].includes(identity.role)) {
       for (const scope of group.scopes) run(`INSERT OR IGNORE INTO member_access_scope (id, member_id, organization_id, site_id, location_id, created_at) VALUES ('${randomUUID()}', '${q(identity.member_id)}', '${q(group.organizationId)}', '${q(scope.siteId)}', ${scope.locationId ? `'${q(scope.locationId)}'` : 'NULL'}, datetime('now'))`)
     }

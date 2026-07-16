@@ -133,6 +133,7 @@ const form = ref<BlogForm>({
 const post = ref<BlogPost | null>(null)
 const publicPath = computed(() => {
   const category = categoryEdited.value ? form.value.category : (form.value.category || post.value?.category)
+  if (categoryEdited.value) return getBlogPostPath(category, post.value?.slug) || 'Draft'
   return post.value?.public_path || getBlogPostPath(category, post.value?.slug) || 'Draft'
 })
 const loadPending = ref(props.isEdit)
@@ -151,6 +152,8 @@ watch(() => form.value.category, () => {
 })
 
 watch(postId, () => {
+  saveRequestSeq += 1
+  saving.value = false
   if (postId.value && props.isEdit) loadPost()
 }, { immediate: true })
 
