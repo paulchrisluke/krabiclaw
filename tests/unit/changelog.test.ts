@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import type { H3Event } from 'h3'
 
 import {
   CHANGE_TYPES,
@@ -180,24 +181,25 @@ test('changelog route returns 400 for malformed limits and preserves the omitted
   let fetchCount = 0
   globals.defineEventHandler = (handler: unknown) => handler
   globals.cloudflareEnv = () => ({ GITHUB_TOKEN: 'test-token' })
-  globals.getQuery = (event: { context: { query: Record<string, unknown> } }) => event.context.query
+  globals.getQuery = (event: H3Event) => (
+    event.context as unknown as { query: Record<string, unknown> }
+  ).query
   globalThis.fetch = (async () => {
     fetchCount += 1
     return githubResponse([])
   }) as typeof fetch
 
-  const { default: handler } = await import('../../server/api/changelog.get.ts') as {
-    default: (_event: { context: { query: Record<string, unknown> } }) => Promise<Response>
-  }
+  const { default: handler } = await import('../../server/api/changelog.get.ts')
+  const routeEvent = (query: Record<string, unknown>) => ({ context: { query } }) as unknown as H3Event
 
   for (const limit of ['', '0', '101', '1.5', '10abc']) {
-    const response = await handler({ context: { query: { limit } } })
+    const response = await handler(routeEvent({ limit }))
     assert.equal(response.status, 400)
     assert.deepEqual(await response.json(), { error: 'limit must be an integer between 1 and 100.' })
   }
   assert.equal(fetchCount, 0)
 
-  const response = await handler({ context: { query: {} } })
+  const response = await handler(routeEvent({}))
   assert.equal(response.status, 200)
   assert.equal((await response.json() as { limit: number }).limit, DEFAULT_CHANGELOG_LIMIT)
   assert.equal(fetchCount, 1)
