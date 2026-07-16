@@ -642,7 +642,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
                     author: { type: 'string' },
                     mergedAt: { type: 'string' },
                     url: { type: 'string' },
-                    type: { type: 'string', enum: [...CHANGE_TYPES] },
+                    type: { type: 'string', enum: [type] },
                     scope: NULLABLE_STRING,
                     description: { type: 'string' },
                   },

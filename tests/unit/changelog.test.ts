@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  CHANGE_TYPES,
   ChangelogFetchError,
   DEFAULT_CHANGELOG_LIMIT,
   getRecentChanges,
@@ -13,6 +14,7 @@ function pullRequest(input: {
   number: number
   title: string
   mergedAt: string | null
+  updatedAt?: string
   body?: string | null
   author?: string
 }) {
@@ -22,6 +24,7 @@ function pullRequest(input: {
     body: input.body ?? null,
     user: { login: input.author ?? 'krabi-maintainer' },
     merged_at: input.mergedAt,
+    updated_at: input.updatedAt ?? input.mergedAt ?? '2026-07-12T10:00:00Z',
     html_url: `https://github.com/paulchrisluke/krabiclaw/pull/${input.number}`,
   }
 }
@@ -79,6 +82,62 @@ test('getRecentChanges preserves conventional-commit scope metadata', async () =
   assert.equal(result.commits.fix[0]?.description, 'reject expired sessions')
 })
 
+test('getRecentChanges keeps paging when the first full page satisfies limit but cannot prove the merge cutoff', async () => {
+  const firstPage = Array.from({ length: 100 }, (_, index) => pullRequest({
+    number: index + 1,
+    title: `chore: old merge ${index + 1}`,
+    mergedAt: '2026-07-01T10:00:00Z',
+    updatedAt: '2026-07-20T10:00:00Z',
+  }))
+  const secondPage = [
+    pullRequest({ number: 101, title: 'feat: actually newest merge', mergedAt: '2026-07-18T10:00:00Z', updatedAt: '2026-07-19T10:00:00Z' }),
+    pullRequest({ number: 102, title: 'fix: second newest merge', mergedAt: '2026-07-17T10:00:00Z', updatedAt: '2026-07-19T09:00:00Z' }),
+  ]
+  let requestCount = 0
+
+  const result = await getRecentChanges({
+    githubToken: 'test-token',
+    limit: 2,
+    fetchImpl: (async () => {
+      requestCount += 1
+      return githubResponse(requestCount === 1 ? firstPage : secondPage)
+    }) as typeof fetch,
+  })
+
+  assert.equal(requestCount, 2)
+  assert.deepEqual(
+    [...result.commits.feat, ...result.commits.fix].map(change => change.number),
+    [101, 102],
+  )
+  assert.equal(result.lastUpdated, '2026-07-18T10:00:00Z')
+})
+
+test('getRecentChanges stops after a full page once the updated-at boundary proves later merges are older', async () => {
+  const page = Array.from({ length: 100 }, (_, index) => pullRequest({
+    number: index + 1,
+    title: `fix: merge ${index + 1}`,
+    mergedAt: index === 0
+      ? '2026-07-20T10:00:00Z'
+      : index === 1 ? '2026-07-19T10:00:00Z' : '2026-06-01T10:00:00Z',
+    updatedAt: index === 0
+      ? '2026-07-20T10:00:00Z'
+      : index === 1 ? '2026-07-19T10:00:00Z' : '2026-06-01T10:00:00Z',
+  }))
+  let requestCount = 0
+
+  const result = await getRecentChanges({
+    githubToken: 'test-token',
+    limit: 2,
+    fetchImpl: (async () => {
+      requestCount += 1
+      return githubResponse(page)
+    }) as typeof fetch,
+  })
+
+  assert.equal(requestCount, 1)
+  assert.deepEqual(result.commits.fix.map(change => change.number), [1, 2])
+})
+
 test('changelog limit validation rejects unbounded or non-integer requests', () => {
   assert.equal(validateChangelogLimit(undefined), DEFAULT_CHANGELOG_LIMIT)
   assert.equal(validateChangelogLimit(1), 1)
@@ -117,4 +176,12 @@ test('platform MCP exposes recent changes as a bounded, read-only open-world too
     { type: limit?.type, minimum: limit?.minimum, maximum: limit?.maximum, default: limit?.default },
     { type: 'integer', minimum: 1, maximum: 100, default: 50 },
   )
+
+  const outputProperties = tool.outputSchema.properties as Record<string, Record<string, unknown>>
+  const commitBuckets = (outputProperties.commits?.properties ?? {}) as Record<string, Record<string, unknown>>
+  for (const category of CHANGE_TYPES) {
+    const items = commitBuckets[category]?.items as Record<string, unknown>
+    const properties = items.properties as Record<string, Record<string, unknown>>
+    assert.deepEqual(properties.type?.enum, [category])
+  }
 })

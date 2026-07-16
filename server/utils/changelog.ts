@@ -13,6 +13,7 @@ interface GitHubPullRequest {
     login: string
   }
   merged_at: string | null
+  updated_at: string
   html_url: string
 }
 
@@ -113,7 +114,7 @@ export async function getRecentChanges(options: GetRecentChangesOptions): Promis
   const perPage = 100
   let page = 1
 
-  while (allMergedPullRequests.length < limit) {
+  while (true) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -139,6 +140,26 @@ export async function getRecentChanges(options: GetRecentChangesOptions): Promis
       allMergedPullRequests.push(...pullRequests.filter(pullRequest => pullRequest.merged_at !== null))
 
       if (pullRequests.length < perPage) break
+
+      // GitHub only lets this endpoint sort closed PRs by updated_at, not merged_at.
+      // A merge updates the PR, so merged_at cannot be later than updated_at. Once
+      // the oldest updated_at on this page is at or before our current merged_at
+      // cutoff, every later page is provably unable to contain a newer merge. Until
+      // then, keep paging even if we already collected `limit` merged PRs.
+      if (allMergedPullRequests.length >= limit) {
+        const mergedAtCutoff = [...allMergedPullRequests]
+          .sort((a, b) => new Date(b.merged_at!).getTime() - new Date(a.merged_at!).getTime())
+          .at(limit - 1)?.merged_at
+        const oldestUpdatedAt = pullRequests.at(-1)?.updated_at
+        if (
+          mergedAtCutoff
+          && oldestUpdatedAt
+          && new Date(oldestUpdatedAt).getTime() <= new Date(mergedAtCutoff).getTime()
+        ) {
+          break
+        }
+      }
+
       page += 1
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
