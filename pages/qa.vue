@@ -28,20 +28,20 @@ definePageMeta({ layout: 'saya' })
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
-const { googleBusiness, qaList, locations } = useBootstrap()
+const { googleBusiness, qaList, locations, config } = useBootstrap()
 const googleQA = computed(() => qaList.value || [])
 const siteName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Site')
 
-const currentPageUrl = useSeoUrl('/qa')
-useSeoMeta({
-  title: computed(() => `Q&A | ${siteName.value}`),
-  description: computed(() => `Frequently asked questions about ${siteName.value}.`),
-  ogTitle: computed(() => `Q&A | ${siteName.value}`),
-  ogDescription: computed(() => `Frequently asked questions about ${siteName.value}.`),
-  ogSiteName: computed(() => siteName.value),
-  twitterTitle: computed(() => `Q&A | ${siteName.value}`),
-  twitterDescription: computed(() => `Frequently asked questions about ${siteName.value}.`),
-  ogImage: useTenantOgImage(),
-  ogUrl: currentPageUrl
-})
+useTenantSocialMetadata(() => ({
+  path: '/qa',
+  title: `Q&A | ${siteName.value}`,
+  description: `Frequently asked questions about ${siteName.value}.`,
+  label: 'Q&A',
+  brand: {
+    siteName: siteName.value,
+    logoUrl: config.value?.logo_url || null,
+    faviconUrl: config.value?.favicon_url || null,
+    primaryColor: config.value?.brand_color || null,
+  },
+}))
 </script>

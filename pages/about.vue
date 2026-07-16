@@ -232,6 +232,7 @@ if (isPlatform) {
     brand: {
       siteName: site?.brand_name || 'KrabiClaw',
       logoUrl: config.value?.logo_url || null,
+      faviconUrl: config.value?.favicon_url || null,
       primaryColor: config.value?.brand_color || null,
     },
     heroImage: locations.value[0]?.hero_image_public_url ? { url: locations.value[0].hero_image_public_url } : null,

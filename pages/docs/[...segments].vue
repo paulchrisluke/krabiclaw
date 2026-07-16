@@ -337,12 +337,11 @@ const docMedia = computed(() => resolveMedia({
 }))
 
 const categorySlug = computed(() => categoryToSlug(doc.value?.category) || categoryParam.value)
-const canonicalUrl = usePlatformSeoUrl(() => {
+const docPath = computed(() => {
   if (!doc.value) return '/docs'
   if (doc.value.canonical_url) return doc.value.canonical_url
   return isOverviewDoc.value ? `/docs/${categorySlug.value}` : `/docs/${categorySlug.value}/${doc.value.slug}`
 })
-const ogImage = useSharedOgImage(() => docMedia.value.thumb)
 const seoTitle = computed(() => doc.value?.title || 'Documentation')
 const seoDescription = computed(() => doc.value?.seo_description || doc.value?.excerpt || `Learn about ${doc.value?.title || 'this topic'} in KrabiClaw documentation.`)
 
@@ -352,21 +351,29 @@ const breadcrumbs = computed(() => [
   ...(doc.value && !isOverviewDoc.value ? [{ name: doc.value.title, url: `/docs/${categorySlug.value}/${doc.value.slug}` }] : []),
 ])
 
-useSeoMeta({
-  title: seoTitle,
-  description: seoDescription,
-  ogTitle: seoTitle,
-  ogDescription: seoDescription,
-  ogImage,
-  twitterImage: ogImage,
-  ogUrl: canonicalUrl,
-})
+// useSocialMetadata directly (not usePlatformPageSeo) — this page already emits its own
+// complete schema.org @graph via useContentPageSchema below; usePlatformPageSeo would add
+// a second WebSite/WebPage graph with the same @id values, so only the OG/tag layer is
+// wanted here, not the schema-emitting half.
+const runtimeConfig = useRuntimeConfig()
+const requestURL = useRequestURL()
+const platformOrigin = computed(() => runtimeConfig.public.siteUrl || requestURL.origin)
+const { canonicalUrl } = useSocialMetadata(() => ({
+  template: 'platform' as const,
+  pageType: 'article' as const,
+  title: seoTitle.value,
+  description: seoDescription.value,
+  canonicalUrl: resolveSeoUrl(docPath.value, platformOrigin.value),
+  brand: { siteName: 'KrabiClaw', logoUrl: resolveSeoUrl('/krabi-claw-logo.png', platformOrigin.value), primaryColor: '#1e1b4b', secondaryColor: '#4338ca' },
+  label: doc.value?.category || null,
+  heroImage: docMedia.value.thumb ? { url: docMedia.value.thumb } : null,
+  robots: doc.value?.robots?.trim() || null,
+  indexable: !doc.value?.robots || !/noindex/i.test(doc.value.robots),
+}), platformOrigin)
 
 useHead(() => ({
-  link: [{ rel: 'canonical', href: canonicalUrl.value }],
   meta: [
     ...(doc.value?.seo_keywords?.trim() ? [{ name: 'keywords', content: doc.value.seo_keywords.trim() }] : []),
-    ...(doc.value?.robots?.trim() ? [{ name: 'robots', content: doc.value.robots.trim() }] : []),
   ],
 }))
 

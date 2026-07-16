@@ -604,6 +604,7 @@ if (!isPlatform && siteId && !isBlawbyPage.value) {
     brand: {
       siteName: site?.brand_name || restaurantName.value,
       logoUrl: bootstrapConfig.value?.logo_url || null,
+      faviconUrl: bootstrapConfig.value?.favicon_url || null,
       primaryColor: bootstrapConfig.value?.brand_color || null,
     },
     heroImage: hero.value.image ? { url: hero.value.image } : null,

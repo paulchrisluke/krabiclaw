@@ -252,9 +252,7 @@ const { locale } = useI18n()
 const vertCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 const { t } = useI18n()
 const route = useRoute()
-const requestURL = useRequestURL()
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const tenantOgImage = useTenantOgImage()
 
 // Plain-Tailwind form styling — replaces UInput/UTextarea's default look
 // now that this page no longer depends on Nuxt UI (see SayaFormField.vue).
@@ -364,15 +362,15 @@ const handleTenantContact = async () => {
 }
 
 // ── SEO ──────────────────────────────────────────────────
-useSeoMeta({
-  title: computed(() => `Contact | ${businessName.value}`),
+useTenantSocialMetadata(() => ({
+  path: '/contact',
+  title: `Contact | ${businessName.value}`,
   description: 'Get in touch with our business.',
-  ogTitle: computed(() => `Contact | ${businessName.value}`),
-  ogDescription: 'Get in touch with our business.',
-  ogSiteName: computed(() => businessName.value),
-  twitterTitle: computed(() => `Contact | ${businessName.value}`),
-  twitterDescription: 'Get in touch with our business.',
-  ogImage: tenantOgImage,
-  ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
-})
+  brand: {
+    siteName: businessName.value,
+    logoUrl: siteConfig.value?.logo_url || null,
+    faviconUrl: siteConfig.value?.favicon_url || null,
+    primaryColor: siteConfig.value?.brand_color || null,
+  },
+}))
 </script>

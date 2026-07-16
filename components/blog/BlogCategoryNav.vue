@@ -6,7 +6,7 @@
         v-for="post in group.posts"
         :key="post.id"
         :to="`${basePath}/${post.slug}`"
-        class="block truncate rounded px-2.5 py-1.5 no-underline"
+        class="line-clamp-2 rounded px-2.5 py-1.5 leading-snug no-underline"
         :class="post.slug === activeSlug ? 'font-semibold text-gray-900 bg-gray-100' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'"
       >
         {{ post.title }}

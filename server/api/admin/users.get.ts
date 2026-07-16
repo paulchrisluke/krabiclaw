@@ -3,6 +3,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { queryAll } from '~/server/db'
 import { betterAuthTimestampToIso, type BetterAuthTimestamp } from '~/server/utils/better-auth-timestamps'
+import { escapeLikePattern } from '~/server/utils/public-search'
 
 type UserQueryParam = string | number
 
@@ -32,9 +33,8 @@ export default defineEventHandler(async (event) => {
   const where: string[] = []
   const params: UserQueryParam[] = []
   if (search) {
-    const escapedSearch = search.replace(/([%_\\])/g, '\\$1')
     where.push("lower(email) LIKE ? ESCAPE '\\'")
-    params.push(`%${escapedSearch}%`)
+    params.push(`%${escapeLikePattern(search)}%`)
   }
 
   let users: UserRow[]

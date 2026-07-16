@@ -18,13 +18,13 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'upload_user_media',
-      description: 'Canonical inline upload path for user-provided images and videos — "add photos", "upload my pictures", "add this video". Accepts a ChatGPT file reference for either an image or a video; the content type is auto-detected from the file bytes, not from a hint. For a video, you may also pass poster_file (an image) to use as its thumbnail. This tool only uploads into the site media library; it does not place the asset on a page. After upload succeeds, call the matching assignment tool (set_home_hero_image, set_home_hero_video, set_logo, set_location_hero_image, set_location_hero_video, set_post_image, set_experience_image, set_experience_video, etc.). Only call this tool directly once the host has actually resolved a `file`/`file_id` value for you (this reliably happens for files sent through the explicit attach/paperclip control). An image the user merely pastes or drops inline into the chat message is NOT guaranteed to come with a resolvable file reference even though you can see it — do not guess or invent a file/file_id value for it. If you do not have a real resolved reference, call open_media_upload (or the scoped variant, e.g. open_experience_media_upload) instead so the user can supply the image through the upload widget.',
+      description: 'Canonical inline upload path for user-provided images, videos, and Markdown documents (.md/.markdown). Accepts a resolved ChatGPT file reference and validates the actual bytes. Markdown files are stored in the media library; after upload, call analyze_document with the returned assetId. Images and videos remain available to the matching assignment tools. For a video, poster_file may provide a thumbnail. Only call this tool when the host supplied a real file/file_id reference; never invent one.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
       inputSchema: {
         file: chatgptFileInput,
-        file_id: { type: 'string', description: 'Resolved file identifier for a user-uploaded image or video (e.g. file_abc123). Prefer file when the host can supply it directly.' },
+        file_id: { type: 'string', description: 'Resolved file identifier for a user-uploaded image, video, or Markdown document (e.g. file_abc123). Prefer file when the host can supply the filename directly.' },
         poster_file: { ...chatgptFileInput, description: 'Optional poster/thumbnail image for a video upload. Ignored for image uploads.' },
         category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'blog', 'other'], description: 'What this media will be used for.' },
         description: { type: 'string', description: 'Description of the media (stored as alt text).' },
@@ -41,7 +41,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
           assetId: { type: 'string' },
           publicUrl: { type: 'string' },
           thumbnailUrl: { type: ['string', 'null'] },
-          kind: { type: 'string', enum: ['image', 'video'] },
+          kind: { type: 'string', enum: ['image', 'video', 'file'] },
           posterWarning: { type: ['string', 'null'] },
           nextStep: { type: 'string' },
         },
@@ -119,6 +119,38 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
           items_created: { type: 'number', description: 'Number of menu items extracted and created.' },
         },
         required: ['menu'],
+      },
+    }),
+  siteTool({
+      name: 'analyze_document',
+      description: 'Summarize, answer questions about, or extract information from an uploaded Markdown document (.md/.markdown), grounded strictly in that file. Use upload_user_media with the attached Markdown file or get_site_media_assets to obtain its asset_id. Pass a question for grounded Q&A; omit it for a summary.',
+      domain: 'media',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        asset_id: { type: 'string', description: 'Media asset ID of the uploaded Markdown document.' },
+        question: { type: 'string', description: 'Optional question to answer using only the document content. Omit for a summary.' },
+      },
+      required: ['asset_id'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          answer: { type: 'string', description: 'Grounded answer or summary.' },
+          creditsRemaining: { type: 'number', description: 'AI credits remaining after document analysis.' },
+          stats: {
+            type: 'object',
+            description: 'Structural stats detected in the document.',
+            properties: {
+              headings: { type: 'number' },
+              listItems: { type: 'number' },
+              tableRows: { type: 'number' },
+              codeBlocks: { type: 'number' },
+              blockquotes: { type: 'number' },
+              links: { type: 'number' },
+            },
+          },
+        },
+        required: ['answer', 'creditsRemaining', 'stats'],
       },
     }),
 ]

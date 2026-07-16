@@ -117,7 +117,7 @@ const { isAuthenticated } = useAuth()
 const { locale } = useI18n()
 const locationsCopy = computed(() => getVerticalCopy(unref(site)?.vertical, locale.value))
 
-const { locations, pending } = useBootstrap()
+const { locations, pending, config } = useBootstrap()
 
 function formatAddress(address: AddressInput) {
   if (!address) return ''
@@ -132,15 +132,16 @@ const placeholders = computed(() => [
 
 const siteName = computed(() => unref(site)?.brand_name || 'KrabiClaw')
 
-useSeoMeta({
-  title: () => `Locations · ${siteName.value}`,
+useTenantSocialMetadata(() => ({
+  path: '/locations',
+  title: `Locations · ${siteName.value}`,
   description: 'Find all our locations.',
-  ogTitle: () => `Locations · ${siteName.value}`,
-  ogDescription: 'Find all our locations.',
-  ogSiteName: () => siteName.value,
-  twitterTitle: () => `Locations · ${siteName.value}`,
-  twitterDescription: 'Find all our locations.',
-  ogImage: useTenantOgImage(),
-  ogUrl: useSeoUrl('/locations')
-})
+  label: 'Locations',
+  brand: {
+    siteName: siteName.value,
+    logoUrl: config.value?.logo_url || null,
+    faviconUrl: config.value?.favicon_url || null,
+    primaryColor: config.value?.brand_color || null,
+  },
+}))
 </script>

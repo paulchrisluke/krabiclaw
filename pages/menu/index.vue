@@ -210,15 +210,16 @@ const defaultCurrency = computed(() => {
 const formatMenuPrice = (amount: unknown, emptyLabel = 'TBD') =>
   formatMoneyAmount(amount, defaultCurrency.value, emptyLabel)
 
-useSeoMeta({
-  title: () => `Menu · ${restaurantName.value}`,
-  description: () => `Full menu at ${restaurantName.value}.`,
-  ogTitle: () => `Menu · ${restaurantName.value}`,
-  ogDescription: () => `Full menu at ${restaurantName.value}.`,
-  ogSiteName: () => restaurantName.value,
-  twitterTitle: () => `Menu · ${restaurantName.value}`,
-  twitterDescription: () => `Full menu at ${restaurantName.value}.`,
-  ogImage: useTenantOgImage(),
-  ogUrl: useSeoUrl('/menu')
-})
+useTenantSocialMetadata(() => ({
+  path: '/menu',
+  title: `Menu · ${restaurantName.value}`,
+  description: `Full menu at ${restaurantName.value}.`,
+  label: 'Menu',
+  brand: {
+    siteName: restaurantName.value,
+    logoUrl: bootstrapConfig.value?.logo_url || null,
+    faviconUrl: bootstrapConfig.value?.favicon_url || null,
+    primaryColor: bootstrapConfig.value?.brand_color || null,
+  },
+}))
 </script>

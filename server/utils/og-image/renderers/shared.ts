@@ -23,6 +23,9 @@ export interface RenderInputs extends OgImageRenderPayload {
   /** Already-resolved data: URIs — fetching/inlining happens in server/utils/og-image/pipeline.ts. */
   backgroundImageDataUri?: string | null
   logoDataUri?: string | null
+  /** Square icon, preferred over logoDataUri for the small brand mark below — logoDataUri
+   * is often a non-square wordmark that distorts when forced into a square slot. */
+  faviconDataUri?: string | null
 }
 
 /**
@@ -125,8 +128,13 @@ export function buildOgImageCard(payload: RenderInputs, variant: OgImageCardVari
     'div',
     { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 36 },
     [
-      payload.logoDataUri
-        ? node('img', { width: 44, height: 44, borderRadius: 8 }, undefined, { src: payload.logoDataUri, width: 44, height: 44 })
+      payload.faviconDataUri || payload.logoDataUri
+        ? node(
+            'img',
+            { width: 44, height: 44, borderRadius: 8, objectFit: 'contain' },
+            undefined,
+            { src: payload.faviconDataUri || payload.logoDataUri!, width: 44, height: 44 },
+          )
         : node('div', {
             display: 'flex',
             width: 44,

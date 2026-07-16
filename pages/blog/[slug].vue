@@ -127,7 +127,7 @@ const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).de
 const { isTenant, siteId, site } = useTenantSite()
 if (!isTenant || !siteId) throw createError({ statusCode: 404 })
 
-definePageMeta({ layout: 'saya' })
+definePageMeta({ layout: 'saya', middleware: 'tenant-blog-canonical' })
 
 const { resolveMedia } = useMedia()
 
@@ -209,7 +209,7 @@ if (!data.value?.post) {
 }
 
 const post = computed(() => data.value?.post ?? null)
-const { blogList } = useBootstrap()
+const { blogList, config } = useBootstrap()
 const allPosts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 const { categories } = useTenantBlogNav(allPosts)
 const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))
@@ -265,30 +265,30 @@ const postMedia = computed(() => resolveMedia({
 }))
 
 const postPath = computed(() => `/blog/${post.value?.slug ?? ''}`)
-const canonicalUrl = useSeoUrl(() => post.value ? (post.value.canonical_url || postPath.value) : '/blog')
-const ogImage = useTenantOgImage(() => postMedia.value.thumb)
 const seoTitle = computed(() => post.value ? `${post.value.title} | ${siteName.value}` : 'Blog')
 const seoDescription = computed(() => post.value?.seo_description || post.value?.excerpt || `A post from ${siteName.value}.`)
 
-useSeoMeta({
-  title: seoTitle,
-  description: seoDescription,
-  ogTitle: seoTitle,
-  ogDescription: seoDescription,
-  ogSiteName: siteName,
-  twitterTitle: seoTitle,
-  twitterDescription: seoDescription,
-  ogUrl: canonicalUrl,
-  ogType: 'article',
-  ogImage,
-  twitterImage: ogImage,
-})
+const { canonicalUrl } = useTenantSocialMetadata(() => ({
+  path: post.value ? (post.value.canonical_url || postPath.value) : '/blog',
+  title: seoTitle.value,
+  description: seoDescription.value,
+  pageType: 'article',
+  label: post.value?.category || null,
+  author: authorName.value,
+  publishedAt: post.value?.published_at || null,
+  robots: post.value?.robots || null,
+  brand: {
+    siteName: siteName.value,
+    logoUrl: config.value?.logo_url || null,
+    faviconUrl: config.value?.favicon_url || null,
+    primaryColor: config.value?.brand_color || null,
+  },
+  heroImage: postMedia.value.thumb ? { url: postMedia.value.thumb } : null,
+}))
 
 useHead(() => ({
-  link: [{ rel: 'canonical', href: canonicalUrl.value }],
   meta: [
     ...(post.value?.seo_keywords?.trim() ? [{ name: 'keywords', content: post.value.seo_keywords.trim() }] : []),
-    ...(post.value?.robots?.trim() ? [{ name: 'robots', content: post.value.robots.trim() }] : []),
   ],
 }))
 

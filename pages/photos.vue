@@ -71,7 +71,7 @@ definePageMeta({ layout: 'saya' })
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
-const { locations, photosList, pending } = useBootstrap()
+const { locations, photosList, pending, config } = useBootstrap()
 const photos = photosList
 const siteName = computed(() => site?.brand_name || 'Our Site')
 
@@ -115,16 +115,16 @@ const lightboxItems = computed(() =>
   }))
 )
 
-const currentPageUrl = useSeoUrl('/photos')
-useSeoMeta({
-  title: computed(() => `Photos | ${siteName.value}`),
-  description: computed(() => `Photo gallery from ${siteName.value}.`),
-  ogTitle: computed(() => `Photos | ${siteName.value}`),
-  ogDescription: computed(() => `Photo gallery from ${siteName.value}.`),
-  ogSiteName: computed(() => siteName.value),
-  twitterTitle: computed(() => `Photos | ${siteName.value}`),
-  twitterDescription: computed(() => `Photo gallery from ${siteName.value}.`),
-  ogImage: useTenantOgImage(),
-  ogUrl: currentPageUrl
-})
+useTenantSocialMetadata(() => ({
+  path: '/photos',
+  title: `Photos | ${siteName.value}`,
+  description: `Photo gallery from ${siteName.value}.`,
+  label: 'Gallery',
+  brand: {
+    siteName: siteName.value,
+    logoUrl: config.value?.logo_url || null,
+    faviconUrl: config.value?.favicon_url || null,
+    primaryColor: config.value?.brand_color || null,
+  },
+}))
 </script>

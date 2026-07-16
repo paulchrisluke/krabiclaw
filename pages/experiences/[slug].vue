@@ -503,10 +503,6 @@ const locationAddress = computed(() => {
   const addr = loc.address as Addr
   return [...(addr.addressLines ?? []), addr.locality, addr.administrativeArea].filter(Boolean).join(', ') || null
 })
-const currentPageUrl = useSeoUrl(() => `/experiences/${slug}`)
-const canonicalUrl = useSeoUrl(() => experience.value?.canonical_url || `/experiences/${slug}`)
-const ogImage = useSharedOgImage(() => experience.value?.og_image_public_url || experience.value?.image_url || (site as ApiValue)?.logo_url)
-
 const sanitizedBody = computed(() => {
   const raw = experience.value?.body
   if (!raw) return ''
@@ -705,34 +701,36 @@ async function submitBooking() {
 }
 
 // SEO + structured data
-useBreadcrumbSchema([
-  { name: 'Home', url: `${siteUrl}/` },
-  { name: 'Experiences', url: `${siteUrl}/experiences` },
-  { name: experience.value?.title ?? slug, url: `${siteUrl}/experiences/${slug}` },
-])
-
 const seoTitle = computed(() => experience.value?.seo_title ?? (experience.value ? `${experience.value.title} | Experiences` : 'Experience'))
 const seoDescription = computed(() =>
   truncateForSeo(experience.value?.seo_description ?? experience.value?.tagline ?? `Book the ${experience.value?.title} experience.`, 160)
 )
 
-useSeoMeta({
-  title: seoTitle,
-  description: seoDescription,
-  ogTitle: seoTitle,
-  ogDescription: seoDescription,
-  ogSiteName: () => siteName.value,
-  twitterTitle: seoTitle,
-  twitterDescription: seoDescription,
-  ogUrl: currentPageUrl,
-  ogType: 'website',
-  ogImage,
-  robots: () => experience.value?.robots || undefined,
+const { canonicalUrl } = useTenantSocialMetadata(() => {
+  const heroImageUrl = experience.value?.og_image_public_url || experience.value?.image_url || null
+  return {
+    path: experience.value?.canonical_url || `/experiences/${slug}`,
+    title: seoTitle.value,
+    description: seoDescription.value,
+    label: 'Experience',
+    robots: experience.value?.robots || null,
+    brand: {
+      siteName: siteName.value,
+      logoUrl: siteConfig.value?.logo_url || null,
+      faviconUrl: siteConfig.value?.favicon_url || null,
+      primaryColor: siteConfig.value?.brand_color || null,
+    },
+    heroImage: heroImageUrl ? { url: heroImageUrl } : null,
+  }
 })
 
-useHead({
-  link: [{ rel: 'canonical', href: canonicalUrl }],
-})
+const resolvedCanonicalUrl = computed(() => canonicalUrl.value || `${siteUrl}/experiences/${slug}`)
+
+useBreadcrumbSchema([
+  { name: 'Home', url: `${siteUrl}/` },
+  { name: 'Experiences', url: `${siteUrl}/experiences` },
+  { name: experience.value?.title ?? slug, url: resolvedCanonicalUrl.value },
+])
 
 // JSON-LD — @graph with WebPage + Product/Service + Organization
 // Event entities are omitted until the booking system exposes real dated sessions
@@ -745,7 +743,7 @@ useHead({
         const val = experience.value
         if (!val) return '{}'
 
-        const experienceUrl = `${siteUrl}/experiences/${val.slug}`
+        const experienceUrl = resolvedCanonicalUrl.value
         const orgId = `${siteUrl}/#organization`
         const experienceId = `${experienceUrl}#experience`
         const currency = siteConfig.value?.default_currency || 'THB'

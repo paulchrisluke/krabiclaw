@@ -42,6 +42,10 @@ export interface SocialBrand {
   /** og:site_name and the name rendered on generated OG image cards. */
   siteName: string
   logoUrl?: string | null
+  /** Square icon (favicon) — preferred over logoUrl for the small brand mark on generated
+   * OG cards, since logoUrl is often a non-square wordmark that distorts when forced into
+   * a square slot. Falls back to logoUrl when unset. */
+  faviconUrl?: string | null
   /** Hex color, e.g. '#0f172a'. Used as the generated-card background/accent. */
   primaryColor?: string | null
   secondaryColor?: string | null
@@ -175,6 +179,7 @@ export interface OgImageRenderPayload {
   label?: string | null
   location?: string | null
   logoUrl?: string | null
+  faviconUrl?: string | null
   backgroundImageUrl?: string | null
   primaryColor?: string | null
   secondaryColor?: string | null
@@ -192,8 +197,9 @@ function buildOgImageQueryParams(payload: OgImageRenderPayload): URLSearchParams
   params.set('siteName', payload.siteName)
   if (payload.label) params.set('label', payload.label)
   if (payload.location) params.set('location', payload.location)
-  if (payload.logoUrl) params.set('logoUrl', payload.logoUrl)
-  if (payload.backgroundImageUrl) params.set('backgroundImageUrl', payload.backgroundImageUrl)
+  if (payload.logoUrl && payload.logoUrl.startsWith('https://')) params.set('logoUrl', payload.logoUrl)
+  if (payload.faviconUrl && payload.faviconUrl.startsWith('https://')) params.set('faviconUrl', payload.faviconUrl)
+  if (payload.backgroundImageUrl && payload.backgroundImageUrl.startsWith('https://')) params.set('backgroundImageUrl', payload.backgroundImageUrl)
   if (payload.primaryColor) params.set('primaryColor', payload.primaryColor)
   if (payload.secondaryColor) params.set('secondaryColor', payload.secondaryColor)
   // Sort so the query string — and therefore the cache key — is stable regardless of
@@ -240,6 +246,7 @@ export function resolveSocialOgImage(input: SocialPageMetadataInput, origin: str
     label: input.label,
     location: input.location,
     logoUrl: input.brand.logoUrl,
+    faviconUrl: input.brand.faviconUrl,
     backgroundImageUrl: input.heroImage?.url,
     primaryColor: input.brand.primaryColor,
     secondaryColor: input.brand.secondaryColor,
@@ -277,6 +284,7 @@ export function parseOgImageQuery(query: Record<string, string | string[] | unde
     label: get('label') || null,
     location: get('location') || null,
     logoUrl: get('logoUrl', MAX_QUERY_URL_LENGTH) || null,
+    faviconUrl: get('faviconUrl', MAX_QUERY_URL_LENGTH) || null,
     backgroundImageUrl: get('backgroundImageUrl', MAX_QUERY_URL_LENGTH) || null,
     primaryColor: get('primaryColor') || null,
     secondaryColor: get('secondaryColor') || null,

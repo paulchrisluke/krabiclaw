@@ -1,5 +1,3 @@
-import { BLOG_CATEGORY_LABELS } from '~/utils/blog-categories'
-
 export interface PlatformMcpToolDefinition {
   name: string
   description: string
@@ -20,7 +18,6 @@ const NULLABLE_NUMBER = { type: ['number', 'null'] }
 const NULLABLE_BOOLEAN = { type: ['boolean', 'null'] }
 const COMPONENT_STATUS_ENUM = ['active', 'inactive']
 const ROBOTS_ENUM = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow']
-const BLOG_CATEGORY_ENUM = BLOG_CATEGORY_LABELS
 const DOC_CATEGORY_ENUM = ['Getting Started', 'Menu Management', 'Theme Customization', 'SEO & Marketing', 'Integrations', 'Advanced']
 const DOC_DIFFICULTY_ENUM = ['Beginner', 'Intermediate', 'Advanced']
 const CONTENT_DOCUMENT_OWNER_TYPE_ENUM = ['platform_blog', 'platform_doc', 'tenant_blog']
@@ -893,11 +890,12 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   readTool({
     name: 'list_platform_blog_posts',
-    description: 'List KrabiClaw platform blog posts. Optionally filter by published or draft status.',
+    description: 'List KrabiClaw platform blog posts. Optionally filter by published or draft status. For tenant sites, provide site_id to list site-scoped blog posts.',
     inputSchema: {
       type: 'object',
       properties: {
         status: { type: 'string', enum: ['published', 'draft'] },
+        site_id: { type: 'string', description: 'Optional site id to list tenant blog posts instead of platform posts.' },
       },
       additionalProperties: false,
     },
@@ -910,10 +908,13 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   readTool({
     name: 'get_platform_blog_post',
-    description: 'Fetch one platform blog post in the canonical component model with resolved media fields.',
+    description: 'Fetch one platform blog post in the canonical component model with resolved media fields. For tenant sites, provide site_id to fetch site-scoped blog posts.',
     inputSchema: {
       type: 'object',
-      properties: { post_id: { type: 'string', description: "Post id, or its slug from the public URL (krabiclaw.com/blog/<category>/<slug>)." } },
+      properties: {
+        post_id: { type: 'string', description: "Post id, or its slug from the public URL (krabiclaw.com/blog/<category>/<slug>)." },
+        site_id: { type: 'string', description: 'Optional site id to fetch tenant blog posts instead of platform posts.' },
+      },
       required: ['post_id'],
       additionalProperties: false,
     },
@@ -934,12 +935,13 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         title: { type: 'string' },
         body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
         excerpt: { type: 'string' },
-        category: { type: 'string', enum: BLOG_CATEGORY_ENUM },
+        category: { type: 'string', description: 'Platform posts use the documented platform categories; tenant categories are free text when site_id is provided.' },
         ...NAV_FIELDS_SCHEMA,
         seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         ...SEO_FIELDS_SCHEMA,
         components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
         publish: { type: 'boolean' },
+        site_id: { type: 'string', description: 'Optional site id to create tenant blog posts instead of platform posts.' },
       },
       required: ['title', 'body'],
       additionalProperties: false,
@@ -957,13 +959,14 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         title: { type: 'string' },
         body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
         excerpt: { type: 'string' },
-        category: { type: 'string', enum: BLOG_CATEGORY_ENUM },
+        category: { type: 'string', description: 'Platform posts use the documented platform categories; tenant categories are free text when site_id is provided.' },
         ...NAV_FIELDS_SCHEMA,
         seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         ...SEO_FIELDS_SCHEMA,
         components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
         publish: { type: 'boolean' },
         unpublish: { type: 'boolean' },
+        site_id: { type: 'string', description: 'Optional site id to update tenant blog posts instead of platform posts.' },
       },
       required: ['post_id'],
       additionalProperties: false,
@@ -988,7 +991,10 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     openWorld: true,
     inputSchema: {
       type: 'object',
-      properties: { post_id: { type: 'string', description: 'Post id or slug.' } },
+      properties: {
+        post_id: { type: 'string', description: 'Post id or slug.' },
+        site_id: { type: 'string', description: 'Optional site id for a tenant blog post.' },
+      },
       required: ['post_id'],
       additionalProperties: false,
     },
@@ -1012,7 +1018,10 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     openWorld: true,
     inputSchema: {
       type: 'object',
-      properties: { post_id: { type: 'string', description: 'Post id or slug.' } },
+      properties: {
+        post_id: { type: 'string', description: 'Post id or slug.' },
+        site_id: { type: 'string', description: 'Optional site id for a tenant blog post.' },
+      },
       required: ['post_id'],
       additionalProperties: false,
     },
@@ -1037,6 +1046,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        site_id: { type: 'string', description: 'Optional site id for tenant blog posts.' },
         items: {
           type: 'array',
           items: {
@@ -1074,7 +1084,10 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     openWorld: true,
     inputSchema: {
       type: 'object',
-      properties: { post_id: { type: 'string', description: 'Post id or slug.' } },
+      properties: {
+        post_id: { type: 'string', description: 'Post id or slug.' },
+        site_id: { type: 'string', description: 'Optional site id for a tenant blog post.' },
+      },
       required: ['post_id'],
       additionalProperties: false,
     },

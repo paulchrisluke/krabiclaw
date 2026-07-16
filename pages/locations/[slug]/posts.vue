@@ -51,26 +51,24 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
-const { location, postsList } = useBootstrap()
+const { location, postsList, config: bootstrapConfig } = useBootstrap()
 const posts = postsList
 
-const config = useRuntimeConfig()
-const siteUrl = config.public.siteUrl
+const runtimeConfig = useRuntimeConfig()
+const siteUrl = runtimeConfig.public.siteUrl
 
-const seoTitle = () => `Updates · ${location.value?.title || slug.value}`
-const seoDescription = () => `Latest news and updates from ${location.value?.title || slug.value} at ${siteName.value}.`
-
-useSeoMeta({
-  title: seoTitle,
-  description: seoDescription,
-  ogTitle: seoTitle,
-  ogDescription: seoDescription,
-  ogSiteName: () => siteName.value,
-  twitterTitle: seoTitle,
-  twitterDescription: seoDescription,
-  ogImage: useSharedOgImage(),
-  ogUrl: useSeoUrl(() => `/locations/${slug.value}/posts`)
-})
+useTenantSocialMetadata(() => ({
+  path: `/locations/${slug.value}/posts`,
+  title: `Updates · ${location.value?.title || slug.value}`,
+  description: `Latest news and updates from ${location.value?.title || slug.value} at ${siteName.value}.`,
+  location: location.value?.title || null,
+  brand: {
+    siteName: siteName.value,
+    logoUrl: bootstrapConfig.value?.logo_url || null,
+    faviconUrl: bootstrapConfig.value?.favicon_url || null,
+    primaryColor: bootstrapConfig.value?.brand_color || null,
+  },
+}))
 
 useSchemaOrg([
   computed(() => ({
