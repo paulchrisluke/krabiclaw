@@ -68,7 +68,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const messageId = body.messageId?.trim() || crypto.randomUUID()
-  await insertInboundSubmissionReply(db, {
+  await insertInboundSubmissionReply(env, db, {
     submissionType: body.submissionType,
     submissionId: body.submissionId,
     organizationId: orgSite.organizationId,

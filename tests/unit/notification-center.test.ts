@@ -11,6 +11,7 @@ import {
   redactNotificationPayload,
   tenantEventTypeForTemplate,
 } from '../../server/utils/notification-center.ts'
+import { composeOwnerThreadInboxUrl } from '../../server/utils/dashboard-notification-links.ts'
 
 test('Discord delivery mode fails closed', () => {
   assert.equal(getDiscordDeliveryMode({}), 'log_only')
@@ -157,6 +158,21 @@ test('dashboard notification writers use canonical fields and guest replies emit
   const notifications = readFileSync('server/utils/notifications.ts', 'utf8')
   const guestReplyWriter = notifications.slice(notifications.indexOf('async function notifyGuestThreadReplyInner'))
   assert.doesNotMatch(guestReplyWriter, /createCanonicalNotification/)
+
+  const inboundWriter = readFileSync('server/utils/submission-messages.ts', 'utf8')
+  assert.match(inboundWriter, /buildOwnerThreadInboxUrl\(env, db/)
+  assert.match(inboundWriter, /deepLink: replyUrl/)
+  assert.equal(inboundWriter.match(/buildCanonicalNotificationInsert\(\{/g)?.length, 1)
+})
+
+test('canonical guest-reply deep link targets the exact dashboard inbox thread', () => {
+  assert.equal(composeOwnerThreadInboxUrl({
+    NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://staging.krabiclaw.com/',
+  }, {
+    orgSlug: 'krabi-team',
+    siteSlug: 'sunset-cafe',
+    locationSlug: 'ao-nang',
+  }, 'thread/with spaces'), 'https://staging.krabiclaw.com/dashboard/krabi-team/sites/sunset-cafe/ao-nang/inbox?thread=thread%2Fwith+spaces')
 })
 
 test('notification migration preserves legacy rows while adding per-user read and delivery relations', () => {

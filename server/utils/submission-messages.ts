@@ -10,6 +10,7 @@ import {
 } from '~/server/utils/reply-address'
 import { getReplyDomain } from '~/server/utils/reply-domain'
 import { buildCanonicalNotificationInsert, NOTIFICATION_EVENT_TYPES } from '~/server/utils/notification-center'
+import { buildOwnerThreadInboxUrl, type DashboardNotificationLinkEnv } from '~/server/utils/dashboard-notification-links'
 
 export type SubmissionType = ReplySubmissionType
 
@@ -268,7 +269,7 @@ export async function insertSubmissionMessage(db: DbClient, opts: {
   return id
 }
 
-export async function insertInboundSubmissionReply(db: DbClient, opts: {
+export async function insertInboundSubmissionReply(env: DashboardNotificationLinkEnv, db: DbClient, opts: {
   submissionType: SubmissionType
   submissionId: string
   organizationId: string
@@ -283,6 +284,12 @@ export async function insertInboundSubmissionReply(db: DbClient, opts: {
   const now = new Date().toISOString()
   const template = opts.channel === 'email' ? 'submission_reply_email' : 'submission_reply_whatsapp'
   const title = `New ${opts.channel === 'email' ? 'email' : 'WhatsApp'} reply from ${thread.guest_name}`
+  const replyUrl = await buildOwnerThreadInboxUrl(env, db, {
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    locationId: thread.location_id,
+    threadId: thread.id,
+  })
   const notification = buildCanonicalNotificationInsert({
     scope: 'site',
     eventType: NOTIFICATION_EVENT_TYPES.GUEST_REPLY_CREATED,
@@ -291,12 +298,14 @@ export async function insertInboundSubmissionReply(db: DbClient, opts: {
     locationId: thread.location_id,
     title,
     message: `${thread.guest_name} replied by ${opts.channel}.`,
+    deepLink: replyUrl,
     payload: {
       thread_id: thread.id,
       submission_type: opts.submissionType,
       submission_id: opts.submissionId,
       from: opts.from ?? null,
       message: opts.body,
+      deep_link: replyUrl ?? '',
     },
     template,
   }, undefined, now)

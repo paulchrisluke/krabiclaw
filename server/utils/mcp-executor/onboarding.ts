@@ -1,6 +1,6 @@
 import type { McpExecutorContext } from './shared'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
-import { getPlatformDomain } from '~/server/utils/notifications'
+import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
 import { createPreviewToken } from '~/server/utils/preview-token'
 import { getFreeSiteDomain } from '~/server/utils/tenant-hosts'
 import { getSiteForMcp } from '~/server/utils/mcp-workflows'
