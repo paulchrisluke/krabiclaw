@@ -492,6 +492,8 @@ const applyRouteContentScope = () => {
   const queryPage = route.query.page
   if (typeof queryPage === 'string' && pages.value.some(page => page.id === queryPage)) {
     selectedPageId.value = queryPage
+  } else {
+    selectedPageId.value = 'home'
   }
   selectedLocationId.value = dashboardLocation.currentLocationId.value
 }

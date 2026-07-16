@@ -53,6 +53,7 @@ const registryIdByRowKey: Record<string, string> = {
   about: 'about',
   locations: 'location',
   menu: 'menu',
+  experiences: 'experiences',
   contact: 'contact',
   reservations: 'reservations',
   order: 'order',

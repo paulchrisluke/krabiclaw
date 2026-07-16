@@ -53,7 +53,7 @@ const TARGET_DIRS = [
 // Matches the exact historical bug shape: a TS union or ternary that pairs
 // 'restaurant' and 'experience' literals without 'professional_service' (or
 // its DB alias 'service') anywhere on the same line.
-const NARROW_UNION_PATTERN = /['"]restaurant['"]\s*\|\s*['"]experience['"]|['"]experience['"]\s*\|\s*['"]restaurant['"]/
+const NARROW_UNION_PATTERN = /['"]restaurant['"]\s*\|\s*['"]experience['"]|['"]experience['"]\s*\|\s*['"]restaurant['"]|\?\s*['"](experience|restaurant)['"]\s*:\s*['"](experience|restaurant)['"]/
 
 function walk(path: string, files: string[] = []): string[] {
   const stat = statSync(path)

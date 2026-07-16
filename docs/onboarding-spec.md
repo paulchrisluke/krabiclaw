@@ -21,7 +21,7 @@ Global first, local second, persistent after that.
 
 **Current** — the flow is draft-first, and this is the one and only new-site creation path:
 
-`OnboardingWizard.vue`: `welcome → vertical → source → url/manual name → confirm → details → importing → imported`, then optional post-creation handoff cards (brand essentials, social/polish/MCP — all skippable via "Set up later").
+`OnboardingWizard.vue`: `welcome → vertical → source → url/manual name → confirm → details → importing → imported`, then optional post-creation handoff cards (brand essentials, social/polish/MCP — all skippable via "Set up later"). Brand essentials is required before leaving onboarding but optional/skippable via "Set up later".
 
 - `submitDetails()` posts to `/api/dashboard/onboarding/drafts/from-place` or `/manual`, which calls `buildOnboardingDraftPayload()` in `server/utils/onboarding-drafts.ts` and returns a `previewToken` for a private preview *before* the site is committed.
 - `commitDraft()` turns that draft into a real site via `POST /api/dashboard/onboarding/drafts/[draftId]/commit`, which calls the same `runSiteCreation()` used everywhere else a site gets created (`POST /api/sites`, the MCP `create_site` tool).
@@ -73,8 +73,8 @@ Recommended mechanism (still just a proposal, not implemented): add a single nul
 | # | Step | Required | Lands on |
 |---|---|---|---|
 | 1 | Business basics (Maps import or manual: name, vertical, address, contact) | Required | Wizard |
-| 2 | Draft preview (private, current architecture) | Required (shown automatically, not opt-in) | Wizard → `/preview/draft/...` |
-| 3 | Brand essentials — logo, hero photo (upload or keep template), brand color | Required | Wizard, post-creation `brandCard` step |
+| 2 | Draft preview (private, current architecture) | Proposed (not currently step 2) | Wizard → `/preview/draft/...` |
+| 3 | Brand essentials — logo, hero photo (upload or keep template), brand color | Optional (skippable) | Wizard, post-creation `brandCard` step |
 | 4 | Operations — timezone, currency, notification phone | Required | Wizard |
 | 5 | Core offering — menu (restaurant), experiences (experience vertical); no equivalent yet for professional_service (#284) | Required, most prominent step | Wizard, deep-linkable to dashboard CMS later |
 | 6 | Story — about, founder story, FAQ seeds | Optional but prompted | Wizard or checklist |

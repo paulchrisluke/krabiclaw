@@ -19,6 +19,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getPlaceDetailsByUrl, getPlaceDetails, PlaceDetailsError } from '~/server/utils/google-places'
+import { incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -35,6 +36,19 @@ export default defineEventHandler(async (event) => {
   const mapsUrl = typeof body?.mapsUrl === 'string' ? body.mapsUrl.trim() : ''
   const placeId = typeof body?.placeId === 'string' ? body.placeId.trim() : ''
   if (!mapsUrl && !placeId) return jsonResponse({ error: 'mapsUrl or placeId is required' }, { status: 400 })
+
+  if (!import.meta.dev) {
+    const hourWindow = Math.floor(Date.now() / 3_600_000)
+    const rateLimitOk = await incrementHourlyRateLimit(
+      db,
+      `rate:places-preview:user:${session.user.id}:${hourWindow}`,
+      20,
+      3_600_000,
+    )
+    if (!rateLimitOk) {
+      return jsonResponse({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+    }
+  }
 
   let place
   try {
