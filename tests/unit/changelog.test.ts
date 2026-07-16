@@ -6,6 +6,7 @@ import {
   ChangelogFetchError,
   DEFAULT_CHANGELOG_LIMIT,
   getRecentChanges,
+  parseChangelogLimitQuery,
   validateChangelogLimit,
 } from '../../server/utils/changelog.ts'
 import { getPlatformMcpTool } from '../../server/utils/platform-mcp-tools.ts'
@@ -69,17 +70,22 @@ test('getRecentChanges paginates, sorts, limits, and categorizes merged pull req
   assert.equal(result.commits.fix.length, 0)
 })
 
-test('getRecentChanges preserves conventional-commit scope metadata', async () => {
+test('getRecentChanges preserves conventional-commit metadata for breaking changes', async () => {
   const result = await getRecentChanges({
     githubToken: 'test-token',
     fetchImpl: (async () => githubResponse([
-      pullRequest({ number: 12, title: 'fix(auth): reject expired sessions', mergedAt: '2026-07-15T10:00:00Z' }),
+      pullRequest({ number: 12, title: 'fix(auth)!: reject expired sessions', mergedAt: '2026-07-15T10:00:00Z' }),
+      pullRequest({ number: 13, title: 'feat!: replace the release API', mergedAt: '2026-07-14T10:00:00Z' }),
     ])) as typeof fetch,
   })
 
   assert.equal(result.limit, DEFAULT_CHANGELOG_LIMIT)
   assert.equal(result.commits.fix[0]?.scope, 'auth')
   assert.equal(result.commits.fix[0]?.description, 'reject expired sessions')
+  assert.equal(result.commits.fix[0]?.type, 'fix')
+  assert.equal(result.commits.feat[0]?.scope, null)
+  assert.equal(result.commits.feat[0]?.description, 'replace the release API')
+  assert.equal(result.commits.feat[0]?.type, 'feat')
 })
 
 test('getRecentChanges keeps paging when the first full page satisfies limit but cannot prove the merge cutoff', async () => {
@@ -145,6 +151,56 @@ test('changelog limit validation rejects unbounded or non-integer requests', () 
   for (const value of [0, 101, 1.5, '10', null, Number.NaN]) {
     assert.throws(() => validateChangelogLimit(value), /integer between 1 and 100/)
   }
+})
+
+test('changelog query limit parser defaults only when omitted and rejects malformed values', () => {
+  assert.equal(parseChangelogLimitQuery(undefined), DEFAULT_CHANGELOG_LIMIT)
+  assert.equal(parseChangelogLimitQuery('1'), 1)
+  assert.equal(parseChangelogLimitQuery('100'), 100)
+  for (const value of ['', ' ', '0', '101', '1.5', '+1', '10abc', ['10'], null, 10]) {
+    assert.throws(() => parseChangelogLimitQuery(value), /integer between 1 and 100/)
+  }
+})
+
+test('changelog route returns 400 for malformed limits and preserves the omitted default', async (t) => {
+  const globals = globalThis as unknown as Record<string, unknown>
+  const originals = {
+    defineEventHandler: globals.defineEventHandler,
+    cloudflareEnv: globals.cloudflareEnv,
+    getQuery: globals.getQuery,
+    fetch: globalThis.fetch,
+  }
+  t.after(() => {
+    globals.defineEventHandler = originals.defineEventHandler
+    globals.cloudflareEnv = originals.cloudflareEnv
+    globals.getQuery = originals.getQuery
+    globalThis.fetch = originals.fetch
+  })
+
+  let fetchCount = 0
+  globals.defineEventHandler = (handler: unknown) => handler
+  globals.cloudflareEnv = () => ({ GITHUB_TOKEN: 'test-token' })
+  globals.getQuery = (event: { context: { query: Record<string, unknown> } }) => event.context.query
+  globalThis.fetch = (async () => {
+    fetchCount += 1
+    return githubResponse([])
+  }) as typeof fetch
+
+  const { default: handler } = await import('../../server/api/changelog.get.ts') as {
+    default: (_event: { context: { query: Record<string, unknown> } }) => Promise<Response>
+  }
+
+  for (const limit of ['', '0', '101', '1.5', '10abc']) {
+    const response = await handler({ context: { query: { limit } } })
+    assert.equal(response.status, 400)
+    assert.deepEqual(await response.json(), { error: 'limit must be an integer between 1 and 100.' })
+  }
+  assert.equal(fetchCount, 0)
+
+  const response = await handler({ context: { query: {} } })
+  assert.equal(response.status, 200)
+  assert.equal((await response.json() as { limit: number }).limit, DEFAULT_CHANGELOG_LIMIT)
+  assert.equal(fetchCount, 1)
 })
 
 test('getRecentChanges reports GitHub failures without response-body leakage', async () => {

@@ -1,15 +1,21 @@
 import { jsonResponse } from '~/server/utils/api-response'
-import { ChangelogFetchError, DEFAULT_CHANGELOG_LIMIT, getRecentChanges, MAX_CHANGELOG_LIMIT } from '~/server/utils/changelog'
+import { ChangelogFetchError, getRecentChanges, parseChangelogLimitQuery } from '~/server/utils/changelog'
 
 export default defineEventHandler(async (event) => {
   try {
-    const env = cloudflareEnv(event)
     const query = getQuery(event)
-    const requestedLimit = Number.parseInt(String(query.limit || ''), 10)
-    const prLimit = Number.isFinite(requestedLimit)
-      ? Math.max(1, Math.min(requestedLimit, MAX_CHANGELOG_LIMIT))
-      : DEFAULT_CHANGELOG_LIMIT
+    let prLimit: number
+    try {
+      prLimit = parseChangelogLimitQuery(query.limit)
+    } catch (error) {
+      if (!(error instanceof RangeError)) throw error
+      return jsonResponse(
+        { error: error.message },
+        { status: 400 },
+      )
+    }
 
+    const env = cloudflareEnv(event)
     const githubToken = env.GITHUB_TOKEN
     const repoOwner = env.GITHUB_REPO_OWNER || 'paulchrisluke'
     const repoName = env.GITHUB_REPO_NAME || 'krabiclaw'

@@ -63,6 +63,14 @@ export function validateChangelogLimit(limit: unknown): number {
   return limit
 }
 
+export function parseChangelogLimitQuery(limit: unknown): number {
+  if (limit === undefined) return validateChangelogLimit(undefined)
+  if (typeof limit !== 'string' || !/^\d+$/.test(limit)) {
+    throw new RangeError(`limit must be an integer between 1 and ${MAX_CHANGELOG_LIMIT}.`)
+  }
+  return validateChangelogLimit(Number(limit))
+}
+
 function emptyCategories(): Record<ChangeType, RecentChange[]> {
   return {
     feat: [],
@@ -83,7 +91,7 @@ function categorizePullRequests(pullRequests: GitHubPullRequest[]): Record<Chang
   const categorized = emptyCategories()
 
   for (const pullRequest of pullRequests) {
-    const match = pullRequest.title.match(/^(feat|fix|chore|docs|style|refactor|perf|test|build|ci)(\(.+\))?:\s*(.+)/)
+    const match = pullRequest.title.match(/^(feat|fix|chore|docs|style|refactor|perf|test|build|ci)(\([^)]+\))?!?:\s*(.+)/)
     const type = (match?.[1] ?? 'other') as ChangeType
     categorized[type].push({
       number: pullRequest.number,
