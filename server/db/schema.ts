@@ -740,9 +740,16 @@ export const menus = sqliteTable("menus", {
 
 export const notifications = sqliteTable("notifications", {
 	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	organization_id: text().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().references(() => sites.id, { onDelete: "set null" } ),
 	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
+	scope: text().default("organization").notNull(),
+	event_type: text(),
+	severity: text().default("info").notNull(),
+	actor_user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	target_user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	deep_link: text(),
+	message: text(),
 	channel: text().default("dashboard").notNull(),
 	template: text().notNull(),
 	recipient: text(),
@@ -754,7 +761,35 @@ export const notifications = sqliteTable("notifications", {
 	read_at: text(),
 	sent_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	index("notifications_scope_created_at_idx").on(table.scope, table.created_at),
+	index("notifications_organization_created_at_idx").on(table.organization_id, table.created_at),
+	index("notifications_site_created_at_idx").on(table.site_id, table.created_at),
+	index("notifications_target_user_created_at_idx").on(table.target_user_id, table.created_at),
+]);
+
+export const notification_reads = sqliteTable("notification_reads", {
+	notification_id: text().notNull().references(() => notifications.id, { onDelete: "cascade" } ),
+	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
+	read_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.notification_id, table.user_id] }),
+	index("notification_reads_user_read_at_idx").on(table.user_id, table.read_at),
+]);
+
+export const notification_deliveries = sqliteTable("notification_deliveries", {
+	id: text().primaryKey(),
+	notification_id: text().notNull().references(() => notifications.id, { onDelete: "cascade" } ),
+	channel: text().notNull(),
+	status: text().default("pending").notNull(),
+	provider_message_id: text(),
+	error: text(),
+	sent_at: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("notification_deliveries_notification_idx").on(table.notification_id),
+	index("notification_deliveries_channel_status_idx").on(table.channel, table.status),
+]);
 
 export const oauthAccessToken = sqliteTable("oauthAccessToken", {
 	id: text().primaryKey(),

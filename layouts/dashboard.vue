@@ -330,6 +330,7 @@
             </template>
 
             <template #right>
+              <DashboardNotificationCenter v-if="organization" />
               <UColorModeButton variant="ghost" color="neutral" size="sm" />
               <UTooltip v-if="!inAdminWorkspace && !inConversationsWorkspace && site" text="ChowBot">
                 <UButton

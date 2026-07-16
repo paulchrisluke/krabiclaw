@@ -1,0 +1,3 @@
+# Safe local defaults. Copy values into your untracked .dev.vars file.
+DISCORD_DELIVERY_MODE=log_only
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/<webhook-id>/<webhook-token>

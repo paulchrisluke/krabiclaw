@@ -9,7 +9,7 @@ import type { H3Event } from 'h3'
 import { createDb, execute, schema } from '~/server/db'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { normalizePhone, sendWhatsAppOtp } from '~/server/utils/whatsapp'
-import { notifyAdminNewUserSignup } from '~/server/utils/admin-notifications'
+import { notifyNewUserSignup } from '~/server/utils/notification-center'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
 import { validatePassword } from '~/utils/password-validation'
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/site-events'
@@ -56,6 +56,8 @@ export interface CloudflareEnv {
   EMAIL_DELIVERY_MODE?: string
   EMAIL_REPLY_SECRET?: string
   EMAIL_INBOUND_SECRET?: string
+  DISCORD_DELIVERY_MODE?: string
+  DISCORD_WEBHOOK_URL?: string
   MEDIA_BUCKET?: R2Bucket
   db?: ReturnType<typeof createDb>
   [key: string]: ApiValue
@@ -91,14 +93,12 @@ export function createAuth(env: CloudflareEnv) {
             // Signup itself must not assume why the user is here: they may be
             // accepting an invitation into an existing org, in which case a
             // personal org here would just be an orphaned, siteless duplicate.
-            const now = new Date()
-            // Fire-and-forget — must not block or throw into the auth flow
-            notifyAdminNewUserSignup(env, {
+            // Persist the canonical event before the auth hook completes. Delivery failures
+            // are recorded by the dispatcher and must never fail account creation.
+            await notifyNewUserSignup(db, env, {
               id: user.id,
-              name: user.name,
               email: user.email,
-              createdAt: now.toISOString(),
-            }).catch((err) => console.error('admin_signup_notify_failed', err))
+            }).catch((err) => console.error('signup_notification_failed', err))
           }
         }
       },

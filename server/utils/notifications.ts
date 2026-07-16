@@ -19,6 +19,7 @@ import BookingOwnerCancelled from '~/server/emails/templates/BookingOwnerCancell
 import BookingGuestCancelled from '~/server/emails/templates/BookingGuestCancelled'
 import BookingThankYouReviewRequest from '~/server/emails/templates/BookingThankYouReviewRequest'
 import BookingReviewReminder from '~/server/emails/templates/BookingReviewReminder'
+import { createCanonicalNotification, NOTIFICATION_EVENT_TYPES, tenantEventTypeForTemplate } from '~/server/utils/notification-center'
 
 const SUBJECT_LABELS: Record<string, string> = {
   general: 'General',
@@ -375,30 +376,23 @@ export async function insertDashboardNotification(
     payload: Record<string, string>
   }
 ): Promise<void> {
-  const id = crypto.randomUUID()
-  const now = new Date().toISOString()
   try {
-    await execute(db, `
-      INSERT INTO notifications
-      (id, organization_id, site_id, location_id, channel, template, title, payload, status, sent_at, created_at)
-      VALUES (?, ?, ?, ?, 'dashboard', ?, ?, ?, 'sent', ?, ?)
-    `, [
-      id,
-      opts.organizationId,
-      opts.siteId,
-      opts.locationId ?? null,
-      opts.template,
-      opts.title,
-      JSON.stringify(opts.payload),
-      now,
-      now
-    ])
+    await createCanonicalNotification(db, {
+      scope: 'site',
+      eventType: tenantEventTypeForTemplate(opts.template, opts.payload),
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      locationId: opts.locationId ?? null,
+      title: opts.title,
+      deepLink: opts.payload.deep_link || null,
+      payload: opts.payload,
+      template: opts.template,
+    })
   } catch (error) {
     console.error('dashboard_notification_failed', {
       organizationId: opts.organizationId,
       siteId: opts.siteId,
       template: opts.template,
-      notificationId: id,
       error: error instanceof Error ? error.message : String(error)
     })
   }
@@ -810,6 +804,7 @@ export async function notifyReservationCreated(
     requests: opts.requests ?? '',
     location_name: opts.locationName ?? '',
     site_name: restaurant,
+    deep_link: inboxUrl ?? '',
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
@@ -894,6 +889,7 @@ export async function notifyReservationCancelled(
     reservation_was_confirmed: confirmed ? 'true' : 'false',
     location_name: opts.locationName ?? '',
     site_name: restaurant,
+    deep_link: inboxUrl ?? '',
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
@@ -967,6 +963,7 @@ export async function notifyContactSubmitted(
     site_name: restaurant,
     experience_title: opts.experienceTitle ?? '',
     consent_acknowledged: opts.consentAcknowledged === true ? 'true' : 'false',
+    deep_link: inboxUrl ?? '',
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
@@ -1180,6 +1177,7 @@ export async function notifyReviewReceived(
         rating: String(opts.rating),
         content_preview: (opts.content ?? '').slice(0, 200),
         site_name: restaurant,
+        deep_link: reviewsUrl ?? '',
       },
       email: { subject: `New review from ${opts.authorName}`, html: ownerEmail.html, text: ownerEmail.text },
       whatsapp: {
@@ -1273,6 +1271,7 @@ export async function notifyExperienceBookingCreated(
     party_size: String(opts.partySize),
     requests: opts.notes ?? '',
     site_name: studio,
+    deep_link: inboxUrl ?? '',
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
@@ -1356,6 +1355,7 @@ export async function notifyExperienceBookingCancelled(
     party_size: String(opts.partySize),
     booking_was_confirmed: confirmed ? 'true' : 'false',
     site_name: studio,
+    deep_link: inboxUrl ?? '',
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
@@ -1451,6 +1451,28 @@ async function notifyGuestThreadReplyInner(
     messagePreview: opts.messagePreview,
     replyUrl,
   })
+
+  try {
+    await createCanonicalNotification(db, {
+      scope: 'site',
+      eventType: NOTIFICATION_EVENT_TYPES.GUEST_REPLY_CREATED,
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      locationId: opts.locationId ?? null,
+      title,
+      message: `${opts.guestName} replied by ${opts.inboundChannel}.`,
+      deepLink: replyUrl,
+      payload,
+      template: 'guest_thread_reply',
+    })
+  } catch (error) {
+    console.error('dashboard_notification_failed', {
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      template: 'guest_thread_reply',
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 
   const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
   const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.siteId) : null

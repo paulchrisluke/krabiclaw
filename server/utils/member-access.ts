@@ -42,6 +42,7 @@ const LOCATION_MANAGER_DASHBOARD_PATHS = [
   '/api/dashboard/reservations',
   '/api/dashboard/experience-bookings',
   '/api/dashboard/reviews',
+  '/api/dashboard/notifications',
   '/api/dashboard/locations',
   '/api/dashboard/location-preference',
   '/api/dashboard/sites',
