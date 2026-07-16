@@ -1,6 +1,6 @@
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { isOperationalRole, isOrganizationWideRole, LOCATION_MANAGER_ROLE } from '~/server/utils/member-access'
-import { normalizePhone } from '~/server/utils/whatsapp'
+import { normalizePhone, sendWhatsAppNotification } from '~/server/utils/whatsapp'
 
 export interface WhatsAppAccessTarget {
   organizationId: string
@@ -16,6 +16,28 @@ export interface WhatsAppAccessResult {
   memberId?: string
   invitationId?: string
   createdInvitation?: boolean
+}
+
+export async function sendWhatsAppAccessInvitation(
+  env: { WHATSAPP_PHONE_NUMBER_ID?: string; WHATSAPP_ACCESS_TOKEN?: string; WHATSAPP_DELIVERY_MODE?: string },
+  db: DbClient,
+  target: Pick<WhatsAppAccessTarget, 'organizationId' | 'siteId' | 'locationId' | 'phone'> & { invitationId: string },
+): Promise<void> {
+  const site = await queryFirst<{ name: string }>(db, `
+    SELECT coalesce(s.brand_name, o.name) AS name
+    FROM sites s JOIN organization o ON o.id = s.organization_id
+    WHERE s.id = ? AND s.organization_id = ? LIMIT 1
+  `, [target.siteId, target.organizationId])
+  const invitationPath = `${encodeURIComponent(target.invitationId)}?siteId=${encodeURIComponent(target.siteId)}`
+  const result = await sendWhatsAppNotification(env, db, {
+    organizationId: target.organizationId,
+    siteId: target.siteId,
+    locationId: target.locationId,
+    toPhone: target.phone,
+    template: 'dashboard_access_invitation',
+    vars: { site_name: site?.name || 'your site', invitation_path: invitationPath },
+  })
+  if (!result.success) throw new Error(result.error || 'Failed to send WhatsApp access invitation')
 }
 
 export function phoneTemporaryEmail(phone: string): string {

@@ -55,6 +55,7 @@ export type WhatsAppTemplate =
   | 'new_reservation'
   | 'reservation_cancelled'
   | 'domain_update'
+  | 'dashboard_access_invitation'
   | 'otp_code'
 
 interface TemplateHeaderComponent {
@@ -138,6 +139,26 @@ const TEMPLATES: Record<
   WhatsAppTemplate,
   (_vars: Record<string, string>) => { name: string; language: { code: string }; components: TemplateComponent[] }
 > = {
+  dashboard_access_invitation: (v) => ({
+    name: 'dashboard_access_invitation',
+    language: { code: 'en_US' },
+    components: [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.site_name, 'your site', 120) },
+        ],
+      },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.invitation_path, '', 300) },
+        ],
+      },
+    ],
+  }),
   new_review: (v) => ({
     name: 'new_review',
     language: { code: 'en_US' },
@@ -311,6 +332,10 @@ const TEMPLATES: Record<
   }),
 }
 
+export function buildWhatsAppTemplatePayload(template: WhatsAppTemplate, vars: Record<string, string>) {
+  return TEMPLATES[template](normalizeTemplateVars(vars))
+}
+
 /** Normalize any phone number to E.164. Assumes Thailand if no country code. */
 export function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, '')
@@ -385,7 +410,7 @@ export async function sendWhatsAppNotification(
     return { success: false, error: 'WhatsApp env vars not configured' }
   }
 
-  const templatePayload = TEMPLATES[opts.template](vars)
+  const templatePayload = buildWhatsAppTemplatePayload(opts.template, vars)
 
   let result: SendWhatsAppResult
   try {
@@ -638,7 +663,8 @@ export async function setOrgWhatsAppPhone(
   db: DbClient,
   organizationId: string,
   siteId: string,
-  phone: string | null
+  phone: string | null,
+  env?: WhatsAppEnv,
 ): Promise<void> {
   if (!phone) {
     await execute(db, `
@@ -647,12 +673,15 @@ export async function setOrgWhatsAppPhone(
     return
   }
   const normalized = normalizePhone(phone)
-  const { ensureWhatsAppRecipientAccess } = await import('~/server/utils/whatsapp-access')
-  await ensureWhatsAppRecipientAccess(db, { organizationId, siteId, locationId: null, phone: normalized })
+  const { ensureWhatsAppRecipientAccess, sendWhatsAppAccessInvitation } = await import('~/server/utils/whatsapp-access')
+  const access = await ensureWhatsAppRecipientAccess(db, { organizationId, siteId, locationId: null, phone: normalized })
   const now = new Date().toISOString()
   await execute(db, `
     INSERT INTO site_config (organization_id, site_id, key, value, updated_at)
     VALUES (?, ?, 'whatsapp_phone', ?, ?)
     ON CONFLICT(organization_id, site_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
   `, [organizationId, siteId, normalized, now])
+  if (env && access.status === 'invitation_pending' && access.createdInvitation && access.invitationId) {
+    await sendWhatsAppAccessInvitation(env, db, { organizationId, siteId, locationId: null, phone: normalized, invitationId: access.invitationId })
+  }
 }

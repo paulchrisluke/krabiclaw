@@ -37,6 +37,7 @@ export async function handleNotificationsTools(ctx: McpExecutorContext): Promise
           site.siteId,
           whatsappPhone,
           channels,
+          site.env,
         );
         return {
           notifications,

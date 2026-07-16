@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
 
 const args = process.argv.slice(2)
 const targetCount = ['--local', '--staging', '--remote'].filter(flag => args.includes(flag)).length
@@ -15,6 +16,33 @@ if (args.includes('--remote') && args.includes('--apply') && !args.includes('--c
 
 const targetArgs = args.includes('--staging') ? ['--env', 'staging', '--remote'] : args.includes('--remote') ? ['--remote'] : ['--local']
 const baseUrl = args.includes('--staging') ? 'https://staging.krabiclaw.com' : args.includes('--remote') ? 'https://krabiclaw.com' : 'http://localhost:3000'
+if (args.includes('--remote') && (!process.env.WHATSAPP_ACCESS_TOKEN || !process.env.WHATSAPP_BUSINESS_ACCOUNT_ID) && existsSync('.env')) process.loadEnvFile('.env')
+const graphVersion = 'v25.0'
+async function assertInvitationTemplateApproved() {
+  const accountId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID
+  const token = process.env.WHATSAPP_ACCESS_TOKEN
+  if (!accountId || !token || !process.env.WHATSAPP_PHONE_NUMBER_ID) throw new Error('Production apply requires WHATSAPP_BUSINESS_ACCOUNT_ID, WHATSAPP_PHONE_NUMBER_ID, and WHATSAPP_ACCESS_TOKEN')
+  const response = await fetch(`https://graph.facebook.com/${graphVersion}/${accountId}/message_templates?name=dashboard_access_invitation&fields=name,status` , { headers: { Authorization: `Bearer ${token}` } })
+  const data = await response.json()
+  const template = data.data?.find(item => item.name === 'dashboard_access_invitation')
+  if (!response.ok || template?.status !== 'APPROVED') throw new Error(`dashboard_access_invitation is not approved by Meta (status: ${template?.status || 'missing'})`)
+}
+async function sendAccessInvitation(phone, siteName, invitationId, siteId) {
+  const response = await fetch(`https://graph.facebook.com/${graphVersion}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messaging_product: 'whatsapp', to: phone, type: 'template', template: {
+      name: 'dashboard_access_invitation', language: { code: 'en_US' }, components: [
+        { type: 'body', parameters: [{ type: 'text', text: siteName }] },
+        { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: `${encodeURIComponent(invitationId)}?siteId=${encodeURIComponent(siteId)}` }] },
+      ],
+    } }),
+  })
+  const data = await response.json()
+  if (!response.ok || data.error) throw new Error(data.error?.message || `WhatsApp invitation send failed (${response.status})`)
+  return data.messages?.[0]?.id ?? null
+}
+if (args.includes('--remote') && args.includes('--apply')) await assertInvitationTemplateApproved()
 const q = value => String(value).replaceAll("'", "''")
 function run(sql) {
   const result = spawnSync('node_modules/.bin/wrangler', ['d1', 'execute', 'DB', ...targetArgs, '--command', sql, '--json'], { encoding: 'utf8' })
@@ -80,8 +108,20 @@ for (const group of groups.values()) {
   const inviter = run(`SELECT userId AS id FROM member WHERE organizationId = '${q(group.organizationId)}' AND role IN ('owner','admin') ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END, createdAt LIMIT 1`)[0]
   if (!inviter) throw new Error(`No owner/admin inviter for ${group.organizationName}`)
   const invitationId = pending?.id ?? randomUUID()
+  const createdInvitation = !pending
   if (!pending) run(`INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt) VALUES ('${invitationId}', '${q(group.organizationId)}', '${q(email)}', 'location_manager', 'pending', unixepoch() + 604800, '${q(inviter.id)}', unixepoch())`)
   for (const scope of group.scopes) run(`INSERT OR IGNORE INTO invitation_access_scope (id, invitation_id, organization_id, site_id, location_id, created_at) VALUES ('${randomUUID()}', '${invitationId}', '${q(group.organizationId)}', '${q(scope.siteId)}', ${scope.locationId ? `'${q(scope.locationId)}'` : 'NULL'}, datetime('now'))`)
+  item.pendingInvitationId = invitationId
+  item.invitationUrl = `${baseUrl}/accept-invitation/${encodeURIComponent(invitationId)}?siteId=${encodeURIComponent(group.scopes[0].siteId)}`
+  if (args.includes('--remote') && (createdInvitation || args.includes('--resend'))) {
+    try {
+      item.providerMessageId = await sendAccessInvitation(group.phone, group.organizationName, invitationId, group.scopes[0].siteId)
+      run(`INSERT INTO notifications (id, organization_id, site_id, location_id, channel, template, recipient, payload, status, provider_message_id, sent_at, created_at) VALUES ('${randomUUID()}', '${q(group.organizationId)}', '${q(group.scopes[0].siteId)}', ${group.scopes[0].locationId ? `'${q(group.scopes[0].locationId)}'` : 'NULL'}, 'whatsapp', 'dashboard_access_invitation', '${q(group.phone)}', '${q(JSON.stringify({ invitationId }))}', 'sent', ${item.providerMessageId ? `'${q(item.providerMessageId)}'` : 'NULL'}, datetime('now'), datetime('now'))`)
+    } catch (error) {
+      if (createdInvitation) run(`DELETE FROM invitation WHERE id = '${q(invitationId)}'`)
+      throw error
+    }
+  }
 }
 
 console.error(`WhatsApp access ${args.includes('--apply') ? 'apply' : 'dry-run'}: ${report.length} recipient(s)`)

@@ -44,6 +44,6 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'WhatsApp notifications require a Growth plan or higher.' }, { status: 403 })
   }
 
-  const notifications = await updateNotificationsSettings(db, site.organization_id, siteId, body.whatsapp_phone?.trim(), body.channels)
+  const notifications = await updateNotificationsSettings(db, site.organization_id, siteId, body.whatsapp_phone?.trim(), body.channels, env)
   return jsonResponse({ success: true, notifications })
 })

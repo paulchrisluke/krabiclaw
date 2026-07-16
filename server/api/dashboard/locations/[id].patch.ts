@@ -7,7 +7,7 @@ import { parseLocationPayload } from './location-helpers'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { queryFirst } from '~/server/db'
 import { assertMemberScope } from '~/server/utils/member-access'
-import { ensureWhatsAppRecipientAccess } from '~/server/utils/whatsapp-access'
+import { ensureWhatsAppRecipientAccess, sendWhatsAppAccessInvitation } from '~/server/utils/whatsapp-access'
 
 export default defineEventHandler(async (event) => {
   const locationId = getRouterParam(event, 'id')
@@ -52,13 +52,22 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
   if (typeof body.notification_phone === 'string' && body.notification_phone.trim()) {
-    await ensureWhatsAppRecipientAccess(db, {
+    const access = await ensureWhatsAppRecipientAccess(db, {
       organizationId,
       siteId,
       locationId,
       phone: body.notification_phone,
       inviterUserId: session.user.id,
     })
+    if (access.status === 'invitation_pending' && access.createdInvitation && access.invitationId) {
+      await sendWhatsAppAccessInvitation(env, db, {
+        organizationId,
+        siteId,
+        locationId,
+        phone: body.notification_phone,
+        invitationId: access.invitationId,
+      })
+    }
   }
 
   const rating = body.rating === undefined || body.rating === null || String(body.rating).trim() === ''
