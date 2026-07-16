@@ -136,6 +136,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: {
           answer: { type: 'string', description: 'Grounded answer or summary.' },
+          creditsRemaining: { type: 'number', description: 'AI credits remaining after document analysis.' },
           stats: {
             type: 'object',
             description: 'Structural stats detected in the document.',
@@ -149,7 +150,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
             },
           },
         },
-        required: ['answer'],
+        required: ['answer', 'creditsRemaining', 'stats'],
       },
     }),
 ]
