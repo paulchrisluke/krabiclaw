@@ -17,14 +17,14 @@ export async function handleNotificationsTools(ctx: McpExecutorContext): Promise
     case "update_notification_settings":
       {
         const rawPhone = args.whatsapp_phone;
-        const whatsappPhone = typeof rawPhone === "string"
+        const whatsappPhone = typeof rawPhone === "string" && rawPhone.trim()
           ? rawPhone.trim()
           : undefined;
         const channels = args.channels === undefined
           ? undefined
           : requiredStringArray(args.channels, "channels");
 
-        if (whatsappPhone === undefined && !channels) {
+        if (!whatsappPhone && !channels) {
           throw mcpProtocolError(
             MCP_ERROR.invalidParams,
             "Provide whatsapp_phone and/or channels.",
