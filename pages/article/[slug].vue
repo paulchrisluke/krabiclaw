@@ -53,9 +53,8 @@
             <img v-if="post.featured_image?.public_url" :src="post.featured_image.public_url" :alt="post.title" :width="post.featured_image.width || 704" :height="post.featured_image.height || 478" loading="lazy" class="aspect-video min-w-full rounded-xl bg-gray-50 object-cover">
             <div class="mt-10 min-w-full max-w-2xl">
               <p v-if="post.excerpt" class="mb-10 min-w-full italic text-[var(--blawby-primary-dark)]">{{ post.excerpt }}</p>
-              <div class="prose min-w-full">
-                <BlawbyRichText :content="body" unstyled class="contents" />
-              </div>
+              <BlogArticleRenderer v-if="post.content_blocks.length" :title="post.title" :blocks="post.content_blocks" :show-title="false" template="blawby" class="!max-w-none !px-0 !py-0" />
+              <div v-else class="prose min-w-full"><BlawbyRichText :content="body" unstyled class="contents" /></div>
               <p v-if="compliance?.disclaimer" class="mt-8 text-sm italic text-gray-500">{{ compliance.disclaimer }}</p>
             </div>
           </div>
@@ -122,7 +121,7 @@ const authorInitials = computed(() => String(post.value.author_name || 'NCLS Sta
 const relatedPosts = computed(() => data.value.posts.filter(item => item.slug !== slug).slice(0, 3))
 const { categories } = useTenantBlogNav(computed(() => data.value.posts))
 const browseTopicsOpen = ref(false)
-const seoTitle = computed(() => `${post.value.title} | ${identity.value.brand_name || 'Professional services'}`)
+const seoTitle = computed(() => post.value.seo_title?.trim() || post.value.title)
 const seoDescription = computed(() => post.value.seo_description || post.value.excerpt || '')
 const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
 
@@ -152,14 +151,14 @@ const { canonicalUrl } = useTenantSocialMetadata(() => ({
     logoUrl: identity.value.logo_url || null,
     faviconUrl: identity.value.favicon_url || null,
   },
-  heroImage: post.value.featured_image?.public_url
+  heroImage: (post.value.social_image?.public_url || post.value.featured_image?.public_url)
     ? {
-        url: post.value.featured_image.public_url,
-        width: post.value.featured_image.width || undefined,
-        height: post.value.featured_image.height || undefined,
+        url: (post.value.social_image?.public_url || post.value.featured_image?.public_url)!,
+        width: post.value.social_image?.width || post.value.featured_image?.width || undefined,
+        height: post.value.social_image?.height || post.value.featured_image?.height || undefined,
       }
     : null,
-  robots: post.value.robots || null,
+  robots: post.value.visibility === 'unlisted' ? 'noindex,follow' : post.value.robots || null,
 }))
 
 const blogUrl = useSeoUrl(() => '/blog')
@@ -171,9 +170,9 @@ useProfessionalServiceSchema(() => ({
   pageUrl: canonicalUrl.value,
   pageTitle: post.value.title,
   pageDescription: seoDescription.value,
-  imageUrl: post.value.featured_image?.public_url || null,
-  imageWidth: post.value.featured_image?.width || null,
-  imageHeight: post.value.featured_image?.height || null,
+  imageUrl: post.value.social_image?.public_url || post.value.featured_image?.public_url || null,
+  imageWidth: post.value.social_image?.width || post.value.featured_image?.width || null,
+  imageHeight: post.value.social_image?.height || post.value.featured_image?.height || null,
   breadcrumbs: [
     { name: 'Home', url: homeUrl.value },
     { name: 'Blog', url: blogUrl.value },

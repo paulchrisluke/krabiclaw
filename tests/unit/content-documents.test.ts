@@ -185,6 +185,18 @@ test('syncContentDocumentFromMarkdown creates blocks and a published revision', 
   assert.equal(document.published_revision_id, result.revision_id)
 })
 
+test('divider blocks serialize as thematic breaks without disturbing structured blocks', async () => {
+  const db = createStore()
+  const d1 = db as unknown as D1Database
+  const initial = await syncContentDocumentFromMarkdown(d1, {
+    ownerType: 'tenant_blog', ownerId: 'post-divider', bodyMarkdown: 'Before',
+  })
+  await appendContentBlock(d1, initial.document.id, { type: 'divider', data: {} })
+  const preview = await renderContentPreview(d1, initial.document.id)
+  assert.match(preview.body_markdown, /Before\n\n---/)
+  assert.equal(preview.blocks.at(-1)?.type, 'divider')
+})
+
 test('block edits produce draft previews and reject stale replacement tokens', async () => {
   const db = createStore()
   const d1 = db as unknown as D1Database

@@ -62,7 +62,8 @@
       />
     </div>
 
-    <div class="space-y-14">
+    <BlogArticleRenderer v-if="post.content_blocks?.length" :title="post.title" :blocks="post.content_blocks" :show-title="false" template="saya" class="!max-w-none !px-0 !py-0" />
+    <div v-else class="space-y-14">
       <template v-for="(block, blockIndex) in renderedBlocks" :key="`block-${blockIndex}`">
         <!-- eslint-disable vue/no-v-html -->
         <div
@@ -139,15 +140,19 @@ interface TenantBlogPost {
   excerpt?: string | null
   category?: string | null
   seo_description?: string | null
+  seo_title?: string | null
   seo_keywords?: string | null
   canonical_url?: string | null
   robots?: string | null
+  visibility?: 'public' | 'unlisted'
   published_at?: string | null
   author_name?: string | null
   updated_at?: string | null
   featured_order?: number | null
   featured_image?: { public_url: string | null; kind: string | null; width: number | null; height: number | null } | null
+  social_image?: { public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null
   components?: ContentComponent[]
+  content_blocks?: import('~/components/workspace/blog/types').BlogEditorBlock[] | null
 }
 
 const route = useRoute()
@@ -260,12 +265,12 @@ const renderableComponents = computed(() =>
 )
 
 const postMedia = computed(() => resolveMedia({
-  public_url: post.value?.featured_image?.public_url,
+  public_url: post.value?.social_image?.public_url || post.value?.featured_image?.public_url,
   kind: post.value?.featured_image?.kind,
 }))
 
 const postPath = computed(() => `/blog/${post.value?.slug ?? ''}`)
-const seoTitle = computed(() => post.value ? `${post.value.title} | ${siteName.value}` : 'Blog')
+const seoTitle = computed(() => post.value?.seo_title?.trim() || post.value?.title || 'Blog')
 const seoDescription = computed(() => post.value?.seo_description || post.value?.excerpt || `A post from ${siteName.value}.`)
 
 const { canonicalUrl } = useTenantSocialMetadata(() => ({
@@ -276,7 +281,7 @@ const { canonicalUrl } = useTenantSocialMetadata(() => ({
   label: post.value?.category || null,
   author: authorName.value,
   publishedAt: post.value?.published_at || null,
-  robots: post.value?.robots || null,
+  robots: post.value?.visibility === 'unlisted' ? 'noindex,follow' : post.value?.robots || null,
   brand: {
     siteName: siteName.value,
     logoUrl: config.value?.logo_url || null,

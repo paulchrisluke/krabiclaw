@@ -2,15 +2,22 @@ import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/se
 import {
   deleteContentDocumentForOwner,
   publishCurrentContentRevision,
+  getContentEditorSnapshot,
+  getPublishedContentSnapshot,
+  replaceContentDocumentBlocks,
   syncContentDocumentFromMarkdown,
   unpublishContentDocument,
   type ContentDocumentOwnerType,
+  type ContentBlockInput,
 } from '~/server/utils/content-documents'
 import { slugifyTitle } from '~/utils/post-slugs'
 import { PLATFORM_MEDIA_SITE_ID } from '~/server/utils/platform-media'
 import { BLOG_CATEGORY_LABELS, blogCategoryToSlug } from '~/utils/blog-categories'
 import { categoryToSlug } from '~/utils/docs-categories'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
+import { normalizeBlogSlug, parseScheduledFor, structuredComponentsFromBlocks } from '~/utils/blog-editor'
+import { createBlogRedirect, resolveBlogSocialImage } from '~/server/utils/blog-publishing'
+import { resolvePublicTemplate } from '~/utils/template-registry'
 
 const BLOG_TITLE_MAX = 200
 const BLOG_BODY_MAX = 100000
@@ -39,6 +46,17 @@ const AI_ASSISTANCE_PROMPT_DESCRIPTION_MAX = 500
 const AI_ASSISTANCE_PROMPT_COPY_LABEL_MAX = 80
 const COMPONENT_LABEL_MAX = 200
 const MAX_SLUG_ATTEMPTS = 8
+
+function parseStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string')
+  if (typeof value !== 'string' || !value) return []
+  try {
+    const parsed = JSON.parse(value) as unknown
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
+  } catch {
+    return []
+  }
+}
 
 export const PLATFORM_DOC_CATEGORIES = ['Getting Started', 'Menu Management', 'Theme Customization', 'SEO & Marketing', 'Integrations', 'Advanced'] as const
 export const PLATFORM_BLOG_CATEGORIES = BLOG_CATEGORY_LABELS
@@ -225,6 +243,9 @@ export interface PlatformBlogCreateInput extends PlatformStructuredContentInput,
   canonical_url?: string | null
   robots?: string | null
   featured_image_asset_id?: string | null
+  social_image_asset_id?: string | null
+  visibility?: 'public' | 'unlisted'
+  scheduled_for?: string | null
   publish?: boolean
 }
 
@@ -240,6 +261,14 @@ export interface PlatformBlogUpdateInput extends PlatformStructuredContentInput,
   canonical_url?: string | null
   robots?: string | null
   featured_image_asset_id?: string | null
+  social_image_asset_id?: string | null
+  visibility?: 'public' | 'unlisted'
+  scheduled_for?: string | null
+  slug?: string | null
+  redirect_old_slug?: boolean
+  content_blocks?: Array<ContentBlockInput & { id?: string }>
+  expected_document_updated_at?: string
+  expected_updated_at?: string
   publish?: boolean
   unpublish?: boolean
 }
@@ -369,11 +398,6 @@ function assertValidBlogCategory(value: string | null | undefined) {
   if (!PLATFORM_BLOG_CATEGORIES.includes(value)) {
     badRequest(`category must be one of: ${PLATFORM_BLOG_CATEGORIES.join(', ')}`)
   }
-}
-
-function assertPublishableBlogCategory(value: string | null | undefined) {
-  if (!value) badRequest('category is required when publishing a blog post')
-  assertValidBlogCategory(value)
 }
 
 function assertValidCanonicalUrl(value: string | null | undefined) {
@@ -751,6 +775,29 @@ async function ensureBlogFeaturedImageAssetExists(
   }
 }
 
+async function normalizeEditorContentBlocks(db: D1Database, blocks: Array<ContentBlockInput & { id?: string }>, siteId: string | null) {
+  const normalized: Array<ContentBlockInput & { id?: string }> = []
+  for (const block of blocks) {
+    if (block.type !== 'image') {
+      normalized.push(block)
+      continue
+    }
+    const assetId = typeof block.data.asset_id === 'string' ? block.data.asset_id.trim() : ''
+    if (!assetId) {
+      normalized.push({ ...block, data: { ...block.data, asset_id: '', public_url: '' } })
+      continue
+    }
+    await ensureBlogFeaturedImageAssetExists(db, assetId, 'image block asset_id', siteId)
+    const asset = await queryFirst<{ public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null>(db,
+      'SELECT public_url, thumbnail_url, width, height FROM media_assets WHERE id = ? LIMIT 1', [assetId])
+    normalized.push({
+      ...block,
+      data: { ...block.data, asset_id: assetId, public_url: asset?.public_url ?? '', thumbnail_url: asset?.thumbnail_url ?? null, width: asset?.width ?? null, height: asset?.height ?? null },
+    })
+  }
+  return normalized
+}
+
 async function ensureDocParentExists(db: D1Database, docId: string) {
   const doc = await queryFirst(db, 'SELECT id FROM platform_docs WHERE id = ? LIMIT 1', [docId])
   if (!doc) badRequest('parent_doc_id not found')
@@ -982,7 +1029,7 @@ function contentReviewUrls(
     }
     return `/admin/blog/${id}`
   })()
-  const isPublished = record.status === 'published' || Boolean(record.published_at)
+  const isPublished = typeof record.status === 'string' ? record.status === 'published' : Boolean(record.published_at)
   const category = typeof record.category === 'string' ? record.category : null
   const slug = typeof record.slug === 'string' ? record.slug : null
   const categorySlug = kind === 'blog' ? blogCategoryToSlug(category) : categoryToSlug(category)
@@ -998,6 +1045,7 @@ function contentReviewUrls(
   return {
     ...record,
     admin_edit_url: adminEditUrl,
+    edit_url: adminEditUrl,
     public_path: publicPath,
     public_url: publicPath,
     preview_url: null,
@@ -1038,7 +1086,7 @@ export async function getPublishedPlatformBlogPost(db: DbClient, category: strin
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
       p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.tags_json, p.seo_title, p.seo_description, p.seo_keywords,
-      p.canonical_url, p.robots,
+      p.canonical_url, p.robots, p.visibility, p.social_image_asset_id,
       p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
       p.published_at, p.created_at, p.updated_at,
       p.featured_image_asset_id,
@@ -1056,9 +1104,14 @@ export async function getPublishedPlatformBlogPost(db: DbClient, category: strin
 
   if (!post) return null
 
-  const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'blog_post', String(post.id), { activeOnly: true }))
+  const legacyComponents = await resolveContentComponentsMedia(db, await listContentComponents(db, 'blog_post', String(post.id), { activeOnly: true }))
+  const contentBlocks = await getPublishedContentSnapshot(db, 'platform_blog', String(post.id))
+  const components = contentBlocks
+    ? [...legacyComponents.filter(component => component.type !== 'faq' && component.type !== 'how_to'), ...structuredComponentsFromBlocks(contentBlocks)]
+    : legacyComponents
+  const socialImage = await resolveBlogSocialImage(db, { siteId: null, explicitAssetId: post.social_image_asset_id as string | null, legacyAssetId: post.featured_image_asset_id as string | null, blocks: contentBlocks })
 
-  return attachFeaturedImageFromBareJoin({ ...post, components })
+  return attachFeaturedImageFromBareJoin({ ...post, components, content_blocks: contentBlocks, social_image: socialImage })
 }
 
 /**
@@ -1285,7 +1338,8 @@ export async function resolveContentComponentsMedia(db: DbClient, components: Pl
 
 export async function listPlatformBlogPosts(db: DbClient, status?: string | null, siteId: string | null = null) {
   let sql = `SELECT
-      p.id, p.title, p.slug, p.excerpt, p.category, p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
+      p.id, p.title, p.slug, p.excerpt, p.category, p.status, p.visibility, p.scheduled_for,
+      p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
       p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
       p.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
       ma.width AS featured_image_width, ma.height AS featured_image_height,
@@ -1296,6 +1350,7 @@ export async function listPlatformBlogPosts(db: DbClient, status?: string | null
   const params: ApiValue[] = siteId ? [siteId] : []
   if (status === 'published') sql += " AND p.status = 'published'"
   else if (status === 'draft') sql += " AND p.status = 'draft'"
+  else if (status === 'scheduled') sql += " AND p.status = 'scheduled'"
   sql += ' ORDER BY COALESCE(p.featured_order, 999999), COALESCE(p.nav_section_order, 999999), COALESCE(p.nav_section, p.category), COALESCE(p.nav_order, 999999), p.created_at DESC'
   const results = await queryAll<ApiRecord>(db, sql, params)
   const context = await resolveTenantContext(db, siteId)
@@ -1314,29 +1369,47 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
   const post = await queryFirst<ApiRecord | null>(
     db,
     `SELECT
-       p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
+       p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.tags_json, p.status, p.visibility, p.scheduled_for,
+       p.first_published_at, p.slug_manually_overridden, p.social_image_asset_id, u.name AS author_name,
+       p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
        p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
        p.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
        ma.width AS featured_image_width, ma.height AS featured_image_height,
        p.published_at, p.created_at, p.updated_at
      FROM blog_posts p
+     LEFT JOIN user u ON u.id = p.author_id
      LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
      WHERE p.id = ?`,
     [postId],
   )
   if (!post) notFound('Post not found')
   const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'blog_post', postId))
+  const contentDocument = await getContentEditorSnapshot(db, blogContentOwnerType(siteId), postId)
   const slug = typeof post.slug === 'string' ? post.slug : ''
   const publicPath = siteId && slug ? await resolveTenantBlogPostPath(db, siteId, slug) : null
   const context = await resolveTenantContext(db, siteId)
-  return attachComponents(contentReviewUrls(attachFeaturedImage(attachPublished(post, Boolean(post.published_at))), 'blog', siteId, publicPath, context), components)
+  const editorTheme = siteId ? await queryFirst<{ theme: string | null; theme_id: string | null; vertical: string | null; tokens_json: string | null } | null>(db, `
+    SELECT s.theme, s.theme_id, s.vertical, t.tokens_json
+      FROM sites s
+      LEFT JOIN site_theme_tokens t ON t.site_id = s.id AND t.status = 'active'
+     WHERE s.id = ? LIMIT 1
+  `, [siteId]) : null
+  let editorThemeTokens: ApiRecord = {}
+  try { editorThemeTokens = editorTheme?.tokens_json ? JSON.parse(editorTheme.tokens_json) as ApiRecord : {} } catch { editorThemeTokens = {} }
+  return {
+    ...attachComponents(contentReviewUrls(attachFeaturedImage(attachPublished(post, Boolean(post.published_at))), 'blog', siteId, publicPath, context), components),
+    tags: parseStringArray(post.tags_json),
+    content_document: contentDocument,
+    editor_template: siteId ? resolvePublicTemplate({ theme: editorTheme?.theme, themeId: editorTheme?.theme_id, vertical: editorTheme?.vertical }).slug : 'platform',
+    editor_theme_tokens: editorThemeTokens,
+  }
 }
 
 export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slug: string) {
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
       p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.tags_json, p.seo_title, p.seo_description, p.seo_keywords,
-      p.canonical_url, p.robots, p.featured_order,
+      p.canonical_url, p.robots, p.featured_order, p.visibility, p.social_image_asset_id,
       p.published_at, p.created_at, p.updated_at,
       p.featured_image_asset_id,
       u.name AS author_name,
@@ -1349,17 +1422,23 @@ export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slu
     LEFT JOIN user u ON u.id = p.author_id
     LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
     WHERE p.slug = ? AND p.site_id = ? AND p.status = 'published'
+      AND (p.scheduled_for IS NULL OR p.scheduled_for <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     LIMIT 1
   `, [slug, siteId])
 
   if (!post) return null
 
-  const components = await resolveContentComponentsMedia(
+  const legacyComponents = await resolveContentComponentsMedia(
     db,
     await listContentComponents(db, 'blog_post', String(post.id), { activeOnly: true }),
   )
+  const contentBlocks = await getPublishedContentSnapshot(db, 'tenant_blog', String(post.id))
+  const components = contentBlocks
+    ? [...legacyComponents.filter(component => component.type !== 'faq' && component.type !== 'how_to'), ...structuredComponentsFromBlocks(contentBlocks)]
+    : legacyComponents
+  const socialImage = await resolveBlogSocialImage(db, { siteId, explicitAssetId: post.social_image_asset_id as string | null, legacyAssetId: post.featured_image_asset_id as string | null, blocks: contentBlocks })
 
-  return attachFeaturedImageFromBareJoin({ ...post, components })
+  return attachFeaturedImageFromBareJoin({ ...post, components, content_blocks: contentBlocks, social_image: socialImage })
 }
 
 export async function createPlatformBlogPost(
@@ -1376,20 +1455,26 @@ export async function createPlatformBlogPost(
     assertValidBlogCategory(input.category)
   }
   if (input.featured_image_asset_id) await ensureBlogFeaturedImageAssetExists(db, input.featured_image_asset_id, 'featured_image_asset_id', scope.site_id ?? null)
+  if (input.social_image_asset_id) await ensureBlogFeaturedImageAssetExists(db, input.social_image_asset_id, 'social_image_asset_id', scope.site_id ?? null)
 
   const siteId = scope.site_id ?? null
   const organizationId = scope.organization_id ?? null
   const id = crypto.randomUUID()
   const slugBase = normalizeSlugFromTitle(input.title, 'post')
   const now = new Date().toISOString()
-  const publishedAt = input.publish ? now : null
+  let scheduledFor: string | null = null
+  try { scheduledFor = parseScheduledFor(input.scheduled_for) } catch (error) { badRequest((error as Error).message) }
+  if (scheduledFor && new Date(scheduledFor).getTime() <= Date.now()) badRequest('scheduled_for must be in the future')
+  if (input.visibility && !['public', 'unlisted'].includes(input.visibility)) badRequest('visibility must be public or unlisted')
+  const publishStatus = scheduledFor ? 'scheduled' : input.publish ? 'published' : 'draft'
+  const publishedAt = input.publish && !scheduledFor ? now : null
 
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
     const slug = attempt === 0 ? slugBase : `${slugBase}-${randomSlugSuffix()}`
     try {
       await execute(db, `
-        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, tags_json, nav_section, nav_title, nav_order, nav_section_order, hide_from_nav, featured_order, status, seo_title, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, author_id, published_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, tags_json, nav_section, nav_title, nav_order, nav_section_order, hide_from_nav, featured_order, status, visibility, scheduled_for, seo_title, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, social_image_asset_id, author_id, published_at, first_published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
         id,
         organizationId,
         siteId,
@@ -1405,14 +1490,18 @@ export async function createPlatformBlogPost(
         input.nav_section_order != null ? Number(input.nav_section_order) : null,
         normalizeHideFromNav(input.hide_from_nav) ?? 0,
         input.featured_order != null ? Number(input.featured_order) : null,
-        input.publish ? 'published' : 'draft',
+        publishStatus,
+        input.visibility ?? 'public',
+        scheduledFor,
         input.seo_title ?? null,
         input.seo_description ?? null,
         input.seo_keywords ?? null,
         input.canonical_url ?? null,
         input.robots ?? null,
         input.featured_image_asset_id ?? null,
+        input.social_image_asset_id ?? null,
         authorId,
+        publishedAt,
         publishedAt,
         now,
         now,
@@ -1438,6 +1527,7 @@ export async function createPlatformBlogPost(
         slug,
         published_at: publishedAt,
         admin_edit_url: post.admin_edit_url,
+        edit_url: post.edit_url,
         public_path: post.public_path,
         public_url: post.public_url,
         preview_url: post.preview_url,
@@ -1461,9 +1551,7 @@ export async function updatePlatformBlogPost(
   const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', siteId)
   const isTenant = Boolean(siteId)
   validateBlogCommon(input, isTenant)
-  const current = !isTenant
-    ? await queryFirst<{ category: string | null }>(db, 'SELECT category FROM blog_posts WHERE id = ? LIMIT 1', [postId])
-    : null
+  const current = await queryFirst<{ category: string | null; title: string; slug: string; status: string; published_at: string | null; first_published_at: string | null; slug_manually_overridden: number }>(db, 'SELECT category, title, slug, status, published_at, first_published_at, slug_manually_overridden FROM blog_posts WHERE id = ? LIMIT 1', [postId])
   const effectiveCategory = input.category !== undefined ? input.category : current?.category ?? null
   if (!isTenant) {
     if (!effectiveCategory?.trim()) badRequest('category is required')
@@ -1473,12 +1561,35 @@ export async function updatePlatformBlogPost(
   const updates: string[] = ['updated_at = ?']
   const params: ApiValue[] = [now]
 
+  if (input.visibility !== undefined && !['public', 'unlisted'].includes(input.visibility)) badRequest('visibility must be public or unlisted')
+  let scheduledFor: string | null | undefined
+  if (input.scheduled_for !== undefined) {
+    try { scheduledFor = parseScheduledFor(input.scheduled_for) } catch (error) { badRequest((error as Error).message) }
+    if (scheduledFor && new Date(scheduledFor).getTime() <= Date.now()) badRequest('scheduled_for must be in the future')
+  }
+
   if (input.title !== undefined) {
     if (!input.title?.trim()) badRequest('title cannot be blank')
     // Published URLs are durable identifiers. A headline edit must not silently
     // move the article and break inbound links, feeds, search, or tenant schema.
     updates.push('title = ?')
     params.push(input.title)
+    if (!current?.first_published_at && !current?.slug_manually_overridden && input.slug === undefined) {
+      updates.push('slug = ?')
+      params.push(normalizeBlogSlug(input.title))
+    }
+  }
+
+  const requestedSlug = input.slug?.trim() ? normalizeBlogSlug(input.slug) : null
+  if (input.slug !== undefined && !requestedSlug) badRequest('slug cannot be blank')
+  if (requestedSlug && requestedSlug !== current?.slug) {
+    const redirectCollision = await queryFirst<{ id: string } | null>(db, `
+      SELECT id FROM blog_post_redirects
+       WHERE old_slug = ? AND ${siteId ? 'site_id = ?' : 'site_id IS NULL'} LIMIT 1
+    `, siteId ? [requestedSlug, siteId] : [requestedSlug])
+    if (redirectCollision) badRequest('Slug collides with redirect history')
+    updates.push('slug = ?', 'slug_manually_overridden = 1')
+    params.push(requestedSlug)
   }
 
   if (input.body !== undefined) {
@@ -1510,6 +1621,11 @@ export async function updatePlatformBlogPost(
     | 'how_to_render_enabled'
     | 'how_to_schema_enabled'
     | 'components'
+    | 'slug'
+    | 'redirect_old_slug'
+    | 'content_blocks'
+    | 'expected_document_updated_at'
+    | 'expected_updated_at'
   >> = [
     'excerpt',
     'category',
@@ -1524,6 +1640,8 @@ export async function updatePlatformBlogPost(
     'canonical_url',
     'robots',
     'featured_image_asset_id',
+    'social_image_asset_id',
+    'visibility',
   ]
   for (const field of fields) {
     if (input[field] !== undefined) {
@@ -1542,22 +1660,48 @@ export async function updatePlatformBlogPost(
 
   if (input.publish && input.unpublish) badRequest('Cannot publish and unpublish simultaneously')
   if (input.publish) {
-    updates.push('published_at = ?', "status = 'published'")
-    params.push(now)
+    if (scheduledFor) {
+      updates.push('scheduled_for = ?', 'published_at = NULL', "status = 'scheduled'")
+      params.push(scheduledFor)
+    } else {
+      updates.push('scheduled_for = NULL', 'published_at = ?', 'first_published_at = COALESCE(first_published_at, ?)', "status = 'published'")
+      params.push(now, now)
+    }
+  }
+  if (input.social_image_asset_id !== undefined && input.social_image_asset_id) {
+    await ensureBlogFeaturedImageAssetExists(db, input.social_image_asset_id, 'social_image_asset_id', siteId)
   }
   if (input.unpublish) {
-    updates.push('published_at = NULL', "status = 'draft'")
+    updates.push('published_at = NULL', 'scheduled_for = NULL', "status = 'draft'")
+  } else if (input.scheduled_for !== undefined && !input.publish) {
+    updates.push('scheduled_for = ?')
+    params.push(scheduledFor ?? null)
   }
 
   params.push(postId)
+  if (input.expected_updated_at) params.push(input.expected_updated_at)
 
   try {
     const post = await queryFirst<ApiRecord | null>(db, `
       UPDATE blog_posts
        SET ${updates.join(', ')}
-       WHERE id = ?
+       WHERE id = ?${input.expected_updated_at ? ' AND updated_at = ?' : ''}
        RETURNING id`, params)
+    if (!post && input.expected_updated_at) throw createError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
     if (!post) notFound('Post not found')
+
+    if (requestedSlug && requestedSlug !== current?.slug && current?.first_published_at && input.redirect_old_slug !== false) {
+      await createBlogRedirect(db, postId, siteId, current.slug)
+    }
+
+    if (input.content_blocks !== undefined) {
+      if (!input.expected_document_updated_at) badRequest('expected_document_updated_at is required with content_blocks')
+      const normalizedBlocks = await normalizeEditorContentBlocks(db, input.content_blocks, siteId)
+      await replaceContentDocumentBlocks(db, blogContentOwnerType(siteId), postId, normalizedBlocks, {
+        expected_document_updated_at: input.expected_document_updated_at,
+        label: 'Editor autosave',
+      })
+    }
 
     const priorPost = await getPlatformBlogPost(db, postId, siteId)
     try {
@@ -1573,6 +1717,7 @@ export async function updatePlatformBlogPost(
     return {
       success: true,
       admin_edit_url: updatedPost.admin_edit_url,
+      edit_url: updatedPost.edit_url,
       public_path: updatedPost.public_path,
       public_url: updatedPost.public_url,
       preview_url: updatedPost.preview_url,

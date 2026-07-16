@@ -318,7 +318,7 @@ export async function listPublishedPlatformBlogPostsForLlm(db: DbClient) {
       u.name AS author_name
      FROM blog_posts p
      LEFT JOIN user u ON u.id = p.author_id
-     WHERE p.status = 'published' AND p.site_id IS NULL
+     WHERE p.status = 'published' AND p.site_id IS NULL AND p.visibility = 'public'
      ORDER BY p.category, p.published_at DESC`,
   )
 }
@@ -331,7 +331,7 @@ export async function listPublishedTenantBlogPostsForLlm(db: DbClient, siteId: s
       u.name AS author_name
      FROM blog_posts p
      LEFT JOIN user u ON u.id = p.author_id
-     WHERE p.status = 'published' AND p.site_id = ?
+     WHERE p.status = 'published' AND p.site_id = ? AND p.visibility = 'public'
      ORDER BY p.published_at DESC, p.updated_at DESC`,
     [siteId],
   )

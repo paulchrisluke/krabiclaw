@@ -66,6 +66,7 @@ export default defineNitroPlugin((nitroApp) => {
            FROM blog_posts
            WHERE status = 'published'
              AND site_id IS NULL
+             AND visibility = 'public'
              AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
         ),
       ])
@@ -144,6 +145,7 @@ export default defineNitroPlugin((nitroApp) => {
            FROM blog_posts
            WHERE site_id = ?
              AND status = 'published'
+             AND visibility = 'public'
              AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
           [siteId],
         ),
@@ -199,6 +201,7 @@ export default defineNitroPlugin((nitroApp) => {
          FROM blog_posts
          WHERE site_id = ?
            AND status = 'published'
+           AND visibility = 'public'
            AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
         [siteId],
       ),

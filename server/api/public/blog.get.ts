@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
       ma.height
     FROM blog_posts p
     LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
-    WHERE p.status = 'published' AND p.site_id IS NULL
+    WHERE p.status = 'published' AND p.site_id IS NULL AND p.visibility = 'public'
     ORDER BY COALESCE(p.featured_order, 999999), COALESCE(p.nav_section_order, 999999), COALESCE(p.nav_section, p.category), COALESCE(p.nav_order, 999999), p.published_at DESC
     LIMIT 100
   `

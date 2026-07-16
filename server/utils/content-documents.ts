@@ -1,7 +1,7 @@
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '../db/index.ts'
 
 export type ContentDocumentOwnerType = 'platform_blog' | 'platform_doc' | 'tenant_blog'
-export type ContentBlockType = 'heading' | 'markdown' | 'image' | 'gallery' | 'faq' | 'how_to' | 'ai_assistance' | 'cta' | 'callout'
+export type ContentBlockType = 'heading' | 'markdown' | 'image' | 'gallery' | 'faq' | 'how_to' | 'divider' | 'ai_assistance' | 'cta' | 'callout'
 
 export interface ContentDocumentRow {
   id: string
@@ -45,6 +45,7 @@ export interface ContentBlockSnapshot {
 }
 
 export interface ContentBlockInput {
+  id?: string
   type: ContentBlockType
   data: Record<string, unknown>
   parent_block_id?: string | null
@@ -54,7 +55,7 @@ export interface ContentBlockInput {
 
 type ContentBlockWriteInput = Omit<ContentBlockSnapshot, 'id'> & { id?: string; updated_at?: string | null }
 
-const VALID_BLOCK_TYPES: readonly ContentBlockType[] = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'ai_assistance', 'cta', 'callout']
+const VALID_BLOCK_TYPES: readonly ContentBlockType[] = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout']
 const HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/
 
 function badRequest(message: string): never {
@@ -152,6 +153,7 @@ export function renderContentBlocksToMarkdown(blocks: Array<Pick<ContentBlockRow
       if (block.type === 'markdown') {
         return typeof data.markdown === 'string' ? data.markdown.trim() : ''
       }
+      if (block.type === 'divider') return '---'
       return `{{component type="${block.type}"}}`
     })
     .filter(Boolean)
@@ -374,12 +376,29 @@ export async function syncContentDocumentFromMarkdown(
 export async function publishCurrentContentRevision(db: D1Database, ownerType: ContentDocumentOwnerType, ownerId: string) {
   const document = await getContentDocumentByOwner(db, ownerType, ownerId)
   if (!document?.draft_revision_id) return null
-  const now = new Date().toISOString()
-  await execute(
+  const revision = await queryFirst<Pick<ContentRevisionRow, 'body_markdown'> | null>(
     db,
-    'UPDATE content_documents SET published_revision_id = ?, updated_at = ? WHERE id = ?',
-    [document.draft_revision_id, now, document.id],
+    'SELECT body_markdown FROM content_revisions WHERE id = ? AND document_id = ? LIMIT 1',
+    [document.draft_revision_id, document.id],
   )
+  if (!revision) notFound('Content revision not found')
+  const now = new Date().toISOString()
+  const queries: { query: string; params: unknown[] }[] = [{
+    query: 'UPDATE content_documents SET published_revision_id = ?, updated_at = ? WHERE id = ?',
+    params: [document.draft_revision_id, now, document.id],
+  }]
+  if (ownerType === 'platform_blog' || ownerType === 'tenant_blog') {
+    queries.push({
+      query: 'UPDATE blog_posts SET body = ?, updated_at = ? WHERE id = ?',
+      params: [revision.body_markdown, now, ownerId],
+    })
+  } else {
+    queries.push({
+      query: 'UPDATE platform_docs SET body = ?, updated_at = ? WHERE id = ?',
+      params: [revision.body_markdown, now, ownerId],
+    })
+  }
+  await executeBatch(db, queries)
   return { ...document, published_revision_id: document.draft_revision_id, updated_at: now }
 }
 
@@ -619,4 +638,158 @@ export async function deleteContentBlock(
 export async function renderContentPreview(db: DbClient, documentId: string) {
   const blocks = await listBlocksForDocument(db, documentId)
   return { body_markdown: renderContentBlocksToMarkdown(blocks), blocks: blocks.map(formatBlockOutline) }
+}
+
+/** Editor-oriented snapshot read. Unknown/future block types remain opaque data
+ * so a client can round-trip them without becoming a second content system. */
+export async function getContentEditorSnapshot(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {
+  const document = await getContentDocumentByOwner(db, ownerType, ownerId)
+  if (!document) return null
+  const blocks = await listBlocksForDocument(db, document.id)
+  return { document, blocks: blocks.map(formatBlockOutline) }
+}
+
+export async function getPublishedContentSnapshot(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {
+  const row = await queryFirst<{ snapshot_json: string } | null>(db, `
+    SELECT r.snapshot_json
+      FROM content_documents d
+      JOIN content_revisions r ON r.id = d.published_revision_id
+     WHERE d.owner_type = ? AND d.owner_id = ?
+     LIMIT 1
+  `, [ownerType, ownerId])
+  if (!row) return null
+  try {
+    const parsed = JSON.parse(row.snapshot_json) as { blocks?: ContentBlockSnapshot[] }
+    return Array.isArray(parsed.blocks) ? parsed.blocks : null
+  } catch {
+    throw createError({ statusCode: 500, statusMessage: 'Published content revision is malformed' })
+  }
+}
+
+export async function replaceContentDocumentBlocks(
+  db: D1Database,
+  ownerType: ContentDocumentOwnerType,
+  ownerId: string,
+  blocks: ContentBlockInput[],
+  opts: { expected_document_updated_at: string; createdBy?: string | null; label?: string | null },
+) {
+  const document = await getContentDocumentByOwner(db, ownerType, ownerId)
+  if (!document) notFound('Content document not found')
+  if (document.updated_at !== opts.expected_document_updated_at) {
+    throw createError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
+  }
+  const existing = await listBlocksForDocument(db, document.id)
+  // Use a real existing block as the atomic D1 guard. Empty documents cannot
+  // race after their timestamp was checked because every canonical document
+  // is created with at least one Markdown block.
+  const anchor = existing[0]
+  if (!anchor) throw createError({ statusCode: 409, statusMessage: 'Content document changed; reload before saving' })
+  const snapshots = blocks.map((block, index) => ({
+    id: typeof (block as ContentBlockInput & { id?: unknown }).id === 'string'
+      ? (block as ContentBlockInput & { id: string }).id
+      : undefined,
+    parent_block_id: block.parent_block_id ?? null,
+    type: assertBlockType(block.type),
+    position: index,
+    level: block.level ?? null,
+    data: asObject(block.data, `content block ${index} data`),
+    updated_at: null,
+  }))
+  return await writeRevisionFromBlocks(db, document, snapshots, {
+    createdBy: opts.createdBy,
+    label: opts.label ?? 'Editor autosave',
+    expectedBlock: { id: anchor.id, updatedAt: anchor.updated_at },
+  })
+}
+
+export interface LegacyBlogBackfillFinding {
+  post_id: string
+  component_id: string
+  type: 'faq' | 'how_to'
+  action: 'insert' | 'skip_existing' | 'invalid'
+  detail?: string
+}
+
+/** Idempotent migration/report for the old blog component authoring surface.
+ * Dry-run is the default; apply writes only missing FAQ/How-To block types and
+ * never removes legacy/unknown blocks. Compatibility component rows remain
+ * readable until all external consumers have migrated. */
+export async function backfillLegacyBlogStructuredBlocks(
+  db: D1Database,
+  opts: { apply?: boolean; siteId?: string | null } = {},
+) {
+  const rows = await queryAll<{
+    post_id: string
+    site_id: string | null
+    body: string
+    component_id: string
+    type: string
+    data_json: string
+  }>(db, `
+    SELECT p.id AS post_id, p.site_id, p.body, c.id AS component_id, c.type, c.data_json
+      FROM blog_posts p
+      JOIN platform_content_components c ON c.content_type = 'blog_post' AND c.content_id = p.id
+     WHERE c.type IN ('faq', 'how_to')
+       ${opts.siteId === undefined ? '' : opts.siteId === null ? 'AND p.site_id IS NULL' : 'AND p.site_id = ?'}
+     ORDER BY p.id, c.position, c.created_at
+  `, typeof opts.siteId === 'string' ? [opts.siteId] : [])
+
+  const findings: LegacyBlogBackfillFinding[] = []
+  const grouped = new Map<string, typeof rows>()
+  for (const row of rows ?? []) grouped.set(row.post_id, [...(grouped.get(row.post_id) ?? []), row])
+
+  for (const [postId, components] of grouped) {
+    const first = components[0]!
+    const ownerType: ContentDocumentOwnerType = first.site_id ? 'tenant_blog' : 'platform_blog'
+    let snapshot = await getContentEditorSnapshot(db, ownerType, postId)
+    if (!snapshot && opts.apply) {
+      await syncContentDocumentFromMarkdown(db, { ownerType, ownerId: postId, bodyMarkdown: first.body, label: 'Legacy structured-content backfill' })
+      snapshot = await getContentEditorSnapshot(db, ownerType, postId)
+    }
+    const sourceBlocks = (snapshot?.blocks ?? markdownToContentBlocks(first.body)) as Array<ContentBlockInput & { id?: string }>
+    const blocks: ContentBlockInput[] = sourceBlocks.map(block => ({
+      ...(block.id ? { id: block.id } : {}), type: block.type, data: block.data,
+      parent_block_id: block.parent_block_id, level: block.level, position: block.position,
+    }))
+    const present = new Set(blocks.map(block => block.type))
+
+    for (const component of components) {
+      const type = component.type as 'faq' | 'how_to'
+      let data: Record<string, unknown>
+      try {
+        data = asObject(JSON.parse(component.data_json), `legacy component ${component.component_id} data`)
+      } catch {
+        findings.push({ post_id: postId, component_id: component.component_id, type, action: 'invalid', detail: 'Malformed data_json' })
+        continue
+      }
+      const required = type === 'faq' ? data.items : data.steps
+      if (!Array.isArray(required) || required.length === 0) {
+        findings.push({ post_id: postId, component_id: component.component_id, type, action: 'invalid', detail: `Missing ${type === 'faq' ? 'items' : 'steps'}` })
+        continue
+      }
+      if (present.has(type)) {
+        findings.push({ post_id: postId, component_id: component.component_id, type, action: 'skip_existing' })
+        continue
+      }
+      present.add(type)
+      blocks.push({ type, data })
+      findings.push({ post_id: postId, component_id: component.component_id, type, action: 'insert' })
+    }
+
+    if (opts.apply && snapshot && findings.some(finding => finding.post_id === postId && finding.action === 'insert')) {
+      await replaceContentDocumentBlocks(db, ownerType, postId, blocks, {
+        expected_document_updated_at: snapshot.document.updated_at,
+        label: 'Legacy FAQ/How-To backfill',
+      })
+    }
+  }
+  return {
+    apply: Boolean(opts.apply),
+    findings,
+    totals: {
+      insert: findings.filter(f => f.action === 'insert').length,
+      skip_existing: findings.filter(f => f.action === 'skip_existing').length,
+      invalid: findings.filter(f => f.action === 'invalid').length,
+    },
+  }
 }

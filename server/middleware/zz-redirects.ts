@@ -1,9 +1,11 @@
 // SEO 301 redirects for legacy legal URLs
 import { createError, defineEventHandler, getMethod, getRequestHeader, getRequestURL, sendRedirect, setResponseHeader } from 'h3'
-import { queryAll } from '~/server/db'
+import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { isBlawbyTemplate } from '~/utils/template-registry'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
+import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
+import { blogCategoryToSlug } from '~/utils/blog-categories'
 
 const redirects: Record<string, string> = {
   '/docs/mcp-setup': '/docs/integrations/mcp-setup',
@@ -72,6 +74,31 @@ export default defineEventHandler(async (event) => {
             return external.toString()
           })()
       return sendRedirect(event, target, statusCode)
+    }
+  }
+
+  // Durable blog slugs are separate from tenant-page redirects because they
+  // are scoped to blog_posts and must work on both Saya (/blog) and Blawby
+  // (/article) route surfaces.
+  if (getMethod(event) === 'GET') {
+    const env = cloudflareEnv(event)
+    const db = env.db
+    const tenantMatch = normalizedPathname.match(/^\/(?:blog|article)\/([^/]+)$/)
+    if (db && tenantMatch && event.context.tenantType === TENANT_TYPES.TENANT && event.context.siteId) {
+      const redirected = await queryFirst<{ slug: string } | null>(db, `
+        SELECT p.slug FROM blog_post_redirects r JOIN blog_posts p ON p.id = r.post_id
+         WHERE r.site_id = ? AND r.old_slug = ? AND p.status = 'published' LIMIT 1
+      `, [event.context.siteId, decodeURIComponent(tenantMatch[1]!)])
+      if (redirected) return sendRedirect(event, `${tenantBlogPostPath(event.context.site ?? null, redirected.slug)}${url.search}${url.hash}`, 301)
+    }
+    const platformMatch = normalizedPathname.match(/^\/blog\/[^/]+\/([^/]+)$/)
+    if (db && platformMatch && event.context.tenantType === TENANT_TYPES.PLATFORM) {
+      const redirected = await queryFirst<{ slug: string; category: string | null } | null>(db, `
+        SELECT p.slug, p.category FROM blog_post_redirects r JOIN blog_posts p ON p.id = r.post_id
+         WHERE r.site_id IS NULL AND r.old_slug = ? AND p.status = 'published' LIMIT 1
+      `, [decodeURIComponent(platformMatch[1]!)])
+      const category = blogCategoryToSlug(redirected?.category)
+      if (redirected && category) return sendRedirect(event, `/blog/${category}/${encodeURIComponent(redirected.slug)}${url.search}${url.hash}`, 301)
     }
   }
 
