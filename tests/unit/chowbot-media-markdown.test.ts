@@ -178,6 +178,7 @@ test('saveInboundMediaAsset rejects an oversized Markdown file before touching s
 
 test('saveInboundMediaAsset rejects a Markdown file with invalid UTF-8 content', async () => {
   createdAssets.length = 0
+  uploadedToR2.length = 0
 
   const invalid = new Uint8Array([0x23, 0x20, 0xff, 0xfe, 0x41]).buffer
   await assert.rejects(
@@ -194,6 +195,7 @@ test('saveInboundMediaAsset rejects a Markdown file with invalid UTF-8 content',
     /not valid UTF-8/i,
   )
   assert.equal(createdAssets.length, 0)
+  assert.equal(uploadedToR2.length, 0)
 })
 
 test('saveInboundMediaAsset still rejects a genuinely unsupported file type', async () => {

@@ -8,12 +8,15 @@ import { getHeaders } from 'h3'
 import type { H3Event } from 'h3'
 import { createDb, execute, schema } from '~/server/db'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
-import { normalizePhone, sendWhatsAppOtp } from '~/server/utils/whatsapp'
-import { notifyAdminNewUserSignup } from '~/server/utils/admin-notifications'
+import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
+import { phoneTemporaryEmail } from '~/server/utils/phone-invitations'
+import { parsePhoneOrThrow, PHONE_METADATA_VERSION } from '~/utils/phone'
+import { notifyNewUserSignup } from '~/server/utils/notification-center'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
 import { validatePassword } from '~/utils/password-validation'
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/site-events'
 import type { InferSelectModel } from 'drizzle-orm'
+import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
@@ -55,6 +58,8 @@ export interface CloudflareEnv {
   EMAIL_DELIVERY_MODE?: string
   EMAIL_REPLY_SECRET?: string
   EMAIL_INBOUND_SECRET?: string
+  DISCORD_DELIVERY_MODE?: string
+  DISCORD_WEBHOOK_URL?: string
   MEDIA_BUCKET?: R2Bucket
   db?: ReturnType<typeof createDb>
   [key: string]: ApiValue
@@ -63,10 +68,16 @@ export interface CloudflareEnv {
 // WeakMap keyed on the D1 binding instance — safe for the Worker lifecycle
 const authCache = new WeakMap<D1Database, unknown>()
 
-export function createAuth(env: CloudflareEnv) {
+interface CreateAuthOptions {
+  waitUntil?: (_task: Promise<unknown>) => void
+}
+
+export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) {
   const d1 = env.DB
 
-  const cached = authCache.get(d1)
+  // Request-scoped background scheduling must never be captured by a cached auth
+  // instance. Auth endpoints get a fresh instance; session reads keep the cache.
+  const cached = options.waitUntil ? null : authCache.get(d1)
   if (cached) return cached as ReturnType<typeof betterAuth>
 
   const db = env.db ?? createDb(d1)
@@ -90,14 +101,12 @@ export function createAuth(env: CloudflareEnv) {
             // Signup itself must not assume why the user is here: they may be
             // accepting an invitation into an existing org, in which case a
             // personal org here would just be an orphaned, siteless duplicate.
-            const now = new Date()
-            // Fire-and-forget — must not block or throw into the auth flow
-            notifyAdminNewUserSignup(env, {
+            // Persist the canonical event before the auth hook completes. Delivery failures
+            // are recorded by the dispatcher and must never fail account creation.
+            await notifyNewUserSignup(db, env, {
               id: user.id,
-              name: user.name,
               email: user.email,
-              createdAt: now.toISOString(),
-            }).catch((err) => console.error('admin_signup_notify_failed', err))
+            }, options.waitUntil).catch((err) => console.error('signup_notification_failed', err))
           }
         }
       },
@@ -277,7 +286,7 @@ export function createAuth(env: CloudflareEnv) {
       cimd({
         allowLoopback: import.meta.dev,
       }),
-      organization(),
+      organization({ ac: organizationAccessControl, roles: organizationRoles }),
       admin({
         adminRoles: ['admin'],
         defaultRole: 'user',
@@ -291,24 +300,40 @@ export function createAuth(env: CloudflareEnv) {
         expiresIn: 300,
         phoneNumberValidator: async (phone) => {
           try {
-            normalizePhone(phone)
+            parsePhoneOrThrow(phone, { defaultCountry: 'TH' })
             return true
           } catch {
             return false
           }
         },
+        // Stamp the app-owned user_phone_verification companion table
+        // (issue #293 Section D/I) on every successful OTP verification —
+        // this table exists specifically to track ownership_verified/
+        // format_valid/phone_metadata_version separately from Better Auth's
+        // own phoneNumberVerified column, but nothing wrote to it until now.
+        callbackOnVerification: async ({ user }) => {
+          try {
+            const now = new Date().toISOString()
+            await execute(d1, `
+              INSERT INTO user_phone_verification (id, user_id, format_valid, ownership_verified, phone_metadata_version, created_at, updated_at)
+              VALUES (?, ?, 1, 1, ?, ?, ?)
+              ON CONFLICT(user_id) DO UPDATE SET format_valid = 1, ownership_verified = 1, phone_metadata_version = excluded.phone_metadata_version, updated_at = excluded.updated_at
+            `, [crypto.randomUUID(), user.id, PHONE_METADATA_VERSION, now, now])
+          } catch (error) {
+            console.warn('user_phone_verification_stamp_failed', { userId: user.id, error: error instanceof Error ? error.message : String(error) })
+          }
+        },
         signUpOnVerification: {
           getTempEmail: (phone) => {
             try {
-              const digits = normalizePhone(phone).replace(/\D/g, '')
-              return `phone-${digits}@phone.krabiclaw.local`
+              return phoneTemporaryEmail(phone)
             } catch {
               return 'phone-unknown@phone.krabiclaw.local'
             }
           },
           getTempName: (phone) => {
             try {
-              return `WhatsApp ${normalizePhone(phone)}`
+              return `WhatsApp ${parsePhoneOrThrow(phone, { defaultCountry: 'TH' })}`
             } catch {
               return 'WhatsApp Unknown'
             }
@@ -335,7 +360,7 @@ export function createAuth(env: CloudflareEnv) {
     }
   })
 
-  authCache.set(d1, instance)
+  if (!options.waitUntil) authCache.set(d1, instance)
   return instance
 }
 

@@ -411,7 +411,7 @@ export async function buildTenantBlogDocuments(db: DbClient): Promise<PlatformKn
   const posts = await queryAll<TenantBlogDocRow>(db, `
     SELECT id, site_id, title, slug, body, excerpt, category, tags_json, seo_description, seo_keywords
     FROM blog_posts
-    WHERE status = 'published' AND site_id IS NOT NULL
+    WHERE status = 'published' AND site_id IS NOT NULL AND visibility = 'public'
     ORDER BY site_id, published_at DESC, updated_at DESC
   `)
 
@@ -456,7 +456,7 @@ export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<Pla
     queryAll<PlatformBlogSearchRow>(db, `
       SELECT id, title, slug, body, excerpt, category, seo_description, seo_keywords
       FROM blog_posts
-      WHERE status = 'published' AND site_id IS NULL
+      WHERE status = 'published' AND site_id IS NULL AND visibility = 'public'
       ORDER BY category, published_at DESC, updated_at DESC
     `),
     buildTenantBlogDocuments(db),
@@ -847,6 +847,7 @@ export async function searchPublicResources(
            FROM blog_posts
            WHERE status = 'published'
              AND site_id = ?
+             AND visibility = 'public'
              AND (
                lower(title) LIKE lower(?) ESCAPE '\\'
                OR lower(body) LIKE lower(?) ESCAPE '\\'

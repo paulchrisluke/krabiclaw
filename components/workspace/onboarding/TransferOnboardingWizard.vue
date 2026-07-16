@@ -194,6 +194,7 @@
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
 import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
+import type { SiteVertical } from '~/utils/vertical-copy'
 
 interface Location {
   id: string
@@ -209,13 +210,19 @@ interface Props {
   locations: Location[]
   plan: string
   ownerPhone: string | null
-  vertical?: 'restaurant' | 'experience' | null
+  // Callers must pass the already-normalized canonical app-level vertical
+  // (see utils/vertical-copy.ts's normalizeVertical) — this component does
+  // not itself talk to the DB-storage alias ('service'), so it must not
+  // silently coerce anything it doesn't recognize to 'restaurant'.
+  vertical?: SiteVertical | null
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<{ done: [] }>()
-const siteVertical = computed(() => props.vertical === 'experience' ? 'experience' : 'restaurant')
-const transferStarterPrompt = computed(() => props.vertical === 'experience'
+const siteVertical = computed<SiteVertical>(() => props.vertical ?? 'restaurant')
+const transferStarterPrompt = computed(() => props.vertical === 'professional_service'
+  ? 'Audit this imported site and help me improve it. Start with hero copy, brand story, missing photos, and any weak services pages.'
+  : props.vertical === 'experience'
   ? 'Audit this imported site and help me improve it. Start with hero copy, brand story, missing photos, and any weak experience pages.'
   : 'Audit this imported site and help me improve it. Start with hero copy, brand story, missing photos, and any weak menu pages.'
 )

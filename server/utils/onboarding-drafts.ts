@@ -174,6 +174,11 @@ const DRAFT_QA: Partial<Record<SiteVertical, Array<[string, string, number]>>> =
     ['What should I bring?', 'Comfortable clothes and an open mind. We provide all the materials and tools needed.', 2],
     ['Is there parking nearby?', 'Yes — there is parking available nearby. See our contact page for directions.', 3],
   ],
+  professional_service: [
+    ['How do I request a consultation?', 'You can request a consultation through our contact page or by reaching out directly.', 1],
+    ['What services do you offer?', 'Update this with the services or practice areas your organization provides.', 2],
+    ['How can I get in touch?', 'See our contact page for phone, email, and office details.', 3],
+  ],
 }
 
 function slugify(value: string) {
@@ -217,20 +222,47 @@ function asPlaceSnapshot(place: PlaceDetails): PlaceDetailsSnapshot {
   }
 }
 
+// Per-vertical hero/CTA/story copy. professional_service gets its own explicit
+// branch — no dining/class language, no invented practice areas, plain
+// clearly-editable placeholders instead.
+const DRAFT_CONTENT_COPY: Record<SiteVertical, {
+  heroSubtitle: (_name: string) => string
+  ctaTitle: string
+  aboutCta: string
+  storyBody: (_name: string) => string
+  journeyBody: (_name: string) => string
+}> = {
+  restaurant: {
+    heroSubtitle: name => `${name} is built around generous food, warm service, and a room that feels easy to return to.`,
+    ctaTitle: 'Come hungry.',
+    aboutCta: 'Come dine with us',
+    storyBody: name => `${name} started with a simple idea: make the food we love, serve it with care, and keep the welcome honest.\n\nToday, that same idea guides every part of the restaurant, from the first prep list of the morning to the last table of the night.`,
+    journeyBody: name => `${name} is a neighbourhood restaurant focused on doing a small number of things exceptionally well.\n\nAdd the milestones that shaped your restaurant: where you started, what changed along the way, and what guests can expect when they walk through the door.`,
+  },
+  experience: {
+    heroSubtitle: name => `${name} is built around hands-on learning, skilled instruction, and a space that invites you to try something new.`,
+    ctaTitle: 'Book a class.',
+    aboutCta: 'Book a class',
+    storyBody: name => `${name} started with a simple idea: share a skill, build a community, and make the process enjoyable from start to finish.\n\nToday, that same idea shapes every class, workshop, and session we offer.`,
+    journeyBody: name => `${name} is a hands-on studio focused on doing a small number of things exceptionally well.\n\nAdd the milestones that shaped your studio: where you started, what changed along the way, and what guests can expect when they arrive.`,
+  },
+  professional_service: {
+    heroSubtitle: name => `${name} is built around clear guidance, responsive service, and a team clients can rely on.`,
+    ctaTitle: 'Talk with our team.',
+    aboutCta: 'Talk with our team',
+    storyBody: name => `${name} started with a simple idea: offer dependable, professional service and keep clients informed every step of the way.\n\nAdd your organization's own story here — who you serve, how you work, and what clients can expect when they reach out.`,
+    journeyBody: name => `${name} is a professional-service organization focused on doing right by the people it serves.\n\nAdd the milestones that shaped your organization: where you started, what changed along the way, and what clients can expect when they get in touch. Replace this placeholder with your own services or practice areas — none are assumed here.`,
+  },
+}
+
 function buildDraftContent(brandName: string, vertical: SiteVertical, heroImageUrl: string | null, heroThumbnailUrl: string | null): DraftContentRecord[] {
   const updatedAt = nowIso()
-  const baseHeroSubtitle = vertical === 'experience'
-    ? `${brandName} is built around hands-on learning, skilled instruction, and a space that invites you to try something new.`
-    : `${brandName} is built around generous food, warm service, and a room that feels easy to return to.`
-
-  const ctaTitle = vertical === 'experience' ? 'Book a class.' : 'Come hungry.'
-  const aboutCta = vertical === 'experience' ? 'Book a class' : 'Come dine with us'
-  const storyBody = vertical === 'experience'
-    ? `${brandName} started with a simple idea: share a skill, build a community, and make the process enjoyable from start to finish.\n\nToday, that same idea shapes every class, workshop, and session we offer.`
-    : `${brandName} started with a simple idea: make the food we love, serve it with care, and keep the welcome honest.\n\nToday, that same idea guides every part of the restaurant, from the first prep list of the morning to the last table of the night.`
-  const journeyBody = vertical === 'experience'
-    ? `${brandName} is a hands-on studio focused on doing a small number of things exceptionally well.\n\nAdd the milestones that shaped your studio: where you started, what changed along the way, and what guests can expect when they arrive.`
-    : `${brandName} is a neighbourhood restaurant focused on doing a small number of things exceptionally well.\n\nAdd the milestones that shaped your restaurant: where you started, what changed along the way, and what guests can expect when they walk through the door.`
+  const copy = DRAFT_CONTENT_COPY[vertical] ?? DRAFT_CONTENT_COPY.restaurant
+  const baseHeroSubtitle = copy.heroSubtitle(brandName)
+  const ctaTitle = copy.ctaTitle
+  const aboutCta = copy.aboutCta
+  const storyBody = copy.storyBody(brandName)
+  const journeyBody = copy.journeyBody(brandName)
 
   return [
     {
@@ -399,9 +431,11 @@ export function buildOnboardingDraftPayload(input: {
   const locationSlug = slugify(brandName) || 'main'
   const locationId = 'draft-location-main'
 
-  const description = input.vertical === 'experience'
-    ? `${brandName} is a hands-on studio focused on creating memorable experiences and helping guests learn something new.`
-    : `${brandName} is a welcoming place focused on great food, warm service, and the details guests remember.`
+  const description = input.vertical === 'professional_service'
+    ? `${brandName} is a professional-service organization focused on clear guidance and responsive client service.`
+    : input.vertical === 'experience'
+      ? `${brandName} is a hands-on studio focused on creating memorable experiences and helping guests learn something new.`
+      : `${brandName} is a welcoming place focused on great food, warm service, and the details guests remember.`
 
   const menuTemplate = DRAFT_MENU_SECTIONS[input.vertical]
   const menu: DraftMenuRecord | null = menuTemplate
@@ -446,12 +480,16 @@ export function buildOnboardingDraftPayload(input: {
     sort_order: sortOrder,
   }))
 
+  const postBody = input.vertical === 'professional_service'
+    ? 'We just launched our new site — you can now learn about our services and get in touch with our team. More updates coming soon.'
+    : input.vertical === 'experience'
+      ? 'We just launched our new site — you can now browse what we offer, check our hours, and get in touch. More updates coming soon.'
+      : 'We just launched our new site — you can now browse our full menu, check our hours, and book a table online. More updates coming soon.'
+
   const posts: DraftPostRecord[] = [{
     id: draftUid('post'),
     title: 'Welcome to our new website',
-    body: input.vertical === 'experience'
-      ? 'We just launched our new site — you can now browse what we offer, check our hours, and get in touch. More updates coming soon.'
-      : 'We just launched our new site — you can now browse our full menu, check our hours, and book a table online. More updates coming soon.',
+    body: postBody,
     status: 'published',
     published_at: nowIso(),
   }]

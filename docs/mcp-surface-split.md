@@ -21,7 +21,7 @@ KrabiClaw now ships two separate MCP surfaces. They must stay separate in auth, 
 - Protected resource: `/.well-known/oauth-protected-resource/platform-mcp`
 - Server entrypoint: `server/api/mcp/platform.post.ts`
 - Scope: `platform_admin`
-- Exposes: platform blog and docs operations for `krabiclaw.com/blog` and `krabiclaw.com/docs`
+- Exposes: platform blog and docs operations for `krabiclaw.com/blog` and `krabiclaw.com/docs`, plus read-only categorized release data from merged GitHub pull requests
 
 ## Separation Rules
 

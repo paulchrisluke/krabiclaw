@@ -25,6 +25,7 @@
         :selected-page="selectedPage"
         site-status="live"
         :site-domain="siteDomain"
+        :vertical="siteVertical"
         @select-page="selectedPage = $event"
         @select-location="selectedLocationId = $event"
       />
@@ -42,6 +43,8 @@
 </template>
 
 <script setup lang="ts">
+import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
+
 definePageMeta({ layout: 'editor', ssr: false })
 
 const route = useRoute()
@@ -61,7 +64,7 @@ interface LocationRow {
 const loaded = ref(false)
 const siteId = ref('')
 const siteName = ref('Your Site')
-const siteVertical = ref<'restaurant' | 'experience'>('restaurant')
+const siteVertical = ref<SiteVertical>('restaurant')
 const subdomain = ref('')
 const plan = ref('free')
 const ownerPhone = ref<string | null>(null)
@@ -111,13 +114,19 @@ onMounted(async () => {
     const ctx = await $fetch<{
       success: boolean
       organization?: { id: string; slug: string } | null
-      site?: { id: string; brand_name: string; vertical?: 'restaurant' | 'experience' | null; subdomain: string; plan: string } | null
+      // vertical is the raw sites.vertical storage value (may be 'service',
+      // the DB alias for professional_service — see
+      // server/utils/dashboard-context.ts's DashboardSiteRow) — normalize it
+      // below rather than narrowing the type here, which previously caused
+      // every transferred professional_service/service site to silently
+      // display as 'restaurant'.
+      site?: { id: string; brand_name: string; vertical?: string | null; subdomain: string; plan: string } | null
     }>('/api/dashboard/context?afterTransfer=true')
 
     if (ctx.site) {
       siteId.value = ctx.site.id
       siteName.value = ctx.site.brand_name ?? 'Your Site'
-      siteVertical.value = ctx.site.vertical === 'experience' ? 'experience' : 'restaurant'
+      siteVertical.value = normalizeVertical(ctx.site.vertical) as SiteVertical
       subdomain.value = ctx.site.subdomain ?? ''
       plan.value = ctx.site.plan ?? 'free'
     }

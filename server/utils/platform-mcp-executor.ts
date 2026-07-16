@@ -4,6 +4,8 @@ import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { requireMcpUser } from '~/server/utils/mcp-auth'
 import { queryFirst } from '~/server/db'
 import { aggregatePlatformAnalyticsForDate, getPlatformAnalyticsSummary } from '~/server/utils/analytics'
+import { cloudflareEnv } from '~/server/utils/api-response'
+import { getRecentChanges, validateChangelogLimit } from '~/server/utils/changelog'
 import { hasCloudflareImagesConfig, uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { createMediaAsset, deleteMediaAsset, updateMediaAssetMetadata } from '~/server/utils/media-asset-manager'
 import { getPlatformMcpTool } from '~/server/utils/platform-mcp-tools'
@@ -472,6 +474,25 @@ export async function executePlatformMcpToolCall(
           isPlatformAdmin: user.isPlatformAdmin,
         },
       }
+    }
+    case 'get_recent_changes': {
+      let limit: number
+      try {
+        limit = validateChangelogLimit(rawArguments.limit)
+      } catch (error) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          error instanceof Error ? error.message : 'limit is invalid.',
+        )
+      }
+
+      const env = cloudflareEnv(event)
+      return await getRecentChanges({
+        githubToken: typeof env.GITHUB_TOKEN === 'string' ? env.GITHUB_TOKEN : '',
+        repoOwner: typeof env.GITHUB_REPO_OWNER === 'string' ? env.GITHUB_REPO_OWNER : undefined,
+        repoName: typeof env.GITHUB_REPO_NAME === 'string' ? env.GITHUB_REPO_NAME : undefined,
+        limit,
+      })
     }
     case 'get_platform_analytics': {
       const endDate = optionalDateParam(rawArguments, 'end_date') ?? dateString(new Date())

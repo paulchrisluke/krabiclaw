@@ -1,11 +1,14 @@
 // PATCH /api/dashboard/locations/[id] — Update a location
+import { getHeaders } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { updateLocation } from '~/server/utils/location-management'
+import { syncLocationWhatsAppAccess, updateLocation } from '~/server/utils/location-management'
 import { parseLocationPayload } from './location-helpers'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { queryFirst } from '~/server/db'
+import { assertMemberScope } from '~/server/utils/member-access'
+import { parsePhone } from '~/utils/phone'
 
 export default defineEventHandler(async (event) => {
   const locationId = getRouterParam(event, 'id')
@@ -37,11 +40,39 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Location not found' }, { status: 404 })
   }
   const siteId = locationSite.site_id
+  await assertMemberScope(db, {
+    memberId: organization.memberId,
+    role: organization.role,
+    organizationId,
+    siteId,
+    locationId,
+  })
 
   const body = await readBody<Record<string, unknown>>(event)
   if (typeof body !== 'object' || body === null) {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
+
+  // Normalize to canonical E.164 at this write boundary (issue #293 Section D)
+  // — `ensureWhatsAppRecipientAccess`/`isAuthorizedWhatsAppRecipient` already
+  // compare against E.164, but the raw trimmed input was previously stored
+  // as-is in `business_locations.notification_phone`, which silently broke
+  // that comparison for any input that wasn't already E.164-shaped.
+  let normalizedNotificationPhone: string | null | undefined
+  if (typeof body.notification_phone === 'string' && body.notification_phone.trim()) {
+    const parsed = parsePhone(body.notification_phone, { defaultCountry: 'TH' })
+    if (!parsed.valid || !parsed.e164) {
+      return jsonResponse({ error: 'Enter a valid notification phone number, including country code' }, { status: 400 })
+    }
+    normalizedNotificationPhone = parsed.e164
+  } else if (body.notification_phone === null) {
+    normalizedNotificationPhone = null
+  }
+
+  const previousLocation = await queryFirst<{ notification_phone: string | null }>(db, `
+    SELECT notification_phone FROM business_locations WHERE id = ? LIMIT 1
+  `, [locationId])
+  const previousNotificationPhone = previousLocation?.notification_phone ?? null
 
   const rating = body.rating === undefined || body.rating === null || String(body.rating).trim() === ''
     ? undefined
@@ -91,7 +122,7 @@ export default defineEventHandler(async (event) => {
       uber_eats_url: typeof body.uber_eats_url === 'string' ? body.uber_eats_url : body.uber_eats_url === null ? null : undefined,
       foodpanda_url: typeof body.foodpanda_url === 'string' ? body.foodpanda_url : body.foodpanda_url === null ? null : undefined,
       google_place_id: typeof body.google_place_id === 'string' ? body.google_place_id : body.google_place_id === null ? null : undefined,
-      notification_phone: typeof body.notification_phone === 'string' ? body.notification_phone.trim() || null : body.notification_phone === null ? null : undefined,
+      notification_phone: normalizedNotificationPhone,
       timezone: typeof body.timezone === 'string' ? body.timezone.trim() || null : body.timezone === null ? null : undefined,
       rating,
       review_count: reviewCount,
@@ -106,11 +137,48 @@ export default defineEventHandler(async (event) => {
   if (result.status >= 400) {
     return jsonResponse(result.data, { status: result.status })
   }
+
+  // Provisioning/scope-recalculation for a notification_phone change only
+  // runs AFTER the location write above has committed (CodeRabbit follow-up
+  // on issue #293 Section G/I): provisioning the new number before the save
+  // could leave access/invitations for a phone value that never actually
+  // got persisted, and running scope cleanup for the old number before the
+  // save could revoke a manager's access for a change that then failed to
+  // save. This also only runs when the field was actually touched (idempotency
+  // — Section I) — a save that doesn't touch notification_phone, or resubmits
+  // the same number, must not remove or re-audit anything (the no-op case is
+  // also handled inside syncLocationWhatsAppAccess itself).
+  let whatsappSyncWarning: string | undefined
+  let whatsappSyncError: string | undefined
+  if (normalizedNotificationPhone !== undefined) {
+    const sync = await syncLocationWhatsAppAccess(env as unknown as Parameters<typeof syncLocationWhatsAppAccess>[0], db, {
+      organizationId,
+      siteId,
+      locationId,
+      previousPhone: previousNotificationPhone,
+      newPhone: normalizedNotificationPhone,
+      inviterUserId: session.user.id,
+      actorHeaders: getHeaders(event) as HeadersInit,
+    })
+    if (!sync.ok) {
+      // The location save above already committed — do not hide this behind
+      // a clean 200. A provisioning failure means the new manager may not
+      // have gotten access; a scope-recalc failure means a previous manager
+      // may still be authorized under the number that was just replaced.
+      // Record the error for retry/recovery rather than only logging it.
+      whatsappSyncError = sync.scopeRecalcError
+        ? 'Location saved, but a previous manager\'s WhatsApp access could not be fully revoked. Please retry or check access manually.'
+        : 'Location saved, but WhatsApp access could not be provisioned for the new number. Please retry.'
+      whatsappSyncWarning = whatsappSyncError
+    }
+  }
+
   await purgeBootstrapCacheSafe(env, siteId)
 
   const location = (result.data as { location?: unknown }).location
   return jsonResponse({
     success: true,
     location: location ? parseLocationPayload(location) : null,
-  }, { status: result.status })
+    ...(whatsappSyncWarning ? { warning: whatsappSyncWarning } : {}),
+  }, { status: whatsappSyncWarning ? 207 : result.status })
 })

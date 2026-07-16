@@ -30,6 +30,7 @@ const SITE_EVENT_LABELS: Record<string, string> = {
   'member.invited': 'Invited a member',
   'member.role_changed': "Updated a member's role",
   'member.removed': 'Removed a member',
+  'member.access_scope_revoked': 'Revoked WhatsApp notification access',
 }
 
 export const SITE_EVENT_TYPES = Object.keys(SITE_EVENT_LABELS)

@@ -215,7 +215,7 @@ export async function listPublicBlogSummaries(db: DbClient, siteId: string, limi
       FROM blog_posts p
       LEFT JOIN user u ON u.id = p.author_id
       LEFT JOIN media_assets media ON media.id = p.featured_image_asset_id AND media.status = 'active'
-     WHERE p.site_id = ? AND p.status = 'published'
+     WHERE p.site_id = ? AND p.status = 'published' AND p.visibility = 'public'
      ORDER BY COALESCE(p.featured_order, 999999), p.published_at IS NULL, p.published_at DESC, p.id DESC
      LIMIT ?
   `, [siteId, Math.max(1, Math.min(50, Math.trunc(limit)))])
@@ -494,11 +494,17 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
     author_name: typeof row.author_name === 'string' ? row.author_name : null,
     published_at: typeof row.published_at === 'string' ? row.published_at : null,
     canonical_url: typeof row.canonical_url === 'string' && row.canonical_url ? row.canonical_url : `/article/${String(row.slug)}`,
+    seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
     seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
     robots: typeof row.robots === 'string' ? row.robots : null,
+    visibility: row.visibility === 'unlisted' ? 'unlisted' : 'public',
     created_at: typeof row.created_at === 'string' ? row.created_at : null,
     updated_at: typeof row.updated_at === 'string' ? row.updated_at : null,
     components: Array.isArray(row.components) ? row.components as ApiRecord[] : [],
+    content_blocks: Array.isArray(row.content_blocks) ? row.content_blocks as import('~/components/workspace/blog/types').BlogEditorBlock[] : [],
+    social_image: row.social_image && typeof row.social_image === 'object'
+      ? row.social_image as PublicBlogPost['social_image']
+      : null,
     author_image: typeof row.author_image === 'string' ? row.author_image : null,
     featured_image: featured && typeof featured.public_url === 'string'
       ? {

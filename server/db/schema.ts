@@ -33,6 +33,7 @@ export const customers = sqliteTable("customers", {
 	email_hash: text(),
 	phone: text(),
 	phone_normalized: text(),
+	phone_metadata_version: text(),
 	source: text().notNull(),
 	status: text().default("active").notNull(),
 	review_request_opted_out_at: text(),
@@ -481,6 +482,20 @@ export const invitation = sqliteTable("invitation", {
 }, (table) => [
 	index("invitation_organizationId_idx").on(table.organizationId),
 	uniqueIndex("idx_invitation_org_pending_owner").on(table.organizationId).where(sql`role = 'owner' AND status = 'pending'`),
+	uniqueIndex("idx_invitation_org_email_pending_unique").on(table.organizationId, sql`lower(${table.email})`).where(sql`status = 'pending'`),
+]);
+
+export const invitation_access_scope = sqliteTable("invitation_access_scope", {
+	id: text().primaryKey(),
+	invitation_id: text().notNull().references(() => invitation.id, { onDelete: "cascade" }),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
+	location_id: text().references(() => business_locations.id, { onDelete: "cascade" }),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	uniqueIndex("idx_invitation_access_scope_unique").on(table.invitation_id, table.site_id, table.location_id),
+	uniqueIndex("idx_invitation_access_scope_site_unique").on(table.invitation_id, table.site_id).where(sql`location_id IS NULL`),
+	index("idx_invitation_access_scope_invitation_id").on(table.invitation_id),
 ]);
 
 export const jwks = sqliteTable("jwks", {
@@ -605,6 +620,20 @@ export const member = sqliteTable("member", {
 	index("member_organizationId_idx").on(table.organizationId),
 ]);
 
+export const member_access_scope = sqliteTable("member_access_scope", {
+	id: text().primaryKey(),
+	member_id: text().notNull().references(() => member.id, { onDelete: "cascade" }),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
+	location_id: text().references(() => business_locations.id, { onDelete: "cascade" }),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	uniqueIndex("idx_member_access_scope_unique").on(table.member_id, table.site_id, table.location_id),
+	uniqueIndex("idx_member_access_scope_site_unique").on(table.member_id, table.site_id).where(sql`location_id IS NULL`),
+	index("idx_member_access_scope_member_id").on(table.member_id),
+	index("idx_member_access_scope_resource").on(table.organization_id, table.site_id, table.location_id),
+]);
+
 export const menu_item_translations = sqliteTable("menu_item_translations", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
@@ -712,9 +741,16 @@ export const menus = sqliteTable("menus", {
 
 export const notifications = sqliteTable("notifications", {
 	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	organization_id: text().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().references(() => sites.id, { onDelete: "set null" } ),
 	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
+	scope: text().default("organization").notNull(),
+	event_type: text(),
+	severity: text().default("info").notNull(),
+	actor_user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	target_user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	deep_link: text(),
+	message: text(),
 	channel: text().default("dashboard").notNull(),
 	template: text().notNull(),
 	recipient: text(),
@@ -726,7 +762,65 @@ export const notifications = sqliteTable("notifications", {
 	read_at: text(),
 	sent_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+	// Resolves a WhatsApp quoted reply's context.id back to the guest thread it
+	// originated from (see docs/plan for issue #293's reply-routing contract).
+	related_submission_type: text(),
+	related_submission_id: text(),
+	// Meta Cloud API delivery status ingestion (value.statuses[]), kept separate
+	// from `status` (our own send-attempt lifecycle) since Meta's delivery
+	// lifecycle (accepted < sent < delivered < read, or failed) is a distinct,
+	// out-of-order-tolerant state machine layered on top of a message we already
+	// recorded as sent.
+	whatsapp_delivery_status: text(),
+	whatsapp_delivery_error: text(),
+}, (table) => [
+	index("notifications_scope_created_at_idx").on(table.scope, table.created_at),
+	index("notifications_organization_created_at_idx").on(table.organization_id, table.created_at),
+	index("notifications_site_created_at_idx").on(table.site_id, table.created_at),
+	index("notifications_target_user_created_at_idx").on(table.target_user_id, table.created_at),
+	check("notifications_whatsapp_delivery_status_check", sql`whatsapp_delivery_status IS NULL OR whatsapp_delivery_status IN ('accepted', 'sent', 'delivered', 'read', 'failed')`),
+	check("notifications_related_submission_type_check", sql`related_submission_type IS NULL OR related_submission_type IN ('contact', 'reservation', 'experience_booking', 'invitation')`),
+]);
+
+// App-owned mirror of Better Auth's `user.phoneNumberVerified`, kept as a
+// separate companion table (rather than columns bolted onto Better Auth's
+// `user` table) so app-domain verification state stays independent of a
+// table Better Auth migrates on its own schedule. One row per user.
+export const user_phone_verification = sqliteTable("user_phone_verification", {
+	id: text().primaryKey(),
+	user_id: text().notNull().unique().references(() => user.id, { onDelete: "cascade" } ),
+	format_valid: integer().default(0).notNull(),
+	ownership_verified: integer().default(0).notNull(),
+	whatsapp_observed_at: text(),
+	phone_metadata_version: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	uniqueIndex("user_phone_verification_user_id_unique").on(table.user_id),
+]);
+
+export const notification_reads = sqliteTable("notification_reads", {
+	notification_id: text().notNull().references(() => notifications.id, { onDelete: "cascade" } ),
+	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
+	read_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.notification_id, table.user_id] }),
+	index("notification_reads_user_read_at_idx").on(table.user_id, table.read_at),
+]);
+
+export const notification_deliveries = sqliteTable("notification_deliveries", {
+	id: text().primaryKey(),
+	notification_id: text().notNull().references(() => notifications.id, { onDelete: "cascade" } ),
+	channel: text().notNull(),
+	status: text().default("pending").notNull(),
+	provider_message_id: text(),
+	error: text(),
+	sent_at: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("notification_deliveries_notification_idx").on(table.notification_id),
+	index("notification_deliveries_channel_status_idx").on(table.channel, table.status),
+]);
 
 export const oauthAccessToken = sqliteTable("oauthAccessToken", {
 	id: text().primaryKey(),
@@ -929,10 +1023,15 @@ export const blog_posts = sqliteTable("blog_posts", {
 	hide_from_nav: integer().default(0).notNull(),
 	featured_order: integer(),
 	status: text().default("draft").notNull(), // draft | published | scheduled | archived
+	visibility: text().default("public").notNull(), // public | unlisted
 	author_id: text().references(() => user.id, { onDelete: "set null" } ),
 	featured_image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
+	social_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	published_at: text(),
+	first_published_at: text(),
 	scheduled_for: text(),
+	scheduled_revision_id: text(),
+	slug_manually_overridden: integer().default(0).notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	seo_title: text(),
@@ -943,10 +1042,23 @@ export const blog_posts = sqliteTable("blog_posts", {
 }, (table) => [
 	check("blog_posts_scope_check", sql`(organization_id IS NULL AND site_id IS NULL) OR (organization_id IS NOT NULL AND site_id IS NOT NULL)`),
 	check("blog_posts_status_check", sql`status IN ('draft', 'published', 'scheduled', 'archived')`),
+	check("blog_posts_visibility_check", sql`visibility IN ('public', 'unlisted')`),
 	check("blog_posts_category_check", sql`site_id IS NOT NULL OR category IS NOT NULL`),
 	uniqueIndex("blog_posts_platform_slug_idx").on(table.slug).where(sql`site_id IS NULL`),
 	uniqueIndex("blog_posts_site_slug_idx").on(table.site_id, table.slug).where(sql`site_id IS NOT NULL`),
 	index("blog_posts_org_site_idx").on(table.organization_id, table.site_id),
+]);
+
+export const blog_post_redirects = sqliteTable("blog_post_redirects", {
+	id: text().primaryKey(),
+	post_id: text().notNull().references(() => blog_posts.id, { onDelete: "cascade" }),
+	site_id: text().references(() => sites.id, { onDelete: "cascade" }),
+	old_slug: text().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	uniqueIndex("blog_post_redirects_platform_slug_idx").on(table.old_slug).where(sql`site_id IS NULL`),
+	uniqueIndex("blog_post_redirects_site_slug_idx").on(table.site_id, table.old_slug).where(sql`site_id IS NOT NULL`),
+	index("blog_post_redirects_post_idx").on(table.post_id),
 ]);
 
 export const platform_contact_submissions = sqliteTable("platform_contact_submissions", {
@@ -2123,7 +2235,7 @@ export const content_blocks = sqliteTable("content_blocks", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	check("content_blocks_type_check", sql`type IN ('heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'ai_assistance', 'cta', 'callout')`),
+	check("content_blocks_type_check", sql`type IN ('heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout')`),
 	index("content_blocks_document_position_idx").on(table.document_id, table.position),
 	index("content_blocks_parent_idx").on(table.parent_block_id),
 ]);

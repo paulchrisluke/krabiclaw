@@ -723,7 +723,6 @@ const { canonicalUrl } = useTenantSocialMetadata(() => {
     heroImage: heroImageUrl ? { url: heroImageUrl } : null,
   }
 })
-
 const resolvedCanonicalUrl = computed(() => canonicalUrl.value || `${siteUrl}/experiences/${slug}`)
 
 useBreadcrumbSchema([

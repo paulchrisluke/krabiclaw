@@ -22,13 +22,10 @@
       style="grid-template-columns: minmax(24rem, 45%) 1fr; grid-template-rows: minmax(0, 1fr)"
     >
       <OnboardingWizard
+        mode="add-location"
         :site-id="null"
         :existing-org-slug="orgSlug"
         :existing-site-slug="siteSlug"
-        setup-endpoint="/api/dashboard/locations/add"
-        setup-manual-endpoint="/api/dashboard/locations/add"
-        skip-vertical
-        is-adding-location
         @site-created="onLocationCreated"
       />
       <OnboardingPreviewPane
@@ -38,6 +35,7 @@
         :selected-page="selectedPreviewPage"
         :site-status="computedSiteStatus"
         :site-domain="siteDomain"
+        :vertical="previewVertical"
         @select-page="onSelectPage"
         @select-location="onSelectLocation"
       />
@@ -74,6 +72,8 @@
 </template>
 
 <script setup lang="ts">
+import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
+
 definePageMeta({ layout: 'editor', ssr: false })
 
 const route = useRoute()
@@ -85,6 +85,7 @@ const orgSlug = route.params.orgSlug as string
 const siteSlug = route.params.siteSlug as string
 
 const siteData = ref<ApiRecord | null>(null)
+const previewVertical = computed<SiteVertical>(() => normalizeVertical(siteData.value?.vertical as string | undefined) as SiteVertical)
 const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])
 const contextLoaded = ref(false)
 const contextError = ref<string | null>(null)

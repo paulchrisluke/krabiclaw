@@ -3,6 +3,14 @@ export type SiteVertical =
   | "experience"
   | "professional_service";
 
+// The single canonical list of app-level verticals a tenant can be created
+// or migrated with. This is the one place that enumerates every supported
+// value — server/utils/site-creation.ts's VALID_VERTICALS re-exports this
+// rather than redeclaring its own array, and any UI vertical picker should
+// import this (or ALL_VERTICALS) instead of hand-writing a local
+// 'restaurant' | 'experience' union that silently omits new verticals.
+export const ALL_VERTICALS: SiteVertical[] = ["restaurant", "experience", "professional_service"];
+
 type LocaleCode = "en" | "th";
 
 type VerticalCopy = {
@@ -697,7 +705,7 @@ registry.th.professional_service = registry.en.professional_service!
 // `sites.vertical` stores 'service' for Blawby/professional-service tenants (see
 // sites_vertical_check + utils/template-registry.ts); 'professional_service' is the
 // copy-registry key, so callers passing either value must resolve to the same copy.
-function normalizeVertical(vertical: string | null | undefined): string {
+export function normalizeVertical(vertical: string | null | undefined): string {
   const v = String(vertical ?? "restaurant")
   return v === "service" ? "professional_service" : v
 }

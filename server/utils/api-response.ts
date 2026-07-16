@@ -94,12 +94,14 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
       e2eDeliveryOverrides = {
         ...(process.env.EMAIL_DELIVERY_MODE !== undefined && { EMAIL_DELIVERY_MODE: process.env.EMAIL_DELIVERY_MODE }),
         ...(process.env.WHATSAPP_DELIVERY_MODE !== undefined && { WHATSAPP_DELIVERY_MODE: process.env.WHATSAPP_DELIVERY_MODE }),
+        ...(process.env.DISCORD_DELIVERY_MODE !== undefined && { DISCORD_DELIVERY_MODE: process.env.DISCORD_DELIVERY_MODE }),
       }
     }
   } else if (devMode) {
     e2eDeliveryOverrides = {
       ...(process.env.EMAIL_DELIVERY_MODE !== undefined && { EMAIL_DELIVERY_MODE: process.env.EMAIL_DELIVERY_MODE }),
       ...(process.env.WHATSAPP_DELIVERY_MODE !== undefined && { WHATSAPP_DELIVERY_MODE: process.env.WHATSAPP_DELIVERY_MODE }),
+      ...(process.env.DISCORD_DELIVERY_MODE !== undefined && { DISCORD_DELIVERY_MODE: process.env.DISCORD_DELIVERY_MODE }),
     }
   }
 

@@ -5,7 +5,8 @@ import { seedNewSite } from '~/server/utils/site-template'
 import { createSystemSubdomain } from '~/server/utils/domains'
 import { setSiteEntitlementsFromPlan } from '~/server/utils/billing'
 import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
-import type { SiteVertical } from '~/utils/vertical-copy'
+import { ALL_VERTICALS, type SiteVertical } from '~/utils/vertical-copy'
+import { resolvePublicTemplate } from '~/utils/template-registry'
 
 type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
 
@@ -17,11 +18,33 @@ interface UserOrganizationSiteRow {
   onboarding_status: string | null
 }
 
-export const VALID_VERTICALS: SiteVertical[] = ['restaurant', 'experience']
+// Re-exported for existing callers (endpoint validation, tests) — the
+// canonical list itself lives in utils/vertical-copy.ts (ALL_VERTICALS) so a
+// third supported vertical only needs one array to update, not a duplicate
+// here plus one in every UI vertical picker.
+export const VALID_VERTICALS: SiteVertical[] = ALL_VERTICALS
 
 export interface SiteCreationResult {
   status: number
   data: Record<string, unknown>
+}
+
+// sites.vertical has a narrower CHECK constraint (sites_vertical_check) than the
+// app-level SiteVertical union — it accepts 'service' but not 'professional_service'.
+// This is the single place that bridges the two: every caller of runSiteCreation
+// passes the canonical app-level SiteVertical, and this function is the only thing
+// that ever writes to sites.vertical, so there is exactly one alias translation.
+function toStoredVertical(vertical: SiteVertical): string {
+  return vertical === 'professional_service' ? 'service' : vertical
+}
+
+// Registry-driven: the template (and therefore theme_id) a site gets is derived
+// from the same publicTemplateRegistry that already drives tenant routing/rendering
+// (utils/template-registry.ts) — this is the only place site-creation decides a
+// theme_id, so a future third template only needs a new registry entry, not a
+// second hardcoded vertical-to-theme switch here.
+function resolveThemeId(vertical: SiteVertical): string {
+  return resolvePublicTemplate({ vertical }).themeId
 }
 
 export async function runSiteCreation(
@@ -42,8 +65,16 @@ export async function runSiteCreation(
       return { status: 409, data: { error: 'This subdomain is already taken' } }
     }
 
+    const themeId = resolveThemeId(vertical)
+    const storedVertical = toStoredVertical(vertical)
+
     const { organizationId, existingRetrySiteId } = await resolveCreationOrganization(db, userId, name)
     if (existingRetrySiteId) {
+      // A retry (pending/failed site from a previous attempt) may have been created
+      // under a stale default (theme_id='saya-theme-v1', vertical='restaurant') —
+      // correct both here so a professional-service retry can never be left on Saya.
+      await execute(db, `UPDATE sites SET theme_id = ?, vertical = ?, updated_at = ? WHERE id = ?`,
+        [themeId, storedVertical, new Date().toISOString(), existingRetrySiteId])
       return await performSeeding(env, db, existingRetrySiteId, organizationId, name, vertical, '')
     }
 
@@ -51,9 +82,9 @@ export async function runSiteCreation(
     try {
       await execute(db, `
         INSERT INTO sites
-          (id, organization_id, theme_id, slug, subdomain, brand_name, status, plan, onboarding_status, created_at, updated_at)
-        VALUES (?, ?, 'saya-theme-v1', ?, ?, ?, 'active', 'free', 'pending', ?, ?)
-      `, [siteId, organizationId, normalizedSubdomain, normalizedSubdomain, name, new Date().toISOString(), new Date().toISOString()])
+          (id, organization_id, theme_id, vertical, slug, subdomain, brand_name, status, plan, onboarding_status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 'free', 'pending', ?, ?)
+      `, [siteId, organizationId, themeId, storedVertical, normalizedSubdomain, normalizedSubdomain, name, new Date().toISOString(), new Date().toISOString()])
     } catch (siteError) {
       const msg = siteError instanceof Error ? siteError.message : ''
       if (msg.includes('UNIQUE constraint failed')) {

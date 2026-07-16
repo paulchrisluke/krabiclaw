@@ -1,7 +1,7 @@
 
 import { createAuth } from '~/server/utils/auth'
 import { cloudflareEnv } from '~/server/utils/api-response'
-import { normalizePhone } from '~/server/utils/whatsapp'
+import { parsePhoneOrThrow } from '~/utils/phone'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import type { H3Event } from 'h3'
 
@@ -29,7 +29,7 @@ async function normalizedAuthRequest(event: H3Event): Promise<Request> {
     headers,
     body: JSON.stringify({
       ...body,
-      phoneNumber: normalizePhone(body.phoneNumber),
+      phoneNumber: parsePhoneOrThrow(body.phoneNumber, { defaultCountry: 'TH' }),
     }),
   })
 }
@@ -38,7 +38,9 @@ export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event) as CloudflareEnv
   if (!env?.DB) throw createError({ statusCode: 503, message: 'Database unavailable' })
 
-  const auth = createAuth(env)
+  const cloudflareContext = event.context.cloudflare?.context
+  const waitUntil = cloudflareContext?.waitUntil?.bind(cloudflareContext)
+  const auth = createAuth(env, { waitUntil })
   
   try {
     const request = await normalizedAuthRequest(event)

@@ -95,12 +95,16 @@ export interface PublicBlogSummary {
 
 export interface PublicBlogPost extends PublicBlogSummary {
   body: string
+  seo_title: string | null
   seo_description: string | null
   canonical_url: string
   robots: string | null
+  visibility: 'public' | 'unlisted'
   created_at: string | null
   updated_at: string | null
   components: ApiRecord[]
+  content_blocks: import('~/components/workspace/blog/types').BlogEditorBlock[]
+  social_image: { public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null
 }
 
 export type BlawbyRouteRecipe =

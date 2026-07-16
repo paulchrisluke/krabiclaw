@@ -2,7 +2,7 @@
 
 ## What It Is
 
-**Website builder for local businesses** — multi-tenant SaaS where owners get a subdomain site and build their web presence completely through conversation with ChatGPT (via MCP) or the dashboard CMS. SSR-rendered, SEO-optimised sites. The ChatGPT plugin is the primary creation surface. Supports the `restaurant`, `experience`, and other local-business verticals, with the model designed to easily accommodate any local business over time.
+**Website builder for local and professional-service businesses** — multi-tenant SaaS where owners get a subdomain site and build their web presence completely through conversation with ChatGPT (via MCP) or the dashboard CMS. SSR-rendered, SEO-optimised sites. The ChatGPT plugin is the primary creation surface. Supports the `restaurant`, `experience`, and `professional_service` verticals today, with the model designed to easily accommodate more local-business categories over time. See `CONTEXT.md` for the canonical vertical contract (app-level `professional_service` vs. its `service` DB-storage alias).
 
 ---
 
@@ -29,7 +29,7 @@ Internal ChatGPT app for KrabiClaw operators only.
 - MCP endpoint at `/api/mcp/platform` (`server/api/mcp/platform.post.ts`)
 - Scope: `platform_admin`
 - Auth requires global Better Auth `user.role = 'admin'`
-- Tools limited to platform blog/docs operations for `krabiclaw.com/blog` and `krabiclaw.com/docs`
+- Tools limited to platform blog/docs operations for `krabiclaw.com/blog` and `krabiclaw.com/docs`, plus read-only categorized release data from merged GitHub pull requests
 
 The dashboard is still the home for billing, org settings, unified inbox (contact, reservations, bookings, reviews), and analytics. MCP and dashboard operate on the same D1 backend with no forked business logic.
 
@@ -39,14 +39,19 @@ See `docs/mcp-surface-split.md` for the canonical split rules.
 
 ## Verticals
 
-KrabiClaw supports multiple business verticals. ChatGPT asks the user directly during onboarding (plain text) and passes the chosen vertical to `create_site`.
+KrabiClaw supports multiple business verticals. ChatGPT asks the user directly during onboarding (plain text) and passes the chosen vertical to `create_site`; the dashboard onboarding wizard and multi-site "Add a site" picker offer the same three choices.
 
-| Vertical | Description |
-|----------|-------------|
-| `restaurant` | Food & beverage — menus, reviews, hours, reservations |
-| `experience` | Activity-based businesses — experiences, bookings, classes |
+| Vertical (app-level) | Description | DB-stored as |
+|----------|-------------|-------------|
+| `restaurant` | Food & beverage — menus, reviews, hours, reservations | `restaurant` |
+| `experience` | Activity-based businesses — experiences, bookings, classes | `experience` |
+| `professional_service` | Legal and other professional/advisory services — offerings (practice areas), consultations, pricing/donate pages | `service` |
+
+`professional_service` is the one canonical app-level value; `service` is its DB-storage alias, not a second vertical — see `CONTEXT.md`'s "Tenant vertical (canonical contract)" entry for the full normalization-boundary explanation (`toStoredVertical()` / `normalizeVertical()`).
 
 Experiences have their own data model: `experiences` table, `experience_bookings`, experience-specific MCP tools (`list_experiences`, `create_experience`, `list_experience_bookings`, etc.) and Saya theme routes at `/experiences/[slug]`.
+
+Professional-service tenants render through the Blawby template (see "Public Templates" below) rather than Saya, and don't yet have a first-class offerings/practice-areas content model in the dashboard CMS — that's tracked separately (issue #278).
 
 ---
 
@@ -78,18 +83,23 @@ WhatsApp Business API sends and Google Places API calls cost real per-use money 
 
 ## Current Clients
 
-| Client | Vertical | Locations |
-|--------|----------|-----------|
-| **Kikuzuki** | Restaurant | 2 locations — Ao Nang + Krabi Town |
-| **Pottery House Krabi** | Experience | 2 locations — main + beachfront |
+| Client | Vertical | Template | Locations |
+|--------|----------|----------|-----------|
+| **Kikuzuki** | Restaurant | Saya | 2 locations — Ao Nang + Krabi Town |
+| **Pottery House Krabi** | Experience | Saya | 2 locations — main + beachfront |
+| **NCLS** (North Carolina Legal Services) | Professional service | Blawby | Statewide/remote service area — cutover-ready per #194; production DNS cutover is a separate, deliberate follow-up step |
 
 ---
 
-## Theme: Saya
+## Public Templates
 
-Default theme for all tenants. SSR-rendered, SEO-first, editorial typography. Location-centric with vertical-aware routing.
+Template selection is registry-driven (`utils/template-registry.ts`'s `publicTemplateRegistry`, resolved via `resolvePublicTemplate()`), not a hardcoded per-vertical `if` chain — a tenant's `theme_id` + `vertical` map to exactly one template definition, and a future third template only needs a new registry entry.
 
-### URL Structure
+### Saya (restaurant, experience)
+
+Default template for restaurant/experience tenants. SSR-rendered, SEO-first, editorial typography. Location-centric with vertical-aware routing.
+
+#### URL Structure
 
 ```
 /                              → Home: hero + location/experience entry points + brand feed
@@ -109,9 +119,29 @@ Default theme for all tenants. SSR-rendered, SEO-first, editorial typography. Lo
 /menu                          → Redirects to primary location menu (SEO fallback)
 ```
 
-### Nav
+Nav: Logo | Locations (dropdown) | Story | Contact | **RESERVE** (primary CTA). Locations dropdown built at runtime from `business_locations`.
 
-Logo | Locations (dropdown) | Story | Contact | **RESERVE** (primary CTA). Locations dropdown built at runtime from `business_locations`.
+### Blawby (professional_service)
+
+Template for professional-service tenants, proven first against NCLS (#194). Offerings default to site-level (not location-scoped), since many professional-service tenants serve a statewide/remote area rather than a single storefront.
+
+#### URL Structure
+
+```text
+/                              → Home
+/about                         → Brand story, compliance/organization info
+/services                      → Offerings index (practice areas)
+/services/[slug]               → Offering detail
+/pricing                       → Pricing/eligibility, optional structured calculator component
+/donate                        → External donation CTA (no native payment processing)
+/schedule                      → Consultation entry point (external URL, e.g. Clio Grow, for now)
+/contact                       → Brand contact form
+/blog                          → Article index
+/article/[slug]                → Article detail (canonical — preserved for SEO parity with the NCLS source site)
+/policies/privacy, /policies/terms, /third-party-notices → Tenant-owned legal pages
+```
+
+Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rendered at `/posts`; Blawby's is `/blog` + `/article/[slug]`. Structured data for Blawby tenants is generated from platform models (`utils/professional-service-schema.ts`), never pasted as raw tenant JSON-LD.
 
 ---
 
@@ -151,12 +181,12 @@ Logo | Locations (dropdown) | Story | Contact | **RESERVE** (primary CTA). Locat
 
 ## Dashboard Model
 
-- **Organization** is the restaurant brand workspace and billing/team boundary.
+- **Organization** is the site/brand workspace and billing/team boundary — vertical-neutral: an org can hold a restaurant, an experience business, or a professional-service firm, and (per "One org can have multiple sites" below) can even hold a mix.
 - **One org can have multiple sites** — there is no unique-per-org constraint on sites. Sites are explicit everywhere — there is no "first site in org" fallback in dashboard routing or billing.
 - Each site has its own plan and Stripe subscription (`site_billing`). The Stripe *customer* stays at org level (`organization_billing.stripe_customer_id`) — one payment method covers every site in the org.
 - A new site always starts on `free`, even under a paid org. If the org already has another site on a paid plan and a saved card on file, the dashboard offers to auto-subscribe the new site immediately (`POST /api/billing/site-subscribe`, no Checkout redirect). Otherwise it's a normal Checkout upgrade later.
-- **Locations** are the persistent dashboard working context within a site, selected from the header on every dashboard page.
-- Public tenant routes remain location/experience-centric under `/locations/[slug]` and `/experiences/[slug]`.
+- **Locations** are the persistent dashboard working context within a site, selected from the header on every dashboard page. For Saya (restaurant/experience) sites this is a physical location; Blawby's offerings are site-level by default and don't require a location to have a public street address (a professional-service tenant may serve a statewide/remote area).
+- Public tenant routes are template-specific: Saya remains location/experience-centric under `/locations/[slug]` and `/experiences/[slug]`; Blawby is offering-centric under `/services/[slug]` (see "Public Templates" above).
 - Dashboard routes follow the Vercel-style workspace shape, with an explicit site segment:
   - `/dashboard/{orgSlug}` — org root; lists sites, auto-redirects to the single site if the org has exactly one
   - `/dashboard/{orgSlug}/sites/{siteSlug}` — site workspace (`siteSlug` is the site's `subdomain`)

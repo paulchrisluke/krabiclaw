@@ -35,11 +35,30 @@
 </template>
 
 <script setup lang="ts">
+import { getEditablePages } from '~/config/content-registry'
+import type { SiteVertical } from '~/utils/vertical-copy'
+
 definePageMeta({ layout: 'dashboard' })
 
 const siteId = await useDashboardSiteId()
 const sitePublicUrl = ref<string | null>(null)
+const siteVertical = ref<SiteVertical>('restaurant')
 const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
+
+/** Maps a page-inventory row to its content-registry page id, where one exists.
+ *  Rows with no registry entry (reviews/photos/qa manage their own data models
+ *  outside the field-editor registry) are always shown, ungated by vertical. */
+const registryIdByRowKey: Record<string, string> = {
+  home: 'home',
+  about: 'about',
+  locations: 'location',
+  menu: 'menu',
+  experiences: 'experiences',
+  contact: 'contact',
+  reservations: 'reservations',
+  order: 'order',
+}
+const visiblePageIds = computed(() => new Set(getEditablePages(siteVertical.value).map(p => p.id)))
 
 const contentUrl = (page: string) => `${paths.value.content}?page=${page}`
 const publicPath = (path: string) => {
@@ -64,7 +83,12 @@ const _headerLinks = computed(() => buildHeaderLinks([
   { label: 'Content editor', icon: 'i-lucide-square-pen', to: paths.value.content, color: 'neutral' as const, variant: 'soft' as const }
 ]))
 
-const pageRows = computed(() => [
+const pageRows = computed(() => allPageRows.value.filter(row => {
+  const registryId = registryIdByRowKey[row.key]
+  return !registryId || visiblePageIds.value.has(registryId)
+}))
+
+const allPageRows = computed(() => [
   {
     key: 'home',
     label: 'Home',
@@ -189,8 +213,14 @@ async function loadSettings() {
   sitePublicUrl.value = res.settings.public_url
 }
 
+async function loadSiteVertical() {
+  const res = await $fetch<{ context: { site: { vertical: SiteVertical } } }>(`/api/dashboard/editor/context`)
+  siteVertical.value = res.context.site.vertical
+}
+
 onMounted(() => {
   loadSettings().catch((err) => console.warn('pages_settings_load_failed', err))
+  loadSiteVertical().catch((err) => console.warn('pages_vertical_load_failed', err))
 })
 
 useSeoMeta({ title: 'Pages | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

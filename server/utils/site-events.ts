@@ -46,6 +46,7 @@ export type SiteEventType =
   | 'member.invited'
   | 'member.role_changed'
   | 'member.removed'
+  | 'member.access_scope_revoked'
 
 interface FireEventParams {
   db: DbClient

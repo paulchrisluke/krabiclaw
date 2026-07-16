@@ -508,6 +508,17 @@ jobs:
         run: |
           yarn migrate:prod
           yarn deploy:prod:worker
+      - name: Sync production Discord webhook secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            printf '%s' "$DISCORD_WEBHOOK_URL" | npx wrangler secret put DISCORD_WEBHOOK_URL
+          else
+            echo "DISCORD_WEBHOOK_URL is not configured; signup Discord delivery will be recorded as failed."
+          fi
       - name: Sync production Stripe secrets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

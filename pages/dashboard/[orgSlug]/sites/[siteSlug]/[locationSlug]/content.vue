@@ -15,7 +15,7 @@
         </div>
       </div>
 
-      <!-- Location tabs — only shown for location-scoped pages (Location, Menu) -->
+      <!-- Location tabs — only shown for pages scoped to a location (registry-driven, see contentRegistry) -->
       <div v-if="currentPageIsLocationScoped" class="hidden min-w-0 items-center gap-1 md:flex">
         <UButton
           v-for="loc in siteLocations"
@@ -72,9 +72,9 @@
       <UCard class="w-full max-w-xl">
         <div class="text-center">
           <UIcon name="i-lucide-map-pin" class="mx-auto size-10 text-muted" />
-          <h1 class="mt-4 text-xl font-semibold text-highlighted">Add a location first</h1>
+          <h1 class="mt-4 text-xl font-semibold text-highlighted">Add a {{ selectedPageScopeLabel.toLowerCase() }} first</h1>
           <p class="mt-2 text-sm text-muted">
-            The Location and Menu pages are per-location. Add your first location to start editing.
+            This page is per-{{ selectedPageScopeLabel.toLowerCase() }}. Add your first {{ selectedPageScopeLabel.toLowerCase() }} to start editing.
           </p>
           <div class="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
             <UButton
@@ -389,8 +389,9 @@ import { ref, computed, onMounted, watch } from 'vue'
 // import DOMPurify from 'isomorphic-dompurify'
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string, _options?: unknown) => s }
 
-import { contentRegistry, editablePages, getFieldDef } from '~/config/content-registry'
+import { contentRegistry, getEditablePages, getFieldDef, resolvePreviewPath } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
+import type { SiteVertical } from '~/utils/vertical-copy'
 import BookingPolicyForm from '~/components/dashboard/BookingPolicyForm.vue'
 
 definePageMeta({ layout: 'editor', ssr: false })
@@ -450,7 +451,7 @@ const selectedLocationLabel = computed(() => selectedLocation.value?.title || 'A
 
 /** Pages that require a specific location to be selected */
 const currentPageIsLocationScoped = computed(() =>
-  contentRegistry[selectedPageId.value]?.locationScoped === true
+  contentRegistry[selectedPageId.value]?.scope === 'location'
 )
 
 /** Only block rendering when a location-scoped page has no locations at all */
@@ -471,36 +472,34 @@ const selectLocation = async (id: string) => {
 }
 
 // ─── Pages ────────────────────────────────────────────────────────────
-const pages = editablePages.map(p => ({
-  id: p.path === '/' ? 'home' : p.path.replace(/^\//, '').replace(/\//g, '-'),
-  label: p.label,
-  path: p.path
-}))
+const siteVertical = computed<SiteVertical>(() => (siteData.value?.vertical as SiteVertical) || 'restaurant')
+const pages = computed(() => getEditablePages(siteVertical.value))
 
 function resolveInitialPageId() {
   const queryPage = route.query.page
-  if (typeof queryPage === 'string' && pages.some(page => page.id === queryPage)) {
+  if (typeof queryPage === 'string' && pages.value.some(page => page.id === queryPage)) {
     return queryPage
   }
   return 'home'
 }
 
 const selectedPageId = ref(resolveInitialPageId())
-const currentPagePath = computed(() => pages.find(p => p.id === selectedPageId.value)?.path || '/')
-const selectedPageLabel = computed(() => pages.find(p => p.id === selectedPageId.value)?.label || '')
+const currentPagePath = computed(() => pages.value.find(p => p.id === selectedPageId.value)?.path || '/')
+const selectedPageLabel = computed(() => pages.value.find(p => p.id === selectedPageId.value)?.label || '')
+const selectedPageScopeLabel = computed(() => pages.value.find(p => p.id === selectedPageId.value)?.scopeLabelKey === 'office' ? 'Office' : 'Location')
 
 const applyRouteContentScope = () => {
   const queryPage = route.query.page
-  if (typeof queryPage === 'string' && pages.some(page => page.id === queryPage)) {
+  if (typeof queryPage === 'string' && pages.value.some(page => page.id === queryPage)) {
     selectedPageId.value = queryPage
+  } else {
+    selectedPageId.value = 'home'
   }
   selectedLocationId.value = dashboardLocation.currentLocationId.value
 }
 const previewPagePath = computed(() => {
   if (!selectedLocation.value) return currentPagePath.value
-  if (selectedPageId.value === 'location') return `/locations/${selectedLocation.value.slug}`
-  if (selectedPageId.value === 'menu') return `/locations/${selectedLocation.value.slug}/menu`
-  return currentPagePath.value
+  return resolvePreviewPath(selectedPageId.value, { locationSlug: selectedLocation.value.slug })
 })
 
 // ─── Iframe ───────────────────────────────────────────────────────────
@@ -580,44 +579,7 @@ watch(() => dashboardLocation.currentLocationId.value, async (newVal, oldVal) =>
 // ─── Groups ───────────────────────────────────────────────────────────
 const openGroups = ref<string[]>(['hero'])
 
-const groupConfig: Record<string, Array<{ id: string; label: string; icon: string; fields: string[] }>> = {
-  home: [
-    { id: 'hero',  label: 'Hero Section',   icon: 'i-lucide-image',     fields: ['hero.eyebrow', 'hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
-    { id: 'story', label: 'Brand Story',    icon: 'i-lucide-book-open', fields: ['story.headline', 'story.body', 'story.image'] },
-    { id: 'cta',   label: 'Call to Action', icon: 'i-lucide-megaphone', fields: ['cta.title', 'cta.description'] },
-  ],
-  about: [
-    { id: 'hero',    label: 'Hero Section',    icon: 'i-lucide-image',      fields: ['hero.title', 'hero.subtitle'] },
-    { id: 'story',   label: 'Story',           icon: 'i-lucide-book-open',  fields: ['story.image', 'story.headline', 'story.body'] },
-    { id: 'journey', label: 'Journey',         icon: 'i-lucide-map',        fields: ['journey.title', 'journey.body'] },
-    { id: 'cta',     label: 'Call to Action',  icon: 'i-lucide-megaphone',  fields: ['cta.title'] },
-  ],
-  contact: [
-    { id: 'hero', label: 'Hero Section', icon: 'i-lucide-image', fields: ['hero.title', 'hero.subtitle'] },
-  ],
-  location: [
-    { id: 'hero',    label: 'Hero Section',    icon: 'i-lucide-image',         fields: ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
-    { id: 'content', label: 'Additional Info', icon: 'i-lucide-file-text', fields: ['parking.info', 'extra.notes'] },
-  ],
-  menu: [
-    { id: 'hero',   label: 'Hero Section',   icon: 'i-lucide-image',          fields: ['hero.title', 'hero.subtitle'] },
-    { id: 'items',  label: 'Menu Items',     icon: 'i-lucide-list',    fields: ['menu_items'] },
-    { id: 'google', label: 'Google Products', icon: 'i-lucide-layers', fields: ['business.products'] },
-  ],
-  experiences: [
-    { id: 'hero', label: 'Hero Section', icon: 'i-lucide-sparkles', fields: ['hero.kicker', 'hero.title', 'hero.subtitle'] },
-  ],
-  order: [
-    { id: 'hero', label: 'Hero Section', icon: 'i-lucide-shopping-bag', fields: ['hero.title', 'hero.subtitle'] },
-  ],
-  reservations: [
-    { id: 'hero',     label: 'Hero Section',    icon: 'i-lucide-image',                   fields: ['hero.title', 'hero.subtitle'] },
-    { id: 'contact',  label: 'Contact Details', icon: 'i-lucide-phone',                   fields: ['contact.phone', 'contact.email'] },
-    { id: 'policies', label: 'Policies',        icon: 'i-lucide-clipboard-list', fields: ['policies.structured'] },
-  ]
-}
-
-const currentPageGroups = computed(() => groupConfig[selectedPageId.value] || [])
+const currentPageGroups = computed(() => contentRegistry[selectedPageId.value]?.groups ?? [])
 
 const toggleGroup = (id: string) => {
   const idx = openGroups.value.indexOf(id)

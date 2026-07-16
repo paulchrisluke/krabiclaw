@@ -5,6 +5,7 @@
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { logOnlyWhatsAppMessageId, shouldSendRealWhatsApp } from './whatsapp-delivery'
 import { chargeFlatCredits } from './ai-credits'
+import { parsePhoneOrThrow } from '~/utils/phone'
 
 function maskPhone(phone: string): string {
   if (!phone || phone.length < 4) return '***';
@@ -55,6 +56,7 @@ export type WhatsAppTemplate =
   | 'new_reservation'
   | 'reservation_cancelled'
   | 'domain_update'
+  | 'dashboard_access_invitation'
   | 'otp_code'
 
 interface TemplateHeaderComponent {
@@ -82,6 +84,30 @@ function cleanTemplateText(value: string | undefined, fallback: string, maxLen =
   // Process fallback the same way so returned string respects maxLen
   const fb = String(fallback ?? '').replace(/\s+/g, ' ').trim()
   return fb.slice(0, maxLen)
+}
+
+// Meta Cloud API delivery-status ordering (webhook `value.statuses[]`, see
+// server/api/whatsapp/webhook.post.ts). Statuses are not guaranteed to arrive
+// in order, so a later webhook call for the same provider message ID must
+// never regress an already-observed later stage. `failed` is terminal: once
+// recorded, nothing (including a late-arriving success) overwrites it, and it
+// is itself never allowed to clobber an already-recorded `delivered`/`read` —
+// the raw error should still be captured (see caller), just not treated as
+// the current delivery state.
+const WHATSAPP_DELIVERY_STATUS_RANK: Record<string, number> = {
+  accepted: 1,
+  sent: 2,
+  delivered: 3,
+  read: 4,
+}
+
+export function compareWhatsAppDeliveryStatus(current: string | null, incoming: string): boolean {
+  if (!current) return true
+  if (current === 'failed') return incoming === 'failed'
+  if (incoming === 'failed') return current !== 'delivered' && current !== 'read'
+  const currentRank = WHATSAPP_DELIVERY_STATUS_RANK[current] ?? 0
+  const incomingRank = WHATSAPP_DELIVERY_STATUS_RANK[incoming] ?? 0
+  return incomingRank > currentRank
 }
 
 // Dynamic URL buttons in approved Meta templates are declared as a fixed prefix +
@@ -138,6 +164,26 @@ const TEMPLATES: Record<
   WhatsAppTemplate,
   (_vars: Record<string, string>) => { name: string; language: { code: string }; components: TemplateComponent[] }
 > = {
+  dashboard_access_invitation: (v) => ({
+    name: 'dashboard_access_invitation',
+    language: { code: 'en_US' },
+    components: [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.site_name, 'your site', 120) },
+        ],
+      },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [
+          { type: 'text', text: cleanTemplateText(v.invitation_path, '', 300) },
+        ],
+      },
+    ],
+  }),
   new_review: (v) => ({
     name: 'new_review',
     language: { code: 'en_US' },
@@ -311,13 +357,8 @@ const TEMPLATES: Record<
   }),
 }
 
-/** Normalize any phone number to E.164. Assumes Thailand if no country code. */
-export function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '')
-  if (digits.startsWith('0') && digits.length >= 9) return `+66${digits.slice(1)}`
-  if (digits.startsWith('66') && digits.length >= 11) return `+${digits}`
-  if (digits.length >= 10) return `+${digits}`
-  throw new Error(`Invalid phone number: ${phone}`)
+export function buildWhatsAppTemplatePayload(template: WhatsAppTemplate, vars: Record<string, string>) {
+  return TEMPLATES[template](normalizeTemplateVars(vars))
 }
 
 export interface SendWhatsAppResult {
@@ -340,6 +381,13 @@ export async function sendWhatsAppNotification(
     toPhone: string            // raw phone, will be normalized
     template: WhatsAppTemplate
     vars?: Record<string, string>
+    // Correlates this send attempt back to the domain record that triggered
+    // it (e.g. 'invitation' + invitationId for dashboard_access_invitation),
+    // so failure/status is queryable per-record instead of only visible as a
+    // standalone log line. See issue #293 Section A: "a failed invitation
+    // send must remain visible as a failed/pending assignment."
+    relatedSubmissionType?: string | null
+    relatedSubmissionId?: string | null
   }
 ): Promise<SendWhatsAppResult> {
   const phoneNumberId = env.WHATSAPP_PHONE_NUMBER_ID
@@ -347,13 +395,13 @@ export async function sendWhatsAppNotification(
 
   const notificationId = crypto.randomUUID()
   const now = new Date().toISOString()
-  const normalizedPhone = normalizePhone(opts.toPhone)
+  const normalizedPhone = parsePhoneOrThrow(opts.toPhone, { defaultCountry: 'TH' })
   const vars = normalizeTemplateVars(opts.vars ?? {})
 
   // Insert pending row first so we always have a record even if the send fails
   await execute(db, `
-    INSERT INTO notifications (id, organization_id, site_id, location_id, channel, template, recipient, payload, status, created_at)
-    VALUES (?, ?, ?, ?, 'whatsapp', ?, ?, ?, 'pending', ?)
+    INSERT INTO notifications (id, organization_id, site_id, location_id, channel, template, recipient, payload, status, related_submission_type, related_submission_id, created_at)
+    VALUES (?, ?, ?, ?, 'whatsapp', ?, ?, ?, 'pending', ?, ?, ?)
   `, [
     notificationId,
     opts.organizationId,
@@ -362,6 +410,8 @@ export async function sendWhatsAppNotification(
     opts.template,
     normalizedPhone,
     JSON.stringify({ to: normalizedPhone, ...vars }),
+    opts.relatedSubmissionType ?? null,
+    opts.relatedSubmissionId ?? null,
     now
   ])
 
@@ -385,7 +435,7 @@ export async function sendWhatsAppNotification(
     return { success: false, error: 'WhatsApp env vars not configured' }
   }
 
-  const templatePayload = TEMPLATES[opts.template](vars)
+  const templatePayload = buildWhatsAppTemplatePayload(opts.template, vars)
 
   let result: SendWhatsAppResult
   try {
@@ -478,7 +528,7 @@ export async function sendWhatsAppOtp(
   const accessToken = env.WHATSAPP_ACCESS_TOKEN
 
   if (!shouldSendRealWhatsApp(env)) {
-    console.log('whatsapp_delivery_log_only', { kind: 'otp', to: maskPhone(normalizePhone(toPhone)) })
+    console.log('whatsapp_delivery_log_only', { kind: 'otp', to: maskPhone(parsePhoneOrThrow(toPhone, { defaultCountry: 'TH' })) })
     return
   }
 
@@ -486,7 +536,7 @@ export async function sendWhatsAppOtp(
     throw new Error('WhatsApp env vars not configured')
   }
 
-  const normalized = normalizePhone(toPhone)
+  const normalized = parsePhoneOrThrow(toPhone, { defaultCountry: 'TH' })
   const templatePayload = TEMPLATES.otp_code({ code })
 
   const response = await fetch(`${GRAPH_BASE}/${phoneNumberId}/messages`, {
@@ -521,7 +571,7 @@ export async function sendWhatsAppText(
     const messageId = logOnlyWhatsAppMessageId('text')
     let normalized: string
     try {
-      normalized = normalizePhone(toPhone)
+      normalized = parsePhoneOrThrow(toPhone, { defaultCountry: 'TH' })
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
@@ -534,7 +584,7 @@ export async function sendWhatsAppText(
   }
 
   try {
-    const normalized = normalizePhone(toPhone)
+    const normalized = parsePhoneOrThrow(toPhone, { defaultCountry: 'TH' })
     const response = await fetch(`${GRAPH_BASE}/${phoneNumberId}/messages`, {
       method: 'POST',
       headers: {
@@ -633,24 +683,85 @@ export async function fetchWhatsAppMedia(
 /**
  * Store (or update) the org's WhatsApp notification phone in site_config.
  * Normalizes to E.164 before saving. Passing null/empty clears it instead.
+ *
+ * Reads the previous value first (needed either way for the delete/upsert
+ * decision) so it can also drive scope recalculation on an actual change
+ * (issue #293 Section G) — skipped entirely when the value didn't change,
+ * per the idempotency requirement in Section I.
  */
 export async function setOrgWhatsAppPhone(
   db: DbClient,
   organizationId: string,
   siteId: string,
-  phone: string | null
+  phone: string | null,
+  env?: WhatsAppEnv,
+  options?: { actorHeaders?: HeadersInit },
 ): Promise<void> {
+  const previous = await queryFirst<{ value: string }>(db, `
+    SELECT value FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'whatsapp_phone' LIMIT 1
+  `, [organizationId, siteId])
+  const previousPhone = previous?.value ?? null
+
+  let normalized: string | null = null
   if (!phone) {
     await execute(db, `
       DELETE FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'whatsapp_phone'
     `, [organizationId, siteId])
-    return
+  } else {
+    normalized = parsePhoneOrThrow(phone, { defaultCountry: 'TH' })
+    const now = new Date().toISOString()
+    await execute(db, `
+      INSERT INTO site_config (organization_id, site_id, key, value, updated_at)
+      VALUES (?, ?, 'whatsapp_phone', ?, ?)
+      ON CONFLICT(organization_id, site_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+    `, [organizationId, siteId, normalized, now])
   }
-  const normalized = normalizePhone(phone)
-  const now = new Date().toISOString()
-  await execute(db, `
-    INSERT INTO site_config (organization_id, site_id, key, value, updated_at)
-    VALUES (?, ?, 'whatsapp_phone', ?, ?)
-    ON CONFLICT(organization_id, site_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-  `, [organizationId, siteId, normalized, now])
+
+  if (previousPhone !== normalized && env) {
+    const [{ recalculateScopesForPhoneChange }, { createAuth }] = await Promise.all([
+      import('~/server/utils/whatsapp-revocation'),
+      import('~/server/utils/auth'),
+    ])
+    // `env` here is always the full Cloudflare env (callers pass through
+    // `cloudflareEnv(event)`/`site.env` under a narrower local type) —
+    // createAuth only reads the DB/Better-Auth-config fields it needs.
+    try {
+      await recalculateScopesForPhoneChange(db, createAuth(env as unknown as Parameters<typeof createAuth>[0]), {
+        organizationId,
+        siteId,
+        scopeType: 'site',
+        previousPhone,
+        newPhone: normalized,
+        actorHeaders: options?.actorHeaders,
+      })
+    } catch (error) {
+      // Compensating cleanup: restore the previous phone configuration
+      // so a revocation failure cannot leave the newly saved phone configured
+      if (previousPhone) {
+        const now = new Date().toISOString()
+        await execute(db, `
+          INSERT INTO site_config (organization_id, site_id, key, value, updated_at)
+          VALUES (?, ?, 'whatsapp_phone', ?, ?)
+          ON CONFLICT(organization_id, site_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+        `, [organizationId, siteId, previousPhone, now])
+      } else {
+        await execute(db, `
+          DELETE FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'whatsapp_phone'
+        `, [organizationId, siteId])
+      }
+      // Propagate the failure after cleanup
+      throw error
+    }
+  }
+
+  if (env && normalized) {
+    try {
+      const { ensureWhatsAppRecipientAccess, sendWhatsAppAccessInvitation } = await import('~/server/utils/whatsapp-access')
+      const access = await ensureWhatsAppRecipientAccess(db, { organizationId, siteId, locationId: null, phone: normalized })
+      if (access.status !== 'invitation_pending' || !access.shouldDeliverInvitation || !access.invitationId) return
+      await sendWhatsAppAccessInvitation(env, db, { organizationId, siteId, locationId: null, phone: normalized, invitationId: access.invitationId })
+    } catch (error) {
+      console.warn('Failed to provision WhatsApp access for site notification phone:', error)
+    }
+  }
 }

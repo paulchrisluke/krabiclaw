@@ -145,13 +145,14 @@ export function parseMarkdownDocument(text: string): ParsedMarkdownDocument {
     if (fenceMatch) {
       const fence = fenceMatch[1]!;
       const language = fenceMatch[2] || undefined;
+      const closingFenceRe = new RegExp(`^\\s*${fence[0] === "`" ? "`" : "~"}{${fence.length},}\\s*$`);
       const codeLines: string[] = [];
       i += 1;
-      while (i < lines.length && !(lines[i] ?? "").trimEnd().startsWith(fence)) {
+      while (i < lines.length && !closingFenceRe.test(lines[i] ?? "")) {
         codeLines.push(lines[i] ?? "");
         i += 1;
       }
-      i += 1; // skip closing fence (or EOF if unterminated)
+      if (i < lines.length) i += 1;
       blocks.push({ type: "code", raw: codeLines.join("\n"), language });
       continue;
     }

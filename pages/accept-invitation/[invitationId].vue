@@ -33,14 +33,19 @@
         <div class="flex flex-col px-8 py-12 lg:px-12 max-w-lg mx-auto w-full lg:order-1 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto bg-default border-r border-default">
           <span class="self-start inline-flex items-center gap-2 text-[11px] font-bold tracking-[0.3em] uppercase text-(--kc-teal-600) bg-(--kc-teal-100) px-3.5 py-1.5 rounded-full mb-6">
             <span class="w-1.5 h-1.5 rounded-full bg-(--kc-teal) shrink-0" />
-            Team invitation
+            {{ invitedPhone ? 'Location manager access' : 'Team invitation' }}
           </span>
 
           <h1 class="text-[clamp(32px,4vw,48px)] font-extrabold leading-[1.02] tracking-tight text-default text-balance m-0">
-            Join {{ invitation.organization.name }}
+            {{ invitedPhone ? `Activate manager access for ${invitation.organization.name}` : `Join ${invitation.organization.name}` }}
           </h1>
           <p class="mt-4 text-base text-muted">
-            You’ve been invited to join as <strong class="text-default capitalize">{{ invitation.role }}</strong>.
+            <template v-if="invitedPhone">
+              You’ve been given operational access as a <strong class="text-default">location manager</strong> — notification replies and daily updates only, not full account onboarding.
+            </template>
+            <template v-else>
+              You’ve been invited to join as <strong class="text-default capitalize">{{ roleLabel }}</strong>.
+            </template>
           </p>
 
           <div class="mt-6 space-y-3">
@@ -66,6 +71,21 @@
 
           <div class="mt-8 space-y-3">
             <template v-if="!isAuthenticated && !sessionLoading">
+              <div v-if="invitedPhone" class="rounded-xl border border-default p-4 space-y-3">
+                <p class="text-sm text-muted">Verify the invited WhatsApp number <strong class="text-default">{{ invitedPhone }}</strong> to activate location manager access. Your assignment stays inactive until this code is confirmed.</p>
+                <button v-if="otpStep === 'send'" class="w-full py-3 px-4 rounded-[10px] font-semibold text-white bg-green-600 disabled:opacity-50" :disabled="otpLoading" @click="sendInvitationOtp">
+                  {{ otpLoading ? 'Sending…' : 'Send code via WhatsApp' }}
+                </button>
+                <template v-else>
+                  <input v-model="otpCode" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code" class="w-full rounded-lg border border-default bg-default px-3 py-2 text-center font-mono tracking-widest" @keydown.enter="verifyInvitationOtp" />
+                  <button class="w-full py-3 px-4 rounded-[10px] font-semibold text-white bg-green-600 disabled:opacity-50" :disabled="otpLoading || otpCode.length !== 6" @click="verifyInvitationOtp">
+                    {{ otpLoading ? 'Verifying…' : 'Verify and continue' }}
+                  </button>
+                  <button class="w-full text-sm text-muted" :disabled="otpLoading" @click="sendInvitationOtp">Resend code</button>
+                </template>
+                <p v-if="otpError" role="alert" class="text-sm text-red-500">{{ otpError }}</p>
+              </div>
+              <template v-else>
               <button class="w-full flex items-center justify-center bg-black dark:bg-white text-white dark:text-black py-3 px-4 rounded-[10px] font-semibold text-[15px] shadow-sm hover:scale-[1.01] transition-all duration-300" @click="continueWithGoogle">
                 <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -79,6 +99,7 @@
                 Sign in with email
               </NuxtLink>
               <p class="text-xs text-center text-muted">Sign in or create an account with the invited email to join this team.</p>
+              </template>
             </template>
 
             <template v-else-if="isAuthenticated && !emailMatches">
@@ -166,6 +187,11 @@ definePageMeta({ layout: false })
 const route = useRoute()
 const invitationId = route.params.invitationId as string
 const preferredSiteId = computed(() => typeof route.query.siteId === 'string' ? route.query.siteId : '')
+// Preserves any destination info already on this URL (currently `siteId`,
+// and `returnTo` when a caller — e.g. a future dashboard reauth deep link —
+// sets one) across the OTP verify -> full-page-reload round trip, instead of
+// hardcoding just the one query param this page happens to read today.
+const returnTo = computed(() => typeof route.query.returnTo === 'string' ? route.query.returnTo : '')
 
 const { isAuthenticated, sessionLoading, user } = useAuth()
 
@@ -204,10 +230,28 @@ const accepted = ref(false)
 const pagePath = computed(() => {
   const url = new URL(`/accept-invitation/${invitationId}`, 'http://localhost')
   if (preferredSiteId.value) url.searchParams.set('siteId', preferredSiteId.value)
+  if (returnTo.value) url.searchParams.set('returnTo', returnTo.value)
   return `${url.pathname}${url.search}`
 })
 
-const emailLoginUrl = computed(() => `/login?next=${encodeURIComponent(pagePath.value)}`)
+const emailLoginUrl = computed(() => `/login?redirect=${encodeURIComponent(pagePath.value)}`)
+const invitedPhone = computed(() => {
+  const match = invitation.value?.email.match(/^phone-(\d+)@phone\.krabiclaw\.local$/i)
+  return match ? `+${match[1]}` : ''
+})
+// Better Auth roles like `location_manager` are snake_case identifiers, not
+// display copy — render them as normal words instead of leaking the raw
+// underscore ("Location_manager") into invitation copy.
+const roleLabel = computed(() => (invitation.value?.role ?? 'member').replace(/_/g, ' '))
+// Shared with pages/login.vue's dashboard-reauth WhatsApp OTP branch — see
+// composables/useWhatsAppOtpLogin.ts. This page's phone is fixed (the
+// invited number), unlike login.vue's user-entered one, but the send/verify
+// round-trip against Better Auth's phone plugin is identical.
+const whatsAppOtp = useWhatsAppOtpLogin()
+const otpStep = ref<'send' | 'code'>('send')
+const otpCode = ref('')
+const otpLoading = whatsAppOtp.loading
+const otpError = whatsAppOtp.error
 
 const config = useRuntimeConfig()
 const freeSiteDomain = computed(() => (config.public.freeSiteDomain as string).replace(/^https?:\/\//, ''))
@@ -222,12 +266,27 @@ const iframeUrl = computed(() => {
   return `https://${invitation.value.site.subdomain}.${freeSiteDomain.value}`
 })
 
+function invitationQuerySuffix(): string {
+  const params = new URLSearchParams()
+  if (preferredSiteId.value) params.set('siteId', preferredSiteId.value)
+  if (returnTo.value) params.set('returnTo', returnTo.value)
+  return params.size ? `?${params.toString()}` : ''
+}
+
 onMounted(async () => {
   try {
-    const params = new URLSearchParams()
-    if (preferredSiteId.value) params.set('siteId', preferredSiteId.value)
-    const suffix = params.size ? `?${params.toString()}` : ''
-    invitation.value = await $fetch<InvitationInfo>(`/api/invitations/${invitationId}${suffix}`)
+    const result = await $fetch<InvitationInfo | { status: 'accepted'; redirectTo: string }>(`/api/invitations/${invitationId}${invitationQuerySuffix()}`)
+    // Idempotent re-visit of an already-accepted invitation (see
+    // server/api/invitations/[invitationId].get.ts): the current session is
+    // already the accepted member, so skip straight to the destination
+    // instead of rendering the invite screen or an error.
+    if ('status' in result && result.status === 'accepted') {
+      accepted.value = true
+      loading.value = false
+      await navigateTo(result.redirectTo)
+      return
+    }
+    invitation.value = result as InvitationInfo
   } catch (err: unknown) {
     const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
     const errorMessage = err && typeof err === 'object' && 'message' in err ? (err as Record<string, string>).message : null
@@ -241,10 +300,7 @@ async function acceptInvitation() {
   accepting.value = true
   acceptError.value = null
   try {
-    const params = new URLSearchParams()
-    if (preferredSiteId.value) params.set('siteId', preferredSiteId.value)
-    const suffix = params.size ? `?${params.toString()}` : ''
-    const result = await $fetch<{ success: boolean; redirectTo: string }>(`/api/invitations/${invitationId}/accept${suffix}`, {
+    const result = await $fetch<{ success: boolean; redirectTo: string }>(`/api/invitations/${invitationId}/accept${invitationQuerySuffix()}`, {
       method: 'POST',
     })
     accepted.value = true
@@ -263,6 +319,22 @@ async function continueWithGoogle() {
     provider: 'google',
     callbackURL: pagePath.value,
   })
+}
+
+async function sendInvitationOtp() {
+  if (!invitedPhone.value) return
+  const result = await whatsAppOtp.sendOtp(invitedPhone.value)
+  if (result.ok) otpStep.value = 'code'
+}
+
+async function verifyInvitationOtp() {
+  if (!invitedPhone.value || otpCode.value.length !== 6) return
+  const verified = await whatsAppOtp.verifyOtp(invitedPhone.value, otpCode.value)
+  if (verified) {
+    window.location.href = pagePath.value
+    return
+  }
+  otpCode.value = ''
 }
 
 async function switchAccount() {

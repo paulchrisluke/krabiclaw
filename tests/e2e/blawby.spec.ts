@@ -103,8 +103,12 @@ test.describe('Blawby NCLS public site', () => {
 
   test('article body media and related articles render successfully', async ({ page }) => {
     await page.goto(`${blawbyBaseURL}/article/preparing-for-your-consultation-with-north-carolina-legal-services`, { waitUntil: 'load' })
-    await expect(page.locator('[data-parity-section="related-articles"]')).toBeVisible()
-    await expect.poll(() => page.locator('[data-parity-section="article-content"] img').evaluateAll(images => images.filter(image => !(image as HTMLImageElement).complete || (image as HTMLImageElement).naturalWidth === 0).length)).toBe(0)
+    const relatedArticles = page.locator('[data-parity-section="related-articles"]')
+    await expect(relatedArticles).toBeVisible()
+    await relatedArticles.scrollIntoViewIfNeeded()
+    const relatedImages = relatedArticles.locator('img')
+    await expect.poll(() => relatedImages.count()).toBeGreaterThan(0)
+    await expect.poll(() => relatedImages.evaluateAll(images => images.filter(image => !(image as HTMLImageElement).complete || (image as HTMLImageElement).naturalWidth === 0).length)).toBe(0)
   })
 
   test('mobile routes do not overflow and expose the source section order', async ({ page }) => {

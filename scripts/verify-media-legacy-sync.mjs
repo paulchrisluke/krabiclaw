@@ -95,6 +95,7 @@ try {
     SET hero_image_asset_id = NULL
     WHERE id = '${fixture.id}' AND hero_image_asset_id = '${canaryId}';
     DELETE FROM media_assets WHERE id = '${canaryId}';
+    DELETE FROM media_assets_old WHERE id = '${canaryId}';
   `)
 }
 
