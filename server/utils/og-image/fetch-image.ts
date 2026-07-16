@@ -29,7 +29,7 @@ function isPrivateIpv6(hostname: string): boolean {
 function publicImageUrl(value: string, base?: URL): URL | null {
   try {
     const url = new URL(value, base)
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+    if (url.protocol !== 'https:') return null
     const hostname = url.hostname.toLowerCase().replace(/\.$/, '')
     if (!hostname || hostname === 'localhost' || hostname.endsWith('.localhost')
       || hostname.endsWith('.local') || hostname.endsWith('.internal')

@@ -1,6 +1,7 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { getGuestThreadDetail, markGuestThreadSeen } from '~/server/utils/guest-threads'
 import { requireSiteAccess } from '~/server/utils/location-access'
+import { assertMemberScope } from '~/server/utils/member-access'
 
 function openingTimelineItem(detail: NonNullable<Awaited<ReturnType<typeof getGuestThreadDetail>>>) {
   const { thread, source } = detail
@@ -32,9 +33,10 @@ export default defineEventHandler(async (event) => {
   const threadId = getRouterParam(event, 'threadId')
   if (!siteId || !threadId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
-  const { db } = await requireSiteAccess(event, siteId, ['owner', 'admin', 'editor'])
+  const { db, site } = await requireSiteAccess(event, siteId, ['owner', 'admin', 'editor', 'location_manager'])
   const detail = await getGuestThreadDetail(db, threadId, siteId)
   if (!detail) return jsonResponse({ error: 'Thread not found' }, { status: 404 })
+  await assertMemberScope(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, locationId: detail.thread.location_id })
 
   const timeline = [
     openingTimelineItem(detail),

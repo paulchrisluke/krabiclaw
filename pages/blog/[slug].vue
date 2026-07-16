@@ -127,7 +127,7 @@ const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).de
 const { isTenant, siteId, site } = useTenantSite()
 if (!isTenant || !siteId) throw createError({ statusCode: 404 })
 
-definePageMeta({ layout: 'saya' })
+definePageMeta({ layout: 'saya', middleware: 'tenant-blog-canonical' })
 
 const { resolveMedia } = useMedia()
 

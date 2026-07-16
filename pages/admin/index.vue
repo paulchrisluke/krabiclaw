@@ -193,18 +193,76 @@
           <template #header>
             <div>
               <h2 class="font-semibold text-highlighted">Invite Client</h2>
-              <p class="mt-0.5 text-sm text-muted">Creates an org and generates an invite link to send via WhatsApp.</p>
+              <p class="mt-0.5 text-sm text-muted">
+                {{ inviteMode === 'new'
+                  ? 'Creates an org and generates an invite link to send via WhatsApp.'
+                  : 'Attaches an owner invitation to an org that already exists (e.g. one provisioned by client:import).' }}
+              </p>
             </div>
           </template>
 
           <div class="space-y-3">
-            <UFormField label="Business name">
+            <UButtonGroup class="w-full">
+              <UButton
+                class="flex-1 justify-center"
+                :color="inviteMode === 'new' ? 'primary' : 'neutral'"
+                :variant="inviteMode === 'new' ? 'solid' : 'soft'"
+                @click="setInviteMode('new')"
+              >
+                New client
+              </UButton>
+              <UButton
+                class="flex-1 justify-center"
+                :color="inviteMode === 'existing' ? 'primary' : 'neutral'"
+                :variant="inviteMode === 'existing' ? 'solid' : 'soft'"
+                @click="setInviteMode('existing')"
+              >
+                Existing organization
+              </UButton>
+            </UButtonGroup>
+
+            <UFormField v-if="inviteMode === 'new'" label="Business name">
               <UInput v-model="clientRestaurantName" placeholder="Kikuzuki Krabi" class="w-full" />
             </UFormField>
+
+            <UFormField v-else label="Organization">
+              <UInputMenu
+                v-model="selectedOrg"
+                v-model:search-term="orgSearchTerm"
+                :items="orgSearchResults"
+                :loading="orgSearchLoading"
+                ignore-filter
+                by="id"
+                label-key="name"
+                placeholder="Search by slug or name..."
+                class="w-full"
+              >
+                <template #item-label="{ item }">
+                  <div class="flex items-center justify-between gap-2 w-full">
+                    <span class="truncate">{{ item.name }}<span class="text-muted"> · {{ item.slug || 'no slug' }}</span></span>
+                    <UBadge v-if="item.hasOwner" label="has owner" color="warning" variant="soft" size="sm" />
+                    <UBadge v-else-if="item.hasPendingInvitation" label="invite pending" color="warning" variant="soft" size="sm" />
+                  </div>
+                </template>
+              </UInputMenu>
+              <p v-if="selectedOrg?.hasOwner" class="mt-1 text-xs text-warning">
+                This organization already has an owner — sending an invite will fail.
+              </p>
+              <p v-else-if="selectedOrg?.hasPendingInvitation" class="mt-1 text-xs text-warning">
+                This organization already has a pending owner invitation — sending another will fail.
+              </p>
+            </UFormField>
+
             <UFormField label="Owner email">
               <UInput v-model="clientEmail" type="email" placeholder="owner@business.com" class="w-full" @keyup.enter="inviteClient" />
             </UFormField>
-            <UButton :loading="invitingClient" @click="inviteClient">Generate invite link</UButton>
+            <UButton
+              :loading="invitingClient"
+              :disabled="inviteMode === 'existing' && !selectedOrg"
+              @click="inviteClient"
+            >
+              Generate invite link
+            </UButton>
           </div>
 
           <div v-if="clientInviteResult" class="mt-4">
@@ -761,6 +819,45 @@ const clientRestaurantName = ref('')
 const invitingClient = ref(false)
 const clientInviteResult = ref<{ inviteUrl?: string; restaurantName?: string; error?: string } | null>(null)
 
+// ── Invite Client: new-org vs existing-org mode ──────────────────────────────
+interface OrgSearchResult { id: string; name: string; slug: string | null; hasOwner: boolean; hasPendingInvitation: boolean }
+
+const inviteMode = ref<'new' | 'existing'>('new')
+const orgSearchTerm = ref('')
+const orgSearchResults = ref<OrgSearchResult[]>([])
+const orgSearchLoading = ref(false)
+const selectedOrg = ref<OrgSearchResult | undefined>(undefined)
+let orgSearchDebounce: ReturnType<typeof setTimeout> | undefined
+
+async function runOrgSearch(term: string) {
+  orgSearchLoading.value = true
+  try {
+    const res = await $fetch<{ organizations: OrgSearchResult[] }>('/api/admin/organizations', {
+      query: { q: term },
+    })
+    if (term !== orgSearchTerm.value) return
+    orgSearchResults.value = res.organizations
+  } catch {
+    if (term !== orgSearchTerm.value) return
+    toast.add({ title: 'Failed to search organizations', color: 'error' })
+  } finally {
+    if (term === orgSearchTerm.value) orgSearchLoading.value = false
+  }
+}
+
+watch(orgSearchTerm, (term) => {
+  if (orgSearchDebounce) clearTimeout(orgSearchDebounce)
+  orgSearchDebounce = setTimeout(() => runOrgSearch(term), 250)
+})
+
+function setInviteMode(mode: 'new' | 'existing') {
+  inviteMode.value = mode
+  clientInviteResult.value = null
+  if (mode === 'existing' && orgSearchResults.value.length === 0 && !orgSearchLoading.value) {
+    runOrgSearch(orgSearchTerm.value)
+  }
+}
+
 async function loadMembers() {
   membersLoading.value = true
   try {
@@ -799,6 +896,32 @@ async function inviteTeamMember() {
 
 async function inviteClient() {
   const email = clientEmail.value.trim()
+
+  if (inviteMode.value === 'existing') {
+    if (!email || !selectedOrg.value) return
+    invitingClient.value = true
+    clientInviteResult.value = null
+    try {
+      const res = await $fetch<{ inviteUrl: string; restaurantName: string }>('/api/admin/invite/client', {
+        method: 'POST',
+        body: { email, orgId: selectedOrg.value.id },
+      })
+      clientInviteResult.value = res
+      clientEmail.value = ''
+      // Existing-org mode only: reset the org picker's search state and re-run the
+      // search so the just-invited org drops out of the "no owner" browse list. The
+      // new-org branch below has no equivalent search state to reset.
+      selectedOrg.value = undefined
+      orgSearchTerm.value = ''
+      await runOrgSearch('')
+    } catch (err: unknown) {
+      clientInviteResult.value = { error: extractApiErrorMessage(err, 'Failed to create invitation') }
+    } finally {
+      invitingClient.value = false
+    }
+    return
+  }
+
   const name = clientRestaurantName.value.trim()
   if (!email || !name) return
   invitingClient.value = true
@@ -812,11 +935,21 @@ async function inviteClient() {
     clientEmail.value = ''
     clientRestaurantName.value = ''
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Failed to create invitation'
-    clientInviteResult.value = { error: msg }
+    clientInviteResult.value = { error: extractApiErrorMessage(err, 'Failed to create invitation') }
   } finally {
     invitingClient.value = false
   }
+}
+
+// $fetch throws an H3-style FetchError whose own `message` is a generic
+// "[POST] ... 409 Conflict" — the actual server message (e.g. "Organization
+// already has an owner") lives in `err.data.error`. Prefer that so 409s from
+// /api/admin/invite/client render as the real reason, not a generic failure.
+function extractApiErrorMessage(err: unknown, fallback: string): string {
+  const data = (err as { data?: { error?: string } } | undefined)?.data
+  if (data?.error) return data.error
+  if (err instanceof Error && err.message) return err.message
+  return fallback
 }
 
 async function copyInviteLink(url: string) {

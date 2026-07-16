@@ -4,6 +4,7 @@ import { hashEmail, isReservedTestDomain, logOnlyEmailProviderId, shouldSendReal
 import { ensureGuestThread } from '~/server/utils/guest-threads'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification, toDashboardButtonPath, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 import { buildReplyToAddress } from '~/server/utils/submission-messages'
+import { isAuthorizedWhatsAppRecipient } from '~/server/utils/member-access'
 import { getPlatformSupportEmails } from '~/server/utils/platform-support'
 import ReservationOwnerNew from '~/server/emails/templates/ReservationOwnerNew'
 import ReservationOwnerCancelled from '~/server/emails/templates/ReservationOwnerCancelled'
@@ -550,8 +551,17 @@ async function notifyOwner(
   const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.siteId) : null
   const ownerEmail = await getOwnerEmail(db, opts.organizationId)
 
-  // Collect unique phones — location manager + owner (site-level), deduped
-  const phones = [...new Set([locationPhone, sitePhone].filter(Boolean))] as string[]
+  const configuredTargets = [
+    locationPhone ? { phone: locationPhone, requireSiteWide: false } : null,
+    sitePhone ? { phone: sitePhone, requireSiteWide: true } : null,
+  ].filter(Boolean) as Array<{ phone: string; requireSiteWide: boolean }>
+  const targetByPhone = new Map<string, { phone: string; requireSiteWide: boolean }>()
+  for (const target of configuredTargets) {
+    const existing = targetByPhone.get(target.phone)
+    targetByPhone.set(target.phone, { phone: target.phone, requireSiteWide: Boolean(existing?.requireSiteWide || target.requireSiteWide) })
+  }
+  const phoneTargets = [...targetByPhone.values()]
+  const phones = [...new Set(phoneTargets.map(target => target.phone))]
   // Internal email alerts always go to the org owner/admin account.
   // Public contact emails are guest-facing data and must not double as notification routing.
   const emails = [...new Set([ownerEmail].filter(Boolean))] as string[]
@@ -565,16 +575,30 @@ async function notifyOwner(
   }
 
   if (channels.includes('whatsapp') && opts.whatsapp && phones.length > 0) {
-    await Promise.allSettled(phones.map(toPhone =>
-      sendWhatsAppNotification(env, db, {
+    await Promise.allSettled(phoneTargets.map(async target => {
+      const authorized = await isAuthorizedWhatsAppRecipient(db, {
+        phone: target.phone,
         organizationId: opts.organizationId,
         siteId: opts.siteId,
         locationId: opts.locationId ?? null,
-        toPhone,
+        requireSiteWide: target.requireSiteWide,
+      })
+      if (!authorized) {
+        await execute(db, `
+          INSERT INTO notifications (id, organization_id, site_id, location_id, channel, template, recipient, payload, status, error, created_at)
+          VALUES (?, ?, ?, ?, 'whatsapp', ?, ?, ?, 'blocked', 'recipient_access_pending', ?)
+        `, [crypto.randomUUID(), opts.organizationId, opts.siteId, opts.locationId ?? null, opts.whatsapp!.template, target.phone, JSON.stringify(opts.whatsapp!.vars), new Date().toISOString()])
+        return
+      }
+      await sendWhatsAppNotification(env, db, {
+        organizationId: opts.organizationId,
+        siteId: opts.siteId,
+        locationId: opts.locationId ?? null,
+        toPhone: target.phone,
         template: opts.whatsapp!.template,
         vars: opts.whatsapp!.vars,
       })
-    ))
+    }))
   }
 }
 

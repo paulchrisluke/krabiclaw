@@ -3,13 +3,14 @@ import { requireSiteAccess } from '~/server/utils/location-access'
 import { getGuestThreadDetail } from '~/server/utils/guest-threads'
 import { insertSubmissionMessage, sendReplyEmail } from '~/server/utils/submission-messages'
 import { queryFirst } from '~/server/db'
+import { assertMemberScope } from '~/server/utils/member-access'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const threadId = getRouterParam(event, 'threadId')
   if (!siteId || !threadId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
-  const { env, db, session, site } = await requireSiteAccess(event, siteId, ['owner', 'admin'])
+  const { env, db, session, site } = await requireSiteAccess(event, siteId, ['owner', 'admin', 'editor', 'location_manager'])
   const body = (await readBody(event).catch(() => null)) as { channel?: unknown; body?: unknown } | null
   const channel = body?.channel
   const replyBody = typeof body?.body === 'string' ? body.body.trim() : ''
@@ -22,6 +23,7 @@ export default defineEventHandler(async (event) => {
 
   const detail = await getGuestThreadDetail(db, threadId, siteId)
   if (!detail) return jsonResponse({ error: 'Thread not found' }, { status: 404 })
+  await assertMemberScope(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, locationId: detail.thread.location_id })
   if (!detail.source.guest_email) {
     return jsonResponse({ error: 'This guest has no email on file' }, { status: 400 })
   }

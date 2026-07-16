@@ -197,9 +197,9 @@ function buildOgImageQueryParams(payload: OgImageRenderPayload): URLSearchParams
   params.set('siteName', payload.siteName)
   if (payload.label) params.set('label', payload.label)
   if (payload.location) params.set('location', payload.location)
-  if (payload.logoUrl) params.set('logoUrl', payload.logoUrl)
-  if (payload.faviconUrl) params.set('faviconUrl', payload.faviconUrl)
-  if (payload.backgroundImageUrl) params.set('backgroundImageUrl', payload.backgroundImageUrl)
+  if (payload.logoUrl && payload.logoUrl.startsWith('https://')) params.set('logoUrl', payload.logoUrl)
+  if (payload.faviconUrl && payload.faviconUrl.startsWith('https://')) params.set('faviconUrl', payload.faviconUrl)
+  if (payload.backgroundImageUrl && payload.backgroundImageUrl.startsWith('https://')) params.set('backgroundImageUrl', payload.backgroundImageUrl)
   if (payload.primaryColor) params.set('primaryColor', payload.primaryColor)
   if (payload.secondaryColor) params.set('secondaryColor', payload.secondaryColor)
   // Sort so the query string — and therefore the cache key — is stable regardless of

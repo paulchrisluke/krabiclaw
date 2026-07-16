@@ -3,6 +3,7 @@ import { getHeader } from 'h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
+import { assertDashboardPathPermission, assertMemberSiteAccess, isOrganizationWideRole } from '~/server/utils/member-access'
 
 export interface DashboardOrganizationRow {
   id: string
@@ -10,6 +11,7 @@ export interface DashboardOrganizationRow {
   slug: string | null
   logo: string | null
   role: string
+  memberId: string
 }
 
 export interface DashboardSiteRow {
@@ -141,7 +143,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     : null
 
   const organization = await queryFirst<DashboardOrganizationRow>(db, `
-    SELECT o.id, o.name, o.slug, o.logo, m.role
+    SELECT o.id, o.name, o.slug, o.logo, m.role, m.id AS memberId
     FROM organization o
     JOIN member m ON o.id = m.organizationId
     WHERE m.userId = ?
@@ -162,6 +164,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     }
     throw createError({ statusCode: 404, message: 'No organization found' })
   }
+  assertDashboardPathPermission(organization.role, event.path)
 
   // The active site is resolved explicitly from the `siteSlug` route segment, sent on
   // every /api/dashboard/* request via the x-dashboard-site-slug header (see
@@ -197,6 +200,15 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     throw createError({ statusCode: 404, message: 'Site not found' })
   }
 
+  if (site) {
+    await assertMemberSiteAccess(db, {
+      memberId: organization.memberId,
+      role: organization.role,
+      organizationId: organization.id,
+      siteId: site.id,
+    })
+  }
+
   const siteConfig = site
     ? await queryAll<{ key: string; value: string | null }>(db, `
         SELECT key, value
@@ -229,13 +241,14 @@ export interface DashboardSiteSummaryRow {
   plan: string | null
 }
 
-export async function listOrganizationSites(db: DbClient, organizationId: string) {
+export async function listOrganizationSites(db: DbClient, organizationId: string, principal?: { memberId: string; role: string }) {
   return await queryAll<DashboardSiteSummaryRow>(db, `
     SELECT id, brand_name, subdomain, plan
     FROM sites
     WHERE organization_id = ?
+      ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member_access_scope mas WHERE mas.member_id = ? AND mas.organization_id = sites.organization_id AND mas.site_id = sites.id)' : ''}
     ORDER BY created_at ASC, id ASC
-  `, [organizationId])
+  `, principal && !isOrganizationWideRole(principal.role) ? [organizationId, principal.memberId] : [organizationId])
 }
 
 export async function getDashboardSite(event: H3Event) {
@@ -249,13 +262,14 @@ export async function getDashboardSite(event: H3Event) {
   }
 }
 
-export async function listDashboardLocations(db: DbClient, organizationId: string, siteId: string) {
+export async function listDashboardLocations(db: DbClient, organizationId: string, siteId: string, principal?: { memberId: string; role: string }) {
   const locations = await queryAll<DashboardLocationRow>(db, `
     SELECT id, slug, title, is_primary, status
     FROM business_locations
     WHERE organization_id = ? AND site_id = ? AND status = 'active'
+      ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member_access_scope mas WHERE mas.member_id = ? AND mas.organization_id = business_locations.organization_id AND mas.site_id = business_locations.site_id AND (mas.location_id IS NULL OR mas.location_id = business_locations.id))' : ''}
     ORDER BY is_primary DESC, title ASC
-  `, [organizationId, siteId])
+  `, principal && !isOrganizationWideRole(principal.role) ? [organizationId, siteId, principal.memberId] : [organizationId, siteId])
 
   return locations.map((location) => ({
     ...location,
@@ -267,9 +281,10 @@ export async function resolveSelectedDashboardLocation(
   db: DbClient,
   userId: string,
   organizationId: string,
-  siteId: string
+  siteId: string,
+  principal?: { memberId: string; role: string }
 ) {
-  const locations = await listDashboardLocations(db, organizationId, siteId)
+  const locations = await listDashboardLocations(db, organizationId, siteId, principal)
   const preference = await queryFirst<DashboardPreferenceRow>(db, `
     SELECT selected_location_id
     FROM dashboard_preferences

@@ -628,10 +628,21 @@ export async function executePlatformMcpToolCall(
       return { success: true }
     }
     case 'list_platform_blog_posts':
-      return { posts: await listPlatformBlogPosts(user.db, optionalString(rawArguments, 'status')) }
+      return { posts: await listPlatformBlogPosts(user.db, optionalString(rawArguments, 'status'), optionalString(rawArguments, 'site_id')) }
     case 'get_platform_blog_post':
-      return { post: await getPlatformBlogPost(user.db, requiredString(rawArguments, 'post_id')) }
-    case 'create_platform_blog_post':
+      return { post: await getPlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), optionalString(rawArguments, 'site_id')) }
+    case 'create_platform_blog_post': {
+      const siteId = optionalString(rawArguments, 'site_id')
+      let blogScope = undefined
+      if (siteId) {
+        const site = await queryFirst<{ organization_id: string }>(
+          user.db,
+          'SELECT organization_id FROM sites WHERE id = ? LIMIT 1',
+          [siteId],
+        )
+        if (!site) throw mcpProtocolError(MCP_ERROR.invalidParams, 'Site not found.')
+        blogScope = { site_id: siteId, organization_id: site.organization_id }
+      }
       return await createPlatformBlogPost(user.db, user.userId, {
         title: requiredString(rawArguments, 'title'),
         body: requiredString(rawArguments, 'body'),
@@ -646,8 +657,10 @@ export async function executePlatformMcpToolCall(
         featured_image_asset_id: optionalString(rawArguments, 'featured_image_asset_id') ?? null,
         ...structuredContentInput(rawArguments),
         publish: optionalBoolean(rawArguments, 'publish') ?? false,
-      })
-    case 'update_platform_blog_post':
+      }, blogScope)
+    }
+    case 'update_platform_blog_post': {
+      const siteId = optionalString(rawArguments, 'site_id')
       return await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), {
         title: optionalString(rawArguments, 'title'),
         body: optionalString(rawArguments, 'body'),
@@ -663,15 +676,16 @@ export async function executePlatformMcpToolCall(
         ...structuredContentInput(rawArguments),
         publish: optionalBoolean(rawArguments, 'publish'),
         unpublish: optionalBoolean(rawArguments, 'unpublish'),
-      })
+      }, siteId)
+    }
     case 'publish_platform_blog_post':
-      return await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), { publish: true })
+      return await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), { publish: true }, optionalString(rawArguments, 'site_id'))
     case 'unpublish_platform_blog_post':
-      return await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), { unpublish: true })
+      return await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), { unpublish: true }, optionalString(rawArguments, 'site_id'))
     case 'reorder_platform_blog_posts':
-      return await reorderPlatformBlogPosts(user.db, reorderItems(rawArguments, 'post_id') as Array<{ post_id: string; nav_section?: string | null; nav_title?: string | null; nav_order: number; nav_section_order?: number | null; hide_from_nav?: boolean | null }>)
+      return await reorderPlatformBlogPosts(user.db, reorderItems(rawArguments, 'post_id') as Array<{ post_id: string; nav_section?: string | null; nav_title?: string | null; nav_order: number; nav_section_order?: number | null; hide_from_nav?: boolean | null }>, optionalString(rawArguments, 'site_id'))
     case 'delete_platform_blog_post':
-      return await deletePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'))
+      return await deletePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), optionalString(rawArguments, 'site_id'))
     case 'list_platform_docs':
       return { docs: await listPlatformDocs(user.db, optionalString(rawArguments, 'status')) }
     case 'get_platform_doc':

@@ -33,7 +33,8 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const sites = await listOrganizationSites(db, organization.id)
+  const principal = { memberId: organization.memberId, role: organization.role }
+  const sites = await listOrganizationSites(db, organization.id, principal)
 
   if (!site) {
     return jsonResponse({
@@ -51,7 +52,8 @@ export default defineEventHandler(async (event) => {
     db,
     userId,
     organization.id,
-    site.id
+    site.id,
+    principal
   )
 
   return jsonResponse({

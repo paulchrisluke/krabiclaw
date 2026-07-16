@@ -112,8 +112,10 @@ function normalizeQuery(query: string) {
 
 // SQLite LIKE treats '%' and '_' as wildcards even inside a bound parameter, so a
 // literal search term containing them (e.g. "50% off") must have those escaped —
-// paired with `ESCAPE '\'` on every LIKE predicate that uses this.
-function escapeLikePattern(value: string) {
+// paired with `ESCAPE '\'` on every LIKE predicate that uses this. Exported so other
+// LIKE-based search utils (e.g. server/utils/admin-org-search.ts) reuse this instead
+// of reimplementing the same escaping.
+export function escapeLikePattern(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
 }
 

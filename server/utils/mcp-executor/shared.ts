@@ -18,6 +18,7 @@ import {
 } from "~/server/utils/mcp-context";
 import { chargeFlatCredits, type FlatCreditAction } from "~/server/utils/ai-credits";
 import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, R2_IMAGE_MIME_TYPES } from "~/server/utils/media-mime";
+import { assertMarkdownSize, decodeMarkdownText, resolveMarkdownMimeType } from "~/server/utils/markdown-document";
 import { hasCloudflareImagesConfig } from "~/server/utils/cloudflare-images";
 
 /**
@@ -526,8 +527,14 @@ export async function resolveUserUploadedMediaFileById(
   fileId: string,
   env: ApiRecord,
 ): Promise<ResolvedMediaFile> {
-  const { buffer, normalizedFileId } = await fetchUploadedFileFromAiGateway(fileId, env, MAX_VIDEO_BYTES);
+  const { buffer, contentType, normalizedFileId } = await fetchUploadedFileFromAiGateway(fileId, env, MAX_VIDEO_BYTES);
   const bytes = new Uint8Array(buffer);
+  const markdownType = resolveMarkdownMimeType(contentType);
+  if (markdownType) {
+    assertMarkdownSize(bytes.byteLength);
+    decodeMarkdownText(buffer);
+    return { buffer, contentType: markdownType, filename: `${normalizedFileId}.md`, kind: "file" };
+  }
   if (bytes.byteLength < 64) {
     throw createError({
       statusCode: 400,
@@ -596,7 +603,7 @@ export interface ResolvedMediaFile {
   buffer: ArrayBuffer;
   contentType: string;
   filename: string;
-  kind: "image" | "video";
+  kind: "image" | "video" | "file";
 }
 
 const RESOLVED_MEDIA_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
@@ -675,6 +682,17 @@ export async function resolveUserUploadedMediaFile(
     MAX_VIDEO_BYTES,
   );
   const bytes = new Uint8Array(buffer);
+  const markdownType = resolveMarkdownMimeType(file.mime_type, file.file_name);
+  if (markdownType) {
+    assertMarkdownSize(bytes.byteLength);
+    decodeMarkdownText(buffer);
+    return {
+      buffer,
+      contentType: markdownType,
+      filename: file.file_name ?? `${file.file_id}.md`,
+      kind: "file",
+    };
+  }
   if (bytes.byteLength < 64) {
     throw createError({
       statusCode: 400,

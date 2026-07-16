@@ -10,6 +10,7 @@ import { slugifyTitle } from '~/utils/post-slugs'
 import { PLATFORM_MEDIA_SITE_ID } from '~/server/utils/platform-media'
 import { BLOG_CATEGORY_LABELS, blogCategoryToSlug } from '~/utils/blog-categories'
 import { categoryToSlug } from '~/utils/docs-categories'
+import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 
 const BLOG_TITLE_MAX = 200
 const BLOG_BODY_MAX = 100000
@@ -962,9 +963,25 @@ export function attachFeaturedImageFromBareJoin(record: ApiRecord) {
   }
 }
 
-function contentReviewUrls(record: ApiRecord, kind: 'blog' | 'doc', siteId: string | null = null) {
+export type ContentReviewContext =
+  | { scope: 'platform' }
+  | { scope: 'tenant'; orgSlug: string; siteSlug: string }
+
+function contentReviewUrls(
+  record: ApiRecord,
+  kind: 'blog' | 'doc',
+  siteId: string | null = null,
+  tenantBlogPath: string | null = null,
+  context?: ContentReviewContext,
+) {
   const id = String(record.id ?? '')
-  const adminEditUrl = kind === 'blog' ? `/admin/blog/${id}` : `/admin/docs/${id}`
+  const adminEditUrl = (() => {
+    if (kind === 'doc') return `/admin/docs/${id}`
+    if (context?.scope === 'tenant') {
+      return `/dashboard/${context.orgSlug}/sites/${context.siteSlug}/blog/${id}`
+    }
+    return `/admin/blog/${id}`
+  })()
   const isPublished = record.status === 'published' || Boolean(record.published_at)
   const category = typeof record.category === 'string' ? record.category : null
   const slug = typeof record.slug === 'string' ? record.slug : null
@@ -972,7 +989,7 @@ function contentReviewUrls(record: ApiRecord, kind: 'blog' | 'doc', siteId: stri
   const publicPath = (() => {
     if (!isPublished || !slug) return null
     if (kind === 'blog') {
-      if (siteId) return `/blog/${slug}`
+      if (siteId) return tenantBlogPath ?? `/blog/${slug}`
       return categorySlug ? `/blog/${categorySlug}/${slug}` : null
     }
     return categorySlug ? `/docs/${categorySlug}/${slug}` : null
@@ -985,6 +1002,27 @@ function contentReviewUrls(record: ApiRecord, kind: 'blog' | 'doc', siteId: stri
     public_url: publicPath,
     preview_url: null,
   }
+}
+
+async function resolveTenantBlogPostPath(db: DbClient, siteId: string | null, slug: string) {
+  if (!siteId) return null
+  const site = await queryFirst<{ theme: string | null; theme_id: string | null }>(
+    db,
+    'SELECT theme, theme_id FROM sites WHERE id = ? LIMIT 1',
+    [siteId],
+  )
+  return tenantBlogPostPath(site, slug)
+}
+
+async function resolveTenantContext(db: DbClient, siteId: string | null): Promise<ContentReviewContext | undefined> {
+  if (!siteId) return undefined
+  const site = await queryFirst<{ slug: string; organization_slug: string }>(
+    db,
+    'SELECT s.slug, o.slug AS organization_slug FROM sites s JOIN organization o ON s.organization_id = o.id WHERE s.id = ? LIMIT 1',
+    [siteId],
+  )
+  if (!site) return undefined
+  return { scope: 'tenant', orgSlug: site.organization_slug, siteSlug: site.slug }
 }
 
 /**
@@ -1260,7 +1298,15 @@ export async function listPlatformBlogPosts(db: DbClient, status?: string | null
   else if (status === 'draft') sql += " AND p.status = 'draft'"
   sql += ' ORDER BY COALESCE(p.featured_order, 999999), COALESCE(p.nav_section_order, 999999), COALESCE(p.nav_section, p.category), COALESCE(p.nav_order, 999999), p.created_at DESC'
   const results = await queryAll<ApiRecord>(db, sql, params)
-  return (results ?? []).map(record => contentReviewUrls(attachFeaturedImage(attachPublished(record, Boolean(record.published_at))), 'blog', siteId))
+  const context = await resolveTenantContext(db, siteId)
+  const site = siteId
+    ? await queryFirst<{ theme: string | null; theme_id: string | null }>(db, 'SELECT theme, theme_id FROM sites WHERE id = ? LIMIT 1', [siteId])
+    : null
+  return (results ?? []).map((record) => {
+    const slug = typeof record.slug === 'string' ? record.slug : ''
+    const publicPath = siteId && slug ? tenantBlogPostPath(site, slug) : null
+    return contentReviewUrls(attachFeaturedImage(attachPublished(record, Boolean(record.published_at))), 'blog', siteId, publicPath, context)
+  })
 }
 
 export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, siteId: string | null = null) {
@@ -1280,7 +1326,10 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
   )
   if (!post) notFound('Post not found')
   const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'blog_post', postId))
-  return attachComponents(contentReviewUrls(attachFeaturedImage(attachPublished(post, Boolean(post.published_at))), 'blog', siteId), components)
+  const slug = typeof post.slug === 'string' ? post.slug : ''
+  const publicPath = siteId && slug ? await resolveTenantBlogPostPath(db, siteId, slug) : null
+  const context = await resolveTenantContext(db, siteId)
+  return attachComponents(contentReviewUrls(attachFeaturedImage(attachPublished(post, Boolean(post.published_at))), 'blog', siteId, publicPath, context), components)
 }
 
 export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slug: string) {
@@ -1322,8 +1371,10 @@ export async function createPlatformBlogPost(
   if (!input.title?.trim() || !input.body?.trim()) badRequest('title and body are required')
   const isTenant = Boolean(scope.site_id)
   validateBlogCommon(input, isTenant)
-  if (!isTenant && !input.category?.trim()) badRequest('category is required')
-  if (input.publish && !isTenant) assertPublishableBlogCategory(input.category)
+  if (!isTenant) {
+    if (!input.category?.trim()) badRequest('category is required')
+    assertValidBlogCategory(input.category)
+  }
   if (input.featured_image_asset_id) await ensureBlogFeaturedImageAssetExists(db, input.featured_image_asset_id, 'featured_image_asset_id', scope.site_id ?? null)
 
   const siteId = scope.site_id ?? null
@@ -1414,9 +1465,9 @@ export async function updatePlatformBlogPost(
     ? await queryFirst<{ category: string | null }>(db, 'SELECT category FROM blog_posts WHERE id = ? LIMIT 1', [postId])
     : null
   const effectiveCategory = input.category !== undefined ? input.category : current?.category ?? null
-  if (!isTenant && !effectiveCategory?.trim()) badRequest('category is required')
-  if (input.publish && !isTenant) {
-    assertPublishableBlogCategory(effectiveCategory)
+  if (!isTenant) {
+    if (!effectiveCategory?.trim()) badRequest('category is required')
+    assertValidBlogCategory(effectiveCategory)
   }
   const now = new Date().toISOString()
   const updates: string[] = ['updated_at = ?']
