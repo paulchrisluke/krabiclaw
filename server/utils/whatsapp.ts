@@ -682,7 +682,7 @@ export async function setOrgWhatsAppPhone(
   if (env) {
     const { ensureWhatsAppRecipientAccess, sendWhatsAppAccessInvitation } = await import('~/server/utils/whatsapp-access')
     const access = await ensureWhatsAppRecipientAccess(db, { organizationId, siteId, locationId: null, phone: normalized })
-    if (access.status !== 'invitation_pending' || !access.invitationId) return
+    if (access.status !== 'invitation_pending' || !access.shouldDeliverInvitation || !access.invitationId) return
     await sendWhatsAppAccessInvitation(env, db, { organizationId, siteId, locationId: null, phone: normalized, invitationId: access.invitationId })
   }
 }

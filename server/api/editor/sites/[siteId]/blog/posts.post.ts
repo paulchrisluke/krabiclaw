@@ -1,6 +1,5 @@
 import { jsonResponse } from "~/server/utils/api-response";
-import { requireSiteAccess } from "~/server/utils/location-access";
-import { assertMemberScope } from "~/server/utils/member-access";
+import { requireBlogAccess } from "~/server/utils/blog-access";
 import { createPlatformBlogPost, type PlatformBlogCreateInput } from "~/server/utils/platform-content";
 import { httpErrorDetails } from "~/server/utils/http-error";
 
@@ -23,8 +22,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const { db, session, site } = await requireSiteAccess(event, siteId, ['owner', 'admin', 'editor', 'location_manager']);
-    await assertMemberScope(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId });
+    const { db, session, site } = await requireBlogAccess(event, siteId);
 
     const result = await createPlatformBlogPost(db, session.user.id, body as PlatformBlogCreateInput, {
       site_id: siteId,

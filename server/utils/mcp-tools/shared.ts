@@ -1071,6 +1071,7 @@ export const READ_ONLY_TOOL_NAMES = [
 
 export const BOUNDED_WRITE_TOOL_NAMES = [
   'set_workspace_context',
+  'analyze_document',
   'save_generated_image',
   'save_generated_image_file',
   'upload_user_photo',
