@@ -683,6 +683,11 @@ export async function fetchWhatsAppMedia(
 /**
  * Store (or update) the org's WhatsApp notification phone in site_config.
  * Normalizes to E.164 before saving. Passing null/empty clears it instead.
+ *
+ * Reads the previous value first (needed either way for the delete/upsert
+ * decision) so it can also drive scope recalculation on an actual change
+ * (issue #293 Section G) — skipped entirely when the value didn't change,
+ * per the idempotency requirement in Section I.
  */
 export async function setOrgWhatsAppPhone(
   db: DbClient,
@@ -690,21 +695,51 @@ export async function setOrgWhatsAppPhone(
   siteId: string,
   phone: string | null,
   env?: WhatsAppEnv,
+  options?: { actorHeaders?: HeadersInit },
 ): Promise<void> {
+  const previous = await queryFirst<{ value: string }>(db, `
+    SELECT value FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'whatsapp_phone' LIMIT 1
+  `, [organizationId, siteId])
+  const previousPhone = previous?.value ?? null
+
+  let normalized: string | null = null
   if (!phone) {
     await execute(db, `
       DELETE FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'whatsapp_phone'
     `, [organizationId, siteId])
-    return
+  } else {
+    normalized = parsePhoneOrThrow(phone, { defaultCountry: 'TH' })
+    const now = new Date().toISOString()
+    await execute(db, `
+      INSERT INTO site_config (organization_id, site_id, key, value, updated_at)
+      VALUES (?, ?, 'whatsapp_phone', ?, ?)
+      ON CONFLICT(organization_id, site_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+    `, [organizationId, siteId, normalized, now])
   }
-  const normalized = parsePhoneOrThrow(phone, { defaultCountry: 'TH' })
-  const now = new Date().toISOString()
-  await execute(db, `
-    INSERT INTO site_config (organization_id, site_id, key, value, updated_at)
-    VALUES (?, ?, 'whatsapp_phone', ?, ?)
-    ON CONFLICT(organization_id, site_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-  `, [organizationId, siteId, normalized, now])
-  if (env) {
+
+  if (previousPhone !== normalized && env) {
+    try {
+      const [{ recalculateScopesForPhoneChange }, { createAuth }] = await Promise.all([
+        import('~/server/utils/whatsapp-revocation'),
+        import('~/server/utils/auth'),
+      ])
+      // `env` here is always the full Cloudflare env (callers pass through
+      // `cloudflareEnv(event)`/`site.env` under a narrower local type) —
+      // createAuth only reads the DB/Better-Auth-config fields it needs.
+      await recalculateScopesForPhoneChange(db, createAuth(env as unknown as Parameters<typeof createAuth>[0]), {
+        organizationId,
+        siteId,
+        scopeType: 'site',
+        previousPhone,
+        newPhone: normalized,
+        actorHeaders: options?.actorHeaders,
+      })
+    } catch (error) {
+      console.warn('Failed to recalculate WhatsApp scopes for site notification phone change:', error)
+    }
+  }
+
+  if (env && normalized) {
     try {
       const { ensureWhatsAppRecipientAccess, sendWhatsAppAccessInvitation } = await import('~/server/utils/whatsapp-access')
       const access = await ensureWhatsAppRecipientAccess(db, { organizationId, siteId, locationId: null, phone: normalized })

@@ -1,6 +1,7 @@
 // PATCH /api/dashboard/locations/[id] — Update a location
+import { getHeaders } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { createAuth, getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { updateLocation } from '~/server/utils/location-management'
 import { parseLocationPayload } from './location-helpers'
@@ -8,6 +9,8 @@ import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { queryFirst } from '~/server/db'
 import { assertMemberScope } from '~/server/utils/member-access'
 import { ensureWhatsAppRecipientAccess, sendWhatsAppAccessInvitation } from '~/server/utils/whatsapp-access'
+import { recalculateScopesForPhoneChange } from '~/server/utils/whatsapp-revocation'
+import { parsePhone } from '~/utils/phone'
 
 export default defineEventHandler(async (event) => {
   const locationId = getRouterParam(event, 'id')
@@ -51,13 +54,35 @@ export default defineEventHandler(async (event) => {
   if (typeof body !== 'object' || body === null) {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
+
+  // Normalize to canonical E.164 at this write boundary (issue #293 Section D)
+  // — `ensureWhatsAppRecipientAccess`/`isAuthorizedWhatsAppRecipient` already
+  // compare against E.164, but the raw trimmed input was previously stored
+  // as-is in `business_locations.notification_phone`, which silently broke
+  // that comparison for any input that wasn't already E.164-shaped.
+  let normalizedNotificationPhone: string | null | undefined
   if (typeof body.notification_phone === 'string' && body.notification_phone.trim()) {
+    const parsed = parsePhone(body.notification_phone, { defaultCountry: 'TH' })
+    if (!parsed.valid || !parsed.e164) {
+      return jsonResponse({ error: 'Enter a valid notification phone number, including country code' }, { status: 400 })
+    }
+    normalizedNotificationPhone = parsed.e164
+  } else if (body.notification_phone === null) {
+    normalizedNotificationPhone = null
+  }
+
+  const previousLocation = await queryFirst<{ notification_phone: string | null }>(db, `
+    SELECT notification_phone FROM business_locations WHERE id = ? LIMIT 1
+  `, [locationId])
+  const previousNotificationPhone = previousLocation?.notification_phone ?? null
+
+  if (normalizedNotificationPhone) {
     try {
       const access = await ensureWhatsAppRecipientAccess(db, {
         organizationId,
         siteId,
         locationId,
-        phone: body.notification_phone,
+        phone: normalizedNotificationPhone,
         inviterUserId: session.user.id,
       })
       if (access.status === 'invitation_pending' && access.shouldDeliverInvitation && access.invitationId) {
@@ -65,7 +90,7 @@ export default defineEventHandler(async (event) => {
           organizationId,
           siteId,
           locationId,
-          phone: body.notification_phone,
+          phone: normalizedNotificationPhone,
           invitationId: access.invitationId,
         })
       }
@@ -122,7 +147,7 @@ export default defineEventHandler(async (event) => {
       uber_eats_url: typeof body.uber_eats_url === 'string' ? body.uber_eats_url : body.uber_eats_url === null ? null : undefined,
       foodpanda_url: typeof body.foodpanda_url === 'string' ? body.foodpanda_url : body.foodpanda_url === null ? null : undefined,
       google_place_id: typeof body.google_place_id === 'string' ? body.google_place_id : body.google_place_id === null ? null : undefined,
-      notification_phone: typeof body.notification_phone === 'string' ? body.notification_phone.trim() || null : body.notification_phone === null ? null : undefined,
+      notification_phone: normalizedNotificationPhone,
       timezone: typeof body.timezone === 'string' ? body.timezone.trim() || null : body.timezone === null ? null : undefined,
       rating,
       review_count: reviewCount,
@@ -137,6 +162,26 @@ export default defineEventHandler(async (event) => {
   if (result.status >= 400) {
     return jsonResponse(result.data, { status: result.status })
   }
+
+  // Recalculate scopes only when the notification_phone actually changed
+  // (idempotency — Section I) — a save that doesn't touch this field, or
+  // resubmits the same number, must not remove or re-audit anything.
+  if (normalizedNotificationPhone !== undefined && normalizedNotificationPhone !== previousNotificationPhone) {
+    try {
+      await recalculateScopesForPhoneChange(db, createAuth(env), {
+        organizationId,
+        siteId,
+        locationId,
+        scopeType: 'location',
+        previousPhone: previousNotificationPhone,
+        newPhone: normalizedNotificationPhone,
+        actorHeaders: getHeaders(event) as HeadersInit,
+      })
+    } catch (error) {
+      console.warn('Failed to recalculate WhatsApp scopes for location notification phone change:', error)
+    }
+  }
+
   await purgeBootstrapCacheSafe(env, siteId)
 
   const location = (result.data as { location?: unknown }).location

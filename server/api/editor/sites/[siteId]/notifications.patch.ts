@@ -1,3 +1,4 @@
+import { getHeaders } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { updateNotificationsSettings } from '~/server/utils/mcp-workflows'
@@ -44,6 +45,6 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'WhatsApp notifications require a Growth plan or higher.' }, { status: 403 })
   }
 
-  const notifications = await updateNotificationsSettings(db, site.organization_id, siteId, body.whatsapp_phone?.trim(), body.channels, env)
+  const notifications = await updateNotificationsSettings(db, site.organization_id, siteId, body.whatsapp_phone?.trim(), body.channels, env, getHeaders(event) as HeadersInit)
   return jsonResponse({ success: true, notifications })
 })

@@ -21,32 +21,62 @@
             <div
               v-for="member in members"
               :key="member.id"
-              class="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0"
+              class="py-4 first:pt-0 last:pb-0 space-y-3"
             >
-              <div class="flex min-w-0 items-center gap-3">
-                <UAvatar
-                  :src="member.image || undefined"
-                  :alt="member.name || member.email"
-                  icon="i-lucide-user"
-                />
-                <div class="min-w-0">
-                  <p class="truncate font-medium text-highlighted">{{ member.name || member.email }}</p>
-                  <p class="truncate text-sm text-muted">{{ member.email }}</p>
+              <div class="flex items-center justify-between gap-4">
+                <div class="flex min-w-0 items-center gap-3">
+                  <UAvatar
+                    :src="member.image || undefined"
+                    :alt="member.name || member.email"
+                    icon="i-lucide-user"
+                  />
+                  <div class="min-w-0">
+                    <p class="truncate font-medium text-highlighted">{{ member.name || member.email }}</p>
+                    <p class="truncate text-sm text-muted">{{ member.email }}</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <UBadge :label="member.role" color="neutral" variant="soft" class="capitalize" />
+                  <UButton
+                    v-if="member.role !== 'owner'"
+                    icon="i-lucide-x"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    :loading="removingMemberId === member.id"
+                    :aria-label="`Remove ${member.name || member.email}`"
+                    @click="removeMember(member.id)"
+                  />
                 </div>
               </div>
-              <div class="flex items-center gap-2">
-                <UBadge :label="member.role" color="neutral" variant="soft" class="capitalize" />
-                <UButton
-                  v-if="member.role !== 'owner'"
-                  icon="i-lucide-x"
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  :loading="removingMemberId === member.id"
-                  :aria-label="`Remove ${member.name || member.email}`"
-                  @click="removeMember(member.id)"
-                />
-              </div>
+
+              <UAlert
+                v-if="pendingRemoval && pendingRemoval.memberId === member.id"
+                color="warning"
+                variant="soft"
+                icon="i-lucide-triangle-alert"
+              >
+                <template #title>
+                  Removing {{ member.name || member.email }} will also clear these WhatsApp notification assignments
+                </template>
+                <template #description>
+                  <ul class="mt-1 list-disc pl-4 text-sm">
+                    <li v-for="(assignment, index) in pendingRemoval.assignments" :key="index">
+                      {{ assignment.locationName ? `${assignment.siteName} · ${assignment.locationName}` : `${assignment.siteName} (site-wide)` }}
+                    </li>
+                  </ul>
+                  <div class="mt-3 flex items-center gap-2">
+                    <UButton
+                      label="Clear assignments and remove"
+                      color="error"
+                      size="xs"
+                      :loading="removingMemberId === member.id"
+                      @click="confirmRemoveMember(member.id)"
+                    />
+                    <UButton label="Cancel" color="neutral" variant="ghost" size="xs" @click="pendingRemoval = null" />
+                  </div>
+                </template>
+              </UAlert>
             </div>
           </div>
 
@@ -259,6 +289,15 @@ interface InvitationRow {
   deliveryError: string | null
 }
 
+interface PhoneAssignment {
+  kind: 'location' | 'site'
+  organizationId: string
+  siteId: string
+  siteName: string | null
+  locationId: string | null
+  locationName: string | null
+}
+
 const { data, pending, refresh } = await useFetch<{
   members: MemberRow[]
   invitations: InvitationRow[]
@@ -281,6 +320,7 @@ const inviteSuccessTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
 const removingMemberId = ref<string | null>(null)
 const cancellingInviteId = ref<string | null>(null)
 const memberError = ref<string | null>(null)
+const pendingRemoval = ref<{ memberId: string; assignments: PhoneAssignment[] } | null>(null)
 
 const invitationActionId = ref<string | null>(null)
 const invitationAction = ref<'retry' | 'replace' | 'clear' | null>(null)
@@ -408,24 +448,44 @@ async function cancelInvitation(invitationId: string) {
   await refresh()
 }
 
-async function removeMember(memberId: string) {
-  if (!activeOrgId.value) return
+// Routes through a dedicated server endpoint rather than calling
+// authClient.organization.removeMember directly — Better Auth's org-plugin
+// after-hook can't block/veto, so this server route is the only place that
+// can check for active WhatsApp notification assignments before removing a
+// location_manager and require a deliberate confirm-and-clear step (issue
+// #293 Section H).
+async function submitRemoveMember(memberId: string, options?: { confirmed?: boolean }) {
   removingMemberId.value = memberId
   memberError.value = null
 
-  const { error } = await authClient.organization.removeMember({
-    memberIdOrEmail: memberId,
-    organizationId: activeOrgId.value,
-  })
-
-  removingMemberId.value = null
-
-  if (error) {
-    memberError.value = error.message ?? 'Failed to remove member.'
-    return
+  try {
+    await $fetch(`/api/dashboard/organizations/members/${memberId}/remove`, {
+      method: 'POST',
+      body: options?.confirmed ? { action: 'clear', confirmed: true } : {},
+    })
+    pendingRemoval.value = null
+    await refresh()
+  } catch (err: unknown) {
+    const errorData = err && typeof err === 'object' && 'data' in err
+      ? (err as Record<string, { error?: string; requiresConfirmation?: boolean; assignments?: PhoneAssignment[] }>).data
+      : null
+    if (errorData?.requiresConfirmation && errorData.assignments) {
+      pendingRemoval.value = { memberId, assignments: errorData.assignments }
+    } else {
+      pendingRemoval.value = null
+      memberError.value = errorData?.error ?? 'Failed to remove member.'
+    }
+  } finally {
+    removingMemberId.value = null
   }
+}
 
-  await refresh()
+async function removeMember(memberId: string) {
+  await submitRemoveMember(memberId)
+}
+
+async function confirmRemoveMember(memberId: string) {
+  await submitRemoveMember(memberId, { confirmed: true })
 }
 
 function formatDate(value: string) {
