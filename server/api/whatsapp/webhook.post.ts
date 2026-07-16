@@ -747,6 +747,19 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
 
   const toPhone = parsePhoneOrThrow(message.from, { defaultCountry: 'TH' })
   const user = await resolveUser(db, message.from)
+  if (user) {
+    // A signed inbound message is exactly what user_phone_verification's
+    // whatsapp_observed_at is for (issue #293 Section D) — best-effort, never
+    // blocks message handling.
+    const observedAt = new Date().toISOString()
+    await execute(db, `
+      INSERT INTO user_phone_verification (id, user_id, format_valid, ownership_verified, whatsapp_observed_at, created_at, updated_at)
+      VALUES (?, ?, 1, 1, ?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET whatsapp_observed_at = excluded.whatsapp_observed_at, updated_at = excluded.updated_at
+    `, [crypto.randomUUID(), user.id, observedAt, observedAt, observedAt]).catch((error) => {
+      console.warn('user_phone_verification_observed_stamp_failed', { userId: user.id, error: error instanceof Error ? error.message : String(error) })
+    })
+  }
   if (!user) {
     // Not a verified owner/staff account — check whether this is a customer replying to an
     // open reservation/experience-booking thread rather than trying to talk to ChowBot.

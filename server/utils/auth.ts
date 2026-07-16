@@ -9,7 +9,7 @@ import type { H3Event } from 'h3'
 import { createDb, execute, schema } from '~/server/db'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
-import { parsePhoneOrThrow } from '~/utils/phone'
+import { parsePhoneOrThrow, PHONE_METADATA_VERSION } from '~/utils/phone'
 import { notifyNewUserSignup } from '~/server/utils/notification-center'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
 import { validatePassword } from '~/utils/password-validation'
@@ -303,6 +303,23 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
             return true
           } catch {
             return false
+          }
+        },
+        // Stamp the app-owned user_phone_verification companion table
+        // (issue #293 Section D/I) on every successful OTP verification —
+        // this table exists specifically to track ownership_verified/
+        // format_valid/phone_metadata_version separately from Better Auth's
+        // own phoneNumberVerified column, but nothing wrote to it until now.
+        callbackOnVerification: async ({ user }) => {
+          try {
+            const now = new Date().toISOString()
+            await execute(d1, `
+              INSERT INTO user_phone_verification (id, user_id, format_valid, ownership_verified, phone_metadata_version, created_at, updated_at)
+              VALUES (?, ?, 1, 1, ?, ?, ?)
+              ON CONFLICT(user_id) DO UPDATE SET format_valid = 1, ownership_verified = 1, phone_metadata_version = excluded.phone_metadata_version, updated_at = excluded.updated_at
+            `, [crypto.randomUUID(), user.id, PHONE_METADATA_VERSION, now, now])
+          } catch (error) {
+            console.warn('user_phone_verification_stamp_failed', { userId: user.id, error: error instanceof Error ? error.message : String(error) })
           }
         },
         signUpOnVerification: {

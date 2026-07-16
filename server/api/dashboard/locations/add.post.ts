@@ -9,11 +9,53 @@ import { chargeFlatCredits } from '~/server/utils/ai-credits'
 import { createLocation } from '~/server/utils/location-management'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { execute, queryFirst, type DbClient } from '~/server/db'
+import { ensureWhatsAppRecipientAccess, sendWhatsAppAccessInvitation } from '~/server/utils/whatsapp-access'
+import { parsePhone } from '~/utils/phone'
 
 type SetupEnv = Parameters<typeof createLocation>[0]
 
 function slugify(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'location'
+}
+
+// Normalize to canonical E.164 at this write boundary (issue #293 Section D),
+// mirroring server/api/dashboard/locations/[id].patch.ts — this create path
+// previously stored the raw trimmed input, which silently broke the E.164
+// comparisons ensureWhatsAppRecipientAccess/isAuthorizedWhatsAppRecipient rely on.
+function normalizeNotificationPhone(raw: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (typeof raw !== 'string' || !raw.trim()) return { ok: true, value: null }
+  const parsed = parsePhone(raw, { defaultCountry: 'TH' })
+  if (!parsed.valid || !parsed.e164) {
+    return { ok: false, error: 'Enter a valid notification phone number, including country code' }
+  }
+  return { ok: true, value: parsed.e164 }
+}
+
+async function provisionLocationWhatsAppAccess(
+  env: SetupEnv,
+  db: DbClient,
+  opts: { organizationId: string; siteId: string; locationId: string; phone: string; inviterUserId: string },
+): Promise<void> {
+  try {
+    const access = await ensureWhatsAppRecipientAccess(db, {
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      locationId: opts.locationId,
+      phone: opts.phone,
+      inviterUserId: opts.inviterUserId,
+    })
+    if (access.status === 'invitation_pending' && access.shouldDeliverInvitation && access.invitationId) {
+      await sendWhatsAppAccessInvitation(env as Parameters<typeof sendWhatsAppAccessInvitation>[0], db, {
+        organizationId: opts.organizationId,
+        siteId: opts.siteId,
+        locationId: opts.locationId,
+        phone: opts.phone,
+        invitationId: access.invitationId,
+      })
+    }
+  } catch (error) {
+    console.warn('Failed to provision WhatsApp access for location notification phone:', error)
+  }
 }
 
 async function uniqueLocationSlug(db: DbClient, siteId: string, base: string): Promise<string> {
@@ -65,6 +107,11 @@ export default defineEventHandler(async (event) => {
 
   // Manual path: business name only, no Google Places lookup required.
   if (name && !mapsUrl && !placeId && !query) {
+    const notificationPhone = normalizeNotificationPhone(details?.notificationPhone)
+    if (!notificationPhone.ok) {
+      return jsonResponse({ error: notificationPhone.error }, { status: 400 })
+    }
+
     const baseSlug = slugify(name).slice(0, 50)
     const slug = await uniqueLocationSlug(db, siteId, baseSlug)
 
@@ -81,7 +128,7 @@ export default defineEventHandler(async (event) => {
         phone: typeof details?.phone === 'string' && details.phone.trim() ? details.phone.trim() : null,
         website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim() ? details.websiteUrl.trim() : null,
         opening_hours: typeof details?.openingHours === 'string' && details.openingHours.trim() ? details.openingHours.trim() : null,
-        notification_phone: typeof details?.notificationPhone === 'string' && details.notificationPhone.trim() ? details.notificationPhone.trim() : null,
+        notification_phone: notificationPhone.value,
         timezone: typeof details?.timezone === 'string' && details.timezone.trim() ? details.timezone.trim() : null,
         is_primary: typeof details?.isPrimary === 'boolean' ? details.isPrimary : false,
       },
@@ -90,6 +137,16 @@ export default defineEventHandler(async (event) => {
 
     if (result.status !== 200 && result.status !== 201) {
       return jsonResponse({ error: (result.data as { error?: string }).error ?? 'Could not add location.' }, { status: result.status })
+    }
+    const createdLocationId = (result.data as { location?: { id: string } }).location?.id
+    if (notificationPhone.value && createdLocationId) {
+      await provisionLocationWhatsAppAccess(env as SetupEnv, db, {
+        organizationId,
+        siteId,
+        locationId: createdLocationId,
+        phone: notificationPhone.value,
+        inviterUserId: session.user.id,
+      })
     }
     await purgeBootstrapCacheSafe(env, siteId)
 
@@ -152,6 +209,11 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  const notificationPhone = normalizeNotificationPhone(details?.notificationPhone)
+  if (!notificationPhone.ok) {
+    return jsonResponse({ error: notificationPhone.error }, { status: 400 })
+  }
+
   if (chargeSearch) {
     await chargeFlatCredits(db, organizationId, { siteId, action: 'google_places_search' }).catch(() => {})
   }
@@ -187,9 +249,7 @@ export default defineEventHandler(async (event) => {
         : place.openingHours ?? null,
       rating: place.rating ?? null,
       review_count: place.ratingCount ?? null,
-      notification_phone: typeof details?.notificationPhone === 'string' && details.notificationPhone.trim()
-        ? details.notificationPhone.trim()
-        : null,
+      notification_phone: notificationPhone.value,
       timezone: typeof details?.timezone === 'string' && details.timezone.trim()
         ? details.timezone.trim()
         : null,
@@ -203,6 +263,15 @@ export default defineEventHandler(async (event) => {
   }
   // Upsert reviews for the new location
   const locationId = (result.data as { location?: { id: string } }).location?.id
+  if (notificationPhone.value && locationId) {
+    await provisionLocationWhatsAppAccess(env as SetupEnv, db, {
+      organizationId,
+      siteId,
+      locationId,
+      phone: notificationPhone.value,
+      inviterUserId: session.user.id,
+    })
+  }
   if (locationId) {
     const now = new Date().toISOString()
     for (const review of place.reviews ?? []) {

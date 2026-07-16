@@ -2,6 +2,22 @@ import { updateSubscriptionQuantity } from "~/server/utils/billing";
 import { fireSiteEventSafe } from "~/server/utils/site-events";
 import { execute, executeBatch, queryFirst, type DbClient } from "~/server/db";
 import { isValidTimezone, normalizeTimezone } from "~/utils/timezone";
+import { parsePhone } from "~/utils/phone";
+
+// Require format-valid E.164 at the shared location write boundary (issue
+// #293 Section D/I) — this is the one place createLocation/updateLocation
+// both funnel through, so it also covers callers that don't go through the
+// dashboard HTTP routes (e.g. MCP/ChowBot's create_location/update_location
+// tools in server/utils/mcp-executor/locations.ts), which previously wrote
+// input.notification_phone straight to the column with no validation at all.
+export function normalizeLocationNotificationPhone(raw: string | null | undefined): string | null {
+  if (raw === undefined || raw === null || !raw.trim()) return null;
+  const parsed = parsePhone(raw, { defaultCountry: "TH" });
+  if (!parsed.valid || !parsed.e164) {
+    throw new Error("notification_phone must be a valid phone number, including country code.");
+  }
+  return parsed.e164;
+}
 
 type SetupEnv = Record<string, string | undefined>;
 
@@ -361,6 +377,16 @@ export async function createLocation(
     };
   }
 
+  let normalizedNotificationPhone: string | null;
+  try {
+    normalizedNotificationPhone = normalizeLocationNotificationPhone(input.notification_phone);
+  } catch (error) {
+    return {
+      status: 400,
+      data: { error: error instanceof Error ? error.message : "Invalid notification_phone." },
+    };
+  }
+
   try {
     await validateMediaAsset(
       db,
@@ -475,7 +501,7 @@ export async function createLocation(
           normalizeOrderingUrl(input.foodpanda_url, "foodpanda_url"),
           input.hero_image_asset_id ?? null,
           input.hero_video_asset_id ?? null,
-          input.notification_phone ?? null,
+          normalizedNotificationPhone,
           normalizedTimezone ?? null,
           input.max_capacity ?? null,
           isPrimary ? 1 : 0,
@@ -644,6 +670,18 @@ export async function updateLocation(
     };
   }
 
+  let normalizedNotificationPhone: string | null | undefined;
+  if (input.notification_phone !== undefined) {
+    try {
+      normalizedNotificationPhone = normalizeLocationNotificationPhone(input.notification_phone);
+    } catch (error) {
+      return {
+        status: 400,
+        data: { error: error instanceof Error ? error.message : "Invalid notification_phone." },
+      };
+    }
+  }
+
   const now = new Date().toISOString();
   const sets: string[] = ["updated_at = ?"];
   const params: Array<string | number | null> = [now];
@@ -693,7 +731,13 @@ export async function updateLocation(
   for (const field of simpleFields) {
     if (input[field] !== undefined) {
       sets.push(`${field} = ?`);
-      params.push(field === "timezone" ? normalizedTimezone ?? null : input[field] ?? null);
+      params.push(
+        field === "timezone"
+          ? normalizedTimezone ?? null
+          : field === "notification_phone"
+            ? normalizedNotificationPhone ?? null
+            : input[field] ?? null,
+      );
     }
   }
 
