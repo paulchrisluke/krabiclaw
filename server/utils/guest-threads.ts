@@ -1,4 +1,5 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
 
 export type GuestThreadSubmissionType = 'contact' | 'reservation' | 'experience_booking'
 export type GuestThreadInboxStatus = 'open' | 'waiting_on_owner' | 'waiting_on_guest' | 'closed'
@@ -424,4 +425,110 @@ export async function updateGuestThreadInboxStatus(
     SET inbox_status = ?, updated_at = ?
     WHERE id = ?
   `, [inboxStatus, now, threadId])
+}
+
+// Canonical "send an owner reply into a guest thread" implementation — the only place
+// this logic should exist (see issue #293 Section C.1: "reuse canonical thread
+// authorization, message persistence, delivery, audit ... do not fork a shadow reply
+// implementation"). Both the dashboard HTTP route
+// (server/api/dashboard/sites/[siteId]/guest-threads/[threadId]/reply.post.ts) and the
+// WhatsApp inbound webhook (server/api/whatsapp/webhook.post.ts) call this function
+// directly rather than one calling the other's HTTP endpoint — a nested self-fetch from
+// the webhook would lose the Cloudflare `env`/`db` bindings per this repo's SSR rule.
+//
+// Deliberately does NOT re-check site/member authorization — callers authorize the
+// sender against the target thread's site/location using whatever mechanism fits their
+// entry point (requireSiteAccess + assertMemberScope for the HTTP route,
+// isAuthorizedWhatsAppRecipient for the WhatsApp webhook) *before* calling this
+// function. `senderUserId` is the Better Auth user id to attribute the message to; it is
+// not a member id, since insertSubmissionMessage.sender_user_id references `user.id`.
+export type PostGuestThreadReplyOutcome =
+  | { ok: true; status: 200; messageId?: string; duplicate?: boolean }
+  | { ok: true; status: 207; messageId?: string; error: string }
+  | { ok: false; status: 404; reason: 'thread_not_found' }
+  | { ok: false; status: 400; reason: 'no_guest_email' }
+  | { ok: false; status: 502; reason: 'send_failed'; error: string; persisted: boolean }
+
+export async function postGuestThreadReply(
+  db: DbClient,
+  env: ReplyEmailEnv,
+  opts: {
+    threadId: string
+    siteId: string
+    senderUserId: string
+    body: string
+  },
+): Promise<PostGuestThreadReplyOutcome> {
+  // Deferred import to avoid a module-init-time circular dependency with
+  // submission-messages.ts, which itself imports several helpers from this file
+  // (ensureGuestThread, syncGuestThreadAfterMessage, attachThreadToSubmissionMessages).
+  // Both call sites only invoke this function from inside another function body (never
+  // at module top-level), so the circularity is safe at runtime.
+  const { sendReplyEmail, insertSubmissionMessage } = await import('~/server/utils/submission-messages')
+
+  const detail = await getGuestThreadDetail(db, opts.threadId, opts.siteId)
+  if (!detail) return { ok: false, status: 404, reason: 'thread_not_found' }
+  if (!detail.source.guest_email) return { ok: false, status: 400, reason: 'no_guest_email' }
+
+  const replyBody = opts.body.trim()
+
+  // Guards against duplicate sends when a client retries after a network error or a
+  // 207 (email sent, DB write failed) response — same thread + identical body within a
+  // short window is treated as the same submission rather than sent again.
+  const dedupeWindowStart = new Date(Date.now() - 30_000).toISOString()
+  const recentDuplicate = await queryFirst<{ id: string }>(db, `
+    SELECT id FROM submission_messages
+    WHERE thread_id = ? AND direction = 'out' AND body = ? AND created_at > ?
+    ORDER BY created_at DESC LIMIT 1
+  `, [detail.thread.id, replyBody, dedupeWindowStart])
+  if (recentDuplicate) {
+    return { ok: true, status: 200, duplicate: true }
+  }
+
+  const siteRow = await queryFirst<{ brand_name: string | null }>(db, `SELECT brand_name FROM sites WHERE id = ? LIMIT 1`, [opts.siteId])
+  const fromName = siteRow?.brand_name || 'KrabiClaw'
+  const subject = detail.source.submission_type === 'contact'
+    ? `Re: your message to ${fromName}`
+    : detail.source.submission_type === 'reservation'
+      ? `Re: your reservation at ${fromName}`
+      : `Re: your booking at ${fromName}`
+
+  const result = await sendReplyEmail(env, {
+    to: detail.source.guest_email,
+    fromName,
+    subject,
+    body: replyBody,
+    submissionType: detail.thread.submission_type,
+    submissionId: detail.thread.submission_id,
+  })
+
+  let persisted = true
+  try {
+    await insertSubmissionMessage(db, {
+      submissionType: detail.thread.submission_type,
+      submissionId: detail.thread.submission_id,
+      organizationId: detail.thread.organization_id,
+      siteId: opts.siteId,
+      direction: 'out',
+      channel: 'email',
+      body: replyBody,
+      senderUserId: opts.senderUserId,
+      metaMessageId: result.messageId ?? null,
+      status: result.success ? 'sent' : 'failed',
+      error: result.error ?? null,
+    })
+  } catch (error) {
+    persisted = false
+    console.error('Failed to save guest thread reply to database', error)
+  }
+
+  if (!result.success) {
+    return { ok: false, status: 502, reason: 'send_failed', error: result.error || 'Failed to send reply', persisted }
+  }
+
+  if (!persisted) {
+    return { ok: true, status: 207, messageId: result.messageId, error: 'Reply email was sent, but the thread could not be updated. Refresh to check its status.' }
+  }
+
+  return { ok: true, status: 200, messageId: result.messageId }
 }

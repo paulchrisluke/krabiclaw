@@ -19,7 +19,7 @@ interface ReplyAddressEnv {
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
 }
 
-interface ReplyEmailEnv extends ReplyAddressEnv {
+export interface ReplyEmailEnv extends ReplyAddressEnv {
   RESEND_API_KEY?: string
   EMAIL_FROM?: string
   EMAIL_DELIVERY_MODE?: string

@@ -477,6 +477,14 @@ async function notifyOwner(
       template: WhatsAppTemplate
       vars: Record<string, string>
     }
+    // Correlates this owner notification back to the guest-thread submission that
+    // triggered it, so a manager quoting the resulting WhatsApp message can be routed
+    // back to the exact guest thread (see issue #293 Section C.1). Only set for
+    // submission types the `notifications.related_submission_type` CHECK constraint
+    // allows ('contact' | 'reservation' | 'experience_booking' | 'invitation') —
+    // omit for notification kinds (e.g. reviews) that have no guest thread.
+    submissionType?: 'contact' | 'reservation' | 'experience_booking' | 'invitation' | null
+    submissionId?: string | null
   }
 ) {
   await insertDashboardNotification(db, opts)
@@ -531,6 +539,8 @@ async function notifyOwner(
         toPhone: target.phone,
         template: opts.whatsapp!.template,
         vars: opts.whatsapp!.vars,
+        relatedSubmissionType: opts.submissionType ?? null,
+        relatedSubmissionId: opts.submissionId ?? null,
       })
     }))
   }
@@ -755,6 +765,8 @@ export async function notifyReservationCreated(
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
       ...opts,
+      submissionType: 'reservation',
+      submissionId: opts.reservationId,
       template: 'new_reservation',
       title: `New reservation request from ${opts.guestName}`,
       payload,
@@ -840,6 +852,8 @@ export async function notifyReservationCancelled(
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
       ...opts,
+      submissionType: 'reservation',
+      submissionId: opts.reservationId,
       template: 'reservation_cancelled',
       title: ownerCancelTitle,
       payload,
@@ -914,6 +928,8 @@ export async function notifyContactSubmitted(
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
       ...opts,
+      submissionType: 'contact',
+      submissionId: opts.contactId,
       template: 'new_contact_msg',
       title: `New website message from ${opts.guestName}`,
       payload,
@@ -1222,6 +1238,8 @@ export async function notifyExperienceBookingCreated(
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
       ...opts,
+      submissionType: 'experience_booking',
+      submissionId: opts.bookingId,
       template: 'new_reservation',
       title: `New booking request from ${opts.guestName}`,
       payload,
@@ -1306,6 +1324,8 @@ export async function notifyExperienceBookingCancelled(
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
       ...opts,
+      submissionType: 'experience_booking',
+      submissionId: opts.bookingId,
       template: 'experience_booking_cancelled',
       title: ownerCancelTitle,
       payload,
