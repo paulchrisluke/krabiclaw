@@ -2,7 +2,7 @@ import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import { resolveSeoUrl } from '~/composables/useSeoUrls'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import { useSocialMetadata } from '~/composables/useSocialMetadata'
-import { inferSocialImageMimeType, type SocialPageMetadataInput } from '~/utils/social-metadata'
+import { inferSocialImageMimeType, type SocialImageSource, type SocialPageMetadataInput, type SocialPageType } from '~/utils/social-metadata'
 
 export interface PlatformBreadcrumb {
   name: string
@@ -45,16 +45,29 @@ interface PlatformPageSeoInput {
   }
   /** Set true on the homepage to also emit Organization + WebSite nodes. */
   isHomepage?: boolean
+  /** Open Graph type for the #259 composer — distinct from `pageType`, which is the
+   * schema.org @type. Set 'article' for blog/docs detail pages. Defaults to 'website'. */
+  socialType?: SocialPageType
+  /** A real photo to composite as the generated OG card's background (blog/docs featured
+   * image). Omit for pages with no natural hero photo — falls back to the template gradient. */
+  heroImage?: SocialImageSource | null
+  /** Eyebrow/category label shown on the generated card, e.g. the doc's category or post's tag. */
+  label?: string | null
+  author?: string | null
+  /** ISO 8601 date string. Only meaningful when socialType is 'article'. */
+  publishedAt?: string | null
 }
 
 const PLATFORM_NAME = 'KrabiClaw'
 const PLATFORM_DESCRIPTION = 'The AI-powered website builder for local businesses. Build your web presence through conversation with ChatGPT.'
 
 /**
- * Shared SEO setup for static marketing pages (platform surface only).
- * Sets canonical/meta/OG/Twitter tags and emits one SSR JSON-LD @graph.
+ * Shared SEO setup for platform-surface pages (marketing pages, and — via `socialType`/
+ * `heroImage`/`author`/`publishedAt` — platform blog/docs detail pages). Sets canonical/meta/
+ * OG/Twitter tags through the shared #259 composer and emits one SSR JSON-LD @graph.
  *
- * Not for blog/docs (use useContentPageSchema) or tenant/Saya pages (use useTenantOgImage directly).
+ * Not for tenant/Saya pages (use useTenantSocialMetadata instead — different origin-resolution
+ * precedence, see useSeoUrls.ts).
  */
 export function usePlatformPageSeo(input: MaybeRefOrGetter<PlatformPageSeoInput>) {
   const config = useRuntimeConfig()
@@ -69,7 +82,7 @@ export function usePlatformPageSeo(input: MaybeRefOrGetter<PlatformPageSeoInput>
     const value = toValue(input)
     return {
       template: 'platform',
-      pageType: 'website',
+      pageType: value.socialType || 'website',
       title: value.title,
       description: value.description,
       canonicalUrl: pageUrl.value,
@@ -77,6 +90,10 @@ export function usePlatformPageSeo(input: MaybeRefOrGetter<PlatformPageSeoInput>
       ogImageOverride: value.ogImage
         ? { url: resolveSeoUrl(value.ogImage, origin), type: inferSocialImageMimeType(value.ogImage) }
         : null,
+      heroImage: value.heroImage ?? null,
+      label: value.label ?? null,
+      author: value.author ?? null,
+      publishedAt: value.publishedAt ?? null,
       indexable: value.robots ? !/noindex/i.test(value.robots) : true,
       robots: value.robots ?? null,
     }

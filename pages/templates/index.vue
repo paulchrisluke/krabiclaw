@@ -37,27 +37,30 @@
           <div class="h-1 shrink-0" style="background: linear-gradient(90deg, var(--kc-coral) 0%, var(--kc-teal) 100%);"></div>
 
           <!--
-            Intentional brand-mark placeholder, not a stand-in for missing
-            infra: the #259 OG-image pipeline (server/utils/og-image/pipeline.ts)
-            generates a title/description card for social-sharing meta tags
-            (see /templates/[slug].vue's ogImage), not a gallery-style visual
-            preview meant for in-page foreground display — there is no other
-            index/gallery page in this codebase that sources its visible card
-            art from that pipeline, and adding one here would fork it into a
-            second purpose it isn't designed for. If/when real per-template
-            screenshot assets exist, add a `previewImageUrl` field to
-            TemplateMarketingMetadata (utils/template-registry.ts) and swap
-            it in here — do not route static screenshot art through the OG
-            composer.
+            Real per-template screenshot when available (utils/template-registry.ts's
+            previewImageUrl, captured from the template's live demo site) — falls back to
+            a letter avatar otherwise. This is static screenshot art, not routed through the
+            #259 OG-image pipeline (server/utils/og-image/pipeline.ts), which generates a
+            title/description social-share card (see /templates/[slug].vue's usePlatformPageSeo
+            call), a different shape of asset than a gallery preview image.
           -->
           <div class="relative flex aspect-[16/9] items-center justify-center overflow-hidden" style="background: linear-gradient(135deg, var(--ui-bg-muted) 0%, var(--ui-bg-elevated) 100%);">
-            <div class="absolute inset-0 opacity-0 transition-opacity group-hover:opacity-100" style="background: linear-gradient(135deg, var(--kc-coral-50) 0%, var(--kc-teal-100)/30 100%);"></div>
-            <div
-              class="relative flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-bold text-white"
-              style="background: linear-gradient(135deg, var(--kc-navy) 0%, var(--kc-navy-700) 100%); box-shadow: 0 8px 24px rgba(31,37,71,0.2);"
-            >
-              {{ template.displayName.charAt(0) }}
-            </div>
+            <img
+              v-if="template.previewImageUrl"
+              :src="template.previewImageUrl"
+              :alt="`${template.displayName} template preview`"
+              loading="lazy"
+              class="absolute inset-0 size-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
+            />
+            <template v-else>
+              <div class="absolute inset-0 opacity-0 transition-opacity group-hover:opacity-100" style="background: linear-gradient(135deg, var(--kc-coral-50) 0%, var(--kc-teal-100)/30 100%);"></div>
+              <div
+                class="relative flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-bold text-white"
+                style="background: linear-gradient(135deg, var(--kc-navy) 0%, var(--kc-navy-700) 100%); box-shadow: 0 8px 24px rgba(31,37,71,0.2);"
+              >
+                {{ template.displayName.charAt(0) }}
+              </div>
+            </template>
           </div>
 
           <div class="flex flex-1 flex-col gap-4 p-6">

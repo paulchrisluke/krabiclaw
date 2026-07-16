@@ -79,7 +79,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
-const { location, photosList } = useBootstrap()
+const { location, photosList, config: bootstrapConfig } = useBootstrap()
 
 const photos = photosList
 
@@ -121,10 +121,8 @@ const lightboxItems = computed(() =>
 )
 
 
-const config = useRuntimeConfig()
-const siteUrl = config.public.siteUrl
-const currentPageUrl = useSeoUrl(() => `/locations/${slug.value}/photos`)
-const ogImage = useSharedOgImage(() => photos.value[0]?.local_url || photos.value[0]?.google_url || photos.value[0]?.thumbnail_url)
+const runtimeConfig = useRuntimeConfig()
+const siteUrl = runtimeConfig.public.siteUrl
 
 function toAbsoluteUrl(value?: string | null): string | null {
   if (!value) return null
@@ -135,20 +133,21 @@ function toAbsoluteUrl(value?: string | null): string | null {
   }
 }
 
-const seoTitle = () => `Photos · ${location.value?.title || slug.value}`
-const seoDescription = () => `${photos.value.length} photos from ${location.value?.title || slug.value} at ${siteName.value}.`
-
-useSeoMeta({
-  title: seoTitle,
-  description: seoDescription,
-  ogTitle: seoTitle,
-  ogDescription: seoDescription,
-  ogSiteName: () => siteName.value,
-  twitterTitle: seoTitle,
-  twitterDescription: seoDescription,
-  ogImage,
-  ogUrl: currentPageUrl
-})
+useTenantSocialMetadata(() => ({
+  path: `/locations/${slug.value}/photos`,
+  title: `Photos · ${location.value?.title || slug.value}`,
+  description: `${photos.value.length} photos from ${location.value?.title || slug.value} at ${siteName.value}.`,
+  location: location.value?.title || null,
+  brand: {
+    siteName: siteName.value,
+    logoUrl: bootstrapConfig.value?.logo_url || null,
+    faviconUrl: bootstrapConfig.value?.favicon_url || null,
+    primaryColor: bootstrapConfig.value?.brand_color || null,
+  },
+  heroImage: photos.value[0]?.local_url || photos.value[0]?.google_url || photos.value[0]?.thumbnail_url
+    ? { url: photos.value[0]?.local_url || photos.value[0]?.google_url || photos.value[0]?.thumbnail_url }
+    : null,
+}))
 
 useSchemaOrg([
   computed(() => ({

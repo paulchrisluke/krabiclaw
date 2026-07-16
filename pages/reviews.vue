@@ -58,7 +58,7 @@ definePageMeta({ layout: 'saya' })
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
-const { googleBusiness, locations } = useBootstrap()
+const { googleBusiness, locations, config } = useBootstrap()
 const starRatingMap = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }
 const allReviews = computed(() => googleBusiness.value?.reviews ?? [])
 const googleReviewRating = r => starRatingMap[r.starRating] ?? Number(r.starRating ?? r.rating ?? 0)
@@ -85,18 +85,18 @@ function loadMore() { visibleCount.value += PAGE_SIZE }
 
 const siteName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Site')
 
-const currentPageUrl = useSeoUrl('/reviews')
-useSeoMeta({
-  title: computed(() => `Reviews | ${siteName.value}`),
-  description: computed(() => `Guest reviews for ${siteName.value}.`),
-  ogTitle: computed(() => `Reviews | ${siteName.value}`),
-  ogDescription: computed(() => `Guest reviews for ${siteName.value}.`),
-  ogSiteName: computed(() => siteName.value),
-  twitterTitle: computed(() => `Reviews | ${siteName.value}`),
-  twitterDescription: computed(() => `Guest reviews for ${siteName.value}.`),
-  ogImage: useTenantOgImage(),
-  ogUrl: currentPageUrl
-})
+useTenantSocialMetadata(() => ({
+  path: '/reviews',
+  title: `Reviews | ${siteName.value}`,
+  description: `Guest reviews for ${siteName.value}.`,
+  label: 'Reviews',
+  brand: {
+    siteName: siteName.value,
+    logoUrl: config.value?.logo_url || null,
+    faviconUrl: config.value?.favicon_url || null,
+    primaryColor: config.value?.brand_color || null,
+  },
+}))
 
 useSchemaOrg([
   computed(() => ({

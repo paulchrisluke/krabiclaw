@@ -164,6 +164,15 @@ export interface TemplateMarketingMetadata {
    */
   demoUrl: string | null
   demoLabel: string
+  /**
+   * Root-relative path to a real screenshot of this template's live demo site,
+   * shown as the /templates index card's visual (see pages/templates/index.vue).
+   * Null falls back to a letter-avatar placeholder — do not route this through
+   * the OG-image pipeline (server/utils/og-image/pipeline.ts generates
+   * title/description social-share cards, not gallery thumbnails; see the
+   * `seo` field below for that pipeline's actual use on this template).
+   */
+  previewImageUrl: string | null
   ctaLabel: string
   ctaTo: string
   features: TemplateMarketingFeature[]
@@ -202,6 +211,7 @@ export const publicTemplateMarketing: Record<PublicTemplateSlug, TemplateMarketi
     priceNote: 'No purchase needed — start building immediately',
     schemaOffer: { price: '0', priceCurrency: 'USD' },
     demoUrl: null,
+    previewImageUrl: '/templates/saya-preview.jpg',
     demoLabel: 'View live demo',
     ctaLabel: 'Get started free',
     ctaTo: '/signup',
@@ -267,6 +277,7 @@ export const publicTemplateMarketing: Record<PublicTemplateSlug, TemplateMarketi
     priceNote: 'Approved customer showcase: North Carolina Legal Services',
     schemaOffer: null,
     demoUrl: 'https://ncls.krabiclaw.com',
+    previewImageUrl: '/templates/blawby-preview.jpg',
     demoLabel: 'View live customer site',
     ctaLabel: 'Get started',
     ctaTo: '/signup',

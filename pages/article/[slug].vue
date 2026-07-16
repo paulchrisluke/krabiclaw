@@ -118,6 +118,7 @@ const { canonicalUrl } = useTenantSocialMetadata(() => ({
   brand: {
     siteName: identity.value.brand_name || 'Professional services',
     logoUrl: identity.value.logo_url || null,
+    faviconUrl: identity.value.favicon_url || null,
   },
   heroImage: post.value.featured_image?.public_url
     ? {

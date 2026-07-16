@@ -294,30 +294,34 @@ const breadcrumbs = computed(() => [
   ...(post.value ? [{ name: post.value.title, url: postPath.value }] : []),
 ])
 
-const canonicalUrl = usePlatformSeoUrl(() => post.value ? (post.value.canonical_url || postPath.value) : '/blog')
-const ogImage = useSharedOgImage(() => postMedia.value.thumb)
 const seoTitle = computed(() => post.value?.title || 'Blog')
 const seoDescription = computed(() => post.value?.seo_description || truncateForSeo(post.value?.excerpt ?? 'Business tips and insights from KrabiClaw.', 160))
 
-useSeoMeta({
-  title: seoTitle,
-  description: seoDescription,
-  ogTitle: seoTitle,
-  ogDescription: seoDescription,
-  ogSiteName: 'KrabiClaw',
-  twitterTitle: seoTitle,
-  twitterDescription: seoDescription,
-  ogUrl: canonicalUrl,
-  ogType: 'article',
-  ogImage,
-  twitterImage: ogImage,
-})
+// useSocialMetadata directly (not usePlatformPageSeo) — this page already emits its own
+// complete schema.org @graph via useContentPageSchema below; usePlatformPageSeo would add
+// a second WebSite/WebPage graph with the same @id values, so only the OG/tag layer is
+// wanted here, not the schema-emitting half.
+const runtimeConfig = useRuntimeConfig()
+const requestURL = useRequestURL()
+const platformOrigin = computed(() => runtimeConfig.public.siteUrl || requestURL.origin)
+const { canonicalUrl } = useSocialMetadata(() => ({
+  template: 'platform' as const,
+  pageType: 'article' as const,
+  title: seoTitle.value,
+  description: seoDescription.value,
+  canonicalUrl: resolveSeoUrl(post.value ? (post.value.canonical_url || postPath.value) : '/blog', platformOrigin.value),
+  brand: { siteName: 'KrabiClaw', logoUrl: resolveSeoUrl('/krabi-claw-logo.png', platformOrigin.value), primaryColor: '#1e1b4b', secondaryColor: '#4338ca' },
+  label: post.value?.category || null,
+  author: post.value?.author_name || null,
+  publishedAt: post.value?.published_at || null,
+  heroImage: postMedia.value.thumb ? { url: postMedia.value.thumb } : null,
+  robots: post.value?.robots?.trim() || null,
+  indexable: !post.value?.robots || !/noindex/i.test(post.value.robots),
+}), platformOrigin)
 
 useHead(() => ({
-  link: [{ rel: 'canonical', href: canonicalUrl.value }],
   meta: [
     ...(post.value?.seo_keywords?.trim() ? [{ name: 'keywords', content: post.value.seo_keywords.trim() }] : []),
-    ...(post.value?.robots?.trim() ? [{ name: 'robots', content: post.value.robots.trim() }] : []),
   ],
 }))
 

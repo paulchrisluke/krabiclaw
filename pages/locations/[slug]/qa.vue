@@ -133,7 +133,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
-const { location, qaList } = useBootstrap()
+const { location, qaList, config: bootstrapConfig } = useBootstrap()
 const { formatDate } = useLocaleDate()
 
 const qa = qaList
@@ -151,23 +151,21 @@ function formatQaDate(ts: string | null) {
 }
 
 
-const config = useRuntimeConfig()
-const siteUrl = config.public.siteUrl
+const runtimeConfig = useRuntimeConfig()
+const siteUrl = runtimeConfig.public.siteUrl
 
-const seoTitle = () => `Questions and answers · ${location.value?.title || slug.value}`
-const seoDescription = () => `Questions and answers for ${location.value?.title || slug.value} at ${siteName.value}.`
-
-useSeoMeta({
-  title: seoTitle,
-  description: seoDescription,
-  ogTitle: seoTitle,
-  ogDescription: seoDescription,
-  ogSiteName: () => siteName.value,
-  twitterTitle: seoTitle,
-  twitterDescription: seoDescription,
-  ogImage: useSharedOgImage(),
-  ogUrl: useSeoUrl(() => `/locations/${slug.value}/qa`)
-})
+useTenantSocialMetadata(() => ({
+  path: `/locations/${slug.value}/qa`,
+  title: `Questions and answers · ${location.value?.title || slug.value}`,
+  description: `Questions and answers for ${location.value?.title || slug.value} at ${siteName.value}.`,
+  location: location.value?.title || null,
+  brand: {
+    siteName: siteName.value,
+    logoUrl: bootstrapConfig.value?.logo_url || null,
+    faviconUrl: bootstrapConfig.value?.favicon_url || null,
+    primaryColor: bootstrapConfig.value?.brand_color || null,
+  },
+}))
 
 useSchemaOrg([
   computed(() => ({

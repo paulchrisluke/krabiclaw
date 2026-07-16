@@ -326,6 +326,7 @@ export default defineEventHandler(async (event) => {
       brand_name: string | null;
       brand_description: string | null;
       logo_url: string | null;
+      favicon_url: string | null;
       og_image_url: string | null;
       seo_title: string | null;
       seo_description: string | null;
@@ -335,6 +336,7 @@ export default defineEventHandler(async (event) => {
       db,
       `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name,
               s.brand_description, COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
+              json_extract(s.settings, '$.favicon_url') AS favicon_url,
               ma_og.public_url AS og_image_url,
               s.seo_title, s.seo_description, s.canonical_url, s.robots
          FROM sites s
@@ -988,6 +990,7 @@ export default defineEventHandler(async (event) => {
   if (site.brand_name) config.brand_name = site.brand_name;
   if (site.brand_description) config.brand_description = site.brand_description;
   if (site.logo_url) config.logo_url = site.logo_url;
+  if (site.favicon_url) config.favicon_url = site.favicon_url;
   if (site.og_image_url) config.og_image_url = site.og_image_url;
   if (site.seo_title) config.seo_title = site.seo_title;
   if (site.seo_description) config.seo_description = site.seo_description;

@@ -486,31 +486,25 @@ const activeClosureMessage = computed(() => formatClosureMessage(activeClosure.v
 
 
 
-const config = useRuntimeConfig()
-const siteUrl = config.public.siteUrl
-const currentPageUrl = useSeoUrl(() => `/locations/${slug.value}`)
-const canonicalUrl = useSeoUrl(() => location.value?.canonical_url || `/locations/${slug.value}`)
-const ogImage = useSharedOgImage(() => location.value?.og_image_public_url || heroMedia.value.thumb)
+const runtimeConfig = useRuntimeConfig()
+const siteUrl = runtimeConfig.public.siteUrl
 
-const seoTitle = () => location.value?.seo_title || (location.value ? `${location.value.title} | Locations` : 'Location')
-const seoDescription = () => location.value?.seo_description || (location.value ? `Visit ${location.value.title}. ${formattedAddress.value}` : '')
-
-useSeoMeta({
-  title: seoTitle,
-  description: seoDescription,
-  ogTitle: seoTitle,
-  ogDescription: seoDescription,
-  ogSiteName: () => siteName.value,
-  twitterTitle: seoTitle,
-  twitterDescription: seoDescription,
-  ogImage,
-  ogUrl: currentPageUrl,
-  robots: () => location.value?.robots || undefined,
-})
-
-useHead({
-  link: [{ rel: 'canonical', href: canonicalUrl }],
-})
+useTenantSocialMetadata(() => ({
+  path: location.value?.canonical_url || `/locations/${slug.value}`,
+  title: location.value?.seo_title || (location.value ? `${location.value.title} | Locations` : 'Location'),
+  description: location.value?.seo_description || (location.value ? `Visit ${location.value.title}. ${formattedAddress.value}` : ''),
+  location: location.value?.title || null,
+  robots: location.value?.robots || null,
+  brand: {
+    siteName: siteName.value,
+    logoUrl: bootstrapConfig.value?.logo_url || null,
+    faviconUrl: bootstrapConfig.value?.favicon_url || null,
+    primaryColor: bootstrapConfig.value?.brand_color || null,
+  },
+  heroImage: location.value?.og_image_public_url || heroMedia.value.thumb
+    ? { url: location.value?.og_image_public_url || heroMedia.value.thumb }
+    : null,
+}))
 
 useSchemaOrg([
   computed(() => {

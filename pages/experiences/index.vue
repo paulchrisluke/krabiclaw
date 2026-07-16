@@ -92,7 +92,7 @@ const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 const { locale } = useI18n()
 const expCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 
-const { experiencesList, pending: bootstrapPending, getField } = useBootstrap()
+const { experiencesList, pending: bootstrapPending, getField, config } = useBootstrap()
 
 const pending = computed(() => bootstrapPending.value)
 const experiences = computed<Experience[]>(() => experiencesList.value)
@@ -113,8 +113,6 @@ function unavailabilityBadge(exp: Experience): string | null {
 const heroKicker = computed(() => getField('hero.kicker', 'Experiences') || 'Experiences')
 const heroTitle = computed(() => getField('hero.title', expCopy.value.experiencesPageTitle) || expCopy.value.experiencesPageTitle)
 const heroSubtitle = computed(() => getField('hero.subtitle', expCopy.value.experiencesPageSubtitle) || expCopy.value.experiencesPageSubtitle)
-const currentPageUrl = useSeoUrl('/experiences')
-const ogImage = useSharedOgImage(() => experiences.value[0]?.image_url)
 
 function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} min`
@@ -128,16 +126,17 @@ useBreadcrumbSchema([
   { name: 'Experiences', url: '/experiences' },
 ])
 
-useSeoMeta({
-  title: computed(() => `Experiences | ${siteName.value}`),
-  description: computed(() => expCopy.value.seoExperiencesDescription(siteName.value)),
-  ogTitle: computed(() => `Experiences | ${siteName.value}`),
-  ogDescription: computed(() => expCopy.value.seoExperiencesDescription(siteName.value)),
-  ogSiteName: computed(() => siteName.value),
-  twitterTitle: computed(() => `Experiences | ${siteName.value}`),
-  twitterDescription: computed(() => expCopy.value.seoExperiencesDescription(siteName.value)),
-  ogUrl: currentPageUrl,
-  ogType: 'website',
-  ogImage,
-})
+useTenantSocialMetadata(() => ({
+  path: '/experiences',
+  title: `Experiences | ${siteName.value}`,
+  description: expCopy.value.seoExperiencesDescription(siteName.value),
+  label: 'Experiences',
+  brand: {
+    siteName: siteName.value,
+    logoUrl: config.value?.logo_url || null,
+    faviconUrl: config.value?.favicon_url || null,
+    primaryColor: config.value?.brand_color || null,
+  },
+  heroImage: experiences.value[0]?.image_url ? { url: experiences.value[0].image_url } : null,
+}))
 </script>

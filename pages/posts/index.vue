@@ -44,7 +44,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const { locale } = useI18n()
 const postsCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 
-const { googleBusiness, locations } = useBootstrap()
+const { googleBusiness, locations, config } = useBootstrap()
 const googlePosts = computed(() => googleBusiness.value?.posts || [])
 const siteName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Site')
 
@@ -56,16 +56,16 @@ const hasMore = computed(() => visibleCount.value < googlePosts.value.length)
 const remaining = computed(() => googlePosts.value.length - visibleCount.value)
 function loadMore() { visibleCount.value += PAGE_SIZE }
 
-const currentPageUrl = useSeoUrl('/posts')
-useSeoMeta({
-  title: computed(() => `Updates | ${siteName.value}`),
-  description: computed(() => `Latest news and updates from ${siteName.value}.`),
-  ogTitle: computed(() => `Updates | ${siteName.value}`),
-  ogDescription: computed(() => `Latest news and updates from ${siteName.value}.`),
-  ogSiteName: computed(() => siteName.value),
-  twitterTitle: computed(() => `Updates | ${siteName.value}`),
-  twitterDescription: computed(() => `Latest news and updates from ${siteName.value}.`),
-  ogImage: useTenantOgImage(),
-  ogUrl: currentPageUrl
-})
+useTenantSocialMetadata(() => ({
+  path: '/posts',
+  title: `Updates | ${siteName.value}`,
+  description: `Latest news and updates from ${siteName.value}.`,
+  label: 'Updates',
+  brand: {
+    siteName: siteName.value,
+    logoUrl: config.value?.logo_url || null,
+    faviconUrl: config.value?.favicon_url || null,
+    primaryColor: config.value?.brand_color || null,
+  },
+}))
 </script>

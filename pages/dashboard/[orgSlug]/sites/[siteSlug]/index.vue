@@ -142,6 +142,17 @@
           </div>
         </div>
 
+        <!-- Site-wide content -->
+        <div class="flex flex-wrap items-center justify-between gap-3 border-y border-default py-4">
+          <div>
+            <h2 class="text-sm font-semibold text-highlighted">Site-wide content</h2>
+            <p class="mt-1 text-xs text-muted">Manage blog posts for your site.</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <UButton icon="i-lucide-file-text" color="neutral" variant="soft" :to="`${siteDashboardPath}/blog`">Blog</UButton>
+          </div>
+        </div>
+
         <!-- Locations header + new button -->
         <div class="flex items-center justify-between">
           <h2 class="text-sm font-semibold text-highlighted">Locations</h2>

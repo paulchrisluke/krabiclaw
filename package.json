@@ -52,6 +52,7 @@
     "preview": "nuxt preview",
     "postinstall": "patch-package && nuxt prepare",
     "schema:local": "wrangler d1 migrations apply DB --local",
+    "schema:verify:media-sync": "node scripts/verify-media-legacy-sync.mjs",
     "schema:remote": "wrangler d1 migrations apply DB --remote",
     "schema:staging": "wrangler d1 migrations apply DB --env staging --remote",
     "drizzle:check": "drizzle-kit check",
