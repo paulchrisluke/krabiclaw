@@ -33,14 +33,19 @@
         <div class="flex flex-col px-8 py-12 lg:px-12 max-w-lg mx-auto w-full lg:order-1 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto bg-default border-r border-default">
           <span class="self-start inline-flex items-center gap-2 text-[11px] font-bold tracking-[0.3em] uppercase text-(--kc-teal-600) bg-(--kc-teal-100) px-3.5 py-1.5 rounded-full mb-6">
             <span class="w-1.5 h-1.5 rounded-full bg-(--kc-teal) shrink-0" />
-            Team invitation
+            {{ invitedPhone ? 'Location manager access' : 'Team invitation' }}
           </span>
 
           <h1 class="text-[clamp(32px,4vw,48px)] font-extrabold leading-[1.02] tracking-tight text-default text-balance m-0">
-            Join {{ invitation.organization.name }}
+            {{ invitedPhone ? `Activate manager access for ${invitation.organization.name}` : `Join ${invitation.organization.name}` }}
           </h1>
           <p class="mt-4 text-base text-muted">
-            You’ve been invited to join as <strong class="text-default capitalize">{{ invitation.role }}</strong>.
+            <template v-if="invitedPhone">
+              You’ve been given operational access as a <strong class="text-default">location manager</strong> — notification replies and daily updates only, not full account onboarding.
+            </template>
+            <template v-else>
+              You’ve been invited to join as <strong class="text-default capitalize">{{ roleLabel }}</strong>.
+            </template>
           </p>
 
           <div class="mt-6 space-y-3">
@@ -67,7 +72,7 @@
           <div class="mt-8 space-y-3">
             <template v-if="!isAuthenticated && !sessionLoading">
               <div v-if="invitedPhone" class="rounded-xl border border-default p-4 space-y-3">
-                <p class="text-sm text-muted">Verify the invited WhatsApp number <strong class="text-default">{{ invitedPhone }}</strong> to activate access.</p>
+                <p class="text-sm text-muted">Verify the invited WhatsApp number <strong class="text-default">{{ invitedPhone }}</strong> to activate location manager access. Your assignment stays inactive until this code is confirmed.</p>
                 <button v-if="otpStep === 'send'" class="w-full py-3 px-4 rounded-[10px] font-semibold text-white bg-green-600 disabled:opacity-50" :disabled="otpLoading" @click="sendInvitationOtp">
                   {{ otpLoading ? 'Sending…' : 'Send code via WhatsApp' }}
                 </button>
@@ -182,6 +187,11 @@ definePageMeta({ layout: false })
 const route = useRoute()
 const invitationId = route.params.invitationId as string
 const preferredSiteId = computed(() => typeof route.query.siteId === 'string' ? route.query.siteId : '')
+// Preserves any destination info already on this URL (currently `siteId`,
+// and `returnTo` when a caller — e.g. a future dashboard reauth deep link —
+// sets one) across the OTP verify -> full-page-reload round trip, instead of
+// hardcoding just the one query param this page happens to read today.
+const returnTo = computed(() => typeof route.query.returnTo === 'string' ? route.query.returnTo : '')
 
 const { isAuthenticated, sessionLoading, user } = useAuth()
 
@@ -220,6 +230,7 @@ const accepted = ref(false)
 const pagePath = computed(() => {
   const url = new URL(`/accept-invitation/${invitationId}`, 'http://localhost')
   if (preferredSiteId.value) url.searchParams.set('siteId', preferredSiteId.value)
+  if (returnTo.value) url.searchParams.set('returnTo', returnTo.value)
   return `${url.pathname}${url.search}`
 })
 
@@ -228,6 +239,10 @@ const invitedPhone = computed(() => {
   const match = invitation.value?.email.match(/^phone-(\d+)@phone\.krabiclaw\.local$/i)
   return match ? `+${match[1]}` : ''
 })
+// Better Auth roles like `location_manager` are snake_case identifiers, not
+// display copy — render them as normal words instead of leaking the raw
+// underscore ("Location_manager") into invitation copy.
+const roleLabel = computed(() => (invitation.value?.role ?? 'member').replace(/_/g, ' '))
 const otpStep = ref<'send' | 'code'>('send')
 const otpCode = ref('')
 const otpLoading = ref(false)
@@ -246,12 +261,27 @@ const iframeUrl = computed(() => {
   return `https://${invitation.value.site.subdomain}.${freeSiteDomain.value}`
 })
 
+function invitationQuerySuffix(): string {
+  const params = new URLSearchParams()
+  if (preferredSiteId.value) params.set('siteId', preferredSiteId.value)
+  if (returnTo.value) params.set('returnTo', returnTo.value)
+  return params.size ? `?${params.toString()}` : ''
+}
+
 onMounted(async () => {
   try {
-    const params = new URLSearchParams()
-    if (preferredSiteId.value) params.set('siteId', preferredSiteId.value)
-    const suffix = params.size ? `?${params.toString()}` : ''
-    invitation.value = await $fetch<InvitationInfo>(`/api/invitations/${invitationId}${suffix}`)
+    const result = await $fetch<InvitationInfo | { status: 'accepted'; redirectTo: string }>(`/api/invitations/${invitationId}${invitationQuerySuffix()}`)
+    // Idempotent re-visit of an already-accepted invitation (see
+    // server/api/invitations/[invitationId].get.ts): the current session is
+    // already the accepted member, so skip straight to the destination
+    // instead of rendering the invite screen or an error.
+    if ('status' in result && result.status === 'accepted') {
+      accepted.value = true
+      loading.value = false
+      await navigateTo(result.redirectTo)
+      return
+    }
+    invitation.value = result as InvitationInfo
   } catch (err: unknown) {
     const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
     const errorMessage = err && typeof err === 'object' && 'message' in err ? (err as Record<string, string>).message : null
@@ -265,10 +295,7 @@ async function acceptInvitation() {
   accepting.value = true
   acceptError.value = null
   try {
-    const params = new URLSearchParams()
-    if (preferredSiteId.value) params.set('siteId', preferredSiteId.value)
-    const suffix = params.size ? `?${params.toString()}` : ''
-    const result = await $fetch<{ success: boolean; redirectTo: string }>(`/api/invitations/${invitationId}/accept${suffix}`, {
+    const result = await $fetch<{ success: boolean; redirectTo: string }>(`/api/invitations/${invitationId}/accept${invitationQuerySuffix()}`, {
       method: 'POST',
     })
     accepted.value = true

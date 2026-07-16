@@ -87,26 +87,85 @@
             <div
               v-for="invitation in invitations"
               :key="invitation.id"
-              class="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0"
+              class="py-4 first:pt-0 last:pb-0 space-y-3"
             >
-              <div class="min-w-0">
-                <p class="truncate font-medium text-highlighted">{{ invitation.email }}</p>
-                <p class="truncate text-sm text-muted">
-                  Invited by {{ invitation.inviterName || 'team member' }} · Expires {{ formatDate(invitation.expiresAt) }}
-                </p>
+              <div class="flex items-center justify-between gap-4">
+                <div class="min-w-0">
+                  <p class="truncate font-medium text-highlighted">
+                    {{ invitation.isPhoneInvite ? `WhatsApp · ${invitation.phoneDisplay}` : invitation.email }}
+                  </p>
+                  <p class="truncate text-sm text-muted">
+                    Invited by {{ invitation.inviterName || 'team member' }} · Expires {{ formatDate(invitation.expiresAt) }}
+                  </p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <UBadge :label="invitation.role || 'member'" color="neutral" variant="soft" class="capitalize" />
+                  <UBadge
+                    v-if="invitation.isPhoneInvite"
+                    :label="deliveryLabel(invitation.deliveryStatus)"
+                    :color="deliveryColor(invitation.deliveryStatus)"
+                    variant="soft"
+                  />
+                  <UButton
+                    v-if="!invitation.isPhoneInvite"
+                    icon="i-lucide-x"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    :loading="cancellingInviteId === invitation.id"
+                    :aria-label="`Cancel invitation for ${invitation.email}`"
+                    @click="cancelInvitation(invitation.id)"
+                  />
+                </div>
               </div>
-              <div class="flex items-center gap-2">
-                <UBadge :label="invitation.role || 'member'" color="neutral" variant="soft" class="capitalize" />
+
+              <div v-if="invitation.isPhoneInvite" class="flex flex-wrap items-center gap-2">
                 <UButton
-                  icon="i-lucide-x"
+                  label="Retry"
+                  icon="i-lucide-refresh-cw"
                   color="neutral"
-                  variant="ghost"
+                  variant="soft"
                   size="xs"
-                  :loading="cancellingInviteId === invitation.id"
-                  :aria-label="`Cancel invitation for ${invitation.email}`"
-                  @click="cancelInvitation(invitation.id)"
+                  :loading="invitationActionId === invitation.id && invitationAction === 'retry'"
+                  @click="retryInvitation(invitation.id)"
+                />
+                <UButton
+                  label="Replace number"
+                  icon="i-lucide-phone"
+                  color="neutral"
+                  variant="soft"
+                  size="xs"
+                  @click="toggleReplaceForm(invitation.id)"
+                />
+                <UButton
+                  label="Clear"
+                  icon="i-lucide-x"
+                  color="error"
+                  variant="soft"
+                  size="xs"
+                  :loading="invitationActionId === invitation.id && invitationAction === 'clear'"
+                  @click="clearInvitation(invitation.id)"
                 />
               </div>
+
+              <div v-if="replaceFormInvitationId === invitation.id" class="flex items-center gap-2">
+                <UInput v-model="replacePhone" placeholder="+66 81 234 5678" size="xs" class="max-w-56" />
+                <UButton
+                  label="Save"
+                  color="primary"
+                  size="xs"
+                  :loading="invitationActionId === invitation.id && invitationAction === 'replace'"
+                  @click="replaceInvitation(invitation.id)"
+                />
+                <UButton label="Cancel" color="neutral" variant="ghost" size="xs" @click="replaceFormInvitationId = null" />
+              </div>
+
+              <UAlert
+                v-if="invitationActionError && invitationActionId === invitation.id"
+                color="error"
+                variant="soft"
+                :description="invitationActionError"
+              />
             </div>
           </div>
 
@@ -194,6 +253,10 @@ interface InvitationRow {
   expiresAt: string
   createdAt: string
   inviterName: string | null
+  isPhoneInvite: boolean
+  phoneDisplay: string | null
+  deliveryStatus: string | null
+  deliveryError: string | null
 }
 
 const { data, pending, refresh } = await useFetch<{
@@ -218,6 +281,84 @@ const inviteSuccessTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
 const removingMemberId = ref<string | null>(null)
 const cancellingInviteId = ref<string | null>(null)
 const memberError = ref<string | null>(null)
+
+const invitationActionId = ref<string | null>(null)
+const invitationAction = ref<'retry' | 'replace' | 'clear' | null>(null)
+const invitationActionError = ref<string | null>(null)
+const replaceFormInvitationId = ref<string | null>(null)
+const replacePhone = ref('')
+
+function deliveryLabel(status: string | null): string {
+  if (status === 'sent') return 'Sent'
+  if (status === 'failed') return 'Failed'
+  return 'Sending…'
+}
+
+function deliveryColor(status: string | null): 'success' | 'error' | 'neutral' {
+  if (status === 'sent') return 'success'
+  if (status === 'failed') return 'error'
+  return 'neutral'
+}
+
+function toggleReplaceForm(invitationId: string) {
+  replaceFormInvitationId.value = replaceFormInvitationId.value === invitationId ? null : invitationId
+  replacePhone.value = ''
+  invitationActionError.value = null
+}
+
+async function retryInvitation(invitationId: string) {
+  invitationActionId.value = invitationId
+  invitationAction.value = 'retry'
+  invitationActionError.value = null
+  try {
+    await $fetch(`/api/dashboard/invitations/${invitationId}/retry`, { method: 'POST' })
+    await refresh()
+  } catch (err: unknown) {
+    const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
+    invitationActionError.value = errorData?.error ?? 'Failed to resend the invitation.'
+  } finally {
+    invitationActionId.value = null
+    invitationAction.value = null
+  }
+}
+
+async function replaceInvitation(invitationId: string) {
+  if (!replacePhone.value.trim()) return
+  invitationActionId.value = invitationId
+  invitationAction.value = 'replace'
+  invitationActionError.value = null
+  try {
+    await $fetch(`/api/dashboard/invitations/${invitationId}/replace`, {
+      method: 'POST',
+      body: { phone: replacePhone.value.trim() },
+    })
+    replaceFormInvitationId.value = null
+    replacePhone.value = ''
+    await refresh()
+  } catch (err: unknown) {
+    const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
+    invitationActionError.value = errorData?.error ?? 'Failed to replace the phone number.'
+  } finally {
+    invitationActionId.value = null
+    invitationAction.value = null
+  }
+}
+
+async function clearInvitation(invitationId: string) {
+  invitationActionId.value = invitationId
+  invitationAction.value = 'clear'
+  invitationActionError.value = null
+  try {
+    await $fetch(`/api/dashboard/invitations/${invitationId}/clear`, { method: 'POST' })
+    await refresh()
+  } catch (err: unknown) {
+    const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
+    invitationActionError.value = errorData?.error ?? 'Failed to clear this invitation.'
+  } finally {
+    invitationActionId.value = null
+    invitationAction.value = null
+  }
+}
 
 const { data: session } = await authClient.useSession(useFetch)
 const activeOrgId = computed(() => session.value?.session?.activeOrganizationId ?? null)

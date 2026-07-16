@@ -779,7 +779,7 @@ export const notifications = sqliteTable("notifications", {
 	index("notifications_site_created_at_idx").on(table.site_id, table.created_at),
 	index("notifications_target_user_created_at_idx").on(table.target_user_id, table.created_at),
 	check("notifications_whatsapp_delivery_status_check", sql`whatsapp_delivery_status IS NULL OR whatsapp_delivery_status IN ('accepted', 'sent', 'delivered', 'read', 'failed')`),
-	check("notifications_related_submission_type_check", sql`related_submission_type IS NULL OR related_submission_type IN ('contact', 'reservation', 'experience_booking')`),
+	check("notifications_related_submission_type_check", sql`related_submission_type IS NULL OR related_submission_type IN ('contact', 'reservation', 'experience_booking', 'invitation')`),
 ]);
 
 // App-owned mirror of Better Auth's `user.phoneNumberVerified`, kept as a

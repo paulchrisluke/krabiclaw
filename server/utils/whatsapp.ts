@@ -357,6 +357,13 @@ export async function sendWhatsAppNotification(
     toPhone: string            // raw phone, will be normalized
     template: WhatsAppTemplate
     vars?: Record<string, string>
+    // Correlates this send attempt back to the domain record that triggered
+    // it (e.g. 'invitation' + invitationId for dashboard_access_invitation),
+    // so failure/status is queryable per-record instead of only visible as a
+    // standalone log line. See issue #293 Section A: "a failed invitation
+    // send must remain visible as a failed/pending assignment."
+    relatedSubmissionType?: string | null
+    relatedSubmissionId?: string | null
   }
 ): Promise<SendWhatsAppResult> {
   const phoneNumberId = env.WHATSAPP_PHONE_NUMBER_ID
@@ -369,8 +376,8 @@ export async function sendWhatsAppNotification(
 
   // Insert pending row first so we always have a record even if the send fails
   await execute(db, `
-    INSERT INTO notifications (id, organization_id, site_id, location_id, channel, template, recipient, payload, status, created_at)
-    VALUES (?, ?, ?, ?, 'whatsapp', ?, ?, ?, 'pending', ?)
+    INSERT INTO notifications (id, organization_id, site_id, location_id, channel, template, recipient, payload, status, related_submission_type, related_submission_id, created_at)
+    VALUES (?, ?, ?, ?, 'whatsapp', ?, ?, ?, 'pending', ?, ?, ?)
   `, [
     notificationId,
     opts.organizationId,
@@ -379,6 +386,8 @@ export async function sendWhatsAppNotification(
     opts.template,
     normalizedPhone,
     JSON.stringify({ to: normalizedPhone, ...vars }),
+    opts.relatedSubmissionType ?? null,
+    opts.relatedSubmissionId ?? null,
     now
   ])
 

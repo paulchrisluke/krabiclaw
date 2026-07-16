@@ -2,6 +2,7 @@ import { appendResponseHeader, getHeaders } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createAuth, getAuthSession } from '~/server/utils/auth'
 import { executeBatch, queryAll, queryFirst } from '~/server/db'
+import { buildInvitationRedirectUrl, sanitizeInvitationReturnTo } from '~/server/utils/invitations'
 
 interface AcceptInvitationApi {
   acceptInvitation(_input: {
@@ -9,36 +10,6 @@ interface AcceptInvitationApi {
     headers: HeadersInit
     asResponse: true
   }): Promise<Response>
-}
-
-function buildRedirectUrl(params: {
-  orgSlug: string
-  preferredSite: {
-    id: string
-    subdomain: string | null
-    onboarding_status: string | null
-  } | null
-  fallbackSites: Array<{
-    id: string
-    subdomain: string | null
-    onboarding_status: string | null
-  }>
-}): string {
-  const orgBase = `/dashboard/${encodeURIComponent(params.orgSlug)}`
-
-  const site = params.preferredSite
-  if (site) {
-    if (site.onboarding_status !== 'active') return `${orgBase}/~/onboarding`
-    if (site.subdomain) return `${orgBase}/sites/${encodeURIComponent(site.subdomain)}`
-  }
-
-  if (params.fallbackSites.length === 1) {
-    const onlySite = params.fallbackSites[0]!
-    if (onlySite.onboarding_status !== 'active') return `${orgBase}/~/onboarding`
-    if (onlySite.subdomain) return `${orgBase}/sites/${encodeURIComponent(onlySite.subdomain)}`
-  }
-
-  return orgBase
 }
 
 export default defineEventHandler(async (event) => {
@@ -52,7 +23,9 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const preferredSiteId = typeof getQuery(event).siteId === 'string' ? String(getQuery(event).siteId).trim() : ''
+  const query = getQuery(event)
+  const preferredSiteId = typeof query.siteId === 'string' ? String(query.siteId).trim() : ''
+  const requestedReturnTo = typeof query.returnTo === 'string' ? query.returnTo : ''
 
   const invitation = await queryFirst<{
     id: string
@@ -71,6 +44,48 @@ export default defineEventHandler(async (event) => {
   `, [invitationId])
 
   if (!invitation) return jsonResponse({ error: 'Invitation not found' }, { status: 404 })
+
+  const orgSlug = invitation.organizationSlug || invitation.organizationId
+  const sanitizedReturnTo = sanitizeInvitationReturnTo(requestedReturnTo, orgSlug)
+
+  async function resolveRedirectTo(): Promise<string> {
+    if (sanitizedReturnTo) return sanitizedReturnTo
+    const orgSites = await queryAll<{
+      id: string
+      subdomain: string | null
+      onboarding_status: string | null
+    }>(db, `
+      SELECT id, subdomain, onboarding_status
+      FROM sites
+      WHERE organization_id = ?
+      ORDER BY created_at ASC
+    `, [invitation.organizationId])
+    const preferredSite = preferredSiteId
+      ? orgSites.find(site => site.id === preferredSiteId) ?? null
+      : null
+    return buildInvitationRedirectUrl({ orgSlug, preferredSite, fallbackSites: orgSites })
+  }
+
+  // Idempotent double-submit / stale-tab guard: if this invitation was already
+  // accepted (e.g. the OTP round-trip reload raced a manual "Join" click, or
+  // the manager re-opened the link) and the signed-in session is already the
+  // member it created, don't surface a raw error — hand back the same
+  // redirect a fresh acceptance would have produced.
+  if (invitation.status === 'accepted') {
+    const acceptedMember = await queryFirst<{ id: string }>(db, `
+      SELECT id FROM member WHERE organizationId = ? AND userId = ? LIMIT 1
+    `, [invitation.organizationId, session.user.id])
+    if (acceptedMember) {
+      return jsonResponse({
+        success: true,
+        alreadyAccepted: true,
+        redirectTo: await resolveRedirectTo(),
+        organizationId: invitation.organizationId,
+        role: invitation.role ?? 'member',
+      })
+    }
+    return jsonResponse({ error: `This invitation was already accepted by a different account (${invitation.email}).` }, { status: 410 })
+  }
   if (invitation.status !== 'pending') {
     return jsonResponse({ error: `Invitation is already ${invitation.status}` }, { status: 410 })
   }
@@ -149,26 +164,7 @@ export default defineEventHandler(async (event) => {
     appendResponseHeader(event, 'set-cookie', cookieValue)
   }
 
-  const orgSites = await queryAll<{
-    id: string
-    subdomain: string | null
-    onboarding_status: string | null
-  }>(db, `
-    SELECT id, subdomain, onboarding_status
-    FROM sites
-    WHERE organization_id = ?
-    ORDER BY created_at ASC
-  `, [invitation.organizationId])
-
-  const preferredSite = preferredSiteId
-    ? orgSites.find(site => site.id === preferredSiteId) ?? null
-    : null
-
-  const redirectTo = buildRedirectUrl({
-    orgSlug: invitation.organizationSlug || invitation.organizationId,
-    preferredSite,
-    fallbackSites: orgSites,
-  })
+  const redirectTo = await resolveRedirectTo()
 
   return jsonResponse({
     success: true,
