@@ -107,6 +107,7 @@ definePageMeta({ layout: 'platform', auth: false })
 
 import { authClient } from '~/lib/auth-client'
 import { FORM_INPUT_CLASS } from '~/utils/form-constants'
+import { parsePhone } from '~/utils/phone'
 
 useSeoMeta({
   robots: 'noindex, nofollow'
@@ -234,25 +235,23 @@ const otpStep = ref('phone')
 const phone = ref('')
 const code = ref('')
 
-function normalizePhone(value) {
-  return value.trim().replace(/[\s\-\(\)]/g, '')
+function normalizedLoginPhone(value) {
+  const parsed = parsePhone(value, { defaultCountry: 'TH' })
+  return parsed.valid && parsed.e164 ? parsed.e164 : null
 }
 
-const isPhoneValid = computed(() => {
-  const value = normalizePhone(phone.value)
-  if (!value) return false
-  return /^\+?[1-9]\d{1,14}$/.test(value)
-})
+const isPhoneValid = computed(() => normalizedLoginPhone(phone.value) !== null)
 
 const handleSendOtp = async () => {
-  if (!isPhoneValid.value) {
+  const normalized = normalizedLoginPhone(phone.value)
+  if (!normalized) {
     error.value = 'Please enter a valid phone number'
     return
   }
   loading.value = true
   error.value = null
   try {
-    await authClient.phoneNumber.sendOtp({ phoneNumber: normalizePhone(phone.value) })
+    await authClient.phoneNumber.sendOtp({ phoneNumber: normalized })
     otpStep.value = 'code'
   } catch (err) {
     error.value = err?.message ?? 'Failed to send code. Check your number and try again.'
@@ -263,11 +262,16 @@ const handleSendOtp = async () => {
 
 const handleVerifyOtp = async () => {
   if (code.value.length < 6) return
+  const normalized = normalizedLoginPhone(phone.value)
+  if (!normalized) {
+    error.value = 'Please enter a valid phone number'
+    return
+  }
   loading.value = true
   error.value = null
   try {
     await authClient.phoneNumber.verify({
-      phoneNumber: normalizePhone(phone.value),
+      phoneNumber: normalized,
       code: code.value.trim(),
       callbackURL: postLoginUrl.value,
     })

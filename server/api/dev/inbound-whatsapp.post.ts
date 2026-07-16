@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { findSubmissionByPhone, insertInboundSubmissionReply } from '~/server/utils/submission-messages'
-import { normalizePhone } from '~/server/utils/whatsapp'
+import { parsePhoneOrThrow } from '~/utils/phone'
 
 const enc = new TextEncoder()
 
@@ -57,7 +57,7 @@ export default defineEventHandler(async (event) => {
 
   const match = await findSubmissionByPhone(
     db,
-    normalizePhone(from),
+    parsePhoneOrThrow(from, { defaultCountry: 'TH' }),
     body.organizationId?.trim() || undefined,
     body.siteId?.trim() || undefined,
   )
@@ -74,7 +74,7 @@ export default defineEventHandler(async (event) => {
     channel: 'whatsapp',
     body: text,
     metaMessageId: messageId,
-    from: normalizePhone(from),
+    from: parsePhoneOrThrow(from, { defaultCountry: 'TH' }),
   })
 
   return jsonResponse({ received: true, match, messageId })

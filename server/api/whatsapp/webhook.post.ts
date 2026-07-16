@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { fetchWhatsAppMedia, normalizePhone, sendWhatsAppText } from '~/server/utils/whatsapp'
+import { fetchWhatsAppMedia, sendWhatsAppText } from '~/server/utils/whatsapp'
+import { parsePhoneOrThrow } from '~/utils/phone'
 import { chargeFlatCredits } from '~/server/utils/ai-credits'
 import { saveInboundMediaAsset } from '~/server/utils/chowbot-media'
 import { runChowBot } from '~/server/utils/chowbot-agent'
@@ -118,7 +119,7 @@ async function reply(
 }
 
 async function resolveUser(db: D1Database, from: string): Promise<UserRow | null> {
-  const normalized = normalizePhone(from)
+  const normalized = parsePhoneOrThrow(from, { defaultCountry: 'TH' })
   return await queryFirst<UserRow>(db, `
     SELECT id, phoneNumber, phoneNumberVerified
     FROM user
@@ -188,7 +189,7 @@ async function runChowBotAndReply(
 async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMessage): Promise<void> {
   if (await metaMessageExists(db, message.id)) return
 
-  const toPhone = normalizePhone(message.from)
+  const toPhone = parsePhoneOrThrow(message.from, { defaultCountry: 'TH' })
   const user = await resolveUser(db, message.from)
   if (!user) {
     // Not a verified owner/staff account — check whether this is a customer replying to an

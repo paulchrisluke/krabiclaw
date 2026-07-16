@@ -1,7 +1,7 @@
 
 import { createAuth } from '~/server/utils/auth'
 import { cloudflareEnv } from '~/server/utils/api-response'
-import { normalizePhone } from '~/server/utils/whatsapp'
+import { parsePhoneOrThrow } from '~/utils/phone'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import type { H3Event } from 'h3'
 
@@ -29,7 +29,7 @@ async function normalizedAuthRequest(event: H3Event): Promise<Request> {
     headers,
     body: JSON.stringify({
       ...body,
-      phoneNumber: normalizePhone(body.phoneNumber),
+      phoneNumber: parsePhoneOrThrow(body.phoneNumber, { defaultCountry: 'TH' }),
     }),
   })
 }

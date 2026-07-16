@@ -5,7 +5,7 @@ import { isDateBeforeTimezoneToday, isTimeSlotInPast } from '~/server/utils/site
 import { fmt12Hour } from '~/shared/reservation-hours'
 import { notifyExperienceBookingCreated } from '~/server/utils/notifications'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
-import { normalizePhone } from '~/server/utils/whatsapp'
+import { parsePhone } from '~/utils/phone'
 import { queryFirst } from '~/server/db'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
@@ -44,11 +44,9 @@ export default defineEventHandler(async (event) => {
   const guestEmail = cleanString(body.guest_email, 254)
   let guestPhone = cleanString(body.guest_phone, 30)
   if (guestPhone) {
-    try {
-      guestPhone = normalizePhone(guestPhone)
-    } catch {
-      return jsonResponse({ error: 'A valid phone number is required' }, { status: 400 })
-    }
+    const parsedPhone = parsePhone(guestPhone, { defaultCountry: 'TH' })
+    if (parsedPhone.valid && parsedPhone.e164) guestPhone = parsedPhone.e164
+    // else: fall back to the raw value — guest-facing field, don't hard-reject.
   }
   const bookingDate = cleanString(body.booking_date, 10)
   const timeSlot = cleanString(body.time_slot, 5)

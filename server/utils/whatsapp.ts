@@ -5,6 +5,7 @@
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { logOnlyWhatsAppMessageId, shouldSendRealWhatsApp } from './whatsapp-delivery'
 import { chargeFlatCredits } from './ai-credits'
+import { parsePhoneOrThrow } from '~/utils/phone'
 
 function maskPhone(phone: string): string {
   if (!phone || phone.length < 4) return '***';
@@ -336,15 +337,6 @@ export function buildWhatsAppTemplatePayload(template: WhatsAppTemplate, vars: R
   return TEMPLATES[template](normalizeTemplateVars(vars))
 }
 
-/** Normalize any phone number to E.164. Assumes Thailand if no country code. */
-export function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '')
-  if (digits.startsWith('0') && digits.length >= 9) return `+66${digits.slice(1)}`
-  if (digits.startsWith('66') && digits.length >= 11) return `+${digits}`
-  if (digits.length >= 10) return `+${digits}`
-  throw new Error(`Invalid phone number: ${phone}`)
-}
-
 export interface SendWhatsAppResult {
   success: boolean
   messageId?: string
@@ -372,7 +364,7 @@ export async function sendWhatsAppNotification(
 
   const notificationId = crypto.randomUUID()
   const now = new Date().toISOString()
-  const normalizedPhone = normalizePhone(opts.toPhone)
+  const normalizedPhone = parsePhoneOrThrow(opts.toPhone, { defaultCountry: 'TH' })
   const vars = normalizeTemplateVars(opts.vars ?? {})
 
   // Insert pending row first so we always have a record even if the send fails
@@ -503,7 +495,7 @@ export async function sendWhatsAppOtp(
   const accessToken = env.WHATSAPP_ACCESS_TOKEN
 
   if (!shouldSendRealWhatsApp(env)) {
-    console.log('whatsapp_delivery_log_only', { kind: 'otp', to: maskPhone(normalizePhone(toPhone)) })
+    console.log('whatsapp_delivery_log_only', { kind: 'otp', to: maskPhone(parsePhoneOrThrow(toPhone, { defaultCountry: 'TH' })) })
     return
   }
 
@@ -511,7 +503,7 @@ export async function sendWhatsAppOtp(
     throw new Error('WhatsApp env vars not configured')
   }
 
-  const normalized = normalizePhone(toPhone)
+  const normalized = parsePhoneOrThrow(toPhone, { defaultCountry: 'TH' })
   const templatePayload = TEMPLATES.otp_code({ code })
 
   const response = await fetch(`${GRAPH_BASE}/${phoneNumberId}/messages`, {
@@ -546,7 +538,7 @@ export async function sendWhatsAppText(
     const messageId = logOnlyWhatsAppMessageId('text')
     let normalized: string
     try {
-      normalized = normalizePhone(toPhone)
+      normalized = parsePhoneOrThrow(toPhone, { defaultCountry: 'TH' })
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
@@ -559,7 +551,7 @@ export async function sendWhatsAppText(
   }
 
   try {
-    const normalized = normalizePhone(toPhone)
+    const normalized = parsePhoneOrThrow(toPhone, { defaultCountry: 'TH' })
     const response = await fetch(`${GRAPH_BASE}/${phoneNumberId}/messages`, {
       method: 'POST',
       headers: {
@@ -672,7 +664,7 @@ export async function setOrgWhatsAppPhone(
     `, [organizationId, siteId])
     return
   }
-  const normalized = normalizePhone(phone)
+  const normalized = parsePhoneOrThrow(phone, { defaultCountry: 'TH' })
   const now = new Date().toISOString()
   await execute(db, `
     INSERT INTO site_config (organization_id, site_id, key, value, updated_at)

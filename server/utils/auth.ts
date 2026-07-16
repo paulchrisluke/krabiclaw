@@ -8,7 +8,8 @@ import { getHeaders } from 'h3'
 import type { H3Event } from 'h3'
 import { createDb, execute, schema } from '~/server/db'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
-import { normalizePhone, sendWhatsAppOtp } from '~/server/utils/whatsapp'
+import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
+import { parsePhoneOrThrow } from '~/utils/phone'
 import { notifyNewUserSignup } from '~/server/utils/notification-center'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
 import { validatePassword } from '~/utils/password-validation'
@@ -298,7 +299,7 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
         expiresIn: 300,
         phoneNumberValidator: async (phone) => {
           try {
-            normalizePhone(phone)
+            parsePhoneOrThrow(phone, { defaultCountry: 'TH' })
             return true
           } catch {
             return false
@@ -307,7 +308,7 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
         signUpOnVerification: {
           getTempEmail: (phone) => {
             try {
-              const digits = normalizePhone(phone).replace(/\D/g, '')
+              const digits = parsePhoneOrThrow(phone, { defaultCountry: 'TH' }).replace(/\D/g, '')
               return `phone-${digits}@phone.krabiclaw.local`
             } catch {
               return 'phone-unknown@phone.krabiclaw.local'
@@ -315,7 +316,7 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
           },
           getTempName: (phone) => {
             try {
-              return `WhatsApp ${normalizePhone(phone)}`
+              return `WhatsApp ${parsePhoneOrThrow(phone, { defaultCountry: 'TH' })}`
             } catch {
               return 'WhatsApp Unknown'
             }

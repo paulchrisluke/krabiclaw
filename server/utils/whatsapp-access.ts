@@ -1,6 +1,7 @@
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { isOperationalRole, isOrganizationWideRole, LOCATION_MANAGER_ROLE } from '~/server/utils/member-access'
-import { normalizePhone, sendWhatsAppNotification } from '~/server/utils/whatsapp'
+import { sendWhatsAppNotification } from '~/server/utils/whatsapp'
+import { parsePhoneOrThrow } from '~/utils/phone'
 
 export interface WhatsAppAccessTarget {
   organizationId: string
@@ -41,11 +42,11 @@ export async function sendWhatsAppAccessInvitation(
 }
 
 export function phoneTemporaryEmail(phone: string): string {
-  return `phone-${normalizePhone(phone).replace(/\D/g, '')}@phone.krabiclaw.local`
+  return `phone-${parsePhoneOrThrow(phone, { defaultCountry: 'TH' }).replace(/\D/g, '')}@phone.krabiclaw.local`
 }
 
 export async function ensureWhatsAppRecipientAccess(db: DbClient, target: WhatsAppAccessTarget): Promise<WhatsAppAccessResult> {
-  const normalizedPhone = normalizePhone(target.phone)
+  const normalizedPhone = parsePhoneOrThrow(target.phone, { defaultCountry: 'TH' })
   const existing = await queryFirst<{ userId: string; email: string; memberId: string | null; role: string | null }>(db, `
     SELECT u.id AS userId, u.email, m.id AS memberId, m.role
     FROM user u
