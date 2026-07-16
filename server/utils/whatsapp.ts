@@ -86,6 +86,30 @@ function cleanTemplateText(value: string | undefined, fallback: string, maxLen =
   return fb.slice(0, maxLen)
 }
 
+// Meta Cloud API delivery-status ordering (webhook `value.statuses[]`, see
+// server/api/whatsapp/webhook.post.ts). Statuses are not guaranteed to arrive
+// in order, so a later webhook call for the same provider message ID must
+// never regress an already-observed later stage. `failed` is terminal: once
+// recorded, nothing (including a late-arriving success) overwrites it, and it
+// is itself never allowed to clobber an already-recorded `delivered`/`read` —
+// the raw error should still be captured (see caller), just not treated as
+// the current delivery state.
+const WHATSAPP_DELIVERY_STATUS_RANK: Record<string, number> = {
+  accepted: 1,
+  sent: 2,
+  delivered: 3,
+  read: 4,
+}
+
+export function compareWhatsAppDeliveryStatus(current: string | null, incoming: string): boolean {
+  if (!current) return true
+  if (current === 'failed') return incoming === 'failed'
+  if (incoming === 'failed') return current !== 'delivered' && current !== 'read'
+  const currentRank = WHATSAPP_DELIVERY_STATUS_RANK[current] ?? 0
+  const incomingRank = WHATSAPP_DELIVERY_STATUS_RANK[incoming] ?? 0
+  return incomingRank > currentRank
+}
+
 // Dynamic URL buttons in approved Meta templates are declared as a fixed prefix +
 // single {{1}} variable (e.g. "https://krabiclaw.com/dashboard/{{1}}"), so callers
 // that already built a full dashboard URL only need the suffix after that prefix.

@@ -1,5 +1,5 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { fetchWhatsAppMedia, sendWhatsAppText } from '~/server/utils/whatsapp'
+import { compareWhatsAppDeliveryStatus, fetchWhatsAppMedia, sendWhatsAppText } from '~/server/utils/whatsapp'
 import { parsePhoneOrThrow } from '~/utils/phone'
 import { chargeFlatCredits } from '~/server/utils/ai-credits'
 import { saveInboundMediaAsset } from '~/server/utils/chowbot-media'
@@ -16,7 +16,7 @@ import {
   upsertChannelState,
   type ChowBotConversation,
 } from '~/server/utils/chowbot-conversations'
-import { queryFirst } from '~/server/db'
+import { execute, queryFirst } from '~/server/db'
 import { ensureGuestThread, getGuestThreadSource } from '~/server/utils/guest-threads'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 import { findSubmissionByPhone, insertInboundSubmissionReply } from '~/server/utils/submission-messages'
@@ -32,12 +32,27 @@ interface WhatsAppMessage {
   document?: { id?: string; mime_type?: string; filename?: string; caption?: string }
 }
 
+interface WhatsAppStatusError {
+  code?: number
+  title?: string
+  message?: string
+  error_data?: { details?: string }
+}
+
+interface WhatsAppStatus {
+  id?: string
+  status?: string
+  timestamp?: string
+  recipient_id?: string
+  errors?: WhatsAppStatusError[]
+}
+
 interface WhatsAppPayload {
   entry?: Array<{
     changes?: Array<{
       value?: {
         messages?: WhatsAppMessage[]
-        statuses?: Array<{ id?: string; status?: string }>
+        statuses?: WhatsAppStatus[]
       }
     }>
   }>
@@ -60,6 +75,13 @@ function inboundMessages(payload: WhatsAppPayload): WhatsAppMessage[] {
     .flatMap((entry) => entry.changes ?? [])
     .flatMap((change) => change.value?.messages ?? [])
     .filter((message) => Boolean(message.id && message.from))
+}
+
+function inboundStatuses(payload: WhatsAppPayload): WhatsAppStatus[] {
+  return (payload.entry ?? [])
+    .flatMap((entry) => entry.changes ?? [])
+    .flatMap((change) => change.value?.statuses ?? [])
+    .filter((status) => Boolean(status.id && status.status))
 }
 
 function messageText(message: WhatsAppMessage): string {
@@ -420,6 +442,59 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
   }
 }
 
+function formatStatusError(errors: WhatsAppStatusError[] | undefined): string | null {
+  if (!errors?.length) return null
+  try {
+    return JSON.stringify(errors)
+  } catch {
+    return null
+  }
+}
+
+// Meta status webhooks (value.statuses[]) reference outbound messages by
+// provider_message_id, not by anything tied to a manager/session — a failed
+// or missing lookup here must never touch member/scope/OTP state (see
+// server/utils/whatsapp-access.ts, untouched by this function).
+async function handleStatus(db: D1Database, status: WhatsAppStatus): Promise<void> {
+  const providerMessageId = status.id
+  const incomingStatus = status.status
+  if (!providerMessageId || !incomingStatus) return
+
+  const notification = await queryFirst<{ id: string; whatsapp_delivery_status: string | null }>(db, `
+    SELECT id, whatsapp_delivery_status
+    FROM notifications
+    WHERE provider_message_id = ?
+    LIMIT 1
+  `, [providerMessageId])
+  // No matching notification — either a message this app didn't send, or one
+  // that's since been pruned. Expected and silent, not an error.
+  if (!notification) return
+
+  const shouldAdvanceStatus = compareWhatsAppDeliveryStatus(notification.whatsapp_delivery_status, incomingStatus)
+  const errorText = formatStatusError(status.errors)
+
+  if (shouldAdvanceStatus) {
+    await execute(db, `
+      UPDATE notifications
+      SET whatsapp_delivery_status = ?, whatsapp_delivery_error = ?
+      WHERE id = ?
+    `, [incomingStatus, errorText, notification.id])
+    return
+  }
+
+  // A `failed` event arrived after a later success stage was already
+  // recorded (or a same/earlier-stage replay) — never regress
+  // whatsapp_delivery_status, but still persist the raw provider error so a
+  // failure is never silently lost.
+  if (errorText) {
+    await execute(db, `
+      UPDATE notifications
+      SET whatsapp_delivery_error = ?
+      WHERE id = ?
+    `, [errorText, notification.id])
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
@@ -456,9 +531,13 @@ export default defineEventHandler(async (event) => {
   let payload: WhatsAppPayload = {}
   try { payload = rawBody ? JSON.parse(rawBody) : {} } catch { payload = {} }
   const messages = inboundMessages(payload)
+  const statuses = inboundStatuses(payload)
 
   for (const message of messages) {
     await handleMessage(db, env, message)
+  }
+  for (const status of statuses) {
+    await handleStatus(db, status)
   }
 
   return jsonResponse({ success: true })
