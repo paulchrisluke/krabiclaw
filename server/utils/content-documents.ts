@@ -396,7 +396,9 @@ export async function syncContentDocumentFromMarkdown(
     label: opts.label,
     publish: opts.publish,
   })
-  return { document, ...revision }
+  const currentDocument = await getContentDocumentById(db, document.id)
+  if (!currentDocument) throw createError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
+  return { document: currentDocument, ...revision }
 }
 
 export async function syncContentDocumentFromBlocks(
@@ -423,7 +425,9 @@ export async function syncContentDocumentFromBlocks(
     label: opts.label,
     publish: opts.publish,
   })
-  return { document, ...revision }
+  const currentDocument = await getContentDocumentById(db, document.id)
+  if (!currentDocument) throw createError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
+  return { document: currentDocument, ...revision }
 }
 
 export async function publishCurrentContentRevision(db: D1Database, ownerType: ContentDocumentOwnerType, ownerId: string) {

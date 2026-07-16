@@ -15,6 +15,7 @@ type Store = {
   blogPosts: Row[]
   platformDocs: Row[]
   beforeBatch?: (() => void) | null
+  documentWriteTimestamp?: string
 }
 
 function createStore(): Store {
@@ -74,14 +75,14 @@ async function execute(db: Store, query: string, params: unknown[] = []) {
   if (query.startsWith('UPDATE content_documents SET draft_revision_id = ?, published_revision_id = ?')) {
     const [draft_revision_id, published_revision_id, updated_at, id] = params
     const document = db.contentDocuments.find(row => row.id === id)
-    if (document) Object.assign(document, { draft_revision_id, published_revision_id, updated_at })
+    if (document) Object.assign(document, { draft_revision_id, published_revision_id, updated_at: db.documentWriteTimestamp ?? updated_at })
     return { meta: { changes: document ? 1 : 0 } }
   }
 
   if (query.startsWith('UPDATE content_documents SET draft_revision_id = ?')) {
     const [draft_revision_id, updated_at, id] = params
     const document = db.contentDocuments.find(row => row.id === id)
-    if (document) Object.assign(document, { draft_revision_id, updated_at })
+    if (document) Object.assign(document, { draft_revision_id, updated_at: db.documentWriteTimestamp ?? updated_at })
     return { meta: { changes: document ? 1 : 0 } }
   }
 
@@ -179,6 +180,7 @@ const {
 
 test('syncContentDocumentFromMarkdown creates blocks and a published revision', async () => {
   const db = createStore()
+  db.documentWriteTimestamp = 'committed-document-token'
   const d1 = db as unknown as D1Database
   const result = await syncContentDocumentFromMarkdown(d1, {
     ownerType: 'platform_blog',
@@ -196,6 +198,9 @@ test('syncContentDocumentFromMarkdown creates blocks and a published revision', 
   assert.deepEqual(result.blocks.map(block => block.type), ['heading', 'markdown', 'heading', 'markdown'])
   assert.equal(document.draft_revision_id, result.revision_id)
   assert.equal(document.published_revision_id, result.revision_id)
+  assert.equal(result.document.updated_at, 'committed-document-token')
+  assert.equal(result.document.draft_revision_id, result.revision_id)
+  assert.equal(result.document.published_revision_id, result.revision_id)
 })
 
 test('divider blocks serialize as thematic breaks without disturbing structured blocks', async () => {
@@ -288,13 +293,18 @@ test('legacy structured backfill replaces placeholders in place and reports dupl
 
 test('whole-document replacement rejects a stale token after every prior block id was replaced', async () => {
   const db = createStore()
+  db.documentWriteTimestamp = 'initial-document-token'
   const d1 = db as unknown as D1Database
   const initial = await syncContentDocumentFromMarkdown(d1, {
     ownerType: 'platform_blog', ownerId: 'post-race', bodyMarkdown: 'Original',
   })
   const token = initial.document.updated_at
+  assert.equal(token, 'initial-document-token')
+  const revisionCount = db.contentRevisions.length
+  let reachedBatch = false
 
   db.beforeBatch = () => {
+    reachedBatch = true
     const document = db.contentDocuments[0]!
     document.updated_at = 'newer-document-token'
     db.contentBlocks = [{
@@ -308,8 +318,12 @@ test('whole-document replacement rejects a stale token after every prior block i
     () => replaceContentDocumentBlocks(d1, 'platform_blog', 'post-race', [{ type: 'markdown', data: { markdown: 'Stale writer' } }], { expected_document_updated_at: token }),
     (error: unknown) => typeof error === 'object' && error !== null && (error as { statusCode?: number }).statusCode === 409,
   )
+  assert.equal(reachedBatch, true)
   assert.equal(db.contentDocuments[0]?.updated_at, 'newer-document-token')
-  assert.equal(db.contentBlocks.some(block => String(block.data_json).includes('Stale writer')), false)
+  assert.equal(db.contentBlocks.length, 1)
+  assert.equal(db.contentBlocks[0]?.id, 'replacement-id')
+  assert.match(String(db.contentBlocks[0]?.data_json), /Concurrent replacement/)
+  assert.equal(db.contentRevisions.length, revisionCount)
 })
 
 test('published-snapshot backfill preserves a distinct unpublished draft', async () => {
