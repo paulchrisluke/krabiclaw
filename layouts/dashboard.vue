@@ -688,8 +688,14 @@ onMounted(async () => {
 })
 
 async function handleSignOut() {
+  // Preserve the current path across sign-out/sign-back-in like
+  // middleware/account.ts and middleware/dashboard.global.ts already do for
+  // session-expiry redirects, so a manager who explicitly logs out from a
+  // notification deep link lands back on the same thread after signing in
+  // again rather than the generic dashboard root.
+  const redirect = route.fullPath
   await signOut()
-  await navigateTo('/login')
+  await navigateTo({ path: '/login', query: { redirect } })
 }
 
 async function stopImpersonating() {

@@ -243,10 +243,15 @@ const invitedPhone = computed(() => {
 // display copy — render them as normal words instead of leaking the raw
 // underscore ("Location_manager") into invitation copy.
 const roleLabel = computed(() => (invitation.value?.role ?? 'member').replace(/_/g, ' '))
+// Shared with pages/login.vue's dashboard-reauth WhatsApp OTP branch — see
+// composables/useWhatsAppOtpLogin.ts. This page's phone is fixed (the
+// invited number), unlike login.vue's user-entered one, but the send/verify
+// round-trip against Better Auth's phone plugin is identical.
+const whatsAppOtp = useWhatsAppOtpLogin()
 const otpStep = ref<'send' | 'code'>('send')
 const otpCode = ref('')
-const otpLoading = ref(false)
-const otpError = ref<string | null>(null)
+const otpLoading = whatsAppOtp.loading
+const otpError = whatsAppOtp.error
 
 const config = useRuntimeConfig()
 const freeSiteDomain = computed(() => (config.public.freeSiteDomain as string).replace(/^https?:\/\//, ''))
@@ -318,35 +323,18 @@ async function continueWithGoogle() {
 
 async function sendInvitationOtp() {
   if (!invitedPhone.value) return
-  otpLoading.value = true
-  otpError.value = null
-  try {
-    const { authClient } = await import('~/lib/auth-client')
-    const result = await authClient.phoneNumber.sendOtp({ phoneNumber: invitedPhone.value })
-    if (result.error) throw new Error(result.error.message || 'Failed to send code')
-    otpStep.value = 'code'
-  } catch (error) {
-    otpError.value = error instanceof Error ? error.message : 'Failed to send code'
-  } finally {
-    otpLoading.value = false
-  }
+  const result = await whatsAppOtp.sendOtp(invitedPhone.value)
+  if (result.ok) otpStep.value = 'code'
 }
 
 async function verifyInvitationOtp() {
   if (!invitedPhone.value || otpCode.value.length !== 6) return
-  otpLoading.value = true
-  otpError.value = null
-  try {
-    const { authClient } = await import('~/lib/auth-client')
-    const result = await authClient.phoneNumber.verify({ phoneNumber: invitedPhone.value, code: otpCode.value.trim() })
-    if (result.error) throw new Error(result.error.message || 'Invalid or expired code')
+  const verified = await whatsAppOtp.verifyOtp(invitedPhone.value, otpCode.value)
+  if (verified) {
     window.location.href = pagePath.value
-  } catch (error) {
-    otpError.value = error instanceof Error ? error.message : 'Invalid or expired code'
-    otpCode.value = ''
-  } finally {
-    otpLoading.value = false
+    return
   }
+  otpCode.value = ''
 }
 
 async function switchAccount() {

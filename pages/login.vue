@@ -21,10 +21,14 @@
 
           <div class="space-y-3">
             <!-- Google -->
-            <PlatformButton variant="outline" size="lg" block :loading="loading" @click="handleGoogleSignIn">
+            <PlatformButton v-if="!isWhatsAppMode" variant="outline" size="lg" block :loading="loading" @click="handleGoogleSignIn">
               <PlatformGoogleIcon class="w-5 h-5" />
               Continue with Google
             </PlatformButton>
+
+            <p v-if="isWhatsAppMode" class="text-sm text-muted">
+              Verify your WhatsApp number to continue to your dashboard.
+            </p>
 
             <!-- WhatsApp OTP — Step 1 -->
             <PlatformButton v-if="otpStep === 'phone'" variant="outline" size="lg" block @click="otpStep = 'number'">
@@ -63,39 +67,41 @@
               </PlatformButton>
             </div>
 
-            <!-- Divider -->
-            <div class="flex items-center gap-3 py-1">
-              <div class="flex-1 h-px bg-default" />
-              <span class="text-[12px] text-dimmed uppercase tracking-[0.18em]">or continue with email</span>
-              <div class="flex-1 h-px bg-default" />
-            </div>
+            <template v-if="!isWhatsAppMode">
+              <!-- Divider -->
+              <div class="flex items-center gap-3 py-1">
+                <div class="flex-1 h-px bg-default" />
+                <span class="text-[12px] text-dimmed uppercase tracking-[0.18em]">or continue with email</span>
+                <div class="flex-1 h-px bg-default" />
+              </div>
 
-            <form class="space-y-3" @submit.prevent="handleEmailSignIn">
-              <SayaFormField v-slot="{ id }" label="Email" name="login-email">
-                <input :id="id" v-model="emailForm.email" type="email" placeholder="you@example.com" :disabled="loading" autocomplete="email" :class="inputClass" />
-              </SayaFormField>
-              <SayaFormField v-slot="{ id }" label="Password" name="login-password">
-                <input :id="id" v-model="emailForm.password" type="password" placeholder="••••••••" :disabled="loading" autocomplete="current-password" :class="inputClass" />
-              </SayaFormField>
-              <div class="flex items-center justify-between gap-3 text-sm">
-                <NuxtLink to="/forgot-password" class="text-primary font-medium hover:underline no-underline">
-                  Forgot password?
-                </NuxtLink>
-                <PlatformButton type="submit" :loading="loading">
-                  Sign in with email
+              <form class="space-y-3" @submit.prevent="handleEmailSignIn">
+                <SayaFormField v-slot="{ id }" label="Email" name="login-email">
+                  <input :id="id" v-model="emailForm.email" type="email" placeholder="you@example.com" :disabled="loading" autocomplete="email" :class="inputClass" />
+                </SayaFormField>
+                <SayaFormField v-slot="{ id }" label="Password" name="login-password">
+                  <input :id="id" v-model="emailForm.password" type="password" placeholder="••••••••" :disabled="loading" autocomplete="current-password" :class="inputClass" />
+                </SayaFormField>
+                <div class="flex items-center justify-between gap-3 text-sm">
+                  <NuxtLink to="/forgot-password" class="text-primary font-medium hover:underline no-underline">
+                    Forgot password?
+                  </NuxtLink>
+                  <PlatformButton type="submit" :loading="loading">
+                    Sign in with email
+                  </PlatformButton>
+                </div>
+              </form>
+
+              <div v-if="showResendVerification" class="rounded-xl border border-default/60 bg-elevated/60 p-3 space-y-2">
+                <p class="text-sm text-muted">Need to verify your email before signing in?</p>
+                <SayaFormField v-slot="{ id }" label="Email address" name="verification-email">
+                  <input :id="id" v-model="verificationEmail" type="email" placeholder="Enter your account email" :disabled="loading || resendingVerification" :class="inputClass" />
+                </SayaFormField>
+                <PlatformButton variant="outline" :loading="resendingVerification" :disabled="loading" block @click="handleResendVerification">
+                  Resend verification
                 </PlatformButton>
               </div>
-            </form>
-
-            <div v-if="showResendVerification" class="rounded-xl border border-default/60 bg-elevated/60 p-3 space-y-2">
-              <p class="text-sm text-muted">Need to verify your email before signing in?</p>
-              <SayaFormField v-slot="{ id }" label="Email address" name="verification-email">
-                <input :id="id" v-model="verificationEmail" type="email" placeholder="Enter your account email" :disabled="loading || resendingVerification" :class="inputClass" />
-              </SayaFormField>
-              <PlatformButton variant="outline" :loading="resendingVerification" :disabled="loading" block @click="handleResendVerification">
-                Resend verification
-              </PlatformButton>
-            </div>
+            </template>
           </div>
         </div>
       </div>
@@ -107,7 +113,7 @@ definePageMeta({ layout: 'platform', auth: false })
 
 import { authClient } from '~/lib/auth-client'
 import { FORM_INPUT_CLASS } from '~/utils/form-constants'
-import { parsePhone } from '~/utils/phone'
+import { useWhatsAppOtpLogin } from '~/composables/useWhatsAppOtpLogin'
 
 useSeoMeta({
   robots: 'noindex, nofollow'
@@ -117,6 +123,11 @@ const inputClass = FORM_INPUT_CLASS
 
 const route = useRoute()
 const isOAuthFlow = computed(() => !!route.query.client_id)
+// Forces the focused WhatsApp-OTP branch (no Google/email options) when this
+// page is reached from middleware/dashboard.global.ts's reauth redirect for
+// the WhatsApp-notification inbox deep link (issue #293, Section B) — "do not
+// require email magic links or the general onboarding flow" for that path.
+const isWhatsAppMode = computed(() => route.query.mode === 'whatsapp')
 const postLoginUrl = computed(() => {
   const redirect = route.query.redirect
   return typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//') && !redirect.includes('\\')
@@ -231,56 +242,41 @@ const handleResendVerification = async () => {
   }
 }
 
-const otpStep = ref('phone')
+// Shared with pages/accept-invitation/[invitationId].vue's phone-invite OTP
+// branch — see composables/useWhatsAppOtpLogin.ts.
+const whatsAppOtp = useWhatsAppOtpLogin({ defaultCountry: 'TH' })
+
+// mode=whatsapp skips the "Continue with WhatsApp" button and opens straight
+// to phone entry, since that's the only option offered in this mode.
+const otpStep = ref(isWhatsAppMode.value ? 'number' : 'phone')
 const phone = ref('')
 const code = ref('')
 
-function normalizedLoginPhone(value) {
-  const parsed = parsePhone(value, { defaultCountry: 'TH' })
-  return parsed.valid && parsed.e164 ? parsed.e164 : null
-}
-
-const isPhoneValid = computed(() => normalizedLoginPhone(phone.value) !== null)
+const isPhoneValid = computed(() => whatsAppOtp.normalizePhone(phone.value) !== null)
 
 const handleSendOtp = async () => {
-  const normalized = normalizedLoginPhone(phone.value)
-  if (!normalized) {
-    error.value = 'Please enter a valid phone number'
-    return
-  }
   loading.value = true
   error.value = null
-  try {
-    await authClient.phoneNumber.sendOtp({ phoneNumber: normalized })
-    otpStep.value = 'code'
-  } catch (err) {
-    error.value = err?.message ?? 'Failed to send code. Check your number and try again.'
-  } finally {
-    loading.value = false
+  const result = await whatsAppOtp.sendOtp(phone.value)
+  loading.value = false
+  if (!result.ok) {
+    error.value = whatsAppOtp.error.value
+    return
   }
+  otpStep.value = 'code'
 }
 
 const handleVerifyOtp = async () => {
   if (code.value.length < 6) return
-  const normalized = normalizedLoginPhone(phone.value)
-  if (!normalized) {
-    error.value = 'Please enter a valid phone number'
-    return
-  }
   loading.value = true
   error.value = null
-  try {
-    await authClient.phoneNumber.verify({
-      phoneNumber: normalized,
-      code: code.value.trim(),
-      callbackURL: postLoginUrl.value,
-    })
-    window.location.href = postLoginUrl.value
-  } catch (err) {
-    error.value = err?.message ?? 'Invalid or expired code. Please try again.'
+  const verified = await whatsAppOtp.verifyOtp(phone.value, code.value, postLoginUrl.value)
+  loading.value = false
+  if (!verified) {
+    error.value = whatsAppOtp.error.value
     code.value = ''
-  } finally {
-    loading.value = false
+    return
   }
+  window.location.href = postLoginUrl.value
 }
 </script>
