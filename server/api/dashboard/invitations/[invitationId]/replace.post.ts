@@ -91,24 +91,49 @@ export default defineEventHandler(async (event) => {
 
   // Old invitation is now superseded — cancel it via Better Auth (keeps its
   // own status/permission invariants) then clean up its now-obsolete scopes.
-  // A failure here must not be reported as the whole replace having failed:
-  // the new invitation already exists and is the one that matters going
-  // forward, so this is best-effort cleanup, not part of the success path.
-  try {
-    const auth = createAuth(env)
-    const cancelApi = auth.api as unknown as CancelInvitationApi
-    const response = await cancelApi.cancelInvitation({
-      body: { invitationId },
-      headers: getHeaders(event) as HeadersInit,
-      asResponse: true,
-    })
-    if (response.ok) {
+  // Unlike a true best-effort cleanup, a failure here must NOT be reported as
+  // full success: the old invitation would remain usable, so a caller could
+  // end up with both the old and new phone numbers active simultaneously.
+  // We retry the cancellation once (transient network/API blips are the most
+  // likely failure mode), and if it still fails, report an explicit partial
+  // result rather than `{ success: true }` — the new invitation already
+  // exists and is not rolled back (that risks destroying the only working
+  // path if the compensating cancel also fails), but the caller must know to
+  // retry clearing/cancelling the old invitation.
+  const auth = createAuth(env)
+  const cancelApi = auth.api as unknown as CancelInvitationApi
+
+  const cancelOldInvitation = async (): Promise<boolean> => {
+    try {
+      const response = await cancelApi.cancelInvitation({
+        body: { invitationId },
+        headers: getHeaders(event) as HeadersInit,
+        asResponse: true,
+      })
+      if (!response.ok) {
+        console.warn('whatsapp_invitation_replace_cancel_old_failed', { invitationId, status: response.status })
+        return false
+      }
       await execute(db, `DELETE FROM invitation_access_scope WHERE invitation_id = ?`, [invitationId])
-    } else {
-      console.warn('whatsapp_invitation_replace_cancel_old_failed', { invitationId, status: response.status })
+      return true
+    } catch (error) {
+      console.warn('whatsapp_invitation_replace_cancel_old_failed', { invitationId, error: error instanceof Error ? error.message : String(error) })
+      return false
     }
-  } catch (error) {
-    console.warn('whatsapp_invitation_replace_cancel_old_failed', { invitationId, error: error instanceof Error ? error.message : String(error) })
+  }
+
+  let cancelledOld = await cancelOldInvitation()
+  if (!cancelledOld) cancelledOld = await cancelOldInvitation()
+
+  if (!cancelledOld) {
+    console.error('whatsapp_invitation_replace_old_still_active', { invitationId, newInvitationId })
+    return jsonResponse({
+      success: false,
+      invitationId: newInvitationId,
+      oldInvitationId: invitationId,
+      oldInvitationActive: true,
+      error: 'The new phone number was provisioned, but the previous invitation could not be cancelled and is still active. Please retry clearing it.',
+    }, { status: 502 })
   }
 
   return jsonResponse({ success: true, invitationId: newInvitationId })

@@ -4,24 +4,12 @@
 // can idempotently resolve the same "where does this invite land" answer
 // instead of duplicating the logic (see issue #293, Section A).
 
-// Matches the deterministic temporary email Better Auth's phoneNumber plugin
-// assigns to WhatsApp-activated managers (server/utils/auth.ts's
-// signUpOnVerification.getTempEmail) and phoneTemporaryEmail() in
-// server/utils/whatsapp-access.ts. Kept here too so invitation-flow code
-// doesn't need to import the WhatsApp access module just to recognize the
-// pattern.
-const PHONE_INVITE_EMAIL_PATTERN = /^phone-(\d+)@phone\.krabiclaw\.local$/i
-
-/** True when an invitation's email is a WhatsApp/phone-activated manager invite, not a normal email invite. */
-export function isPhoneInvitationEmail(email: string): boolean {
-  return PHONE_INVITE_EMAIL_PATTERN.test(email)
-}
-
-/** Recovers the E.164 phone digits encoded in a phone-invite's temporary email, or null if it isn't one. */
-export function phoneDigitsFromInvitationEmail(email: string): string | null {
-  const match = email.match(PHONE_INVITE_EMAIL_PATTERN)
-  return match ? match[1]! : null
-}
+// The phone-invite temporary-email format (generation via phoneTemporaryEmail
+// and parsing via isPhoneInvitationEmail/phoneDigitsFromInvitationEmail) is
+// owned by server/utils/whatsapp-access.ts so the format string and its
+// regex can't drift apart. Re-exported here for backward compat since this
+// invitation-flow module historically owned the parsing half.
+export { isPhoneInvitationEmail, phoneDigitsFromInvitationEmail } from '~/server/utils/whatsapp-access'
 
 export interface InvitationRedirectSite {
   id: string
@@ -70,8 +58,24 @@ export function sanitizeInvitationReturnTo(returnTo: unknown, orgSlug: string): 
   // Reject anything that could be reinterpreted as a full URL.
   if (/^\/[a-z][a-z0-9+.-]*:/i.test(returnTo)) return null
 
+  // A naive string-prefix check against orgBase accepts dot-segment paths
+  // (e.g. "/dashboard/org-a/../org-b/settings") and percent-encoded
+  // variants ("%2e%2e") that a browser/router resolves to a path outside
+  // this organization after normalization. Parse against a fixed dummy
+  // origin so the URL parser collapses "." / ".." segments and decodes
+  // percent-encoding the same way navigation eventually would, then
+  // validate the *normalized* pathname — not the raw input string.
+  let normalizedPathname: string
+  try {
+    const parsed = new URL(returnTo, 'https://invitation-return-to.invalid')
+    if (parsed.origin !== 'https://invitation-return-to.invalid') return null
+    normalizedPathname = parsed.pathname
+  } catch {
+    return null
+  }
+
   const orgBase = `/dashboard/${encodeURIComponent(orgSlug)}`
-  if (returnTo !== orgBase && !returnTo.startsWith(`${orgBase}/`)) return null
+  if (normalizedPathname !== orgBase && !normalizedPathname.startsWith(`${orgBase}/`)) return null
 
   return returnTo
 }

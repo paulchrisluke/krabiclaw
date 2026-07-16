@@ -31,6 +31,12 @@ test('sanitizeInvitationReturnTo only accepts a same-org, root-relative dashboar
   assert.equal(sanitizeInvitationReturnTo('/dashboard/pottery-house\\@evil.com', 'pottery-house'), null)
   assert.equal(sanitizeInvitationReturnTo(undefined, 'pottery-house'), null)
   assert.equal(sanitizeInvitationReturnTo('', 'pottery-house'), null)
+  // Dot-segment traversal that resolves outside the invited organization
+  // after normalization, even though the raw string starts with orgBase.
+  assert.equal(sanitizeInvitationReturnTo('/dashboard/pottery-house/../other-org/settings', 'pottery-house'), null)
+  // Percent-encoded traversal ("%2e%2e" decodes to "..") must be normalized
+  // before the same-org check, not evaluated as a literal string prefix.
+  assert.equal(sanitizeInvitationReturnTo('/dashboard/pottery-house/%2e%2e/other-org/settings', 'pottery-house'), null)
 })
 
 test('buildInvitationRedirectUrl sends non-active sites through onboarding', () => {
