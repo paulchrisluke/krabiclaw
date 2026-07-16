@@ -254,6 +254,7 @@ interface QuotedNotificationMatch {
   threadId: string
   siteId: string
   organizationId: string
+  locationId: string | null
   guestEmail: string
 }
 
@@ -294,7 +295,7 @@ async function resolveQuotedNotification(
   const thread = await getGuestThreadBySubmission(db, notification.related_submission_type, notification.related_submission_id)
   if (!thread || !thread.guest_email) return null
 
-  return { threadId: thread.id, siteId: thread.site_id, organizationId: thread.organization_id, guestEmail: thread.guest_email }
+  return { threadId: thread.id, siteId: thread.site_id, organizationId: thread.organization_id, locationId: thread.location_id, guestEmail: thread.guest_email }
 }
 
 // Tier 3 candidate list: recent (24h) guest-related operational notifications scoped to
@@ -437,6 +438,7 @@ async function routeManagerWhatsAppMessage(
           threadId: match.threadId,
           siteId: match.siteId,
           organizationId: match.organizationId,
+          locationId: match.locationId,
           replyBody: trimmedText,
           guestEmailMasked,
         }
@@ -483,7 +485,7 @@ async function routeManagerWhatsAppMessage(
         phone: opts.toPhone,
         organizationId: pendingState.organizationId,
         siteId: pendingState.siteId,
-        locationId: null,
+        locationId: pendingState.locationId,
       })
       if (!authorized) {
         await clearPending()
@@ -534,7 +536,7 @@ async function routeManagerWhatsAppMessage(
         return { handled: true }
       }
       const guestEmailMasked = maskEmailForDisplay(detail.source.guest_email)
-      const newState: PendingWhatsAppReplyState = { kind: 'collect_reply', threadId: chosen.threadId, siteId: chosen.siteId, organizationId: chosen.organizationId, guestEmailMasked }
+      const newState: PendingWhatsAppReplyState = { kind: 'collect_reply', threadId: chosen.threadId, siteId: chosen.siteId, organizationId: chosen.organizationId, locationId: chosen.locationId, guestEmailMasked }
       const sendResult = await sendWhatsAppText(env, opts.toPhone, buildCollectReplyPrompt(guestEmailMasked))
       if (!sendResult.success) throw new Error(sendResult.error || 'Failed to send WhatsApp reply prompt')
       await upsertChannelState(db, { userId: opts.userId, channel: 'whatsapp', pendingConfirmation: newState, lastInboundId: opts.messageId })
@@ -548,6 +550,7 @@ async function routeManagerWhatsAppMessage(
       threadId: pendingState.threadId,
       siteId: pendingState.siteId,
       organizationId: pendingState.organizationId,
+      locationId: pendingState.locationId,
       replyBody: rawText,
       guestEmailMasked: pendingState.guestEmailMasked,
     }
@@ -579,6 +582,7 @@ async function routeManagerWhatsAppMessage(
         threadId: match.threadId,
         siteId: match.siteId,
         organizationId: match.organizationId,
+        locationId: match.locationId,
         replyBody: rawText,
         guestEmailMasked,
       }

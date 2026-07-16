@@ -32,6 +32,7 @@ export type PendingWhatsAppReplyState =
       threadId: string
       siteId: string
       organizationId: string
+      locationId: string | null
       replyBody: string
       guestEmailMasked: string
     }
@@ -44,6 +45,7 @@ export type PendingWhatsAppReplyState =
       threadId: string
       siteId: string
       organizationId: string
+      locationId: string | null
       guestEmailMasked: string
     }
 

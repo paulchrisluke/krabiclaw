@@ -117,6 +117,7 @@ test('pending confirm_send: an affirmative reply executes the send', () => {
     threadId: 't1',
     siteId: 's1',
     organizationId: 'o1',
+    locationId: null,
     replyBody: 'Yes, confirmed',
     guestEmailMasked: 'j***@example.com',
   }
@@ -139,6 +140,7 @@ test('pending confirm_send: a non-affirmative reply cancels and redispatches rat
     threadId: 't1',
     siteId: 's1',
     organizationId: 'o1',
+    locationId: null,
     replyBody: 'Yes, confirmed',
     guestEmailMasked: 'j***@example.com',
   }
@@ -196,6 +198,7 @@ test('pending collect_reply: any text becomes the reply body and moves to confir
     threadId: 't1',
     siteId: 's1',
     organizationId: 'o1',
+    locationId: null,
     guestEmailMasked: 'j***@example.com',
   }
   const decision = decideWhatsAppReplyRouting({
