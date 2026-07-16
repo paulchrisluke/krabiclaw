@@ -89,7 +89,7 @@ for (const group of groups.values()) {
     WHERE u.phoneNumber = '${q(group.phone)}' LIMIT 1
   `)[0] ?? null
   const email = identity?.email || `phone-${digits}@phone.krabiclaw.local`
-  const pending = run(`SELECT id, role FROM invitation WHERE organizationId = '${q(group.organizationId)}' AND lower(email) = lower('${q(email)}') AND status = 'pending' AND expiresAt > unixepoch() ORDER BY createdAt DESC LIMIT 1`)[0] ?? null
+  const pending = run(`SELECT id, role FROM invitation WHERE organizationId = '${q(group.organizationId)}' AND lower(email) = lower('${q(email)}') AND status = 'pending' ORDER BY createdAt DESC LIMIT 1`)[0] ?? null
   const existingScopes = identity?.member_id ? run(`SELECT site_id, location_id FROM member_access_scope WHERE member_id = '${q(identity.member_id)}' ORDER BY site_id, location_id`) : []
   const pendingScopes = pending ? run(`SELECT site_id, location_id FROM invitation_access_scope WHERE invitation_id = '${q(pending.id)}' ORDER BY site_id, location_id`) : []
   const active = identity?.member_id && ['owner', 'admin', 'editor', 'location_manager'].includes(identity.role)
@@ -120,6 +120,7 @@ for (const item of report) {
   const invitationId = pending?.id ?? randomUUID()
   const createdInvitation = !pending
   if (!pending) run(`INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt) VALUES ('${invitationId}', '${q(item.organizationId)}', '${q(email)}', 'location_manager', 'pending', unixepoch() + 604800, '${q(inviter.id)}', unixepoch())`)
+  else run(`UPDATE invitation SET expiresAt = unixepoch() + 604800 WHERE id = '${q(invitationId)}'`)
   for (const scope of item.scopes) run(`INSERT OR IGNORE INTO invitation_access_scope (id, invitation_id, organization_id, site_id, location_id, created_at) VALUES ('${randomUUID()}', '${invitationId}', '${q(item.organizationId)}', '${q(scope.siteId)}', ${scope.locationId ? `'${q(scope.locationId)}'` : 'NULL'}, datetime('now'))`)
   item.pendingInvitationId = invitationId
   item.invitationUrl = `${baseUrl}/accept-invitation/${encodeURIComponent(invitationId)}?siteId=${encodeURIComponent(item.scopes[0].siteId)}`

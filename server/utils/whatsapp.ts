@@ -680,9 +680,13 @@ export async function setOrgWhatsAppPhone(
     ON CONFLICT(organization_id, site_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
   `, [organizationId, siteId, normalized, now])
   if (env) {
-    const { ensureWhatsAppRecipientAccess, sendWhatsAppAccessInvitation } = await import('~/server/utils/whatsapp-access')
-    const access = await ensureWhatsAppRecipientAccess(db, { organizationId, siteId, locationId: null, phone: normalized })
-    if (access.status !== 'invitation_pending' || !access.shouldDeliverInvitation || !access.invitationId) return
-    await sendWhatsAppAccessInvitation(env, db, { organizationId, siteId, locationId: null, phone: normalized, invitationId: access.invitationId })
+    try {
+      const { ensureWhatsAppRecipientAccess, sendWhatsAppAccessInvitation } = await import('~/server/utils/whatsapp-access')
+      const access = await ensureWhatsAppRecipientAccess(db, { organizationId, siteId, locationId: null, phone: normalized })
+      if (access.status !== 'invitation_pending' || !access.shouldDeliverInvitation || !access.invitationId) return
+      await sendWhatsAppAccessInvitation(env, db, { organizationId, siteId, locationId: null, phone: normalized, invitationId: access.invitationId })
+    } catch (error) {
+      console.warn('Failed to provision WhatsApp access for site notification phone:', error)
+    }
   }
 }

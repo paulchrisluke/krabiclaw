@@ -1,5 +1,5 @@
 import { execute, queryFirst, type DbClient } from '~/server/db'
-import { isOperationalRole, isOrganizationWideRole } from '~/server/utils/member-access'
+import { isOperationalRole, isOrganizationWideRole, LOCATION_MANAGER_ROLE } from '~/server/utils/member-access'
 import { normalizePhone, sendWhatsAppNotification } from '~/server/utils/whatsapp'
 
 export interface WhatsAppAccessTarget {
@@ -55,7 +55,9 @@ export async function ensureWhatsAppRecipientAccess(db: DbClient, target: WhatsA
   `, [target.organizationId, normalizedPhone])
 
   if (existing?.memberId && existing.role) {
-    if (!isOperationalRole(existing.role)) throw new Error(`Existing member role ${existing.role} cannot receive operational notifications`)
+    if (!isOperationalRole(existing.role)) {
+      throw createError({ statusCode: 409, statusMessage: `Existing member role ${existing.role} cannot receive operational notifications` })
+    }
     if (!isOrganizationWideRole(existing.role)) {
       await execute(db, `
         INSERT OR IGNORE INTO member_access_scope (id, member_id, organization_id, site_id, location_id, created_at)
@@ -80,7 +82,7 @@ export async function ensureWhatsAppRecipientAccess(db: DbClient, target: WhatsA
     WHERE organizationId = ? AND lower(email) = lower(?) AND status = 'pending'
     ORDER BY createdAt DESC LIMIT 1
   `, [target.organizationId, email])
-  if (invitation && invitation.role !== 'location_manager') {
+  if (invitation && invitation.role !== LOCATION_MANAGER_ROLE) {
     throw new Error(`Pending invitation role ${invitation.role || 'unset'} is not compatible with operational access`)
   }
   let shouldDeliverInvitation = false
@@ -89,15 +91,15 @@ export async function ensureWhatsAppRecipientAccess(db: DbClient, target: WhatsA
     const invitationId = crypto.randomUUID()
     await execute(db, `
       INSERT OR IGNORE INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt)
-      VALUES (?, ?, ?, 'location_manager', 'pending', ?, ?, ?)
-    `, [invitationId, target.organizationId, email, expiresAt, inviter.id, Math.floor(Date.now() / 1000)])
+      VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)
+    `, [invitationId, target.organizationId, email, LOCATION_MANAGER_ROLE, expiresAt, inviter.id, Math.floor(Date.now() / 1000)])
     invitation = await queryFirst<{ id: string; expiresAt: number; role: string | null }>(db, `
       SELECT id, expiresAt, role FROM invitation
       WHERE organizationId = ? AND lower(email) = lower(?) AND status = 'pending'
       ORDER BY createdAt DESC LIMIT 1
     `, [target.organizationId, email])
     if (!invitation) throw new Error('Failed to create or reuse WhatsApp access invitation')
-    if (invitation.role !== 'location_manager') {
+    if (invitation.role !== LOCATION_MANAGER_ROLE) {
       throw new Error(`Pending invitation role ${invitation.role || 'unset'} is not compatible with operational access`)
     }
     shouldDeliverInvitation = invitation.id === invitationId
