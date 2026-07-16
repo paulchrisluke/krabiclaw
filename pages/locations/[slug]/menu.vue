@@ -220,20 +220,18 @@ function getDietaryTags(item: ApiValue): string[] {
 }
 
 
-const seoTitle = () => `Menu · ${location.value?.title || slug.value}`
-const seoDescription = () => `Full menu for ${location.value?.title || slug.value} at ${siteName.value}.`
-
-useSeoMeta({
-  title: seoTitle,
-  description: seoDescription,
-  ogTitle: seoTitle,
-  ogDescription: seoDescription,
-  ogSiteName: () => siteName.value,
-  twitterTitle: seoTitle,
-  twitterDescription: seoDescription,
-  ogImage: useSharedOgImage(),
-  ogUrl: useSeoUrl(() => `/locations/${slug.value}/menu`)
-})
+useTenantSocialMetadata(() => ({
+  path: `/locations/${slug.value}/menu`,
+  title: `Menu · ${location.value?.title || slug.value}`,
+  description: `Full menu for ${location.value?.title || slug.value} at ${siteName.value}.`,
+  location: location.value?.title || null,
+  brand: {
+    siteName: siteName.value,
+    logoUrl: bootstrapConfig.value?.logo_url || null,
+    faviconUrl: bootstrapConfig.value?.favicon_url || null,
+    primaryColor: bootstrapConfig.value?.brand_color || null,
+  },
+}))
 
 const locationCurrency = computed(() => {
   const loc = location.value as ApiValue

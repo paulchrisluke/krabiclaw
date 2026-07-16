@@ -22,6 +22,7 @@
         :selected-page="selectedPreviewPage"
         :site-status="computedSiteStatus"
         :site-domain="siteDomain"
+        :vertical="previewVertical"
         @select-page="onSelectPage"
         @select-location="onSelectLocation"
       />
@@ -40,6 +41,8 @@
 </template>
 
 <script setup lang="ts">
+import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
+
 definePageMeta({ layout: 'editor', ssr: false })
 
 const route = useRoute()
@@ -48,6 +51,7 @@ const toast = useToast()
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const siteData = ref<ApiRecord | null>(null)
+const previewVertical = computed<SiteVertical>(() => normalizeVertical(siteData.value?.vertical as string | undefined) as SiteVertical)
 const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])
 const orgSlug = ref<string | null>(null)
 const previewToken = ref('')

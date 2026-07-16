@@ -81,7 +81,7 @@ if (isPlatform) throw createError({ statusCode: 404, statusMessage: 'Page not fo
 
 const { locale } = useI18n()
 const orderCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
-const { getField, locations } = useBootstrap()
+const { getField, locations, config } = useBootstrap()
 
 const allLocations = computed(() => locations.value)
 
@@ -96,13 +96,16 @@ const orderableLocations = computed(() =>
 )
 
 const hasOrderLinks = computed(() => orderableLocations.value.length > 0)
-const route = useRoute()
-const requestURL = useRequestURL()
 
-useSeoMeta({
-  title: computed(() => `Order Online | ${site?.brand_name || 'Our Site'}`),
-  description: computed(() => orderCopy.value.seoOrderDescription(site?.brand_name || 'Our Site')),
-  ogImage: useTenantOgImage(),
-  ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
-})
+useTenantSocialMetadata(() => ({
+  path: '/order',
+  title: `Order Online | ${site?.brand_name || 'Our Site'}`,
+  description: orderCopy.value.seoOrderDescription(site?.brand_name || 'Our Site'),
+  brand: {
+    siteName: site?.brand_name || 'Our Site',
+    logoUrl: config.value?.logo_url || null,
+    faviconUrl: config.value?.favicon_url || null,
+    primaryColor: config.value?.brand_color || null,
+  },
+}))
 </script>

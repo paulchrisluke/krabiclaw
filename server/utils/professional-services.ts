@@ -398,6 +398,7 @@ export async function getPublicThemeTokens(db: DbClient, siteId: string, templat
 export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Promise<PublicBlawbyIdentity> {
   const row = await queryFirst<ApiRecord>(db, `
     SELECT s.brand_name, s.brand_description, s.contact_phone, COALESCE(logo.public_url, s.logo_url) AS logo_url,
+           json_extract(s.settings, '$.favicon_url') AS favicon_url,
            primary_loc.address AS primary_location_address,
            primary_loc.city AS primary_location_city
       FROM sites s
@@ -411,6 +412,7 @@ export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Pro
     brand_name: typeof row?.brand_name === 'string' ? row.brand_name : null,
     brand_description: typeof row?.brand_description === 'string' ? row.brand_description : null,
     logo_url: typeof row?.logo_url === 'string' ? row.logo_url : null,
+    favicon_url: typeof row?.favicon_url === 'string' ? row.favicon_url : null,
     phone: typeof row?.contact_phone === 'string' ? row.contact_phone : null,
     banner_content: null,
     banner_dismissible: false,

@@ -12,6 +12,7 @@ interface SiteRow {
   status: string
   onboarding_status: string
   organization_name: string
+  vertical: string
 }
 
 interface LocationRow {
@@ -67,7 +68,7 @@ export default defineEventHandler(async (event) => {
   try {
     // Verify user belongs to organization that owns the site
     const site = await queryFirst<SiteRow>(db, `
-      SELECT s.id, s.brand_name, s.subdomain, s.organization_id, s.status, s.onboarding_status,
+      SELECT s.id, s.brand_name, s.subdomain, s.organization_id, s.status, s.onboarding_status, s.vertical,
              o.name as organization_name
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
@@ -118,7 +119,10 @@ export default defineEventHandler(async (event) => {
     )
 
     // Get content registry for this site/theme
-    const { contentRegistry } = await import('../../../../../config/content-registry')
+    const { contentRegistry, getEditablePages } = await import('../../../../../config/content-registry')
+    const { normalizeVertical } = await import('../../../../../utils/vertical-copy')
+    const vertical = normalizeVertical(site.vertical) as import('../../../../../utils/vertical-copy').SiteVertical
+    const editablePages = getEditablePages(vertical)
 
     // Build scopes array
     const scopes = [
@@ -143,6 +147,7 @@ export default defineEventHandler(async (event) => {
           subdomain: site.subdomain,
           status: site.status,
           onboarding_status: site.onboarding_status,
+          vertical,
           entitlements
         },
         organization: {
@@ -152,7 +157,8 @@ export default defineEventHandler(async (event) => {
         locations: parsedLocations,
         scopes,
         previewToken,
-        contentRegistry
+        contentRegistry,
+        editablePages
       }
     })
     

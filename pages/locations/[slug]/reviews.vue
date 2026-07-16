@@ -181,7 +181,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
-const { location, reviewsAggregate, reviewsList, pending } = useBootstrap()
+const { location, reviewsAggregate, reviewsList, pending, config } = useBootstrap()
 const { formatDate } = useLocaleDate()
 const aggregate = reviewsAggregate
 const reviews = reviewsList
@@ -233,20 +233,18 @@ function formatReviewDate(ts: string | null) {
 }
 
 
-const seoTitle = () => `Reviews · ${location.value?.title || slug.value}`
-const seoDescription = () => `Guest reviews for ${location.value?.title || slug.value} at ${siteName.value}.`
-
-useSeoMeta({
-  title: seoTitle,
-  description: seoDescription,
-  ogTitle: seoTitle,
-  ogDescription: seoDescription,
-  ogSiteName: () => siteName.value,
-  twitterTitle: seoTitle,
-  twitterDescription: seoDescription,
-  ogImage: useSharedOgImage(),
-  ogUrl: useSeoUrl(() => `/locations/${slug.value}/reviews`)
-})
+useTenantSocialMetadata(() => ({
+  path: `/locations/${slug.value}/reviews`,
+  title: `Reviews · ${location.value?.title || slug.value}`,
+  description: `Guest reviews for ${location.value?.title || slug.value} at ${siteName.value}.`,
+  location: location.value?.title || null,
+  brand: {
+    siteName: siteName.value,
+    logoUrl: config.value?.logo_url || null,
+    faviconUrl: config.value?.favicon_url || null,
+    primaryColor: config.value?.brand_color || null,
+  },
+}))
 
 useSchemaOrg([
   computed(() => ({

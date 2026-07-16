@@ -42,19 +42,19 @@ if (!siteId) throw createError({ statusCode: 404 })
 
 const siteName = computed(() => site?.brand_name || 'Our Site')
 
-const { blogList, error, pending } = useBootstrap()
+const { blogList, error, pending, config } = useBootstrap()
 const posts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 
-const currentPageUrl = useSeoUrl('/blog')
-useSeoMeta({
-  title: computed(() => `Blog | ${siteName.value}`),
-  description: computed(() => `Stories, news, and updates from ${siteName.value}.`),
-  ogTitle: computed(() => `Blog | ${siteName.value}`),
-  ogDescription: computed(() => `Stories, news, and updates from ${siteName.value}.`),
-  ogSiteName: siteName,
-  twitterTitle: computed(() => `Blog | ${siteName.value}`),
-  twitterDescription: computed(() => `Stories, news, and updates from ${siteName.value}.`),
-  ogImage: useTenantOgImage(),
-  ogUrl: currentPageUrl,
-})
+useTenantSocialMetadata(() => ({
+  path: '/blog',
+  title: `Blog | ${siteName.value}`,
+  description: `Stories, news, and updates from ${siteName.value}.`,
+  label: 'Blog',
+  brand: {
+    siteName: siteName.value,
+    logoUrl: config.value?.logo_url || null,
+    faviconUrl: config.value?.favicon_url || null,
+    primaryColor: config.value?.brand_color || null,
+  },
+}))
 </script>

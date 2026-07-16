@@ -25,6 +25,7 @@
         :selected-page="selectedPage"
         site-status="live"
         :site-domain="siteDomain"
+        :vertical="siteVertical"
         @select-page="selectedPage = $event"
         @select-location="selectedLocationId = $event"
       />

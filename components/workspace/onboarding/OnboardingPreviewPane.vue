@@ -141,14 +141,21 @@
 </template>
 
 <script setup lang="ts">
-const props = defineProps<{
+import { getEditablePages } from '~/config/content-registry'
+import { resolvePublicTemplate } from '~/utils/template-registry'
+import type { SiteVertical } from '~/utils/vertical-copy'
+
+const props = withDefaults(defineProps<{
   iframeSrc: string
   siteLocations: Array<{ id: string; slug: string; title: string; is_primary: boolean }>
   selectedLocationId: string | null
   selectedPage: string
   siteStatus: 'setup' | 'progress' | 'ready' | 'live'
   siteDomain?: string
-}>()
+  vertical?: SiteVertical
+}>(), {
+  vertical: 'restaurant',
+})
 
 const emit = defineEmits<{
   'select-page': [page: string]
@@ -162,23 +169,32 @@ watch(() => props.iframeSrc, (newSrc, oldSrc) => {
   if (newSrc && newSrc !== oldSrc) iframeLoading.value = true
 }, { immediate: true })
 
-// Deliberately static, not vertical-aware: this always shows a Saya-shaped
-// (menu/location) tab list, even for a professional_service/Blawby preview
-// where the equivalent page is site-level /services, not a location-scoped
-// /menu. Fixing this means deriving tabs from the resolved
-// PublicTemplateDefinition (utils/template-registry.ts's
-// resolvePublicTemplate) instead — tracked as #285, deferred to #278's
-// vertical-aware CMS/preview registry work rather than solved ad hoc here.
-const locationScopedPages = new Set(['location', 'menu'])
+// Derives the "core offering" tab (Menu / Experiences / Services) from the
+// same page registry the main CMS editor uses, instead of a hardcoded
+// Saya-shaped "Menu" tab. professional_service has no menu/experiences
+// registry entry (see #276/#277), so it falls through to the resolved
+// public template's offerings route (/services for Blawby) — site-level,
+// not location-scoped, per #285.
+const secondaryTab = computed(() => {
+  if (props.vertical === 'professional_service') {
+    const offeringsPath = resolvePublicTemplate({ vertical: props.vertical }).serviceRoutes.offeringsIndex
+    if (!offeringsPath) return null
+    return { id: offeringsPath.replace(/^\//, ''), label: 'Services', enabled: !!props.iframeSrc, locationScoped: false }
+  }
+  const match = getEditablePages(props.vertical).find(page => page.id === 'menu' || page.id === 'experiences')
+  if (!match) return null
+  return { id: match.id, label: match.label, enabled: !!props.iframeSrc, locationScoped: match.scope === 'location' }
+})
 
-const tabs = computed(() => [
-  { id: 'home',     label: 'Home',    enabled: !!props.iframeSrc },
-  { id: 'menu',     label: 'Menu',    enabled: !!props.iframeSrc },
-  { id: 'about',    label: 'About',   enabled: !!props.iframeSrc },
-  { id: 'contact',  label: 'Contact', enabled: !!props.iframeSrc },
-])
+const tabs = computed(() => {
+  const list = [{ id: 'home', label: 'Home', enabled: !!props.iframeSrc, locationScoped: false }]
+  if (secondaryTab.value) list.push(secondaryTab.value)
+  list.push({ id: 'about', label: 'About', enabled: !!props.iframeSrc, locationScoped: false })
+  list.push({ id: 'contact', label: 'Contact', enabled: !!props.iframeSrc, locationScoped: false })
+  return list
+})
 
-const currentTabIsLocationScoped = computed(() => locationScopedPages.has(props.selectedPage))
+const currentTabIsLocationScoped = computed(() => tabs.value.find(tab => tab.id === props.selectedPage)?.locationScoped === true)
 
 const selectedLocation = computed(() =>
   props.siteLocations.find(l => l.id === props.selectedLocationId) ?? props.siteLocations[0] ?? null

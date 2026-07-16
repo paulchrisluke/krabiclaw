@@ -209,6 +209,7 @@ export interface PublicBlawbyIdentity {
   brand_name: string | null
   brand_description: string | null
   logo_url: string | null
+  favicon_url: string | null
   phone: string | null
   banner_content: string | null
   banner_dismissible: boolean

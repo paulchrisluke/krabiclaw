@@ -103,6 +103,10 @@ export default defineEventHandler(async (event) => {
       SELECT COUNT(*) as c FROM experiences WHERE site_id = ? AND source != 'template'
     `, [siteId])
 
+    const offerings = await queryFirst<{ c: number }>(db, `
+      SELECT COUNT(*) as c FROM offerings WHERE site_id = ? AND source != 'template'
+    `, [siteId])
+
     const story = await queryFirst<{ c: number }>(db, `
       SELECT COUNT(*) as c FROM site_content
       WHERE site_id = ? AND page = 'about' AND field LIKE 'story%'
@@ -129,17 +133,16 @@ export default defineEventHandler(async (event) => {
         business_info: (businessInfo?.c ?? 0) > 0,
         hero_image: heroIsReal,
         // Renamed from menu_or_experiences (#277) since this key isn't
-        // menu-shaped — but the completion check itself is still only wired
-        // for restaurant (menuItems) and experience (experiences).
-        // professional_service falls into the menuItems branch and can
-        // never complete, because #276 intentionally seeds no menu for it
-        // and there is no offerings/practice-areas content model yet to
-        // check instead. This is a known, tracked gap, not a silent
-        // restaurant coercion — see #284, which depends on the offerings
-        // model from #194/#278.
+        // menu-shaped. Branches per vertical's real core-offering content
+        // model: menu items (restaurant), experiences (experience), or
+        // offerings/practice areas (professional_service — see #284, #194,
+        // #278's offerings model, already implemented end-to-end in
+        // server/utils/professional-services.ts).
         core_offering: normalizedVertical === 'experience'
           ? (experiences?.c ?? 0) > 0
-          : (menuItems?.c ?? 0) > 0,
+          : normalizedVertical === 'professional_service'
+            ? (offerings?.c ?? 0) > 0
+            : (menuItems?.c ?? 0) > 0,
         story: (story?.c ?? 0) > 0,
         post: (post?.c ?? 0) > 0,
       },

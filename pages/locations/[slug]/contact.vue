@@ -185,7 +185,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 
 // Bootstrap: location data + page content (parking/notes) — 1 SSR call
-const { location, getField: getContentField, pending } = useBootstrap()
+const { location, getField: getContentField, pending, config } = useBootstrap()
 
 const formattedAddress = computed(() => {
   const loc = location.value
@@ -239,20 +239,18 @@ const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
-const seoTitle = () => `Plan a visit · ${location.value?.title || slug.value}`
-const seoDescription = () => `Hours, address and directions for ${location.value?.title || slug.value}.`
-
-useSeoMeta({
-  title: seoTitle,
-  description: seoDescription,
-  ogTitle: seoTitle,
-  ogDescription: seoDescription,
-  ogSiteName: () => siteName.value,
-  twitterTitle: seoTitle,
-  twitterDescription: seoDescription,
-  ogImage: useSharedOgImage(),
-  ogUrl: useSeoUrl(() => `/locations/${slug.value}/contact`)
-})
+useTenantSocialMetadata(() => ({
+  path: `/locations/${slug.value}/contact`,
+  title: `Plan a visit · ${location.value?.title || slug.value}`,
+  description: `Hours, address and directions for ${location.value?.title || slug.value}.`,
+  location: location.value?.title || null,
+  brand: {
+    siteName: siteName.value,
+    logoUrl: config.value?.logo_url || null,
+    faviconUrl: config.value?.favicon_url || null,
+    primaryColor: config.value?.brand_color || null,
+  },
+}))
 
 useSchemaOrg([
   computed(() => {

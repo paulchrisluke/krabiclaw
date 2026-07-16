@@ -426,7 +426,6 @@ async function handleReservation() {
 }
 
 // ── SEO ───────────────────────────────────────────────────────────────────
-const currentPageUrl = useSeoUrl('/reservations')
 const requestUrl = useRequestURL()
 
 useBreadcrumbSchema([
@@ -435,20 +434,19 @@ useBreadcrumbSchema([
 ])
 
 const brandName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Our Site')
-const seoTitle = computed(() => `${brandName.value} | ${resCopy.value.reserveCta}`)
-const seoDescription = computed(() => resCopy.value.seoReservationDescription(brandName.value))
-useSeoMeta({
-  title: seoTitle,
-  description: seoDescription,
-  ogTitle: seoTitle,
-  ogDescription: seoDescription,
-  ogSiteName: computed(() => brandName.value),
-  twitterTitle: seoTitle,
-  twitterDescription: seoDescription,
-  ogImage: useTenantOgImage(),
-  ogUrl: currentPageUrl,
-  ogType: 'website'
-})
+
+useTenantSocialMetadata(() => ({
+  path: '/reservations',
+  title: `${brandName.value} | ${resCopy.value.reserveCta}`,
+  description: resCopy.value.seoReservationDescription(brandName.value),
+  brand: {
+    siteName: brandName.value,
+    logoUrl: config.value?.logo_url || null,
+    faviconUrl: config.value?.favicon_url || null,
+    primaryColor: config.value?.brand_color || null,
+  },
+  heroImage: locations.value[0]?.hero_image_public_url ? { url: locations.value[0].hero_image_public_url } : null,
+}))
 
 useSchemaOrg([
   ({

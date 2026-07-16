@@ -498,10 +498,6 @@ const reviewDateTime = (review: Review) => review.datetime ?? review.createdAt ?
 const schemaImage = computed(() =>
   mainMedia.value.url ?? undefined
 )
-const currentPageUrl = useSeoUrl(() => item.value ? `/menu/${item.value.slug}` : '/menu')
-const canonicalUrl = useSeoUrl(() => item.value?.canonical_url || (item.value ? `/menu/${item.value.slug}` : '/menu'))
-const ogImage = useSharedOgImage(() => item.value?.og_image_public_url || mainMedia.value.thumb)
-
 const loadReviews = async () => {
   if (!item.value?.slug) return
   reviewsLoading.value = true
@@ -574,24 +570,22 @@ watch(() => item.value?.slug, async () => {
 const seoTitle = () => item.value?.seo_title || (item.value ? `${item.value.name} | Menu | ${siteName.value}` : `Menu Item Not Found | ${siteName.value}`)
 const seoDescription = () => truncateForSeo(item.value?.seo_description || (item.value ? item.value.description : 'The menu item you\'re looking for doesn\'t exist.'), 160)
 
-useSeoMeta({
-  title: seoTitle,
-  description: seoDescription,
-  ogTitle: seoTitle,
-  ogDescription: seoDescription,
-  ogSiteName: () => siteName.value,
-  ogImage,
-  ogUrl: currentPageUrl,
-  ogType: 'website',
-  twitterCard: 'summary_large_image',
-  twitterTitle: seoTitle,
-  twitterDescription: seoDescription,
-  twitterImage: ogImage,
-  robots: () => item.value?.robots || undefined,
-})
-
-useHead({
-  link: [{ rel: 'canonical', href: canonicalUrl }],
+useTenantSocialMetadata(() => {
+  const heroImageUrl = item.value?.og_image_public_url || mainMedia.value.thumb || null
+  return {
+    path: item.value?.canonical_url || (item.value ? `/menu/${item.value.slug}` : '/menu'),
+    title: seoTitle(),
+    description: seoDescription(),
+    label: 'Menu',
+    robots: item.value?.robots || null,
+    brand: {
+      siteName: siteName.value,
+      logoUrl: siteConfig.value?.logo_url || null,
+      faviconUrl: siteConfig.value?.favicon_url || null,
+      primaryColor: siteConfig.value?.brand_color || null,
+    },
+    heroImage: heroImageUrl ? { url: heroImageUrl } : null,
+  }
 })
 
 const schemaGraph = computed(() => {
