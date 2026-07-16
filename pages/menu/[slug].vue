@@ -498,7 +498,6 @@ const reviewDateTime = (review: Review) => review.datetime ?? review.createdAt ?
 const schemaImage = computed(() =>
   mainMedia.value.url ?? undefined
 )
-
 const loadReviews = async () => {
   if (!item.value?.slug) return
   reviewsLoading.value = true

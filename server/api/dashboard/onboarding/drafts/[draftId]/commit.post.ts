@@ -6,6 +6,7 @@ import { parseOnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
 import { runSiteCreation } from '~/server/utils/site-creation'
 import { setConfig } from '~/server/utils/site-config'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
+import type { SiteVertical } from '~/utils/vertical-copy'
 
 type SiteEnv = Parameters<typeof runSiteCreation>[0]
 
@@ -36,7 +37,7 @@ export default defineEventHandler(async (event) => {
     id: string
     user_id: string
     name: string
-    vertical: 'restaurant' | 'experience'
+    vertical: SiteVertical
     subdomain_candidate: string
     status: string
     payload_json: string

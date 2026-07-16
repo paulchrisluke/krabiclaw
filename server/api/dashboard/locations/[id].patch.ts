@@ -52,21 +52,25 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
   if (typeof body.notification_phone === 'string' && body.notification_phone.trim()) {
-    const access = await ensureWhatsAppRecipientAccess(db, {
-      organizationId,
-      siteId,
-      locationId,
-      phone: body.notification_phone,
-      inviterUserId: session.user.id,
-    })
-    if (access.status === 'invitation_pending' && access.createdInvitation && access.invitationId) {
-      await sendWhatsAppAccessInvitation(env, db, {
+    try {
+      const access = await ensureWhatsAppRecipientAccess(db, {
         organizationId,
         siteId,
         locationId,
         phone: body.notification_phone,
-        invitationId: access.invitationId,
+        inviterUserId: session.user.id,
       })
+      if (access.status === 'invitation_pending' && access.shouldDeliverInvitation && access.invitationId) {
+        await sendWhatsAppAccessInvitation(env, db, {
+          organizationId,
+          siteId,
+          locationId,
+          phone: body.notification_phone,
+          invitationId: access.invitationId,
+        })
+      }
+    } catch (error) {
+      console.warn('Failed to provision WhatsApp access for location notification phone:', error)
     }
   }
 

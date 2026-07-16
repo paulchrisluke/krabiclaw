@@ -1,3 +1,5 @@
+import type { SiteVertical } from '~/utils/vertical-copy'
+
 export type FieldSource = 'manual' | 'google' | 'static' | 'computed'
 
 export type FieldDefinition = TextField | TextareaField | RichTextField | ImageField | MediaField | MenuItemsField | BusinessHoursField | LocationField | ProductsField | BookingPolicyField;
@@ -66,13 +68,58 @@ export interface ValidationRule {
   message?: string
 }
 
+export interface PageGroupDefinition {
+  id: string
+  label: string
+  icon: string
+  fields: string[]
+}
+
+export interface PreviewContext {
+  locationSlug?: string
+}
+
 export interface PageDefinition {
   label: string
   path: string
   fields: Record<string, FieldDefinition>
-  groups?: Array<{ id: string; label: string; icon: string; fields: string[] }>
-  /** If true, this page is scoped to a specific location (location/menu pages) */
-  locationScoped?: boolean
+  groups: PageGroupDefinition[]
+  /** Verticals that see this page in the CMS page selector and page inventory. */
+  verticals: SiteVertical[]
+  scope: 'site' | 'location'
+  /** Resolves the public preview path. Defaults to the page's static `path` when omitted. */
+  preview?: {
+    resolvePath: (_context: PreviewContext) => string
+  }
+}
+
+export interface EditablePage {
+  id: string
+  label: string
+  path: string
+  scope: 'site' | 'location'
+  scopeLabelKey: 'location' | 'office'
+}
+
+/** Resolves the visible page inventory for a tenant's vertical — the one source of truth for
+ *  the CMS page selector (content.vue) and the page inventory list (pages.vue). */
+export function getEditablePages(vertical: SiteVertical): EditablePage[] {
+  return Object.entries(contentRegistry)
+    .filter(([, page]) => page.verticals.includes(vertical))
+    .map(([id, page]) => ({
+      id,
+      label: page.label,
+      path: page.path,
+      scope: page.scope,
+      scopeLabelKey: page.scope === 'location' && vertical === 'professional_service' ? 'office' : 'location',
+    }))
+}
+
+/** Resolves the public preview path for a page, given the currently selected location (if any). */
+export function resolvePreviewPath(pageId: string, context: PreviewContext): string {
+  const page = contentRegistry[pageId]
+  if (!page) return '/'
+  return page.preview?.resolvePath(context) ?? page.path
 }
 
 /** Shared validator for social URLs to reject common placeholder patterns */
@@ -101,6 +148,13 @@ export const contentRegistry: Record<string, PageDefinition> = {
   home: {
     label: 'Home',
     path: '/',
+    verticals: ['restaurant', 'experience', 'professional_service'],
+    scope: 'site',
+    groups: [
+      { id: 'hero', label: 'Hero Section', icon: 'i-lucide-image', fields: ['hero.eyebrow', 'hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
+      { id: 'story', label: 'Brand Story', icon: 'i-lucide-book-open', fields: ['story.headline', 'story.body', 'story.image'] },
+      { id: 'cta', label: 'Call to Action', icon: 'i-lucide-megaphone', fields: ['cta.title', 'cta.description'] },
+    ],
     fields: {
       'hero.eyebrow': {
         label: 'Hero Eyebrow',
@@ -260,6 +314,14 @@ export const contentRegistry: Record<string, PageDefinition> = {
   about: {
     label: 'About',
     path: '/about',
+    verticals: ['restaurant', 'experience', 'professional_service'],
+    scope: 'site',
+    groups: [
+      { id: 'hero', label: 'Hero Section', icon: 'i-lucide-image', fields: ['hero.title', 'hero.subtitle'] },
+      { id: 'story', label: 'Story', icon: 'i-lucide-book-open', fields: ['story.image', 'story.headline', 'story.body'] },
+      { id: 'journey', label: 'Journey', icon: 'i-lucide-map', fields: ['journey.title', 'journey.body'] },
+      { id: 'cta', label: 'Call to Action', icon: 'i-lucide-megaphone', fields: ['cta.title'] },
+    ],
     fields: {
       'hero.title': {
         label: 'Page Title',
@@ -323,6 +385,11 @@ export const contentRegistry: Record<string, PageDefinition> = {
   contact: {
     label: 'Contact',
     path: '/contact',
+    verticals: ['restaurant', 'experience', 'professional_service'],
+    scope: 'site',
+    groups: [
+      { id: 'hero', label: 'Hero Section', icon: 'i-lucide-image', fields: ['hero.title', 'hero.subtitle'] },
+    ],
     fields: {
       'hero.title': {
         label: 'Page Title',
@@ -344,7 +411,15 @@ export const contentRegistry: Record<string, PageDefinition> = {
   location: {
     label: 'Location',
     path: '/location',
-    locationScoped: true,
+    verticals: ['restaurant', 'experience', 'professional_service'],
+    scope: 'location',
+    groups: [
+      { id: 'hero', label: 'Hero Section', icon: 'i-lucide-image', fields: ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
+      { id: 'content', label: 'Additional Info', icon: 'i-lucide-file-text', fields: ['parking.info', 'extra.notes'] },
+    ],
+    preview: {
+      resolvePath: context => context.locationSlug ? `/locations/${context.locationSlug}` : '/location',
+    },
     fields: {
       'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Location & Hours' },
       'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Find us and see when we’re open.' },
@@ -440,12 +515,16 @@ export const contentRegistry: Record<string, PageDefinition> = {
   menu: {
     label: 'Menu',
     path: '/menu',
-    locationScoped: true,
+    verticals: ['restaurant'],
+    scope: 'location',
     groups: [
       { id: 'hero',   label: 'Hero Section',  icon: 'i-lucide-image',        fields: ['hero.title', 'hero.subtitle'] },
       { id: 'items',  label: 'Menu Items',    icon: 'i-lucide-list',   fields: ['menu_items'] },
       { id: 'google', label: 'Google Products', icon: 'i-lucide-layers', fields: ['business.products'] }
     ],
+    preview: {
+      resolvePath: context => context.locationSlug ? `/locations/${context.locationSlug}/menu` : '/menu',
+    },
     fields: {
       'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Our Menu' },
       'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'A look at what we serve.' },
@@ -472,6 +551,11 @@ export const contentRegistry: Record<string, PageDefinition> = {
   experiences: {
     label: 'Experiences',
     path: '/experiences',
+    verticals: ['experience'],
+    scope: 'site',
+    groups: [
+      { id: 'hero', label: 'Hero Section', icon: 'i-lucide-sparkles', fields: ['hero.kicker', 'hero.title', 'hero.subtitle'] },
+    ],
     fields: {
       'hero.kicker': {
         label: 'Hero Kicker',
@@ -500,7 +584,11 @@ export const contentRegistry: Record<string, PageDefinition> = {
   order: {
     label: 'Order Online',
     path: '/order',
-    locationScoped: true,
+    verticals: ['restaurant'],
+    scope: 'location',
+    groups: [
+      { id: 'hero', label: 'Hero Section', icon: 'i-lucide-shopping-bag', fields: ['hero.title', 'hero.subtitle'] },
+    ],
     fields: {
       'hero.title': {
         label: 'Page Title',
@@ -522,6 +610,13 @@ export const contentRegistry: Record<string, PageDefinition> = {
   reservations: {
     label: 'Reservations',
     path: '/reservations',
+    verticals: ['restaurant', 'experience'],
+    scope: 'site',
+    groups: [
+      { id: 'hero', label: 'Hero Section', icon: 'i-lucide-image', fields: ['hero.title', 'hero.subtitle'] },
+      { id: 'contact', label: 'Contact Details', icon: 'i-lucide-phone', fields: ['contact.phone', 'contact.email'] },
+      { id: 'policies', label: 'Policies', icon: 'i-lucide-clipboard-list', fields: ['policies.structured'] },
+    ],
     fields: {
       'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Reservations' },
       'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Plan your visit with us.' },
@@ -546,12 +641,6 @@ export const contentRegistry: Record<string, PageDefinition> = {
     }
   }
 }
-
-/** All editable public pages (for the page selector) */
-export const editablePages: Array<{ label: string; path: string }> = Object.values(contentRegistry).map(p => ({
-  label: p.label,
-  path: p.path
-}))
 
 /** Get a field definition for a page+field key */
 export const getFieldDef = (page: string, field: string): FieldDefinition | undefined => {

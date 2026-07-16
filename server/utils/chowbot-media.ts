@@ -139,7 +139,7 @@ export async function extractMenuFromMediaAsset(
   const asset = await getMediaAsset(db, opts.assetId, opts.siteId)
   if (!asset?.public_url || !asset.mime_type) throw new Error('Media asset not found')
 
-  const mediaResponse = await fetch(asset.public_url)
+  const mediaResponse = await fetch(asset.public_url, { signal: AbortSignal.timeout(30_000) })
   if (!mediaResponse.ok) throw new Error(`Failed to read media asset: HTTP ${mediaResponse.status}`)
   const bytes = await mediaResponse.arrayBuffer()
   const isPdf = asset.mime_type === 'application/pdf'
@@ -268,7 +268,7 @@ export async function analyzeDocumentAsset(
     throw new Error(`Unsupported media type for document analysis: ${asset.mime_type}`)
   }
 
-  const mediaResponse = await fetch(asset.public_url)
+  const mediaResponse = await fetch(asset.public_url, { signal: AbortSignal.timeout(30_000) })
   if (!mediaResponse.ok) throw new Error(`Failed to read media asset: HTTP ${mediaResponse.status}`)
   const bytes = await mediaResponse.arrayBuffer()
 

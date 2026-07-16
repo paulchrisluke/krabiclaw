@@ -1033,7 +1033,6 @@ export const READ_ONLY_TOOL_NAMES = [
   'list_blog_posts',
   'get_blog_post',
   'get_site_media_assets',
-  'analyze_document',
   'open_media_upload',
   'open_experience_media_upload',
   'open_home_hero_media_upload',
@@ -1072,6 +1071,7 @@ export const READ_ONLY_TOOL_NAMES = [
 
 export const BOUNDED_WRITE_TOOL_NAMES = [
   'set_workspace_context',
+  'analyze_document',
   'save_generated_image',
   'save_generated_image_file',
   'upload_user_photo',

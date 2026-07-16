@@ -11,4 +11,12 @@ test('WhatsApp membership backfill is dry-run capable and production guarded', a
   assert.match(source, /phone-\$\{digits\}@phone\.krabiclaw\.local/)
   assert.match(source, /INSERT OR IGNORE INTO invitation_access_scope/)
   assert.match(source, /INSERT OR IGNORE INTO member_access_scope/)
+  const unsupportedIndex = source.indexOf('const unsupported = report.filter')
+  const applyIndex = source.indexOf("if (args.includes('--apply'))")
+  assert.notEqual(unsupportedIndex, -1, 'unsupported-recipient validation must exist')
+  assert.notEqual(applyIndex, -1, 'the apply pass must exist')
+  assert.ok(
+    unsupportedIndex < applyIndex,
+    'all unsupported recipients must be rejected before the apply pass starts',
+  )
 })

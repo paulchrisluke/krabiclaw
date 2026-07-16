@@ -28,13 +28,13 @@
         <UIcon name="i-lucide-sparkles" class="size-8" />
       </div>
       <div>
-        <p class="mb-1 text-[11px] font-bold uppercase tracking-[0.28em] text-primary">{{ props.isAddingLocation ? "Let's add a location" : "Let's build your site" }}</p>
+        <p class="mb-1 text-[11px] font-bold uppercase tracking-[0.28em] text-primary">{{ isAddingLocation ? "Let's add a location" : "Let's build your site" }}</p>
         <h1 class="text-3xl font-extrabold leading-tight tracking-tight text-highlighted">
-          {{ props.isAddingLocation ? "Tell me about this location. I'll do the typing." : "Tell me about your business. I'll do the typing." }}
+          {{ isAddingLocation ? "Tell me about this location. I'll do the typing." : "Tell me about your business. I'll do the typing." }}
         </h1>
       </div>
       <p class="text-[14.5px] leading-relaxed text-muted">
-        {{ props.isAddingLocation
+        {{ isAddingLocation
           ? "Answer a few questions and this location is added to your site — you decide what to keep."
           : "Answer a few questions and a real, SEO-ready site builds itself on the right — you decide what to keep." }}
       </p>
@@ -55,7 +55,7 @@
         size="md"
         icon="i-lucide-sparkles"
         class="self-start"
-        @click="advance(props.skipVertical ? 'source' : 'vertical')"
+        @click="advance(skipVertical ? 'source' : 'vertical')"
       >
         Start building
       </UButton>
@@ -235,6 +235,7 @@ import {
   getQuickActionPrompts,
   type OnboardingChecklistResponse,
 } from '~/composables/useOnboardingPrompts'
+import type { SiteVertical } from '~/utils/vertical-copy'
 
 interface WizardMessage {
   id: string
@@ -273,17 +274,27 @@ interface DraftSavedPayload {
 }
 
 type WizardStep = 'welcome' | 'vertical' | 'source' | 'awaiting_url' | 'awaiting_manual_name' | 'confirm' | 'details' | 'importing' | 'imported'
-type Vertical = 'restaurant' | 'experience'
 type DetailsSource = 'imported' | 'manual'
 
+// Discriminated intent, replacing the previous generic endpoint-injection
+// props (endpoint-per-Places-preview-call, endpoint-per-manual-call, plus a
+// separate skip-the-vertical-step flag and an add-a-location flag):
+// - 'new-site': Places preview goes through the dedicated
+//   /api/dashboard/onboarding/places-preview lookup endpoint; the actual
+//   mutation always goes through the draft endpoints
+//   (drafts/from-place|manual -> drafts/[draftId]/commit), never through a
+//   prop-injected endpoint.
+// - 'add-location': both preview and mutation go through the single
+//   /api/dashboard/locations/add endpoint (it owns both for an existing
+//   site), and the vertical picker step is skipped — a location doesn't
+//   have its own vertical, the site does.
+type WizardMode = 'new-site' | 'add-location'
+
 const props = defineProps<{
+  mode: WizardMode
   siteId: string | null
   existingOrgSlug?: string | null
   existingSiteSlug?: string | null
-  setupEndpoint?: string
-  setupManualEndpoint?: string
-  skipVertical?: boolean
-  isAddingLocation?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -298,7 +309,18 @@ const connectingFacebook = ref(false)
 const facebookConnected = ref(false)
 const hasFacebookAccess = ref(false)
 
-const WELCOME_POINTS: [string, string][] = props.isAddingLocation
+const isAddingLocation = computed(() => props.mode === 'add-location')
+// Add-location has no vertical step (the site already has one); new-site
+// always asks.
+const skipVertical = computed(() => props.mode === 'add-location')
+// New-site preview lookup uses the dedicated single-purpose preview endpoint;
+// add-location preview/mutation both go through the location endpoint.
+const lookupEndpoint = computed(() => isAddingLocation.value
+  ? '/api/dashboard/locations/add'
+  : '/api/dashboard/onboarding/places-preview')
+const addLocationEndpoint = '/api/dashboard/locations/add'
+
+const WELCOME_POINTS: [string, string][] = isAddingLocation.value
   ? [
       ['i-lucide-globe', 'Pulls the address, hours, photos & reviews from Google'],
       ['i-lucide-sparkles', 'Adds the location to your existing site as you watch'],
@@ -340,7 +362,7 @@ const pendingPreview = ref<{
   openingHours?: string[] | null
 } | null>(null)
 const detailsSource = ref<DetailsSource>('imported')
-const selectedVertical = ref<Vertical>('restaurant')
+const selectedVertical = ref<SiteVertical>('restaurant')
 const detailsForm = reactive({
   name: '',
   city: '',
@@ -362,13 +384,13 @@ const inputPlaceholder = computed(() => {
   if (step.value === 'awaiting_manual_name') return 'Your business name…'
   return 'Paste your Google Maps link…'
 })
-const detailsActionLabel = computed(() => props.isAddingLocation ? 'Add location' : 'Create site')
-const detailsCardTitle = computed(() => props.isAddingLocation ? 'Location details' : 'Business details')
+const detailsActionLabel = computed(() => isAddingLocation.value ? 'Add location' : 'Create site')
+const detailsCardTitle = computed(() => isAddingLocation.value ? 'Location details' : 'Business details')
 const detailsCardDescription = computed(() => detailsSource.value === 'manual'
-  ? (props.isAddingLocation
+  ? (isAddingLocation.value
     ? 'I still need the branch basics before I can add it to your site.'
     : 'I still need the basics before I can create this site.')
-  : (props.isAddingLocation
+  : (isAddingLocation.value
     ? 'I pulled the location data from Google. Fix anything that looks off, then add it.'
     : 'I pulled the business data from Google. Fix anything that looks off, then create it.')
 )
@@ -444,7 +466,7 @@ const chatgptGuidePath = computed(() => {
 })
 
 const chatgptStarterPrompt = computed(() => {
-  if (props.isAddingLocation) {
+  if (isAddingLocation.value) {
     return 'Help me finish this new location. Ask me for location-specific hours, photos, FAQs, and what makes this branch different.'
   }
 
@@ -456,13 +478,17 @@ const chatgptStarterPrompt = computed(() => {
     return 'Help me finish my experience site. First ask me for my hero headline, brand story, and signature experiences.'
   }
 
+  if (selectedVertical.value === 'professional_service') {
+    return 'Help me finish my professional-service site. First ask me for my hero headline, brand story, and core services.'
+  }
+
   return 'Help me finish my restaurant site. First ask me for my hero headline, brand story, and top menu sections.'
 })
 
 const quickActionExamples = computed(() => getQuickActionPrompts(selectedVertical.value))
 
 async function refreshChecklistStarterPrompt(siteId: string | null) {
-  if (!siteId || props.isAddingLocation) return
+  if (!siteId || isAddingLocation.value) return
   try {
     const checklist = await $fetch<OnboardingChecklistResponse>(`/api/dashboard/onboarding/checklist?siteId=${encodeURIComponent(siteId)}`)
     checklistStarterPrompt.value = buildOnboardingStarterPrompt(checklist)
@@ -494,7 +520,7 @@ async function pushBot(text: string, extra?: {
 }
 
 async function refreshSocialStatus(siteId: string | null) {
-  if (!siteId || props.isAddingLocation) return
+  if (!siteId || isAddingLocation.value) return
 
   try {
     const [contextRes, facebookRes] = await Promise.all([
@@ -547,6 +573,7 @@ async function advance(target: WizardStep) {
     replies.value = [
       { label: 'Restaurant, café or bar', icon: 'i-lucide-flame', primary: true, action: 'set_vertical_restaurant' },
       { label: 'Experience, class or activity', icon: 'i-lucide-graduation-cap', action: 'set_vertical_experience' },
+      { label: 'Legal or professional services', sub: 'Law firms, consultancies, and similar practices', icon: 'i-lucide-briefcase', action: 'set_vertical_professional_service' },
     ]
   }
 
@@ -575,7 +602,7 @@ async function advance(target: WizardStep) {
           description: detailsCardDescription.value,
           actionLabel: detailsActionLabel.value,
           requireLocationBasics: detailsRequireBasics.value,
-          showPrimaryToggle: !!props.isAddingLocation,
+          showPrimaryToggle: !!isAddingLocation.value,
         },
       })
   }
@@ -598,6 +625,13 @@ async function handleReply(reply: QuickReply) {
 
   if (reply.action === 'set_vertical_experience') {
     selectedVertical.value = 'experience'
+    pushUser(reply.label)
+    await advance('source')
+    return
+  }
+
+  if (reply.action === 'set_vertical_professional_service') {
+    selectedVertical.value = 'professional_service'
     pushUser(reply.label)
     await advance('source')
     return
@@ -707,12 +741,11 @@ async function runLookup(mapsUrl: string) {
   const tools = await showLookupTools('Looking up your Google Maps listing…')
 
   try {
-    const endpoint = props.setupEndpoint ?? '/api/dashboard/onboarding/setup'
     const res = await $fetch<{
       success: boolean
       preview?: { placeId: string; name: string; address: string; city?: string | null; phone?: string | null; mapsUrl?: string | null; websiteUrl?: string | null; openingHours?: string[] | null }
       error?: string
-    }>(endpoint, { method: 'POST', body: { mapsUrl, previewOnly: true } })
+    }>(lookupEndpoint.value, { method: 'POST', body: { mapsUrl, previewOnly: true } })
 
     if (!res.success || !res.preview) {
       throw new Error(res.error ?? 'Could not find your business. Please check the Google Maps URL and try again.')
@@ -744,13 +777,13 @@ async function submitDetails() {
   importing.value = true
   importError.value = null
   const tools = await showLookupTools(
-    props.isAddingLocation
+    isAddingLocation.value
       ? 'Adding your location…'
       : 'Saving your private draft preview…'
   )
 
   try {
-    if (!props.isAddingLocation) {
+    if (!isAddingLocation.value) {
       const endpoint = pendingPreview.value
         ? '/api/dashboard/onboarding/drafts/from-place'
         : '/api/dashboard/onboarding/drafts/manual'
@@ -800,9 +833,11 @@ async function submitDetails() {
       return
     }
 
-    const endpoint = pendingPreview.value
-      ? (props.setupEndpoint ?? '/api/dashboard/onboarding/setup')
-      : (props.setupManualEndpoint ?? '/api/dashboard/onboarding/setup-manual')
+    // This branch only runs in add-location mode (new-site always returns
+    // above via the draft endpoints) — both the Places and manual-name paths
+    // create through the same /api/dashboard/locations/add endpoint, since it
+    // owns add-location creation regardless of source.
+    const endpoint = addLocationEndpoint
 
     const body = pendingPreview.value
       ? {
@@ -901,7 +936,7 @@ function serializeDetails() {
     openingHours: detailsForm.openingHours.trim() || null,
     notificationPhone: detailsForm.notificationPhone.trim() || null,
     timezone: detailsForm.timezone.trim() || null,
-    isPrimary: props.isAddingLocation ? detailsForm.isPrimary : true,
+    isPrimary: isAddingLocation.value ? detailsForm.isPrimary : true,
   }
 }
 
@@ -922,7 +957,7 @@ function seedDetailsFromPreview(preview: NonNullable<typeof pendingPreview.value
   detailsForm.notificationPhone = preview.phone ?? ''
   detailsForm.timezone = guessLocalTimezone()
   detailsForm.currency = DEFAULT_CURRENCY
-  detailsForm.isPrimary = !props.isAddingLocation
+  detailsForm.isPrimary = !isAddingLocation.value
 }
 
 function seedDetailsFromManual(name: string) {
@@ -935,7 +970,7 @@ function seedDetailsFromManual(name: string) {
   detailsForm.notificationPhone = ''
   detailsForm.timezone = guessLocalTimezone()
   detailsForm.currency = DEFAULT_CURRENCY
-  detailsForm.isPrimary = !props.isAddingLocation
+  detailsForm.isPrimary = !isAddingLocation.value
 }
 
 async function finishCreation(orgSlug: string | null | undefined, siteSlug: string | null | undefined, locationSlug?: string | null) {
@@ -943,13 +978,13 @@ async function finishCreation(orgSlug: string | null | undefined, siteSlug: stri
   importedLocationSlug.value = locationSlug ?? null
   
   // Track site creation
-  if (importedSiteId.value && !props.isAddingLocation) {
+  if (importedSiteId.value && !isAddingLocation.value) {
     trackSiteCreated(importedSiteId.value)
   }
 
   // Currency is site-level (not asked again on add-location) and otherwise
   // silently defaults to THB — persist the onboarding choice explicitly.
-  if (importedSiteId.value && !props.isAddingLocation) {
+  if (importedSiteId.value && !isAddingLocation.value) {
     try {
       await $fetch(`/api/sites/${importedSiteId.value}/settings`, {
         method: 'PATCH',
@@ -966,9 +1001,13 @@ async function finishCreation(orgSlug: string | null | undefined, siteSlug: stri
   await sleep(300)
   const domainSlug = siteSlug ?? orgSlug
   const domain = domainSlug ? `**${domainSlug}.krabiclaw.com**` : 'your new workspace'
-  const offerLabel = selectedVertical.value === 'experience' ? 'experiences' : 'menu'
+  const offerLabel = selectedVertical.value === 'experience'
+    ? 'experiences'
+    : selectedVertical.value === 'professional_service'
+      ? 'services'
+      : 'menu'
   await pushBot(`Done. Your workspace is live at ${domain}.`)
-  if (!props.isAddingLocation && importedSiteId.value) {
+  if (!isAddingLocation.value && importedSiteId.value) {
     await pushBot(
       `One last thing before you go — a logo, real photo, and brand color take this from "a template" to "your site" in under a minute.`,
       { brandCard: true },
@@ -976,7 +1015,7 @@ async function finishCreation(orgSlug: string | null | undefined, siteSlug: stri
   }
   await pushBot(
     `From here, head to your dashboard to keep building — add your ${offerLabel} and story — or connect ChatGPT to manage it from there.`,
-    { handoff: true, socialCard: !props.isAddingLocation, polishCard: true, mcpCard: true },
+    { handoff: true, socialCard: !isAddingLocation.value, polishCard: true, mcpCard: true },
   )
   step.value = 'imported'
   replies.value = [

@@ -105,7 +105,15 @@ export default defineEventHandler(async (event) => {
   const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
   if (!apiKey) return jsonResponse({ error: 'Google Places API key not configured' }, { status: 503 })
 
+  // Charging happens once per intended lookup/import operation, not once per
+  // HTTP call to this endpoint. The wizard calls this same endpoint twice for
+  // one add-location operation — once with previewOnly:true for the confirm
+  // card, once without it to actually create the location — so the charge
+  // must be deferred until the previewOnly check below confirms this is the
+  // real (non-preview) call. Charging unconditionally here previously
+  // double-charged every add-location-by-search/place flow.
   let place
+  let chargeSearch = false
   try {
     if (placeId) {
       place = await getPlaceDetails(apiKey, placeId, false)
@@ -113,14 +121,13 @@ export default defineEventHandler(async (event) => {
       place = await getPlaceDetailsByUrl(apiKey, mapsUrl, false)
     } else {
       const results = await searchPlaces(apiKey, query)
-      await chargeFlatCredits(db, organizationId, { siteId, action: 'google_places_search' }).catch(() => {})
+      chargeSearch = true
       const top = results[0]
       if (!top?.placeId) {
         return jsonResponse({ error: `No results found for "${query}". Try a more specific name.` }, { status: 404 })
       }
       place = await getPlaceDetails(apiKey, top.placeId, false)
     }
-    await chargeFlatCredits(db, organizationId, { siteId, action: 'google_places_details' }).catch(() => {})
   } catch (err) {
     return jsonResponse({
       error: err instanceof Error ? err.message : 'Could not fetch place details. Try again.',
@@ -144,6 +151,11 @@ export default defineEventHandler(async (event) => {
       },
     })
   }
+
+  if (chargeSearch) {
+    await chargeFlatCredits(db, organizationId, { siteId, action: 'google_places_search' }).catch(() => {})
+  }
+  await chargeFlatCredits(db, organizationId, { siteId, action: 'google_places_details' }).catch(() => {})
 
   const baseSlug = slugify(place.name).slice(0, 50)
   const slug = await uniqueLocationSlug(db, siteId, baseSlug)

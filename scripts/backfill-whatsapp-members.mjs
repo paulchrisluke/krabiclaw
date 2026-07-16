@@ -89,39 +89,51 @@ for (const group of groups.values()) {
     WHERE u.phoneNumber = '${q(group.phone)}' LIMIT 1
   `)[0] ?? null
   const email = identity?.email || `phone-${digits}@phone.krabiclaw.local`
-  const pending = run(`SELECT id FROM invitation WHERE organizationId = '${q(group.organizationId)}' AND lower(email) = lower('${q(email)}') AND status = 'pending' AND expiresAt > unixepoch() ORDER BY createdAt DESC LIMIT 1`)[0] ?? null
+  const pending = run(`SELECT id, role FROM invitation WHERE organizationId = '${q(group.organizationId)}' AND lower(email) = lower('${q(email)}') AND status = 'pending' ORDER BY createdAt DESC LIMIT 1`)[0] ?? null
   const existingScopes = identity?.member_id ? run(`SELECT site_id, location_id FROM member_access_scope WHERE member_id = '${q(identity.member_id)}' ORDER BY site_id, location_id`) : []
   const pendingScopes = pending ? run(`SELECT site_id, location_id FROM invitation_access_scope WHERE invitation_id = '${q(pending.id)}' ORDER BY site_id, location_id`) : []
-  const active = identity?.member_id && ['owner', 'admin', 'editor', 'member', 'location_manager'].includes(identity.role)
-  const action = active ? (identity.role === 'member' ? 'promote_member_and_ensure_scopes' : 'ensure_scopes') : pending ? 'reuse_invitation' : 'create_invitation'
-  const item = { ...group, identity, existingScopes, pendingInvitationId: pending?.id ?? null, pendingScopes, proposedAction: action }
+  const active = identity?.member_id && ['owner', 'admin', 'editor', 'location_manager'].includes(identity.role)
+  const unsupportedMember = identity?.member_id && !active
+  const unsupportedPending = !active && pending && pending.role !== 'location_manager'
+  const action = unsupportedMember ? `reject_non_operational_role:${identity.role}` : unsupportedPending ? `reject_incompatible_invitation_role:${pending.role || 'unset'}` : active ? 'ensure_scopes' : pending ? 'reuse_invitation' : 'create_invitation'
+  const item = { ...group, identity, email, pending, active, unsupportedMember, unsupportedPending, existingScopes, pendingInvitationId: pending?.id ?? null, pendingScopes, proposedAction: action }
   report.push(item)
-  if (!args.includes('--apply')) continue
+}
+
+const unsupported = report.filter(item => item.unsupportedMember || item.unsupportedPending)
+if (unsupported.length > 0) {
+  throw new Error(`Unsupported WhatsApp access state: ${unsupported.map(item => `${item.organizationName} (${item.proposedAction})`).join(', ')}`)
+}
+
+if (args.includes('--apply')) {
+for (const item of report) {
+  const { identity, active, pending, email } = item
 
   if (active) {
-    if (identity.role === 'member') run(`UPDATE member SET role = 'location_manager' WHERE id = '${q(identity.member_id)}'`)
     if (!['owner', 'admin'].includes(identity.role)) {
-      for (const scope of group.scopes) run(`INSERT OR IGNORE INTO member_access_scope (id, member_id, organization_id, site_id, location_id, created_at) VALUES ('${randomUUID()}', '${q(identity.member_id)}', '${q(group.organizationId)}', '${q(scope.siteId)}', ${scope.locationId ? `'${q(scope.locationId)}'` : 'NULL'}, datetime('now'))`)
+      for (const scope of item.scopes) run(`INSERT OR IGNORE INTO member_access_scope (id, member_id, organization_id, site_id, location_id, created_at) VALUES ('${randomUUID()}', '${q(identity.member_id)}', '${q(item.organizationId)}', '${q(scope.siteId)}', ${scope.locationId ? `'${q(scope.locationId)}'` : 'NULL'}, datetime('now'))`)
     }
     continue
   }
-  const inviter = run(`SELECT userId AS id FROM member WHERE organizationId = '${q(group.organizationId)}' AND role IN ('owner','admin') ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END, createdAt LIMIT 1`)[0]
-  if (!inviter) throw new Error(`No owner/admin inviter for ${group.organizationName}`)
+  const inviter = run(`SELECT userId AS id FROM member WHERE organizationId = '${q(item.organizationId)}' AND role IN ('owner','admin') ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END, createdAt LIMIT 1`)[0]
+  if (!inviter) throw new Error(`No owner/admin inviter for ${item.organizationName}`)
   const invitationId = pending?.id ?? randomUUID()
   const createdInvitation = !pending
-  if (!pending) run(`INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt) VALUES ('${invitationId}', '${q(group.organizationId)}', '${q(email)}', 'location_manager', 'pending', unixepoch() + 604800, '${q(inviter.id)}', unixepoch())`)
-  for (const scope of group.scopes) run(`INSERT OR IGNORE INTO invitation_access_scope (id, invitation_id, organization_id, site_id, location_id, created_at) VALUES ('${randomUUID()}', '${invitationId}', '${q(group.organizationId)}', '${q(scope.siteId)}', ${scope.locationId ? `'${q(scope.locationId)}'` : 'NULL'}, datetime('now'))`)
+  if (!pending) run(`INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt) VALUES ('${invitationId}', '${q(item.organizationId)}', '${q(email)}', 'location_manager', 'pending', unixepoch() + 604800, '${q(inviter.id)}', unixepoch())`)
+  else run(`UPDATE invitation SET expiresAt = unixepoch() + 604800 WHERE id = '${q(invitationId)}'`)
+  for (const scope of item.scopes) run(`INSERT OR IGNORE INTO invitation_access_scope (id, invitation_id, organization_id, site_id, location_id, created_at) VALUES ('${randomUUID()}', '${invitationId}', '${q(item.organizationId)}', '${q(scope.siteId)}', ${scope.locationId ? `'${q(scope.locationId)}'` : 'NULL'}, datetime('now'))`)
   item.pendingInvitationId = invitationId
-  item.invitationUrl = `${baseUrl}/accept-invitation/${encodeURIComponent(invitationId)}?siteId=${encodeURIComponent(group.scopes[0].siteId)}`
+  item.invitationUrl = `${baseUrl}/accept-invitation/${encodeURIComponent(invitationId)}?siteId=${encodeURIComponent(item.scopes[0].siteId)}`
   if (args.includes('--remote') && (createdInvitation || args.includes('--resend'))) {
     try {
-      item.providerMessageId = await sendAccessInvitation(group.phone, group.organizationName, invitationId, group.scopes[0].siteId)
-      run(`INSERT INTO notifications (id, organization_id, site_id, location_id, channel, template, recipient, payload, status, provider_message_id, sent_at, created_at) VALUES ('${randomUUID()}', '${q(group.organizationId)}', '${q(group.scopes[0].siteId)}', ${group.scopes[0].locationId ? `'${q(group.scopes[0].locationId)}'` : 'NULL'}, 'whatsapp', 'dashboard_access_invitation', '${q(group.phone)}', '${q(JSON.stringify({ invitationId }))}', 'sent', ${item.providerMessageId ? `'${q(item.providerMessageId)}'` : 'NULL'}, datetime('now'), datetime('now'))`)
+      item.providerMessageId = await sendAccessInvitation(item.phone, item.organizationName, invitationId, item.scopes[0].siteId)
+      run(`INSERT INTO notifications (id, organization_id, site_id, location_id, channel, template, recipient, payload, status, provider_message_id, sent_at, created_at) VALUES ('${randomUUID()}', '${q(item.organizationId)}', '${q(item.scopes[0].siteId)}', ${item.scopes[0].locationId ? `'${q(item.scopes[0].locationId)}'` : 'NULL'}, 'whatsapp', 'dashboard_access_invitation', '${q(item.phone)}', '${q(JSON.stringify({ invitationId }))}', 'sent', ${item.providerMessageId ? `'${q(item.providerMessageId)}'` : 'NULL'}, datetime('now'), datetime('now'))`)
     } catch (error) {
       if (createdInvitation) run(`DELETE FROM invitation WHERE id = '${q(invitationId)}'`)
       throw error
     }
   }
+}
 }
 
 console.error(`WhatsApp access ${args.includes('--apply') ? 'apply' : 'dry-run'}: ${report.length} recipient(s)`)

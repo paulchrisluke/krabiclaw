@@ -8,6 +8,7 @@
       style="grid-template-columns: minmax(24rem, 45%) 1fr; grid-template-rows: minmax(0, 1fr)"
     >
       <OnboardingWizard
+        mode="new-site"
         :site-id="siteId"
         :existing-org-slug="orgSlug"
         :existing-site-slug="siteData?.subdomain ?? null"
@@ -21,6 +22,7 @@
         :selected-page="selectedPreviewPage"
         :site-status="computedSiteStatus"
         :site-domain="siteDomain"
+        :vertical="previewVertical"
         @select-page="onSelectPage"
         @select-location="onSelectLocation"
       />
@@ -39,6 +41,8 @@
 </template>
 
 <script setup lang="ts">
+import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
+
 definePageMeta({ layout: 'editor', ssr: false })
 
 const route = useRoute()
@@ -47,6 +51,7 @@ const toast = useToast()
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const siteData = ref<ApiRecord | null>(null)
+const previewVertical = computed<SiteVertical>(() => normalizeVertical(siteData.value?.vertical as string | undefined) as SiteVertical)
 const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])
 const orgSlug = ref<string | null>(null)
 const previewToken = ref('')
@@ -194,16 +199,16 @@ const loadReadiness = async () => {
 
   try {
     const data = await $fetch<{
-      items: { business_info: boolean; hero_image: boolean; menu_or_experiences: boolean; story: boolean; post: boolean }
+      items: { business_info: boolean; hero_image: boolean; core_offering: boolean; story: boolean; post: boolean }
     }>(`/api/dashboard/onboarding/checklist?siteId=${siteId.value}`)
 
     readiness.value = {
       details: data.items.business_info ? 'complete' : 'missing',
       hero: data.items.hero_image ? 'complete' : 'missing',
-      offer: data.items.menu_or_experiences ? 'complete' : 'missing',
+      offer: data.items.core_offering ? 'complete' : 'missing',
       brand: data.items.story ? 'complete' : data.items.business_info ? 'attention' : 'missing',
       trust: data.items.post ? 'complete' : data.items.business_info ? 'attention' : 'missing',
-      launch: (data.items.business_info && data.items.hero_image && data.items.menu_or_experiences) ? 'attention' : 'missing',
+      launch: (data.items.business_info && data.items.hero_image && data.items.core_offering) ? 'attention' : 'missing',
     }
   } catch {
     // Not critical, readiness stays at default

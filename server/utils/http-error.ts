@@ -7,7 +7,7 @@ export function httpErrorDetails(error: unknown, fallbackMessage: string) {
   const parsedCode = typeof candidate.statusCode === 'number' ? candidate.statusCode : 500
   const statusCode = (parsedCode >= 400 && parsedCode < 600) ? parsedCode : 500
   const isServerError = statusCode >= 500
-  
+
   return {
     message: !isServerError && typeof candidate.message === 'string' ? candidate.message : fallbackMessage,
     statusCode,

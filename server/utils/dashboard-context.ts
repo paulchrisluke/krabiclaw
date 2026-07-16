@@ -18,7 +18,16 @@ export interface DashboardSiteRow {
   id: string
   organization_id: string
   brand_name: string | null
-  vertical: 'restaurant' | 'experience' | null
+  // Raw sites.vertical storage value (see sites_vertical_check in
+  // server/db/schema.ts): one of restaurant, experience, retail, wellness,
+  // or service — where service is professional_service's DB-storage alias
+  // (see server/utils/site-creation.ts's toStoredVertical /
+  // utils/vertical-copy.ts's normalizeVertical). A narrower literal union
+  // here previously caused callers (transfer onboarding) to silently coerce
+  // any non-'experience' vertical to 'restaurant' — consumers that need the
+  // canonical app-level value must call normalizeVertical() on this field
+  // rather than relying on TypeScript to have already narrowed it.
+  vertical: string | null
   subdomain: string | null
   custom_domain: string | null
   public_url: string | null
