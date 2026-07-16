@@ -999,6 +999,7 @@ export const blog_posts = sqliteTable("blog_posts", {
 	published_at: text(),
 	first_published_at: text(),
 	scheduled_for: text(),
+	scheduled_revision_id: text(),
 	slug_manually_overridden: integer().default(0).notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),

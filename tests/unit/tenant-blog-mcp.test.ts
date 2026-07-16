@@ -32,4 +32,7 @@ test('tenant blog MCP contract exposes explicit publishing, tags, and AI assista
   assert.match(source, /name: 'unpublish_blog_post'/)
   assert.match(source, /tags: \{ type: 'array'/)
   assert.match(source, /ai_assistance/)
+  assert.match(source, /content_blocks/)
+  assert.doesNotMatch(source, /body: \{ type: 'string', description: 'Use \{\{component/)
+  assert.match(source, /review the draft at edit_url/i)
 })

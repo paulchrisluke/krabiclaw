@@ -13,58 +13,8 @@
     <article>
       <DocsBreadcrumb :crumbs="breadcrumbs" />
 
-      <h1 class="mb-3 text-4xl font-bold leading-tight text-default">{{ post.title }}</h1>
-      <p v-if="post.excerpt" class="mb-6 text-xl leading-relaxed text-muted">{{ post.excerpt }}</p>
-
-      <div class="mb-10 flex items-center gap-3">
-        <div class="shrink-0">
-          <img
-            v-if="post.author_image"
-            :src="post.author_image"
-            :alt="post.author_name || 'Author avatar'"
-            class="h-10 w-10 rounded-full object-cover"
-          />
-          <div
-            v-else
-            class="flex h-10 w-10 items-center justify-center rounded-full text-base font-bold text-white"
-            style="background-color: var(--kc-teal)"
-          >
-            {{ authorInitial }}
-          </div>
-        </div>
-        <div>
-          <p class="font-semibold text-default">{{ post.author_name || 'KrabiClaw' }}</p>
-          <div class="flex flex-wrap items-center gap-x-2 text-sm text-dimmed">
-            <span>{{ readTime }} min read</span>
-            <span v-if="post.published_at">·</span>
-            <span v-if="post.published_at">
-              <NuxtTime :datetime="post.published_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
-            </span>
-            <span v-if="wasUpdated && post.updated_at">(updated <NuxtTime :datetime="post.updated_at" locale="en-US" month="long" day="numeric" time-zone="UTC" />)</span>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="postMedia.url" class="relative mb-10 h-64 w-full overflow-hidden rounded-2xl md:h-96">
-        <video
-          v-if="postMedia.isVideo"
-          :src="postMedia.url"
-          autoplay
-          muted
-          loop
-          playsinline
-          class="h-full w-full object-cover"
-        />
-        <img
-          v-else
-          :src="postMedia.url"
-          :alt="post.title"
-          class="h-full w-full object-cover"
-        />
-      </div>
-
-      <BlogArticleRenderer v-if="post.content_blocks?.length" :title="post.title" :blocks="post.content_blocks" :show-title="false" template="platform" class="!max-w-none !px-0 !py-0" />
-      <div v-else ref="articleBodyRef" class="space-y-14">
+      <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="post.author_name || 'KrabiClaw'" :author-image="post.author_image" site-name="KrabiClaw" :media-url="postMedia.url" :media-kind="postMedia.isVideo ? 'video' : 'image'" :read-minutes="readTime" :blocks="post.content_blocks" template="platform">
+      <template #legacy-body><div ref="articleBodyRef" class="space-y-14">
         <template v-for="(block, blockIndex) in renderedBlocks" :key="`block-${blockIndex}`">
           <!-- eslint-disable vue/no-v-html -->
           <div
@@ -89,7 +39,8 @@
             v-bind="block.props"
           />
         </template>
-      </div>
+      </div></template>
+      </BlogArticleView>
 
       <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
         <div class="flex items-center gap-4">

@@ -19,12 +19,14 @@ export interface BlogPost {
   published_at?: string | null
   updated_at?: string | null
   first_published_at?: string | null
+  slug_manually_overridden?: boolean | number | null
   scheduled_for?: string | null
   status?: 'draft' | 'published' | 'scheduled' | 'archived'
   visibility?: 'public' | 'unlisted'
   tags?: string[]
   seo_title?: string | null
   social_image_asset_id?: string | null
+  social_image?: { public_url?: string | null; thumbnail_url?: string | null } | null
   edit_url?: string | null
   content_document?: {
     document: { id: string; updated_at: string; draft_revision_id: string | null; published_revision_id: string | null }
@@ -96,6 +98,7 @@ export interface PlatformBlogCreateInput {
   visibility?: 'public' | 'unlisted'
   scheduled_for?: string | null
   social_image_asset_id?: string | null
+  content_blocks?: BlogEditorBlock[]
 }
 
 export interface PlatformBlogUpdateInput {
@@ -137,6 +140,7 @@ export interface PlatformBlogUpdateInput {
   social_image_asset_id?: string | null
   slug?: string | null
   redirect_old_slug?: boolean
+  reset_slug_override?: boolean
   content_blocks?: BlogEditorBlock[]
   expected_document_updated_at?: string
   expected_updated_at?: string

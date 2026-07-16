@@ -13,8 +13,9 @@
     <div v-if="loadPending" class="grid min-h-0 flex-1 place-items-center"><UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" /></div>
     <div v-else-if="loadError" class="grid min-h-0 flex-1 place-items-center p-6"><UAlert color="error" :description="loadError" /></div>
     <main v-else class="min-h-0 flex-1 overflow-y-auto bg-[var(--editor-canvas,#fff)] text-[var(--editor-ink,#1f2937)] [overscroll-behavior:contain]" :style="editorCanvasStyle">
-      <BlogArticleRenderer
+      <BlogArticleView
         v-model:title="form.title"
+        :excerpt="form.excerpt || resolvedExcerpt"
         :blocks="blocks"
         :template="templateName"
         editable
@@ -46,7 +47,7 @@
             <UButton icon="i-lucide-trash-2" color="neutral" variant="soft" size="xs" aria-label="Delete block" @click="removeBlock(index)" />
           </div>
         </template>
-      </BlogArticleRenderer>
+      </BlogArticleView>
 
       <div class="sticky bottom-[calc(env(safe-area-inset-bottom)+1rem)] mx-auto mb-10 flex w-fit gap-1 rounded-full bg-[#151923] p-1.5 text-white shadow-xl">
         <UPopover v-model:open="inserterOpen">
@@ -82,10 +83,10 @@
           <div class="rounded-lg border border-white/10 bg-white/5 p-3"><p class="truncate text-sm text-blue-300">{{ resolvedSeo.title }}</p><p class="truncate text-xs text-green-300">{{ resolvedSeo.canonicalUrl }}</p><p class="mt-1 line-clamp-2 text-xs text-gray-300">{{ resolvedSeo.description }}</p></div>
           <UFormField label="SEO title"><UInput v-model="form.seo_title" :placeholder="form.title" /></UFormField>
           <UFormField label="Meta description"><UTextarea v-model="form.seo_description" :placeholder="resolvedExcerpt" /></UFormField>
-          <UFormField label="Social image"><component :is="mediaPickerComponent || PlatformMediaPicker" :site-id="siteId" v-model="form.social_image_asset_id" accept="image" /></UFormField>
+          <UFormField label="Social image"><img v-if="resolvedSocialImageUrl" :src="resolvedSocialImageUrl" alt="Resolved social preview" class="mb-2 aspect-video w-full rounded-lg object-cover"><component :is="mediaPickerComponent || PlatformMediaPicker" :site-id="siteId" v-model="form.social_image_asset_id" accept="image" /></UFormField>
         </SettingsSection>
         <SettingsSection title="Advanced">
-          <UFormField label="URL slug"><UInput v-model="form.slug" /><p class="mt-1 text-xs text-gray-400">{{ form.slug || generatedSlug }}</p></UFormField>
+          <UFormField label="URL slug"><UInput v-model="form.slug" :disabled="slugResetRequested" /><div class="mt-1 flex items-center justify-between gap-3"><p class="text-xs text-gray-400">{{ slugResetRequested ? generatedSlug : form.slug || generatedSlug }}</p><button v-if="post?.slug_manually_overridden" type="button" class="text-xs text-blue-300 hover:underline" @click="resetSlugOverride">Use automatic slug</button></div></UFormField>
           <UCheckbox v-if="post?.first_published_at && form.slug !== post.slug" v-model="form.redirect_old_slug" label="Redirect old URL" />
           <UFormField label="Canonical URL"><UInput v-model="form.canonical_url" :placeholder="resolvedSeo.canonicalUrl" /></UFormField>
           <UFormField label="Robots"><UInput v-model="form.robots" placeholder="index, follow" /></UFormField>
@@ -98,11 +99,11 @@
 
 <script setup lang="ts">
 import type { Component } from 'vue'
-import BlogArticleRenderer from '~/components/blog/BlogArticleRenderer.vue'
+import BlogArticleView from '~/components/blog/BlogArticleView.vue'
 import PlatformMediaPicker from '~/components/workspace/media/PlatformMediaPicker.vue'
 import SettingsSection from './SettingsSection.vue'
 import type { BlogPostRepository, BlogPost, BlogEditorBlock, PlatformBlogUpdateInput } from './types'
-import { generatedExcerpt, normalizeBlogSlug, resolveBlogSeo } from '~/utils/blog-editor'
+import { generatedExcerpt, initialBlogEditorBlocks, normalizeBlogSlug, resolveBlogPublicPath, resolveBlogSeo, SerializedSnapshotQueue } from '~/utils/blog-editor'
 import { getErrorMessage } from '~/utils/errors'
 
 const props = withDefaults(defineProps<{ repository: BlogPostRepository; postId?: string; siteId?: string; isEdit?: boolean; backUrl?: string; mediaPickerComponent?: Component; freeTextCategory?: boolean }>(), {
@@ -111,7 +112,7 @@ const props = withDefaults(defineProps<{ repository: BlogPostRepository; postId?
 const route = useRoute()
 const postId = computed(() => props.postId || String(route.params.postId || ''))
 const post = ref<BlogPost | null>(null)
-const blocks = ref<BlogEditorBlock[]>([])
+const blocks = ref<BlogEditorBlock[]>(initialBlogEditorBlocks())
 const loadPending = ref(true)
 const loadError = ref('')
 const saveState = ref<'saved' | 'saving' | 'failed' | 'conflict'>('saved')
@@ -124,6 +125,10 @@ const settingsButton = ref()
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 let clockTimer: ReturnType<typeof setInterval> | undefined
 let dirty = false
+let applyingServerSnapshot = false
+let serverPostUpdatedAt: string | undefined
+let serverDocumentUpdatedAt: string | undefined
+const slugResetRequested = ref(false)
 
 const form = reactive({ title: '', category: '', excerpt: '', seo_title: '', seo_description: '', social_image_asset_id: '', slug: '', canonical_url: '', robots: '', visibility: 'public' as 'public' | 'unlisted', scheduled_for: '', redirect_old_slug: true })
 const tagsText = ref('')
@@ -142,7 +147,13 @@ const editorCanvasStyle = computed(() => {
 const statusLabel = computed(() => post.value?.status === 'scheduled' ? 'Scheduled' : post.value?.published_at ? 'Published' : 'Draft')
 const generatedSlug = computed(() => normalizeBlogSlug(form.title))
 const resolvedExcerpt = computed(() => generatedExcerpt(blocks.value))
-const resolvedSeo = computed(() => resolveBlogSeo({ title: form.title, seoTitle: form.seo_title, excerpt: form.excerpt || resolvedExcerpt.value, seoDescription: form.seo_description, slug: form.slug || generatedSlug.value, canonicalUrl: form.canonical_url, baseUrl: windowOrigin(), pathPrefix: post.value?.public_path?.startsWith('/article') ? '/article' : '/blog', robots: form.robots }))
+const publicPath = computed(() => resolveBlogPublicPath({ scope: props.siteId ? 'tenant' : 'platform', template: templateName.value, slug: slugResetRequested.value ? generatedSlug.value : form.slug || generatedSlug.value, category: form.category }))
+const resolvedSeo = computed(() => resolveBlogSeo({ title: form.title, seoTitle: form.seo_title, excerpt: form.excerpt || resolvedExcerpt.value, seoDescription: form.seo_description, slug: form.slug || generatedSlug.value, canonicalUrl: form.canonical_url, baseUrl: windowOrigin(), pathPrefix: publicPath.value.replace(/\/[^/]+$/, ''), robots: form.robots }))
+const resolvedSocialImageUrl = computed<string | null>(() => {
+  const block = blocks.value.find(item => item.type === 'image')
+  const candidate = post.value?.social_image?.thumbnail_url || post.value?.social_image?.public_url || block?.data.thumbnail_url || block?.data.public_url
+  return typeof candidate === 'string' && candidate ? candidate : null
+})
 const saveLabel = computed(() => {
   if (saveState.value === 'saving') return 'Saving…'
   if (saveState.value === 'failed') return 'Save failed'
@@ -157,7 +168,31 @@ const inserterItems = [
   { type: 'divider', label: 'Divider', icon: 'i-lucide-minus' },
 ] as const
 
-watch([() => ({ ...form }), blocks, tagsText, publishTiming], () => queueSave(), { deep: true })
+type SaveSnapshot = { postId: string; payload: PlatformBlogUpdateInput }
+const saveQueue = new SerializedSnapshotQueue<SaveSnapshot, BlogPost>(
+  async (snapshot) => {
+    const updated = await props.repository.update(snapshot.postId, {
+      ...snapshot.payload,
+      expected_updated_at: serverPostUpdatedAt,
+      expected_document_updated_at: serverDocumentUpdatedAt,
+    })
+    syncServerVersions(updated)
+    return updated
+  },
+  (updated) => {
+    applyingServerSnapshot = true
+    post.value = updated
+    form.slug = updated.slug || form.slug
+    slugResetRequested.value = false
+    if (updated.content_document?.blocks) blocks.value = structuredClone(updated.content_document.blocks)
+    dirty = false
+    saveState.value = 'saved'
+    lastSavedAt.value = Date.now()
+    void nextTick(() => { applyingServerSnapshot = false })
+  },
+)
+
+watch([() => ({ ...form }), blocks, tagsText, publishTiming, slugResetRequested], () => { if (!applyingServerSnapshot) queueSave() }, { deep: true })
 onMounted(async () => { clockTimer = setInterval(() => { clock.value = Date.now() }, 1000); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('popstate', onPopState); await load() })
 onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer); if (saveTimer) clearTimeout(saveTimer); if (import.meta.client) { window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('popstate', onPopState) } })
 
@@ -165,8 +200,10 @@ async function load() {
   if (!postId.value || !props.isEdit) { loadPending.value = false; return }
   try {
     const loaded = await props.repository.get(postId.value)
+    syncServerVersions(loaded)
     post.value = loaded
     Object.assign(form, { title: loaded.title, category: loaded.category || '', excerpt: loaded.excerpt || '', seo_title: loaded.seo_title || '', seo_description: loaded.seo_description || '', social_image_asset_id: loaded.social_image_asset_id || '', slug: loaded.slug || '', canonical_url: loaded.canonical_url || '', robots: loaded.robots || '', visibility: loaded.visibility || 'public', scheduled_for: toLocalDatetime(loaded.scheduled_for), redirect_old_slug: true })
+    slugResetRequested.value = false
     tagsText.value = loaded.tags?.join(', ') || ''
     publishTiming.value = loaded.scheduled_for ? 'Scheduled' : 'Now'
     blocks.value = loaded.content_document?.blocks?.length ? structuredClone(loaded.content_document.blocks) : [{ type: 'markdown', data: { markdown: loaded.body || '' } }]
@@ -186,32 +223,33 @@ function queueSave() {
     if (form.title.trim() && serializeBody().trim() && (props.freeTextCategory || form.category.trim())) saveTimer = setTimeout(() => void createDraft(false), 900)
     return
   }
-  if (post.value) saveTimer = setTimeout(() => void flushSave(), 900)
+  if (post.value) {
+    saveQueue.mark(buildSaveSnapshot())
+    saveTimer = setTimeout(() => void flushSave(), 900)
+  }
 }
 async function flushSave() {
   if (!dirty || !post.value) return post.value
   if (saveTimer) clearTimeout(saveTimer)
   saveState.value = 'saving'
-  const scheduledFor = publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null
-  const payload: PlatformBlogUpdateInput = { title: form.title, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, slug: form.slug !== post.value.slug ? (form.slug || generatedSlug.value) : undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: scheduledFor, content_blocks: blocks.value, expected_document_updated_at: post.value.content_document?.document.updated_at, expected_updated_at: post.value.updated_at || undefined }
   try {
-    const updated = await props.repository.update(postId.value, payload)
-    post.value = updated
-    form.slug = updated.slug || form.slug
-    if (updated.content_document?.blocks) blocks.value = structuredClone(updated.content_document.blocks)
-    dirty = false; saveState.value = 'saved'; lastSavedAt.value = Date.now(); return updated
+    await saveQueue.flush()
+    return post.value
   } catch (error: unknown) {
     const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status)
     saveState.value = status === 409 ? 'conflict' : 'failed'
     throw error
   }
 }
-async function publish() { publishing.value = true; try { if (!post.value) { await createDraft(true); return } await flushSave(); const updated = await props.repository.update(postId.value, { publish: true, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null }); post.value = updated; saveState.value = 'saved' } catch { if (saveState.value !== 'conflict') saveState.value = 'failed' } finally { publishing.value = false } }
+function buildSaveSnapshot(): SaveSnapshot {
+  const scheduledFor = publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null
+  return { postId: postId.value, payload: { title: form.title, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: scheduledFor, content_blocks: structuredClone(blocks.value) } }
+}
+async function publish() { publishing.value = true; try { if (!post.value) { await createDraft(true); return } if (dirty) saveQueue.mark(buildSaveSnapshot()); await saveQueue.runExclusive(async () => { const updated = await props.repository.update(postId.value, { publish: true, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null, expected_updated_at: serverPostUpdatedAt }); syncServerVersions(updated); post.value = { ...updated, content_document: post.value?.content_document }; return updated }); saveState.value = 'saved' } catch (error: unknown) { const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status); saveState.value = status === 409 ? 'conflict' : 'failed' } finally { publishing.value = false } }
 async function createDraft(publishNow: boolean) {
   if (!form.title.trim() || !serializeBody().trim()) return
   saveState.value = 'saving'
-  const components = blocks.value.filter(block => block.type === 'faq' || block.type === 'how_to').map((block, position) => ({ type: block.type as 'faq' | 'how_to', position, data: block.data }))
-  const created = await props.repository.create({ title: form.title, body: serializeBody(), category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null, components, publish: publishNow })
+  const created = await props.repository.create({ title: form.title, body: serializeBody(), content_blocks: structuredClone(blocks.value), category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null, publish: publishNow })
   dirty = false
   await navigateTo(props.repository.editUrl(created.id))
 }
@@ -227,7 +265,7 @@ function parseFaq(index: number, value: string) { const items = value.split(/\n\
 function serializeHowTo(block: BlogEditorBlock) { return (Array.isArray(block.data.steps) ? block.data.steps : []).map((step, index: number) => { const record = step && typeof step === 'object' ? step as Record<string, unknown> : {}; return `${index + 1}. ${String(record.text || record.name || '')}` }).join('\n') }
 function parseHowTo(index: number, value: string) { setBlockData(index, 'steps', value.split('\n').map(line => ({ text: line.replace(/^\s*\d+[.)]\s*/, '').trim() })).filter(step => step.text)) }
 async function share() { const url = new URL(post.value?.edit_url || props.repository.editUrl(postId.value), windowOrigin()).toString(); await navigator.clipboard?.writeText(url) }
-async function goBack() { try { await flushSave(); await navigateTo(props.backUrl) } catch { if (saveState.value !== 'conflict') saveState.value = 'failed' } }
+async function goBack() { if (settingsOpen.value) { closeSettings(); return } try { await flushSave(); await navigateTo(props.backUrl) } catch { if (saveState.value !== 'conflict') saveState.value = 'failed' } }
 function openSettings() { settingsOpen.value = true; if (import.meta.client) history.pushState({ blogSettings: true }, '') }
 function closeSettings() { settingsOpen.value = false; nextTick(() => settingsButton.value?.$el?.focus?.()) }
 function onPopState() { if (settingsOpen.value) closeSettings() }
@@ -235,4 +273,12 @@ function beforeUnload(event: BeforeUnloadEvent) { if (dirty) event.preventDefaul
 async function remove() { if (!confirm('Delete this post permanently?')) return; await props.repository.delete(postId.value); await navigateTo(props.backUrl) }
 function windowOrigin() { return import.meta.client ? window.location.origin : 'https://krabiclaw.com' }
 function toLocalDatetime(value?: string | null) { if (!value) return ''; const d = new Date(value); const offset = d.getTimezoneOffset() * 60_000; return new Date(d.getTime() - offset).toISOString().slice(0, 16) }
+function resetSlugOverride() { slugResetRequested.value = true; form.slug = generatedSlug.value }
+function syncServerVersions(value: BlogPost) { serverPostUpdatedAt = value.updated_at || serverPostUpdatedAt; serverDocumentUpdatedAt = value.content_document?.document.updated_at || serverDocumentUpdatedAt }
+
+onBeforeRouteLeave(async () => {
+  if (settingsOpen.value || inserterOpen.value) { settingsOpen.value = false; inserterOpen.value = false; return false }
+  await flushSave()
+  return true
+})
 </script>

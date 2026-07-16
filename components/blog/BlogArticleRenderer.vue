@@ -46,19 +46,36 @@
           <figcaption v-if="block.data.caption" class="text-center text-sm opacity-70">{{ block.data.caption }}</figcaption>
           <slot v-if="editable" name="image-editor" :block="block" :index="index" />
         </figure>
-        <dl v-else-if="block.type === 'faq'" class="space-y-5">
+        <dl v-else-if="block.type === 'faq' && (editable || isRenderable(block))" class="space-y-5">
           <div v-for="(item, itemIndex) in faqItems(block)" :key="itemIndex">
             <dt class="font-semibold">Q: {{ item.question }}</dt>
             <dd class="mt-1 opacity-80">A: {{ item.answer }}</dd>
           </div>
           <slot v-if="editable" name="faq-editor" :block="block" :index="index" />
         </dl>
-        <ol v-else-if="block.type === 'how_to'" class="list-decimal space-y-2 pl-6 text-lg leading-8">
+        <ol v-else-if="block.type === 'how_to' && (editable || isRenderable(block))" class="list-decimal space-y-2 pl-6 text-lg leading-8">
           <li v-for="(step, stepIndex) in howToSteps(block)" :key="stepIndex">{{ step.text || step.name }}</li>
           <slot v-if="editable" name="how-to-editor" :block="block" :index="index" />
         </ol>
+        <div v-else-if="block.type === 'gallery'" class="grid gap-4 sm:grid-cols-2">
+          <figure v-for="(item, itemIndex) in galleryItems(block)" :key="item.id || itemIndex" class="space-y-2">
+            <img v-if="item.public_url || item.thumbnail_url" :src="String(item.public_url || item.thumbnail_url)" :alt="String(item.alt || '')" class="aspect-video w-full rounded-lg object-cover">
+            <figcaption v-if="item.caption" class="text-sm opacity-70">{{ item.caption }}</figcaption>
+          </figure>
+        </div>
+        <ContentAiAssistanceSection v-else-if="block.type === 'ai_assistance' && aiAssistanceProps(block)" v-bind="aiAssistanceProps(block)!" />
+        <aside v-else-if="block.type === 'callout'" class="rounded-xl border border-current/15 bg-current/5 p-5">
+          <h3 v-if="block.data.title" class="mb-2 font-semibold">{{ block.data.title }}</h3>
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <div class="prose max-w-none" v-html="renderMarkdown(String(block.data.markdown || block.data.text || ''))" />
+        </aside>
+        <div v-else-if="block.type === 'cta'" class="rounded-xl border border-current/15 p-6 text-center">
+          <h3 v-if="block.data.title" class="text-xl font-semibold">{{ block.data.title }}</h3>
+          <p v-if="block.data.description" class="mt-2 opacity-75">{{ block.data.description }}</p>
+          <a v-if="safeUrl(block.data.url)" :href="safeUrl(block.data.url)!" class="mt-4 inline-flex rounded-lg bg-current px-4 py-2 font-semibold text-white no-underline"><span class="mix-blend-difference">{{ block.data.label || 'Learn more' }}</span></a>
+        </div>
         <hr v-else-if="block.type === 'divider'" class="border-current opacity-20">
-        <div v-else class="rounded-lg border border-dashed border-current/20 p-4 text-sm opacity-70">
+        <div v-else-if="editable" class="rounded-lg border border-dashed border-current/20 p-4 text-sm opacity-70">
           {{ block.type.replaceAll('_', ' ') }} block
         </div>
         <slot v-if="editable" name="block-actions" :block="block" :index="index" />
@@ -69,7 +86,9 @@
 
 <script setup lang="ts">
 import type { BlogEditorBlock } from '~/components/workspace/blog/types'
+import ContentAiAssistanceSection from '~/components/content/ContentAiAssistanceSection.vue'
 import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
+import { sanitizeUrl } from '~/utils/sanitize'
 
 withDefaults(defineProps<{ title: string; blocks: BlogEditorBlock[]; editable?: boolean; template?: string; showTitle?: boolean }>(), {
   editable: false,
@@ -108,6 +127,20 @@ function htmlToMarkdown(root: HTMLElement) {
 }
 function faqItems(block: BlogEditorBlock) { return Array.isArray(block.data.items) ? block.data.items as Array<{ question?: string; answer?: string }> : [] }
 function howToSteps(block: BlogEditorBlock) { return Array.isArray(block.data.steps) ? block.data.steps as Array<{ name?: string; text?: string }> : [] }
+function isRenderable(block: BlogEditorBlock) { return block.data.status !== 'inactive' && block.data.render_enabled !== false }
+function galleryItems(block: BlogEditorBlock) { return Array.isArray(block.data.items) ? block.data.items as Array<{ id?: string; public_url?: string; thumbnail_url?: string; alt?: string; caption?: string }> : [] }
+function safeUrl(value: unknown) { return sanitizeUrl(typeof value === 'string' ? value : null) }
+function aiAssistanceProps(block: BlogEditorBlock) {
+  if (block.data.render_enabled === false || block.data.status === 'inactive') return null
+  const prompts = Array.isArray(block.data.prompts) ? block.data.prompts : []
+  const normalized = prompts.flatMap((item) => {
+    if (!item || typeof item !== 'object') return []
+    const prompt = item as Record<string, unknown>
+    if (typeof prompt.prompt !== 'string' || !prompt.prompt.trim()) return []
+    return [{ title: typeof prompt.title === 'string' ? prompt.title : null, prompt: prompt.prompt, description: typeof prompt.description === 'string' ? prompt.description : null, copyLabel: typeof prompt.copy_label === 'string' ? prompt.copy_label : 'Copy prompt' }]
+  })
+  return normalized.length ? { label: typeof block.data.label === 'string' ? block.data.label : 'AI Assistance', intro: typeof block.data.intro === 'string' ? block.data.intro : null, prompts: normalized } : null
+}
 </script>
 
 <style scoped>

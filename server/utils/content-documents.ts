@@ -1,4 +1,4 @@
-import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '../db/index.ts'
+import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '../db/index.ts'
 
 export type ContentDocumentOwnerType = 'platform_blog' | 'platform_doc' | 'tenant_blog'
 export type ContentBlockType = 'heading' | 'markdown' | 'image' | 'gallery' | 'faq' | 'how_to' | 'divider' | 'ai_assistance' | 'cta' | 'callout'
@@ -231,6 +231,8 @@ async function writeRevisionFromBlocks(
     label?: string | null
     publish?: boolean
     expectedBlock?: { id: string; updatedAt: string }
+    additionalQueriesBefore?: BatchQuery[]
+    additionalQueriesAfter?: BatchQuery[]
   } = {},
 ) {
   const now = new Date().toISOString()
@@ -288,6 +290,7 @@ async function writeRevisionFromBlocks(
     : []
 
   const queries: { query: string; params: unknown[] }[] = [
+    ...(opts.additionalQueriesBefore ?? []).map(query => ({ query: query.query, params: query.params ?? [] })),
     deleteBlocksQuery,
     ...snapshots.map(block => ({
       query: `INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
@@ -318,6 +321,7 @@ async function writeRevisionFromBlocks(
         ? [revisionId, revisionId, now, document.id]
         : [revisionId, now, document.id],
     },
+    ...(opts.additionalQueriesAfter ?? []).map(query => ({ query: query.query, params: query.params ?? [] })),
   ]
 
   try {
@@ -366,6 +370,33 @@ export async function syncContentDocumentFromMarkdown(
 
   const revision = await writeRevisionFromBlocks(db, document, blocks, {
     bodyMarkdown: opts.bodyMarkdown,
+    createdBy: opts.createdBy,
+    label: opts.label,
+    publish: opts.publish,
+  })
+  return { document, ...revision }
+}
+
+export async function syncContentDocumentFromBlocks(
+  db: D1Database,
+  opts: {
+    ownerType: ContentDocumentOwnerType
+    ownerId: string
+    blocks: ContentBlockInput[]
+    createdBy?: string | null
+    label?: string | null
+    publish?: boolean
+  },
+) {
+  const document = await ensureContentDocument(db, opts.ownerType, opts.ownerId)
+  const revision = await writeRevisionFromBlocks(db, document, opts.blocks.map((block, index) => ({
+    id: block.id,
+    parent_block_id: block.parent_block_id ?? null,
+    type: block.type,
+    position: index,
+    level: block.level ?? null,
+    data: block.data,
+  })), {
     createdBy: opts.createdBy,
     label: opts.label,
     publish: opts.publish,
@@ -671,7 +702,7 @@ export async function replaceContentDocumentBlocks(
   ownerType: ContentDocumentOwnerType,
   ownerId: string,
   blocks: ContentBlockInput[],
-  opts: { expected_document_updated_at: string; createdBy?: string | null; label?: string | null },
+  opts: { expected_document_updated_at: string; createdBy?: string | null; label?: string | null; publish?: boolean; additionalQueriesBefore?: BatchQuery[]; additionalQueriesAfter?: BatchQuery[] },
 ) {
   const document = await getContentDocumentByOwner(db, ownerType, ownerId)
   if (!document) notFound('Content document not found')
@@ -698,7 +729,10 @@ export async function replaceContentDocumentBlocks(
   return await writeRevisionFromBlocks(db, document, snapshots, {
     createdBy: opts.createdBy,
     label: opts.label ?? 'Editor autosave',
+    publish: opts.publish,
     expectedBlock: { id: anchor.id, updatedAt: anchor.updated_at },
+    additionalQueriesBefore: opts.additionalQueriesBefore,
+    additionalQueriesAfter: opts.additionalQueriesAfter,
   })
 }
 
@@ -706,8 +740,61 @@ export interface LegacyBlogBackfillFinding {
   post_id: string
   component_id: string
   type: 'faq' | 'how_to'
-  action: 'insert' | 'skip_existing' | 'invalid'
+  action: 'insert' | 'skip_existing' | 'malformed' | 'unmatched_placeholder' | 'duplicate'
   detail?: string
+}
+
+const LEGACY_COMPONENT_PLACEHOLDER_RE = /\{\{\s*component\s+type\s*=\s*(?:"([^"]+)"|'([^']+)'|([a-zA-Z0-9_-]+))\s*\}\}/g
+
+export function mergeLegacyBlogComponents(
+  sourceBlocks: ContentBlockInput[],
+  components: Array<{ component_id: string; type: 'faq' | 'how_to'; position: number; data: Record<string, unknown> }>,
+) {
+  const findings: LegacyBlogBackfillFinding[] = []
+  const remaining = [...components].sort((a, b) => a.position - b.position)
+  const canonicalTypes = new Set(sourceBlocks.filter(block => block.type === 'faq' || block.type === 'how_to').map(block => block.type))
+  const blocks: ContentBlockInput[] = []
+
+  for (const block of sourceBlocks) {
+    if (block.type !== 'markdown' || typeof block.data.markdown !== 'string') { blocks.push(block); continue }
+    const markdown = block.data.markdown
+    let cursor = 0
+    for (const match of markdown.matchAll(LEGACY_COMPONENT_PLACEHOLDER_RE)) {
+      const index = match.index ?? 0
+      const prose = markdown.slice(cursor, index)
+      if (prose.trim()) blocks.push({ ...block, id: cursor === 0 ? block.id : undefined, data: { ...block.data, markdown: prose } })
+      const rawType = match[1] ?? match[2] ?? match[3] ?? ''
+      const type = rawType === 'faq' || rawType === 'how_to' ? rawType : null
+      const componentIndex = type ? remaining.findIndex(component => component.type === type) : -1
+      if (componentIndex < 0 || !type) {
+        findings.push({ post_id: '', component_id: '', type: type ?? 'faq', action: 'unmatched_placeholder', detail: `No valid legacy component matched ${rawType || 'unknown'}` })
+        blocks.push({ type: 'markdown', data: { markdown: match[0] } })
+      } else {
+        const [component] = remaining.splice(componentIndex, 1)
+        if (canonicalTypes.has(type)) findings.push({ post_id: '', component_id: component!.component_id, type, action: 'duplicate', detail: 'Canonical block of this type already exists' })
+        else {
+          blocks.push({ type, data: component!.data })
+          canonicalTypes.add(type)
+          findings.push({ post_id: '', component_id: component!.component_id, type, action: 'insert', detail: 'Replaced body placeholder in place' })
+        }
+      }
+      cursor = index + match[0].length
+    }
+    const trailing = markdown.slice(cursor)
+    if (trailing.trim()) blocks.push({ ...block, id: cursor === 0 ? block.id : undefined, data: { ...block.data, markdown: trailing } })
+  }
+
+  for (const component of remaining) {
+    if (canonicalTypes.has(component.type)) {
+      findings.push({ post_id: '', component_id: component.component_id, type: component.type, action: 'duplicate', detail: 'Duplicate legacy component type' })
+      continue
+    }
+    const position = Math.max(0, Math.min(blocks.length, component.position))
+    blocks.splice(position, 0, { type: component.type, data: component.data })
+    canonicalTypes.add(component.type)
+    findings.push({ post_id: '', component_id: component.component_id, type: component.type, action: 'insert', detail: 'Inserted at legacy position because no placeholder existed' })
+  }
+  return { blocks: blocks.map((block, position) => ({ ...block, position })), findings }
 }
 
 /** Idempotent migration/report for the old blog component authoring surface.
@@ -724,9 +811,10 @@ export async function backfillLegacyBlogStructuredBlocks(
     body: string
     component_id: string
     type: string
+    position: number
     data_json: string
   }>(db, `
-    SELECT p.id AS post_id, p.site_id, p.body, c.id AS component_id, c.type, c.data_json
+    SELECT p.id AS post_id, p.site_id, p.body, c.id AS component_id, c.type, c.position, c.data_json
       FROM blog_posts p
       JOIN platform_content_components c ON c.content_type = 'blog_post' AND c.content_id = p.id
      WHERE c.type IN ('faq', 'how_to')
@@ -751,30 +839,26 @@ export async function backfillLegacyBlogStructuredBlocks(
       ...(block.id ? { id: block.id } : {}), type: block.type, data: block.data,
       parent_block_id: block.parent_block_id, level: block.level, position: block.position,
     }))
-    const present = new Set(blocks.map(block => block.type))
-
+    const validComponents: Array<{ component_id: string; type: 'faq' | 'how_to'; position: number; data: Record<string, unknown> }> = []
     for (const component of components) {
       const type = component.type as 'faq' | 'how_to'
       let data: Record<string, unknown>
       try {
         data = asObject(JSON.parse(component.data_json), `legacy component ${component.component_id} data`)
       } catch {
-        findings.push({ post_id: postId, component_id: component.component_id, type, action: 'invalid', detail: 'Malformed data_json' })
+        findings.push({ post_id: postId, component_id: component.component_id, type, action: 'malformed', detail: 'Malformed data_json' })
         continue
       }
       const required = type === 'faq' ? data.items : data.steps
       if (!Array.isArray(required) || required.length === 0) {
-        findings.push({ post_id: postId, component_id: component.component_id, type, action: 'invalid', detail: `Missing ${type === 'faq' ? 'items' : 'steps'}` })
+        findings.push({ post_id: postId, component_id: component.component_id, type, action: 'malformed', detail: `Missing ${type === 'faq' ? 'items' : 'steps'}` })
         continue
       }
-      if (present.has(type)) {
-        findings.push({ post_id: postId, component_id: component.component_id, type, action: 'skip_existing' })
-        continue
-      }
-      present.add(type)
-      blocks.push({ type, data })
-      findings.push({ post_id: postId, component_id: component.component_id, type, action: 'insert' })
+      validComponents.push({ component_id: component.component_id, type, position: component.position, data })
     }
+    const merged = mergeLegacyBlogComponents(blocks, validComponents)
+    blocks.splice(0, blocks.length, ...merged.blocks)
+    findings.push(...merged.findings.map(finding => ({ ...finding, post_id: postId })))
 
     if (opts.apply && snapshot && findings.some(finding => finding.post_id === postId && finding.action === 'insert')) {
       await replaceContentDocumentBlocks(db, ownerType, postId, blocks, {
@@ -789,7 +873,9 @@ export async function backfillLegacyBlogStructuredBlocks(
     totals: {
       insert: findings.filter(f => f.action === 'insert').length,
       skip_existing: findings.filter(f => f.action === 'skip_existing').length,
-      invalid: findings.filter(f => f.action === 'invalid').length,
+      malformed: findings.filter(f => f.action === 'malformed').length,
+      unmatched_placeholder: findings.filter(f => f.action === 'unmatched_placeholder').length,
+      duplicate: findings.filter(f => f.action === 'duplicate').length,
     },
   }
 }

@@ -15,55 +15,8 @@
 
     <article class="min-w-0">
     <div class="mx-auto max-w-4xl">
-    <div class="mb-6 flex flex-wrap items-center gap-3">
-      <span v-if="post.category" class="rounded bg-muted px-2 py-1 text-xs font-medium text-muted">
-        {{ post.category }}
-      </span>
-      <span v-if="post.published_at" class="text-sm text-dimmed">
-        <NuxtTime :datetime="post.published_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
-      </span>
-      <span class="text-sm text-dimmed">{{ readTime }} min read</span>
-      <span v-if="wasUpdated && post.updated_at" class="text-sm text-dimmed">
-        Updated <NuxtTime :datetime="post.updated_at" locale="en-US" month="long" day="numeric" time-zone="UTC" />
-      </span>
-    </div>
-
-    <h1 class="mb-5 text-4xl font-bold leading-tight text-default">{{ post.title }}</h1>
-    <p v-if="post.excerpt" class="mb-8 text-xl leading-relaxed text-muted">{{ post.excerpt }}</p>
-
-    <div class="mb-8 flex items-center gap-4 border-y border-default py-4">
-      <div
-        class="flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold text-white"
-        style="background-color: var(--ui-primary)"
-      >
-        {{ authorInitial }}
-      </div>
-      <div>
-        <p class="font-semibold text-default">{{ authorName }}</p>
-        <p class="text-sm text-dimmed">Published from {{ siteName }}</p>
-      </div>
-    </div>
-
-    <div v-if="postMedia.url" class="relative mb-10 h-64 w-full overflow-hidden rounded-2xl md:h-96">
-      <video
-        v-if="postMedia.isVideo"
-        :src="postMedia.url"
-        autoplay
-        muted
-        loop
-        playsinline
-        class="h-full w-full object-cover"
-      />
-      <img
-        v-else
-        :src="postMedia.url"
-        :alt="post.title"
-        class="h-full w-full object-cover"
-      />
-    </div>
-
-    <BlogArticleRenderer v-if="post.content_blocks?.length" :title="post.title" :blocks="post.content_blocks" :show-title="false" template="saya" class="!max-w-none !px-0 !py-0" />
-    <div v-else class="space-y-14">
+    <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="authorName" :site-name="siteName" :media-url="postMedia.url" :media-kind="postMedia.isVideo ? 'video' : 'image'" :read-minutes="readTime" :blocks="post.content_blocks" template="saya">
+      <template #legacy-body><div class="space-y-14">
       <template v-for="(block, blockIndex) in renderedBlocks" :key="`block-${blockIndex}`">
         <!-- eslint-disable vue/no-v-html -->
         <div
@@ -79,7 +32,8 @@
         <!-- eslint-enable vue/no-v-html -->
         <component :is="resolveContentComponent(block.type)" v-else v-bind="block.props" />
       </template>
-    </div>
+      </div></template>
+    </BlogArticleView>
 
     <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
       <div>
@@ -225,7 +179,6 @@ function slugifyCategory(value: string) {
 const activeCategorySlug = computed(() => slugifyCategory(post.value?.category?.trim() || 'Uncategorized'))
 const siteName = computed(() => site?.brand_name || 'Our Site')
 const authorName = computed(() => post.value?.author_name?.trim() || siteName.value)
-const authorInitial = computed(() => authorName.value.charAt(0).toUpperCase())
 const readTime = computed(() => {
   const words = (post.value?.body ?? '')
     .trim()

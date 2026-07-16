@@ -158,6 +158,7 @@ mock.module('../../server/db/index.ts', {
 const {
   appendContentBlock,
   getContentOutline,
+  mergeLegacyBlogComponents,
   publishContentDocumentRevision,
   renderContentPreview,
   replaceContentBlock,
@@ -257,4 +258,18 @@ test('publishContentDocumentRevision writes the compatibility body field', async
   assert.equal(post.status, 'published')
   assert.match(String(post.body), /New body\./)
   assert.equal(document.published_revision_id, document.draft_revision_id)
+})
+
+test('legacy structured backfill replaces placeholders in place and reports duplicates and unmatched placeholders', () => {
+  const result = mergeLegacyBlogComponents([
+    { type: 'markdown', data: { markdown: 'Before\n\n{{component type="faq"}}\n\nMiddle\n\n{{component type="how_to"}}\n\nAfter' } },
+  ], [
+    { component_id: 'faq-1', type: 'faq', position: 1, data: { items: [{ question: 'Q', answer: 'A' }] } },
+    { component_id: 'faq-2', type: 'faq', position: 2, data: { items: [{ question: 'Q2', answer: 'A2' }] } },
+  ])
+
+  assert.deepEqual(result.blocks.map(block => block.type), ['markdown', 'faq', 'markdown', 'markdown', 'markdown'])
+  assert.equal(result.blocks.some(block => String(block.data.markdown || '').includes('{{component type="how_to"}}')), true)
+  assert.ok(result.findings.some(finding => finding.action === 'unmatched_placeholder'))
+  assert.ok(result.findings.some(finding => finding.action === 'duplicate'))
 })

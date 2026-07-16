@@ -1,5 +1,16 @@
 import type { McpToolDefinition } from './shared'
-import { BLOG_NAV_FIELDS_SCHEMA, ROBOTS_DIRECTIVE_ENUM, blogComponentInputSchema, blogPostMutationResultObject, blogPostObject, siteTool } from './shared'
+import { BLOG_NAV_FIELDS_SCHEMA, ROBOTS_DIRECTIVE_ENUM, blogPostMutationResultObject, blogPostObject, siteTool } from './shared'
+
+const blogContentBlockSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    type: { type: 'string', enum: ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout'] },
+    level: { type: ['number', 'null'] },
+    data: { type: 'object', description: 'Typed block payload. FAQ uses items; How-To uses steps; images retain asset_id, alt, caption, and resolved media metadata.' },
+  },
+  required: ['type', 'data'],
+} as const
 
 export const BLOG_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -31,21 +42,17 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'create_blog_post',
-      description: 'Create a draft blog post for this site by default. The result includes edit_url for human review in the tenant-themed editor. Set publish=true only when explicitly requested; scheduled_for schedules publication. category is free text for tenant blogs.',
+      description: 'Create a draft blog post for this site by default. Always review the draft at edit_url in the tenant-themed editor. Set publish=true only when explicitly requested; scheduled_for schedules publication. category is free text for tenant blogs.',
       domain: 'blog',
       minimumRole: 'editor',
       confirmRequired: false,
       inputSchema: {
         title: { type: 'string' },
-        body: { type: 'string', description: 'Use {{component type="faq"}} or {{component type="how_to"}} in the body when you want structured embeds.' },
+        body: { type: 'string', description: 'Markdown compatibility body. Prefer content_blocks when authoring structured content.' },
         excerpt: { type: 'string' },
         category: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.' },
-        components: {
-          type: 'array',
-          description: 'Optional structured content components: faq, how_to, or ai_assistance. FAQ: data.items[] of { question, answer, position? }. How-To: data.steps[] of { name, text, image_asset_id?, url?, position? }. AI assistance: data.prompts[] with prompt plus optional title/description/copy_label; keep schema_enabled=false because it has no schema.org representation.',
-          items: blogComponentInputSchema,
-        },
+        content_blocks: { type: 'array', description: 'Canonical ordered article blocks. This is the source of truth for FAQ, How-To, media, and other structured content.', items: blogContentBlockSchema },
         seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         seo_description: { type: 'string' },
         canonical_url: { type: 'string' },
@@ -59,22 +66,18 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'update_blog_post',
-      description: 'Update a blog post. Only provided fields are changed. Set publish=true to publish, or unpublish=true to revert to draft.',
+      description: 'Update a blog post. Only provided fields are changed. Always review the draft at edit_url. Set publish=true to publish, or unpublish=true to revert to draft.',
       domain: 'blog',
       minimumRole: 'editor',
       confirmRequired: false,
       inputSchema: {
         post_id: { type: 'string', description: 'Post id or slug.' },
         title: { type: 'string' },
-        body: { type: 'string', description: 'Use {{component type="faq"}} or {{component type="how_to"}} in the body when you want structured embeds.' },
+        body: { type: 'string', description: 'Markdown compatibility body. Prefer content_blocks for complete article edits.' },
         excerpt: { type: 'string' },
         category: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.' },
-        components: {
-          type: 'array',
-          description: 'Updated structured content components: faq, how_to, or ai_assistance. Sending components replaces the complete set; omit it to preserve existing components. Keep schema_enabled=false for ai_assistance.',
-          items: blogComponentInputSchema,
-        },
+        content_blocks: { type: 'array', description: 'Canonical ordered article blocks. Sending this replaces the complete draft block snapshot.', items: blogContentBlockSchema },
         seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         seo_description: { type: 'string' },
         canonical_url: { type: 'string' },

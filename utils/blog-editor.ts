@@ -11,6 +11,62 @@ export interface EditorContentBlock {
   updated_at?: string
 }
 
+export function initialBlogEditorBlocks(): EditorContentBlock[] {
+  return [{ type: 'markdown', data: { markdown: '' } }]
+}
+
+export class SerializedSnapshotQueue<TSnapshot, TResult> {
+  private generation = 0
+  private pending: { generation: number; snapshot: TSnapshot } | null = null
+  private running: Promise<void> | null = null
+  private readonly persist: (_snapshot: TSnapshot) => Promise<TResult>
+  private readonly applyCurrent: (_result: TResult, _snapshot: TSnapshot) => void
+
+  constructor(
+    persist: (_snapshot: TSnapshot) => Promise<TResult>,
+    applyCurrent: (_result: TResult, _snapshot: TSnapshot) => void,
+  ) {
+    this.persist = persist
+    this.applyCurrent = applyCurrent
+  }
+
+  mark(snapshot: TSnapshot) {
+    this.pending = { generation: ++this.generation, snapshot }
+    return this.generation
+  }
+
+  async flush() {
+    if (!this.running) this.running = this.drain().finally(() => { this.running = null })
+    await this.running
+  }
+
+  async runExclusive<T>(operation: () => Promise<T>) {
+    const prior = this.running
+    const exclusive = (async () => {
+      if (prior) await prior
+      await this.drain()
+      const result = await operation()
+      await this.drain()
+      return result
+    })()
+    const lock = exclusive.then(() => undefined, () => undefined)
+    this.running = lock
+    void lock.finally(() => {
+      if (this.running === lock) this.running = null
+    })
+    return await exclusive
+  }
+
+  private async drain() {
+    while (this.pending) {
+      const task = this.pending
+      this.pending = null
+      const result = await this.persist(task.snapshot)
+      if (task.generation === this.generation) this.applyCurrent(result, task.snapshot)
+    }
+  }
+}
+
 const PLACEHOLDER_RE = /\{\{\s*component\b[^}]*\}\}/gi
 
 export function plainTextFromMarkdown(markdown: string) {
@@ -79,23 +135,52 @@ export function parseScheduledFor(value: unknown) {
 }
 
 export function structuredComponentsFromBlocks(blocks: EditorContentBlock[]): Array<{
-  type: 'faq' | 'how_to'
+  type: 'faq' | 'how_to' | 'ai_assistance'
   position: number
-  status: 'active'
-  render_enabled: true
-  schema_enabled: true
-  data: { items: unknown[] } | { steps: unknown[] }
+  status: 'active' | 'inactive'
+  render_enabled: boolean
+  schema_enabled: boolean
+  data: Record<string, unknown>
 }> {
   const components: ReturnType<typeof structuredComponentsFromBlocks> = []
   blocks.forEach((block, position) => {
     if (block.type === 'faq') {
       const items = Array.isArray(block.data.items) ? block.data.items.filter(item => item && typeof item === 'object') : []
-      components.push({ type: 'faq', position, status: 'active', render_enabled: true, schema_enabled: true, data: { items } })
+      components.push({ type: 'faq', position, status: block.data.status === 'inactive' ? 'inactive' : 'active', render_enabled: block.data.render_enabled !== false, schema_enabled: block.data.schema_enabled !== false, data: { items } })
     }
     if (block.type === 'how_to') {
       const steps = Array.isArray(block.data.steps) ? block.data.steps.filter(item => item && typeof item === 'object') : []
-      components.push({ type: 'how_to', position, status: 'active', render_enabled: true, schema_enabled: true, data: { steps } })
+      components.push({ type: 'how_to', position, status: block.data.status === 'inactive' ? 'inactive' : 'active', render_enabled: block.data.render_enabled !== false, schema_enabled: block.data.schema_enabled !== false, data: { steps } })
+    }
+    if (block.type === 'ai_assistance') {
+      const prompts = Array.isArray(block.data.prompts) ? block.data.prompts.filter(item => item && typeof item === 'object') : []
+      components.push({ type: 'ai_assistance', position, status: block.data.status === 'inactive' ? 'inactive' : 'active', render_enabled: block.data.render_enabled !== false, schema_enabled: false, data: { ...block.data, prompts } })
     }
   })
   return components
+}
+
+export function resolveBlogPublicPath(input: {
+  scope: 'platform' | 'tenant'
+  slug: string
+  category?: string | null
+  template?: 'saya' | 'blawby' | 'platform' | string | null
+}) {
+  const slug = encodeURIComponent(input.slug)
+  if (input.scope === 'tenant') return input.template === 'blawby' ? `/article/${slug}` : `/blog/${slug}`
+  return `/blog/${normalizeBlogSlug(input.category || 'uncategorized', 'uncategorized')}/${slug}`
+}
+
+export function resolveSlugMutation(input: {
+  requestedSlug: string | null | undefined
+  title: string
+  currentSlug: string
+  manuallyOverridden: boolean
+}) {
+  if (input.requestedSlug === null) return { slug: normalizeBlogSlug(input.title), manuallyOverridden: false }
+  if (typeof input.requestedSlug === 'string') return { slug: normalizeBlogSlug(input.requestedSlug), manuallyOverridden: true }
+  return {
+    slug: input.manuallyOverridden ? input.currentSlug : normalizeBlogSlug(input.title),
+    manuallyOverridden: input.manuallyOverridden,
+  }
 }

@@ -53,7 +53,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
           updated_at: result.post.updated_at,
           context: createBlogContext,
         },
-        `Created blog post "${result.post.title ?? result.post.id}".`,
+        `Created blog post "${result.post.title ?? result.post.id}". Please review the draft at edit_url before publishing.`,
         { post: hydratedBlogPost },
       );
     }
@@ -78,7 +78,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
           updated_at: result.post.updated_at,
           context: updateBlogContext,
         },
-        `Updated blog post "${result.post.title ?? result.post.id}".`,
+        `Updated blog post "${result.post.title ?? result.post.id}". Please review the draft at edit_url before publishing.`,
         { post: hydratedUpdatedBlogPost },
       );
     }

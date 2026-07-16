@@ -37,26 +37,10 @@
                 <NuxtLink :to="`/blog?tags[]=${encodeURIComponent(tag)}`" class="text-white no-underline">{{ tag }}</NuxtLink>
               </template>
             </h3>
-            <h1 class="mt-2 text-3xl font-bold text-[var(--blawby-primary)] sm:text-4xl">{{ post.title }}</h1>
-            <div class="mb-4 mt-4 flex flex-wrap items-center justify-between gap-4">
-              <div class="flex items-center">
-                <img v-if="post.author_image" :src="post.author_image" :alt="post.author_name || ''" width="48" height="48" class="mr-4 size-12 flex-none rounded-full bg-white/10">
-                <span v-else class="mr-4 flex size-12 flex-none items-center justify-center rounded-full bg-[var(--blawby-primary)] text-sm font-semibold text-white">{{ authorInitials }}</span>
-                <span>
-                  <span v-if="post.author_name" class="block text-base leading-6 text-[var(--blawby-primary)]">{{ post.author_name }}</span>
-                  <time v-if="post.published_at" :datetime="post.published_at" class="block text-sm leading-5 text-gray-600">Published {{ formatDate(post.published_at) }}</time>
-                  <time v-if="hasUpdatedDate && post.updated_at" :datetime="post.updated_at" class="block text-xs text-gray-500">Updated {{ formatDate(post.updated_at) }}</time>
-                </span>
-              </div>
-              <BlawbyArticleShare :title="post.title" :url="canonicalUrl" />
-            </div>
-            <img v-if="post.featured_image?.public_url" :src="post.featured_image.public_url" :alt="post.title" :width="post.featured_image.width || 704" :height="post.featured_image.height || 478" loading="lazy" class="aspect-video min-w-full rounded-xl bg-gray-50 object-cover">
-            <div class="mt-10 min-w-full max-w-2xl">
-              <p v-if="post.excerpt" class="mb-10 min-w-full italic text-[var(--blawby-primary-dark)]">{{ post.excerpt }}</p>
-              <BlogArticleRenderer v-if="post.content_blocks.length" :title="post.title" :blocks="post.content_blocks" :show-title="false" template="blawby" class="!max-w-none !px-0 !py-0" />
-              <div v-else class="prose min-w-full"><BlawbyRichText :content="body" unstyled class="contents" /></div>
-              <p v-if="compliance?.disclaimer" class="mt-8 text-sm italic text-gray-500">{{ compliance.disclaimer }}</p>
-            </div>
+            <BlogArticleView :title="post.title" :excerpt="post.excerpt" category="Article" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author_name" :author-image="post.author_image" :site-name="identity.brand_name" :media-url="post.social_image?.public_url || post.featured_image?.public_url" media-kind="image" :blocks="post.content_blocks" template="blawby">
+              <template #legacy-body><div class="prose min-w-full"><BlawbyRichText :content="body" unstyled class="contents" /></div></template>
+            </BlogArticleView>
+            <p v-if="compliance?.disclaimer" class="mt-8 text-sm italic text-gray-500">{{ compliance.disclaimer }}</p>
           </div>
 
           <div v-if="relatedPosts.length" class="my-8" data-parity-section="related-articles">
@@ -117,7 +101,6 @@ const ctaBlock = computed(() => data.value.page?.components.find(component => co
 const body = computed(() => stripLeadingTitleHeading(post.value.body || '', post.value.title))
 const displayTags = computed(() => post.value.tags.slice(1))
 const hasUpdatedDate = computed(() => Boolean(post.value.updated_at && post.value.updated_at !== post.value.published_at))
-const authorInitials = computed(() => String(post.value.author_name || 'NCLS Staff').split(/\s+/).map(part => part[0]).join('').slice(0, 2))
 const relatedPosts = computed(() => data.value.posts.filter(item => item.slug !== slug).slice(0, 3))
 const { categories } = useTenantBlogNav(computed(() => data.value.posts))
 const browseTopicsOpen = ref(false)
@@ -125,9 +108,6 @@ const seoTitle = computed(() => post.value.seo_title?.trim() || post.value.title
 const seoDescription = computed(() => post.value.seo_description || post.value.excerpt || '')
 const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(value))
-}
 function optionalString(value: unknown) {
   return typeof value === 'string' && value ? value : null
 }

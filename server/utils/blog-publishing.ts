@@ -1,24 +1,34 @@
-import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import type { ContentBlockSnapshot } from '~/server/utils/content-documents'
 
 export async function publishDueBlogPosts(db: D1Database, now = new Date()) {
-  const due = await queryAll<{ id: string }>(db, `
-    SELECT id FROM blog_posts
-     WHERE status = 'scheduled' AND scheduled_for IS NOT NULL AND scheduled_for <= ?
+  const due = await queryAll<{ id: string; document_id: string; scheduled_revision_id: string; body_markdown: string }>(db, `
+    SELECT p.id, d.id AS document_id, p.scheduled_revision_id, r.body_markdown
+      FROM blog_posts p
+      JOIN content_documents d ON d.owner_id = p.id AND d.owner_type IN ('platform_blog', 'tenant_blog')
+      JOIN content_revisions r ON r.id = p.scheduled_revision_id AND r.document_id = d.id
+     WHERE p.status = 'scheduled' AND p.scheduled_for IS NOT NULL AND p.scheduled_for <= ?
      ORDER BY scheduled_for ASC LIMIT 100
   `, [now.toISOString()])
   let published = 0
   for (const row of due ?? []) {
     const timestamp = now.toISOString()
-    const result = await queryFirst<{ id: string } | null>(db, `
-      UPDATE blog_posts
-         SET status = 'published', published_at = COALESCE(published_at, scheduled_for, ?),
-             first_published_at = COALESCE(first_published_at, scheduled_for, ?), updated_at = ?
-       WHERE id = ? AND status = 'scheduled' AND scheduled_for <= ?
-       RETURNING id
-    `, [timestamp, timestamp, timestamp, row.id, timestamp])
-    if (result) published++
+    await executeBatch(db, [
+      {
+        query: 'UPDATE content_documents SET published_revision_id = ?, updated_at = ? WHERE id = ?',
+        params: [row.scheduled_revision_id, timestamp, row.document_id],
+      },
+      {
+        query: `UPDATE blog_posts
+           SET body = ?, status = 'published', published_at = COALESCE(published_at, scheduled_for, ?),
+               first_published_at = COALESCE(first_published_at, scheduled_for, ?),
+               scheduled_revision_id = NULL, updated_at = ?
+         WHERE id = ? AND status = 'scheduled' AND scheduled_for <= ?`,
+        params: [row.body_markdown, timestamp, timestamp, timestamp, row.id, timestamp],
+      },
+    ])
+    published++
   }
   return { published }
 }
