@@ -701,18 +701,12 @@ async function submitBooking() {
 }
 
 // SEO + structured data
-useBreadcrumbSchema([
-  { name: 'Home', url: `${siteUrl}/` },
-  { name: 'Experiences', url: `${siteUrl}/experiences` },
-  { name: experience.value?.title ?? slug, url: `${siteUrl}/experiences/${slug}` },
-])
-
 const seoTitle = computed(() => experience.value?.seo_title ?? (experience.value ? `${experience.value.title} | Experiences` : 'Experience'))
 const seoDescription = computed(() =>
   truncateForSeo(experience.value?.seo_description ?? experience.value?.tagline ?? `Book the ${experience.value?.title} experience.`, 160)
 )
 
-useTenantSocialMetadata(() => {
+const { canonicalUrl } = useTenantSocialMetadata(() => {
   const heroImageUrl = experience.value?.og_image_public_url || experience.value?.image_url || null
   return {
     path: experience.value?.canonical_url || `/experiences/${slug}`,
@@ -730,6 +724,14 @@ useTenantSocialMetadata(() => {
   }
 })
 
+const resolvedCanonicalUrl = computed(() => canonicalUrl.value || `${siteUrl}/experiences/${slug}`)
+
+useBreadcrumbSchema([
+  { name: 'Home', url: `${siteUrl}/` },
+  { name: 'Experiences', url: `${siteUrl}/experiences` },
+  { name: experience.value?.title ?? slug, url: resolvedCanonicalUrl.value },
+])
+
 // JSON-LD — @graph with WebPage + Product/Service + Organization
 // Event entities are omitted until the booking system exposes real dated sessions
 // (Google requires startDate for Event rich results; time_slots are times-only strings)
@@ -741,7 +743,7 @@ useHead({
         const val = experience.value
         if (!val) return '{}'
 
-        const experienceUrl = `${siteUrl}/experiences/${val.slug}`
+        const experienceUrl = resolvedCanonicalUrl.value
         const orgId = `${siteUrl}/#organization`
         const experienceId = `${experienceUrl}#experience`
         const currency = siteConfig.value?.default_currency || 'THB'

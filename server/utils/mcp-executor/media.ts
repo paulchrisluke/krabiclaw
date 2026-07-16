@@ -59,6 +59,12 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
           throw new Error("Cloudflare Images not configured");
         }
         const posterResolved = await resolveUserUploadedMediaFile(posterReference);
+        if (posterResolved.kind !== "image") {
+          throw mcpProtocolError(
+            MCP_ERROR.invalidParams,
+            "Poster must be an image.",
+          );
+        }
         poster = posterResolved;
       }
 

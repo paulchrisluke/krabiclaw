@@ -41,7 +41,7 @@ export function resolveMarkdownMimeType(mimeType: string | undefined | null, fil
 export function assertMarkdownSize(byteLength: number): void {
   if (byteLength > MAX_MARKDOWN_BYTES) {
     throw new MarkdownDocumentError(
-      `Markdown file too large (${byteLength} bytes; max ${MAX_MARKDOWN_BYTES} bytes / ${Math.floor(MAX_MARKDOWN_BYTES / (1024 * 1024))} MB).`
+      `Markdown file too large (${byteLength} bytes; max ${MAX_MARKDOWN_BYTES} bytes / ${Math.floor(MAX_MARKDOWN_BYTES / 1024)} KB).`
     );
   }
 }

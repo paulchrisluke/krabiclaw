@@ -15,7 +15,10 @@ import platformLogoBase64 from '~/server/assets/platform-logo'
 function resolveLogoDataUri(logoUrl: string | null | undefined): Promise<string | null> {
   if (logoUrl) {
     try {
-      if (new URL(logoUrl).pathname === '/krabi-claw-logo.png') {
+      const url = new URL(logoUrl)
+      const platformDomain = process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com'
+      const platformOrigin = platformDomain.startsWith('http') ? platformDomain : `https://${platformDomain}`
+      if (url.pathname === '/krabi-claw-logo.png' && url.origin === new URL(platformOrigin).origin) {
         return Promise.resolve(`data:image/png;base64,${platformLogoBase64}`)
       }
     } catch {

@@ -2,13 +2,35 @@
   <NuxtLayout name="blawby">
     <div v-if="post" data-parity-root>
       <div class="mx-auto max-w-7xl px-6 pb-12 pt-12 sm:pb-16 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8" data-parity-section="article-content">
-        <aside class="mb-8 lg:sticky lg:top-28 lg:mb-0 lg:h-fit lg:pt-6">
+        <!--
+          Sidebar is removed from the mobile document flow entirely (`hidden lg:block`), not
+          just visually collapsed — it used to render above the article on mobile with no
+          breakpoint gate, delaying the headline by roughly a full screen and reading as the
+          page's primary content. It only reappears once the grid actually puts it side by
+          side with the article at `lg:` (~992px, see --breakpoint-lg in assets/css/main.css).
+        -->
+        <aside class="hidden lg:sticky lg:top-28 lg:block lg:h-fit lg:pt-6">
           <PlatformCommandSearchTrigger surface="tenant_blog" variant="blawby" label="Search articles..." aria-label="Open article search" class="mb-6" />
           <BlogCategoryNav :categories="categories" base-path="/article" :active-slug="slug" />
         </aside>
 
         <div class="min-w-0 text-base leading-6 text-gray-700">
           <div class="mx-auto max-w-3xl">
+            <!-- Mobile-only compact control replacing the sidebar: search + a drawer with
+                 the same category nav shown in the desktop sidebar. -->
+            <div class="flex items-center gap-3 lg:hidden">
+              <PlatformCommandSearchTrigger surface="tenant_blog" variant="blawby" label="Search articles" aria-label="Search articles" class="flex-1" />
+              <button
+                type="button"
+                class="group flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--blawby-border)] bg-[var(--blawby-surface)] px-3 py-2.5 text-sm font-medium transition hover:border-[var(--blawby-primary)] hover:bg-[var(--blawby-accent-100)]"
+                aria-haspopup="dialog"
+                :aria-expanded="browseTopicsOpen"
+                @click="browseTopicsOpen = true"
+              >
+                <PlatformIcon name="list" class="size-4 shrink-0 text-[var(--blawby-ink)] opacity-60 transition group-hover:opacity-100" />
+                <span class="text-[var(--blawby-ink)] opacity-60 transition group-hover:opacity-100">Browse topics</span>
+              </button>
+            </div>
             <h3 v-if="displayTags.length" class="mt-6 inline-block rounded bg-[var(--blawby-accent)] px-2 text-sm font-semibold uppercase text-white">
               <template v-for="(tag, index) in displayTags" :key="tag">
                 <span v-if="index" aria-hidden="true"> · </span>
@@ -60,6 +82,14 @@
       <ClientOnly>
         <PlatformCommandSearchModal surface="tenant_blog" variant="blawby" />
       </ClientOnly>
+
+      <!-- Mobile "Browse topics" drawer — same search trigger + category nav as the
+           desktop sidebar, just reachable from the compact control instead of always
+           occupying document flow. -->
+      <PlatformDrawer v-model="browseTopicsOpen" title="Browse topics">
+        <PlatformCommandSearchTrigger surface="tenant_blog" variant="blawby" label="Search articles..." aria-label="Open article search" class="mb-6" @click="browseTopicsOpen = false" />
+        <BlogCategoryNav :categories="categories" base-path="/article" :active-slug="slug" @click="browseTopicsOpen = false" />
+      </PlatformDrawer>
     </div>
   </NuxtLayout>
 </template>
@@ -67,6 +97,7 @@
 <script setup lang="ts">
 import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
+import PlatformDrawer from '~/components/platform/PlatformDrawer.vue'
 import { stripLeadingTitleHeading } from '~/utils/markdown'
 
 const { isBlawby } = usePublicTemplate()
@@ -90,6 +121,7 @@ const hasUpdatedDate = computed(() => Boolean(post.value.updated_at && post.valu
 const authorInitials = computed(() => String(post.value.author_name || 'NCLS Staff').split(/\s+/).map(part => part[0]).join('').slice(0, 2))
 const relatedPosts = computed(() => data.value.posts.filter(item => item.slug !== slug).slice(0, 3))
 const { categories } = useTenantBlogNav(computed(() => data.value.posts))
+const browseTopicsOpen = ref(false)
 const seoTitle = computed(() => `${post.value.title} | ${identity.value.brand_name || 'Professional services'}`)
 const seoDescription = computed(() => post.value.seo_description || post.value.excerpt || '')
 const { trackConsultationClick } = useBlawbyConversionTracking(consultation)

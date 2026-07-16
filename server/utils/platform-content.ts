@@ -1371,8 +1371,10 @@ export async function createPlatformBlogPost(
   if (!input.title?.trim() || !input.body?.trim()) badRequest('title and body are required')
   const isTenant = Boolean(scope.site_id)
   validateBlogCommon(input, isTenant)
-  if (!isTenant && !input.category?.trim()) badRequest('category is required')
-  if (input.publish && !isTenant) assertPublishableBlogCategory(input.category)
+  if (!isTenant) {
+    if (!input.category?.trim()) badRequest('category is required')
+    assertValidBlogCategory(input.category)
+  }
   if (input.featured_image_asset_id) await ensureBlogFeaturedImageAssetExists(db, input.featured_image_asset_id, 'featured_image_asset_id', scope.site_id ?? null)
 
   const siteId = scope.site_id ?? null
@@ -1463,9 +1465,9 @@ export async function updatePlatformBlogPost(
     ? await queryFirst<{ category: string | null }>(db, 'SELECT category FROM blog_posts WHERE id = ? LIMIT 1', [postId])
     : null
   const effectiveCategory = input.category !== undefined ? input.category : current?.category ?? null
-  if (!isTenant && !effectiveCategory?.trim()) badRequest('category is required')
-  if (input.publish && !isTenant) {
-    assertPublishableBlogCategory(effectiveCategory)
+  if (!isTenant) {
+    if (!effectiveCategory?.trim()) badRequest('category is required')
+    assertValidBlogCategory(effectiveCategory)
   }
   const now = new Date().toISOString()
   const updates: string[] = ['updated_at = ?']

@@ -66,6 +66,29 @@ try {
     ORDER BY name;
   `)[0]?.results ?? []
   assert.equal(triggers.length, 3, 'All three media compatibility sync triggers must exist')
+
+  execute(`
+    UPDATE media_assets
+    SET category = 'menu'
+    WHERE id = '${canaryId}';
+  `)
+  const updatedMirror = execute(`
+    SELECT category
+    FROM media_assets_old
+    WHERE id = '${canaryId}';
+  `)[0]?.results?.[0]
+  assert.equal(updatedMirror?.category, 'menu')
+
+  execute(`
+    DELETE FROM media_assets
+    WHERE id = '${canaryId}';
+  `)
+  const deletedMirror = execute(`
+    SELECT id
+    FROM media_assets_old
+    WHERE id = '${canaryId}';
+  `)[0]?.results?.[0]
+  assert.equal(deletedMirror, undefined)
 } finally {
   execute(`
     UPDATE business_locations

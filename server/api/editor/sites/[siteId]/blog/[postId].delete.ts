@@ -2,6 +2,7 @@ import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
 import { getAuthSession } from "~/server/utils/auth";
 import { queryFirst } from "~/server/db";
 import { deletePlatformBlogPost } from "~/server/utils/platform-content";
+import { httpErrorDetails } from "~/server/utils/http-error";
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, "siteId");
@@ -69,9 +70,10 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ success: true });
   } catch (error) {
     console.error("Failed to delete blog post:", error);
+    const { message, statusCode } = httpErrorDetails(error, "Failed to delete blog post");
     return jsonResponse(
-      { error: "Failed to delete blog post" },
-      { status: 500 },
+      { error: message },
+      { status: statusCode },
     );
   }
 });

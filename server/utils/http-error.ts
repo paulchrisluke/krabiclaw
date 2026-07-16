@@ -4,8 +4,12 @@ export function httpErrorDetails(error: unknown, fallbackMessage: string) {
   }
 
   const candidate = error as { message?: unknown, statusCode?: unknown }
+  const parsedCode = typeof candidate.statusCode === 'number' ? candidate.statusCode : 500
+  const statusCode = (parsedCode >= 400 && parsedCode < 600) ? parsedCode : 500
+  const isServerError = statusCode >= 500
+  
   return {
-    message: typeof candidate.message === 'string' ? candidate.message : fallbackMessage,
-    statusCode: typeof candidate.statusCode === 'number' ? candidate.statusCode : 500,
+    message: !isServerError && typeof candidate.message === 'string' ? candidate.message : fallbackMessage,
+    statusCode,
   }
 }

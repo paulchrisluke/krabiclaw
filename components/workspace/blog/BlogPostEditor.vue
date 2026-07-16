@@ -275,8 +275,12 @@ async function loadPost() {
 }
 
 async function update(publish = false) {
-  if (!form.value.title.trim() || !form.value.body.trim()) {
-    errorMessage.value = 'Title and body are required.'
+  if (publish && !canPublish.value) {
+    errorMessage.value = 'Title and body are required to publish.'
+    return
+  }
+  if (!publish && !canSave.value) {
+    errorMessage.value = 'Title or body is required to save a draft.'
     return
   }
   const requestPostId = postId.value
@@ -340,8 +344,12 @@ async function remove() {
 }
 
 async function save(publish: boolean) {
-  if (!form.value.title.trim() || !form.value.body.trim()) {
-    errorMessage.value = 'Title and body are required.'
+  if (publish && !canPublish.value) {
+    errorMessage.value = 'Title and body are required to publish.'
+    return
+  }
+  if (!publish && !canSave.value) {
+    errorMessage.value = 'Title or body is required to save a draft.'
     return
   }
 
