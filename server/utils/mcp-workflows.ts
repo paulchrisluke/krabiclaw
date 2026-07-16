@@ -818,10 +818,17 @@ export async function hydrateSeededLocationForOnboarding(
     return result;
   }
 
-  // Sync WhatsApp access if notification_phone was updated
+  // Sync WhatsApp access if notification_phone was updated. This is
+  // onboarding-time hydration of a pre-seeded location, not a
+  // user-initiated interactive save — a WhatsApp provisioning hiccup
+  // shouldn't block the rest of onboarding, so this logs and continues
+  // (matching other non-critical steps in this file, e.g. fireSiteEventSafe)
+  // rather than throwing, but the caller still needs to know the location
+  // itself saved successfully while WhatsApp access needs attention.
+  let whatsAppSyncWarning: string | undefined
   if (touchesNotificationPhone) {
     const { syncLocationWhatsAppAccess } = await import('~/server/utils/location-management')
-    await syncLocationWhatsAppAccess(env, db, {
+    const syncResult = await syncLocationWhatsAppAccess(env, db, {
       organizationId,
       siteId,
       locationId: location.id,
@@ -829,12 +836,18 @@ export async function hydrateSeededLocationForOnboarding(
       newPhone: (updates.notification_phone as string | null | undefined) ?? null,
       inviterUserId: userId,
     })
+    if (!syncResult.ok) {
+      const detail = syncResult.provisioningError || syncResult.scopeRecalcError || 'unknown error'
+      console.warn('hydrate_seeded_location_whatsapp_sync_failed', { organizationId, siteId, locationId: location.id, error: detail })
+      whatsAppSyncWarning = `The location was saved, but syncing WhatsApp manager access failed: ${detail}. Retry updating the notification phone to re-sync it.`
+    }
   }
 
   return {
     ...result.data,
     hydrated_seed_location: true,
     previous_slug: location.slug,
+    ...(whatsAppSyncWarning ? { warning: whatsAppSyncWarning } : {}),
   };
 }
 

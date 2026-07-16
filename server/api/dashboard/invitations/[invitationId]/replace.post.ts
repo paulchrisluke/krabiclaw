@@ -1,8 +1,11 @@
 // POST /api/dashboard/invitations/[invitationId]/replace
 // Re-points a pending WhatsApp/phone-activated manager invitation at a
-// different phone number: cancels the old invitation (its email is a
+// different phone number: provisions a fresh invitation for the same
+// site/location scopes, then cancels the old one (its email is a
 // deterministic function of the phone number, so a new number is a new
-// identity) and provisions a fresh one for the same site/location scopes.
+// identity). Provisioning happens first so a transient failure never
+// strands the org without a working invitation — see the ordering comment
+// below.
 // See issue #293 Section A.4.
 import { getHeaders } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
@@ -53,45 +56,18 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'This is already the assigned phone number' }, { status: 409 })
   }
 
-  // Cancel the old invitation BEFORE provisioning the new one — this ensures
-  // we don't leave both the old and new phone numbers active if cancellation
-  // fails. Cancellation is a required durable step; if it fails, the entire
-  // replacement operation fails and no new invitation is created.
+  // Provision the new invitation BEFORE cancelling the old one. The old and
+  // new invitations use different deterministic emails (one per phone
+  // number — see header comment), so there's no uniqueness conflict with
+  // having both exist at once, and provisioning first means a transient
+  // failure here never leaves the org without a working invitation: the old
+  // one is simply left pending and retryable. Cancellation only happens
+  // once the replacement is confirmed active (CodeRabbit follow-up on
+  // PR #295 — the old ordering cancelled first and could strand the org
+  // with neither invitation if provisioning then failed).
   const auth = createAuth(env)
   const cancelApi = auth.api as unknown as CancelInvitationApi
 
-  const cancelOldInvitation = async (): Promise<boolean> => {
-    try {
-      const response = await cancelApi.cancelInvitation({
-        body: { invitationId },
-        headers: getHeaders(event) as HeadersInit,
-        asResponse: true,
-      })
-      if (!response.ok) {
-        console.error('whatsapp_invitation_replace_cancel_old_failed', { invitationId, status: response.status })
-        return false
-      }
-      await execute(db, `DELETE FROM invitation_access_scope WHERE invitation_id = ?`, [invitationId])
-      return true
-    } catch (error) {
-      console.error('whatsapp_invitation_replace_cancel_old_failed', { invitationId, error: error instanceof Error ? error.message : String(error) })
-      return false
-    }
-  }
-
-  let cancelledOld = await cancelOldInvitation()
-  if (!cancelledOld) cancelledOld = await cancelOldInvitation()
-
-  if (!cancelledOld) {
-    return jsonResponse({
-      success: false,
-      oldInvitationId: invitationId,
-      oldInvitationActive: true,
-      error: 'The previous invitation could not be cancelled. Please retry.',
-    }, { status: 502 })
-  }
-
-  // Old invitation successfully cancelled — now provision the new one.
   // Track all newly created invitations for rollback if provisioning fails.
   const newInvitationIds: string[] = []
   let shouldDeliver = false
@@ -149,5 +125,37 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: error instanceof Error ? error.message : 'Failed to provision the replacement invitation' }, { status: 502 })
   }
 
-  return jsonResponse({ success: true, invitationId: newInvitationIds[0] || null })
+  // Replacement is confirmed active — cancel the old invitation now. If this
+  // fails after retrying, the replacement itself is still fully working; the
+  // old invitation is just left pending (its phone number is already stale,
+  // so it grants no additional access) and can be retried separately, rather
+  // than reporting the whole operation as failed.
+  const cancelOldInvitation = async (): Promise<boolean> => {
+    try {
+      const response = await cancelApi.cancelInvitation({
+        body: { invitationId },
+        headers: getHeaders(event) as HeadersInit,
+        asResponse: true,
+      })
+      if (!response.ok) {
+        console.error('whatsapp_invitation_replace_cancel_old_failed', { invitationId, status: response.status })
+        return false
+      }
+      await execute(db, `DELETE FROM invitation_access_scope WHERE invitation_id = ?`, [invitationId])
+      return true
+    } catch (error) {
+      console.error('whatsapp_invitation_replace_cancel_old_failed', { invitationId, error: error instanceof Error ? error.message : String(error) })
+      return false
+    }
+  }
+
+  let cancelledOld = await cancelOldInvitation()
+  if (!cancelledOld) cancelledOld = await cancelOldInvitation()
+
+  return jsonResponse({
+    success: true,
+    invitationId: newInvitationIds[0] || null,
+    oldInvitationCancelled: cancelledOld,
+    ...(cancelledOld ? {} : { warning: 'The replacement is active, but the previous invitation could not be cancelled automatically. Retry cancelling it separately.' }),
+  })
 })

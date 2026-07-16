@@ -23,13 +23,13 @@ async function syncLocationWhatsAppPhone(
   site: McpExecutorContext['site'],
   locationId: string,
   previousNotificationPhone: string | null,
-): Promise<void> {
+): Promise<{ ok: boolean; provisioningError?: string; scopeRecalcError?: string }> {
   const current = await queryFirst<{ notification_phone: string | null }>(site.db, `
     SELECT notification_phone FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1
   `, [locationId, site.organizationId, site.siteId])
   const newPhone = current?.notification_phone ?? null
 
-  await syncLocationWhatsAppAccess(site.env as unknown as Parameters<typeof syncLocationWhatsAppAccess>[0], site.db, {
+  return await syncLocationWhatsAppAccess(site.env as unknown as Parameters<typeof syncLocationWhatsAppAccess>[0], site.db, {
     organizationId: site.organizationId,
     siteId: site.siteId,
     locationId,
@@ -37,6 +37,17 @@ async function syncLocationWhatsAppPhone(
     newPhone,
     inviterUserId: site.userId,
   })
+}
+
+// Mirrors the warning-surfacing convention used elsewhere in this file (e.g.
+// set_location_hero_image/set_location_hero_video) — a non-fatal issue with
+// a mutation that otherwise succeeded is reported via a `warning` string on
+// the structured response rather than failing the whole tool call, so the
+// AI/user sees the location was saved but WhatsApp access needs attention.
+export function whatsAppSyncWarning(result: { ok: boolean; provisioningError?: string; scopeRecalcError?: string }): string | undefined {
+  if (result.ok) return undefined
+  const detail = result.provisioningError || result.scopeRecalcError || 'unknown error'
+  return `The location was saved, but syncing WhatsApp manager access failed: ${detail}. Retry updating the notification phone to re-sync it.`
 }
 
 export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unknown> {
@@ -98,9 +109,9 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
       }
       assertDomainSuccess(result);
       const createdLocation = (result.data as { location: LocationRecord }).location;
-      if (createdLocation.notification_phone) {
-        await syncLocationWhatsAppPhone(site, createdLocation.id, null);
-      }
+      const createWhatsAppWarning = createdLocation.notification_phone
+        ? whatsAppSyncWarning(await syncLocationWhatsAppPhone(site, createdLocation.id, null))
+        : undefined;
       const createContext = await mutationContextPayload(site, { locationId: createdLocation.id });
       return renderStructuredResponse(
         {
@@ -110,6 +121,7 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
           slug: createdLocation.slug,
           updated_at: createdLocation.updated_at,
           context: createContext,
+          ...(createWhatsAppWarning ? { warning: createWhatsAppWarning } : {}),
         },
         `Created location "${createdLocation.title}".`,
         { ...result.data, context: createContext },
@@ -134,9 +146,9 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
       );
       assertDomainSuccess(result);
       const updatedLocation = (result.data as { location: LocationRecord }).location;
-      if (touchesNotificationPhone) {
-        await syncLocationWhatsAppPhone(site, locationId, previousLocationRow?.notification_phone ?? null);
-      }
+      const updateWhatsAppWarning = touchesNotificationPhone
+        ? whatsAppSyncWarning(await syncLocationWhatsAppPhone(site, locationId, previousLocationRow?.notification_phone ?? null))
+        : undefined;
       const updateContext = await mutationContextPayload(site, { locationId });
       return renderStructuredResponse(
         {
@@ -147,6 +159,7 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
           changed_fields: Object.keys(omit(args, ["location_id"])),
           updated_at: updatedLocation.updated_at,
           context: updateContext,
+          ...(updateWhatsAppWarning ? { warning: updateWhatsAppWarning } : {}),
         },
         `Updated "${updatedLocation.title}".`,
         { ...result.data, context: updateContext },
