@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   const threadId = getRouterParam(event, 'threadId')
   if (!siteId || !threadId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
-  const { env, db, session, site } = await requireSiteAccess(event, siteId, ['owner', 'admin', 'location_manager'])
+  const { env, db, session, site } = await requireSiteAccess(event, siteId, ['owner', 'admin', 'editor', 'location_manager'])
   const body = (await readBody(event).catch(() => null)) as { channel?: unknown; body?: unknown } | null
   const channel = body?.channel
   const replyBody = typeof body?.body === 'string' ? body.body.trim() : ''
