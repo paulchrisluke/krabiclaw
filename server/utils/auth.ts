@@ -14,6 +14,7 @@ import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/au
 import { validatePassword } from '~/utils/password-validation'
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/site-events'
 import type { InferSelectModel } from 'drizzle-orm'
+import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
@@ -277,7 +278,7 @@ export function createAuth(env: CloudflareEnv) {
       cimd({
         allowLoopback: import.meta.dev,
       }),
-      organization(),
+      organization({ ac: organizationAccessControl, roles: organizationRoles }),
       admin({
         adminRoles: ['admin'],
         defaultRole: 'user',

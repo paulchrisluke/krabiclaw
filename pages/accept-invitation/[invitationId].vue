@@ -66,6 +66,21 @@
 
           <div class="mt-8 space-y-3">
             <template v-if="!isAuthenticated && !sessionLoading">
+              <div v-if="invitedPhone" class="rounded-xl border border-default p-4 space-y-3">
+                <p class="text-sm text-muted">Verify the invited WhatsApp number <strong class="text-default">{{ invitedPhone }}</strong> to activate access.</p>
+                <button v-if="otpStep === 'send'" class="w-full py-3 px-4 rounded-[10px] font-semibold text-white bg-green-600 disabled:opacity-50" :disabled="otpLoading" @click="sendInvitationOtp">
+                  {{ otpLoading ? 'Sending…' : 'Send code via WhatsApp' }}
+                </button>
+                <template v-else>
+                  <input v-model="otpCode" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code" class="w-full rounded-lg border border-default bg-default px-3 py-2 text-center font-mono tracking-widest" @keydown.enter="verifyInvitationOtp" />
+                  <button class="w-full py-3 px-4 rounded-[10px] font-semibold text-white bg-green-600 disabled:opacity-50" :disabled="otpLoading || otpCode.length !== 6" @click="verifyInvitationOtp">
+                    {{ otpLoading ? 'Verifying…' : 'Verify and continue' }}
+                  </button>
+                  <button class="w-full text-sm text-muted" :disabled="otpLoading" @click="sendInvitationOtp">Resend code</button>
+                </template>
+                <p v-if="otpError" role="alert" class="text-sm text-red-500">{{ otpError }}</p>
+              </div>
+              <template v-else>
               <button class="w-full flex items-center justify-center bg-black dark:bg-white text-white dark:text-black py-3 px-4 rounded-[10px] font-semibold text-[15px] shadow-sm hover:scale-[1.01] transition-all duration-300" @click="continueWithGoogle">
                 <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -79,6 +94,7 @@
                 Sign in with email
               </NuxtLink>
               <p class="text-xs text-center text-muted">Sign in or create an account with the invited email to join this team.</p>
+              </template>
             </template>
 
             <template v-else-if="isAuthenticated && !emailMatches">
@@ -207,7 +223,15 @@ const pagePath = computed(() => {
   return `${url.pathname}${url.search}`
 })
 
-const emailLoginUrl = computed(() => `/login?next=${encodeURIComponent(pagePath.value)}`)
+const emailLoginUrl = computed(() => `/login?redirect=${encodeURIComponent(pagePath.value)}`)
+const invitedPhone = computed(() => {
+  const match = invitation.value?.email.match(/^phone-(\d+)@phone\.krabiclaw\.local$/i)
+  return match ? `+${match[1]}` : ''
+})
+const otpStep = ref<'send' | 'code'>('send')
+const otpCode = ref('')
+const otpLoading = ref(false)
+const otpError = ref<string | null>(null)
 
 const config = useRuntimeConfig()
 const freeSiteDomain = computed(() => (config.public.freeSiteDomain as string).replace(/^https?:\/\//, ''))
@@ -263,6 +287,39 @@ async function continueWithGoogle() {
     provider: 'google',
     callbackURL: pagePath.value,
   })
+}
+
+async function sendInvitationOtp() {
+  if (!invitedPhone.value) return
+  otpLoading.value = true
+  otpError.value = null
+  try {
+    const { authClient } = await import('~/lib/auth-client')
+    const result = await authClient.phoneNumber.sendOtp({ phoneNumber: invitedPhone.value })
+    if (result.error) throw new Error(result.error.message || 'Failed to send code')
+    otpStep.value = 'code'
+  } catch (error) {
+    otpError.value = error instanceof Error ? error.message : 'Failed to send code'
+  } finally {
+    otpLoading.value = false
+  }
+}
+
+async function verifyInvitationOtp() {
+  if (!invitedPhone.value || otpCode.value.length !== 6) return
+  otpLoading.value = true
+  otpError.value = null
+  try {
+    const { authClient } = await import('~/lib/auth-client')
+    const result = await authClient.phoneNumber.verify({ phoneNumber: invitedPhone.value, code: otpCode.value.trim() })
+    if (result.error) throw new Error(result.error.message || 'Invalid or expired code')
+    window.location.href = pagePath.value
+  } catch (error) {
+    otpError.value = error instanceof Error ? error.message : 'Invalid or expired code'
+    otpCode.value = ''
+  } finally {
+    otpLoading.value = false
+  }
 }
 
 async function switchAccount() {

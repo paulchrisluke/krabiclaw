@@ -6,6 +6,8 @@ import type { H3Event } from 'h3'
 interface SiteAccessRow {
   id: string
   organization_id: string
+  member_id: string
+  member_role: string
 }
 
 interface LocationAccessRow {
@@ -35,7 +37,7 @@ export async function requireLocationAccess(
 
   const placeholders = roles.map(() => '?').join(', ')
   const site = await queryFirst<SiteAccessRow>(db, `
-    SELECT s.id, s.organization_id
+    SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role
     FROM sites s
     JOIN member om ON s.organization_id = om.organizationId
     WHERE s.id = ? AND om.userId = ? AND om.role IN (${placeholders})
@@ -82,7 +84,7 @@ export async function requireSiteAccess(
 
   const placeholders = roles.map(() => '?').join(', ')
   const site = await queryFirst<SiteAccessRow>(db, `
-    SELECT s.id, s.organization_id
+    SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role
     FROM sites s
     JOIN member om ON s.organization_id = om.organizationId
     WHERE s.id = ? AND om.userId = ? AND om.role IN (${placeholders})
