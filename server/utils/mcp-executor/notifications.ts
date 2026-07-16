@@ -32,15 +32,28 @@ export async function handleNotificationsTools(ctx: McpExecutorContext): Promise
           );
         }
 
-        const notifications = await updateNotificationsSettings(
-          site.db,
-          site.organizationId,
-          site.siteId,
-          whatsappPhone,
-          channels,
-          site.env,
-          ctx.event ? (getHeaders(ctx.event) as HeadersInit) : undefined,
-        );
+        let notifications: Awaited<ReturnType<typeof updateNotificationsSettings>>;
+        try {
+          notifications = await updateNotificationsSettings(
+            site.db,
+            site.organizationId,
+            site.siteId,
+            whatsappPhone,
+            channels,
+            site.env,
+            ctx.event ? (getHeaders(ctx.event) as HeadersInit) : undefined,
+          );
+        } catch (error) {
+          // setOrgWhatsAppPhone rejects an invalid/impossible number outright (issue #293
+          // Section D — "reject impossible or invalid numbers at write boundaries") rather
+          // than throwing, not returning a result. Surface that as a clean MCP invalid-params
+          // error instead of an unhandled 500.
+          const message = error instanceof Error ? error.message : String(error);
+          if (message.startsWith('Invalid phone number')) {
+            throw mcpProtocolError(MCP_ERROR.invalidParams, message);
+          }
+          throw error;
+        }
         return {
           notifications,
           context: await mutationContextPayload(site),
