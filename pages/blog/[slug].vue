@@ -15,54 +15,8 @@
 
     <article class="min-w-0">
     <div class="mx-auto max-w-4xl">
-    <div class="mb-6 flex flex-wrap items-center gap-3">
-      <span v-if="post.category" class="rounded bg-muted px-2 py-1 text-xs font-medium text-muted">
-        {{ post.category }}
-      </span>
-      <span v-if="post.published_at" class="text-sm text-dimmed">
-        <NuxtTime :datetime="post.published_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
-      </span>
-      <span class="text-sm text-dimmed">{{ readTime }} min read</span>
-      <span v-if="wasUpdated && post.updated_at" class="text-sm text-dimmed">
-        Updated <NuxtTime :datetime="post.updated_at" locale="en-US" month="long" day="numeric" time-zone="UTC" />
-      </span>
-    </div>
-
-    <h1 class="mb-5 text-4xl font-bold leading-tight text-default">{{ post.title }}</h1>
-    <p v-if="post.excerpt" class="mb-8 text-xl leading-relaxed text-muted">{{ post.excerpt }}</p>
-
-    <div class="mb-8 flex items-center gap-4 border-y border-default py-4">
-      <div
-        class="flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold text-white"
-        style="background-color: var(--ui-primary)"
-      >
-        {{ authorInitial }}
-      </div>
-      <div>
-        <p class="font-semibold text-default">{{ authorName }}</p>
-        <p class="text-sm text-dimmed">Published from {{ siteName }}</p>
-      </div>
-    </div>
-
-    <div v-if="postMedia.url" class="relative mb-10 h-64 w-full overflow-hidden rounded-2xl md:h-96">
-      <video
-        v-if="postMedia.isVideo"
-        :src="postMedia.url"
-        autoplay
-        muted
-        loop
-        playsinline
-        class="h-full w-full object-cover"
-      />
-      <img
-        v-else
-        :src="postMedia.url"
-        :alt="post.title"
-        class="h-full w-full object-cover"
-      />
-    </div>
-
-    <div class="space-y-14">
+    <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="authorName" :site-name="siteName" :media-url="postMedia.url" :media-kind="postMedia.isVideo ? 'video' : 'image'" :read-minutes="readTime" :blocks="post.content_blocks" template="saya">
+      <template #legacy-body><div class="space-y-14">
       <template v-for="(block, blockIndex) in renderedBlocks" :key="`block-${blockIndex}`">
         <!-- eslint-disable vue/no-v-html -->
         <div
@@ -78,7 +32,8 @@
         <!-- eslint-enable vue/no-v-html -->
         <component :is="resolveContentComponent(block.type)" v-else v-bind="block.props" />
       </template>
-    </div>
+      </div></template>
+    </BlogArticleView>
 
     <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
       <div>
@@ -139,15 +94,19 @@ interface TenantBlogPost {
   excerpt?: string | null
   category?: string | null
   seo_description?: string | null
+  seo_title?: string | null
   seo_keywords?: string | null
   canonical_url?: string | null
   robots?: string | null
+  visibility?: 'public' | 'unlisted'
   published_at?: string | null
   author_name?: string | null
   updated_at?: string | null
   featured_order?: number | null
   featured_image?: { public_url: string | null; kind: string | null; width: number | null; height: number | null } | null
+  social_image?: { public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null
   components?: ContentComponent[]
+  content_blocks?: import('~/components/workspace/blog/types').BlogEditorBlock[] | null
 }
 
 const route = useRoute()
@@ -220,7 +179,6 @@ function slugifyCategory(value: string) {
 const activeCategorySlug = computed(() => slugifyCategory(post.value?.category?.trim() || 'Uncategorized'))
 const siteName = computed(() => site?.brand_name || 'Our Site')
 const authorName = computed(() => post.value?.author_name?.trim() || siteName.value)
-const authorInitial = computed(() => authorName.value.charAt(0).toUpperCase())
 const readTime = computed(() => {
   const words = (post.value?.body ?? '')
     .trim()
@@ -259,24 +217,31 @@ const renderableComponents = computed(() =>
     .map(block => block.component),
 )
 
-const postMedia = computed(() => resolveMedia({
-  public_url: post.value?.featured_image?.public_url,
-  kind: post.value?.featured_image?.kind,
-}))
+const selectedPostImage = computed(() => {
+  const social = post.value?.social_image
+  if (social?.public_url) return { public_url: social.public_url, kind: 'image', width: social.width, height: social.height }
+  return post.value?.featured_image ?? null
+})
+const postMedia = computed(() => resolveMedia(selectedPostImage.value))
 
 const postPath = computed(() => `/blog/${post.value?.slug ?? ''}`)
-const seoTitle = computed(() => post.value ? `${post.value.title} | ${siteName.value}` : 'Blog')
-const seoDescription = computed(() => post.value?.seo_description || post.value?.excerpt || `A post from ${siteName.value}.`)
+const requestURL = useRequestURL()
+const resolvedSeo = computed(() => resolveBlogSeo({
+  title: post.value?.title || 'Blog', seoTitle: post.value?.seo_title, excerpt: post.value?.excerpt,
+  seoDescription: post.value?.seo_description, slug: post.value?.slug || '', canonicalUrl: post.value?.canonical_url,
+  baseUrl: requestURL.origin, publicPath: postPath.value, siteName: siteName.value,
+  robots: post.value?.visibility === 'unlisted' ? 'noindex,follow' : post.value?.robots,
+}))
 
 const { canonicalUrl } = useTenantSocialMetadata(() => ({
-  path: post.value ? (post.value.canonical_url || postPath.value) : '/blog',
-  title: seoTitle.value,
-  description: seoDescription.value,
+  path: resolvedSeo.value.canonicalUrl,
+  title: resolvedSeo.value.title,
+  description: resolvedSeo.value.description,
   pageType: 'article',
   label: post.value?.category || null,
   author: authorName.value,
   publishedAt: post.value?.published_at || null,
-  robots: post.value?.robots || null,
+  robots: resolvedSeo.value.robots,
   brand: {
     siteName: siteName.value,
     logoUrl: config.value?.logo_url || null,
@@ -298,10 +263,10 @@ useContentPageSchema(computed(() => {
     articleType: 'BlogPosting' as const,
     url: canonicalUrl.value,
     title: post.value.title,
-    description: seoDescription.value,
+    description: resolvedSeo.value.description,
     imageUrl: postMedia.value.url || undefined,
-    imageWidth: post.value.featured_image?.width ?? undefined,
-    imageHeight: post.value.featured_image?.height ?? undefined,
+    imageWidth: selectedPostImage.value?.width ?? undefined,
+    imageHeight: selectedPostImage.value?.height ?? undefined,
     datePublished: post.value.published_at,
     dateModified: post.value.updated_at,
     authorName: authorName.value,

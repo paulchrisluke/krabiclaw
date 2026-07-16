@@ -14,6 +14,8 @@ type Store = {
   contentRevisions: Row[]
   blogPosts: Row[]
   platformDocs: Row[]
+  beforeBatch?: (() => void) | null
+  documentWriteTimestamp?: string
 }
 
 function createStore(): Store {
@@ -46,6 +48,12 @@ async function execute(db: Store, query: string, params: unknown[] = []) {
   }
 
   if (query.startsWith('INSERT INTO content_blocks')) {
+    if (query.includes('__content_document_concurrency_guard__')) {
+      const [, , , , documentId, expectedUpdatedAt] = params
+      const current = db.contentDocuments.find(row => row.id === documentId && row.updated_at === expectedUpdatedAt)
+      if (!current) throw new Error('CHECK constraint failed: content_blocks_type_check')
+      return { meta: { changes: 0 } }
+    }
     const [id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at] = params
     db.contentBlocks.push({ id, document_id, parent_block_id, type, position: Number(position), level, data_json, created_at, updated_at })
     return { meta: { changes: 1 } }
@@ -67,14 +75,14 @@ async function execute(db: Store, query: string, params: unknown[] = []) {
   if (query.startsWith('UPDATE content_documents SET draft_revision_id = ?, published_revision_id = ?')) {
     const [draft_revision_id, published_revision_id, updated_at, id] = params
     const document = db.contentDocuments.find(row => row.id === id)
-    if (document) Object.assign(document, { draft_revision_id, published_revision_id, updated_at })
+    if (document) Object.assign(document, { draft_revision_id, published_revision_id, updated_at: db.documentWriteTimestamp ?? updated_at })
     return { meta: { changes: document ? 1 : 0 } }
   }
 
   if (query.startsWith('UPDATE content_documents SET draft_revision_id = ?')) {
     const [draft_revision_id, updated_at, id] = params
     const document = db.contentDocuments.find(row => row.id === id)
-    if (document) Object.assign(document, { draft_revision_id, updated_at })
+    if (document) Object.assign(document, { draft_revision_id, updated_at: db.documentWriteTimestamp ?? updated_at })
     return { meta: { changes: document ? 1 : 0 } }
   }
 
@@ -110,6 +118,9 @@ async function execute(db: Store, query: string, params: unknown[] = []) {
 }
 
 async function executeBatch(db: Store, queries: Array<{ query: string; params: unknown[] }>) {
+  const beforeBatch = db.beforeBatch
+  db.beforeBatch = null
+  beforeBatch?.()
   const results: Array<{ meta: { changes: number } }> = []
   for (const item of queries) results.push(await execute(db, item.query, item.params))
   return results
@@ -158,14 +169,18 @@ mock.module('../../server/db/index.ts', {
 const {
   appendContentBlock,
   getContentOutline,
+  mergeLegacyBlogComponents,
   publishContentDocumentRevision,
   renderContentPreview,
   replaceContentBlock,
+  replaceContentDocumentBlocks,
+  replacePublishedContentDocumentBlocks,
   syncContentDocumentFromMarkdown,
 } = await import('../../server/utils/content-documents.ts')
 
 test('syncContentDocumentFromMarkdown creates blocks and a published revision', async () => {
   const db = createStore()
+  db.documentWriteTimestamp = 'committed-document-token'
   const d1 = db as unknown as D1Database
   const result = await syncContentDocumentFromMarkdown(d1, {
     ownerType: 'platform_blog',
@@ -183,6 +198,21 @@ test('syncContentDocumentFromMarkdown creates blocks and a published revision', 
   assert.deepEqual(result.blocks.map(block => block.type), ['heading', 'markdown', 'heading', 'markdown'])
   assert.equal(document.draft_revision_id, result.revision_id)
   assert.equal(document.published_revision_id, result.revision_id)
+  assert.equal(result.document.updated_at, 'committed-document-token')
+  assert.equal(result.document.draft_revision_id, result.revision_id)
+  assert.equal(result.document.published_revision_id, result.revision_id)
+})
+
+test('divider blocks serialize as thematic breaks without disturbing structured blocks', async () => {
+  const db = createStore()
+  const d1 = db as unknown as D1Database
+  const initial = await syncContentDocumentFromMarkdown(d1, {
+    ownerType: 'tenant_blog', ownerId: 'post-divider', bodyMarkdown: 'Before',
+  })
+  await appendContentBlock(d1, initial.document.id, { type: 'divider', data: {} })
+  const preview = await renderContentPreview(d1, initial.document.id)
+  assert.match(preview.body_markdown, /Before\n\n---/)
+  assert.equal(preview.blocks.at(-1)?.type, 'divider')
 })
 
 test('block edits produce draft previews and reject stale replacement tokens', async () => {
@@ -245,4 +275,74 @@ test('publishContentDocumentRevision writes the compatibility body field', async
   assert.equal(post.status, 'published')
   assert.match(String(post.body), /New body\./)
   assert.equal(document.published_revision_id, document.draft_revision_id)
+})
+
+test('legacy structured backfill replaces placeholders in place and reports duplicates and unmatched placeholders', () => {
+  const result = mergeLegacyBlogComponents([
+    { type: 'markdown', data: { markdown: 'Before\n\n{{component type="faq"}}\n\nMiddle\n\n{{component type="how_to"}}\n\nAfter' } },
+  ], [
+    { component_id: 'faq-1', type: 'faq', position: 1, data: { items: [{ question: 'Q', answer: 'A' }] } },
+    { component_id: 'faq-2', type: 'faq', position: 2, data: { items: [{ question: 'Q2', answer: 'A2' }] } },
+  ])
+
+  assert.deepEqual(result.blocks.map(block => block.type), ['markdown', 'faq', 'markdown', 'markdown', 'markdown'])
+  assert.equal(result.blocks.some(block => String(block.data.markdown || '').includes('{{component type="how_to"}}')), true)
+  assert.ok(result.findings.some(finding => finding.action === 'unmatched_placeholder'))
+  assert.ok(result.findings.some(finding => finding.action === 'duplicate'))
+})
+
+test('whole-document replacement rejects a stale token after every prior block id was replaced', async () => {
+  const db = createStore()
+  db.documentWriteTimestamp = 'initial-document-token'
+  const d1 = db as unknown as D1Database
+  const initial = await syncContentDocumentFromMarkdown(d1, {
+    ownerType: 'platform_blog', ownerId: 'post-race', bodyMarkdown: 'Original',
+  })
+  const token = initial.document.updated_at
+  assert.equal(token, 'initial-document-token')
+  const revisionCount = db.contentRevisions.length
+  let reachedBatch = false
+
+  db.beforeBatch = () => {
+    reachedBatch = true
+    const document = db.contentDocuments[0]!
+    document.updated_at = 'newer-document-token'
+    db.contentBlocks = [{
+      id: 'replacement-id', document_id: document.id, parent_block_id: null,
+      type: 'markdown', position: 0, level: null, data_json: JSON.stringify({ markdown: 'Concurrent replacement' }),
+      created_at: '', updated_at: 'newer-block-token',
+    }]
+  }
+
+  await assert.rejects(
+    () => replaceContentDocumentBlocks(d1, 'platform_blog', 'post-race', [{ type: 'markdown', data: { markdown: 'Stale writer' } }], { expected_document_updated_at: token }),
+    (error: unknown) => typeof error === 'object' && error !== null && (error as { statusCode?: number }).statusCode === 409,
+  )
+  assert.equal(reachedBatch, true)
+  assert.equal(db.contentDocuments[0]?.updated_at, 'newer-document-token')
+  assert.equal(db.contentBlocks.length, 1)
+  assert.equal(db.contentBlocks[0]?.id, 'replacement-id')
+  assert.match(String(db.contentBlocks[0]?.data_json), /Concurrent replacement/)
+  assert.equal(db.contentRevisions.length, revisionCount)
+})
+
+test('published-snapshot backfill preserves a distinct unpublished draft', async () => {
+  const db = createStore()
+  const d1 = db as unknown as D1Database
+  const published = await syncContentDocumentFromMarkdown(d1, {
+    ownerType: 'platform_blog', ownerId: 'post-published', bodyMarkdown: 'Published prose', publish: true,
+  })
+  await appendContentBlock(d1, published.document.id, { type: 'markdown', data: { markdown: 'Unpublished draft addition' } })
+  const document = db.contentDocuments[0]!
+  const draftRevisionId = document.draft_revision_id
+  const liveDraftIds = db.contentBlocks.map(block => block.id)
+
+  await replacePublishedContentDocumentBlocks(d1, 'platform_blog', 'post-published', [
+    { type: 'markdown', data: { markdown: 'Published prose' } },
+    { type: 'faq', data: { items: [{ question: 'Q', answer: 'A' }] } },
+  ], { expected_document_updated_at: String(document.updated_at) })
+
+  assert.equal(document.draft_revision_id, draftRevisionId)
+  assert.notEqual(document.published_revision_id, published.revision_id)
+  assert.deepEqual(db.contentBlocks.map(block => block.id), liveDraftIds)
 })

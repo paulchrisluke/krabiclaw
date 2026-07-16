@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
     FROM blog_posts p
     LEFT JOIN user u ON u.id = p.author_id
     LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
-    WHERE p.status = 'published' AND p.site_id = ?
+    WHERE p.status = 'published' AND p.site_id = ? AND p.visibility = 'public'
     ORDER BY p.published_at IS NULL, p.published_at DESC, p.id DESC
     LIMIT 50
   `

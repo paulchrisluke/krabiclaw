@@ -1023,10 +1023,15 @@ export const blog_posts = sqliteTable("blog_posts", {
 	hide_from_nav: integer().default(0).notNull(),
 	featured_order: integer(),
 	status: text().default("draft").notNull(), // draft | published | scheduled | archived
+	visibility: text().default("public").notNull(), // public | unlisted
 	author_id: text().references(() => user.id, { onDelete: "set null" } ),
 	featured_image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
+	social_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	published_at: text(),
+	first_published_at: text(),
 	scheduled_for: text(),
+	scheduled_revision_id: text(),
+	slug_manually_overridden: integer().default(0).notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	seo_title: text(),
@@ -1037,10 +1042,23 @@ export const blog_posts = sqliteTable("blog_posts", {
 }, (table) => [
 	check("blog_posts_scope_check", sql`(organization_id IS NULL AND site_id IS NULL) OR (organization_id IS NOT NULL AND site_id IS NOT NULL)`),
 	check("blog_posts_status_check", sql`status IN ('draft', 'published', 'scheduled', 'archived')`),
+	check("blog_posts_visibility_check", sql`visibility IN ('public', 'unlisted')`),
 	check("blog_posts_category_check", sql`site_id IS NOT NULL OR category IS NOT NULL`),
 	uniqueIndex("blog_posts_platform_slug_idx").on(table.slug).where(sql`site_id IS NULL`),
 	uniqueIndex("blog_posts_site_slug_idx").on(table.site_id, table.slug).where(sql`site_id IS NOT NULL`),
 	index("blog_posts_org_site_idx").on(table.organization_id, table.site_id),
+]);
+
+export const blog_post_redirects = sqliteTable("blog_post_redirects", {
+	id: text().primaryKey(),
+	post_id: text().notNull().references(() => blog_posts.id, { onDelete: "cascade" }),
+	site_id: text().references(() => sites.id, { onDelete: "cascade" }),
+	old_slug: text().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	uniqueIndex("blog_post_redirects_platform_slug_idx").on(table.old_slug).where(sql`site_id IS NULL`),
+	uniqueIndex("blog_post_redirects_site_slug_idx").on(table.site_id, table.old_slug).where(sql`site_id IS NOT NULL`),
+	index("blog_post_redirects_post_idx").on(table.post_id),
 ]);
 
 export const platform_contact_submissions = sqliteTable("platform_contact_submissions", {
@@ -2217,7 +2235,7 @@ export const content_blocks = sqliteTable("content_blocks", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	check("content_blocks_type_check", sql`type IN ('heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'ai_assistance', 'cta', 'callout')`),
+	check("content_blocks_type_check", sql`type IN ('heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout')`),
 	index("content_blocks_document_position_idx").on(table.document_id, table.position),
 	index("content_blocks_parent_idx").on(table.parent_block_id),
 ]);
