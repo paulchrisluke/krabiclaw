@@ -13,57 +13,8 @@
     <article>
       <DocsBreadcrumb :crumbs="breadcrumbs" />
 
-      <h1 class="mb-3 text-4xl font-bold leading-tight text-default">{{ post.title }}</h1>
-      <p v-if="post.excerpt" class="mb-6 text-xl leading-relaxed text-muted">{{ post.excerpt }}</p>
-
-      <div class="mb-10 flex items-center gap-3">
-        <div class="shrink-0">
-          <img
-            v-if="post.author_image"
-            :src="post.author_image"
-            :alt="post.author_name || 'Author avatar'"
-            class="h-10 w-10 rounded-full object-cover"
-          />
-          <div
-            v-else
-            class="flex h-10 w-10 items-center justify-center rounded-full text-base font-bold text-white"
-            style="background-color: var(--kc-teal)"
-          >
-            {{ authorInitial }}
-          </div>
-        </div>
-        <div>
-          <p class="font-semibold text-default">{{ post.author_name || 'KrabiClaw' }}</p>
-          <div class="flex flex-wrap items-center gap-x-2 text-sm text-dimmed">
-            <span>{{ readTime }} min read</span>
-            <span v-if="post.published_at">·</span>
-            <span v-if="post.published_at">
-              <NuxtTime :datetime="post.published_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
-            </span>
-            <span v-if="wasUpdated && post.updated_at">(updated <NuxtTime :datetime="post.updated_at" locale="en-US" month="long" day="numeric" time-zone="UTC" />)</span>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="postMedia.url" class="relative mb-10 h-64 w-full overflow-hidden rounded-2xl md:h-96">
-        <video
-          v-if="postMedia.isVideo"
-          :src="postMedia.url"
-          autoplay
-          muted
-          loop
-          playsinline
-          class="h-full w-full object-cover"
-        />
-        <img
-          v-else
-          :src="postMedia.url"
-          :alt="post.title"
-          class="h-full w-full object-cover"
-        />
-      </div>
-
-      <div ref="articleBodyRef" class="space-y-14">
+      <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="post.author_name || 'KrabiClaw'" :author-image="post.author_image" site-name="KrabiClaw" :media-url="postMedia.url" :media-kind="postMedia.isVideo ? 'video' : 'image'" :read-minutes="readTime" :blocks="post.content_blocks" template="platform">
+      <template #legacy-body><div ref="articleBodyRef" class="space-y-14">
         <template v-for="(block, blockIndex) in renderedBlocks" :key="`block-${blockIndex}`">
           <!-- eslint-disable vue/no-v-html -->
           <div
@@ -88,7 +39,8 @@
             v-bind="block.props"
           />
         </template>
-      </div>
+      </div></template>
+      </BlogArticleView>
 
       <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
         <div class="flex items-center gap-4">
@@ -143,9 +95,11 @@ interface BlogPost {
   excerpt?: string | null
   category?: string | null
   seo_description?: string | null
+  seo_title?: string | null
   seo_keywords?: string | null
   canonical_url?: string | null
   robots?: string | null
+  visibility?: 'public' | 'unlisted'
   published_at?: string | null
   created_at?: string | null
   updated_at?: string | null
@@ -160,7 +114,9 @@ interface BlogPost {
     width: number | null
     height: number | null
   } | null
+  social_image?: { public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null
   components?: ContentComponent[]
+  content_blocks?: import('~/components/workspace/blog/types').BlogEditorBlock[] | null
 }
 
 const route = useRoute()
@@ -281,10 +237,12 @@ const wasUpdated = computed(() => {
   return Math.abs(updatedDate.getTime() - publishedDate.getTime()) > 60_000
 })
 
-const postMedia = computed(() => resolveMedia({
-  public_url: post.value?.featured_image?.public_url,
-  kind: post.value?.featured_image?.kind,
-}))
+const selectedPostImage = computed(() => {
+  const social = post.value?.social_image
+  if (social?.public_url) return { public_url: social.public_url, kind: 'image', width: social.width, height: social.height }
+  return post.value?.featured_image ?? null
+})
+const postMedia = computed(() => resolveMedia(selectedPostImage.value))
 
 const categorySlug = computed(() => blogCategoryToSlug(post.value?.category) || String(route.params.category))
 const postPath = computed(() => getBlogPostPath(post.value?.category, post.value?.slug) || '/blog')
@@ -294,9 +252,6 @@ const breadcrumbs = computed(() => [
   ...(post.value ? [{ name: post.value.title, url: postPath.value }] : []),
 ])
 
-const seoTitle = computed(() => post.value?.title || 'Blog')
-const seoDescription = computed(() => post.value?.seo_description || truncateForSeo(post.value?.excerpt ?? 'Business tips and insights from KrabiClaw.', 160))
-
 // useSocialMetadata directly (not usePlatformPageSeo) — this page already emits its own
 // complete schema.org @graph via useContentPageSchema below; usePlatformPageSeo would add
 // a second WebSite/WebPage graph with the same @id values, so only the OG/tag layer is
@@ -304,19 +259,25 @@ const seoDescription = computed(() => post.value?.seo_description || truncateFor
 const runtimeConfig = useRuntimeConfig()
 const requestURL = useRequestURL()
 const platformOrigin = computed(() => runtimeConfig.public.siteUrl || requestURL.origin)
+const resolvedSeo = computed(() => resolveBlogSeo({
+  title: post.value?.title || 'Blog', seoTitle: post.value?.seo_title, excerpt: post.value?.excerpt,
+  seoDescription: post.value?.seo_description, slug: post.value?.slug || '', canonicalUrl: post.value?.canonical_url,
+  baseUrl: platformOrigin.value, publicPath: postPath.value, siteName: 'KrabiClaw',
+  robots: post.value?.visibility === 'unlisted' ? 'noindex,follow' : post.value?.robots,
+}))
 const { canonicalUrl } = useSocialMetadata(() => ({
   template: 'platform' as const,
   pageType: 'article' as const,
-  title: seoTitle.value,
-  description: seoDescription.value,
-  canonicalUrl: resolveSeoUrl(post.value ? (post.value.canonical_url || postPath.value) : '/blog', platformOrigin.value),
+  title: resolvedSeo.value.title,
+  description: resolvedSeo.value.description,
+  canonicalUrl: resolvedSeo.value.canonicalUrl,
   brand: { siteName: 'KrabiClaw', logoUrl: resolveSeoUrl('/krabi-claw-logo.png', platformOrigin.value), primaryColor: '#1e1b4b', secondaryColor: '#4338ca' },
   label: post.value?.category || null,
   author: post.value?.author_name || null,
   publishedAt: post.value?.published_at || null,
   heroImage: postMedia.value.thumb ? { url: postMedia.value.thumb } : null,
-  robots: post.value?.robots?.trim() || null,
-  indexable: !post.value?.robots || !/noindex/i.test(post.value.robots),
+  robots: resolvedSeo.value.robots,
+  indexable: post.value?.visibility !== 'unlisted' && (!post.value?.robots || !/noindex/i.test(post.value.robots)),
 }), platformOrigin)
 
 useHead(() => ({
@@ -331,10 +292,10 @@ useContentPageSchema(computed(() => {
     articleType: 'BlogPosting' as const,
     url: canonicalUrl.value,
     title: post.value.title,
-    description: seoDescription.value,
+    description: resolvedSeo.value.description,
     imageUrl: postMedia.value.url || undefined,
-    imageWidth: post.value.featured_image?.width ?? undefined,
-    imageHeight: post.value.featured_image?.height ?? undefined,
+    imageWidth: selectedPostImage.value?.width ?? undefined,
+    imageHeight: selectedPostImage.value?.height ?? undefined,
     datePublished: post.value.published_at,
     dateModified: post.value.updated_at,
     authorName: post.value.author_name || 'KrabiClaw',

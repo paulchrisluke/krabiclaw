@@ -1,372 +1,381 @@
 <template>
-  <div class="p-4 lg:p-6">
-    <div class="mb-6 flex items-center justify-between gap-3">
-      <div>
-        <h1 class="text-2xl font-bold text-default">{{ title }}</h1>
-        <p v-if="publicPath" class="mt-1 text-sm text-muted">{{ publicPath }}</p>
-      </div>
-      <UButton :to="backUrl" color="neutral" variant="soft" icon="i-lucide-arrow-left">{{ backLabel }}</UButton>
-    </div>
+  <div class="fixed inset-0 z-50 flex min-h-0 flex-col bg-[#10131b] text-white">
+    <header class="sticky top-0 z-30 flex min-h-14 shrink-0 items-center gap-2 border-b border-white/10 bg-[#151923] px-2 pb-[env(safe-area-inset-top)] sm:px-4">
+      <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="sm" @click="goBack">Posts</UButton>
+      <p class="min-w-0 flex-1 truncate text-xs text-gray-300 sm:text-sm">
+        {{ statusLabel }} · <span :class="saveState === 'failed' || saveState === 'conflict' ? 'text-red-300' : ''">{{ saveLabel }}</span>
+      </p>
+      <UButton icon="i-lucide-share-2" color="neutral" variant="ghost" size="sm" aria-label="Share editor" @click="share"><span class="hidden sm:inline">Share</span></UButton>
+      <UButton ref="settingsButton" icon="i-lucide-settings" color="neutral" variant="ghost" size="sm" aria-label="Post settings" @click="openSettings"><span class="hidden sm:inline">Settings</span></UButton>
+      <UButton size="sm" :loading="publishing" :disabled="loadPending || saveState === 'conflict'" @click="publish">Publish</UButton>
+    </header>
 
-    <UCard v-if="loadPending">
-      <div class="flex items-center gap-3 text-sm text-muted">
-        <UIcon name="i-lucide-refresh-cw" class="size-4 animate-spin" />
-        Loading post...
-      </div>
-    </UCard>
-
-    <UAlert
-      v-else-if="loadError"
-      color="error"
-      variant="soft"
-      icon="i-lucide-triangle-alert"
-      :description="loadError"
-    />
-
-    <UCard v-else>
-      <BlogPostForm ref="formRef" v-model="form" :free-text-category="props.freeTextCategory">
-        <template #media-picker="slotProps">
+    <div v-if="loadPending" class="grid min-h-0 flex-1 place-items-center"><UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" /></div>
+    <div v-else-if="loadError" class="grid min-h-0 flex-1 place-items-center p-6"><UAlert color="error" :description="loadError" /></div>
+    <main v-else class="min-h-0 flex-1 overflow-y-auto bg-[var(--editor-canvas,#fff)] text-[var(--editor-ink,#1f2937)] [overscroll-behavior:contain]" :style="editorCanvasStyle">
+      <BlogArticleView
+        v-model:title="form.title"
+        :excerpt="form.excerpt || resolvedExcerpt"
+        :category="form.category || null"
+        :published-at="post?.published_at || post?.created_at || null"
+        :updated-at="post?.updated_at || null"
+        :author-name="resolvedAuthorName"
+        :author-image="post?.author_image || null"
+        :site-name="resolvedSiteName"
+        :media-url="resolvedSocialImageUrl"
+        :media-kind="resolvedMediaKind"
+        :read-minutes="readMinutes"
+        :blocks="blocks"
+        :template="templateName"
+        editable
+        @update:block="updateBlock"
+      >
+        <template #image-editor="{ block, index }">
           <component
-            :is="props.mediaPickerComponent || PlatformMediaPicker"
-            v-bind="{ ...slotProps, ...(props.mediaPickerComponent ? { siteId: props.siteId } : {}) }"
+            :is="mediaPickerComponent || PlatformMediaPicker"
+            :site-id="siteId"
+            :model-value="String(block.data.asset_id || '')"
+            accept="image"
+            @change="changeImage(index, $event)"
           />
+          <div class="mt-2 grid gap-2 sm:grid-cols-2">
+            <UInput :model-value="String(block.data.alt || '')" placeholder="Alt text" @update:model-value="value => setBlockData(index, 'alt', value)" />
+            <UInput :model-value="String(block.data.caption || '')" placeholder="Caption" @update:model-value="value => setBlockData(index, 'caption', value)" />
+          </div>
         </template>
-      </BlogPostForm>
+        <template #faq-editor="{ block, index }">
+          <UTextarea :model-value="serializeFaq(block)" :rows="6" class="mt-3" aria-label="FAQ questions and answers" @update:model-value="value => parseFaq(index, String(value))" />
+        </template>
+        <template #how-to-editor="{ block, index }">
+          <UTextarea :model-value="serializeHowTo(block)" :rows="5" class="mt-3" aria-label="How-To steps" @update:model-value="value => parseHowTo(index, String(value))" />
+        </template>
+        <template #block-actions="{ index }">
+          <div class="absolute -right-3 top-0 flex opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100">
+            <UButton icon="i-lucide-arrow-up" color="neutral" variant="soft" size="xs" :disabled="index === 0" aria-label="Move block up" @click="moveBlock(index, -1)" />
+            <UButton icon="i-lucide-arrow-down" color="neutral" variant="soft" size="xs" :disabled="index === blocks.length - 1" aria-label="Move block down" @click="moveBlock(index, 1)" />
+            <UButton icon="i-lucide-trash-2" color="neutral" variant="soft" size="xs" aria-label="Delete block" @click="removeBlock(index)" />
+          </div>
+        </template>
+      </BlogArticleView>
 
-      <div v-if="errorMessage || successMessage" class="mt-4 space-y-2">
-        <UAlert v-if="errorMessage" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
-        <UAlert v-if="successMessage" color="success" variant="soft" icon="i-lucide-circle-check" :description="successMessage" />
+      <div class="sticky bottom-[calc(env(safe-area-inset-bottom)+1rem)] mx-auto mb-10 flex w-fit gap-1 rounded-full bg-[#151923] p-1.5 text-white shadow-xl">
+        <UPopover v-model:open="inserterOpen">
+          <UButton icon="i-lucide-plus" color="neutral" variant="ghost" aria-label="Insert block" />
+          <template #content>
+            <div class="grid w-44 p-1">
+              <button v-for="item in inserterItems" :key="item.type" class="flex items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-elevated" @click="insertBlock(item.type)">
+                <UIcon :name="item.icon" class="size-4" />{{ item.label }}
+              </button>
+            </div>
+          </template>
+        </UPopover>
       </div>
+    </main>
 
-      <div class="mt-4 flex flex-wrap items-center gap-2 border-t border-default pt-4">
-        <UButton v-if="isEdit" color="neutral" variant="soft" :loading="saving" :disabled="!canSave" @click="update(false)">
-          Save changes
-        </UButton>
-        <UButton v-if="isEdit" :loading="saving" :disabled="!canPublish" @click="update(true)">
-          Publish
-        </UButton>
-        <UButton v-if="isEdit && post?.published_at" color="neutral" variant="ghost" :loading="saving" @click="unpublish">
-          Unpublish
-        </UButton>
-        <UButton v-if="isEdit" color="error" variant="ghost" :loading="saving" @click="remove">
-          Delete
-        </UButton>
-        <UButton v-if="!isEdit" color="neutral" variant="soft" :loading="saving" :disabled="!canSave" @click="save(false)">
-          Save draft
-        </UButton>
-        <UButton v-if="!isEdit" :loading="saving" :disabled="!canPublish" @click="save(true)">
-          Publish
-        </UButton>
+    <div v-if="settingsOpen" class="fixed inset-0 z-40 bg-black/55" @click="closeSettings" />
+    <aside v-if="settingsOpen" ref="settingsPanel" class="fixed inset-0 z-50 overflow-y-auto bg-[#171b25] p-5 text-white sm:inset-y-0 sm:left-auto sm:w-[360px]" role="dialog" aria-modal="true" aria-label="Post settings" @keydown="onSettingsKeydown">
+      <div class="mb-6 flex items-center justify-between"><h2 class="text-lg font-semibold">Post settings</h2><UButton icon="i-lucide-x" color="neutral" variant="ghost" aria-label="Close settings" @click="closeSettings" /></div>
+      <div class="space-y-7 pb-[env(safe-area-inset-bottom)]">
+        <SettingsSection title="Post">
+          <UFormField label="Author"><p class="text-sm text-gray-200">{{ post?.author_name || 'Current author' }}</p></UFormField>
+          <UFormField label="Category"><UInput v-model="form.category" /></UFormField>
+          <UFormField label="Tags"><UInput v-model="tagsText" placeholder="Comma separated" /></UFormField>
+          <UFormField label="Excerpt"><UTextarea v-model="form.excerpt" :placeholder="resolvedExcerpt" /><p class="mt-1 text-xs text-gray-400">{{ form.excerpt ? 'Custom' : `Auto: ${resolvedExcerpt}` }}</p></UFormField>
+        </SettingsSection>
+        <SettingsSection title="Publishing">
+          <UFormField label="Status"><p class="text-sm text-gray-200">{{ statusLabel }}</p></UFormField>
+          <UFormField label="Publish timing"><USelect v-model="publishTiming" :items="['Now', 'Scheduled']" /></UFormField>
+          <UFormField v-if="publishTiming === 'Scheduled'" label="Scheduled for"><UInput v-model="form.scheduled_for" type="datetime-local" /></UFormField>
+          <UFormField label="Visibility"><USelect v-model="form.visibility" :items="['public', 'unlisted']" /></UFormField>
+        </SettingsSection>
+        <SettingsSection title="Search & sharing">
+          <div class="rounded-lg border border-white/10 bg-white/5 p-3"><p class="truncate text-sm text-blue-300">{{ resolvedSeo.title }}</p><p class="truncate text-xs text-green-300">{{ resolvedSeo.canonicalUrl }}</p><p class="mt-1 line-clamp-2 text-xs text-gray-300">{{ resolvedSeo.description }}</p></div>
+          <UFormField label="SEO title"><UInput v-model="form.seo_title" :placeholder="form.title" /></UFormField>
+          <UFormField label="Meta description"><UTextarea v-model="form.seo_description" :placeholder="resolvedExcerpt" /></UFormField>
+          <UFormField label="Social image"><img v-if="resolvedSocialImageUrl" :src="resolvedSocialImageUrl" alt="Resolved social preview" class="mb-2 aspect-video w-full rounded-lg object-cover"><component :is="mediaPickerComponent || PlatformMediaPicker" :site-id="siteId" v-model="form.social_image_asset_id" accept="image" /></UFormField>
+        </SettingsSection>
+        <SettingsSection title="Advanced">
+          <UFormField label="URL slug"><UInput v-model="form.slug" :disabled="slugResetRequested" /><div class="mt-1 flex items-center justify-between gap-3"><p class="text-xs text-gray-400">{{ slugResetRequested ? generatedSlug : form.slug || generatedSlug }}</p><button v-if="post?.slug_manually_overridden" type="button" class="text-xs text-blue-300 hover:underline" @click="resetSlugOverride">Use automatic slug</button></div></UFormField>
+          <UCheckbox v-if="post?.first_published_at && form.slug !== post.slug" v-model="form.redirect_old_slug" label="Redirect old URL" />
+          <UFormField label="Canonical URL"><UInput v-model="form.canonical_url" :placeholder="resolvedSeo.canonicalUrl" /></UFormField>
+          <UFormField label="Robots"><UInput v-model="form.robots" placeholder="index, follow" /></UFormField>
+        </SettingsSection>
+        <UButton color="error" variant="ghost" block @click="remove">Delete post</UButton>
       </div>
-    </UCard>
+    </aside>
   </div>
 </template>
 
 <script setup lang="ts">
 import type { Component } from 'vue'
-import { getErrorMessage } from '~/utils/errors'
-import { parseOptionalNumber } from '~/utils/optional-number'
-import { getBlogPostPath } from '~/utils/blog-categories'
-import BlogPostForm from './BlogPostForm.vue'
+import BlogArticleView from '~/components/blog/BlogArticleView.vue'
 import PlatformMediaPicker from '~/components/workspace/media/PlatformMediaPicker.vue'
-import type { BlogPostRepository, BlogPost, BlogComponent, PlatformBlogCreateInput, PlatformBlogUpdateInput } from './types'
+import SettingsSection from './SettingsSection.vue'
+import type { BlogPostRepository, BlogPost, BlogEditorBlock, PlatformBlogUpdateInput } from './types'
+import { generatedExcerpt, initialBlogEditorBlocks, normalizeBlogSlug, resolveBlogPublicPath, resolveBlogSeo, SerializedSnapshotQueue } from '~/utils/blog-editor'
+import { getErrorMessage } from '~/utils/errors'
 
-type BlogForm = InstanceType<typeof BlogPostForm>['$props']['modelValue']
-
-interface Props {
-  repository: BlogPostRepository
-  postId?: string
-  siteId?: string
-  isEdit?: boolean
-  title?: string
-  backUrl?: string
-  backLabel?: string
-  mediaPickerComponent?: Component
-  freeTextCategory?: boolean
-}
-
-const props = withDefaults(defineProps<Props>(), {
-  postId: undefined,
-  siteId: undefined,
-  isEdit: false,
-  title: 'Blog Post',
-  backUrl: '/admin',
-  backLabel: 'Admin',
-  mediaPickerComponent: undefined,
-  freeTextCategory: false,
+const props = withDefaults(defineProps<{ repository: BlogPostRepository; postId?: string; siteId?: string; isEdit?: boolean; backUrl?: string; mediaPickerComponent?: Component; freeTextCategory?: boolean }>(), {
+  postId: undefined, siteId: '', isEdit: false, backUrl: '/admin', mediaPickerComponent: undefined, freeTextCategory: false,
 })
-
 const route = useRoute()
 const postId = computed(() => props.postId || String(route.params.postId || ''))
-const categoryEdited = ref(false)
-const categoryInitialized = ref(false)
-
-const formRef = ref<InstanceType<typeof BlogPostForm>>()
-const form = ref<BlogForm>({
-  title: '',
-  excerpt: '',
-  category: '',
-  nav_section: '',
-  nav_title: '',
-  nav_order: '',
-  nav_section_order: '',
-  hide_from_nav: false,
-  featured_order: '',
-  seo_description: '',
-  seo_keywords: '',
-  canonical_url: '',
-  robots: '',
-  body: '',
-  featured_image_asset_id: '',
-  faq_items: [],
-  faq_label: '',
-  faq_status: 'active',
-  faq_render_enabled: true,
-  faq_schema_enabled: true,
-  how_to_steps: [],
-  how_to_label: '',
-  how_to_status: 'active',
-  how_to_render_enabled: true,
-  how_to_schema_enabled: true,
-})
-
 const post = ref<BlogPost | null>(null)
-const publicPath = computed(() => {
-  const category = categoryEdited.value ? form.value.category : (form.value.category || post.value?.category)
-  if (categoryEdited.value) return getBlogPostPath(category, post.value?.slug) || 'Draft'
-  return post.value?.public_path || getBlogPostPath(category, post.value?.slug) || 'Draft'
-})
-const loadPending = ref(props.isEdit)
+const blocks = ref<BlogEditorBlock[]>(initialBlogEditorBlocks())
+const loadPending = ref(true)
 const loadError = ref('')
-const saving = ref(false)
-const errorMessage = ref('')
-const successMessage = ref('')
-let loadRequestSeq = 0
-let saveRequestSeq = 0
+const saveState = ref<'saved' | 'saving' | 'failed' | 'conflict'>('saved')
+const lastSavedAt = ref(Date.now())
+const clock = ref(Date.now())
+const publishing = ref(false)
+const settingsOpen = ref(false)
+const inserterOpen = ref(false)
+const settingsButton = ref()
+const settingsPanel = ref<HTMLElement | null>(null)
+let saveTimer: ReturnType<typeof setTimeout> | undefined
+let clockTimer: ReturnType<typeof setInterval> | undefined
+let dirty = false
+let applyingServerSnapshot = false
+let createDraftPromise: Promise<BlogPost | null> | null = null
+let publishAfterCreateRequested = false
+let serverPostUpdatedAt: string | undefined
+let serverDocumentUpdatedAt: string | undefined
+const slugResetRequested = ref(false)
 
-const canSave = computed(() => Boolean(form.value.title.trim() || form.value.body.trim()))
-const canPublish = computed(() => Boolean(form.value.title.trim() && form.value.body.trim()))
-
-watch(() => form.value.category, () => {
-  if (categoryInitialized.value) categoryEdited.value = true
-})
-
-watch(postId, () => {
-  saveRequestSeq += 1
-  saving.value = false
-  if (postId.value && props.isEdit) loadPost()
-}, { immediate: true })
-
-function resetForm() {
-  form.value = {
-    title: '',
-    excerpt: '',
-    category: '',
-    nav_section: '',
-    nav_title: '',
-    nav_order: '',
-    nav_section_order: '',
-    hide_from_nav: false,
-    featured_order: '',
-    seo_description: '',
-    seo_keywords: '',
-    canonical_url: '',
-    robots: '',
-    body: '',
-    featured_image_asset_id: '',
-    faq_items: [],
-    faq_label: '',
-    faq_status: 'active',
-    faq_render_enabled: true,
-    faq_schema_enabled: true,
-    how_to_steps: [],
-    how_to_label: '',
-    how_to_status: 'active',
-    how_to_render_enabled: true,
-    how_to_schema_enabled: true,
+const form = reactive({ title: '', category: '', excerpt: '', seo_title: '', seo_description: '', social_image_asset_id: '', slug: '', canonical_url: '', robots: '', visibility: 'public' as 'public' | 'unlisted', scheduled_for: '', redirect_old_slug: true })
+const tagsText = ref('')
+const publishTiming = ref<'Now' | 'Scheduled'>('Now')
+const templateName = computed(() => post.value?.editor_template || (route.path.includes('/admin/') ? 'platform' : 'saya'))
+const editorCanvasStyle = computed(() => {
+  const tokens = post.value?.editor_theme_tokens ?? {}
+  if (templateName.value === 'saya') {
+    const primary = String(tokens.primary || post.value?.editor_brand_color || '#8F1D21')
+    const background = String(tokens.bg || '#FFFFFF')
+    const foreground = String(tokens.ink || '#18181B')
+    return {
+      '--editor-canvas': background, '--editor-ink': foreground, '--brand-color': primary,
+      '--saya-primary': primary, '--saya-bg': background, '--saya-bg-alt': String(tokens.surface || '#FAFAFA'),
+      '--saya-fg': foreground, '--saya-fg-muted': String(tokens.muted || '#52525B'), '--saya-border': String(tokens.border || '#E4E4E7'),
+      '--ui-primary': primary, '--ui-bg': background, '--ui-bg-elevated': String(tokens.surface || '#FAFAFA'), '--ui-text': foreground,
+    }
   }
-}
-
-function hydrateStructuredContent(components: BlogComponent[] | undefined) {
-  const faq = components?.find(component => component.type === 'faq')
-  const howTo = components?.find(component => component.type === 'how_to')
-
-  form.value.faq_items = faq?.data?.items?.map(item => ({
-    question: item.question ?? '',
-    answer: item.answer ?? '',
-  })) ?? []
-  form.value.faq_label = faq?.label ?? ''
-  form.value.faq_status = faq?.status ?? 'active'
-  form.value.faq_render_enabled = faq?.render_enabled ?? true
-  form.value.faq_schema_enabled = faq?.schema_enabled ?? true
-
-  form.value.how_to_steps = howTo?.data?.steps?.map(step => ({
-    name: step.name ?? '',
-    text: step.text ?? '',
-    image_asset_id: step.image_asset_id ?? '',
-    url: step.url ?? '',
-  })) ?? []
-  form.value.how_to_label = howTo?.label ?? ''
-  form.value.how_to_status = howTo?.status ?? 'active'
-  form.value.how_to_render_enabled = howTo?.render_enabled ?? true
-  form.value.how_to_schema_enabled = howTo?.schema_enabled ?? true
-}
-
-function buildPayload(): PlatformBlogCreateInput | PlatformBlogUpdateInput {
+  if (templateName.value !== 'blawby') return { '--editor-canvas': '#fff', '--editor-ink': '#1f2937' }
   return {
-    ...form.value,
-    canonical_url: form.value.canonical_url.trim() || null,
-    robots: form.value.robots.trim() || null,
-    nav_section: form.value.nav_section.trim() || null,
-    nav_title: form.value.nav_title.trim() || null,
-    nav_order: parseOptionalNumber(form.value.nav_order),
-    nav_section_order: parseOptionalNumber(form.value.nav_section_order),
-    featured_order: parseOptionalNumber(form.value.featured_order),
-    faq_items: form.value.faq_items
-      .map(item => ({ question: item.question.trim(), answer: item.answer.trim() }))
-      .filter(item => item.question && item.answer),
-    how_to_steps: form.value.how_to_steps
-      .map(step => ({
-        name: step.name.trim(),
-        text: step.text.trim(),
-        image_asset_id: step.image_asset_id.trim() || undefined,
-        url: step.url.trim() || undefined,
+    '--editor-canvas': String(tokens.bg || '#fbfaf7'), '--editor-ink': String(tokens.ink || '#162033'),
+    '--blawby-bg': String(tokens.bg || '#fbfaf7'), '--blawby-surface': String(tokens.surface || '#fff'),
+    '--blawby-primary': String(tokens.primary || '#25356c'), '--blawby-primary-dark': String(tokens.primaryDark || '#161f3b'),
+    '--blawby-accent': String(tokens.accent || '#c19855'), '--blawby-border': String(tokens.border || '#e5e7eb'), '--blawby-ink': String(tokens.ink || '#162033'),
+  }
+})
+const statusLabel = computed(() => post.value?.status === 'scheduled' ? 'Scheduled' : post.value?.published_at ? 'Published' : 'Draft')
+const generatedSlug = computed(() => normalizeBlogSlug(form.title))
+const resolvedExcerpt = computed(() => generatedExcerpt(blocks.value))
+const resolvedSiteName = computed(() => post.value?.editor_site_name || (props.siteId ? 'Our Site' : 'KrabiClaw'))
+const resolvedAuthorName = computed(() => post.value?.author_name?.trim() || resolvedSiteName.value)
+const readMinutes = computed(() => Math.max(1, Math.ceil(serializeBody().trim().split(/\s+/).filter(Boolean).length / 200)))
+const publicPath = computed(() => resolveBlogPublicPath({ scope: props.siteId ? 'tenant' : 'platform', template: templateName.value, slug: slugResetRequested.value ? generatedSlug.value : form.slug || generatedSlug.value, category: form.category }))
+const resolvedSeo = computed(() => resolveBlogSeo({ title: form.title, seoTitle: form.seo_title, excerpt: form.excerpt || resolvedExcerpt.value, seoDescription: form.seo_description, slug: form.slug || generatedSlug.value, canonicalUrl: form.canonical_url, baseUrl: windowOrigin(), publicPath: publicPath.value, siteName: resolvedSiteName.value, robots: form.robots }))
+const resolvedSocialImageUrl = computed<string | null>(() => {
+  const block = blocks.value.find(item => item.type === 'image')
+  const candidate = post.value?.social_image?.thumbnail_url || post.value?.social_image?.public_url || block?.data.thumbnail_url || block?.data.public_url || post.value?.featured_image?.public_url
+  return typeof candidate === 'string' && candidate ? candidate : null
+})
+const resolvedMediaKind = computed(() => {
+  const block = blocks.value.find(item => item.type === 'image')
+  const hasImageOverride = Boolean(
+    post.value?.social_image?.thumbnail_url
+    || post.value?.social_image?.public_url
+    || block?.data.thumbnail_url
+    || block?.data.public_url,
+  )
+  return !hasImageOverride && post.value?.featured_image?.kind === 'video' ? 'video' : 'image'
+})
+const saveLabel = computed(() => {
+  if (saveState.value === 'saving') return 'Saving…'
+  if (saveState.value === 'failed') return 'Save failed'
+  if (saveState.value === 'conflict') return 'Conflict — reload to reconcile'
+  const seconds = Math.max(0, Math.floor((clock.value - lastSavedAt.value) / 1000))
+  return seconds < 3 ? 'Saved just now' : `Saved ${seconds}s ago`
+})
+const inserterItems = [
+  { type: 'image', label: 'Image', icon: 'i-lucide-image' },
+  { type: 'faq', label: 'FAQ', icon: 'i-lucide-circle-help' },
+  { type: 'how_to', label: 'How-To', icon: 'i-lucide-list-ordered' },
+  { type: 'divider', label: 'Divider', icon: 'i-lucide-minus' },
+] as const
+
+type SaveSnapshot = { postId: string; payload: PlatformBlogUpdateInput }
+const saveQueue = new SerializedSnapshotQueue<SaveSnapshot, BlogPost>(
+  async (snapshot) => {
+    const updated = await props.repository.update(snapshot.postId, {
+      ...snapshot.payload,
+      expected_updated_at: serverPostUpdatedAt,
+      expected_document_updated_at: serverDocumentUpdatedAt,
+    })
+    syncServerVersions(updated)
+    return updated
+  },
+  (updated) => {
+    applyingServerSnapshot = true
+    post.value = updated
+    form.slug = updated.slug || form.slug
+    slugResetRequested.value = false
+    if (updated.content_document?.blocks) blocks.value = structuredClone(updated.content_document.blocks)
+    dirty = false
+    saveState.value = 'saved'
+    lastSavedAt.value = Date.now()
+    void nextTick(() => { applyingServerSnapshot = false })
+  },
+)
+
+watch([() => ({ ...form }), blocks, tagsText, publishTiming, slugResetRequested], () => { if (!applyingServerSnapshot) queueSave() }, { deep: true, flush: 'sync' })
+onMounted(async () => { clockTimer = setInterval(() => { clock.value = Date.now() }, 1000); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('popstate', onPopState); await load() })
+onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer); if (saveTimer) clearTimeout(saveTimer); if (import.meta.client) { window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('popstate', onPopState) } })
+
+async function load() {
+  if (!postId.value || !props.isEdit) { loadPending.value = false; return }
+  try {
+    const loaded = await props.repository.get(postId.value)
+    syncServerVersions(loaded)
+    post.value = loaded
+    Object.assign(form, { title: loaded.title, category: loaded.category || '', excerpt: loaded.excerpt || '', seo_title: loaded.seo_title || '', seo_description: loaded.seo_description || '', social_image_asset_id: loaded.social_image_asset_id || '', slug: loaded.slug || '', canonical_url: loaded.canonical_url || '', robots: loaded.robots || '', visibility: loaded.visibility || 'public', scheduled_for: toLocalDatetime(loaded.scheduled_for), redirect_old_slug: true })
+    slugResetRequested.value = false
+    tagsText.value = loaded.tags?.join(', ') || ''
+    publishTiming.value = loaded.scheduled_for ? 'Scheduled' : 'Now'
+    if (loaded.content_document) {
+      blocks.value = structuredClone(loaded.content_document.blocks || [])
+    } else {
+      blocks.value = [{ type: 'markdown', data: { markdown: loaded.body || '' } }]
+      for (const type of ['faq', 'how_to'] as const) {
+        if (blocks.value.some(block => block.type === type)) continue
+        const legacy = loaded.components?.find(component => component.type === type)
+        if (legacy?.data) blocks.value.push({ type, data: structuredClone(legacy.data) as Record<string, unknown> })
+      }
+    }
+    lastSavedAt.value = Date.now()
+  } catch (error) { loadError.value = getErrorMessage(error, 'Failed to load post.') } finally { loadPending.value = false }
+}
+function queueSave() {
+  if (loadPending.value || saveState.value === 'conflict') return
+  dirty = true
+  if (saveTimer) clearTimeout(saveTimer)
+  if (!post.value && !props.isEdit) {
+    if (isDraftValid()) saveTimer = setTimeout(() => { void createDraft(false).catch(() => {}) }, 900)
+    return
+  }
+  if (post.value) {
+    saveQueue.mark(buildSaveSnapshot())
+    saveTimer = setTimeout(() => { void flushSave().catch(() => {}) }, 900)
+  }
+}
+async function flushSave() {
+  if (!dirty) return post.value
+  if (!post.value) {
+    if (!isDraftValid()) throw new Error('Complete the title, article body, and category before leaving this draft.')
+    return await createDraft(false)
+  }
+  if (saveTimer) clearTimeout(saveTimer)
+  saveState.value = 'saving'
+  try {
+    await saveQueue.flush()
+    return post.value
+  } catch (error: unknown) {
+    const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status)
+    saveState.value = status === 409 ? 'conflict' : 'failed'
+    throw error
+  }
+}
+function buildSaveSnapshot(id = postId.value): SaveSnapshot {
+  const scheduledFor = publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null
+  return { postId: id, payload: { title: form.title, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: scheduledFor, content_blocks: structuredClone(blocks.value) } }
+}
+async function publish() { publishing.value = true; try { if (!post.value) { await createDraft(true); return } if (dirty) saveQueue.mark(buildSaveSnapshot()); await saveQueue.runExclusive(async () => { const updated = await props.repository.update(postId.value, { publish: true, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null, expected_updated_at: serverPostUpdatedAt }); syncServerVersions(updated); post.value = { ...updated, content_document: post.value?.content_document }; return updated }); saveState.value = 'saved' } catch (error: unknown) { const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status); saveState.value = status === 409 ? 'conflict' : 'failed' } finally { publishing.value = false } }
+async function createDraft(publishNow: boolean) {
+  if (!isDraftValid()) return null
+  publishAfterCreateRequested ||= publishNow
+  if (createDraftPromise) return await createDraftPromise
+  createDraftPromise = (async () => {
+    if (saveTimer) clearTimeout(saveTimer)
+    saveState.value = 'saving'
+    dirty = false
+    let created = await props.repository.create({ title: form.title, body: serializeBody(), content_blocks: structuredClone(blocks.value), category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null, publish: publishNow })
+    applyingServerSnapshot = true
+    post.value = created
+    syncServerVersions(created)
+    form.slug = created.slug || form.slug
+    await nextTick()
+    applyingServerSnapshot = false
+    if (dirty) {
+      saveQueue.mark(buildSaveSnapshot(created.id))
+      await flushSave()
+      created = post.value || created
+    }
+    if (publishAfterCreateRequested && !created.published_at && created.status !== 'published') {
+      created = await saveQueue.runExclusive(async () => await props.repository.update(created.id, {
+        publish: true,
+        scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null,
+        expected_updated_at: serverPostUpdatedAt,
       }))
-      .filter(step => step.name && step.text),
-  }
-}
-
-async function loadPost() {
-  const requestPostId = postId.value
-  if (!requestPostId) return
-  const requestSeq = ++loadRequestSeq
-  loadPending.value = true
-  loadError.value = ''
-  categoryEdited.value = false
-  categoryInitialized.value = false
-  post.value = null
-  resetForm()
-  try {
-    const loadedPost = await props.repository.get(requestPostId)
-    if (requestSeq !== loadRequestSeq || requestPostId !== postId.value) return
-    post.value = loadedPost
-    form.value.title = loadedPost.title
-    form.value.excerpt = loadedPost.excerpt ?? ''
-    form.value.category = loadedPost.category ?? ''
-    form.value.nav_section = loadedPost.nav_section ?? ''
-    form.value.nav_title = loadedPost.nav_title ?? ''
-    form.value.nav_order = loadedPost.nav_order != null ? String(loadedPost.nav_order) : ''
-    form.value.nav_section_order = loadedPost.nav_section_order != null ? String(loadedPost.nav_section_order) : ''
-    form.value.hide_from_nav = Boolean(loadedPost.hide_from_nav)
-    form.value.featured_order = loadedPost.featured_order != null ? String(loadedPost.featured_order) : ''
-    form.value.seo_description = loadedPost.seo_description ?? ''
-    form.value.seo_keywords = loadedPost.seo_keywords ?? ''
-    form.value.canonical_url = loadedPost.canonical_url ?? ''
-    form.value.robots = loadedPost.robots ?? ''
-    form.value.featured_image_asset_id = loadedPost.featured_image_asset_id ?? ''
-    form.value.body = loadedPost.body
-    hydrateStructuredContent(loadedPost.components)
-    categoryInitialized.value = true
-  } catch (err) {
-    if (requestSeq !== loadRequestSeq || requestPostId !== postId.value) return
-    loadError.value = getErrorMessage(err, 'Failed to load post.')
-  } finally {
-    if (requestSeq === loadRequestSeq && requestPostId === postId.value) {
-      loadPending.value = false
+      syncServerVersions(created)
+      post.value = created
     }
-  }
+    dirty = false
+    saveState.value = 'saved'
+    lastSavedAt.value = Date.now()
+    await navigateTo(props.repository.editUrl(created.id))
+    return created
+  })().catch((error: unknown) => {
+    dirty = true
+    const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status)
+    saveState.value = status === 409 ? 'conflict' : 'failed'
+    throw error
+  }).finally(() => {
+    createDraftPromise = null
+    publishAfterCreateRequested = false
+  })
+  return await createDraftPromise
 }
-
-async function update(publish = false) {
-  if (publish && !canPublish.value) {
-    errorMessage.value = 'Title and body are required to publish.'
-    return
-  }
-  if (!publish && !canSave.value) {
-    errorMessage.value = 'Title or body is required to save a draft.'
-    return
-  }
-  const requestPostId = postId.value
-  if (!requestPostId) return
-  const requestSeq = ++saveRequestSeq
-  saving.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
-  try {
-    const updated = await props.repository.update(requestPostId, { ...buildPayload(), ...(publish ? { publish: true } : {}) } as PlatformBlogUpdateInput)
-    if (requestSeq !== saveRequestSeq || requestPostId !== postId.value) return
-    post.value = updated
-    hydrateStructuredContent(updated.components)
-    successMessage.value = publish ? 'Published.' : 'Saved.'
-  } catch (err) {
-    if (requestSeq !== saveRequestSeq || requestPostId !== postId.value) return
-    errorMessage.value = getErrorMessage(err, 'Failed to save.')
-  } finally {
-    if (requestSeq === saveRequestSeq && requestPostId === postId.value) {
-      saving.value = false
-    }
-  }
+function isDraftValid() { return Boolean(form.title.trim() && serializeBody().trim() && (props.freeTextCategory || form.category.trim())) }
+function serializeBody() { return blocks.value.map(block => block.type === 'heading' ? `${'#'.repeat(Math.max(2, Math.min(6, block.level || 2)))} ${String(block.data.text || '')}` : block.type === 'markdown' ? String(block.data.markdown || '') : block.type === 'divider' ? '---' : `{{component type="${block.type}"}}`).filter(Boolean).join('\n\n') }
+function updateBlock(index: number, block: BlogEditorBlock) { blocks.value[index] = block }
+function setBlockData(index: number, key: string, value: unknown) { blocks.value[index] = { ...blocks.value[index]!, data: { ...blocks.value[index]!.data, [key]: value } } }
+function insertBlock(type: typeof inserterItems[number]['type']) { const data = type === 'faq' ? { items: [{ question: '', answer: '' }] } : type === 'how_to' ? { steps: [{ text: '' }] } : type === 'image' ? { asset_id: '', public_url: '', alt: '', caption: '' } : {}; blocks.value.push({ type, data }); inserterOpen.value = false }
+function removeBlock(index: number) { blocks.value.splice(index, 1); if (!blocks.value.length) blocks.value.push({ type: 'markdown', data: { markdown: '' } }) }
+function moveBlock(index: number, delta: -1 | 1) { const target = index + delta; if (target < 0 || target >= blocks.value.length) return; const [block] = blocks.value.splice(index, 1); if (block) blocks.value.splice(target, 0, block) }
+function changeImage(index: number, value: unknown) { const asset = value && typeof value === 'object' ? value as { id?: unknown; publicUrl?: unknown; thumbnailUrl?: unknown } : null; blocks.value[index] = { ...blocks.value[index]!, data: { ...blocks.value[index]!.data, asset_id: typeof asset?.id === 'string' ? asset.id : '', public_url: typeof asset?.publicUrl === 'string' ? asset.publicUrl : typeof asset?.thumbnailUrl === 'string' ? asset.thumbnailUrl : '' } } }
+function serializeFaq(block: BlogEditorBlock) { return (Array.isArray(block.data.items) ? block.data.items : []).map((item) => { const record = item && typeof item === 'object' ? item as Record<string, unknown> : {}; return `Q: ${String(record.question || '')}\nA: ${String(record.answer || '')}` }).join('\n\n') }
+function parseFaq(index: number, value: string) { const items = value.split(/\n\s*\n/).map(pair => { const q = pair.match(/^Q:\s*(.*)$/im)?.[1] || ''; const a = pair.match(/^A:\s*([\s\S]*)$/im)?.[1] || ''; return { question: q.trim(), answer: a.trim() } }); setBlockData(index, 'items', items) }
+function serializeHowTo(block: BlogEditorBlock) { return (Array.isArray(block.data.steps) ? block.data.steps : []).map((step, index: number) => { const record = step && typeof step === 'object' ? step as Record<string, unknown> : {}; return `${index + 1}. ${String(record.text || record.name || '')}` }).join('\n') }
+function parseHowTo(index: number, value: string) { setBlockData(index, 'steps', value.split('\n').map(line => ({ text: line.replace(/^\s*\d+[.)]\s*/, '').trim() })).filter(step => step.text)) }
+async function share() { const url = new URL(post.value?.edit_url || props.repository.editUrl(postId.value), windowOrigin()).toString(); await navigator.clipboard?.writeText(url) }
+async function goBack() { if (settingsOpen.value) { closeSettings(); return } try { await flushSave(); await navigateTo(props.backUrl) } catch { if (saveState.value !== 'conflict') saveState.value = 'failed' } }
+function settingsFocusableElements() {
+  if (!settingsPanel.value) return []
+  return Array.from(settingsPanel.value.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'))
 }
-
-async function unpublish() {
-  const requestPostId = postId.value
-  if (!requestPostId) return
-  const requestSeq = ++saveRequestSeq
-  saving.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
-  try {
-    await props.repository.unpublish(requestPostId)
-    const updated = await props.repository.get(requestPostId)
-    if (requestSeq !== saveRequestSeq || requestPostId !== postId.value) return
-    post.value = updated
-    hydrateStructuredContent(updated.components)
-    successMessage.value = 'Post unpublished.'
-  } catch (err) {
-    if (requestSeq !== saveRequestSeq || requestPostId !== postId.value) return
-    errorMessage.value = getErrorMessage(err, 'Failed to unpublish.')
-  } finally {
-    if (requestSeq === saveRequestSeq && requestPostId === postId.value) {
-      saving.value = false
-    }
-  }
+function openSettings() { settingsOpen.value = true; if (import.meta.client) history.pushState({ blogSettings: true }, ''); nextTick(() => settingsFocusableElements()[0]?.focus()) }
+function closeSettings() { settingsOpen.value = false; nextTick(() => settingsButton.value?.$el?.focus?.()) }
+function onSettingsKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') { event.preventDefault(); closeSettings(); return }
+  if (event.key !== 'Tab') return
+  const focusable = settingsFocusableElements()
+  if (!focusable.length) { event.preventDefault(); settingsPanel.value?.focus(); return }
+  const first = focusable[0]!
+  const last = focusable[focusable.length - 1]!
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
 }
+function onPopState() { if (settingsOpen.value) closeSettings() }
+function beforeUnload(event: BeforeUnloadEvent) { if (dirty) event.preventDefault() }
+async function remove() { if (!confirm('Delete this post permanently?')) return; await props.repository.delete(postId.value); await navigateTo(props.backUrl) }
+function windowOrigin() { return import.meta.client ? window.location.origin : 'https://krabiclaw.com' }
+function toLocalDatetime(value?: string | null) { if (!value) return ''; const d = new Date(value); const offset = d.getTimezoneOffset() * 60_000; return new Date(d.getTime() - offset).toISOString().slice(0, 16) }
+function resetSlugOverride() { slugResetRequested.value = true; form.slug = generatedSlug.value }
+function syncServerVersions(value: BlogPost) { serverPostUpdatedAt = value.updated_at || serverPostUpdatedAt; serverDocumentUpdatedAt = value.content_document?.document.updated_at || serverDocumentUpdatedAt }
 
-async function remove() {
-  if (!confirm('Delete this post permanently?')) return
-  saving.value = true
-  errorMessage.value = ''
-  try {
-    await props.repository.delete(postId.value)
-    await navigateTo(props.backUrl)
-  } catch (err) {
-    errorMessage.value = getErrorMessage(err, 'Failed to delete.')
-  } finally {
-    saving.value = false
-  }
-}
-
-async function save(publish: boolean) {
-  if (publish && !canPublish.value) {
-    errorMessage.value = 'Title and body are required to publish.'
-    return
-  }
-  if (!publish && !canSave.value) {
-    errorMessage.value = 'Title or body is required to save a draft.'
-    return
-  }
-
-  saving.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
-  try {
-    const payload = { ...buildPayload(), publish } as PlatformBlogCreateInput
-    const res = await props.repository.create(payload)
-    await navigateTo(props.repository.editUrl(res.id))
-  } catch (err) {
-    errorMessage.value = getErrorMessage(err, publish ? 'Failed to publish.' : 'Failed to save draft.')
-  } finally {
-    saving.value = false
-  }
-}
+onBeforeRouteLeave(async () => {
+  if (settingsOpen.value || inserterOpen.value) { settingsOpen.value = false; inserterOpen.value = false; return false }
+  if (dirty && !post.value && !isDraftValid()) return confirm('This draft is incomplete and cannot be saved yet. Leave without saving it?')
+  try { await flushSave(); return true } catch { return false }
+})
 </script>

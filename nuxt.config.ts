@@ -461,7 +461,7 @@ export default defineNuxtConfig({
     // Set NUXT_DISABLE_NITRO_TASKS=true to keep task modules out of a local
     // dev/E2E boot if task imports break the nitro-cloudflare-dev D1 proxy binding.
     scheduledTasks: enableNitroTasks ? {
-      '*/5 * * * *': ['translation-jobs-process'],
+      '*/5 * * * *': ['translation-jobs-process', 'blog-scheduled-publish'],
       '*/10 * * * *': ['domain-reconciliation'],
       '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily'],
       '0 4 * * *': ['site-transfer-reminders'],

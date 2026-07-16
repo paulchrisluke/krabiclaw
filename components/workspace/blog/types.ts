@@ -17,8 +17,41 @@ export interface BlogPost {
   featured_image_asset_id?: string | null
   body: string
   published_at?: string | null
+  updated_at?: string | null
+  first_published_at?: string | null
+  slug_manually_overridden?: boolean | number | null
+  scheduled_for?: string | null
+  status?: 'draft' | 'published' | 'scheduled' | 'archived'
+  visibility?: 'public' | 'unlisted'
+  tags?: string[]
+  seo_title?: string | null
+  social_image_asset_id?: string | null
+  social_image?: { public_url?: string | null; thumbnail_url?: string | null } | null
+  featured_image?: { public_url?: string | null; kind?: string | null } | null
+  edit_url?: string | null
+  content_document?: {
+    document: { id: string; updated_at: string; draft_revision_id: string | null; published_revision_id: string | null }
+    blocks: BlogEditorBlock[]
+  } | null
+  editor_template?: 'saya' | 'blawby' | 'platform'
+  editor_theme_tokens?: Record<string, unknown>
+  author_name?: string | null
+  author_image?: string | null
+  created_at?: string | null
+  editor_site_name?: string | null
+  editor_brand_color?: string | null
   public_path?: string | null
   components?: BlogComponent[]
+}
+
+export interface BlogEditorBlock {
+  id?: string
+  type: string
+  position?: number
+  level?: number | null
+  parent_block_id?: string | null
+  data: Record<string, unknown>
+  updated_at?: string
 }
 
 export interface BlogComponent {
@@ -67,6 +100,10 @@ export interface PlatformBlogCreateInput {
   how_to_schema_enabled?: boolean
   components?: BlogComponent[]
   publish?: boolean
+  visibility?: 'public' | 'unlisted'
+  scheduled_for?: string | null
+  social_image_asset_id?: string | null
+  content_blocks?: BlogEditorBlock[]
 }
 
 export interface PlatformBlogUpdateInput {
@@ -103,6 +140,15 @@ export interface PlatformBlogUpdateInput {
   components?: BlogComponent[]
   publish?: boolean
   unpublish?: boolean
+  visibility?: 'public' | 'unlisted'
+  scheduled_for?: string | null
+  social_image_asset_id?: string | null
+  slug?: string | null
+  redirect_old_slug?: boolean
+  reset_slug_override?: boolean
+  content_blocks?: BlogEditorBlock[]
+  expected_document_updated_at?: string
+  expected_updated_at?: string
 }
 
 export interface BlogPostRepository {
