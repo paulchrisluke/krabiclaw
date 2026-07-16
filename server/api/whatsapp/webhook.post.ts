@@ -1,6 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { compareWhatsAppDeliveryStatus, fetchWhatsAppMedia, sendWhatsAppText } from '~/server/utils/whatsapp'
-import { parsePhoneOrThrow } from '~/utils/phone'
+import { parseMetaMsisdn } from '~/utils/phone'
 import { chargeFlatCredits } from '~/server/utils/ai-credits'
 import { saveInboundMediaAsset } from '~/server/utils/chowbot-media'
 import { runChowBot, type JsonSerializable } from '~/server/utils/chowbot-agent'
@@ -161,7 +161,7 @@ async function reply(
 }
 
 async function resolveUser(db: D1Database, from: string): Promise<UserRow | null> {
-  const normalized = parsePhoneOrThrow(from, { defaultCountry: 'TH' })
+  const normalized = parseMetaMsisdn(from)
   return await queryFirst<UserRow>(db, `
     SELECT id, phoneNumber, phoneNumberVerified
     FROM user
@@ -480,7 +480,7 @@ async function routeManagerWhatsAppMessage(
     if (decision.action === 'confirm_send_execute') {
       // Reauthorize before executing the reply to ensure the member still has access
       const authorized = await isAuthorizedWhatsAppRecipient(db, {
-        phone: opts.message.from,
+        phone: opts.toPhone,
         organizationId: pendingState.organizationId,
         siteId: pendingState.siteId,
         locationId: null,
@@ -516,7 +516,7 @@ async function routeManagerWhatsAppMessage(
 
       // Reauthorize before disambiguation transition to ensure the member still has access
       const authorized = await isAuthorizedWhatsAppRecipient(db, {
-        phone: opts.message.from,
+        phone: opts.toPhone,
         organizationId: chosen.organizationId,
         siteId: chosen.siteId,
         locationId: chosen.locationId,
@@ -790,7 +790,7 @@ async function handleManagerChowBotMessage(
 async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMessage): Promise<void> {
   if (await metaMessageExists(db, message.id)) return
 
-  const toPhone = parsePhoneOrThrow(message.from, { defaultCountry: 'TH' })
+  const toPhone = parseMetaMsisdn(message.from)
   const user = await resolveUser(db, message.from)
   if (user) {
     // A signed inbound message is exactly what user_phone_verification's

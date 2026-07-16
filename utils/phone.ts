@@ -97,3 +97,18 @@ export function formatForDisplay(e164: string): string {
  * context. Update this string when bumping the libphonenumber-js dependency.
  */
 export const PHONE_METADATA_VERSION = 'libphonenumber-js@1.13.8'
+
+/**
+ * Meta's WhatsApp webhook `from`/`recipient_id` fields are always a full
+ * international MSISDN with no leading "+" (e.g. "14155552671" for a US
+ * number, not "+14155552671" or a Thai-local "0812345678"). Parsing that
+ * through `parsePhoneOrThrow`'s `defaultCountry` fallback (the convention used
+ * elsewhere in this codebase for user-typed input) misinterprets it as a
+ * national number for the default country and throws for any sender outside
+ * that country. Prepending "+" makes it unambiguous international input,
+ * which needs no default-country guess.
+ */
+export function parseMetaMsisdn(raw: string): string {
+  const trimmed = raw.trim()
+  return parsePhoneOrThrow(trimmed.startsWith('+') ? trimmed : `+${trimmed}`)
+}
