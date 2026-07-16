@@ -148,11 +148,12 @@ export default defineEventHandler(async (event) => {
         capabilities: { tools: {}, resources: {}, prompts: {} },
         serverInfo: { name: 'krabiclaw-platform-mcp', version: 'v1' },
         instructions: [
-          'KrabiClaw platform admin MCP. This app does not expose tenant site tools — it is for internal operations on krabiclaw.com/blog and krabiclaw.com/docs only.',
+          'KrabiClaw platform admin MCP. This app does not expose tenant site tools — it is for internal platform content operations and read-only release data.',
           'You are acting as a growth/SEO copilot for a human content writer, not an autonomous publisher. Your job is to help them prioritize, research, draft, edit, and publish platform blog posts and docs in service of growing krabiclaw.com traffic and sign-ups.',
           'Early in a session, read the kc://docs/product-context resource (PRODUCT.md) for what KrabiClaw actually is, its surfaces, verticals, and business model — do not assume or invent product facts.',
           'Derive voice and tone from existing published posts/docs (via list_platform_blog_posts, get_platform_blog_post, list_platform_docs, get_platform_doc) rather than inventing a style — KrabiClaw has no separate style guide; the published content is the style guide.',
           'Ground prioritization in get_platform_analytics (traffic and new_signups), not guesses about what readers want.',
+          'Use get_recent_changes when the writer needs categorized merged-pull-request source data for release notes, social posts, or product updates. Treat it as source material for human-reviewed drafts; it does not publish or send anything.',
           'If the writer wants a featured image or step image, use list_platform_media_assets to choose an existing asset or upload_platform_image with a real ChatGPT attachment. Do not suggest or rely on generated images for this surface.',
           'Prefer the prompts audit_content_for_growth, draft_blog_post, and update_and_publish_post as starting points for those respective workflows.',
           'New content should be drafted for the writer\'s approval before publishing. Once the writer has supplied or approved final content, execute the corresponding tool calls directly and in sequence — do not stop to describe a call instead of making it.',
@@ -218,7 +219,7 @@ export default defineEventHandler(async (event) => {
         supportedVersions: ['2026-07-28', '2025-11-25', '2025-03-26', '2024-11-05'],
         capabilities: { tools: {} },
         serverInfo: { name: 'krabiclaw-platform-mcp', version: 'v1' },
-        instructions: 'Internal KrabiClaw platform admin MCP for platform blog and docs operations only.',
+        instructions: 'Internal KrabiClaw platform admin MCP for platform blog/docs operations and read-only release data.',
       })
     }
 

@@ -1,3 +1,5 @@
+import { CHANGE_TYPES } from '~/server/utils/changelog'
+
 export interface PlatformMcpToolDefinition {
   name: string
   description: string
@@ -564,10 +566,17 @@ const PLATFORM_SECURITY_SCHEMES: Array<{ type: 'oauth2'; scopes: string[] }> = [
   { type: 'oauth2', scopes: ['platform_admin'] },
 ]
 
-function readTool(definition: Omit<PlatformMcpToolDefinition, 'annotations' | 'securitySchemes'>): PlatformMcpToolDefinition {
+function readTool(
+  definition: Omit<PlatformMcpToolDefinition, 'annotations' | 'securitySchemes'> & { openWorld?: boolean },
+): PlatformMcpToolDefinition {
+  const { openWorld, ...rest } = definition
   return {
-    ...definition,
-    annotations: { readOnlyHint: true, idempotentHint: true },
+    ...rest,
+    annotations: {
+      readOnlyHint: true,
+      idempotentHint: true,
+      ...(openWorld ? { openWorldHint: true } : {}),
+    },
     securitySchemes: [...PLATFORM_SECURITY_SCHEMES],
   }
 }
@@ -601,6 +610,56 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         },
       },
       required: ['currentUser'],
+    },
+  }),
+  readTool({
+    name: 'get_recent_changes',
+    description: 'Fetch recently merged KrabiClaw GitHub pull requests, newest first, categorized by conventional-commit title type. Use this source data to draft release notes, social posts, and product updates for human review; this tool does not draft or publish anything.',
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', minimum: 1, maximum: 100, default: 50, description: 'Maximum merged pull requests to return.' },
+      },
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        commits: {
+          type: 'object',
+          properties: Object.fromEntries(
+            CHANGE_TYPES.map(type => [
+              type,
+              {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    number: { type: 'integer' },
+                    title: { type: 'string' },
+                    body: NULLABLE_STRING,
+                    author: { type: 'string' },
+                    mergedAt: { type: 'string' },
+                    url: { type: 'string' },
+                    type: { type: 'string', enum: [...CHANGE_TYPES] },
+                    scope: NULLABLE_STRING,
+                    description: { type: 'string' },
+                  },
+                  required: ['number', 'title', 'body', 'author', 'mergedAt', 'url', 'type', 'scope', 'description'],
+                  additionalProperties: false,
+                },
+              },
+            ])),
+          required: [...CHANGE_TYPES],
+          additionalProperties: false,
+        },
+        total: { type: 'integer' },
+        lastUpdated: NULLABLE_STRING,
+        limit: { type: 'integer' },
+      },
+      required: ['commits', 'total', 'lastUpdated', 'limit'],
+      additionalProperties: false,
     },
   }),
   readTool({
