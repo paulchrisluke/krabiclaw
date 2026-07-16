@@ -73,7 +73,7 @@ export default defineEventHandler(async (event) => {
   let response: Response
   try {
     response = await removeApi.removeMember({
-      body: { memberIdOrEmail: member.userId, organizationId: member.organizationId },
+      body: { memberIdOrEmail: member.id, organizationId: member.organizationId },
       headers: getHeaders(event) as HeadersInit,
       asResponse: true,
     })

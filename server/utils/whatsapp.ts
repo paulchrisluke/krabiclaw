@@ -718,14 +718,14 @@ export async function setOrgWhatsAppPhone(
   }
 
   if (previousPhone !== normalized && env) {
+    const [{ recalculateScopesForPhoneChange }, { createAuth }] = await Promise.all([
+      import('~/server/utils/whatsapp-revocation'),
+      import('~/server/utils/auth'),
+    ])
+    // `env` here is always the full Cloudflare env (callers pass through
+    // `cloudflareEnv(event)`/`site.env` under a narrower local type) —
+    // createAuth only reads the DB/Better-Auth-config fields it needs.
     try {
-      const [{ recalculateScopesForPhoneChange }, { createAuth }] = await Promise.all([
-        import('~/server/utils/whatsapp-revocation'),
-        import('~/server/utils/auth'),
-      ])
-      // `env` here is always the full Cloudflare env (callers pass through
-      // `cloudflareEnv(event)`/`site.env` under a narrower local type) —
-      // createAuth only reads the DB/Better-Auth-config fields it needs.
       await recalculateScopesForPhoneChange(db, createAuth(env as unknown as Parameters<typeof createAuth>[0]), {
         organizationId,
         siteId,
@@ -735,7 +735,22 @@ export async function setOrgWhatsAppPhone(
         actorHeaders: options?.actorHeaders,
       })
     } catch (error) {
-      console.warn('Failed to recalculate WhatsApp scopes for site notification phone change:', error)
+      // Compensating cleanup: restore the previous phone configuration
+      // so a revocation failure cannot leave the newly saved phone configured
+      if (previousPhone) {
+        const now = new Date().toISOString()
+        await execute(db, `
+          INSERT INTO site_config (organization_id, site_id, key, value, updated_at)
+          VALUES (?, ?, 'whatsapp_phone', ?, ?)
+          ON CONFLICT(organization_id, site_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+        `, [organizationId, siteId, previousPhone, now])
+      } else {
+        await execute(db, `
+          DELETE FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'whatsapp_phone'
+        `, [organizationId, siteId])
+      }
+      // Propagate the failure after cleanup
+      throw error
     }
   }
 

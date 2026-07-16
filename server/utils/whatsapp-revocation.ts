@@ -17,7 +17,7 @@
 // every removal path here is gated on `role === LOCATION_MANAGER_ROLE`
 // specifically (not just "not organization-wide", since `editor` is
 // operational-but-not-org-wide and must also be excluded).
-import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { LOCATION_MANAGER_ROLE, listMemberAccessScopes } from '~/server/utils/member-access'
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/site-events'
 import type { createAuth } from '~/server/utils/auth'
@@ -79,7 +79,7 @@ export async function removeOrgMembershipIfNoScopesRemain(
     try {
       const removeApi = auth.api as unknown as RemoveMemberApi
       const response = await removeApi.removeMember({
-        body: { memberIdOrEmail: member.userId, organizationId: member.organizationId },
+        body: { memberIdOrEmail: member.id, organizationId: member.organizationId },
         headers: options.actorHeaders,
         asResponse: true,
       })
@@ -215,7 +215,7 @@ export interface PhoneAssignment {
  * phone, matching `isAuthorizedWhatsAppRecipient`'s own verified-phone gate.
  */
 export async function findAssignmentsForMemberPhone(db: DbClient, memberId: string): Promise<PhoneAssignment[]> {
-  const member = await queryFirst<{ userId: string }>(db, `SELECT userId FROM member WHERE id = ? LIMIT 1`, [memberId])
+  const member = await queryFirst<{ userId: string; organizationId: string }>(db, `SELECT userId, organizationId FROM member WHERE id = ? LIMIT 1`, [memberId])
   if (!member) return []
 
   const user = await queryFirst<{ phoneNumber: string | null; phoneNumberVerified: number }>(db, `
@@ -232,8 +232,8 @@ export async function findAssignmentsForMemberPhone(db: DbClient, memberId: stri
     FROM business_locations bl
     JOIN sites s ON s.id = bl.site_id
     JOIN organization o ON o.id = bl.organization_id
-    WHERE bl.notification_phone = ?
-  `, [phone])
+    WHERE bl.notification_phone = ? AND bl.organization_id = ?
+  `, [phone, member.organizationId])
 
   const siteRows = await queryAll<{
     organizationId: string; siteId: string; siteName: string | null
@@ -242,8 +242,8 @@ export async function findAssignmentsForMemberPhone(db: DbClient, memberId: stri
     FROM site_config sc
     JOIN sites s ON s.id = sc.site_id
     JOIN organization o ON o.id = sc.organization_id
-    WHERE sc.key = 'whatsapp_phone' AND sc.value = ?
-  `, [phone])
+    WHERE sc.key = 'whatsapp_phone' AND sc.value = ? AND sc.organization_id = ?
+  `, [phone, member.organizationId])
 
   return [
     ...locationRows.map(row => ({
@@ -298,16 +298,23 @@ export async function clearOrReassignAssignments(
   }
 
   const now = new Date().toISOString()
+  const statements: Array<{ query: string; params: (string | null)[] }> = []
   for (const assignment of assignments) {
     if (assignment.kind === 'location' && assignment.locationId) {
-      await execute(db, `
-        UPDATE business_locations SET notification_phone = NULL, updated_at = ? WHERE id = ?
-      `, [now, assignment.locationId])
+      statements.push({
+        query: `UPDATE business_locations SET notification_phone = NULL, updated_at = ? WHERE id = ?`,
+        params: [now, assignment.locationId],
+      })
     } else if (assignment.kind === 'site') {
-      await execute(db, `
-        DELETE FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'whatsapp_phone'
-      `, [assignment.organizationId, assignment.siteId])
+      statements.push({
+        query: `DELETE FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'whatsapp_phone'`,
+        params: [assignment.organizationId, assignment.siteId],
+      })
     }
+  }
+
+  if (statements.length > 0) {
+    await executeBatch(db, statements)
   }
 
   return { cleared: assignments }

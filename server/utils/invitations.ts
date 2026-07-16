@@ -4,13 +4,6 @@
 // can idempotently resolve the same "where does this invite land" answer
 // instead of duplicating the logic (see issue #293, Section A).
 
-// The phone-invite temporary-email format (generation via phoneTemporaryEmail
-// and parsing via isPhoneInvitationEmail/phoneDigitsFromInvitationEmail) is
-// owned by server/utils/whatsapp-access.ts so the format string and its
-// regex can't drift apart. Re-exported here for backward compat since this
-// invitation-flow module historically owned the parsing half.
-export { isPhoneInvitationEmail, phoneDigitsFromInvitationEmail } from '~/server/utils/whatsapp-access'
-
 export interface InvitationRedirectSite {
   id: string
   subdomain: string | null

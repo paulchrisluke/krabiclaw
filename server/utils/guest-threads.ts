@@ -446,7 +446,7 @@ export type PostGuestThreadReplyOutcome =
   | { ok: true; status: 200; messageId?: string; duplicate?: boolean }
   | { ok: true; status: 207; messageId?: string; error: string }
   | { ok: false; status: 404; reason: 'thread_not_found' }
-  | { ok: false; status: 400; reason: 'no_guest_email' }
+  | { ok: false; status: 400; reason: 'no_guest_email' | 'empty_body' }
   | { ok: false; status: 502; reason: 'send_failed'; error: string; persisted: boolean }
 
 export async function postGuestThreadReply(
@@ -471,6 +471,11 @@ export async function postGuestThreadReply(
   if (!detail.source.guest_email) return { ok: false, status: 400, reason: 'no_guest_email' }
 
   const replyBody = opts.body.trim()
+
+  // Reject empty trimmed bodies before deduplication check
+  if (!replyBody) {
+    return { ok: false, status: 400, reason: 'empty_body' }
+  }
 
   // Guards against duplicate sends when a client retries after a network error or a
   // 207 (email sent, DB write failed) response — same thread + identical body within a

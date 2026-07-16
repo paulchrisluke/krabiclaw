@@ -23,6 +23,103 @@ type SetupEnv = Record<string, string | undefined>;
 
 const MAX_SLUG_ATTEMPTS = 10;
 
+export interface LocationWhatsAppSyncParams {
+  organizationId: string;
+  siteId: string;
+  locationId: string;
+  previousPhone: string | null;
+  newPhone: string | null;
+  inviterUserId: string;
+  actorHeaders?: HeadersInit;
+}
+
+export interface LocationWhatsAppSyncResult {
+  ok: boolean;
+  provisioningError?: string;
+  scopeRecalcError?: string;
+}
+
+/**
+ * Shared write boundary for location-scoped WhatsApp manager access (issue
+ * #293 Sections A/G, CodeRabbit follow-up on PR #295). This is the one place
+ * that provisions access for a location's new `notification_phone` and
+ * revokes/recalculates the previous number's manager scope — the dashboard
+ * PATCH route, the create/add-location flow, and MCP's create_location/
+ * update_location tools all funnel through this instead of each keeping
+ * their own copy, which had drifted into three slightly different
+ * implementations (one of which provisioned before the location row was
+ * even saved).
+ *
+ * No-ops when `newPhone === previousPhone` (idempotency — Section I).
+ * Never throws: provisioning and scope recalculation are independent
+ * best-effort steps, and a failure in either is reported back via the
+ * returned result (`ok: false` + the relevant error message) instead of
+ * being silently swallowed, so callers that already committed the location
+ * write can surface a partial-success response (e.g. HTTP 207) rather than
+ * a clean 200 that hides a security-relevant inconsistency.
+ */
+export async function syncLocationWhatsAppAccess(
+  env: SetupEnv,
+  db: DbClient,
+  params: LocationWhatsAppSyncParams,
+): Promise<LocationWhatsAppSyncResult> {
+  const { organizationId, siteId, locationId, previousPhone, newPhone, inviterUserId, actorHeaders } = params;
+  if (newPhone === previousPhone) return { ok: true };
+
+  const result: LocationWhatsAppSyncResult = { ok: true };
+
+  if (newPhone) {
+    try {
+      const { ensureWhatsAppRecipientAccess, sendWhatsAppAccessInvitation } = await import("~/server/utils/whatsapp-access");
+      const access = await ensureWhatsAppRecipientAccess(db, {
+        organizationId,
+        siteId,
+        locationId,
+        phone: newPhone,
+        inviterUserId,
+      });
+      if (access.status === "invitation_pending" && access.shouldDeliverInvitation && access.invitationId) {
+        await sendWhatsAppAccessInvitation(env as Parameters<typeof sendWhatsAppAccessInvitation>[0], db, {
+          organizationId,
+          siteId,
+          locationId,
+          phone: newPhone,
+          invitationId: access.invitationId,
+        });
+      }
+    } catch (error) {
+      result.ok = false;
+      result.provisioningError = error instanceof Error ? error.message : String(error);
+      console.warn("Failed to provision WhatsApp access for location notification phone:", error);
+    }
+  }
+
+  try {
+    const [{ recalculateScopesForPhoneChange }, { createAuth }] = await Promise.all([
+      import("~/server/utils/whatsapp-revocation"),
+      import("~/server/utils/auth"),
+    ]);
+    // `env` here is the full Cloudflare env under a narrower local type
+    // (mirrors the same cast in setOrgWhatsAppPhone in whatsapp.ts) —
+    // createAuth only reads the DB/Better-Auth-config fields it needs.
+    await recalculateScopesForPhoneChange(db, createAuth(env as unknown as Parameters<typeof createAuth>[0]), {
+      organizationId,
+      siteId,
+      locationId,
+      scopeType: "location",
+      previousPhone,
+      newPhone,
+      actorHeaders,
+    });
+  } catch (error) {
+    result.ok = false;
+    result.scopeRecalcError = error instanceof Error ? error.message : String(error);
+    console.warn("Failed to recalculate WhatsApp scopes for location notification phone change:", error);
+  }
+
+  return result;
+}
+
 export interface SpecialHoursInput {
   closed: boolean;
   starts_on?: string | null;

@@ -782,14 +782,15 @@ export async function updateHomeHero(
 }
 
 export async function hydrateSeededLocationForOnboarding(
+  env: CloudflareEnv,
   db: D1Database,
   organizationId: string,
   siteId: string,
   userId: string,
   updates: Record<string, unknown>,
 ) {
-  const locations = await queryAll<{ id: string; slug: string }>(db, `
-    SELECT id, slug
+  const locations = await queryAll<{ id: string; slug: string; notification_phone: string | null }>(db, `
+    SELECT id, slug, notification_phone
     FROM business_locations
     WHERE organization_id = ? AND site_id = ? AND status = 'active'
     ORDER BY is_primary DESC, created_at ASC
@@ -801,6 +802,9 @@ export async function hydrateSeededLocationForOnboarding(
   }
 
   const location = locations[0]!;
+  const touchesNotificationPhone = Object.prototype.hasOwnProperty.call(updates, "notification_phone");
+  const previousNotificationPhone = location.notification_phone;
+
   const result = await updateLocation(
     db,
     organizationId,
@@ -812,6 +816,19 @@ export async function hydrateSeededLocationForOnboarding(
 
   if (result.status >= 400) {
     return result;
+  }
+
+  // Sync WhatsApp access if notification_phone was updated
+  if (touchesNotificationPhone) {
+    const { syncLocationWhatsAppAccess } = await import('~/server/utils/location-management')
+    await syncLocationWhatsAppAccess(env, db, {
+      organizationId,
+      siteId,
+      locationId: location.id,
+      previousPhone: previousNotificationPhone,
+      newPhone: (updates.notification_phone as string | null | undefined) ?? null,
+      inviterUserId: userId,
+    })
   }
 
   return {

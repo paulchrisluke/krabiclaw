@@ -35,7 +35,11 @@ export default defineEventHandler(async (event) => {
   if (!result.ok) {
     if (result.reason === 'thread_not_found') return jsonResponse({ error: 'Thread not found' }, { status: 404 })
     if (result.reason === 'no_guest_email') return jsonResponse({ error: 'This guest has no email on file' }, { status: 400 })
-    return jsonResponse({ error: result.error, persisted: result.persisted }, { status: 502 })
+    if (result.reason === 'empty_body') return jsonResponse({ error: 'Reply body is required' }, { status: 400 })
+    if (result.reason === 'send_failed') {
+      return jsonResponse({ error: result.error, persisted: result.persisted }, { status: 502 })
+    }
+    return jsonResponse({ error: 'Failed to send reply' }, { status: 500 })
   }
 
   if (result.status === 207) {

@@ -9,6 +9,7 @@ import type { H3Event } from 'h3'
 import { createDb, execute, schema } from '~/server/db'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
+import { phoneTemporaryEmail } from '~/server/utils/phone-invitations'
 import { parsePhoneOrThrow, PHONE_METADATA_VERSION } from '~/utils/phone'
 import { notifyNewUserSignup } from '~/server/utils/notification-center'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
@@ -325,8 +326,7 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
         signUpOnVerification: {
           getTempEmail: (phone) => {
             try {
-              const digits = parsePhoneOrThrow(phone, { defaultCountry: 'TH' }).replace(/\D/g, '')
-              return `phone-${digits}@phone.krabiclaw.local`
+              return phoneTemporaryEmail(phone)
             } catch {
               return 'phone-unknown@phone.krabiclaw.local'
             }

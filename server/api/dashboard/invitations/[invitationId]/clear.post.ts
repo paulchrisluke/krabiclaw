@@ -37,6 +37,21 @@ export default defineEventHandler(async (event) => {
   const auth = createAuth(env)
   const cancelApi = auth.api as unknown as CancelInvitationApi
 
+  // Remove scopes first. If this write fails the invitation remains pending,
+  // so the whole operation is safely retryable. If Better Auth cancellation
+  // subsequently fails, a retry can still load the pending invitation and
+  // finish cancellation; ensureWhatsAppRecipientAccess will recreate any
+  // required scope if the assignment is saved again in the meantime.
+  try {
+    await execute(db, `DELETE FROM invitation_access_scope WHERE invitation_id = ?`, [invitationId])
+  } catch (error) {
+    console.error('whatsapp_invitation_clear_scope_cleanup_failed', {
+      invitationId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return jsonResponse({ error: 'Failed to clear invitation access. Please retry.' }, { status: 502 })
+  }
+
   let response: Response
   try {
     response = await cancelApi.cancelInvitation({
@@ -61,30 +76,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: message }, { status: response.status || 500 })
   }
 
-  // The invitation is already cancelled at this point (source of truth for
-  // "pending or not"), so a failure to delete its scope rows must not 500
-  // the whole request — a 500 here would make retrying impossible, since
-  // loadPendingPhoneInvitation only recognizes still-pending invitations and
-  // would 404 on a second attempt. Retry the cleanup a couple of times, then
-  // fall back to reporting success with a flag so the orphaned rows can be
-  // reconciled later; they don't block anything since they're only read via
-  // this now-cancelled invitation's id.
-  const MAX_SCOPE_CLEANUP_ATTEMPTS = 3
-  let scopeCleanupFailed = false
-  for (let attempt = 1; attempt <= MAX_SCOPE_CLEANUP_ATTEMPTS; attempt++) {
-    try {
-      await execute(db, `DELETE FROM invitation_access_scope WHERE invitation_id = ?`, [invitationId])
-      scopeCleanupFailed = false
-      break
-    } catch (error) {
-      scopeCleanupFailed = true
-      console.error('whatsapp_invitation_clear_scope_cleanup_failed', {
-        invitationId,
-        attempt,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }
-
-  return jsonResponse({ success: true, scopeCleanupPending: scopeCleanupFailed })
+  return jsonResponse({ success: true })
 })

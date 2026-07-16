@@ -1,24 +1,24 @@
 import type { McpExecutorContext } from './shared'
 import { copyLocationBatch, type CopyEntityType } from '~/server/utils/copy-paste'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
-import { createLocation, deleteLocation, updateLocation, type LocationRecord } from '~/server/utils/location-management'
+import { createLocation, deleteLocation, syncLocationWhatsAppAccess, updateLocation, type LocationRecord } from '~/server/utils/location-management'
 import { getLocationForMcp, hydrateSeededLocationForOnboarding } from '~/server/utils/mcp-workflows'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, omit, optionalString, requireActiveImageAsset, requireActiveVideoAsset, requiredString, requiredStringArray, workspaceContextPayload, workspaceLocationsPayload } from './shared'
 import { queryFirst } from '~/server/db'
-import { ensureWhatsAppRecipientAccess, sendWhatsAppAccessInvitation } from '~/server/utils/whatsapp-access'
-import { recalculateScopesForPhoneChange } from '~/server/utils/whatsapp-revocation'
-import { createAuth } from '~/server/utils/auth'
 
 // MCP's create_location/update_location tools write notification_phone
 // through the same location-management.ts write boundary the dashboard HTTP
-// routes use (validation lives there — see location-management.ts), but the
-// HTTP routes additionally provision WhatsApp access and recalculate scopes
-// on change (issue #293 Sections A/G). Mirror that here so a manager number
-// set/changed via ChowBot/MCP gets the same invitation + revocation treatment
-// as one set via the dashboard, instead of silently going inert.
+// routes use (validation lives there — see location-management.ts), and now
+// also share that file's syncLocationWhatsAppAccess for provisioning WhatsApp
+// access and recalculating scopes on change (issue #293 Sections A/G,
+// CodeRabbit follow-up on PR #295 — this used to be a separate copy of the
+// same provisioning/revocation logic as the dashboard PATCH route and
+// add-location flow). This keeps a manager number set/changed via
+// ChowBot/MCP on the same invitation + revocation treatment as one set via
+// the dashboard, instead of silently going inert or drifting out of sync.
 async function syncLocationWhatsAppPhone(
   site: McpExecutorContext['site'],
   locationId: string,
@@ -28,43 +28,15 @@ async function syncLocationWhatsAppPhone(
     SELECT notification_phone FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1
   `, [locationId, site.organizationId, site.siteId])
   const newPhone = current?.notification_phone ?? null
-  if (newPhone === previousNotificationPhone) return
 
-  if (newPhone) {
-    try {
-      const access = await ensureWhatsAppRecipientAccess(site.db, {
-        organizationId: site.organizationId,
-        siteId: site.siteId,
-        locationId,
-        phone: newPhone,
-        inviterUserId: site.userId,
-      })
-      if (access.status === 'invitation_pending' && access.shouldDeliverInvitation && access.invitationId) {
-        await sendWhatsAppAccessInvitation(site.env, site.db, {
-          organizationId: site.organizationId,
-          siteId: site.siteId,
-          locationId,
-          phone: newPhone,
-          invitationId: access.invitationId,
-        })
-      }
-    } catch (error) {
-      console.warn('Failed to provision WhatsApp access for location notification phone (MCP):', error)
-    }
-  }
-
-  try {
-    await recalculateScopesForPhoneChange(site.db, createAuth(site.env), {
-      organizationId: site.organizationId,
-      siteId: site.siteId,
-      locationId,
-      scopeType: 'location',
-      previousPhone: previousNotificationPhone,
-      newPhone,
-    })
-  } catch (error) {
-    console.warn('Failed to recalculate WhatsApp scopes for location notification phone change (MCP):', error)
-  }
+  await syncLocationWhatsAppAccess(site.env as unknown as Parameters<typeof syncLocationWhatsAppAccess>[0], site.db, {
+    organizationId: site.organizationId,
+    siteId: site.siteId,
+    locationId,
+    previousPhone: previousNotificationPhone,
+    newPhone,
+    inviterUserId: site.userId,
+  })
 }
 
 export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unknown> {
@@ -116,6 +88,7 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
           "LOCATION_LIMIT_REACHED"
       ) {
         return await hydrateSeededLocationForOnboarding(
+          site.env,
           site.db,
           site.organizationId,
           site.siteId,

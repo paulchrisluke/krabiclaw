@@ -6,10 +6,9 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getPlaceDetailsByUrl, getPlaceDetails, searchPlaces } from '~/server/utils/google-places'
 import { chargeFlatCredits } from '~/server/utils/ai-credits'
-import { createLocation } from '~/server/utils/location-management'
+import { createLocation, syncLocationWhatsAppAccess } from '~/server/utils/location-management'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { execute, queryFirst, type DbClient } from '~/server/db'
-import { ensureWhatsAppRecipientAccess, sendWhatsAppAccessInvitation } from '~/server/utils/whatsapp-access'
 import { parsePhone } from '~/utils/phone'
 
 type SetupEnv = Parameters<typeof createLocation>[0]
@@ -23,39 +22,35 @@ function slugify(name: string) {
 // previously stored the raw trimmed input, which silently broke the E.164
 // comparisons ensureWhatsAppRecipientAccess/isAuthorizedWhatsAppRecipient rely on.
 function normalizeNotificationPhone(raw: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
-  if (typeof raw !== 'string' || !raw.trim()) return { ok: true, value: null }
-  const parsed = parsePhone(raw, { defaultCountry: 'TH' })
+  if (raw === null || raw === undefined || raw === '') return { ok: true, value: null }
+  if (typeof raw !== 'string') return { ok: false, error: 'Phone number must be a string' }
+  const trimmed = raw.trim()
+  if (!trimmed) return { ok: true, value: null }
+  const parsed = parsePhone(trimmed, { defaultCountry: 'TH' })
   if (!parsed.valid || !parsed.e164) {
     return { ok: false, error: 'Enter a valid notification phone number, including country code' }
   }
   return { ok: true, value: parsed.e164 }
 }
 
+// A new location has no previous notification_phone, so this is always a
+// create-shaped call into the shared server/utils/location-management.ts
+// sync boundary (issue #293 Sections A/D/G, CodeRabbit follow-up on PR #295)
+// — provisioning access for the new number, with scope recalculation as a
+// no-op since there's nothing to revoke yet.
 async function provisionLocationWhatsAppAccess(
   env: SetupEnv,
   db: DbClient,
   opts: { organizationId: string; siteId: string; locationId: string; phone: string; inviterUserId: string },
 ): Promise<void> {
-  try {
-    const access = await ensureWhatsAppRecipientAccess(db, {
-      organizationId: opts.organizationId,
-      siteId: opts.siteId,
-      locationId: opts.locationId,
-      phone: opts.phone,
-      inviterUserId: opts.inviterUserId,
-    })
-    if (access.status === 'invitation_pending' && access.shouldDeliverInvitation && access.invitationId) {
-      await sendWhatsAppAccessInvitation(env as Parameters<typeof sendWhatsAppAccessInvitation>[0], db, {
-        organizationId: opts.organizationId,
-        siteId: opts.siteId,
-        locationId: opts.locationId,
-        phone: opts.phone,
-        invitationId: access.invitationId,
-      })
-    }
-  } catch (error) {
-    console.warn('Failed to provision WhatsApp access for location notification phone:', error)
-  }
+  await syncLocationWhatsAppAccess(env, db, {
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    locationId: opts.locationId,
+    previousPhone: null,
+    newPhone: opts.phone,
+    inviterUserId: opts.inviterUserId,
+  })
 }
 
 async function uniqueLocationSlug(db: DbClient, siteId: string, base: string): Promise<string> {

@@ -1,15 +1,13 @@
 // PATCH /api/dashboard/locations/[id] — Update a location
 import { getHeaders } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { createAuth, getAuthSession } from '~/server/utils/auth'
+import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { updateLocation } from '~/server/utils/location-management'
+import { syncLocationWhatsAppAccess, updateLocation } from '~/server/utils/location-management'
 import { parseLocationPayload } from './location-helpers'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { queryFirst } from '~/server/db'
 import { assertMemberScope } from '~/server/utils/member-access'
-import { ensureWhatsAppRecipientAccess, sendWhatsAppAccessInvitation } from '~/server/utils/whatsapp-access'
-import { recalculateScopesForPhoneChange } from '~/server/utils/whatsapp-revocation'
 import { parsePhone } from '~/utils/phone'
 
 export default defineEventHandler(async (event) => {
@@ -76,29 +74,6 @@ export default defineEventHandler(async (event) => {
   `, [locationId])
   const previousNotificationPhone = previousLocation?.notification_phone ?? null
 
-  if (normalizedNotificationPhone) {
-    try {
-      const access = await ensureWhatsAppRecipientAccess(db, {
-        organizationId,
-        siteId,
-        locationId,
-        phone: normalizedNotificationPhone,
-        inviterUserId: session.user.id,
-      })
-      if (access.status === 'invitation_pending' && access.shouldDeliverInvitation && access.invitationId) {
-        await sendWhatsAppAccessInvitation(env, db, {
-          organizationId,
-          siteId,
-          locationId,
-          phone: normalizedNotificationPhone,
-          invitationId: access.invitationId,
-        })
-      }
-    } catch (error) {
-      console.warn('Failed to provision WhatsApp access for location notification phone:', error)
-    }
-  }
-
   const rating = body.rating === undefined || body.rating === null || String(body.rating).trim() === ''
     ? undefined
     : (() => { const n = Number(body.rating); return Number.isFinite(n) ? n : undefined })()
@@ -163,22 +138,38 @@ export default defineEventHandler(async (event) => {
     return jsonResponse(result.data, { status: result.status })
   }
 
-  // Recalculate scopes only when the notification_phone actually changed
-  // (idempotency — Section I) — a save that doesn't touch this field, or
-  // resubmits the same number, must not remove or re-audit anything.
-  if (normalizedNotificationPhone !== undefined && normalizedNotificationPhone !== previousNotificationPhone) {
-    try {
-      await recalculateScopesForPhoneChange(db, createAuth(env), {
-        organizationId,
-        siteId,
-        locationId,
-        scopeType: 'location',
-        previousPhone: previousNotificationPhone,
-        newPhone: normalizedNotificationPhone,
-        actorHeaders: getHeaders(event) as HeadersInit,
-      })
-    } catch (error) {
-      console.warn('Failed to recalculate WhatsApp scopes for location notification phone change:', error)
+  // Provisioning/scope-recalculation for a notification_phone change only
+  // runs AFTER the location write above has committed (CodeRabbit follow-up
+  // on issue #293 Section G/I): provisioning the new number before the save
+  // could leave access/invitations for a phone value that never actually
+  // got persisted, and running scope cleanup for the old number before the
+  // save could revoke a manager's access for a change that then failed to
+  // save. This also only runs when the field was actually touched (idempotency
+  // — Section I) — a save that doesn't touch notification_phone, or resubmits
+  // the same number, must not remove or re-audit anything (the no-op case is
+  // also handled inside syncLocationWhatsAppAccess itself).
+  let whatsappSyncWarning: string | undefined
+  let whatsappSyncError: string | undefined
+  if (normalizedNotificationPhone !== undefined) {
+    const sync = await syncLocationWhatsAppAccess(env as unknown as Parameters<typeof syncLocationWhatsAppAccess>[0], db, {
+      organizationId,
+      siteId,
+      locationId,
+      previousPhone: previousNotificationPhone,
+      newPhone: normalizedNotificationPhone,
+      inviterUserId: session.user.id,
+      actorHeaders: getHeaders(event) as HeadersInit,
+    })
+    if (!sync.ok) {
+      // The location save above already committed — do not hide this behind
+      // a clean 200. A provisioning failure means the new manager may not
+      // have gotten access; a scope-recalc failure means a previous manager
+      // may still be authorized under the number that was just replaced.
+      // Record the error for retry/recovery rather than only logging it.
+      whatsappSyncError = sync.scopeRecalcError
+        ? 'Location saved, but a previous manager\'s WhatsApp access could not be fully revoked. Please retry or check access manually.'
+        : 'Location saved, but WhatsApp access could not be provisioned for the new number. Please retry.'
+      whatsappSyncWarning = whatsappSyncError
     }
   }
 
@@ -188,5 +179,6 @@ export default defineEventHandler(async (event) => {
   return jsonResponse({
     success: true,
     location: location ? parseLocationPayload(location) : null,
-  }, { status: result.status })
+    ...(whatsappSyncWarning ? { warning: whatsappSyncWarning } : {}),
+  }, { status: whatsappSyncWarning ? 207 : result.status })
 })

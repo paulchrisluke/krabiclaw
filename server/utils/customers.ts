@@ -205,6 +205,7 @@ async function updateCustomerBooking(
   const bookingAt = input.bookingAt ?? new Date().toISOString()
 
   if (includeEmail) {
+    const phoneSupplied = input.phone !== undefined && input.phone !== null
     await execute(db, `
       UPDATE customers
       SET name = COALESCE(NULLIF(?, ''), name),
@@ -213,7 +214,7 @@ async function updateCustomerBooking(
           email_hash = COALESCE(?, email_hash),
           phone = COALESCE(NULLIF(?, ''), phone),
           phone_normalized = COALESCE(?, phone_normalized),
-          phone_metadata_version = COALESCE(?, phone_metadata_version),
+          phone_metadata_version = CASE WHEN ? THEN ? ELSE phone_metadata_version END,
           source = CASE WHEN source = 'manual' THEN source ELSE ? END,
           last_booking_at = ?,
           updated_at = ?
@@ -225,6 +226,7 @@ async function updateCustomerBooking(
       emailHash,
       phone,
       phoneNormalized,
+      phoneSupplied ? 1 : 0,
       phoneMetadataVersion,
       input.source,
       bookingAt,
@@ -234,12 +236,13 @@ async function updateCustomerBooking(
     return
   }
 
+  const phoneSupplied = input.phone !== undefined && input.phone !== null
   await execute(db, `
     UPDATE customers
     SET name = COALESCE(NULLIF(?, ''), name),
         phone = COALESCE(NULLIF(?, ''), phone),
         phone_normalized = COALESCE(?, phone_normalized),
-        phone_metadata_version = COALESCE(?, phone_metadata_version),
+        phone_metadata_version = CASE WHEN ? THEN ? ELSE phone_metadata_version END,
         source = CASE WHEN source = 'manual' THEN source ELSE ? END,
         last_booking_at = ?,
         updated_at = ?
@@ -248,6 +251,7 @@ async function updateCustomerBooking(
     name,
     phone,
     phoneNormalized,
+    phoneSupplied ? 1 : 0,
     phoneMetadataVersion,
     input.source,
     bookingAt,

@@ -2,7 +2,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { queryAll } from '~/server/db'
 import { betterAuthTimestampToIso, type BetterAuthTimestamp } from '~/server/utils/better-auth-timestamps'
-import { isPhoneInvitationEmail, phoneDigitsFromInvitationEmail } from '~/server/utils/invitations'
+import { isPhoneInvitationEmail, phoneDigitsFromInvitationEmail } from '~/server/utils/phone-invitations'
 import { formatForDisplay } from '~/utils/phone'
 
 export default defineEventHandler(async (event) => {

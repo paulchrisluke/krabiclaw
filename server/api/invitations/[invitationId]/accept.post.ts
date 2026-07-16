@@ -84,7 +84,7 @@ export default defineEventHandler(async (event) => {
         role: invitation.role ?? 'member',
       })
     }
-    return jsonResponse({ error: `This invitation was already accepted by a different account (${invitation.email}).` }, { status: 410 })
+    return jsonResponse({ error: 'This invitation was already accepted by a different account.' }, { status: 410 })
   }
   if (invitation.status !== 'pending') {
     return jsonResponse({ error: `Invitation is already ${invitation.status}` }, { status: 410 })

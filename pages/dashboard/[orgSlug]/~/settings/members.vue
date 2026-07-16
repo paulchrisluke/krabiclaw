@@ -191,7 +191,7 @@
               </div>
 
               <UAlert
-                v-if="invitationActionError && invitationActionId === invitation.id"
+                v-if="invitationActionError && invitationActionErrorId === invitation.id"
                 color="error"
                 variant="soft"
                 :description="invitationActionError"
@@ -325,6 +325,7 @@ const pendingRemoval = ref<{ memberId: string; assignments: PhoneAssignment[] } 
 const invitationActionId = ref<string | null>(null)
 const invitationAction = ref<'retry' | 'replace' | 'clear' | null>(null)
 const invitationActionError = ref<string | null>(null)
+const invitationActionErrorId = ref<string | null>(null)
 const replaceFormInvitationId = ref<string | null>(null)
 const replacePhone = ref('')
 
@@ -350,12 +351,14 @@ async function retryInvitation(invitationId: string) {
   invitationActionId.value = invitationId
   invitationAction.value = 'retry'
   invitationActionError.value = null
+  invitationActionErrorId.value = null
   try {
     await $fetch(`/api/dashboard/invitations/${invitationId}/retry`, { method: 'POST' })
     await refresh()
   } catch (err: unknown) {
     const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
     invitationActionError.value = errorData?.error ?? 'Failed to resend the invitation.'
+    invitationActionErrorId.value = invitationId
   } finally {
     invitationActionId.value = null
     invitationAction.value = null
@@ -367,6 +370,7 @@ async function replaceInvitation(invitationId: string) {
   invitationActionId.value = invitationId
   invitationAction.value = 'replace'
   invitationActionError.value = null
+  invitationActionErrorId.value = null
   try {
     await $fetch(`/api/dashboard/invitations/${invitationId}/replace`, {
       method: 'POST',
@@ -378,6 +382,7 @@ async function replaceInvitation(invitationId: string) {
   } catch (err: unknown) {
     const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
     invitationActionError.value = errorData?.error ?? 'Failed to replace the phone number.'
+    invitationActionErrorId.value = invitationId
   } finally {
     invitationActionId.value = null
     invitationAction.value = null
@@ -388,12 +393,14 @@ async function clearInvitation(invitationId: string) {
   invitationActionId.value = invitationId
   invitationAction.value = 'clear'
   invitationActionError.value = null
+  invitationActionErrorId.value = null
   try {
     await $fetch(`/api/dashboard/invitations/${invitationId}/clear`, { method: 'POST' })
     await refresh()
   } catch (err: unknown) {
     const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
     invitationActionError.value = errorData?.error ?? 'Failed to clear this invitation.'
+    invitationActionErrorId.value = invitationId
   } finally {
     invitationActionId.value = null
     invitationAction.value = null

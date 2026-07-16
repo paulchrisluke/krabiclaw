@@ -1,12 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import {
-  buildInvitationRedirectUrl,
-  isPhoneInvitationEmail,
-  phoneDigitsFromInvitationEmail,
-  sanitizeInvitationReturnTo,
-} from '../../server/utils/invitations.ts'
+import { buildInvitationRedirectUrl, sanitizeInvitationReturnTo } from '../../server/utils/invitations.ts'
+import { isPhoneInvitationEmail, phoneDigitsFromInvitationEmail } from '../../server/utils/phone-invitations.ts'
 import { pickPrimaryInvitationScope } from '../../server/utils/whatsapp-access.ts'
 
 test('isPhoneInvitationEmail recognizes the deterministic WhatsApp temp-email pattern', () => {

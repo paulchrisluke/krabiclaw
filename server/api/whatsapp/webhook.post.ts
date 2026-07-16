@@ -422,6 +422,14 @@ async function routeManagerWhatsAppMessage(
 
     switch (decision.action) {
       case 'start_confirm_send': {
+        const trimmedText = rawText.trim()
+        if (!trimmedText) {
+          // Captionless media or empty reply — resend the prompt without advancing
+          const match = fresh.quotedResolved!
+          const guestEmailMasked = maskEmailForDisplay(match.guestEmail)
+          await sendWhatsAppText(env, opts.toPhone, buildConfirmSendPrompt(guestEmailMasked))
+          return { handled: true }
+        }
         const match = fresh.quotedResolved!
         const guestEmailMasked = maskEmailForDisplay(match.guestEmail)
         const newState: PendingWhatsAppReplyState = {
@@ -429,22 +437,31 @@ async function routeManagerWhatsAppMessage(
           threadId: match.threadId,
           siteId: match.siteId,
           organizationId: match.organizationId,
-          replyBody: rawText,
+          replyBody: trimmedText,
           guestEmailMasked,
         }
+        const sendResult = await sendWhatsAppText(env, opts.toPhone, buildConfirmSendPrompt(guestEmailMasked))
+        if (!sendResult.success) {
+          throw new Error(sendResult.error || 'Failed to send WhatsApp confirmation prompt')
+        }
         await upsertChannelState(db, { userId: opts.userId, channel: 'whatsapp', pendingConfirmation: newState, lastInboundId: opts.messageId })
-        await sendWhatsAppText(env, opts.toPhone, buildConfirmSendPrompt(guestEmailMasked))
         return { handled: true }
       }
       case 'start_disambiguation': {
         const newState: PendingWhatsAppReplyState = { kind: 'disambiguate', candidates: fresh.recentCandidates }
+        const sendResult = await sendWhatsAppText(env, opts.toPhone, buildDisambiguationPrompt(fresh.recentCandidates))
+        if (!sendResult.success) {
+          throw new Error(sendResult.error || 'Failed to send WhatsApp disambiguation prompt')
+        }
         await upsertChannelState(db, { userId: opts.userId, channel: 'whatsapp', pendingConfirmation: newState as unknown as JsonSerializable, lastInboundId: opts.messageId })
-        await sendWhatsAppText(env, opts.toPhone, buildDisambiguationPrompt(fresh.recentCandidates))
         return { handled: true }
       }
       case 'ask_chowbot_or_quote': {
+        const sendResult = await sendWhatsAppText(env, opts.toPhone, ASK_CHOWBOT_OR_QUOTE_MESSAGE)
+        if (!sendResult.success) {
+          throw new Error(sendResult.error || 'Failed to send WhatsApp routing prompt')
+        }
         await upsertChannelState(db, { userId: opts.userId, channel: 'whatsapp', pendingConfirmation: null, lastInboundId: opts.messageId })
-        await sendWhatsAppText(env, opts.toPhone, ASK_CHOWBOT_OR_QUOTE_MESSAGE)
         return { handled: true }
       }
       case 'chowbot':
@@ -461,6 +478,18 @@ async function routeManagerWhatsAppMessage(
   if (pendingState.kind === 'confirm_send') {
     const decision = decideWhatsAppReplyRouting({ hasQuotedContext: false, quotedMatch: null, isChowBotDirected: false, pendingState, recentNotificationCount: 0, text: rawText })
     if (decision.action === 'confirm_send_execute') {
+      // Reauthorize before executing the reply to ensure the member still has access
+      const authorized = await isAuthorizedWhatsAppRecipient(db, {
+        phone: opts.message.from,
+        organizationId: pendingState.organizationId,
+        siteId: pendingState.siteId,
+        locationId: null,
+      })
+      if (!authorized) {
+        await clearPending()
+        await sendWhatsAppText(env, opts.toPhone, 'Your WhatsApp access has been revoked. Please contact your organization administrator.')
+        return { handled: true }
+      }
       const result = await postGuestThreadReply(db, env, {
         threadId: pendingState.threadId,
         siteId: pendingState.siteId,
@@ -484,6 +513,20 @@ async function routeManagerWhatsAppMessage(
     const decision = decideWhatsAppReplyRouting({ hasQuotedContext: false, quotedMatch: null, isChowBotDirected: false, pendingState, recentNotificationCount: 0, text: rawText })
     if (decision.action === 'disambiguation_pick') {
       const chosen = pendingState.candidates[decision.index - 1]!
+
+      // Reauthorize before disambiguation transition to ensure the member still has access
+      const authorized = await isAuthorizedWhatsAppRecipient(db, {
+        phone: opts.message.from,
+        organizationId: chosen.organizationId,
+        siteId: chosen.siteId,
+        locationId: chosen.locationId,
+      })
+      if (!authorized) {
+        await clearPending()
+        await sendWhatsAppText(env, opts.toPhone, 'Your WhatsApp access has been revoked. Please contact your organization administrator.')
+        return { handled: true }
+      }
+
       const detail = await getGuestThreadDetail(db, chosen.threadId, chosen.siteId)
       if (!detail || !detail.source.guest_email) {
         await clearPending()
@@ -492,8 +535,9 @@ async function routeManagerWhatsAppMessage(
       }
       const guestEmailMasked = maskEmailForDisplay(detail.source.guest_email)
       const newState: PendingWhatsAppReplyState = { kind: 'collect_reply', threadId: chosen.threadId, siteId: chosen.siteId, organizationId: chosen.organizationId, guestEmailMasked }
+      const sendResult = await sendWhatsAppText(env, opts.toPhone, buildCollectReplyPrompt(guestEmailMasked))
+      if (!sendResult.success) throw new Error(sendResult.error || 'Failed to send WhatsApp reply prompt')
       await upsertChannelState(db, { userId: opts.userId, channel: 'whatsapp', pendingConfirmation: newState, lastInboundId: opts.messageId })
-      await sendWhatsAppText(env, opts.toPhone, buildCollectReplyPrompt(guestEmailMasked))
       return { handled: true }
     }
     await clearPending()
@@ -507,8 +551,9 @@ async function routeManagerWhatsAppMessage(
       replyBody: rawText,
       guestEmailMasked: pendingState.guestEmailMasked,
     }
+    const sendResult = await sendWhatsAppText(env, opts.toPhone, buildConfirmSendPrompt(pendingState.guestEmailMasked))
+    if (!sendResult.success) throw new Error(sendResult.error || 'Failed to send WhatsApp confirmation prompt')
     await upsertChannelState(db, { userId: opts.userId, channel: 'whatsapp', pendingConfirmation: newState, lastInboundId: opts.messageId })
-    await sendWhatsAppText(env, opts.toPhone, buildConfirmSendPrompt(pendingState.guestEmailMasked))
     return { handled: true }
   }
 
@@ -873,11 +918,23 @@ async function handleStatus(db: D1Database, status: WhatsAppStatus): Promise<voi
   const errorText = formatStatusError(status.errors)
 
   if (shouldAdvanceStatus) {
-    await execute(db, `
-      UPDATE notifications
-      SET whatsapp_delivery_status = ?, whatsapp_delivery_error = ?
-      WHERE id = ?
-    `, [incomingStatus, errorText, notification.id])
+    let observedStatus = notification.whatsapp_delivery_status
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (!compareWhatsAppDeliveryStatus(observedStatus, incomingStatus)) break
+      const updateResult = await execute(db, `
+        UPDATE notifications
+        SET whatsapp_delivery_status = ?, whatsapp_delivery_error = ?
+        WHERE id = ?
+          AND (whatsapp_delivery_status = ? OR (whatsapp_delivery_status IS NULL AND ? IS NULL))
+      `, [incomingStatus, errorText, notification.id, observedStatus, observedStatus])
+      if (updateResult.meta.changes > 0) return
+
+      const current = await queryFirst<{ whatsapp_delivery_status: string | null }>(db, `
+        SELECT whatsapp_delivery_status FROM notifications WHERE id = ? LIMIT 1
+      `, [notification.id])
+      if (!current) return
+      observedStatus = current.whatsapp_delivery_status
+    }
     return
   }
 

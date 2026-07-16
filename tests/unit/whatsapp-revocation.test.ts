@@ -32,10 +32,10 @@ async function queryFirst<T>(db: Store, query: string, params: unknown[] = []): 
     const [id] = params
     return db.members.find((m) => m.id === id) as T | undefined
   }
-  if (query.includes('SELECT userId FROM member WHERE id')) {
+  if (query.includes('SELECT userId, organizationId FROM member WHERE id')) {
     const [id] = params
     const member = db.members.find((m) => m.id === id)
-    return (member ? { userId: member.userId } : undefined) as T | undefined
+    return (member ? { userId: member.userId, organizationId: member.organizationId } : undefined) as T | undefined
   }
   if (query.includes('FROM user u') && query.includes('JOIN member m')) {
     const [organizationId, phone] = params
@@ -60,9 +60,9 @@ async function queryAll<T>(db: Store, query: string, params: unknown[] = []): Pr
       .map((s) => ({ organizationId: s.organization_id, siteId: s.site_id, locationId: s.location_id ?? null })) as T[]
   }
   if (query.includes('FROM business_locations bl')) {
-    const [phone] = params
+    const [phone, organizationId] = params
     return db.locations
-      .filter((l) => l.notification_phone === phone)
+      .filter((l) => l.notification_phone === phone && l.organization_id === organizationId)
       .map((l) => ({
         organizationId: l.organization_id,
         siteId: l.site_id,
@@ -72,9 +72,9 @@ async function queryAll<T>(db: Store, query: string, params: unknown[] = []): Pr
       })) as T[]
   }
   if (query.includes('FROM site_config sc')) {
-    const [phone] = params
+    const [phone, organizationId] = params
     return db.siteConfig
-      .filter((c) => c.key === 'whatsapp_phone' && c.value === phone)
+      .filter((c) => c.key === 'whatsapp_phone' && c.value === phone && c.organization_id === organizationId)
       .map((c) => ({ organizationId: c.organization_id, siteId: c.site_id, siteName: c.site_name ?? 'Test Site' })) as T[]
   }
   throw new Error(`Unexpected queryAll query: ${query}`)
@@ -117,8 +117,8 @@ async function execute(db: Store, query: string, params: unknown[] = []) {
   throw new Error(`Unexpected execute query: ${query}`)
 }
 
-async function executeBatch() {
-  throw new Error('executeBatch not used by whatsapp-revocation')
+async function executeBatch(db: Store, statements: Array<{ query: string; params?: unknown[] }>) {
+  return await Promise.all(statements.map(({ query, params }) => execute(db, query, params)))
 }
 
 mock.module('../../server/db/index.ts', {
@@ -247,11 +247,11 @@ test('removeOrgMembershipIfNoScopesRemain never removes owner/admin/editor', asy
 test('removeOrgMembershipIfNoScopesRemain prefers the Better Auth API when actor headers are available', async () => {
   const db = createStore()
   const { memberId } = seedManager(db)
-  let called = false
+  let payload: { memberIdOrEmail: string; organizationId: string } | null = null
   const fakeAuth = {
     api: {
-      removeMember: async () => {
-        called = true
+      removeMember: async (input: { body: { memberIdOrEmail: string; organizationId: string } }) => {
+        payload = input.body
         return new Response(null, { status: 200 })
       },
     },
@@ -259,7 +259,7 @@ test('removeOrgMembershipIfNoScopesRemain prefers the Better Auth API when actor
 
   const result = await removeOrgMembershipIfNoScopesRemain(db as never, fakeAuth as never, memberId, { actorHeaders: { Cookie: 'session=x' } })
 
-  assert.equal(called, true)
+  assert.deepEqual(payload, { memberIdOrEmail: memberId, organizationId: 'org-1' })
   assert.equal(result.removed, true)
   // The API path succeeded, so the direct-SQL fallback must not have run —
   // the mock store (which the fake API call never touches) still has the row.
