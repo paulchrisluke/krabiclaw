@@ -32,8 +32,7 @@ import { execWithRetry } from './wrangler-retry.ts'
 //    fixture site/org IDs FIRST, before the LIKE pattern - contact_submissions,
 //    experience_bookings, and reservation_submissions all already carry a site_id-leading index
 //    (idx_contact_submissions_site, idx_experience_bookings_site, idx_reservation_submissions_site)
-//    and notifications an organization_id-leading one (idx_notifications_org), hand-authored in
-//    the immutable migrations/0001_initial.sql and already live everywhere - but a bare
+//    and notifications an organization_id-leading one (notifications_organization_created_at_idx) - but a bare
 //    `email LIKE '%@playwright.example'` with no site/org filter can't use any of them (leading
 //    wildcard forces a full scan regardless), which is what still exceeded D1's CPU budget on
 //    staging even after category 1 was fixed to be cheap.
@@ -189,7 +188,7 @@ DELETE FROM organization WHERE id IN (${eligibleOrgIds});
 -- Category 2: guest-submitted rows on the persistent Pottery House/demo fixtures, marked by
 -- email. Every query below filters by the known fixture site_id/organization_id FIRST - via
 -- idx_contact_submissions_site, idx_experience_bookings_site, idx_reservation_submissions_site,
--- and idx_notifications_org (all hand-authored, already live, see comment above) - so the
+-- and notifications_organization_created_at_idx (see comment above) - so the
 -- unindexable 'LIKE %@playwright.example' only has to scan a handful of fixture-scoped rows,
 -- not a full table scan. notification_events is polymorphic (submission_type/submission_id, no
 -- FK) so it must be swept explicitly before its parent rows disappear. submission_messages has a

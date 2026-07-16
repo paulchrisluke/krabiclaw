@@ -3,6 +3,7 @@ import { execute, queryFirst } from '~/server/db'
 import { sendWhatsAppNotification, getOrgWhatsAppPhone } from '~/server/utils/whatsapp'
 import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import DomainUpdate from '~/server/emails/templates/DomainUpdate'
+import { createCanonicalNotification, NOTIFICATION_EVENT_TYPES } from '~/server/utils/notification-center'
 
 interface DomainNotificationEnv {
   PLATFORM_OWNER_EMAILS?: string
@@ -174,20 +175,18 @@ export async function notifyDomainLifecycle(
   db: D1Database,
   opts: DomainNotificationInput
 ) {
-  const now = new Date().toISOString()
-  await execute(db, `
-    INSERT INTO notifications
-    (id, organization_id, site_id, channel, template, title, payload, status, sent_at, created_at)
-    VALUES (?, ?, ?, 'dashboard', 'domain_update', ?, ?, 'sent', ?, ?)
-  `, [
-    crypto.randomUUID(),
-    opts.organizationId,
-    opts.siteId,
-    opts.title,
-    JSON.stringify({ domain: opts.domain, status: opts.status, message: opts.message, dashboard_url: opts.dashboardUrl }),
-    now,
-    now
-  ])
+  await createCanonicalNotification(db, {
+    scope: 'site',
+    eventType: NOTIFICATION_EVENT_TYPES.DOMAIN_UPDATED,
+    severity: opts.status === 'active' ? 'success' : 'warning',
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    title: opts.title,
+    message: opts.message,
+    deepLink: opts.dashboardUrl,
+    payload: { domain: opts.domain, status: opts.status, dashboard_url: opts.dashboardUrl },
+    template: 'domain_update',
+  })
 
   if (env.RESEND_API_KEY || !shouldSendRealEmail(env)) {
     const owner = await queryFirst<{ email?: string }>(db, ownerEmailQuery(), [opts.organizationId])

@@ -19,6 +19,8 @@ import BookingOwnerCancelled from '~/server/emails/templates/BookingOwnerCancell
 import BookingGuestCancelled from '~/server/emails/templates/BookingGuestCancelled'
 import BookingThankYouReviewRequest from '~/server/emails/templates/BookingThankYouReviewRequest'
 import BookingReviewReminder from '~/server/emails/templates/BookingReviewReminder'
+import { createCanonicalNotification, tenantEventTypeForTemplate } from '~/server/utils/notification-center'
+import { buildOwnerThreadInboxUrl, getPlatformDomain, resolveSiteLocationSlugs } from '~/server/utils/dashboard-notification-links'
 
 const SUBJECT_LABELS: Record<string, string> = {
   general: 'General',
@@ -40,11 +42,6 @@ interface NotificationEnv {
   EMAIL_REPLY_SECRET?: string
   PLATFORM_OWNER_EMAILS?: string
 }
-
-export function getPlatformDomain(env: NotificationEnv): string {
-  return (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com').replace(/^https?:\/\//, '').replace(/\/$/, '')
-}
-
 
 interface SiteContext {
   organizationId: string
@@ -226,44 +223,6 @@ function buildExperienceWhatsAppContext(experienceTitle: string, siteName?: stri
   return `Business: ${business} · Experience: ${experienceTitle}`
 }
 
-// Shared by buildOwnerInboxUrl/buildOwnerReviewsUrl. Every dashboard deep-link route
-// requires a locationSlug segment even for org/site-scoped content (e.g. contact
-// submissions aren't location-scoped), so we fall back to the site's primary location.
-async function resolveSiteLocationSlugs(
-  db: DbClient,
-  opts: { organizationId: string; siteId: string; locationId?: string | null }
-): Promise<{ orgSlug: string; siteSlug: string; locationSlug: string } | null> {
-  try {
-    const site = await queryFirst<{ org_slug: string | null; site_slug: string | null }>(db, `
-      SELECT o.slug AS org_slug, s.subdomain AS site_slug
-      FROM organization o
-      JOIN sites s ON s.organization_id = o.id
-      WHERE o.id = ? AND s.id = ?
-      LIMIT 1
-    `, [opts.organizationId, opts.siteId])
-    if (!site?.org_slug || !site?.site_slug) return null
-
-    let locationSlug: string | null = null
-    if (opts.locationId) {
-      const location = await queryFirst<{ slug: string }>(db, `
-        SELECT slug FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1
-      `, [opts.locationId, opts.siteId])
-      locationSlug = location?.slug ?? null
-    }
-    if (!locationSlug) {
-      const fallback = await queryFirst<{ slug: string }>(db, `
-        SELECT slug FROM business_locations WHERE site_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1
-      `, [opts.siteId])
-      locationSlug = fallback?.slug ?? null
-    }
-    if (!locationSlug) return null
-
-    return { orgSlug: site.org_slug, siteSlug: site.site_slug, locationSlug }
-  } catch {
-    return null
-  }
-}
-
 // Deep-links an owner notification straight to the dashboard inbox thread for that submission.
 async function buildOwnerInboxUrl(
   env: NotificationEnv,
@@ -283,24 +242,6 @@ async function buildOwnerInboxUrl(
     locationId: opts.locationId,
     threadId: thread.id,
   })
-}
-
-async function buildOwnerThreadInboxUrl(
-  env: NotificationEnv,
-  db: DbClient,
-  opts: {
-    organizationId: string
-    siteId: string
-    locationId?: string | null
-    threadId: string
-  }
-): Promise<string | null> {
-  const slugs = await resolveSiteLocationSlugs(db, opts)
-  if (!slugs) return null
-
-  const platformDomain = getPlatformDomain(env)
-  const query = new URLSearchParams({ thread: opts.threadId })
-  return `https://${platformDomain}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}/${slugs.locationSlug}/inbox?${query.toString()}`
 }
 
 // Deep-links an owner notification straight to the dashboard reviews page for that location,
@@ -375,30 +316,23 @@ export async function insertDashboardNotification(
     payload: Record<string, string>
   }
 ): Promise<void> {
-  const id = crypto.randomUUID()
-  const now = new Date().toISOString()
   try {
-    await execute(db, `
-      INSERT INTO notifications
-      (id, organization_id, site_id, location_id, channel, template, title, payload, status, sent_at, created_at)
-      VALUES (?, ?, ?, ?, 'dashboard', ?, ?, ?, 'sent', ?, ?)
-    `, [
-      id,
-      opts.organizationId,
-      opts.siteId,
-      opts.locationId ?? null,
-      opts.template,
-      opts.title,
-      JSON.stringify(opts.payload),
-      now,
-      now
-    ])
+    await createCanonicalNotification(db, {
+      scope: 'site',
+      eventType: tenantEventTypeForTemplate(opts.template, opts.payload),
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      locationId: opts.locationId ?? null,
+      title: opts.title,
+      deepLink: opts.payload.deep_link || null,
+      payload: opts.payload,
+      template: opts.template,
+    })
   } catch (error) {
     console.error('dashboard_notification_failed', {
       organizationId: opts.organizationId,
       siteId: opts.siteId,
       template: opts.template,
-      notificationId: id,
       error: error instanceof Error ? error.message : String(error)
     })
   }
@@ -810,6 +744,7 @@ export async function notifyReservationCreated(
     requests: opts.requests ?? '',
     location_name: opts.locationName ?? '',
     site_name: restaurant,
+    deep_link: inboxUrl ?? '',
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
@@ -894,6 +829,7 @@ export async function notifyReservationCancelled(
     reservation_was_confirmed: confirmed ? 'true' : 'false',
     location_name: opts.locationName ?? '',
     site_name: restaurant,
+    deep_link: inboxUrl ?? '',
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
@@ -967,6 +903,7 @@ export async function notifyContactSubmitted(
     site_name: restaurant,
     experience_title: opts.experienceTitle ?? '',
     consent_acknowledged: opts.consentAcknowledged === true ? 'true' : 'false',
+    deep_link: inboxUrl ?? '',
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
@@ -1180,6 +1117,7 @@ export async function notifyReviewReceived(
         rating: String(opts.rating),
         content_preview: (opts.content ?? '').slice(0, 200),
         site_name: restaurant,
+        deep_link: reviewsUrl ?? '',
       },
       email: { subject: `New review from ${opts.authorName}`, html: ownerEmail.html, text: ownerEmail.text },
       whatsapp: {
@@ -1273,6 +1211,7 @@ export async function notifyExperienceBookingCreated(
     party_size: String(opts.partySize),
     requests: opts.notes ?? '',
     site_name: studio,
+    deep_link: inboxUrl ?? '',
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
@@ -1356,6 +1295,7 @@ export async function notifyExperienceBookingCancelled(
     party_size: String(opts.partySize),
     booking_was_confirmed: confirmed ? 'true' : 'false',
     site_name: studio,
+    deep_link: inboxUrl ?? '',
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([

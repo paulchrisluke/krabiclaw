@@ -2,6 +2,7 @@ import { useRender } from 'vue-email'
 import { execute } from '~/server/db'
 import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import SiteTransferReminder from '~/server/emails/templates/SiteTransferReminder'
+import { createCanonicalNotification, NOTIFICATION_EVENT_TYPES } from '~/server/utils/notification-center'
 
 interface SiteTransferNotificationEnv {
   PLATFORM_OWNER_EMAILS?: string
@@ -158,7 +159,7 @@ export async function notifySiteTransferReminder(
   const title = opts.customDomainsPaused
     ? `Action needed: Finishing touches for ${opts.siteName}`
     : `Reminder: ${opts.siteName} is ready for you!`
-  const _body = opts.customDomainsPaused
+  const body = opts.customDomainsPaused
     ? `Your website is ready to go, but we just need to wrap up the payment setup to get your custom domain live and kicking.`
     : `Good news—your new website is ready and waiting for you to take the reins. Click below to review and claim it whenever you're ready.`
 
@@ -171,20 +172,18 @@ export async function notifySiteTransferReminder(
     custom_domains_paused: opts.customDomainsPaused,
   }
 
-  const now = new Date().toISOString()
-  await execute(db, `
-    INSERT INTO notifications
-    (id, organization_id, site_id, channel, template, title, payload, status, sent_at, created_at)
-    VALUES (?, ?, ?, 'dashboard', 'site_transfer_reminder', ?, ?, 'sent', ?, ?)
-  `, [
-    crypto.randomUUID(),
-    opts.organizationId,
-    opts.siteId,
+  await createCanonicalNotification(db, {
+    scope: 'site',
+    eventType: NOTIFICATION_EVENT_TYPES.SITE_TRANSFER_REMINDER,
+    severity: opts.customDomainsPaused ? 'warning' : 'info',
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
     title,
-    JSON.stringify(payload),
-    now,
-    now,
-  ])
+    message: body,
+    deepLink: opts.transferUrl,
+    payload,
+    template: 'site_transfer_reminder',
+  })
 
   const planLabel: Record<string, string> = {
     growth: 'Growth ($49/mo)',

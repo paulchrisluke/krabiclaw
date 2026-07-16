@@ -198,7 +198,7 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
       const text = messageText(message)
       if (text) {
         try {
-          await insertInboundSubmissionReply(db, {
+          await insertInboundSubmissionReply(env, db, {
             submissionType: match.submissionType,
             submissionId: match.submissionId,
             organizationId: match.organizationId,

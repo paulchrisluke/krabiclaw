@@ -47,7 +47,7 @@ export default defineEventHandler(async (event) => {
   const existing = await queryFirst<{ id: string }>(db, `SELECT id FROM submission_messages WHERE meta_message_id = ? LIMIT 1`, [messageIdHeader])
   if (existing) return jsonResponse({ received: true })
 
-  await insertInboundSubmissionReply(db, {
+  await insertInboundSubmissionReply(env, db, {
     submissionType: parsed.submissionType,
     submissionId: parsed.submissionId,
     organizationId: orgSite.organizationId,

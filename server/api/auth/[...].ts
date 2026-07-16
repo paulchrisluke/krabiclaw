@@ -38,7 +38,9 @@ export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event) as CloudflareEnv
   if (!env?.DB) throw createError({ statusCode: 503, message: 'Database unavailable' })
 
-  const auth = createAuth(env)
+  const cloudflareContext = event.context.cloudflare?.context
+  const waitUntil = cloudflareContext?.waitUntil?.bind(cloudflareContext)
+  const auth = createAuth(env, { waitUntil })
   
   try {
     const request = await normalizedAuthRequest(event)
