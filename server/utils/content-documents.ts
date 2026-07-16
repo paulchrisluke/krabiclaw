@@ -716,8 +716,11 @@ export async function getPublishedContentSnapshot(db: DbClient, ownerType: Conte
   `, [ownerType, ownerId])
   if (!row) return null
   try {
-    const parsed = JSON.parse(row.snapshot_json) as { blocks?: ContentBlockSnapshot[] }
-    return Array.isArray(parsed.blocks) ? parsed.blocks : null
+    const parsed = JSON.parse(row.snapshot_json) as unknown
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as { blocks?: unknown }).blocks)) {
+      throw new Error('Published revision must contain a blocks array')
+    }
+    return (parsed as { blocks: ContentBlockSnapshot[] }).blocks
   } catch {
     throw createError({ statusCode: 500, statusMessage: 'Published content revision is malformed' })
   }

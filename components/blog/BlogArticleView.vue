@@ -31,7 +31,7 @@
       :editable="editable"
       :template="template"
       :show-title="!showHeader"
-      class="!max-w-none !px-0 !py-0"
+      class="max-w-none! px-0! py-0!"
       @update:title="$emit('update:title', $event)"
       @update:block="(index, block) => $emit('update:block', index, block)"
     >

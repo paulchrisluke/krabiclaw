@@ -781,26 +781,20 @@ async function ensureBlogFeaturedImageAssetExists(
 }
 
 async function normalizeEditorContentBlocks(db: D1Database, blocks: Array<ContentBlockInput & { id?: string }>, siteId: string | null) {
-  const normalized: Array<ContentBlockInput & { id?: string }> = []
-  for (const block of blocks) {
-    if (block.type !== 'image') {
-      normalized.push(block)
-      continue
-    }
+  return await Promise.all(blocks.map(async (block): Promise<ContentBlockInput & { id?: string }> => {
+    if (block.type !== 'image') return block
     const assetId = typeof block.data.asset_id === 'string' ? block.data.asset_id.trim() : ''
     if (!assetId) {
-      normalized.push({ ...block, data: { ...block.data, asset_id: '', public_url: '' } })
-      continue
+      return { ...block, data: { ...block.data, asset_id: '', public_url: '' } }
     }
     await ensureBlogFeaturedImageAssetExists(db, assetId, 'image block asset_id', siteId)
     const asset = await queryFirst<{ public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null>(db,
       'SELECT public_url, thumbnail_url, width, height FROM media_assets WHERE id = ? LIMIT 1', [assetId])
-    normalized.push({
+    return {
       ...block,
       data: { ...block.data, asset_id: assetId, public_url: asset?.public_url ?? '', thumbnail_url: asset?.thumbnail_url ?? null, width: asset?.width ?? null, height: asset?.height ?? null },
-    })
-  }
-  return normalized
+    }
+  }))
 }
 
 const BLOG_COMPONENT_EMBED_RE = /\{\{\s*component\s+type\s*=\s*(?:"([^"]+)"|'([^']+)'|([a-zA-Z0-9_-]+))\s*\}\}/g
@@ -1474,15 +1468,20 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
   const slug = typeof post.slug === 'string' ? post.slug : ''
   const publicPath = siteId && slug ? await resolveTenantBlogPostPath(db, siteId, slug) : null
   const context = await resolveTenantContext(db, siteId)
-  const editorTheme = siteId ? await queryFirst<{ theme: string | null; theme_id: string | null; vertical: string | null; brand_name: string | null; brand_color: string | null; tokens_json: string | null } | null>(db, `
-    SELECT s.theme, s.theme_id, s.vertical, s.brand_name, t.tokens_json,
+  const editorTheme = siteId ? await queryFirst<{ theme: string | null; theme_id: string | null; vertical: string | null; brand_name: string | null; brand_color: string | null } | null>(db, `
+    SELECT s.theme, s.theme_id, s.vertical, s.brand_name,
            (SELECT sc.value FROM site_config sc WHERE sc.site_id = s.id AND sc.key = 'brand_color' LIMIT 1) AS brand_color
       FROM sites s
-      LEFT JOIN site_theme_tokens t ON t.site_id = s.id AND t.status = 'active'
      WHERE s.id = ? LIMIT 1
   `, [siteId]) : null
+  const editorTemplate = siteId ? resolvePublicTemplate({ theme: editorTheme?.theme, themeId: editorTheme?.theme_id, vertical: editorTheme?.vertical }) : null
+  const editorThemeTokenRow = siteId && editorTemplate ? await queryFirst<{ tokens_json: string | null } | null>(db, `
+    SELECT tokens_json FROM site_theme_tokens
+     WHERE site_id = ? AND template_slug = ? AND status = 'active'
+     LIMIT 1
+  `, [siteId, editorTemplate.slug]) : null
   let editorThemeTokens: ApiRecord = {}
-  try { editorThemeTokens = editorTheme?.tokens_json ? JSON.parse(editorTheme.tokens_json) as ApiRecord : {} } catch { editorThemeTokens = {} }
+  try { editorThemeTokens = editorThemeTokenRow?.tokens_json ? JSON.parse(editorThemeTokenRow.tokens_json) as ApiRecord : {} } catch { editorThemeTokens = {} }
   const socialImage = await resolveBlogSocialImage(db, {
     siteId,
     explicitAssetId: typeof post.social_image_asset_id === 'string' ? post.social_image_asset_id : null,
@@ -1493,7 +1492,7 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
     ...attachComponents(contentReviewUrls(attachFeaturedImage(attachPublished(post, Boolean(post.published_at))), 'blog', siteId, publicPath, context), components),
     tags: parseStringArray(post.tags_json),
     content_document: contentDocument,
-    editor_template: siteId ? resolvePublicTemplate({ theme: editorTheme?.theme, themeId: editorTheme?.theme_id, vertical: editorTheme?.vertical }).slug : 'platform',
+    editor_template: editorTemplate?.slug ?? 'platform',
     editor_theme_tokens: editorThemeTokens,
     editor_site_name: siteId ? editorTheme?.brand_name || 'Our Site' : 'KrabiClaw',
     editor_brand_color: editorTheme?.brand_color ?? null,

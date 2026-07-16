@@ -14,4 +14,7 @@ test('scheduled publishing reports missing or dangling pinned revisions', async 
   const source = await readFile(new URL('../../server/utils/blog-publishing.ts', import.meta.url), 'utf8')
   assert.match(source, /p\.scheduled_revision_id IS NULL OR r\.id IS NULL/)
   assert.match(source, /scheduled_revision_issues/)
+  assert.match(source, /p\.scheduled_revision_id = \?/)
+  assert.match(source, /scheduled_revision_id = \?`/)
+  assert.match(source, /results\[1\]\?\.meta\?\.changes/)
 })

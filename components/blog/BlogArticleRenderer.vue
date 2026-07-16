@@ -12,19 +12,14 @@
 
     <div class="space-y-8">
       <section v-for="(block, index) in blocks" :key="block.id || index" class="group relative">
-        <!-- eslint-disable vue/no-v-html -->
-        <div
+        <textarea
           v-if="editable && block.type === 'markdown'"
-          class="prose prose-lg min-h-12 max-w-none outline-none dark:prose-invert"
-          contenteditable="true"
-          role="textbox"
-          aria-multiline="true"
+          :value="textValue(block)"
+          class="field-sizing-content min-h-32 w-full resize-none overflow-hidden border-0 bg-transparent p-0 font-mono text-base leading-7 text-inherit outline-none"
           aria-label="Article text"
-          data-placeholder="Start writing…"
-          v-html="renderMarkdown(String(block.data.markdown || ''))"
-          @input="updateRichText(index, block, $event)"
+          placeholder="Start writing in Markdown…"
+          @input="updateText(index, block, $event)"
         />
-        <!-- eslint-enable vue/no-v-html -->
         <textarea
           v-else-if="editable && block.type === 'heading'"
           :value="textValue(block)"
@@ -103,28 +98,6 @@ function updateText(index: number, block: BlogEditorBlock, event: Event) {
   const key = block.type === 'heading' ? 'text' : 'markdown'
   emit('update:block', index, { ...block, data: { ...block.data, [key]: (event.target as HTMLTextAreaElement).value } })
 }
-function updateRichText(index: number, block: BlogEditorBlock, event: Event) {
-  const root = event.currentTarget as HTMLElement
-  emit('update:block', index, { ...block, data: { ...block.data, markdown: htmlToMarkdown(root).trim() } })
-}
-function htmlToMarkdown(root: HTMLElement) {
-  function walk(node: Node): string {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent || ''
-    if (!(node instanceof HTMLElement)) return ''
-    const content = Array.from(node.childNodes).map(walk).join('')
-    const tag = node.tagName.toLowerCase()
-    if (tag === 'br') return '\n'
-    if (tag === 'strong' || tag === 'b') return `**${content}**`
-    if (tag === 'em' || tag === 'i') return `*${content}*`
-    if (tag === 'a') return `[${content}](${node.getAttribute('href') || ''})`
-    if (tag === 'li') return `${content.trim()}\n`
-    if (tag === 'ul') return Array.from(node.children).map(child => `- ${walk(child).trim()}\n`).join('') + '\n'
-    if (tag === 'ol') return Array.from(node.children).map((child, index) => `${index + 1}. ${walk(child).trim()}\n`).join('') + '\n'
-    if (tag === 'p' || tag === 'div') return `${content.trim()}\n\n`
-    return content
-  }
-  return Array.from(root.childNodes).map(walk).join('').replace(/\n{3,}/g, '\n\n')
-}
 function faqItems(block: BlogEditorBlock) { return Array.isArray(block.data.items) ? block.data.items as Array<{ question?: string; answer?: string }> : [] }
 function howToSteps(block: BlogEditorBlock) { return Array.isArray(block.data.steps) ? block.data.steps as Array<{ name?: string; text?: string }> : [] }
 function isRenderable(block: BlogEditorBlock) { return block.data.status !== 'inactive' && block.data.render_enabled !== false }
@@ -146,5 +119,4 @@ function aiAssistanceProps(block: BlogEditorBlock) {
 <style scoped>
 .blog-article-renderer[data-template="blawby"] { color: var(--blawby-ink, #263238); font-family: var(--blawby-font-body, inherit); }
 .blog-article-renderer[data-template="saya"] { color: var(--ui-text, inherit); }
-[contenteditable="true"]:empty::before { content: attr(data-placeholder); opacity: .55; }
 </style>

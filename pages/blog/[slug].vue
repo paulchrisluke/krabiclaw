@@ -217,10 +217,12 @@ const renderableComponents = computed(() =>
     .map(block => block.component),
 )
 
-const postMedia = computed(() => resolveMedia({
-  public_url: post.value?.social_image?.public_url || post.value?.featured_image?.public_url,
-  kind: post.value?.featured_image?.kind,
-}))
+const selectedPostImage = computed(() => {
+  const social = post.value?.social_image
+  if (social?.public_url) return { public_url: social.public_url, kind: 'image', width: social.width, height: social.height }
+  return post.value?.featured_image ?? null
+})
+const postMedia = computed(() => resolveMedia(selectedPostImage.value))
 
 const postPath = computed(() => `/blog/${post.value?.slug ?? ''}`)
 const requestURL = useRequestURL()
@@ -263,8 +265,8 @@ useContentPageSchema(computed(() => {
     title: post.value.title,
     description: resolvedSeo.value.description,
     imageUrl: postMedia.value.url || undefined,
-    imageWidth: post.value.featured_image?.width ?? undefined,
-    imageHeight: post.value.featured_image?.height ?? undefined,
+    imageWidth: selectedPostImage.value?.width ?? undefined,
+    imageHeight: selectedPostImage.value?.height ?? undefined,
     datePublished: post.value.published_at,
     dateModified: post.value.updated_at,
     authorName: authorName.value,

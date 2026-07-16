@@ -73,7 +73,7 @@
     </main>
 
     <div v-if="settingsOpen" class="fixed inset-0 z-40 bg-black/55" @click="closeSettings" />
-    <aside v-if="settingsOpen" ref="settingsPanel" class="fixed inset-0 z-50 overflow-y-auto bg-[#171b25] p-5 text-white sm:inset-y-0 sm:left-auto sm:w-[360px]" role="dialog" aria-modal="true" aria-label="Post settings">
+    <aside v-if="settingsOpen" ref="settingsPanel" class="fixed inset-0 z-50 overflow-y-auto bg-[#171b25] p-5 text-white sm:inset-y-0 sm:left-auto sm:w-[360px]" role="dialog" aria-modal="true" aria-label="Post settings" @keydown="onSettingsKeydown">
       <div class="mb-6 flex items-center justify-between"><h2 class="text-lg font-semibold">Post settings</h2><UButton icon="i-lucide-x" color="neutral" variant="ghost" aria-label="Close settings" @click="closeSettings" /></div>
       <div class="space-y-7 pb-[env(safe-area-inset-bottom)]">
         <SettingsSection title="Post">
@@ -131,10 +131,13 @@ const publishing = ref(false)
 const settingsOpen = ref(false)
 const inserterOpen = ref(false)
 const settingsButton = ref()
+const settingsPanel = ref<HTMLElement | null>(null)
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 let clockTimer: ReturnType<typeof setInterval> | undefined
 let dirty = false
 let applyingServerSnapshot = false
+let createDraftPromise: Promise<BlogPost | null> | null = null
+let publishAfterCreateRequested = false
 let serverPostUpdatedAt: string | undefined
 let serverDocumentUpdatedAt: string | undefined
 const slugResetRequested = ref(false)
@@ -225,7 +228,7 @@ const saveQueue = new SerializedSnapshotQueue<SaveSnapshot, BlogPost>(
   },
 )
 
-watch([() => ({ ...form }), blocks, tagsText, publishTiming, slugResetRequested], () => { if (!applyingServerSnapshot) queueSave() }, { deep: true })
+watch([() => ({ ...form }), blocks, tagsText, publishTiming, slugResetRequested], () => { if (!applyingServerSnapshot) queueSave() }, { deep: true, flush: 'sync' })
 onMounted(async () => { clockTimer = setInterval(() => { clock.value = Date.now() }, 1000); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('popstate', onPopState); await load() })
 onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer); if (saveTimer) clearTimeout(saveTimer); if (import.meta.client) { window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('popstate', onPopState) } })
 
@@ -239,11 +242,15 @@ async function load() {
     slugResetRequested.value = false
     tagsText.value = loaded.tags?.join(', ') || ''
     publishTiming.value = loaded.scheduled_for ? 'Scheduled' : 'Now'
-    blocks.value = loaded.content_document?.blocks?.length ? structuredClone(loaded.content_document.blocks) : [{ type: 'markdown', data: { markdown: loaded.body || '' } }]
-    for (const type of ['faq', 'how_to'] as const) {
-      if (blocks.value.some(block => block.type === type)) continue
-      const legacy = loaded.components?.find(component => component.type === type)
-      if (legacy?.data) blocks.value.push({ type, data: structuredClone(legacy.data) as Record<string, unknown> })
+    if (loaded.content_document) {
+      blocks.value = structuredClone(loaded.content_document.blocks || [])
+    } else {
+      blocks.value = [{ type: 'markdown', data: { markdown: loaded.body || '' } }]
+      for (const type of ['faq', 'how_to'] as const) {
+        if (blocks.value.some(block => block.type === type)) continue
+        const legacy = loaded.components?.find(component => component.type === type)
+        if (legacy?.data) blocks.value.push({ type, data: structuredClone(legacy.data) as Record<string, unknown> })
+      }
     }
     lastSavedAt.value = Date.now()
   } catch (error) { loadError.value = getErrorMessage(error, 'Failed to load post.') } finally { loadPending.value = false }
@@ -253,16 +260,20 @@ function queueSave() {
   dirty = true
   if (saveTimer) clearTimeout(saveTimer)
   if (!post.value && !props.isEdit) {
-    if (form.title.trim() && serializeBody().trim() && (props.freeTextCategory || form.category.trim())) saveTimer = setTimeout(() => void createDraft(false), 900)
+    if (isDraftValid()) saveTimer = setTimeout(() => { void createDraft(false).catch(() => {}) }, 900)
     return
   }
   if (post.value) {
     saveQueue.mark(buildSaveSnapshot())
-    saveTimer = setTimeout(() => void flushSave(), 900)
+    saveTimer = setTimeout(() => { void flushSave().catch(() => {}) }, 900)
   }
 }
 async function flushSave() {
-  if (!dirty || !post.value) return post.value
+  if (!dirty) return post.value
+  if (!post.value) {
+    if (!isDraftValid()) throw new Error('Complete the title, article body, and category before leaving this draft.')
+    return await createDraft(false)
+  }
   if (saveTimer) clearTimeout(saveTimer)
   saveState.value = 'saving'
   try {
@@ -274,18 +285,57 @@ async function flushSave() {
     throw error
   }
 }
-function buildSaveSnapshot(): SaveSnapshot {
+function buildSaveSnapshot(id = postId.value): SaveSnapshot {
   const scheduledFor = publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null
-  return { postId: postId.value, payload: { title: form.title, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: scheduledFor, content_blocks: structuredClone(blocks.value) } }
+  return { postId: id, payload: { title: form.title, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: scheduledFor, content_blocks: structuredClone(blocks.value) } }
 }
 async function publish() { publishing.value = true; try { if (!post.value) { await createDraft(true); return } if (dirty) saveQueue.mark(buildSaveSnapshot()); await saveQueue.runExclusive(async () => { const updated = await props.repository.update(postId.value, { publish: true, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null, expected_updated_at: serverPostUpdatedAt }); syncServerVersions(updated); post.value = { ...updated, content_document: post.value?.content_document }; return updated }); saveState.value = 'saved' } catch (error: unknown) { const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status); saveState.value = status === 409 ? 'conflict' : 'failed' } finally { publishing.value = false } }
 async function createDraft(publishNow: boolean) {
-  if (!form.title.trim() || !serializeBody().trim()) return
-  saveState.value = 'saving'
-  const created = await props.repository.create({ title: form.title, body: serializeBody(), content_blocks: structuredClone(blocks.value), category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null, publish: publishNow })
-  dirty = false
-  await navigateTo(props.repository.editUrl(created.id))
+  if (!isDraftValid()) return null
+  publishAfterCreateRequested ||= publishNow
+  if (createDraftPromise) return await createDraftPromise
+  createDraftPromise = (async () => {
+    if (saveTimer) clearTimeout(saveTimer)
+    saveState.value = 'saving'
+    dirty = false
+    let created = await props.repository.create({ title: form.title, body: serializeBody(), content_blocks: structuredClone(blocks.value), category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null, publish: publishNow })
+    applyingServerSnapshot = true
+    post.value = created
+    syncServerVersions(created)
+    form.slug = created.slug || form.slug
+    await nextTick()
+    applyingServerSnapshot = false
+    if (dirty) {
+      saveQueue.mark(buildSaveSnapshot(created.id))
+      await flushSave()
+      created = post.value || created
+    }
+    if (publishAfterCreateRequested && !created.published_at && created.status !== 'published') {
+      created = await saveQueue.runExclusive(async () => await props.repository.update(created.id, {
+        publish: true,
+        scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null,
+        expected_updated_at: serverPostUpdatedAt,
+      }))
+      syncServerVersions(created)
+      post.value = created
+    }
+    dirty = false
+    saveState.value = 'saved'
+    lastSavedAt.value = Date.now()
+    await navigateTo(props.repository.editUrl(created.id))
+    return created
+  })().catch((error: unknown) => {
+    dirty = true
+    const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status)
+    saveState.value = status === 409 ? 'conflict' : 'failed'
+    throw error
+  }).finally(() => {
+    createDraftPromise = null
+    publishAfterCreateRequested = false
+  })
+  return await createDraftPromise
 }
+function isDraftValid() { return Boolean(form.title.trim() && serializeBody().trim() && (props.freeTextCategory || form.category.trim())) }
 function serializeBody() { return blocks.value.map(block => block.type === 'heading' ? `${'#'.repeat(Math.max(2, Math.min(6, block.level || 2)))} ${String(block.data.text || '')}` : block.type === 'markdown' ? String(block.data.markdown || '') : block.type === 'divider' ? '---' : `{{component type="${block.type}"}}`).filter(Boolean).join('\n\n') }
 function updateBlock(index: number, block: BlogEditorBlock) { blocks.value[index] = block }
 function setBlockData(index: number, key: string, value: unknown) { blocks.value[index] = { ...blocks.value[index]!, data: { ...blocks.value[index]!.data, [key]: value } } }
@@ -299,8 +349,22 @@ function serializeHowTo(block: BlogEditorBlock) { return (Array.isArray(block.da
 function parseHowTo(index: number, value: string) { setBlockData(index, 'steps', value.split('\n').map(line => ({ text: line.replace(/^\s*\d+[.)]\s*/, '').trim() })).filter(step => step.text)) }
 async function share() { const url = new URL(post.value?.edit_url || props.repository.editUrl(postId.value), windowOrigin()).toString(); await navigator.clipboard?.writeText(url) }
 async function goBack() { if (settingsOpen.value) { closeSettings(); return } try { await flushSave(); await navigateTo(props.backUrl) } catch { if (saveState.value !== 'conflict') saveState.value = 'failed' } }
-function openSettings() { settingsOpen.value = true; if (import.meta.client) history.pushState({ blogSettings: true }, '') }
+function settingsFocusableElements() {
+  if (!settingsPanel.value) return []
+  return Array.from(settingsPanel.value.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+}
+function openSettings() { settingsOpen.value = true; if (import.meta.client) history.pushState({ blogSettings: true }, ''); nextTick(() => settingsFocusableElements()[0]?.focus()) }
 function closeSettings() { settingsOpen.value = false; nextTick(() => settingsButton.value?.$el?.focus?.()) }
+function onSettingsKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') { event.preventDefault(); closeSettings(); return }
+  if (event.key !== 'Tab') return
+  const focusable = settingsFocusableElements()
+  if (!focusable.length) { event.preventDefault(); settingsPanel.value?.focus(); return }
+  const first = focusable[0]!
+  const last = focusable[focusable.length - 1]!
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+}
 function onPopState() { if (settingsOpen.value) closeSettings() }
 function beforeUnload(event: BeforeUnloadEvent) { if (dirty) event.preventDefault() }
 async function remove() { if (!confirm('Delete this post permanently?')) return; await props.repository.delete(postId.value); await navigateTo(props.backUrl) }
@@ -311,7 +375,7 @@ function syncServerVersions(value: BlogPost) { serverPostUpdatedAt = value.updat
 
 onBeforeRouteLeave(async () => {
   if (settingsOpen.value || inserterOpen.value) { settingsOpen.value = false; inserterOpen.value = false; return false }
-  await flushSave()
-  return true
+  if (dirty && !post.value && !isDraftValid()) return confirm('This draft is incomplete and cannot be saved yet. Leave without saving it?')
+  try { await flushSave(); return true } catch { return false }
 })
 </script>

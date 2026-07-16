@@ -92,7 +92,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
       const publish = toolName === "publish_blog_post";
       const result = await updatePlatformBlogPost(site.db, requiredString(args, "post_id"), publish ? { publish: true } : { unpublish: true }, site.siteId);
       const post = attachViewUrlToRecord(result.post, site, {}, site.env);
-      return renderStructuredResponse({ ok: true, entity: "blog_post", id: result.post.id, slug: result.post.slug, edit_url: editUrl(post.admin_edit_url, site.env), public_url: post.public_url, updated_at: result.post.updated_at, context: await mutationContextPayload(site) }, `${publish ? "Published" : "Unpublished"} blog post "${result.post.title ?? result.post.id}".`, { post });
+      return renderStructuredResponse({ ok: true, entity: "blog_post", id: result.post.id, slug: result.post.slug, edit_url: editUrl(post.admin_edit_url, site.env), public_url: post.public_url, updated_at: result.post.updated_at, expected_document_updated_at: (result.post.content_document as { document?: { updated_at?: unknown } } | null | undefined)?.document?.updated_at ?? null, context: await mutationContextPayload(site) }, `${publish ? "Published" : "Unpublished"} blog post "${result.post.title ?? result.post.id}".`, { post });
     }
     case "set_blog_post_image": {
       const assetId = requiredString(args, "asset_id");

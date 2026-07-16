@@ -30,3 +30,27 @@ test('editor supplies the complete public article model and scopes both theme to
   assert.match(source, /--saya-primary/)
   assert.match(source, /--blawby-primary/)
 })
+
+test('markdown editing preserves the canonical source without an HTML round trip', async () => {
+  const source = await readFile(new URL('../../components/blog/BlogArticleRenderer.vue', import.meta.url), 'utf8')
+  assert.match(source, /<textarea[\s\S]*v-if="editable && block\.type === 'markdown'"[\s\S]*:value="textValue\(block\)"[\s\S]*@input="updateText\(index, block, \$event\)"/)
+  assert.doesNotMatch(source, /htmlToMarkdown|contenteditable=/)
+})
+
+test('editor autosave preserves canonical empty documents and serializes draft creation', async () => {
+  const source = await readFile(new URL('../../components/workspace/blog/BlogPostEditor.vue', import.meta.url), 'utf8')
+  assert.match(source, /if \(loaded\.content_document\)[\s\S]*structuredClone\(loaded\.content_document\.blocks \|\| \[\]\)[\s\S]*else/)
+  assert.match(source, /let createDraftPromise: Promise<BlogPost \| null> \| null = null/)
+  assert.match(source, /if \(createDraftPromise\) return await createDraftPromise/)
+  assert.match(source, /social_image_asset_id: form\.social_image_asset_id \|\| null/)
+  assert.match(source, /void flushSave\(\)\.catch\(\(\) => \{\}\)/)
+  assert.match(source, /flush: 'sync'/)
+})
+
+test('settings panel behaves as an accessible modal', async () => {
+  const source = await readFile(new URL('../../components/workspace/blog/BlogPostEditor.vue', import.meta.url), 'utf8')
+  assert.match(source, /@keydown="onSettingsKeydown"/)
+  assert.match(source, /event\.key === 'Escape'/)
+  assert.match(source, /event\.key !== 'Tab'/)
+  assert.match(source, /settingsFocusableElements\(\)\[0\]\?\.focus\(\)/)
+})

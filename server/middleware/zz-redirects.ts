@@ -13,6 +13,10 @@ const redirects: Record<string, string> = {
   '/terms-and-conditions': '/terms',
 }
 
+function safeDecodePathSegment(value: string) {
+  try { return decodeURIComponent(value) } catch { return null }
+}
+
 export default defineEventHandler(async (event) => {
   const url = getRequestURL(event)
   const normalizedPathname = url.pathname === '/' ? '/' : url.pathname.replace(/\/$/, '')
@@ -85,20 +89,34 @@ export default defineEventHandler(async (event) => {
     const db = env.db
     const tenantMatch = normalizedPathname.match(/^\/(?:blog|article)\/([^/]+)$/)
     if (db && tenantMatch && event.context.tenantType === TENANT_TYPES.TENANT && event.context.siteId) {
-      const redirected = await queryFirst<{ slug: string } | null>(db, `
-        SELECT p.slug FROM blog_post_redirects r JOIN blog_posts p ON p.id = r.post_id
-         WHERE r.site_id = ? AND r.old_slug = ? AND p.status = 'published' LIMIT 1
-      `, [event.context.siteId, decodeURIComponent(tenantMatch[1]!)])
-      if (redirected) return sendRedirect(event, `${tenantBlogPostPath(event.context.site ?? null, redirected.slug)}${url.search}${url.hash}`, 301)
+      const oldSlug = safeDecodePathSegment(tenantMatch[1]!)
+      if (oldSlug !== null) {
+        try {
+          const redirected = await queryFirst<{ slug: string } | null>(db, `
+            SELECT p.slug FROM blog_post_redirects r JOIN blog_posts p ON p.id = r.post_id
+             WHERE r.site_id = ? AND p.site_id = ? AND r.old_slug = ? AND p.status = 'published' LIMIT 1
+          `, [event.context.siteId, event.context.siteId, oldSlug])
+          if (redirected) return sendRedirect(event, `${tenantBlogPostPath(event.context.site ?? null, redirected.slug)}${url.search}${url.hash}`, 301)
+        } catch (error) {
+          console.error('Tenant blog redirect lookup failed', error)
+        }
+      }
     }
     const platformMatch = normalizedPathname.match(/^\/blog\/[^/]+\/([^/]+)$/)
     if (db && platformMatch && event.context.tenantType === TENANT_TYPES.PLATFORM) {
-      const redirected = await queryFirst<{ slug: string; category: string | null } | null>(db, `
-        SELECT p.slug, p.category FROM blog_post_redirects r JOIN blog_posts p ON p.id = r.post_id
-         WHERE r.site_id IS NULL AND r.old_slug = ? AND p.status = 'published' LIMIT 1
-      `, [decodeURIComponent(platformMatch[1]!)])
-      const category = blogCategoryToSlug(redirected?.category)
-      if (redirected && category) return sendRedirect(event, `/blog/${category}/${encodeURIComponent(redirected.slug)}${url.search}${url.hash}`, 301)
+      const oldSlug = safeDecodePathSegment(platformMatch[1]!)
+      if (oldSlug !== null) {
+        try {
+          const redirected = await queryFirst<{ slug: string; category: string | null } | null>(db, `
+            SELECT p.slug, p.category FROM blog_post_redirects r JOIN blog_posts p ON p.id = r.post_id
+             WHERE r.site_id IS NULL AND p.site_id IS NULL AND r.old_slug = ? AND p.status = 'published' LIMIT 1
+          `, [oldSlug])
+          const category = blogCategoryToSlug(redirected?.category)
+          if (redirected && category) return sendRedirect(event, `/blog/${category}/${encodeURIComponent(redirected.slug)}${url.search}${url.hash}`, 301)
+        } catch (error) {
+          console.error('Platform blog redirect lookup failed', error)
+        }
+      }
     }
   }
 

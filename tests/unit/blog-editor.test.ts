@@ -33,6 +33,10 @@ test('generated fields use meaningful prose and stable defaults', () => {
 
 test('social image and schema data derive from canonical blocks', () => {
   assert.equal(firstImageAssetId(blocks), 'image-1')
+  assert.equal(firstImageAssetId([
+    { type: 'image', data: { asset_id: 'inactive-image', status: 'inactive' } },
+    ...blocks,
+  ]), 'image-1')
   const components = structuredComponentsFromBlocks(blocks)
   assert.deepEqual(components.map(component => component.type), ['faq', 'how_to'])
   assert.equal(components.every(component => component.schema_enabled), true)
