@@ -176,7 +176,7 @@ const VERTICAL_SITE_CONTENT: Partial<
     ["about", "cta.title", "Book a class"],
   ],
   professional_service: (name) => [
-    ["home", "cta.title", "Talk with our team."],
+    ["home", "cta.title", "Talk with our team"],
     ["about", "hero.title", "About Us"],
     [
       "about",

@@ -30,7 +30,7 @@ function collectStrings(payload: ReturnType<typeof buildOnboardingDraftPayload>)
     if (row.hero_subtitle) strings.push(row.hero_subtitle)
   }
   for (const post of payload.preview.posts) strings.push(post.body, post.title)
-  for (const [question, answer] of payload.preview.qa.map(q => [q.question, q.answer] as const)) {
+  for (const { question, answer } of payload.preview.qa) {
     strings.push(question, answer)
   }
   return strings

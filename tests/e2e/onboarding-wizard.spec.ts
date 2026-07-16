@@ -272,7 +272,7 @@ test.describe('onboarding wizard UI', () => {
 
     await page.setViewportSize({ width: 1280, height: 800 })
     await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
-    await completeManualWizard(page, `Onboard Test Firm ${suffix}`, { vertical: 'professional_service' })
+    await completeManualWizard(page, `e2e- Onboard Test Firm ${suffix}`, { vertical: 'professional_service' })
 
     const contextRes = await page.request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)

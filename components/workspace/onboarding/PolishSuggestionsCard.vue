@@ -55,12 +55,12 @@
 </template>
 
 <script setup lang="ts">
-type Vertical = 'restaurant' | 'experience' | 'professional_service'
+import type { SiteVertical } from '~/utils/vertical-copy'
 
 const props = withDefaults(defineProps<{
   title?: string
   description?: string
-  vertical: Vertical
+  vertical: SiteVertical
   primaryLabel?: string
   primaryTo?: string | null
   secondaryLabel?: string

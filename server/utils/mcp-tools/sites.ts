@@ -1,5 +1,6 @@
 import type { McpToolDefinition } from './shared'
 import { ROBOTS_DIRECTIVE_ENUM, SUPPORTED_CURRENCIES, currentUserObject, globalTool, siteListItem, siteTool, withToolAnnotations } from './shared'
+import { ALL_VERTICALS } from '~/utils/vertical-copy'
 
 export const SITES_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
@@ -32,7 +33,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
         properties: {
           name: { type: 'string' },
           subdomain: { type: 'string' },
-          vertical: { type: 'string', enum: ['restaurant', 'experience', 'professional_service'] },
+          vertical: { type: 'string', enum: [...ALL_VERTICALS] },
         },
         required: ['name', 'subdomain', 'vertical'],
         additionalProperties: true,

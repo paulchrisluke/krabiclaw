@@ -127,7 +127,7 @@ Template for professional-service tenants, proven first against NCLS (#194). Off
 
 #### URL Structure
 
-```
+```text
 /                              → Home
 /about                         → Brand story, compliance/organization info
 /services                      → Offerings index (practice areas)

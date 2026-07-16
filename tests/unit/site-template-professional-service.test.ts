@@ -68,7 +68,8 @@ test('seedNewSite professional_service copy has no restaurant/experience leakage
 
   const haystack = flattenBatch(capturedBatches[0]!)
   for (const banned of BANNED_WORDS) {
-    assert.ok(!haystack.includes(banned), `expected professional_service seed copy to omit "${banned}"`)
+    const wordBoundary = new RegExp(`\\b${banned}\\b`, 'i')
+    assert.ok(!wordBoundary.test(haystack), `expected professional_service seed copy to omit "${banned}"`)
   }
   assert.ok(haystack.includes('talk with our team'))
 })

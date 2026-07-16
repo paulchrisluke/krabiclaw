@@ -235,6 +235,7 @@ import {
   getQuickActionPrompts,
   type OnboardingChecklistResponse,
 } from '~/composables/useOnboardingPrompts'
+import type { SiteVertical } from '~/utils/vertical-copy'
 
 interface WizardMessage {
   id: string
@@ -273,7 +274,6 @@ interface DraftSavedPayload {
 }
 
 type WizardStep = 'welcome' | 'vertical' | 'source' | 'awaiting_url' | 'awaiting_manual_name' | 'confirm' | 'details' | 'importing' | 'imported'
-type Vertical = 'restaurant' | 'experience' | 'professional_service'
 type DetailsSource = 'imported' | 'manual'
 
 // Discriminated intent, replacing the previous generic endpoint-injection
@@ -362,7 +362,7 @@ const pendingPreview = ref<{
   openingHours?: string[] | null
 } | null>(null)
 const detailsSource = ref<DetailsSource>('imported')
-const selectedVertical = ref<Vertical>('restaurant')
+const selectedVertical = ref<SiteVertical>('restaurant')
 const detailsForm = reactive({
   name: '',
   city: '',
