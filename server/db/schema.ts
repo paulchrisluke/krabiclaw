@@ -483,6 +483,19 @@ export const invitation = sqliteTable("invitation", {
 	uniqueIndex("idx_invitation_org_pending_owner").on(table.organizationId).where(sql`role = 'owner' AND status = 'pending'`),
 ]);
 
+export const invitation_access_scope = sqliteTable("invitation_access_scope", {
+	id: text().primaryKey(),
+	invitation_id: text().notNull().references(() => invitation.id, { onDelete: "cascade" }),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
+	location_id: text().references(() => business_locations.id, { onDelete: "cascade" }),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	uniqueIndex("idx_invitation_access_scope_unique").on(table.invitation_id, table.site_id, table.location_id),
+	uniqueIndex("idx_invitation_access_scope_site_unique").on(table.invitation_id, table.site_id).where(sql`location_id IS NULL`),
+	index("idx_invitation_access_scope_invitation_id").on(table.invitation_id),
+]);
+
 export const jwks = sqliteTable("jwks", {
 	id: text().primaryKey(),
 	publicKey: text().notNull(),
@@ -603,6 +616,20 @@ export const member = sqliteTable("member", {
 	// m.organizationId join condition in those same queries.
 	index("member_userId_organizationId_idx").on(table.userId, table.organizationId),
 	index("member_organizationId_idx").on(table.organizationId),
+]);
+
+export const member_access_scope = sqliteTable("member_access_scope", {
+	id: text().primaryKey(),
+	member_id: text().notNull().references(() => member.id, { onDelete: "cascade" }),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
+	location_id: text().references(() => business_locations.id, { onDelete: "cascade" }),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	uniqueIndex("idx_member_access_scope_unique").on(table.member_id, table.site_id, table.location_id),
+	uniqueIndex("idx_member_access_scope_site_unique").on(table.member_id, table.site_id).where(sql`location_id IS NULL`),
+	index("idx_member_access_scope_member_id").on(table.member_id),
+	index("idx_member_access_scope_resource").on(table.organization_id, table.site_id, table.location_id),
 ]);
 
 export const menu_item_translations = sqliteTable("menu_item_translations", {

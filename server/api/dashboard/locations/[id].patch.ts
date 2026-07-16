@@ -6,6 +6,8 @@ import { updateLocation } from '~/server/utils/location-management'
 import { parseLocationPayload } from './location-helpers'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { queryFirst } from '~/server/db'
+import { assertMemberScope } from '~/server/utils/member-access'
+import { ensureWhatsAppRecipientAccess } from '~/server/utils/whatsapp-access'
 
 export default defineEventHandler(async (event) => {
   const locationId = getRouterParam(event, 'id')
@@ -37,10 +39,26 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Location not found' }, { status: 404 })
   }
   const siteId = locationSite.site_id
+  await assertMemberScope(db, {
+    memberId: organization.memberId,
+    role: organization.role,
+    organizationId,
+    siteId,
+    locationId,
+  })
 
   const body = await readBody<Record<string, unknown>>(event)
   if (typeof body !== 'object' || body === null) {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
+  }
+  if (typeof body.notification_phone === 'string' && body.notification_phone.trim()) {
+    await ensureWhatsAppRecipientAccess(db, {
+      organizationId,
+      siteId,
+      locationId,
+      phone: body.notification_phone,
+      inviterUserId: session.user.id,
+    })
   }
 
   const rating = body.rating === undefined || body.rating === null || String(body.rating).trim() === ''

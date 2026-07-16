@@ -647,6 +647,8 @@ export async function setOrgWhatsAppPhone(
     return
   }
   const normalized = normalizePhone(phone)
+  const { ensureWhatsAppRecipientAccess } = await import('~/server/utils/whatsapp-access')
+  await ensureWhatsAppRecipientAccess(db, { organizationId, siteId, locationId: null, phone: normalized })
   const now = new Date().toISOString()
   await execute(db, `
     INSERT INTO site_config (organization_id, site_id, key, value, updated_at)
