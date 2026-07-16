@@ -56,7 +56,23 @@ CREATE TABLE `__new_notifications` (
 INSERT INTO `__new_notifications`("id", "organization_id", "site_id", "location_id", "scope", "event_type", "severity", "actor_user_id", "target_user_id", "deep_link", "message", "channel", "template", "recipient", "title", "payload", "status", "provider_message_id", "error", "read_at", "sent_at", "created_at")
 SELECT "id", "organization_id", "site_id", "location_id",
 	CASE WHEN "site_id" IS NOT NULL THEN 'site' ELSE 'organization' END,
-	CASE WHEN "channel" = 'dashboard' THEN "template" ELSE NULL END,
+	CASE
+		WHEN "channel" <> 'dashboard' THEN NULL
+		WHEN json_extract(CASE WHEN json_valid("payload") THEN "payload" ELSE '{}' END, '$.booking_id') IS NOT NULL
+			THEN CASE
+				WHEN "template" IN ('reservation_cancelled', 'experience_booking_cancelled') THEN 'booking.cancelled'
+				ELSE 'booking.created'
+			END
+		WHEN "template" = 'new_reservation' THEN 'reservation.created'
+		WHEN "template" = 'reservation_cancelled' THEN 'reservation.cancelled'
+		WHEN "template" = 'experience_booking_cancelled' THEN 'booking.cancelled'
+		WHEN "template" = 'new_contact_msg' THEN 'contact_message.created'
+		WHEN "template" IN ('guest_thread_reply', 'submission_reply_email', 'submission_reply_whatsapp') THEN 'guest_reply.created'
+		WHEN "template" = 'new_review' THEN 'review.created'
+		WHEN "template" = 'domain_update' THEN 'domain.updated'
+		WHEN "template" = 'site_transfer_reminder' THEN 'site_transfer.reminder'
+		ELSE "template"
+	END,
 	'info', NULL, NULL, NULL, NULL, "channel", "template", "recipient", "title", "payload", "status", "provider_message_id", "error", "read_at", "sent_at", "created_at"
 FROM `notifications`;--> statement-breakpoint
 DROP TABLE `notifications`;--> statement-breakpoint

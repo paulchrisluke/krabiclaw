@@ -9,6 +9,8 @@ export const NOTIFICATION_EVENT_TYPES = {
   CONTACT_MESSAGE_CREATED: 'contact_message.created',
   GUEST_REPLY_CREATED: 'guest_reply.created',
   REVIEW_CREATED: 'review.created',
+  DOMAIN_UPDATED: 'domain.updated',
+  SITE_TRANSFER_REMINDER: 'site_transfer.reminder',
 } as const
 
 export type NotificationScope = 'platform' | 'organization' | 'site'
@@ -33,6 +35,12 @@ export interface CreateNotificationInput {
   deepLink?: string | null
   payload?: Record<string, unknown>
   template?: string
+}
+
+export interface CanonicalNotificationInsert {
+  id: string
+  query: string
+  params: unknown[]
 }
 
 const SENSITIVE_KEY = /(?:authorization|cookie|secret|token|password|webhook|access[_-]?key|api[_-]?key|email|phone|address|message|name)/i
@@ -63,7 +71,11 @@ function validDiscordWebhookUrl(rawUrl: string): URL | null {
   }
 }
 
-export async function createCanonicalNotification(db: DbClient, input: CreateNotificationInput): Promise<string> {
+export function buildCanonicalNotificationInsert(
+  input: CreateNotificationInput,
+  id = crypto.randomUUID(),
+  now = new Date().toISOString(),
+): CanonicalNotificationInsert {
   if (input.scope === 'platform' && (input.organizationId || input.siteId)) {
     throw new Error('Platform notifications cannot be organization or site scoped')
   }
@@ -74,32 +86,40 @@ export async function createCanonicalNotification(db: DbClient, input: CreateNot
     throw new Error('Site notifications require a site')
   }
 
-  const id = crypto.randomUUID()
-  const now = new Date().toISOString()
-  await execute(db, `
-    INSERT INTO notifications
-    (id, organization_id, site_id, location_id, scope, event_type, severity,
-     actor_user_id, target_user_id, deep_link, message, channel, template, title,
-     payload, status, sent_at, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'dashboard', ?, ?, ?, 'sent', ?, ?)
-  `, [
+  return {
     id,
-    input.organizationId ?? null,
-    input.siteId ?? null,
-    input.locationId ?? null,
-    input.scope,
-    input.eventType,
-    input.severity ?? 'info',
-    input.actorUserId ?? null,
-    input.targetUserId ?? null,
-    input.deepLink ?? null,
-    input.message ?? null,
-    input.template ?? input.eventType,
-    input.title,
-    input.payload ? JSON.stringify(input.payload) : null,
-    now,
-    now,
-  ])
+    query: `
+      INSERT INTO notifications
+      (id, organization_id, site_id, location_id, scope, event_type, severity,
+       actor_user_id, target_user_id, deep_link, message, channel, template, title,
+       payload, status, sent_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'dashboard', ?, ?, ?, 'sent', ?, ?)
+    `,
+    params: [
+      id,
+      input.organizationId ?? null,
+      input.siteId ?? null,
+      input.locationId ?? null,
+      input.scope,
+      input.eventType,
+      input.severity ?? 'info',
+      input.actorUserId ?? null,
+      input.targetUserId ?? null,
+      input.deepLink ?? null,
+      input.message ?? null,
+      input.template ?? input.eventType,
+      input.title,
+      input.payload ? JSON.stringify(input.payload) : null,
+      now,
+      now,
+    ],
+  }
+}
+
+export async function createCanonicalNotification(db: DbClient, input: CreateNotificationInput): Promise<string> {
+  const statement = buildCanonicalNotificationInsert(input)
+  await execute(db, statement.query, statement.params)
+  const { id } = statement
   return id
 }
 
@@ -210,10 +230,11 @@ export async function notifyNewUserSignup(
   db: DbClient,
   env: NotificationCenterEnv,
   user: { id: string; email: string },
+  schedule?: (_task: Promise<unknown>) => void,
 ): Promise<void> {
   if (user.email.endsWith('@phone.krabiclaw.local')) return
 
-  await dispatchNotification(db, env, {
+  const input: CreateNotificationInput = {
     scope: 'platform',
     eventType: NOTIFICATION_EVENT_TYPES.PLATFORM_USER_SIGNUP,
     severity: 'info',
@@ -222,7 +243,29 @@ export async function notifyNewUserSignup(
     message: 'A new KrabiClaw account was created.',
     deepLink: '/admin?tab=users',
     payload: { source: 'better_auth' },
-  }, ['discord'])
+  }
+  const id = await createCanonicalNotification(db, input)
+  const delivery = deliverNotificationToDiscord(db, env, {
+    id,
+    scope: input.scope,
+    eventType: input.eventType,
+    severity: input.severity ?? 'info',
+    title: input.title,
+    message: input.message,
+  }).catch((error) => {
+    console.error('signup_discord_delivery_failed', error)
+    return 'failed' as const
+  })
+
+  if (schedule) {
+    try {
+      schedule(delivery)
+      return
+    } catch (error) {
+      console.error('signup_discord_schedule_failed', error)
+    }
+  }
+  void delivery
 }
 
 export function tenantEventTypeForTemplate(template: string, payload: Record<string, string>): string {

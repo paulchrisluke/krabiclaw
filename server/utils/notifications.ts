@@ -19,7 +19,7 @@ import BookingOwnerCancelled from '~/server/emails/templates/BookingOwnerCancell
 import BookingGuestCancelled from '~/server/emails/templates/BookingGuestCancelled'
 import BookingThankYouReviewRequest from '~/server/emails/templates/BookingThankYouReviewRequest'
 import BookingReviewReminder from '~/server/emails/templates/BookingReviewReminder'
-import { createCanonicalNotification, NOTIFICATION_EVENT_TYPES, tenantEventTypeForTemplate } from '~/server/utils/notification-center'
+import { createCanonicalNotification, tenantEventTypeForTemplate } from '~/server/utils/notification-center'
 
 const SUBJECT_LABELS: Record<string, string> = {
   general: 'General',
@@ -1451,28 +1451,6 @@ async function notifyGuestThreadReplyInner(
     messagePreview: opts.messagePreview,
     replyUrl,
   })
-
-  try {
-    await createCanonicalNotification(db, {
-      scope: 'site',
-      eventType: NOTIFICATION_EVENT_TYPES.GUEST_REPLY_CREATED,
-      organizationId: opts.organizationId,
-      siteId: opts.siteId,
-      locationId: opts.locationId ?? null,
-      title,
-      message: `${opts.guestName} replied by ${opts.inboundChannel}.`,
-      deepLink: replyUrl,
-      payload,
-      template: 'guest_thread_reply',
-    })
-  } catch (error) {
-    console.error('dashboard_notification_failed', {
-      organizationId: opts.organizationId,
-      siteId: opts.siteId,
-      template: 'guest_thread_reply',
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
 
   const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
   const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.siteId) : null

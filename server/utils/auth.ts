@@ -66,10 +66,16 @@ export interface CloudflareEnv {
 // WeakMap keyed on the D1 binding instance — safe for the Worker lifecycle
 const authCache = new WeakMap<D1Database, unknown>()
 
-export function createAuth(env: CloudflareEnv) {
+interface CreateAuthOptions {
+  waitUntil?: (_task: Promise<unknown>) => void
+}
+
+export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) {
   const d1 = env.DB
 
-  const cached = authCache.get(d1)
+  // Request-scoped background scheduling must never be captured by a cached auth
+  // instance. Auth endpoints get a fresh instance; session reads keep the cache.
+  const cached = options.waitUntil ? null : authCache.get(d1)
   if (cached) return cached as ReturnType<typeof betterAuth>
 
   const db = env.db ?? createDb(d1)
@@ -98,7 +104,7 @@ export function createAuth(env: CloudflareEnv) {
             await notifyNewUserSignup(db, env, {
               id: user.id,
               email: user.email,
-            }).catch((err) => console.error('signup_notification_failed', err))
+            }, options.waitUntil).catch((err) => console.error('signup_notification_failed', err))
           }
         }
       },
@@ -336,7 +342,7 @@ export function createAuth(env: CloudflareEnv) {
     }
   })
 
-  authCache.set(d1, instance)
+  if (!options.waitUntil) authCache.set(d1, instance)
   return instance
 }
 

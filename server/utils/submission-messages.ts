@@ -9,6 +9,7 @@ import {
   type ReplySubmissionType,
 } from '~/server/utils/reply-address'
 import { getReplyDomain } from '~/server/utils/reply-domain'
+import { buildCanonicalNotificationInsert, NOTIFICATION_EVENT_TYPES } from '~/server/utils/notification-center'
 
 export type SubmissionType = ReplySubmissionType
 
@@ -279,10 +280,26 @@ export async function insertInboundSubmissionReply(db: DbClient, opts: {
 }): Promise<string> {
   const thread = await ensureGuestThread(db, opts.submissionType, opts.submissionId)
   const messageId = crypto.randomUUID()
-  const notificationId = crypto.randomUUID()
   const now = new Date().toISOString()
   const template = opts.channel === 'email' ? 'submission_reply_email' : 'submission_reply_whatsapp'
-  const title = opts.channel === 'email' ? 'New email reply from a guest' : 'New WhatsApp reply from a guest'
+  const title = `New ${opts.channel === 'email' ? 'email' : 'WhatsApp'} reply from ${thread.guest_name}`
+  const notification = buildCanonicalNotificationInsert({
+    scope: 'site',
+    eventType: NOTIFICATION_EVENT_TYPES.GUEST_REPLY_CREATED,
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    locationId: thread.location_id,
+    title,
+    message: `${thread.guest_name} replied by ${opts.channel}.`,
+    payload: {
+      thread_id: thread.id,
+      submission_type: opts.submissionType,
+      submission_id: opts.submissionId,
+      from: opts.from ?? null,
+      message: opts.body,
+    },
+    template,
+  }, undefined, now)
 
   await executeBatch(db, [
     {
@@ -308,29 +325,7 @@ export async function insertInboundSubmissionReply(db: DbClient, opts: {
         now,
       ],
     },
-    {
-      query: `
-        INSERT INTO notifications
-        (id, organization_id, site_id, location_id, channel, template, title, payload, status, sent_at, created_at)
-        VALUES (?, ?, ?, ?, 'dashboard', ?, ?, ?, 'sent', ?, ?)
-      `,
-      params: [
-        notificationId,
-        opts.organizationId,
-        opts.siteId,
-        null,
-        template,
-        title,
-        JSON.stringify({
-          submission_type: opts.submissionType,
-          submission_id: opts.submissionId,
-          from: opts.from ?? null,
-          message: opts.body,
-        }),
-        now,
-        now,
-      ],
-    },
+    notification,
   ])
 
   await attachThreadToSubmissionMessages(db, thread.id, opts.submissionType, opts.submissionId)
