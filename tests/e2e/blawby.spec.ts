@@ -106,7 +106,9 @@ test.describe('Blawby NCLS public site', () => {
     const relatedArticles = page.locator('[data-parity-section="related-articles"]')
     await expect(relatedArticles).toBeVisible()
     await relatedArticles.scrollIntoViewIfNeeded()
-    await expect.poll(() => relatedArticles.locator('img').evaluateAll(images => images.filter(image => !(image as HTMLImageElement).complete || (image as HTMLImageElement).naturalWidth === 0).length)).toBe(0)
+    const relatedImages = relatedArticles.locator('img')
+    await expect.poll(() => relatedImages.count()).toBeGreaterThan(0)
+    await expect.poll(() => relatedImages.evaluateAll(images => images.filter(image => !(image as HTMLImageElement).complete || (image as HTMLImageElement).naturalWidth === 0).length)).toBe(0)
   })
 
   test('mobile routes do not overflow and expose the source section order', async ({ page }) => {
