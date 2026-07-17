@@ -31,10 +31,13 @@ test('editor supplies the complete public article model and scopes both theme to
   assert.match(source, /--blawby-primary/)
 })
 
-test('markdown editing preserves the canonical source without an HTML round trip', async () => {
-  const source = await readFile(new URL('../../components/blog/BlogArticleRenderer.vue', import.meta.url), 'utf8')
-  assert.match(source, /<textarea[\s\S]*v-if="editable && block\.type === 'markdown'"[\s\S]*:value="textValue\(block\)"[\s\S]*@input="updateText\(index, block, \$event\)"/)
-  assert.doesNotMatch(source, /htmlToMarkdown|contenteditable=/)
+test('markdown structural splits serialize both halves directly and stay out of local undo history', async () => {
+  const source = await readFile(new URL('../../components/ui/RichTextEditor.vue', import.meta.url), 'utf8')
+  assert.match(source, /editor\.markdown\.serialize\(beforeNode\.toJSON\(\)\)/)
+  assert.match(source, /editor\.markdown\.serialize\(afterNode\.toJSON\(\)\)/)
+  assert.match(source, /setMeta\('addToHistory', false\)/)
+  assert.match(source, /setContent\(before, \{ contentType: 'markdown' \}\)/)
+  assert.doesNotMatch(source, /setContent\(afterNode/)
 })
 
 test('editor autosave preserves canonical empty documents and serializes draft creation', async () => {
@@ -49,8 +52,19 @@ test('editor autosave preserves canonical empty documents and serializes draft c
 
 test('settings panel behaves as an accessible modal', async () => {
   const source = await readFile(new URL('../../components/workspace/blog/BlogPostEditor.vue', import.meta.url), 'utf8')
-  assert.match(source, /@keydown="onSettingsKeydown"/)
-  assert.match(source, /event\.key === 'Escape'/)
-  assert.match(source, /event\.key !== 'Tab'/)
-  assert.match(source, /settingsFocusableElements\(\)\[0\]\?\.focus\(\)/)
+  assert.match(source, /<USlideover v-model:open="settingsOpen" title="Post settings"/)
+  assert.doesNotMatch(source, /role="dialog"|aria-modal=/)
+})
+
+test('block controls preserve writable content and persisted-post action boundaries', async () => {
+  const renderer = await readFile(new URL('../../components/blog/BlogArticleRenderer.vue', import.meta.url), 'utf8')
+  const editor = await readFile(new URL('../../components/workspace/blog/BlogPostEditor.vue', import.meta.url), 'utf8')
+  assert.match(renderer, /index === 0 \? 'forward' : 'back'/)
+  assert.match(renderer, /\{ \.\.\.step, text: value \}/)
+  assert.match(editor, /if \(!last \|\| \(last\.type !== 'markdown' && last\.type !== 'heading'\)\)/)
+  assert.match(editor, /function handleMergeBlock[\s\S]*ensureTrailingTextBlock\(\)/)
+  assert.match(editor, /:disabled="!post"/)
+  assert.match(editor, /<UButton v-if="post" color="error"/)
+  assert.match(editor, /async function share\(\) \{ if \(!post\.value \|\| !postId\.value\) return/)
+  assert.match(editor, /async function remove\(\) \{ if \(!post\.value \|\| !postId\.value/)
 })
