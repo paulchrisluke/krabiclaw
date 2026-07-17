@@ -117,11 +117,13 @@ export default defineEventHandler(async (event) => {
     });
   } catch (error) {
     console.error("Failed to save content:", error);
+    const statusCode = Number((error as { statusCode?: number }).statusCode) || 500;
+    const statusMessage = (error as { statusMessage?: string }).statusMessage;
     return jsonResponse(
       {
-        error: "Failed to save content",
+        error: statusMessage || "Failed to save content",
       },
-      { status: 500 },
+      { status: statusCode },
     );
   }
 });

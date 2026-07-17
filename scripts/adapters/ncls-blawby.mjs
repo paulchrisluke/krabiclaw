@@ -833,7 +833,7 @@ function buildPayload(config, sourcePath = null) {
       updated_at: updatedAt,
       seo_description: article.description || null,
       seo_keywords: Array.isArray(article.keywords) ? article.keywords.join(', ') : null,
-      canonical_url: `/article/${article.slug}`,
+      canonical_url: null,
       featured_image_asset_id: featuredImage?.asset_id || null,
       source_image: article.imageName || null,
       author_image_source: authorImageName,
@@ -845,7 +845,7 @@ function buildPayload(config, sourcePath = null) {
     ...articles.flatMap(article => article.old_slugs.map((oldSlug, index) => ({
       id: `redirect_ncls_article_${article.slug}_${index}`,
       from_path: `/article/${oldSlug}`,
-      to_path: article.canonical_url,
+      to_path: `/article/${article.slug}`,
       status_code: 301,
       behavior: 'redirect',
       reason: 'Pinned React article oldSlugs migration',

@@ -103,7 +103,7 @@ export function markdownToContentBlocks(bodyMarkdown: string): Array<Omit<Conten
         type: 'markdown',
         position: blocks.length,
         level: null,
-        data: { markdown },
+        data: { markdown, editor_mode: 'source' },
       })
     }
     markdownLines = []
@@ -132,7 +132,7 @@ export function markdownToContentBlocks(bodyMarkdown: string): Array<Omit<Conten
       type: 'markdown',
       position: 0,
       level: null,
-      data: { markdown: '' },
+      data: { markdown: '', editor_mode: 'source' },
     })
   }
 

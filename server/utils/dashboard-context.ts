@@ -137,19 +137,37 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     throw createError({ statusCode: 401, message: 'Authentication required' })
   }
 
-  const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string }
+  const organizationSlug = getHeader(event, 'x-dashboard-org-slug')
+  const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string | null }
   const activeOrganizationId = typeof sessionRecord.activeOrganizationId === 'string'
     ? sessionRecord.activeOrganizationId
     : null
+  if (!organizationSlug && !activeOrganizationId && options.requireOrganization !== false) {
+    throw createError({
+      statusCode: 400,
+      message: 'Organization context is required. Use /dashboard/{orgSlug} routes or select an active organization.',
+    })
+  }
 
-  const organization = await queryFirst<DashboardOrganizationRow>(db, `
+  const organization = organizationSlug
+    ? await queryFirst<DashboardOrganizationRow>(db, `
     SELECT o.id, o.name, o.slug, o.logo, m.role, m.id AS memberId
     FROM organization o
     JOIN member m ON o.id = m.organizationId
     WHERE m.userId = ?
-    ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC
+      AND o.slug = ?
     LIMIT 1
-  `, [session.user.id, activeOrganizationId ?? ''])
+  `, [session.user.id, organizationSlug])
+    : activeOrganizationId
+      ? await queryFirst<DashboardOrganizationRow>(db, `
+    SELECT o.id, o.name, o.slug, o.logo, m.role, m.id AS memberId
+    FROM organization o
+    JOIN member m ON o.id = m.organizationId
+    WHERE m.userId = ?
+      AND o.id = ?
+    LIMIT 1
+  `, [session.user.id, activeOrganizationId])
+    : null
 
   if (!organization) {
     if (options.requireOrganization === false) {
@@ -162,12 +180,12 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         site: null,
       }
     }
-    throw createError({ statusCode: 404, message: 'No organization found' })
+    throw createError({ statusCode: 404, message: 'Organization not found' })
   }
   assertDashboardPathPermission(organization.role, event.path)
 
-  // The active site is resolved explicitly from the `siteSlug` route segment, sent on
-  // every /api/dashboard/* request via the x-dashboard-site-slug header (see
+  // The organization and active site are resolved explicitly from the route segments,
+  // sent on every /api/dashboard/* request via dashboard headers (see
   // plugins/dashboard-site-header.client.ts). All dashboard routes must include the site
   // explicitly in the URL path for multi-site support. Callers that pass
   // `requireSite: false` (onboarding, org-level routes, and this function's own

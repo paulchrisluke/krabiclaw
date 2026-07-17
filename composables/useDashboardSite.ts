@@ -62,8 +62,10 @@ export function useDashboardSite() {
     // and returns site: null for any org with 2+ sites. Read the same siteSlug route segment
     // here so SSR resolves the right site too.
     const route = useRoute()
+    const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
     const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
     const headers = new Headers(import.meta.server ? useRequestHeaders(['cookie']) : undefined)
+    if (orgSlug) headers.set('x-dashboard-org-slug', orgSlug)
     if (siteSlug) headers.set('x-dashboard-site-slug', siteSlug)
 
     pending.value = true

@@ -1,4 +1,5 @@
 import { contentRegistry, getFieldDef } from "~/config/content-registry";
+import { resolveSiteCmsCapabilities } from "~/server/utils/cms-capabilities";
 import { hasSiteEntitlement } from "~/server/utils/billing";
 import {
   getGoogleBusinessAccounts,
@@ -111,6 +112,29 @@ function editableFieldKeys(page: string) {
   return Object.keys(contentRegistry[page]?.fields ?? {});
 }
 
+async function assertSiteContentPage(
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  page: string,
+) {
+  const site = await queryFirst<{ vertical: string; theme_id: string }>(db, `
+    SELECT vertical, theme_id FROM sites
+    WHERE id = ? AND organization_id = ?
+    LIMIT 1
+  `, [siteId, organizationId]);
+  if (!site) throw createError({ statusCode: 404, statusMessage: `Site "${siteId}" was not found.` });
+  const { vertical, template, capabilities: capability } = resolveSiteCmsCapabilities(site.vertical, site.theme_id);
+  const pageCapability = capability.pages.find(candidate => candidate.id === page);
+  if (!pageCapability) {
+    throw createError({ statusCode: 400, statusMessage: `Page "${page}" is not available for ${vertical}/${template}.` });
+  }
+  if (pageCapability.editor !== "site_content") {
+    throw createError({ statusCode: 400, statusMessage: `Page "${page}" is owned by the ${pageCapability.editor} editor.` });
+  }
+  return pageCapability;
+}
+
 function normalizeStringField(value: unknown, field: string) {
   if (typeof value !== "string") {
     throw new Error(`Field "${field}" must be a string.`);
@@ -130,6 +154,9 @@ function normalizeContentChanges(
   page: string,
   changes: Record<string, unknown>,
 ) {
+  if (!contentRegistry[page]) {
+    throw createError({ statusCode: 400, statusMessage: `Page "${page}" is not supported by the canonical content registry.` })
+  }
   const normalizedFields = new Map<string, string>();
   const heroChange: Partial<SiteContent> = {};
   let hasHeroChange = false;
@@ -572,6 +599,21 @@ export async function updatePageContent(
   actorId?: string | null,
 ) {
   const locationId = input.location_id ?? undefined;
+  const pageDefinition = await assertSiteContentPage(db, organizationId, siteId, input.page);
+  if (pageDefinition.scope === "location" && !locationId) {
+    throw createError({ statusCode: 400, statusMessage: `Page "${input.page}" requires an explicit location_id.` });
+  }
+  if (pageDefinition.scope === "site" && locationId) {
+    throw createError({ statusCode: 400, statusMessage: `Page "${input.page}" is site-scoped and does not accept location_id.` });
+  }
+  if (locationId) {
+    const location = await queryFirst<{ id: string }>(db, `
+      SELECT id FROM business_locations
+      WHERE id = ? AND organization_id = ? AND site_id = ?
+      LIMIT 1
+    `, [locationId, organizationId, siteId]);
+    if (!location) throw createError({ statusCode: 404, statusMessage: `Location "${locationId}" is not owned by site "${siteId}".` });
+  }
   const { normalizedFields, heroChange, hasHeroChange } =
     normalizeContentChanges(input.page, input.changes);
 
@@ -652,6 +694,21 @@ export async function getEditorContent(
   page: string,
   locationId?: string,
 ) {
+  const pageDefinition = await assertSiteContentPage(db, organizationId, siteId, page);
+  if (pageDefinition.scope === "location" && !locationId) {
+    throw createError({ statusCode: 400, statusMessage: `Page "${page}" requires an explicit location_id.` });
+  }
+  if (pageDefinition.scope === "site" && locationId) {
+    throw createError({ statusCode: 400, statusMessage: `Page "${page}" is site-scoped and does not accept location_id.` });
+  }
+  if (locationId) {
+    const location = await queryFirst<{ id: string }>(db, `
+      SELECT id FROM business_locations
+      WHERE id = ? AND organization_id = ? AND site_id = ?
+      LIMIT 1
+    `, [locationId, organizationId, siteId]);
+    if (!location) throw createError({ statusCode: 404, statusMessage: `Location "${locationId}" is not owned by site "${siteId}".` });
+  }
   const mergedContent = await getPageContent(
     db,
     organizationId,

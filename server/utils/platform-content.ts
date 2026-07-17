@@ -1,10 +1,9 @@
-import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import {
   deleteContentDocumentForOwner,
   publishCurrentContentRevision,
   getContentEditorSnapshot,
   getPublishedContentSnapshot,
-  markdownToContentBlocks,
   replaceContentDocumentBlocks,
   renderContentBlocksToMarkdown,
   syncContentDocumentFromBlocks,
@@ -23,7 +22,6 @@ import { createBlogRedirect, resolveBlogSocialImage } from '~/server/utils/blog-
 import { resolvePublicTemplate } from '~/utils/template-registry'
 
 const BLOG_TITLE_MAX = 200
-const BLOG_BODY_MAX = 100000
 const BLOG_EXCERPT_MAX = 500
 const BLOG_CATEGORY_MAX = 100
 const BLOG_SEO_TITLE_MAX = 200
@@ -76,27 +74,6 @@ export const PLATFORM_ROBOTS_DIRECTIVES: readonly PlatformRobotsDirective[] = ['
 
 function blogContentOwnerType(siteId: string | null): ContentDocumentOwnerType {
   return siteId ? 'tenant_blog' : 'platform_blog'
-}
-
-async function syncBlogContentDocument(
-  db: D1Database,
-  postId: string,
-  siteId: string | null,
-  input: { body?: string; publish?: boolean; unpublish?: boolean },
-  createdBy?: string | null,
-) {
-  const ownerType = blogContentOwnerType(siteId)
-  if (input.body !== undefined) {
-    await syncContentDocumentFromMarkdown(db, {
-      ownerType,
-      ownerId: postId,
-      bodyMarkdown: input.body,
-      createdBy,
-      label: input.publish ? 'Published markdown body' : 'Draft markdown body',
-      publish: Boolean(input.publish),
-    })
-  } else if (input.publish) await publishCurrentContentRevision(db, ownerType, postId)
-  if (input.unpublish) await unpublishContentDocument(db, ownerType, postId)
 }
 
 async function syncDocContentDocument(
@@ -234,9 +211,9 @@ export interface PlatformDocNavGroupInput {
   nav_group_order?: number | null
 }
 
-export interface PlatformBlogCreateInput extends PlatformStructuredContentInput, PlatformContentNavInput {
+export interface PlatformBlogCreateInput extends PlatformContentNavInput {
   title: string
-  body: string
+  content_blocks: Array<ContentBlockInput & { id?: string }>
   excerpt?: string | null
   category?: string | null
   tags?: string[] | null
@@ -250,12 +227,10 @@ export interface PlatformBlogCreateInput extends PlatformStructuredContentInput,
   visibility?: 'public' | 'unlisted'
   scheduled_for?: string | null
   publish?: boolean
-  content_blocks?: Array<ContentBlockInput & { id?: string }>
 }
 
-export interface PlatformBlogUpdateInput extends PlatformStructuredContentInput, PlatformContentNavInput {
+export interface PlatformBlogUpdateInput extends PlatformContentNavInput {
   title?: string
-  body?: string
   excerpt?: string | null
   category?: string | null
   tags?: string[] | null
@@ -782,6 +757,15 @@ async function ensureBlogFeaturedImageAssetExists(
 
 async function normalizeEditorContentBlocks(db: D1Database, blocks: Array<ContentBlockInput & { id?: string }>, siteId: string | null) {
   return await Promise.all(blocks.map(async (block): Promise<ContentBlockInput & { id?: string }> => {
+    if (!block || typeof block !== 'object' || !block.data || typeof block.data !== 'object' || Array.isArray(block.data)) badRequest('Every content block requires an object data payload')
+    if (block.type === 'heading' && (typeof block.data.text !== 'string' || !block.data.text.trim())) badRequest('Heading blocks require non-empty data.text')
+    if (block.type === 'markdown') {
+      if (typeof block.data.markdown !== 'string') badRequest('Markdown blocks require data.markdown')
+      if (block.data.editor_mode !== 'rich' && block.data.editor_mode !== 'source') badRequest('Markdown blocks require data.editor_mode to be rich or source')
+      if (block.data.editor_mode === 'rich' && (/^\s*\|.*\|\s*$/m.test(block.data.markdown) || /<\/?[a-z][^>]*>/i.test(block.data.markdown))) {
+        badRequest('Markdown tables and raw HTML require editor_mode source')
+      }
+    }
     if (block.type !== 'image') return block
     const assetId = typeof block.data.asset_id === 'string' ? block.data.asset_id.trim() : ''
     if (!assetId) {
@@ -797,41 +781,6 @@ async function normalizeEditorContentBlocks(db: D1Database, blocks: Array<Conten
   }))
 }
 
-const BLOG_COMPONENT_EMBED_RE = /\{\{\s*component\s+type\s*=\s*(?:"([^"]+)"|'([^']+)'|([a-zA-Z0-9_-]+))\s*\}\}/g
-
-function componentBlockData(component: PlatformComponentReplacement) {
-  return {
-    ...component.data,
-    label: component.label ?? null,
-    status: component.status ?? 'active',
-    render_enabled: component.render_enabled !== false,
-    schema_enabled: component.type === 'ai_assistance' ? false : component.schema_enabled !== false,
-  }
-}
-
-function canonicalBlocksFromLegacy(body: string, components: PlatformComponentReplacement[]) {
-  const queues = new Map<PlatformContentComponentType, PlatformComponentReplacement[]>()
-  for (const type of PLATFORM_CONTENT_COMPONENT_TYPES) queues.set(type, components.filter(component => component.type === type))
-  const blocks: Array<ContentBlockInput & { id?: string }> = []
-  let cursor = 0
-  for (const match of body.matchAll(BLOG_COMPONENT_EMBED_RE)) {
-    const index = match.index ?? 0
-    const prose = body.slice(cursor, index)
-    if (prose.trim()) blocks.push(...markdownToContentBlocks(prose))
-    const rawType = match[1] ?? match[2] ?? match[3] ?? ''
-    const type = PLATFORM_CONTENT_COMPONENT_TYPES.includes(rawType as PlatformContentComponentType) ? rawType as PlatformContentComponentType : null
-    const component = type ? queues.get(type)?.shift() : null
-    if (component) blocks.push({ type: component.type, data: componentBlockData(component) })
-    cursor = index + match[0].length
-  }
-  const trailing = body.slice(cursor)
-  if (trailing.trim()) blocks.push(...markdownToContentBlocks(trailing))
-  for (const component of components) {
-    if (queues.get(component.type)?.includes(component)) blocks.push({ type: component.type, data: componentBlockData(component) })
-  }
-  return blocks.length ? blocks : markdownToContentBlocks(body)
-}
-
 function renderCanonicalBlogBody(blocks: Array<ContentBlockInput & { id?: string }>) {
   return renderContentBlocksToMarkdown(blocks.map((block, position) => ({
     id: block.id ?? `pending-${position}`,
@@ -842,33 +791,13 @@ function renderCanonicalBlogBody(blocks: Array<ContentBlockInput & { id?: string
   })))
 }
 
-function compatibilityComponentsFromBlocks(blocks: Array<ContentBlockInput & { id?: string }>): PlatformComponentReplacement[] {
-  return blocks.flatMap((block, position) => {
-    if (!PLATFORM_CONTENT_COMPONENT_TYPES.includes(block.type as PlatformContentComponentType)) return []
-    const { label, status, render_enabled, schema_enabled, ...data } = block.data
-    const type = block.type as PlatformContentComponentType
-    return [{
-      type,
-      position,
-      label: typeof label === 'string' ? label : null,
-      status: status === 'inactive' ? 'inactive' : 'active',
-      render_enabled: render_enabled !== false,
-      schema_enabled: type === 'ai_assistance' ? false : schema_enabled !== false,
-      data: data as unknown as PlatformComponentReplacement['data'],
-    }]
-  })
-}
-
 async function normalizeCanonicalBlogBlocks(
   db: D1Database,
-  input: Pick<PlatformBlogCreateInput, 'body' | 'components' | 'content_blocks'>,
+  input: Pick<PlatformBlogCreateInput, 'content_blocks'>,
   siteId: string | null,
 ) {
-  let rawBlocks: Array<ContentBlockInput & { id?: string }>
-  if (input.content_blocks !== undefined) rawBlocks = input.content_blocks
-  else if (input.components !== undefined) rawBlocks = canonicalBlocksFromLegacy(input.body, await normalizeFullComponents(db, input.components))
-  else rawBlocks = markdownToContentBlocks(input.body)
-  return await normalizeEditorContentBlocks(db, rawBlocks, siteId)
+  if (!Array.isArray(input.content_blocks) || !input.content_blocks.length) badRequest('content_blocks are required')
+  return await normalizeEditorContentBlocks(db, input.content_blocks, siteId)
 }
 
 async function ensureDocParentExists(db: D1Database, docId: string) {
@@ -1004,7 +933,7 @@ async function syncStructuredContent(
   await replaceContentComponents(db, contentType, contentId, replacements)
 }
 
-function attachComponents<T extends Record<string, unknown>>(record: T, components: PlatformContentComponent[]) {
+function attachComponents<T extends Record<string, unknown>, C>(record: T, components: C[]) {
   return {
     ...record,
     components,
@@ -1177,11 +1106,9 @@ export async function getPublishedPlatformBlogPost(db: DbClient, category: strin
 
   if (!post) return null
 
-  const legacyComponents = await resolveContentComponentsMedia(db, await listContentComponents(db, 'blog_post', String(post.id), { activeOnly: true }))
   const contentBlocks = await getPublishedContentSnapshot(db, 'platform_blog', String(post.id))
-  const components = contentBlocks
-    ? [...legacyComponents.filter(component => !['faq', 'how_to', 'ai_assistance'].includes(component.type)), ...structuredComponentsFromBlocks(contentBlocks)]
-    : legacyComponents
+  if (!contentBlocks) throw createError({ statusCode: 500, statusMessage: 'Published blog content revision is missing' })
+  const components = structuredComponentsFromBlocks(contentBlocks)
   const socialImage = await resolveBlogSocialImage(db, { siteId: null, explicitAssetId: post.social_image_asset_id as string | null, legacyAssetId: post.featured_image_asset_id as string | null, blocks: contentBlocks })
 
   return attachFeaturedImageFromBareJoin({ ...post, components, content_blocks: contentBlocks, social_image: socialImage })
@@ -1260,7 +1187,6 @@ function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant = 
   normalizeBlankToNull(input)
   validateNavMetadata(input)
   if (input.title !== undefined) assertStringLength(input.title, BLOG_TITLE_MAX, 'title')
-  if (input.body !== undefined) assertStringLength(input.body, BLOG_BODY_MAX, 'body')
   if (input.excerpt !== undefined) assertStringLength(input.excerpt ?? null, BLOG_EXCERPT_MAX, 'excerpt')
   if (input.category !== undefined) {
     assertStringLength(input.category ?? null, BLOG_CATEGORY_MAX, 'category')
@@ -1275,6 +1201,12 @@ function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant = 
   if (input.seo_keywords !== undefined) assertStringLength(input.seo_keywords ?? null, BLOG_SEO_KEYWORDS_MAX, 'seo_keywords')
   if (input.canonical_url !== undefined) assertValidCanonicalUrl(input.canonical_url)
   if (input.robots !== undefined) assertValidRobotsDirective(input.robots)
+}
+
+function rejectLegacyBlogContentFields(input: object) {
+  const fields = ['body', 'components', 'faq_items', 'faq_label', 'faq_status', 'faq_render_enabled', 'faq_schema_enabled', 'how_to_steps', 'how_to_estimated_time', 'how_to_tool_items', 'how_to_supply_items', 'how_to_label', 'how_to_status', 'how_to_render_enabled', 'how_to_schema_enabled']
+  const legacy = fields.find(field => Object.prototype.hasOwnProperty.call(input, field))
+  if (legacy) badRequest(`${legacy} is not writable for blogs; use content_blocks`)
 }
 
 function validateDocCommon(input: Partial<PlatformDocCreateInput>) {
@@ -1463,8 +1395,9 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
     [postId],
   )
   if (!post) notFound('Post not found')
-  const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'blog_post', postId))
   const contentDocument = await getContentEditorSnapshot(db, blogContentOwnerType(siteId), postId)
+  if (!contentDocument) throw createError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
+  const components = structuredComponentsFromBlocks(contentDocument.blocks)
   const slug = typeof post.slug === 'string' ? post.slug : ''
   const publicPath = siteId && slug ? await resolveTenantBlogPostPath(db, siteId, slug) : null
   const context = await resolveTenantContext(db, siteId)
@@ -1523,14 +1456,9 @@ export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slu
 
   if (!post) return null
 
-  const legacyComponents = await resolveContentComponentsMedia(
-    db,
-    await listContentComponents(db, 'blog_post', String(post.id), { activeOnly: true }),
-  )
   const contentBlocks = await getPublishedContentSnapshot(db, 'tenant_blog', String(post.id))
-  const components = contentBlocks
-    ? [...legacyComponents.filter(component => !['faq', 'how_to', 'ai_assistance'].includes(component.type)), ...structuredComponentsFromBlocks(contentBlocks)]
-    : legacyComponents
+  if (!contentBlocks) throw createError({ statusCode: 500, statusMessage: 'Published blog content revision is missing' })
+  const components = structuredComponentsFromBlocks(contentBlocks)
   const socialImage = await resolveBlogSocialImage(db, { siteId, explicitAssetId: post.social_image_asset_id as string | null, legacyAssetId: post.featured_image_asset_id as string | null, blocks: contentBlocks })
 
   return attachFeaturedImageFromBareJoin({ ...post, components, content_blocks: contentBlocks, social_image: socialImage })
@@ -1542,7 +1470,8 @@ export async function createPlatformBlogPost(
   input: PlatformBlogCreateInput,
   scope: BlogScope = {},
 ) {
-  if (!input.title?.trim() || !input.body?.trim()) badRequest('title and body are required')
+  rejectLegacyBlogContentFields(input)
+  if (!input.title?.trim()) badRequest('title is required')
   const isTenant = Boolean(scope.site_id)
   validateBlogCommon(input, isTenant)
   if (!isTenant) {
@@ -1611,13 +1540,11 @@ export async function createPlatformBlogPost(
           createdBy: authorId, label: input.publish && !scheduledFor ? 'Published canonical blocks' : 'Draft canonical blocks',
           publish: Boolean(input.publish && !scheduledFor),
         })
-        await replaceContentComponents(db, 'blog_post', id, compatibilityComponentsFromBlocks(canonicalBlocks))
         if (scheduledFor) await execute(db, 'UPDATE blog_posts SET scheduled_revision_id = ? WHERE id = ?', [revision.revision_id, id])
       } catch (err) {
         try {
           await deleteContentDocumentForOwner(db, blogContentOwnerType(siteId), id)
           await execute(db, 'DELETE FROM blog_posts WHERE id = ?', [id])
-          await replaceContentComponents(db, 'blog_post', id, [])
         } catch (cleanupErr) {
           console.error('Failed to clean up blog post after create rollback:', cleanupErr)
         }
@@ -1651,6 +1578,7 @@ export async function updatePlatformBlogPost(
   input: PlatformBlogUpdateInput,
   siteId: string | null = null,
 ) {
+  rejectLegacyBlogContentFields(input)
   const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', siteId)
   const isTenant = Boolean(siteId)
   validateBlogCommon(input, isTenant)
@@ -1720,12 +1648,6 @@ export async function updatePlatformBlogPost(
     params.push(requestedSlug, slugMutation.manuallyOverridden ? 1 : 0)
   } else if (input.reset_slug_override) {
     updates.push('slug_manually_overridden = 0')
-  }
-
-  if (input.body !== undefined && !normalizedBlocks) {
-    if (!input.body?.trim()) badRequest('body cannot be blank')
-    updates.push('body = ?')
-    params.push(input.body)
   }
 
   if (input.featured_image_asset_id !== undefined && input.featured_image_asset_id) {
@@ -1815,7 +1737,13 @@ export async function updatePlatformBlogPost(
     params.push(scheduledFor ?? null)
   }
 
-  if (normalizedBlocks) {
+  if (!normalizedBlocks && (input.publish || input.unpublish)) {
+    contentDocument = await getContentEditorSnapshot(db, blogContentOwnerType(siteId), postId)
+    if (!contentDocument) throw createError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
+    normalizedBlocks = await normalizeEditorContentBlocks(db, contentDocument.blocks, siteId)
+  }
+
+  if (normalizedBlocks && (current.status !== 'published' || input.publish || input.unpublish)) {
     updates.push('body = ?')
     params.push(renderCanonicalBlogBody(normalizedBlocks))
   }
@@ -1833,7 +1761,7 @@ export async function updatePlatformBlogPost(
         query: 'INSERT INTO blog_posts SELECT * FROM blog_posts WHERE id = ? AND updated_at != ?',
         params: [postId, input.expected_updated_at],
       }, rowUpdate] : [rowUpdate]
-      const after = buildContentComponentReplacementQueries('blog_post', postId, compatibilityComponentsFromBlocks(normalizedBlocks))
+      const after: BatchQuery[] = []
       if (input.publish && scheduledFor) {
         after.push({
           query: `UPDATE blog_posts SET scheduled_revision_id = (
@@ -1844,8 +1772,14 @@ export async function updatePlatformBlogPost(
       } else if (input.publish || input.unpublish) {
         after.push({ query: 'UPDATE blog_posts SET scheduled_revision_id = NULL WHERE id = ?', params: [postId] })
       }
+      if (input.unpublish) {
+        after.push({
+          query: 'UPDATE content_documents SET published_revision_id = NULL WHERE owner_type = ? AND owner_id = ?',
+          params: [blogContentOwnerType(siteId), postId],
+        })
+      }
       await replaceContentDocumentBlocks(db, blogContentOwnerType(siteId), postId, normalizedBlocks, {
-        expected_document_updated_at: input.expected_document_updated_at!,
+        expected_document_updated_at: input.expected_document_updated_at ?? contentDocument.document.updated_at,
         label: 'Editor autosave',
         publish: Boolean(input.publish && !scheduledFor),
         additionalQueriesBefore: before,
@@ -1861,16 +1795,6 @@ export async function updatePlatformBlogPost(
       await createBlogRedirect(db, postId, siteId, current.slug)
     }
 
-    const priorPost = await getPlatformBlogPost(db, postId, siteId)
-    if (!normalizedBlocks) {
-      try {
-        await syncStructuredContent(db, 'blog_post', postId, input)
-        await syncBlogContentDocument(db, postId, siteId, input)
-      } catch (err) {
-        await syncStructuredContent(db, 'blog_post', postId, { components: priorPost?.components ?? [] })
-        throw err
-      }
-    }
     const updatedPost = await getPlatformBlogPost(db, postId, siteId)
     return {
       success: true,

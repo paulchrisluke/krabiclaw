@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
   try {
     const result = await createPlatformBlogPost(db, session.user.id, {
       title: body.title ?? '',
-      body: body.body ?? '',
+      content_blocks: body.content_blocks ?? [],
       excerpt: body.excerpt ?? null,
       category: body.category ?? null,
       ...platformContentNavInput(body, { defaultHideFromNav: false }),
@@ -37,16 +37,6 @@ export default defineEventHandler(async (event) => {
       canonical_url: body.canonical_url ?? null,
       robots: body.robots ?? null,
       featured_image_asset_id: body.featured_image_asset_id ?? null,
-      faq_items: body.faq_items,
-      faq_label: body.faq_label,
-      faq_status: body.faq_status,
-      faq_render_enabled: body.faq_render_enabled,
-      faq_schema_enabled: body.faq_schema_enabled,
-      how_to_steps: body.how_to_steps,
-      how_to_label: body.how_to_label,
-      how_to_status: body.how_to_status,
-      how_to_render_enabled: body.how_to_render_enabled,
-      how_to_schema_enabled: body.how_to_schema_enabled,
       publish: body.publish ?? false,
     })
     schedulePlatformKnowledgeIndexRebuild(event, env, 'blog post create')

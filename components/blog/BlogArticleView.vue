@@ -1,16 +1,16 @@
 <template>
   <article class="blog-article-view min-w-0" :data-template="template">
     <header v-if="showHeader" class="blog-article-header mb-10">
-      <div class="mb-4 flex flex-wrap items-center gap-3 text-sm opacity-70">
+      <div v-if="showMeta" class="mb-4 flex flex-wrap items-center gap-3 text-sm opacity-70">
         <span v-if="category" class="rounded bg-current/10 px-2 py-1 text-xs font-semibold">{{ category }}</span>
         <time v-if="publishedAt" :datetime="publishedAt">{{ formatDate(publishedAt) }}</time>
         <span v-if="readMinutes">{{ readMinutes }} min read</span>
         <time v-if="updatedAt && updatedAt !== publishedAt" :datetime="updatedAt">Updated {{ formatDate(updatedAt) }}</time>
       </div>
-      <input v-if="editable" :value="title" class="w-full border-0 bg-transparent p-0 text-4xl font-bold leading-tight text-inherit outline-none sm:text-5xl" aria-label="Post title" placeholder="Post title" @input="$emit('update:title', ($event.target as HTMLInputElement).value)">
+      <textarea v-if="editable" :value="title" rows="1" class="field-sizing-content w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-4xl font-bold leading-tight text-inherit outline-none sm:text-5xl" aria-label="Post title" placeholder="Post title" @input="$emit('update:title', ($event.target as HTMLTextAreaElement).value)" @keydown.enter.prevent />
       <h1 v-else class="text-4xl font-bold leading-tight sm:text-5xl">{{ title }}</h1>
       <p v-if="excerpt" class="mt-5 text-xl leading-relaxed opacity-75">{{ excerpt }}</p>
-      <div v-if="authorName || $slots.author || $slots.share" class="mt-7 flex flex-wrap items-center justify-between gap-4 border-y border-current/15 py-4">
+      <div v-if="showMeta && (authorName || $slots.author || $slots.share)" class="mt-7 flex flex-wrap items-center justify-between gap-4 border-y border-current/15 py-4">
         <slot name="author">
           <div class="flex items-center gap-3">
             <img v-if="authorImage" :src="authorImage" :alt="authorName || ''" class="size-11 rounded-full object-cover">
@@ -34,11 +34,13 @@
       class="max-w-none! px-0! py-0!"
       @update:title="$emit('update:title', $event)"
       @update:block="(index, block) => $emit('update:block', index, block)"
+      @insert-block="(index, cursorPosition) => $emit('insert-block', index, cursorPosition)"
+      @insert-block-type="(index, type) => $emit('insert-block-type', index, type)"
+      @move-block="(index, delta) => $emit('move-block', index, delta)"
+      @merge-block="(index, direction) => $emit('merge-block', index, direction)"
+      @split-insert="(index, payload) => $emit('split-insert', index, payload)"
     >
       <template #image-editor="slotProps"><slot name="image-editor" v-bind="slotProps" /></template>
-      <template #faq-editor="slotProps"><slot name="faq-editor" v-bind="slotProps" /></template>
-      <template #how-to-editor="slotProps"><slot name="how-to-editor" v-bind="slotProps" /></template>
-      <template #block-actions="slotProps"><slot name="block-actions" v-bind="slotProps" /></template>
     </BlogArticleRenderer>
     <slot v-else name="legacy-body" />
     <slot name="footer" />
@@ -64,9 +66,10 @@ const props = withDefaults(defineProps<{
   editable?: boolean
   template?: 'saya' | 'blawby' | 'platform' | string
   showHeader?: boolean
-}>(), { excerpt: null, category: null, publishedAt: null, updatedAt: null, authorName: null, authorImage: null, siteName: null, mediaUrl: null, mediaKind: null, readMinutes: null, blocks: () => [], editable: false, template: 'saya', showHeader: true })
+  showMeta?: boolean
+}>(), { excerpt: null, category: null, publishedAt: null, updatedAt: null, authorName: null, authorImage: null, siteName: null, mediaUrl: null, mediaKind: null, readMinutes: null, blocks: () => [], editable: false, template: 'saya', showHeader: true, showMeta: true })
 
-defineEmits<{ 'update:title': [value: string]; 'update:block': [index: number, block: BlogEditorBlock] }>()
+defineEmits<{ 'update:title': [value: string]; 'update:block': [index: number, block: BlogEditorBlock]; 'insert-block': [index: number, cursorPosition: number]; 'insert-block-type': [index: number, type: string]; 'move-block': [index: number, delta: -1 | 1]; 'merge-block': [index: number, direction: 'back' | 'forward']; 'split-insert': [index: number, payload: { after: string; blockType: 'image' | 'faq' | 'how_to'; editorMode: 'rich' | 'source' }] }>()
 
 const authorInitials = computed(() => String(props.authorName || props.siteName || 'A').split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase())
 const normalizedBlocks = computed(() => props.blocks ?? [])

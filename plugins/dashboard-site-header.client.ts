@@ -1,6 +1,6 @@
-// Every /api/dashboard/* call needs to know which site is active. Routes carry
-// the site explicitly as the `siteSlug` segment (/dashboard/{orgSlug}/sites/{siteSlug}/...),
-// so this plugin forwards it as a header on every request instead of requiring
+// Every /api/dashboard/* call needs to know which organization and site the route names.
+// Routes carry those explicitly as `orgSlug` and `siteSlug` segments
+// (/dashboard/{orgSlug}/sites/{siteSlug}/...), so this plugin forwards them as headers instead of requiring
 // each of the ~70 call sites across the dashboard to thread it through manually.
 //
 // This must stay client-only. Bare `$fetch()` calls everywhere in this codebase
@@ -37,10 +37,15 @@ export default defineNuxtPlugin(() => {
   globalThis.$fetch = $fetch.create({
     onRequest({ request, options }) {
       if (typeof request !== 'string' || !request.startsWith('/api/dashboard')) return
+      const orgSlug = route.params.orgSlug
       const siteSlug = route.params.siteSlug
-      if (typeof siteSlug !== 'string' || !siteSlug) return
       const headers = new Headers(options.headers as HeadersInit)
-      headers.set('x-dashboard-site-slug', siteSlug)
+      if (typeof orgSlug === 'string' && orgSlug) {
+        headers.set('x-dashboard-org-slug', orgSlug)
+      }
+      if (typeof siteSlug === 'string' && siteSlug) {
+        headers.set('x-dashboard-site-slug', siteSlug)
+      }
       options.headers = headers
     },
     onResponseError({ request, response }) {

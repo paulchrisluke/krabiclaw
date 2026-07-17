@@ -532,20 +532,10 @@ const locationNavigation = computed(() => {
       { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: project },
     ],
     [
-      { label: 'Menu', icon: 'i-lucide-utensils', to: `${project}/menu` },
-      { label: 'Content', icon: 'i-lucide-copy', to: `${project}/content?page=location` },
-      { label: 'Posts', icon: 'i-lucide-newspaper', to: `${project}/posts` },
-      { label: 'Media', icon: 'i-lucide-image', to: `${project}/media` },
-      { label: 'Pages', icon: 'i-lucide-file-text', to: `${project}/pages` },
+      { label: 'Content', icon: 'i-lucide-copy', to: `${siteBase.value}/content` },
     ],
     [
-      { label: 'Reviews', icon: 'i-lucide-star', to: `${project}/reviews` },
       { label: 'Inbox', icon: 'i-lucide-inbox', to: `${project}/inbox` },
-      { label: 'Reservations', icon: 'i-lucide-calendar', to: `${project}/reservations` },
-      { label: 'Orders', icon: 'i-lucide-shopping-bag', to: `${project}/order` },
-    ],
-    [
-      { label: 'Experiences', icon: 'i-lucide-ticket', to: `${project}/experiences` },
     ],
   ]
 })
@@ -624,6 +614,7 @@ const navbarTitle = computed(() => {
     activity: 'Activity',
     analytics: 'Analytics',
     billing: 'Billing',
+    blog: 'Blog',
     chatgpt: 'ChatGPT',
     conversations: 'Conversations',
     content: 'Content',

@@ -457,7 +457,7 @@ const brandWorkspacePath = computed(() => {
   const siteSlug = importedSiteSlug.value ?? props.existingSiteSlug ?? null
   const locationSlug = importedLocationSlug.value
   if (!slug || !siteSlug || !locationSlug) return workspaceEntryPath.value
-  return `/dashboard/${slug}/sites/${siteSlug}/${locationSlug}/pages`
+  return `/dashboard/${slug}/sites/${siteSlug}/content`
 })
 
 const chatgptGuidePath = computed(() => {

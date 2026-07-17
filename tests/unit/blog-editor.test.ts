@@ -49,7 +49,7 @@ test('scheduled datetimes require an ISO-compatible value and preserve timezone 
 })
 
 test('new editors start with canonical editable prose and preserve complete block snapshots', () => {
-  assert.deepEqual(initialBlogEditorBlocks(), [{ type: 'markdown', data: { markdown: '' } }])
+  assert.deepEqual(initialBlogEditorBlocks(), [{ type: 'markdown', data: { markdown: '', editor_mode: 'rich' } }])
   const snapshot = structuredClone(blocks)
   assert.deepEqual(snapshot, blocks)
   assert.equal(snapshot[0]?.data.asset_id, 'image-1')
