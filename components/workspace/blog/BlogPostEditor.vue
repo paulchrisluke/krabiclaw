@@ -6,7 +6,7 @@
         {{ statusLabel }} · <span :class="saveState === 'failed' || saveState === 'conflict' ? 'text-error' : ''">{{ saveLabel }}</span>
       </p>
       <UButton icon="i-lucide-share-2" color="neutral" variant="ghost" size="sm" aria-label="Share editor" :disabled="!post" @click="share"><span class="hidden sm:inline">Share</span></UButton>
-      <UButton icon="i-lucide-settings" color="neutral" variant="ghost" size="sm" aria-label="Post settings" @click="openSettings"><span class="hidden sm:inline">Settings</span></UButton>
+      <UButton ref="settingsButton" icon="i-lucide-settings" color="neutral" variant="ghost" size="sm" aria-label="Post settings" @click="openSettings"><span class="hidden sm:inline">Settings</span></UButton>
       <UButton size="sm" :loading="publishing" :disabled="loadPending || saveState === 'conflict'" @click="publish">Publish</UButton>
     </header>
 
@@ -53,9 +53,9 @@
       </div>
     </main>
 
-    <USlideover v-model:open="settingsOpen" title="Post settings" side="right">
+    <USlideover v-model:open="settingsOpen" title="Post settings" side="right" modal @after:enter="focusSettingsPanel" @after:leave="restoreSettingsFocus">
       <template #body>
-        <div class="space-y-7 py-5 pb-[env(safe-area-inset-bottom)]">
+        <div ref="settingsPanel" class="space-y-7 py-5 pb-[env(safe-area-inset-bottom)]" tabindex="-1" @keydown="onSettingsKeydown">
           <UFormField label="Category"><UInput v-model="form.category" /></UFormField>
           <UFormField label="Tags"><UInput v-model="tagsText" placeholder="Comma separated" /></UFormField>
           <UFormField label="Excerpt"><UTextarea v-model="form.excerpt" :placeholder="resolvedExcerpt" /><p class="mt-1 text-xs text-dimmed">{{ form.excerpt ? 'Custom' : `Auto: ${resolvedExcerpt}` }}</p></UFormField>
@@ -105,6 +105,8 @@ const loadError = ref('')
 const saveState = ref<'saved' | 'saving' | 'failed' | 'conflict'>('saved')
 const publishing = ref(false)
 const settingsOpen = ref(false)
+const settingsButton = ref<{ $el?: HTMLElement } | null>(null)
+const settingsPanel = ref<HTMLElement | null>(null)
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 let dirty = false
 let applyingServerSnapshot = false
@@ -129,11 +131,8 @@ const editorCanvasStyle = computed(() => {
       '--editor-canvas': background, '--editor-ink': foreground, '--brand-color': primary,
       '--saya-primary': primary, '--saya-bg': background, '--saya-bg-alt': String(tokens.surface || '#FAFAFA'),
       '--saya-fg': foreground, '--saya-fg-muted': muted, '--saya-border': String(tokens.border || '#E4E4E7'),
-      // UEditor's own theme colors headings/muted text via --ui-text-highlighted/--ui-text-muted/--ui-text-dimmed
-      // directly (not by inheriting --editor-ink), so those must be bridged here too — otherwise headings fall
-      // through to the dashboard's own light/dark theme instead of the site's brand ink, and visibly "jump" color
-      // the moment a block is toggled to a heading (most jarring in dark dashboard mode: --ui-text-highlighted
-      // flips to white while body text stays on the site's ink color).
+      // Dashboard controls use Nuxt UI tokens, so bridge them to the site's
+      // theme while the editor canvas is active.
       '--ui-primary': primary, '--ui-bg': background, '--ui-bg-elevated': String(tokens.surface || '#FAFAFA'), '--ui-text': foreground,
       '--ui-text-highlighted': foreground, '--ui-text-muted': muted, '--ui-text-dimmed': muted,
     }
@@ -383,6 +382,26 @@ async function share() { if (!post.value || !postId.value) return; const url = n
 async function goBack() { if (settingsOpen.value) { closeSettings(); return } try { await flushSave(); await navigateTo(props.backUrl) } catch { if (saveState.value !== 'conflict') saveState.value = 'failed' } }
 function openSettings() { settingsOpen.value = true; if (import.meta.client) history.pushState({ blogSettings: true }, '') }
 function closeSettings() { settingsOpen.value = false }
+function settingsFocusableElements() {
+  if (!settingsPanel.value) return []
+  return Array.from(settingsPanel.value.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+}
+function focusSettingsPanel() {
+  const first = settingsFocusableElements()[0]
+  if (first) first.focus()
+  else settingsPanel.value?.focus()
+}
+function restoreSettingsFocus() { settingsButton.value?.$el?.focus() }
+function onSettingsKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') { event.preventDefault(); closeSettings(); return }
+  if (event.key !== 'Tab') return
+  const focusable = settingsFocusableElements()
+  if (!focusable.length) { event.preventDefault(); settingsPanel.value?.focus(); return }
+  const first = focusable[0]!
+  const last = focusable[focusable.length - 1]!
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+}
 function onPopState() { if (settingsOpen.value) closeSettings() }
 function beforeUnload(event: BeforeUnloadEvent) { if (dirty) event.preventDefault() }
 async function remove() { if (!post.value || !postId.value || !confirm('Delete this post permanently?')) return; await props.repository.delete(postId.value); await navigateTo(props.backUrl) }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFile } from 'node:fs/promises'
+import { replaceMarkdownRange, splitMarkdownAt } from '../../utils/markdown-source.ts'
 
 test('slug changes preflight a post collision in the same site scope', async () => {
   const source = await readFile(new URL('../../server/utils/platform-content.ts', import.meta.url), 'utf8')
@@ -31,13 +32,35 @@ test('editor supplies the complete public article model and scopes both theme to
   assert.match(source, /--blawby-primary/)
 })
 
-test('markdown structural splits serialize both halves directly and stay out of local undo history', async () => {
+test('markdown editing keeps canonical source instead of parsing and serializing the document', async () => {
   const source = await readFile(new URL('../../components/ui/RichTextEditor.vue', import.meta.url), 'utf8')
-  assert.match(source, /editor\.markdown\.serialize\(beforeNode\.toJSON\(\)\)/)
-  assert.match(source, /editor\.markdown\.serialize\(afterNode\.toJSON\(\)\)/)
-  assert.match(source, /setMeta\('addToHistory', false\)/)
-  assert.match(source, /setContent\(before, \{ contentType: 'markdown' \}\)/)
-  assert.doesNotMatch(source, /setContent\(afterNode/)
+  assert.match(source, /<textarea[\s\S]*:value="modelValue"[\s\S]*@input="emitSource"/)
+  assert.match(source, /replaceMarkdownRange\(props\.modelValue, start, end, replacement\)/)
+  assert.match(source, /splitMarkdownAt\(props\.modelValue, start\)/)
+  assert.doesNotMatch(source, /UEditor|ProseMirror|editor\.markdown|setContent/)
+})
+
+test('source-native Markdown operations preserve tables, HTML, links, lists, and formatting exactly', () => {
+  const markdown = [
+    '## Heading **with bold**',
+    '',
+    '- [linked item](https://example.com)',
+    '- second item with _italics_',
+    '',
+    '| Name | Value |',
+    '| --- | --- |',
+    '| one | two |',
+    '',
+    '<aside data-kind="legal">Raw <strong>HTML</strong></aside>',
+  ].join('\n')
+  const position = markdown.indexOf('| Name')
+  const halves = splitMarkdownAt(markdown, position)
+  assert.equal(halves.before + halves.after, markdown)
+
+  const linkedItemStart = markdown.indexOf('linked item')
+  const edited = replaceMarkdownRange(markdown, linkedItemStart, linkedItemStart + 'linked item'.length, 'updated link text')
+  assert.equal(edited.replace('updated link text', 'linked item'), markdown)
+  assert.match(edited, /\| Name \| Value \|[\s\S]*<aside data-kind="legal">Raw <strong>HTML<\/strong><\/aside>/)
 })
 
 test('editor autosave preserves canonical empty documents and serializes draft creation', async () => {
@@ -52,8 +75,13 @@ test('editor autosave preserves canonical empty documents and serializes draft c
 
 test('settings panel behaves as an accessible modal', async () => {
   const source = await readFile(new URL('../../components/workspace/blog/BlogPostEditor.vue', import.meta.url), 'utf8')
-  assert.match(source, /<USlideover v-model:open="settingsOpen" title="Post settings"/)
-  assert.doesNotMatch(source, /role="dialog"|aria-modal=/)
+  assert.match(source, /<USlideover v-model:open="settingsOpen" title="Post settings" side="right" modal/)
+  assert.match(source, /@after:enter="focusSettingsPanel" @after:leave="restoreSettingsFocus"/)
+  assert.match(source, /@keydown="onSettingsKeydown"/)
+  assert.match(source, /event\.key === 'Escape'/)
+  assert.match(source, /event\.key !== 'Tab'/)
+  assert.match(source, /const first = settingsFocusableElements\(\)\[0\][\s\S]*if \(first\) first\.focus\(\)[\s\S]*else settingsPanel\.value\?\.focus\(\)/)
+  assert.match(source, /settingsButton\.value\?\.\$el\?\.focus\(\)/)
 })
 
 test('block controls preserve writable content and persisted-post action boundaries', async () => {
