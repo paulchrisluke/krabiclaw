@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { execute } from '~/server/db'
 import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
 import type { SiteVertical } from '~/utils/vertical-copy'
 import { defineEventHandler, readBody } from 'h3'
@@ -31,5 +32,8 @@ export default defineEventHandler(async (event) => {
     subdomain,
     vertical: vertical as SiteVertical
   })
+  if (result.status === 200 && 'organizationId' in result.data) {
+    await execute(db, 'UPDATE session SET activeOrganizationId = ? WHERE id = ?', [result.data.organizationId, session.session.id])
+  }
   return jsonResponse(result.data, { status: result.status })
 })

@@ -138,10 +138,14 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   }
 
   const organizationSlug = getHeader(event, 'x-dashboard-org-slug')
-  if (!organizationSlug && options.requireOrganization !== false) {
+  const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string | null }
+  const activeOrganizationId = typeof sessionRecord.activeOrganizationId === 'string'
+    ? sessionRecord.activeOrganizationId
+    : null
+  if (!organizationSlug && !activeOrganizationId && options.requireOrganization !== false) {
     throw createError({
       statusCode: 400,
-      message: 'Organization slug is required. Use /dashboard/{orgSlug} routes.',
+      message: 'Organization context is required. Use /dashboard/{orgSlug} routes or select an active organization.',
     })
   }
 
@@ -154,6 +158,15 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
       AND o.slug = ?
     LIMIT 1
   `, [session.user.id, organizationSlug])
+    : activeOrganizationId
+      ? await queryFirst<DashboardOrganizationRow>(db, `
+    SELECT o.id, o.name, o.slug, o.logo, m.role, m.id AS memberId
+    FROM organization o
+    JOIN member m ON o.id = m.organizationId
+    WHERE m.userId = ?
+      AND o.id = ?
+    LIMIT 1
+  `, [session.user.id, activeOrganizationId])
     : null
 
   if (!organization) {

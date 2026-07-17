@@ -27,10 +27,11 @@ const dashboardLayoutSource = readFileSync(
   'utf8',
 )
 
-test('dashboard organization resolution uses the explicit route organization', () => {
+test('dashboard organization resolution uses the route organization or Better Auth active organization', () => {
   assert.match(contextSource, /getHeader\(event, 'x-dashboard-org-slug'\)/)
   assert.match(contextSource, /AND o\.slug = \?/)
-  assert.doesNotMatch(contextSource, /activeOrganizationId/)
+  assert.match(contextSource, /sessionRecord\.activeOrganizationId/)
+  assert.match(contextSource, /AND o\.id = \?/)
   assert.doesNotMatch(contextSource, /ORDER BY CASE WHEN o\.id = \? THEN 0 ELSE 1 END/)
 })
 

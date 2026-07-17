@@ -4,7 +4,7 @@ import { cloudflareEnv } from '~/server/utils/api-response'
 import { createAuth } from '~/server/utils/auth'
 import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
 import { hasBetterAuthAdminRole } from '~/server/utils/platform-auth'
-import { queryAll, queryFirst } from '~/server/db'
+import { execute, queryAll, queryFirst } from '~/server/db'
 
 // Mirrors better-call's signCookieValue (HMAC-SHA256, base64(raw signature),
 // `${value}.${signature}`) since better-auth only exposes signed-cookie
@@ -140,6 +140,17 @@ export default defineEventHandler(async (event) => {
   if (!user) throw createError({ statusCode: 500, statusMessage: 'No users in database' })
 
   const session = await ctx.internalAdapter.createSession(user.id)
+  const activeOrganization = await queryFirst<{ id: string }>(db, `
+    SELECT o.id
+    FROM organization o
+    JOIN member m ON m.organizationId = o.id
+    WHERE m.userId = ?
+    ORDER BY o.createdAt ASC
+    LIMIT 1
+  `, [user.id])
+  if (activeOrganization) {
+    await execute(db, 'UPDATE session SET activeOrganizationId = ? WHERE id = ?', [activeOrganization.id, session.id])
+  }
   const signed = `${session.token}.${await hmacSign(session.token, ctx.secret)}`
 
   const cookieName = ctx.authCookies.sessionToken.name
