@@ -181,7 +181,8 @@ const secondaryTab = computed(() => {
     if (!offeringsPath) return null
     return { id: offeringsPath.replace(/^\//, ''), label: 'Services', enabled: !!props.iframeSrc, locationScoped: false }
   }
-  const match = getEditablePages(props.vertical).find(page => page.id === 'menu' || page.id === 'experiences')
+  const template = resolvePublicTemplate({ vertical: props.vertical })
+  const match = getEditablePages(props.vertical, template.slug).find(page => page.id === 'menu' || page.id === 'experiences')
   if (!match) return null
   return { id: match.id, label: match.label, enabled: !!props.iframeSrc, locationScoped: match.scope === 'location' }
 })

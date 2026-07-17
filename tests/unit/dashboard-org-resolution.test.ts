@@ -45,7 +45,7 @@ test('bare dashboard delegates to the server-side authenticated entry router', (
   assert.doesNotMatch(postLoginSource, /sendRedirect\(event, '\/dashboard'\)/)
 })
 
-test('general Content sidebar link opens the default site content page', () => {
-  assert.match(dashboardLayoutSource, /label: 'Content', icon: 'i-lucide-copy', to: `\$\{project\}\/content`/)
+test('general Content sidebar link opens the site-scoped content page', () => {
+  assert.match(dashboardLayoutSource, /label: 'Content', icon: 'i-lucide-copy', to: `\$\{siteBase\.value\}\/content`/)
   assert.doesNotMatch(dashboardLayoutSource, /label: 'Content'[^\n]+content\?page=location/)
 })

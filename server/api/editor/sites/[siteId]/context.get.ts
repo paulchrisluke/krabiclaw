@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { createPreviewToken } from '~/server/utils/preview-token'
 import { queryAll, queryFirst } from '~/server/db'
+import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 
 interface SiteRow {
   id: string
@@ -13,6 +14,7 @@ interface SiteRow {
   onboarding_status: string
   organization_name: string
   vertical: string
+  theme_id: string
 }
 
 interface LocationRow {
@@ -68,7 +70,7 @@ export default defineEventHandler(async (event) => {
   try {
     // Verify user belongs to organization that owns the site
     const site = await queryFirst<SiteRow>(db, `
-      SELECT s.id, s.brand_name, s.subdomain, s.organization_id, s.status, s.onboarding_status, s.vertical,
+      SELECT s.id, s.brand_name, s.subdomain, s.organization_id, s.status, s.onboarding_status, s.vertical, s.theme_id,
              o.name as organization_name
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
@@ -119,10 +121,9 @@ export default defineEventHandler(async (event) => {
     )
 
     // Get content registry for this site/theme
-    const { contentRegistry, getEditablePages } = await import('../../../../../config/content-registry')
-    const { normalizeVertical } = await import('../../../../../utils/vertical-copy')
-    const vertical = normalizeVertical(site.vertical) as import('../../../../../utils/vertical-copy').SiteVertical
-    const editablePages = getEditablePages(vertical)
+    const { getEditablePages } = await import('../../../../../config/content-registry')
+    const { vertical, template } = resolveSiteCmsCapabilities(site.vertical, site.theme_id)
+    const editablePages = getEditablePages(vertical, template)
 
     // Build scopes array
     const scopes = [
@@ -148,6 +149,7 @@ export default defineEventHandler(async (event) => {
           status: site.status,
           onboarding_status: site.onboarding_status,
           vertical,
+          template,
           entitlements
         },
         organization: {
@@ -157,13 +159,19 @@ export default defineEventHandler(async (event) => {
         locations: parsedLocations,
         scopes,
         previewToken,
-        contentRegistry,
         editablePages
       }
     })
     
   } catch (error) {
     console.error('Failed to get editor context:', error)
+    if (error && typeof error === 'object') {
+      const statusCode = (error as { statusCode?: unknown }).statusCode
+      const statusMessage = (error as { statusMessage?: unknown }).statusMessage
+      if (statusCode === 422 && typeof statusMessage === 'string') {
+        return jsonResponse({ error: statusMessage }, { status: 422 })
+      }
+    }
     return jsonResponse({ 
       error: 'Failed to get editor context' 
     }, { status: 500 })

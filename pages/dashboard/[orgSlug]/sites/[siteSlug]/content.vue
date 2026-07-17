@@ -7,8 +7,8 @@
         <div class="min-w-0">
           <div class="flex items-center gap-2">
             <p class="truncate text-sm font-semibold text-highlighted ">{{ siteName }}</p>
-            <UBadge :color="localHasChanges ? 'warning' : 'success'" variant="soft" size="xs">
-              {{ localHasChanges ? 'Unsaved' : 'Live' }}
+            <UBadge :color="localHasChanges ? 'warning' : 'neutral'" variant="soft" size="xs">
+              {{ localHasChanges ? 'Unsaved changes' : siteStatusLabel }}
             </UBadge>
           </div>
           <p class="truncate text-xs text-muted">{{ siteDomain }}</p>
@@ -29,7 +29,7 @@
       </div>
 
       <!-- Page selector always visible -->
-      <div class="hidden min-w-0 items-center gap-2 md:flex">
+      <div v-if="pages.length" class="hidden min-w-0 items-center gap-2 md:flex">
         <USelect
           id="content-page-selector"
           v-model="selectedPageId"
@@ -43,6 +43,7 @@
       <div class="flex items-center gap-2">
         <UColorModeButton variant="ghost" color="neutral" size="sm" />
         <UButton
+          v-if="pages.length"
           :href="iframeSrc || undefined"
           target="_blank"
           icon="i-lucide-external-link"
@@ -64,9 +65,27 @@
       </div>
     </header>
 
+    <div v-if="cmsLoadError" class="flex min-h-0 flex-1 items-center justify-center bg-muted p-6">
+      <UAlert color="error" variant="soft" title="Content unavailable" :description="cmsLoadError" class="max-w-xl" />
+    </div>
+
+    <UPage v-else-if="cmsCapabilities?.template === 'blawby'" class="min-h-0 flex-1 overflow-auto bg-muted">
+      <UPageBody class="mx-auto w-full max-w-5xl p-6">
+        <h1 class="text-2xl font-semibold text-highlighted">Professional service content</h1>
+        <p class="mt-2 text-sm text-muted">Each editor below writes the canonical data rendered by Blawby, MCP, and ChowBot.</p>
+        <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <UCard v-for="manager in cmsManagers" :key="manager.id">
+            <UIcon :name="manager.icon" class="size-5 text-primary" />
+            <h2 class="mt-3 font-semibold text-highlighted">{{ manager.label }}</h2>
+            <UButton :to="manager.to" :disabled="!manager.to" label="Open editor" class="mt-4" size="sm" />
+          </UCard>
+        </div>
+      </UPageBody>
+    </UPage>
+
     <!-- No locations added yet (only blocks location-scoped pages) -->
     <div
-      v-if="requiresLocationSelection"
+      v-else-if="requiresLocationSelection"
       class="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-muted p-6"
     >
       <UCard class="w-full max-w-xl">
@@ -117,6 +136,25 @@
               :items="pages"
               value-key="id"
               label-key="label"
+            />
+          </div>
+        </div>
+
+        <div class="border-b border-default p-3">
+          <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Universal CMS</p>
+          <div class="grid grid-cols-2 gap-1">
+            <UButton label="Pages" icon="i-lucide-files" size="xs" variant="soft" block />
+            <UButton
+              v-for="manager in cmsManagers"
+              :key="manager.id"
+              :label="manager.label"
+              :icon="manager.icon"
+              :to="manager.to"
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              block
+              class="justify-start"
             />
           </div>
         </div>
@@ -290,29 +328,14 @@
 
           <div v-else-if="activeFieldDef?.type === 'richtext'" class="space-y-2">
             <label :for="`field-${activeField}`" class="block text-sm font-medium text-default">{{ activeFieldDef.label }}</label>
-            <div class="flex flex-wrap gap-1 rounded-md border border-default bg-muted p-1">
-              <UButton
-                v-for="cmd in richtextCommands"
-                :key="cmd.cmd"
-                size="xs"
-                variant="ghost"
-                @mousedown.prevent="execCmd(cmd.cmd)"
-              >
-                {{ cmd.label }}
-              </UButton>
-            </div>
-            <!-- eslint-disable vue/no-v-html -->
-            <div
+            <UEditor
               :key="activeField"
               :id="`field-${activeField}`"
-              contenteditable="true"
-              class="prose prose-sm min-h-40 w-full max-w-none rounded-md border border-default bg-default px-3 py-2 text-sm text-highlighted focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              :data-placeholder="activeFieldDef?.placeholder || 'Start typing...'"
-              v-html="DOMPurify.sanitize(editingValue || '')"
-              @blur="onRichTextBlur"
-              @paste.prevent="onRichTextPaste"
+              v-model="editingValue"
+              content-type="html"
+              :placeholder="activeFieldDef?.placeholder || 'Start typing...'"
+              class="min-h-40 w-full rounded-md border border-default bg-default px-3 py-2"
             />
-            <!-- eslint-enable vue/no-v-html -->
           </div>
 
           <div v-else-if="activeFieldDef?.type === 'media'" class="space-y-2">
@@ -326,14 +349,6 @@
             />
           </div>
 
-          <div v-else-if="activeFieldDef?.type === 'booking_policy'" class="space-y-3">
-            <BookingPolicyForm
-              v-model="bookingPolicyDraft"
-              :policy-type="activeFieldDef.policyType"
-              :summary="bookingPolicySummary"
-            />
-          </div>
-
           <div
             v-if="activeFieldDef?.googleLocked && hasGoogleBusinessEntitlement"
             class="flex items-center gap-2 rounded-lg border border-default bg-muted px-3 py-2 text-sm text-default"
@@ -343,16 +358,6 @@
             </UBadge>
           </div>
 
-          <UButton
-            id="field-apply-btn"
-            :disabled="saving"
-            :loading="saving"
-            color="primary"
-            block
-            @click="applyField"
-          >
-            Apply
-          </UButton>
 
           <UButton
             v-if="activeFieldRequiresGoogleUpgrade"
@@ -384,15 +389,13 @@
 </template>
 
 <script setup lang="ts">
-// -nocheck
 import { ref, computed, onMounted, watch } from 'vue'
-// import DOMPurify from 'isomorphic-dompurify'
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string, _options?: unknown) => s }
 
 import { contentRegistry, getEditablePages, getFieldDef, resolvePreviewPath } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
+import { resolveCmsCapabilities } from '~/config/cms-registry'
+import type { PublicTemplateSlug } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
-import BookingPolicyForm from '~/components/dashboard/BookingPolicyForm.vue'
 
 definePageMeta({ layout: 'editor', ssr: false })
 
@@ -415,7 +418,39 @@ const siteData = ref<ApiRecord | null>(null)
 const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])
 const siteEntitlements = ref<ApiRecord>({})
 const previewToken = ref('')
+const cmsLoadError = ref<string | null>(null)
 const siteName = computed(() => siteData.value?.brand_name || 'Loading...')
+const siteStatusLabel = computed(() => String(siteData.value?.status || 'unknown').replaceAll('_', ' '))
+const cmsCapabilities = computed(() => {
+  if (!siteData.value) return null
+  return resolveCmsCapabilities(siteData.value.vertical as SiteVertical, siteData.value.template as PublicTemplateSlug)
+})
+const cmsManagers = computed(() => {
+  const capabilities = cmsCapabilities.value
+  if (!capabilities) return []
+  const location = siteLocations.value.find(candidate => candidate.id === selectedLocationId.value)?.slug
+    ?? siteLocations.value[0]?.slug
+  const iconBySection = {
+    collections: 'i-lucide-database',
+    locations: 'i-lucide-map-pin',
+    media: 'i-lucide-image',
+    site: 'i-lucide-settings',
+  } as const
+  return capabilities.managers.map((manager) => {
+    if (manager.id === 'settings') {
+      return { ...manager, icon: iconBySection[manager.section], to: paths.value.settingsGeneral }
+    }
+    if (manager.scope === 'location' && !location) {
+      return { ...manager, icon: iconBySection[manager.section], to: undefined }
+    }
+    const routePath = manager.route.replace(':location', location ?? '')
+    return {
+      ...manager,
+      icon: iconBySection[manager.section],
+      to: routePath ? `${paths.value.site}/${routePath}` : paths.value.site,
+    }
+  })
+})
 const siteDomain = computed(() => siteData.value?.subdomain ? `${siteData.value.subdomain}.${platformHostname.value}` : 'localhost:3000')
 const sitePreviewBaseUrl = computed(() => {
   if (!siteData.value?.id) return ''
@@ -426,7 +461,7 @@ const sitePreviewBaseUrl = computed(() => {
 // Load editor context
 const loadEditorContext = async () => {
   try {
-    const response = await $fetch<{ context: ApiValue }>(`/api/dashboard/editor/context`)
+    const response = await $fetch<{ context: ApiRecord }>(`/api/editor/sites/${siteId}/context`)
     siteData.value = response.context.site
     siteLocations.value = response.context.locations || []
     siteEntitlements.value = response.context.site.entitlements || {}
@@ -434,7 +469,8 @@ const loadEditorContext = async () => {
     applyRouteContentScope()
   } catch (error) {
     console.error('Failed to load editor context:', error)
-    toast.add({ description: 'Failed to load editor context', color: 'error' })
+    cmsLoadError.value = getErrorMessage(error, 'Failed to load editor context')
+    toast.add({ description: cmsLoadError.value, color: 'error' })
   }
 }
 
@@ -468,12 +504,19 @@ const endpointWithContentScope = (path: string) =>
   contentQuery.value ? `${path}?${contentQuery.value}` : path
 
 const selectLocation = async (id: string) => {
+  if (localHasChanges.value && import.meta.client && !window.confirm('Discard unsaved changes and switch locations?')) return
+  localHasChanges.value = false
   await dashboardLocation.selectLocation(id, { replace: true })
 }
 
 // ─── Pages ────────────────────────────────────────────────────────────
-const siteVertical = computed<SiteVertical>(() => (siteData.value?.vertical as SiteVertical) || 'restaurant')
-const pages = computed(() => getEditablePages(siteVertical.value))
+const siteVertical = computed<SiteVertical | null>(() => siteData.value ? siteData.value.vertical as SiteVertical : null)
+const pages = computed(() => {
+  const capabilities = cmsCapabilities.value
+  if (!siteVertical.value || !capabilities || capabilities.template === 'blawby') return []
+  const allowedPageIds = new Set(capabilities.pages.map(page => page.id))
+  return getEditablePages(siteVertical.value, capabilities.template).filter(page => allowedPageIds.has(page.id))
+})
 
 function resolveInitialPageId() {
   const queryPage = route.query.page
@@ -486,16 +529,35 @@ function resolveInitialPageId() {
 const selectedPageId = ref(resolveInitialPageId())
 const currentPagePath = computed(() => pages.value.find(p => p.id === selectedPageId.value)?.path || '/')
 const selectedPageLabel = computed(() => pages.value.find(p => p.id === selectedPageId.value)?.label || '')
-const selectedPageScopeLabel = computed(() => pages.value.find(p => p.id === selectedPageId.value)?.scopeLabelKey === 'office' ? 'Office' : 'Location')
+const selectedPageScopeLabel = computed(() => {
+  const scope = pages.value.find(p => p.id === selectedPageId.value)?.scopeLabelKey
+  return scope === 'site' ? 'Site' : scope === 'office' ? 'Office' : 'Location'
+})
 
 const applyRouteContentScope = () => {
   const queryPage = route.query.page
+  if (!pages.value.length) {
+    if (typeof queryPage === 'string') {
+      throw createError({ statusCode: 404, statusMessage: `Page fields are not available for this template: ${queryPage}` })
+    }
+    selectedPageId.value = ''
+    return
+  }
   if (typeof queryPage === 'string' && pages.value.some(page => page.id === queryPage)) {
     selectedPageId.value = queryPage
+  } else if (typeof queryPage === 'string') {
+    throw createError({ statusCode: 404, statusMessage: `Page is not available for this site: ${queryPage}` })
   } else {
     selectedPageId.value = 'home'
   }
-  selectedLocationId.value = dashboardLocation.currentLocationId.value
+  const requestedLocation = route.query.location
+  if (typeof requestedLocation === 'string') {
+    const location = siteLocations.value.find(candidate => candidate.id === requestedLocation || candidate.slug === requestedLocation)
+    if (!location) throw createError({ statusCode: 404, statusMessage: `Location is not available for this site: ${requestedLocation}` })
+    selectedLocationId.value = location.id
+  } else {
+    selectedLocationId.value = dashboardLocation.currentLocationId.value
+  }
 }
 const previewPagePath = computed(() => {
   if (!selectedLocation.value) return currentPagePath.value
@@ -547,8 +609,19 @@ const onPageChange = async (oldPageId?: string) => {
   }
 }
 
+let rollingBackPageSelection = false
 watch(selectedPageId, (newVal, oldVal) => {
   if (newVal !== oldVal) {
+    if (rollingBackPageSelection) {
+      rollingBackPageSelection = false
+      return
+    }
+    if (localHasChanges.value && import.meta.client && !window.confirm('Discard unsaved changes and switch pages?')) {
+      rollingBackPageSelection = true
+      selectedPageId.value = oldVal
+      return
+    }
+    localHasChanges.value = false
     const { locationId: _locationId, ...restQuery } = route.query
     const query = { ...restQuery, page: newVal }
     router.replace({
@@ -614,11 +687,6 @@ const selectField = (key: string) => {
   activeField.value = key
   editingValue.value = currentValues.value[key] || ''
   pendingMediaAssetId.value = null
-  bookingPolicySummary.value = null
-  bookingPolicyDraft.value = {}
-  if (getFieldDef(selectedPageId.value, key)?.type === 'booking_policy') {
-    void loadBookingPolicyEditor()
-  }
   
   // Find which group this field belongs to
   const group = currentPageGroups.value.find(g => g.fields.includes(key))
@@ -643,42 +711,13 @@ const postPreviewUpdate = () => {
 }
 
 watch(editingValue, () => {
+  if (activeField.value && !contentLoading.value && currentValues.value[activeField.value] !== editingValue.value) {
+    currentValues.value = { ...currentValues.value, [activeField.value]: editingValue.value }
+    localHasChanges.value = true
+  }
   postPreviewUpdate()
 })
 
-const onRichTextBlur = (e: FocusEvent) => {
-  editingValue.value = DOMPurify.sanitize((e.target as HTMLElement).innerHTML)
-}
-
-const onRichTextPaste = (e: ClipboardEvent) => {
-  const html = e.clipboardData?.getData('text/html')
-  const text = e.clipboardData?.getData('text/plain') || ''
-  const allowedPasteTags = ['p', 'br', 'b', 'strong', 'i', 'em', 'ul', 'ol', 'li', 'a']
-  const escapeHtml = (value: string) => value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-
-  let cleaned: string
-  if (html) {
-    // Strip inline style/class/color attrs so pasted content inherits editor theme
-    cleaned = DOMPurify.sanitize(html, {
-      ALLOWED_TAGS: allowedPasteTags,
-      ALLOWED_ATTR: ['href'],
-    })
-  } else {
-    cleaned = text.split('\n').map(line => `<p>${line ? escapeHtml(line) : '<br>'}</p>`).join('')
-  }
-
-  const sanitized = DOMPurify.sanitize(cleaned, {
-    ALLOWED_TAGS: allowedPasteTags,
-    ALLOWED_ATTR: ['href'],
-  })
-
-  document.execCommand('insertHTML', false, sanitized)
-  const target = e.target as HTMLElement
-  editingValue.value = DOMPurify.sanitize(target.innerHTML)
-}
 
 // Tracks the picked asset ID separately so MediaPicker can show the thumbnail
 // within the current editor session. On reload, non-hero media editingValue is
@@ -694,84 +733,7 @@ function onMediaChange(asset: { id: string; publicUrl: string } | null) {
   pendingMediaAssetId.value = asset?.id ?? null
 }
 
-const richtextCommands = [
-  { cmd: 'bold',                label: 'B' },
-  { cmd: 'italic',              label: 'I' },
-  { cmd: 'insertUnorderedList', label: '• List' },
-  { cmd: 'insertOrderedList',   label: '1. List' }
-]
-const execCmd = (cmd: string) => document.execCommand(cmd, false)
 
-const bookingPolicyDraft = ref<Record<string, unknown>>({})
-const bookingPolicySummary = ref<ApiRecord | null>(null)
-
-async function loadBookingPolicyEditor() {
-  if (!activeFieldDef.value || activeFieldDef.value.type !== 'booking_policy') return
-  try {
-    const res = await $fetch<{ policy: ApiRecord | null; summary: ApiRecord | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
-      query: {
-        policy_type: activeFieldDef.value.policyType,
-        scope_type: 'site',
-      },
-    })
-    bookingPolicyDraft.value = res.policy ?? {}
-    bookingPolicySummary.value = res.summary ?? null
-  } catch (error) {
-    toast.add({ description: getErrorMessage(error, 'Failed to load booking policy'), color: 'error' })
-  }
-}
-
-const applyField = async () => {
-  if (!activeField.value || !activeFieldDef.value) return
-
-  if (activeFieldDef.value.type === 'booking_policy') {
-    saving.value = true
-    try {
-    const res = await $fetch<{ summary: ApiRecord | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
-        method: 'PATCH',
-        body: {
-          ...bookingPolicyDraft.value,
-          policy_type: activeFieldDef.value.policyType,
-          scope_type: 'site',
-        },
-      })
-      bookingPolicySummary.value = res.summary ?? null
-      toast.add({ description: `"${activeFieldDef.value.label}" updated`, color: 'success' })
-      iframeLoading.value = true
-      previewReloadToken.value = Date.now()
-    } catch (error) {
-      toast.add({ description: getErrorMessage(error, 'Failed to save booking policy'), color: 'error' })
-    } finally {
-      saving.value = false
-    }
-    return
-  }
-  
-  // Validation check
-  if (activeFieldDef.value.validate) {
-    const validationResult = activeFieldDef.value.validate(editingValue.value)
-    if (validationResult !== true) {
-      toast.add({ 
-        title: 'Validation Error',
-        description: typeof validationResult === 'string' ? validationResult : 'Invalid value', 
-        color: 'error' 
-      })
-      return
-    }
-  }
-
-  // Handle regular content fields
-  currentValues.value = { ...currentValues.value, [activeField.value]: editingValue.value }
-  localHasChanges.value = true
-  
-  // Automatically save and refresh preview for immediate feedback
-  try {
-    await handleSaveContent()
-    toast.add({ description: `"${activeFieldDef.value.label}" updated`, color: 'success' })
-  } catch {
-    return
-  }
-}
 
 // ─── Content state ────────────────────────────────────────────────────
 const currentValues = ref<Record<string, string>>({})
@@ -787,6 +749,8 @@ function getErrorMessage(error: unknown, fallback: string): string {
     if (response && typeof response === 'object') {
       const responseData = (response as Record<string, unknown>)._data
       if (responseData && typeof responseData === 'object') {
+        const apiError = (responseData as Record<string, unknown>).error
+        if (typeof apiError === 'string' && apiError) return apiError
         const statusMessage = (responseData as Record<string, unknown>).statusMessage
         if (typeof statusMessage === 'string' && statusMessage) return statusMessage
       }
@@ -804,12 +768,12 @@ const loadPageContent = async () => {
   if (requiresLocationSelection.value) return
   contentLoading.value = true
   try {
-    const res = await $fetch<{ content: ApiRecord[] }>(
-      endpointWithContentScope(`/api/dashboard/editor/content/${selectedPageId.value}`)
+    const res = await $fetch<{ fields: ApiRecord[] }>(
+      endpointWithContentScope(`/api/editor/sites/${siteId}/content/${selectedPageId.value}`)
     )
     if (version !== loadVersion.value) return
     const map: Record<string, string> = {}
-    for (const row of res.content || []) {
+    for (const row of res.fields) {
       if (row.field === 'hero') {
         // Hero fields use dedicated columns, support both asset_id and url for migration
         if (row.hero_title) map['hero.title'] = row.hero_title
@@ -836,15 +800,24 @@ const loadPageContent = async () => {
 // Load on mount
 onMounted(async () => {
   await loadEditorContext()
-  await loadPageContent()
+  if (pages.value.length) await loadPageContent()
 })
 
 // ─── Actions ──────────────────────────────────────────────────────────
 const handleSaveContent = async () => {
   if (!localHasChanges.value) return
+  for (const [field, value] of Object.entries(currentValues.value)) {
+    const fieldDefinition = getFieldDef(selectedPageId.value, field)
+    if (!fieldDefinition?.validate) continue
+    const validationResult = fieldDefinition.validate(value)
+    if (validationResult !== true) {
+      toast.add({ description: typeof validationResult === 'string' ? validationResult : `Invalid value for ${fieldDefinition.label}`, color: 'error' })
+      return
+    }
+  }
   saving.value = true
   try {
-    await $fetch(`/api/dashboard/editor/content/save`, {
+    await $fetch(`/api/editor/sites/${siteId}/content/save`, {
       method: 'POST',
       body: { page: selectedPageId.value, changes: currentValues.value },
       query: effectiveLocationId.value ? { locationId: effectiveLocationId.value } : {},
@@ -879,15 +852,17 @@ const handleDiscard = async () => {
   }
 }
 
+onBeforeRouteLeave(() => {
+  if (!localHasChanges.value || !import.meta.client) return true
+  return window.confirm('Discard unsaved content changes?')
+})
+
 // ─── Utilities ────────────────────────────────────────────────────────
 const stripHtml = (html: string) => html.replace(/<[^>]*>/g, '').trim()
 
 const fieldPreview = (fieldKey: string): string => {
   const fieldDef = getFieldDef(selectedPageId.value, fieldKey)
-  if (fieldDef?.type === 'booking_policy') {
-    return 'Structured policy'
-  }
-  const raw = currentValues.value[fieldKey] || getFieldDef(selectedPageId.value, fieldKey)?.defaultValue
+  const raw = currentValues.value[fieldKey] || fieldDef?.defaultValue
   if (!raw) return fieldHasActiveGoogleSync(fieldKey) ? 'Synced from Google Business' : 'Add content'
   const text = stripHtml(raw)
   return text.length > 48 ? text.substring(0, 45) + '…' : text || 'Add content'
@@ -895,12 +870,3 @@ const fieldPreview = (fieldKey: string): string => {
 
 useSeoMeta({ title: 'Content Editor | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>
-
-<style scoped>
-[contenteditable]:empty::before {
-  content: attr(data-placeholder);
-  color: #a8a29e;
-  font-style: italic;
-  pointer-events: none;
-}
-</style>

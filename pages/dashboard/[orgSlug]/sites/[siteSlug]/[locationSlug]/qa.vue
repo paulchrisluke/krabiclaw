@@ -99,7 +99,7 @@ const form = reactive({ question: '', answer: '' })
 const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 
 const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'Edit page list', icon: 'i-lucide-layers', to: paths.value.pages, color: 'neutral' as const, variant: 'soft' as const }
+  { label: 'Content', icon: 'i-lucide-layers', to: paths.value.content, color: 'neutral' as const, variant: 'soft' as const }
 ]))
 
 async function loadContext() {

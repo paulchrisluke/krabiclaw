@@ -1,8 +1,9 @@
 import type { SiteVertical } from '~/utils/vertical-copy'
+import { cmsCapabilityRegistry, resolveCmsCapabilities } from '~/config/cms-registry'
 
 export type FieldSource = 'manual' | 'google' | 'static' | 'computed'
 
-export type FieldDefinition = TextField | TextareaField | RichTextField | ImageField | MediaField | MenuItemsField | BusinessHoursField | LocationField | ProductsField | BookingPolicyField;
+export type FieldDefinition = TextField | TextareaField | RichTextField | ImageField | MediaField;
 export type FieldType = FieldDefinition;
 
 interface BaseField {
@@ -33,22 +34,6 @@ export interface ImageField extends BaseField {
 export interface MediaField extends BaseField {
   type: 'media';
   mediaKind: 'image' | 'video' | 'any';
-}
-export interface MenuItemsField extends BaseField {
-  type: 'menu_items';
-}
-export interface BusinessHoursField extends BaseField {
-  type: 'business_hours';
-}
-export interface LocationField extends BaseField {
-  type: 'location';
-}
-export interface ProductsField extends BaseField {
-  type: 'products';
-}
-export interface BookingPolicyField extends BaseField {
-  type: 'booking_policy';
-  policyType: 'reservation' | 'experience';
 }
 
 export interface ManualInputConfig {
@@ -98,28 +83,33 @@ export interface EditablePage {
   label: string
   path: string
   scope: 'site' | 'location'
-  scopeLabelKey: 'location' | 'office'
+  scopeLabelKey: 'site' | 'location' | 'office'
 }
 
 /** Resolves the visible page inventory for a tenant's vertical — the one source of truth for
  *  the CMS page selector (content.vue) and the page inventory list (pages.vue). */
-export function getEditablePages(vertical: SiteVertical): EditablePage[] {
-  return Object.entries(contentRegistry)
-    .filter(([, page]) => page.verticals.includes(vertical))
-    .map(([id, page]) => ({
-      id,
+export function getEditablePages(vertical: SiteVertical, template: PublicTemplateSlug): EditablePage[] {
+  const capability = resolveCmsCapabilities(vertical, template)
+  return capability.pages.map(page => ({
+      id: page.id,
       label: page.label,
-      path: page.path,
+      path: page.route,
       scope: page.scope,
-      scopeLabelKey: page.scope === 'location' && vertical === 'professional_service' ? 'office' : 'location',
+      scopeLabelKey: page.scope === 'site'
+        ? 'site'
+        : capability.locationVocabulary === 'office/service area' ? 'office' : 'location',
     }))
 }
 
 /** Resolves the public preview path for a page, given the currently selected location (if any). */
 export function resolvePreviewPath(pageId: string, context: PreviewContext): string {
-  const page = contentRegistry[pageId]
-  if (!page) return '/'
-  return page.preview?.resolvePath(context) ?? page.path
+  const candidates = cmsCapabilityRegistry.flatMap(capability => capability.pages).filter(page => page.id === pageId)
+  if (!candidates.length) throw new Error(`Unknown CMS page: ${pageId}`)
+  const route = candidates[0]!.route
+  if (route.includes(':location') && !context.locationSlug) {
+    throw new Error(`CMS page "${pageId}" requires an explicit location slug`)
+  }
+  return route.replace(':location', context.locationSlug ?? '')
 }
 
 /** Shared validator for social URLs to reject common placeholder patterns */
@@ -277,18 +267,6 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'text',
         sources: ['manual', 'google'],
         googlePath: 'phoneNumbers.0.phoneNumber',
-        googleLocked: true,
-        integrationConfig: {
-          type: 'google_business',
-          syncDirection: 'two_way',
-          conflictResolution: 'integration_wins'
-        }
-      },
-      'business.hours': {
-        label: 'Opening Hours',
-        type: 'business_hours',
-        sources: ['manual', 'google'],
-        googlePath: 'regularHours',
         googleLocked: true,
         integrationConfig: {
           type: 'google_business',
@@ -497,18 +475,6 @@ export const contentRegistry: Record<string, PageDefinition> = {
           conflictResolution: 'integration_wins'
         }
       },
-      'business.hours': { 
-        label: 'Hours', 
-        type: 'business_hours', 
-        sources: ['manual', 'google'], 
-        googlePath: 'regularHours',
-        googleLocked: true,
-        integrationConfig: {
-          type: 'google_business',
-          syncDirection: 'two_way',
-          conflictResolution: 'integration_wins'
-        }
-      }
     }
   },
 
@@ -518,33 +484,14 @@ export const contentRegistry: Record<string, PageDefinition> = {
     verticals: ['restaurant'],
     scope: 'location',
     groups: [
-      { id: 'hero',   label: 'Hero Section',  icon: 'i-lucide-image',        fields: ['hero.title', 'hero.subtitle'] },
-      { id: 'items',  label: 'Menu Items',    icon: 'i-lucide-list',   fields: ['menu_items'] },
-      { id: 'google', label: 'Google Products', icon: 'i-lucide-layers', fields: ['business.products'] }
+      { id: 'hero', label: 'Hero Section', icon: 'i-lucide-image', fields: ['hero.title', 'hero.subtitle'] }
     ],
     preview: {
       resolvePath: context => context.locationSlug ? `/locations/${context.locationSlug}/menu` : '/menu',
     },
     fields: {
       'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Our Menu' },
-      'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'A look at what we serve.' },
-      'menu_items': {
-        label: 'Menu Items',
-        type: 'menu_items',
-        sources: ['manual']
-      },
-      'business.products': { 
-        label: 'Google Products', 
-        type: 'products', 
-        sources: ['manual', 'google'], 
-        googlePath: 'products',
-        googleLocked: true,
-        integrationConfig: {
-          type: 'google_business',
-          syncDirection: 'import',
-          conflictResolution: 'integration_wins'
-        }
-      }
+      'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'A look at what we serve.' }
     }
   },
 
@@ -615,17 +562,10 @@ export const contentRegistry: Record<string, PageDefinition> = {
     groups: [
       { id: 'hero', label: 'Hero Section', icon: 'i-lucide-image', fields: ['hero.title', 'hero.subtitle'] },
       { id: 'contact', label: 'Contact Details', icon: 'i-lucide-phone', fields: ['contact.phone', 'contact.email'] },
-      { id: 'policies', label: 'Policies', icon: 'i-lucide-clipboard-list', fields: ['policies.structured'] },
     ],
     fields: {
       'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Reservations' },
       'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Plan your visit with us.' },
-      'policies.structured': {
-        label: 'Reservation Policies',
-        type: 'booking_policy',
-        policyType: 'reservation',
-        sources: ['manual'],
-      },
       'contact.phone': {
         label: 'Contact Phone',
         type: 'text',
