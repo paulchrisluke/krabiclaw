@@ -32,12 +32,14 @@ test('editor supplies the complete public article model and scopes both theme to
   assert.match(source, /--blawby-primary/)
 })
 
-test('markdown editing keeps canonical source instead of parsing and serializing the document', async () => {
+test('markdown editing makes visual and lossless source modes explicit', async () => {
   const source = await readFile(new URL('../../components/ui/RichTextEditor.vue', import.meta.url), 'utf8')
-  assert.match(source, /<textarea[\s\S]*:value="modelValue"[\s\S]*@input="emitSource"/)
+  assert.match(source, /<UEditor[\s\S]*v-if="mode === 'rich'"/)
+  assert.match(source, /<div v-else[\s\S]*<textarea[\s\S]*:value="modelValue"[\s\S]*@input="emitSource"/)
   assert.match(source, /replaceMarkdownRange\(props\.modelValue, start, end, replacement\)/)
   assert.match(source, /splitMarkdownAt\(props\.modelValue, start\)/)
-  assert.doesNotMatch(source, /UEditor|ProseMirror|editor\.markdown|setContent/)
+  assert.match(source, /editorMode: 'source'/)
+  assert.match(source, /editorMode: 'rich'/)
 })
 
 test('source-native Markdown operations preserve tables, HTML, links, lists, and formatting exactly', () => {

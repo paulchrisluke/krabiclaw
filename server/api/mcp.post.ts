@@ -608,6 +608,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
       "request_id:",
       requestId ?? null,
     );
+    if (status >= 500 && error instanceof Error) console.error(error.stack ?? error.message);
     if (status === 401) {
       const cfEnv = cloudflareEnv(event);
       const baseUrl = (

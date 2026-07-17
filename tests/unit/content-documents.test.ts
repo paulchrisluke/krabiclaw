@@ -196,6 +196,7 @@ test('syncContentDocumentFromMarkdown creates blocks and a published revision', 
   assert.ok(document)
   assert.equal(result.blocks.length, 4)
   assert.deepEqual(result.blocks.map(block => block.type), ['heading', 'markdown', 'heading', 'markdown'])
+  assert.equal(result.blocks.find(block => block.type === 'markdown')?.data.editor_mode, 'source')
   assert.equal(document.draft_revision_id, result.revision_id)
   assert.equal(document.published_revision_id, result.revision_id)
   assert.equal(result.document.updated_at, 'committed-document-token')

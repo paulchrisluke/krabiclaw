@@ -144,11 +144,11 @@ const contentDocumentRows = values((manifest.articles ?? []).map(article => `(
 )`))
 const contentBlockRows = values((manifest.articles ?? []).map(article => `(
   ${sqlValue(`cblk_ncls_${article.slug}`)}, ${sqlValue(`cdoc_ncls_${article.slug}`)}, NULL, 'markdown', 0, NULL,
-  ${sqlJson({ markdown: article.body || article.excerpt || '' })}, ${now}, ${now}
+  ${sqlJson({ markdown: article.body || article.excerpt || '', editor_mode: 'source' })}, ${now}, ${now}
 )`))
 const contentRevisionRows = values((manifest.articles ?? []).map((article, index) => `(
   ${sqlValue(`crev_ncls_${article.slug}`)}, ${sqlValue(`cdoc_ncls_${article.slug}`)},
-  ${sqlJson({ blocks: [{ id: `cblk_ncls_${article.slug}`, parent_block_id: null, type: 'markdown', position: 0, level: null, data: { markdown: article.body || article.excerpt || '' }, updated_at: article.updated_at || article.published_at || new Date(Date.UTC(2026, 0, 1, 12) + index * 86400000).toISOString() }] })},
+  ${sqlJson({ blocks: [{ id: `cblk_ncls_${article.slug}`, parent_block_id: null, type: 'markdown', position: 0, level: null, data: { markdown: article.body || article.excerpt || '', editor_mode: 'source' }, updated_at: article.updated_at || article.published_at || new Date(Date.UTC(2026, 0, 1, 12) + index * 86400000).toISOString() }] })},
   ${sqlValue(article.body || article.excerpt || '')}, ${sqlValue(USER_ID)}, 'Seed import', ${now}
 )`))
 

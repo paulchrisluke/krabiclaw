@@ -12,7 +12,7 @@ export interface EditorContentBlock {
 }
 
 export function initialBlogEditorBlocks(): EditorContentBlock[] {
-  return [{ type: 'markdown', data: { markdown: '' } }]
+  return [{ type: 'markdown', data: { markdown: '', editor_mode: 'rich' } }]
 }
 
 export class SerializedSnapshotQueue<TSnapshot, TResult> {

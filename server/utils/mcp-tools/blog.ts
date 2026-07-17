@@ -7,7 +7,7 @@ const blogContentBlockSchema = {
     id: { type: 'string' },
     type: { type: 'string', enum: ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout'] },
     level: { type: ['number', 'null'] },
-    data: { type: 'object', description: 'Typed block payload. FAQ uses items; How-To uses steps; images retain asset_id, alt, caption, and resolved media metadata.' },
+    data: { type: 'object', description: 'Typed block payload. Markdown requires markdown plus editor_mode (rich for visual-editor-safe prose, source for tables/raw HTML). FAQ uses items; How-To uses steps; images retain asset_id, alt, caption, and resolved media metadata.' },
   },
   required: ['type', 'data'],
 } as const
@@ -51,7 +51,6 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       confirmRequired: false,
       inputSchema: {
         title: { type: 'string' },
-        body: { type: 'string', description: 'Markdown compatibility body. Prefer content_blocks when authoring structured content.' },
         excerpt: { type: 'string' },
         category: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.' },
@@ -64,7 +63,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         scheduled_for: { type: ['string', 'null'], description: 'ISO 8601 datetime with timezone. Publishes automatically when due.' },
         publish: { type: 'boolean', description: 'Publish immediately. Defaults to false (draft).' },
       },
-      required: ['title', 'body'],
+      required: ['title', 'content_blocks'],
       outputSchema: blogPostMutationResultObject,
     }),
   siteTool({
@@ -76,7 +75,6 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         post_id: { type: 'string', description: 'Post id or slug.' },
         title: { type: 'string' },
-        body: { type: 'string', description: 'Markdown compatibility body. Prefer content_blocks for complete article edits.' },
         excerpt: { type: 'string' },
         category: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.' },

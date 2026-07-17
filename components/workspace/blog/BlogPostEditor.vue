@@ -7,6 +7,7 @@
       </p>
       <UButton icon="i-lucide-share-2" color="neutral" variant="ghost" size="sm" aria-label="Share editor" :disabled="!post" @click="share"><span class="hidden sm:inline">Share</span></UButton>
       <UButton ref="settingsButton" icon="i-lucide-settings" color="neutral" variant="ghost" size="sm" aria-label="Post settings" @click="openSettings"><span class="hidden sm:inline">Settings</span></UButton>
+      <UButton v-if="post?.published_at" color="neutral" variant="soft" size="sm" :loading="unpublishing" @click="unpublish">Unpublish</UButton>
       <UButton size="sm" :loading="publishing" :disabled="loadPending || saveState === 'conflict'" @click="publish">Publish</UButton>
     </header>
 
@@ -33,6 +34,7 @@
           @update:block="updateBlock"
           @insert-block="handleInsertBlock"
           @insert-block-type="handleInsertBlockType"
+          @move-block="moveBlock"
           @merge-block="handleMergeBlock"
           @split-insert="handleSplitInsert"
         >
@@ -104,6 +106,7 @@ const loadPending = ref(true)
 const loadError = ref('')
 const saveState = ref<'saved' | 'saving' | 'failed' | 'conflict'>('saved')
 const publishing = ref(false)
+const unpublishing = ref(false)
 const settingsOpen = ref(false)
 const settingsButton = ref<{ $el?: HTMLElement } | null>(null)
 const settingsPanel = ref<HTMLElement | null>(null)
@@ -216,16 +219,8 @@ async function load() {
     slugResetRequested.value = false
     tagsText.value = loaded.tags?.join(', ') || ''
     publishTiming.value = loaded.scheduled_for ? 'Scheduled' : 'Now'
-    if (loaded.content_document) {
-      blocks.value = structuredClone(loaded.content_document.blocks || [])
-    } else {
-      blocks.value = [{ type: 'markdown', data: { markdown: loaded.body || '' } }]
-      for (const type of ['faq', 'how_to'] as const) {
-        if (blocks.value.some(block => block.type === type)) continue
-        const legacy = loaded.components?.find(component => component.type === type)
-        if (legacy?.data) blocks.value.push({ type, data: structuredClone(legacy.data) as Record<string, unknown> })
-      }
-    }
+    if (!loaded.content_document) throw new Error('Blog content document is missing')
+    blocks.value = structuredClone(loaded.content_document.blocks || [])
     ensureTrailingTextBlock()
   } catch (error) { loadError.value = getErrorMessage(error, 'Failed to load post.') } finally { loadPending.value = false }
 }
@@ -263,7 +258,8 @@ function buildSaveSnapshot(id = postId.value): SaveSnapshot {
   const scheduledFor = publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null
   return { postId: id, payload: { title: form.title, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: scheduledFor, content_blocks: structuredClone(toRaw(blocks.value)) } }
 }
-async function publish() { publishing.value = true; try { if (!post.value) { await createDraft(true); return } if (dirty) saveQueue.mark(buildSaveSnapshot()); await saveQueue.runExclusive(async () => { const updated = await props.repository.update(postId.value, { publish: true, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null, expected_updated_at: serverPostUpdatedAt }); syncServerVersions(updated); post.value = { ...updated, content_document: post.value?.content_document }; return updated }); saveState.value = 'saved' } catch (error: unknown) { const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status); saveState.value = status === 409 ? 'conflict' : 'failed' } finally { publishing.value = false } }
+async function publish() { publishing.value = true; try { if (!post.value) { await createDraft(true); return } if (dirty) saveQueue.mark(buildSaveSnapshot()); await saveQueue.runExclusive(async () => { const updated = await props.repository.update(postId.value, { publish: true, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null, expected_updated_at: serverPostUpdatedAt }); syncServerVersions(updated); post.value = updated; return updated }); saveState.value = 'saved' } catch (error: unknown) { const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status); saveState.value = status === 409 ? 'conflict' : 'failed' } finally { publishing.value = false } }
+async function unpublish() { if (!post.value) return; unpublishing.value = true; try { if (dirty) saveQueue.mark(buildSaveSnapshot()); await saveQueue.runExclusive(async () => { const updated = await props.repository.update(postId.value, { unpublish: true, expected_updated_at: serverPostUpdatedAt }); syncServerVersions(updated); post.value = updated; return updated }); saveState.value = 'saved' } catch (error: unknown) { const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status); saveState.value = status === 409 ? 'conflict' : 'failed' } finally { unpublishing.value = false } }
 async function createDraft(publishNow: boolean) {
   if (!isDraftValid()) return null
   publishAfterCreateRequested ||= publishNow
@@ -272,7 +268,7 @@ async function createDraft(publishNow: boolean) {
     if (saveTimer) clearTimeout(saveTimer)
     saveState.value = 'saving'
     dirty = false
-    let created = await props.repository.create({ title: form.title, body: serializeBody(), content_blocks: structuredClone(toRaw(blocks.value)), category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null, publish: publishNow })
+    let created = await props.repository.create({ title: form.title, content_blocks: structuredClone(toRaw(blocks.value)), category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null, publish: publishNow })
     applyingServerSnapshot = true
     post.value = created
     syncServerVersions(created)
@@ -316,7 +312,7 @@ function handleInsertBlock(index: number, _cursorPosition: number) {
   const block = blocks.value[index]
   if (!block || (block.type !== 'markdown' && block.type !== 'heading')) return
 
-  blocks.value.splice(index + 1, 0, { type: 'markdown', data: { markdown: '' } })
+  blocks.value.splice(index + 1, 0, { type: 'markdown', data: { markdown: '', editor_mode: 'rich' } })
 }
 function structuralBlockData(type: string) {
   return type === 'faq' ? { items: [{ question: '', answer: '' }] } : type === 'how_to' ? { steps: [{ text: '' }] } : type === 'image' ? { asset_id: '', public_url: '', alt: '', caption: '' } : {}
@@ -328,7 +324,7 @@ function structuralBlockData(type: string) {
 function ensureTrailingTextBlock() {
   const last = blocks.value[blocks.value.length - 1]
   if (!last || (last.type !== 'markdown' && last.type !== 'heading')) {
-    blocks.value.push({ type: 'markdown', data: { markdown: '' } })
+    blocks.value.push({ type: 'markdown', data: { markdown: '', editor_mode: 'rich' } })
   }
 }
 function handleInsertBlockType(index: number, type: string) {
@@ -341,15 +337,21 @@ function handleInsertBlockType(index: number, type: string) {
   else blocks.value.splice(index + 1, 0, newBlock)
   ensureTrailingTextBlock()
 }
+function moveBlock(index: number, delta: -1 | 1) {
+  const target = index + delta
+  if (target < 0 || target >= blocks.value.length) return
+  const [block] = blocks.value.splice(index, 1)
+  if (block) blocks.value.splice(target, 0, block)
+}
 // Fired when the user picks Image/FAQ/How-To from the "/" menu mid-paragraph
 // (see RichTextEditor.vue's splitAtCursorAndInsert). The rich editor has
 // already truncated blocks[index] to just the "before" half via the normal
 // update:modelValue flow by the time this fires — we only need to insert the
 // new structural block, plus a fresh markdown block for whatever came after
 // the cursor (skipped entirely if there was nothing after it).
-function handleSplitInsert(index: number, payload: { after: string; blockType: 'image' | 'faq' | 'how_to' }) {
+function handleSplitInsert(index: number, payload: { after: string; blockType: 'image' | 'faq' | 'how_to'; editorMode: 'rich' | 'source' }) {
   const newBlocks: BlogEditorBlock[] = [{ type: payload.blockType, data: structuralBlockData(payload.blockType) }]
-  if (payload.after.trim()) newBlocks.push({ type: 'markdown', data: { markdown: payload.after } })
+  if (payload.after.trim()) newBlocks.push({ type: 'markdown', data: { markdown: payload.after, editor_mode: payload.editorMode } })
   blocks.value.splice(index + 1, 0, ...newBlocks)
   ensureTrailingTextBlock()
 }

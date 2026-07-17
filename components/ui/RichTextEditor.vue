@@ -1,6 +1,22 @@
 <template>
-  <div class="w-full space-y-2">
-    <div v-if="editable" class="flex flex-wrap items-center gap-1" role="toolbar" aria-label="Markdown formatting">
+  <UEditor
+    v-if="mode === 'rich'"
+    v-slot="{ editor }"
+    :model-value="modelValue"
+    content-type="markdown"
+    :placeholder="placeholder"
+    :editable="editable"
+    class="w-full"
+    :starter-kit="{ heading: { levels: [2, 3] } }"
+    :handlers="customHandlers"
+    :ui="{ content: 'p-0', base: 'p-0 sm:px-0' }"
+    @update:model-value="value => emit('update:modelValue', String(value ?? ''))"
+  >
+    <UEditorToolbar v-if="editable" :editor="editor" :items="toolbarItems" layout="bubble" />
+    <UEditorSuggestionMenu v-if="editable" :editor="editor" :items="suggestionItems" />
+  </UEditor>
+  <div v-else class="w-full space-y-2">
+    <div v-if="editable" class="flex flex-wrap items-center gap-1" role="toolbar" aria-label="Markdown source formatting">
       <UButton size="xs" color="neutral" variant="ghost" aria-label="Bold" @click="wrapSelection('**', '**', 'bold text')"><strong>B</strong></UButton>
       <UButton size="xs" color="neutral" variant="ghost" aria-label="Italic" @click="wrapSelection('_', '_', 'italic text')"><em>I</em></UButton>
       <UButton size="xs" color="neutral" variant="ghost" aria-label="Link" @click="wrapSelection('[', '](https://)', 'link text')">Link</UButton>
@@ -26,21 +42,25 @@
 </template>
 
 <script setup lang="ts">
+import type { Editor } from '@tiptap/vue-3'
+import type { EditorCustomHandlers, EditorSuggestionMenuItem, EditorToolbarItem } from '@nuxt/ui'
 import { replaceMarkdownRange, splitMarkdownAt } from '~/utils/markdown-source'
 
 const props = withDefaults(defineProps<{
   modelValue?: string
   placeholder?: string
   editable?: boolean
+  mode?: 'rich' | 'source'
 }>(), {
   modelValue: '',
   placeholder: 'Start writing in Markdown…',
   editable: true,
+  mode: 'rich',
 })
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
-  'split-insert': [payload: { after: string; blockType: 'image' | 'faq' | 'how_to' }]
+  'split-insert': [payload: { after: string; blockType: 'image' | 'faq' | 'how_to'; editorMode: 'rich' | 'source' }]
 }>()
 const textarea = useTemplateRef<HTMLTextAreaElement>('textarea')
 
@@ -81,6 +101,50 @@ function splitAtCursorAndInsert(blockType: 'image' | 'faq' | 'how_to') {
   const { start } = selection()
   const { before, after } = splitMarkdownAt(props.modelValue, start)
   emit('update:modelValue', before)
-  emit('split-insert', { after, blockType })
+  emit('split-insert', { after, blockType, editorMode: 'source' })
 }
+
+function splitRichTextAtCursor(editor: Editor, blockType: 'image' | 'faq' | 'how_to') {
+  const { state } = editor
+  const beforeNode = state.doc.cut(0, state.selection.from)
+  const afterNode = state.doc.cut(state.selection.from, state.doc.content.size)
+  if (!editor.markdown) throw new Error('Markdown editor extension is not available')
+  const before = editor.markdown.serialize(beforeNode.toJSON())
+  const after = editor.markdown.serialize(afterNode.toJSON()).trim()
+  editor.chain().setMeta('addToHistory', false).setContent(before, { contentType: 'markdown' }).run()
+  emit('split-insert', { after, blockType, editorMode: 'rich' })
+}
+
+const toolbarItems: EditorToolbarItem[][] = [[
+  { kind: 'mark', mark: 'bold', icon: 'i-lucide-bold' },
+  { kind: 'mark', mark: 'italic', icon: 'i-lucide-italic' },
+  { kind: 'link', icon: 'i-lucide-link' },
+], [
+  { kind: 'heading', level: 2, icon: 'i-lucide-heading-2' },
+  { kind: 'heading', level: 3, icon: 'i-lucide-heading-3' },
+  { kind: 'blockquote', icon: 'i-lucide-quote' },
+]]
+
+const customHandlers = {
+  insertStructuralBlock: {
+    canExecute: () => true,
+    execute: (editor: Editor, item?: { blockType?: 'image' | 'faq' | 'how_to' }) => {
+      splitRichTextAtCursor(editor, item?.blockType ?? 'image')
+      return editor.chain().focus()
+    },
+    isActive: () => false,
+  },
+} satisfies EditorCustomHandlers
+
+const suggestionItems: EditorSuggestionMenuItem<typeof customHandlers>[] = [
+  { kind: 'heading', level: 2, label: 'Heading 2', icon: 'i-lucide-heading-2' },
+  { kind: 'heading', level: 3, label: 'Heading 3', icon: 'i-lucide-heading-3' },
+  { kind: 'blockquote', label: 'Quote', icon: 'i-lucide-quote' },
+  { kind: 'bulletList', label: 'Bulleted list', icon: 'i-lucide-list' },
+  { kind: 'orderedList', label: 'Numbered list', icon: 'i-lucide-list-ordered' },
+  { kind: 'horizontalRule', label: 'Divider', icon: 'i-lucide-minus' },
+  { kind: 'insertStructuralBlock', blockType: 'image', label: 'Image', icon: 'i-lucide-image' },
+  { kind: 'insertStructuralBlock', blockType: 'faq', label: 'FAQ', icon: 'i-lucide-circle-help' },
+  { kind: 'insertStructuralBlock', blockType: 'how_to', label: 'How-To', icon: 'i-lucide-list-ordered' },
+]
 </script>

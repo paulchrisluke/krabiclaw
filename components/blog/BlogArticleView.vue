@@ -36,6 +36,7 @@
       @update:block="(index, block) => $emit('update:block', index, block)"
       @insert-block="(index, cursorPosition) => $emit('insert-block', index, cursorPosition)"
       @insert-block-type="(index, type) => $emit('insert-block-type', index, type)"
+      @move-block="(index, delta) => $emit('move-block', index, delta)"
       @merge-block="(index, direction) => $emit('merge-block', index, direction)"
       @split-insert="(index, payload) => $emit('split-insert', index, payload)"
     >
@@ -68,7 +69,7 @@ const props = withDefaults(defineProps<{
   showMeta?: boolean
 }>(), { excerpt: null, category: null, publishedAt: null, updatedAt: null, authorName: null, authorImage: null, siteName: null, mediaUrl: null, mediaKind: null, readMinutes: null, blocks: () => [], editable: false, template: 'saya', showHeader: true, showMeta: true })
 
-defineEmits<{ 'update:title': [value: string]; 'update:block': [index: number, block: BlogEditorBlock]; 'insert-block': [index: number, cursorPosition: number]; 'insert-block-type': [index: number, type: string]; 'merge-block': [index: number, direction: 'back' | 'forward']; 'split-insert': [index: number, payload: { after: string; blockType: 'image' | 'faq' | 'how_to' }] }>()
+defineEmits<{ 'update:title': [value: string]; 'update:block': [index: number, block: BlogEditorBlock]; 'insert-block': [index: number, cursorPosition: number]; 'insert-block-type': [index: number, type: string]; 'move-block': [index: number, delta: -1 | 1]; 'merge-block': [index: number, direction: 'back' | 'forward']; 'split-insert': [index: number, payload: { after: string; blockType: 'image' | 'faq' | 'how_to'; editorMode: 'rich' | 'source' }] }>()
 
 const authorInitials = computed(() => String(props.authorName || props.siteName || 'A').split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase())
 const normalizedBlocks = computed(() => props.blocks ?? [])

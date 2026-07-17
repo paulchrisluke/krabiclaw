@@ -21,6 +21,7 @@ import {
   renderContentPreview,
   replaceContentBlock,
   type ContentBlockType,
+  type ContentBlockInput,
   type ContentDocumentOwnerType,
 } from '~/server/utils/content-documents'
 import {
@@ -81,7 +82,7 @@ function optionalArray(args: Record<string, unknown>, key: string) {
 }
 
 const CONTENT_DOCUMENT_OWNER_TYPES: readonly ContentDocumentOwnerType[] = ['platform_blog', 'platform_doc', 'tenant_blog']
-const CONTENT_BLOCK_TYPES: readonly ContentBlockType[] = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'ai_assistance', 'cta', 'callout']
+const CONTENT_BLOCK_TYPES: readonly ContentBlockType[] = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout']
 
 function requiredObject(args: Record<string, unknown>, key: string) {
   const value = args[key]
@@ -89,6 +90,22 @@ function requiredObject(args: Record<string, unknown>, key: string) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be an object.`)
   }
   return value as Record<string, unknown>
+}
+
+function contentBlocks(args: Record<string, unknown>): ContentBlockInput[] {
+  const value = args.content_blocks
+  if (!Array.isArray(value) || !value.length) throw mcpProtocolError(MCP_ERROR.invalidParams, 'content_blocks are required.')
+  return value.map((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw mcpProtocolError(MCP_ERROR.invalidParams, `content_blocks[${index}] must be an object.`)
+    const block = item as Record<string, unknown>
+    return {
+      id: typeof block.id === 'string' ? block.id : undefined,
+      type: optionalContentBlockType(block, 'type'),
+      data: requiredObject(block, 'data'),
+      parent_block_id: optionalNullableString(block, 'parent_block_id'),
+      level: optionalNullableNumber(block, 'level'),
+    }
+  })
 }
 
 function optionalContentBlockType(args: Record<string, unknown>, key: string) {
@@ -666,7 +683,7 @@ export async function executePlatformMcpToolCall(
       }
       return await createPlatformBlogPost(user.db, user.userId, {
         title: requiredString(rawArguments, 'title'),
-        body: requiredString(rawArguments, 'body'),
+        content_blocks: contentBlocks(rawArguments),
         excerpt: optionalString(rawArguments, 'excerpt') ?? null,
         category: optionalString(rawArguments, 'category') ?? null,
         ...navMetadataInput(rawArguments),
@@ -676,7 +693,6 @@ export async function executePlatformMcpToolCall(
         canonical_url: optionalString(rawArguments, 'canonical_url') ?? null,
         robots: optionalString(rawArguments, 'robots') ?? null,
         featured_image_asset_id: optionalString(rawArguments, 'featured_image_asset_id') ?? null,
-        ...structuredContentInput(rawArguments),
         publish: optionalBoolean(rawArguments, 'publish') ?? false,
       }, blogScope)
     }
@@ -684,7 +700,8 @@ export async function executePlatformMcpToolCall(
       const siteId = optionalString(rawArguments, 'site_id')
       return await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), {
         title: optionalString(rawArguments, 'title'),
-        body: optionalString(rawArguments, 'body'),
+        content_blocks: rawArguments.content_blocks === undefined ? undefined : contentBlocks(rawArguments),
+        expected_document_updated_at: optionalString(rawArguments, 'expected_document_updated_at'),
         excerpt: optionalString(rawArguments, 'excerpt'),
         category: optionalString(rawArguments, 'category'),
         ...navMetadataInput(rawArguments),
@@ -694,7 +711,6 @@ export async function executePlatformMcpToolCall(
         canonical_url: optionalString(rawArguments, 'canonical_url'),
         robots: optionalString(rawArguments, 'robots'),
         featured_image_asset_id: optionalString(rawArguments, 'featured_image_asset_id'),
-        ...structuredContentInput(rawArguments),
         publish: optionalBoolean(rawArguments, 'publish'),
         unpublish: optionalBoolean(rawArguments, 'unpublish'),
       }, siteId)

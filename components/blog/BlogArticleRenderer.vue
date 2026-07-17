@@ -14,11 +14,17 @@
       <template v-for="(block, index) in blocks" :key="block.id || index">
         <section class="group relative">
           <div v-if="editable" class="absolute right-full top-0 mr-2 flex items-center gap-1">
+            <button class="flex size-8 shrink-0 items-center justify-center rounded-full border border-current/30 bg-transparent hover:bg-current/5 disabled:opacity-30" :disabled="index === 0" aria-label="Move block up" @click="$emit('move-block', index, -1)">
+              <UIcon name="i-lucide-chevron-up" class="size-4" />
+            </button>
+            <button class="flex size-8 shrink-0 items-center justify-center rounded-full border border-current/30 bg-transparent hover:bg-current/5 disabled:opacity-30" :disabled="index === blocks.length - 1" aria-label="Move block down" @click="$emit('move-block', index, 1)">
+              <UIcon name="i-lucide-chevron-down" class="size-4" />
+            </button>
             <button class="flex size-8 shrink-0 items-center justify-center rounded-full border border-current/30 hover:border-current/50 hover:bg-current/5 bg-transparent" aria-label="Remove block" @click="$emit('merge-block', index, index === 0 ? 'forward' : 'back')">
               <UIcon name="i-lucide-trash-2" class="size-4" />
             </button>
             <UPopover v-model:open="inserterOpenLocal[index]">
-              <button class="flex size-8 shrink-0 items-center justify-center rounded-full border border-current/30 hover:border-current/50 bg-transparent">
+              <button class="flex size-8 shrink-0 items-center justify-center rounded-full border border-current/30 hover:border-current/50 bg-transparent" aria-label="Insert block">
                 <UIcon name="i-lucide-plus" class="size-4" />
               </button>
               <template #content>
@@ -34,6 +40,7 @@
         <RichTextEditor
           v-if="editable && block.type === 'markdown'"
           :model-value="textValue(block)"
+          :mode="block.data.editor_mode === 'source' ? 'source' : 'rich'"
           class="text-base leading-7"
           @update:model-value="value => updateMarkdown(index, block, value)"
           @split-insert="payload => $emit('split-insert', index, payload)"
@@ -128,7 +135,7 @@ const props = withDefaults(defineProps<{ title: string; blocks: BlogEditorBlock[
   template: 'saya',
   showTitle: true,
 })
-const emit = defineEmits<{ 'update:title': [value: string]; 'update:block': [index: number, block: BlogEditorBlock]; 'insert-block': [index: number, cursorPosition: number]; 'insert-block-type': [index: number, type: string]; 'merge-block': [index: number, direction: 'back' | 'forward']; 'split-insert': [index: number, payload: { after: string; blockType: 'image' | 'faq' | 'how_to' }] }>()
+const emit = defineEmits<{ 'update:title': [value: string]; 'update:block': [index: number, block: BlogEditorBlock]; 'insert-block': [index: number, cursorPosition: number]; 'insert-block-type': [index: number, type: string]; 'move-block': [index: number, delta: -1 | 1]; 'merge-block': [index: number, direction: 'back' | 'forward']; 'split-insert': [index: number, payload: { after: string; blockType: 'image' | 'faq' | 'how_to'; editorMode: 'rich' | 'source' }] }>()
 const inserterOpenLocal = ref<Record<number, boolean>>({})
 const inserterItems = [
   { type: 'image', label: 'Image', icon: 'i-lucide-image' },

@@ -69,7 +69,7 @@ export interface BlogComponent {
 
 export interface PlatformBlogCreateInput {
   title: string
-  body: string
+  content_blocks: BlogEditorBlock[]
   excerpt?: string | null
   category?: string | null
   tags?: string[] | null
@@ -103,7 +103,6 @@ export interface PlatformBlogCreateInput {
   visibility?: 'public' | 'unlisted'
   scheduled_for?: string | null
   social_image_asset_id?: string | null
-  content_blocks?: BlogEditorBlock[]
 }
 
 export interface PlatformBlogUpdateInput {

@@ -1,4 +1,5 @@
 import type { PlatformContentComponentInput } from '~/server/utils/platform-content'
+import type { ContentBlockInput } from '~/server/utils/content-documents'
 
 export interface PlatformStructuredContentRequestBody {
   faq_items?: Array<{ question: string; answer: string }>
@@ -26,9 +27,11 @@ export interface PlatformContentNavRequestBody {
   featured_order?: number | null
 }
 
-export interface PlatformBlogPostRequestBody extends PlatformStructuredContentRequestBody, PlatformContentNavRequestBody {
+export interface PlatformBlogPostRequestBody extends PlatformContentNavRequestBody {
   title?: string
-  body?: string
+  content_blocks?: ContentBlockInput[]
+  expected_document_updated_at?: string
+  expected_updated_at?: string
   excerpt?: string
   category?: string
   seo_description?: string

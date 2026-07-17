@@ -79,9 +79,9 @@ export function renderPlatformMcpPrompt(name: string, args: Record<string, strin
           referencePostId
             ? `Call get_platform_blog_post with post_id "${referencePostId}" and study its voice, structure, and SEO field usage as the primary reference.`
             : 'Call list_platform_blog_posts (status "published"), pick 1-2 of the most relevant existing posts, and call get_platform_blog_post on them to study voice, structure, and SEO field usage — do not invent a new voice.',
-          `Draft a full post body about "${topic}"${targetKeyword ? ` targeting the keyword "${targetKeyword}"` : ''}, matching the established voice, plus the appropriate SEO fields (seo_description, seo_keywords, robots) and structured-content components (FAQ, How-To, or AI Assistance prompts) if the content genuinely supports them.`,
+          `Draft a full ordered content_blocks document about "${topic}"${targetKeyword ? ` targeting the keyword "${targetKeyword}"` : ''}, matching the established voice, plus the appropriate SEO fields. Use rich Markdown blocks for visual-editor-safe prose, source Markdown blocks for tables/raw HTML, and first-class FAQ, How-To, image, callout, or divider blocks when appropriate.`,
           'Only set featured_image_asset_id if the writer has already chosen an existing asset from list_platform_media_assets or uploaded one with upload_platform_image. Otherwise leave featured_image_asset_id null.',
-          'Present the full draft — body and all computed fields — to the user for approval. Do NOT call create_platform_blog_post or publish_platform_blog_post until the user explicitly approves the draft. After approval, create a draft and report the returned admin_edit_url for human review; do not publish unless explicitly asked.',
+          'Present the full draft — blocks and all computed fields — to the user for approval. Do NOT call create_platform_blog_post or publish_platform_blog_post until the user explicitly approves the draft. After approval, create a draft with content_blocks and report the returned admin_edit_url for human review; do not publish unless explicitly asked.',
         ].join(' '),
       }
     }
@@ -92,8 +92,8 @@ export function renderPlatformMcpPrompt(name: string, args: Record<string, strin
       return {
         description: `Update and publish post: ${identifier}`,
         text: [
-          `Call update_platform_blog_post with post_id "${identifier}" (it accepts either the post's id or its slug) and this body: ${body}`,
-          'Compute the SEO fields (seo_description, canonical_url, robots) and any structured-content fields per the field-usage rules in the tool description, based on the body above.',
+          `Call get_platform_blog_post with post_id "${identifier}", convert this approved body into the complete canonical content_blocks array, then call update_platform_blog_post with content_blocks and expected_document_updated_at: ${body}`,
+          'Compute the SEO fields (seo_description, canonical_url, robots) from the approved article.',
           'Only send featured_image_asset_id if the writer has already selected or uploaded a real platform media asset. Otherwise leave it unset or null.',
           notes ? `Additional instructions: ${notes}` : '',
           `Immediately after the update succeeds, call publish_platform_blog_post with post_id "${identifier}" — do not stop to describe the publish step instead of executing it.`,

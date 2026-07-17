@@ -152,6 +152,62 @@ async function loginAsFreshMcpUser(request: APIRequestContext, baseURL: string) 
 }
 
 test.describe('stateless MCP server', () => {
+  test('tenant blog tools write the same canonical block document as the dashboard', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
+    await loginAs(request, baseURL!, MCP_FREE_USER_ID)
+    const siteId = 'site-mcp-free'
+    let postId = ''
+    try {
+      const legacy = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'create_blog_post',
+        args: { site_id: siteId, title: 'Legacy MCP body', body: 'Rejected' },
+      })
+      expect(legacy.status()).toBe(400)
+
+      const create = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'create_blog_post',
+        args: {
+          site_id: siteId,
+          title: `MCP canonical blog ${Date.now()}`,
+          category: 'Guides',
+          content_blocks: [
+            { type: 'heading', level: 2, data: { text: 'Created through MCP' } },
+            { type: 'markdown', data: { markdown: 'One shared **document**.', editor_mode: 'rich' } },
+          ],
+        },
+      })
+      if (create.status() !== 200) console.error(await create.text())
+      expect(create.status()).toBe(200)
+      const createBody = await create.json()
+      const created = mcpData<{ id: string; expected_document_updated_at: string }>(createBody)
+      postId = created.id
+      expect(created.expected_document_updated_at).toEqual(expect.any(String))
+
+      const update = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'update_blog_post',
+        args: {
+          site_id: siteId,
+          post_id: postId,
+          expected_document_updated_at: created.expected_document_updated_at,
+          content_blocks: [
+            { type: 'heading', level: 2, data: { text: 'Edited through MCP' } },
+            { type: 'markdown', data: { markdown: 'Still one shared **document**.', editor_mode: 'rich' } },
+            { type: 'faq', data: { items: [{ question: 'Shared?', answer: 'Yes.' }] } },
+          ],
+        },
+      })
+      expect(update.status()).toBe(200)
+
+      const dashboardRead = await request.get(`${baseURL}/api/editor/sites/${siteId}/blog/${postId}`)
+      expect(dashboardRead.status()).toBe(200)
+      const dashboardBody = await dashboardRead.json() as { post: { content_document: { blocks: Array<{ type: string; data: Record<string, unknown> }> } } }
+      expect(dashboardBody.post.content_document.blocks.map(block => block.type)).toEqual(['heading', 'markdown', 'faq'])
+      expect(dashboardBody.post.content_document.blocks[0]?.data.text).toBe('Edited through MCP')
+    } finally {
+      if (postId) await request.delete(`${baseURL}/api/editor/sites/site-mcp-free/blog/${postId}`)
+    }
+  })
+
   test('requires auth and handles stateless discovery/list/error flow without initialize', async ({ request, baseURL }) => {
     const unauthenticated = await mcpRequest(request, baseURL!, { method: 'server/discover' })
     expect(unauthenticated.status()).toBe(401)
