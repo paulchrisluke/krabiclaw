@@ -48,7 +48,7 @@
           </div>
 
           <!-- Body -->
-          <div class="px-4 sm:px-6 pb-4 sm:pb-6 overflow-y-auto flex-1 flex flex-col min-h-0">
+          <div class="px-4 sm:px-6 pb-4 sm:pb-6 overflow-y-auto overscroll-contain flex-1 flex flex-col min-h-0">
             <slot />
           </div>
 
