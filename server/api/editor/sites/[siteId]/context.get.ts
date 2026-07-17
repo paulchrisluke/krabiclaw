@@ -13,6 +13,7 @@ interface SiteRow {
   onboarding_status: string
   organization_name: string
   vertical: string
+  theme_id: string
 }
 
 interface LocationRow {
@@ -68,7 +69,7 @@ export default defineEventHandler(async (event) => {
   try {
     // Verify user belongs to organization that owns the site
     const site = await queryFirst<SiteRow>(db, `
-      SELECT s.id, s.brand_name, s.subdomain, s.organization_id, s.status, s.onboarding_status, s.vertical,
+      SELECT s.id, s.brand_name, s.subdomain, s.organization_id, s.status, s.onboarding_status, s.vertical, s.theme_id,
              o.name as organization_name
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
@@ -119,9 +120,15 @@ export default defineEventHandler(async (event) => {
     )
 
     // Get content registry for this site/theme
-    const { contentRegistry, getEditablePages } = await import('../../../../../config/content-registry')
-    const { normalizeVertical } = await import('../../../../../utils/vertical-copy')
-    const vertical = normalizeVertical(site.vertical) as import('../../../../../utils/vertical-copy').SiteVertical
+    const { getEditablePages } = await import('../../../../../config/content-registry')
+    const { ALL_VERTICALS, normalizeVertical } = await import('../../../../../utils/vertical-copy')
+    const normalizedVertical = normalizeVertical(site.vertical)
+    if (!ALL_VERTICALS.includes(normalizedVertical as import('../../../../../utils/vertical-copy').SiteVertical)) {
+      return jsonResponse({ error: `Unsupported site vertical: ${site.vertical}` }, { status: 422 })
+    }
+    const vertical = normalizedVertical as import('../../../../../utils/vertical-copy').SiteVertical
+    const template = site.theme_id === 'blawby-theme-v1' ? 'blawby' : site.theme_id === 'saya-theme-v1' ? 'saya' : null
+    if (!template) return jsonResponse({ error: `Unsupported public template: ${site.theme_id}` }, { status: 422 })
     const editablePages = getEditablePages(vertical)
 
     // Build scopes array
@@ -148,6 +155,7 @@ export default defineEventHandler(async (event) => {
           status: site.status,
           onboarding_status: site.onboarding_status,
           vertical,
+          template,
           entitlements
         },
         organization: {
@@ -157,7 +165,6 @@ export default defineEventHandler(async (event) => {
         locations: parsedLocations,
         scopes,
         previewToken,
-        contentRegistry,
         editablePages
       }
     })

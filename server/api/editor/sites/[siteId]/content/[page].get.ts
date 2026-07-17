@@ -59,8 +59,10 @@ export default defineEventHandler(async (event) => {
     
   } catch (error) {
     console.error('Failed to get editor content:', error)
+    const statusCode = Number((error as { statusCode?: number }).statusCode) || 500
+    const statusMessage = (error as { statusMessage?: string }).statusMessage
     return jsonResponse({ 
-      error: 'Failed to get editor content' 
-    }, { status: 500 })
+      error: statusMessage || 'Failed to get editor content'
+    }, { status: statusCode })
   }
 })

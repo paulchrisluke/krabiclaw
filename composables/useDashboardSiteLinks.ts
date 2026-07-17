@@ -42,8 +42,7 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
       site: siteBase,
       project: projectBase,
       conversations: `${siteBase}/conversations`,
-      pages: `${projectBase}/pages`,
-      content: `${projectBase}/content`,
+      content: `${siteBase}/content`,
       menu: `${projectBase}/menu`,
       posts: `${projectBase}/posts`,
       reviews: `${projectBase}/reviews`,
@@ -118,7 +117,7 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
     return `${paths.value.site}/${location?.slug ?? locationId}`
   }
   const locationMenuPath = (locationId: string) => `${locationPath(locationId)}/menu`
-  const locationContentPath = (locationId: string) => appendQuery(`${locationPath(locationId)}/content`, { page: 'location' })
+  const locationContentPath = (locationId: string) => appendQuery(`${paths.value.content}`, { page: 'location', location: locationId })
 
   const menuPath = (locationId?: string | null) => {
     if (locationId) {
