@@ -533,8 +533,9 @@ const locationNavigation = computed(() => {
     ],
     [
       { label: 'Menu', icon: 'i-lucide-utensils', to: `${project}/menu` },
-      { label: 'Content', icon: 'i-lucide-copy', to: `${project}/content?page=location` },
+      { label: 'Content', icon: 'i-lucide-copy', to: `${project}/content` },
       { label: 'Posts', icon: 'i-lucide-newspaper', to: `${project}/posts` },
+      { label: 'Blog', icon: 'i-lucide-pencil-line', to: `${siteBase.value}/blog` },
       { label: 'Media', icon: 'i-lucide-image', to: `${project}/media` },
       { label: 'Pages', icon: 'i-lucide-file-text', to: `${project}/pages` },
     ],
@@ -624,6 +625,7 @@ const navbarTitle = computed(() => {
     activity: 'Activity',
     analytics: 'Analytics',
     billing: 'Billing',
+    blog: 'Blog',
     chatgpt: 'ChatGPT',
     conversations: 'Conversations',
     content: 'Content',

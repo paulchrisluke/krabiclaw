@@ -191,7 +191,7 @@ test("NCLS Blawby adapter normalizes source data into cutover artifacts", () => 
   );
   assert.equal(
     payload.articles[0].canonical_url,
-    "/article/preparing-for-your-consultation",
+    null,
   );
   assert.deepEqual(
     payload.siteQa.map((faq: { page_path: string | null }) => faq.page_path),

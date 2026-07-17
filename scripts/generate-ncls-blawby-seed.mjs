@@ -129,7 +129,27 @@ const blogRows = values((manifest.articles ?? []).map((article, index) => `(
   ${sqlValue(USER_ID)}, ${sqlValue(article.featured_image_asset_id)},
   ${sqlValue(article.published_at || new Date(Date.UTC(2026, 0, 1, 12) + index * 86400000).toISOString())},
   ${sqlValue(article.published_at || new Date(Date.UTC(2026, 0, 1, 12) + index * 86400000).toISOString())}, ${sqlValue(article.updated_at || article.published_at || new Date(Date.UTC(2026, 0, 1, 12) + index * 86400000).toISOString())}, ${sqlValue(article.seo_description)}, ${sqlValue(article.seo_keywords)},
-  ${sqlValue(article.canonical_url || `/article/${article.slug}`)}, NULL
+  ${sqlValue(article.canonical_url ?? null)}, NULL
+)`))
+
+// Every blog post the editor can open needs a backing content_documents row —
+// the update endpoint (updatePlatformBlogPost) requires expected_document_updated_at
+// whenever content_blocks is present, and refuses to create a document on first
+// save. Without this, seeded posts loaded fine but permanently failed to save
+// the moment an editor touched a block, with no way to recover client-side.
+const blogPostIds = (manifest.articles ?? []).map(article => `blog_ncls_${article.slug}`)
+const contentDocumentRows = values((manifest.articles ?? []).map(article => `(
+  ${sqlValue(`cdoc_ncls_${article.slug}`)}, 'tenant_blog', ${sqlValue(`blog_ncls_${article.slug}`)},
+  ${sqlValue(`crev_ncls_${article.slug}`)}, ${sqlValue(`crev_ncls_${article.slug}`)}, ${now}, ${now}
+)`))
+const contentBlockRows = values((manifest.articles ?? []).map(article => `(
+  ${sqlValue(`cblk_ncls_${article.slug}`)}, ${sqlValue(`cdoc_ncls_${article.slug}`)}, NULL, 'markdown', 0, NULL,
+  ${sqlJson({ markdown: article.body || article.excerpt || '', editor_mode: 'source' })}, ${now}, ${now}
+)`))
+const contentRevisionRows = values((manifest.articles ?? []).map((article, index) => `(
+  ${sqlValue(`crev_ncls_${article.slug}`)}, ${sqlValue(`cdoc_ncls_${article.slug}`)},
+  ${sqlJson({ blocks: [{ id: `cblk_ncls_${article.slug}`, parent_block_id: null, type: 'markdown', position: 0, level: null, data: { markdown: article.body || article.excerpt || '', editor_mode: 'source' }, updated_at: article.updated_at || article.published_at || new Date(Date.UTC(2026, 0, 1, 12) + index * 86400000).toISOString() }] })},
+  ${sqlValue(article.body || article.excerpt || '')}, ${sqlValue(USER_ID)}, 'Seed import', ${now}
 )`))
 
 const qaRows = values((manifest.siteQa ?? []).map((qa) => `(
@@ -176,6 +196,7 @@ DELETE FROM sites WHERE id = ${sqlValue(SITE_ID)} OR subdomain = ${sqlValue(SLUG
 DELETE FROM organization WHERE id = ${sqlValue(ORG_ID)};
 DELETE FROM site_domains WHERE domain IN ('ncls.localhost', 'ncls.krabiclaw.com', 'northcarolinalegalservices.org');
 DELETE FROM user WHERE id = ${sqlValue(USER_ID)};
+${blogPostIds.length ? `DELETE FROM content_documents WHERE owner_type = 'tenant_blog' AND owner_id IN (${blogPostIds.map(sqlValue).join(', ')});` : '-- No blog posts in manifest.'}
 
 INSERT INTO user (id, name, email, emailVerified, image, role, createdAt, updatedAt)
 VALUES (${sqlValue(USER_ID)}, 'Rich Gittings', 'ncls-blawby@example.test', 1, ${sqlValue(site.author_image_url)}, 'admin', unixepoch(), unixepoch());
@@ -313,6 +334,21 @@ INSERT INTO blog_posts (
   seo_description, seo_keywords, canonical_url, robots
 ) VALUES
 ${blogRows};
+
+${blogPostIds.length ? `INSERT INTO content_documents (
+  id, owner_type, owner_id, draft_revision_id, published_revision_id, created_at, updated_at
+) VALUES
+${contentDocumentRows};
+
+INSERT INTO content_revisions (
+  id, document_id, snapshot_json, body_markdown, created_by, label, created_at
+) VALUES
+${contentRevisionRows};
+
+INSERT INTO content_blocks (
+  id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at
+) VALUES
+${contentBlockRows};` : '-- No blog posts in manifest.'}
 `
 
 if (isStdout) {

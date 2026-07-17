@@ -120,8 +120,8 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           reference
             ? `Call get_blog_post with post_id "${reference}" and use its voice, terminology, structure, and SEO field usage as the primary reference.`
             : "Call get_blog_post for the 1-2 most relevant published articles and infer the tenant's established voice and terminology; do not copy KrabiClaw platform voice or invent a generic brand voice.",
-          `Draft a complete Markdown article about "${topic}"${keyword ? ` targeting "${keyword}"` : ""}. Include category, a short deduplicated tags list, excerpt, seo_title, seo_description, seo_keywords, and robots. Use FAQ or How-To components only when the article genuinely supports them; category controls public filtering, nav_section controls sidebar grouping, and featured_order controls featured/home placement.`,
-          "Present the full body and computed fields for explicit approval. Do not create or publish yet. After approval, call create_blog_post without publish so the writer can review the returned admin_edit_url. Publish only when explicitly requested.",
+          `Draft a complete block-structured article about "${topic}"${keyword ? ` targeting "${keyword}"` : ""}. Use ordered heading, markdown, image, FAQ, How-To, callout, and divider blocks as appropriate. Markdown blocks require editor_mode "rich" for visual-editor-safe prose or "source" for tables/raw HTML. Include category, a short deduplicated tags list, excerpt, seo_title, seo_description, seo_keywords, and robots.`,
+          "Present the full article and computed fields for explicit approval. Do not create or publish yet. After approval, call create_blog_post with content_blocks and without publish so the writer can review the returned admin_edit_url. Publish only when explicitly requested.",
         ].join(" "),
       };
     }
@@ -132,8 +132,8 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
       return {
         description: `Update and publish tenant blog post: ${identifier}`,
         text: [
-          `Call update_blog_post with post_id "${identifier}" and this writer-approved body: ${body}`,
-          "Compute and send the SEO fields and justified structured components. Preserve category, navigation, tags, and components unless the approved content requires changing them.",
+          `Call get_blog_post with post_id "${identifier}", convert this writer-approved body into the complete canonical content_blocks array, and call update_blog_post with its expected_document_updated_at token: ${body}`,
+          "Preserve existing category, navigation, tags, and structural blocks unless the approved content requires changing them.",
           notes ? `Additional instructions: ${notes}` : "",
           `Immediately after the update succeeds, call publish_blog_post with post_id "${identifier}". Report the changed fields, public_url, and admin_edit_url.`,
         ].filter(Boolean).join(" "),

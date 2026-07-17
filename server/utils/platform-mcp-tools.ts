@@ -347,6 +347,7 @@ const CONTENT_DOCUMENT_LOOKUP_REQUIREMENT = {
 }
 
 const CONTENT_BLOCK_INPUT_PROPERTIES = {
+  id: { type: 'string' },
   type: { type: 'string', enum: CONTENT_BLOCK_TYPE_ENUM },
   data: CONTENT_BLOCK_DATA_SCHEMA,
   parent_block_id: NULLABLE_STRING,
@@ -416,8 +417,25 @@ const BLOG_RECORD_SCHEMA = {
         oneOf: [FAQ_COMPONENT_SCHEMA, HOW_TO_COMPONENT_SCHEMA, AI_ASSISTANCE_COMPONENT_SCHEMA],
       },
     },
+    content_document: {
+      type: 'object',
+      properties: {
+        document: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            updated_at: { type: 'string' },
+            draft_revision_id: NULLABLE_STRING,
+            published_revision_id: NULLABLE_STRING,
+          },
+          required: ['id', 'updated_at', 'draft_revision_id', 'published_revision_id'],
+        },
+        blocks: { type: 'array', items: CONTENT_BLOCK_SCHEMA },
+      },
+      required: ['document', 'blocks'],
+    },
   },
-  required: [...BLOG_SUMMARY_SCHEMA.required, 'body', 'components'],
+  required: [...BLOG_SUMMARY_SCHEMA.required, 'body', 'components', 'content_document'],
   additionalProperties: false,
 }
 
@@ -992,17 +1010,16 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         title: { type: 'string' },
-        body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
+        content_blocks: { type: 'array', items: { type: 'object', properties: CONTENT_BLOCK_INPUT_PROPERTIES, required: ['type', 'data'], additionalProperties: false } },
         excerpt: { type: 'string' },
         category: { type: 'string', description: 'Platform posts use the documented platform categories; tenant categories are free text when site_id is provided.' },
         ...NAV_FIELDS_SCHEMA,
         seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         ...SEO_FIELDS_SCHEMA,
-        components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
         publish: { type: 'boolean' },
         site_id: { type: 'string', description: 'Optional site id to create tenant blog posts instead of platform posts.' },
       },
-      required: ['title', 'body'],
+      required: ['title', 'content_blocks'],
       additionalProperties: false,
     },
     outputSchema: BLOG_WRITE_RESPONSE_SCHEMA,
@@ -1016,13 +1033,13 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       properties: {
         post_id: { type: 'string', description: 'Post id or slug.' },
         title: { type: 'string' },
-        body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
+        content_blocks: { type: 'array', items: { type: 'object', properties: CONTENT_BLOCK_INPUT_PROPERTIES, required: ['type', 'data'], additionalProperties: false } },
+        expected_document_updated_at: { type: 'string', description: 'Required when replacing content_blocks.' },
         excerpt: { type: 'string' },
         category: { type: 'string', description: 'Platform posts use the documented platform categories; tenant categories are free text when site_id is provided.' },
         ...NAV_FIELDS_SCHEMA,
         seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         ...SEO_FIELDS_SCHEMA,
-        components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
         publish: { type: 'boolean' },
         unpublish: { type: 'boolean' },
         site_id: { type: 'string', description: 'Optional site id to update tenant blog posts instead of platform posts.' },

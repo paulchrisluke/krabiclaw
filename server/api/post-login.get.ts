@@ -35,7 +35,9 @@ export default defineEventHandler(async (event) => {
   }
 
   // Everyone else: resolve their org slug and go to dashboard
-  if (!db) return sendRedirect(event, '/dashboard')
+  if (!db) {
+    throw createError({ statusCode: 503, message: 'Database not available' })
+  }
 
   try {
     const row = await queryFirst<{ slug: string | null }>(db, `
@@ -65,6 +67,6 @@ export default defineEventHandler(async (event) => {
     return sendRedirect(event, `/dashboard/${slug}`)
   } catch (error) {
     console.error('Failed to resolve organization slug in post-login:', error)
-    return sendRedirect(event, '/dashboard')
+    throw createError({ statusCode: 500, message: 'Failed to resolve dashboard destination' })
   }
 })
