@@ -83,20 +83,21 @@ export interface EditablePage {
   label: string
   path: string
   scope: 'site' | 'location'
-  scopeLabelKey: 'location' | 'office'
+  scopeLabelKey: 'site' | 'location' | 'office'
 }
 
 /** Resolves the visible page inventory for a tenant's vertical — the one source of truth for
  *  the CMS page selector (content.vue) and the page inventory list (pages.vue). */
-export function getEditablePages(vertical: SiteVertical): EditablePage[] {
-  const template = vertical === 'professional_service' ? 'blawby' : 'saya'
+export function getEditablePages(vertical: SiteVertical, template: PublicTemplateSlug): EditablePage[] {
   const capability = resolveCmsCapabilities(vertical, template)
   return capability.pages.map(page => ({
       id: page.id,
       label: page.label,
       path: page.route,
       scope: page.scope,
-      scopeLabelKey: page.scope === 'location' && capability.locationVocabulary === 'office/service area' ? 'office' : 'location',
+      scopeLabelKey: page.scope === 'site'
+        ? 'site'
+        : capability.locationVocabulary === 'office/service area' ? 'office' : 'location',
     }))
 }
 

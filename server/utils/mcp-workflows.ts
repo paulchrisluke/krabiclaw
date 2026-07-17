@@ -1,7 +1,5 @@
 import { contentRegistry, getFieldDef } from "~/config/content-registry";
-import { resolveCmsCapabilities } from "~/config/cms-registry";
-import { ALL_VERTICALS, normalizeVertical, type SiteVertical } from "~/utils/vertical-copy";
-import type { PublicTemplateSlug } from "~/utils/template-registry";
+import { resolveSiteCmsCapabilities } from "~/server/utils/cms-capabilities";
 import { hasSiteEntitlement } from "~/server/utils/billing";
 import {
   getGoogleBusinessAccounts,
@@ -126,20 +124,10 @@ async function assertSiteContentPage(
     LIMIT 1
   `, [siteId, organizationId]);
   if (!site) throw createError({ statusCode: 404, statusMessage: `Site "${siteId}" was not found.` });
-  const normalizedVertical = normalizeVertical(site.vertical);
-  if (!ALL_VERTICALS.includes(normalizedVertical as SiteVertical)) {
-    throw createError({ statusCode: 422, statusMessage: `Unsupported site vertical: ${site.vertical}` });
-  }
-  const template: PublicTemplateSlug | null = site.theme_id === "saya-theme-v1"
-    ? "saya"
-    : site.theme_id === "blawby-theme-v1"
-      ? "blawby"
-      : null;
-  if (!template) throw createError({ statusCode: 422, statusMessage: `Unsupported public template: ${site.theme_id}` });
-  const capability = resolveCmsCapabilities(normalizedVertical as SiteVertical, template);
+  const { vertical, template, capabilities: capability } = resolveSiteCmsCapabilities(site.vertical, site.theme_id);
   const pageCapability = capability.pages.find(candidate => candidate.id === page);
   if (!pageCapability) {
-    throw createError({ statusCode: 400, statusMessage: `Page "${page}" is not available for ${normalizedVertical}/${template}.` });
+    throw createError({ statusCode: 400, statusMessage: `Page "${page}" is not available for ${vertical}/${template}.` });
   }
   if (pageCapability.editor !== "site_content") {
     throw createError({ statusCode: 400, statusMessage: `Page "${page}" is owned by the ${pageCapability.editor} editor.` });

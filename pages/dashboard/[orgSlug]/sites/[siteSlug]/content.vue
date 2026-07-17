@@ -69,8 +69,8 @@
       <UAlert color="error" variant="soft" title="Content unavailable" :description="cmsLoadError" class="max-w-xl" />
     </div>
 
-    <div v-else-if="cmsCapabilities?.template === 'blawby'" class="min-h-0 flex-1 overflow-auto bg-muted p-6">
-      <div class="mx-auto max-w-5xl">
+    <UPage v-else-if="cmsCapabilities?.template === 'blawby'" class="min-h-0 flex-1 overflow-auto bg-muted">
+      <UPageBody class="mx-auto w-full max-w-5xl p-6">
         <h1 class="text-2xl font-semibold text-highlighted">Professional service content</h1>
         <p class="mt-2 text-sm text-muted">Each editor below writes the canonical data rendered by Blawby, MCP, and ChowBot.</p>
         <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -80,8 +80,8 @@
             <UButton :to="manager.to" :disabled="!manager.to" label="Open editor" class="mt-4" size="sm" />
           </UCard>
         </div>
-      </div>
-    </div>
+      </UPageBody>
+    </UPage>
 
     <!-- No locations added yet (only blocks location-scoped pages) -->
     <div
@@ -428,7 +428,8 @@ const cmsCapabilities = computed(() => {
 const cmsManagers = computed(() => {
   const capabilities = cmsCapabilities.value
   if (!capabilities) return []
-  const location = selectedLocation.value?.slug ?? siteLocations.value[0]?.slug
+  const location = siteLocations.value.find(candidate => candidate.id === selectedLocationId.value)?.slug
+    ?? siteLocations.value[0]?.slug
   const iconBySection = {
     collections: 'i-lucide-database',
     locations: 'i-lucide-map-pin',
@@ -511,8 +512,10 @@ const selectLocation = async (id: string) => {
 // ─── Pages ────────────────────────────────────────────────────────────
 const siteVertical = computed<SiteVertical | null>(() => siteData.value ? siteData.value.vertical as SiteVertical : null)
 const pages = computed(() => {
-  if (!siteVertical.value || cmsCapabilities.value?.template === 'blawby') return []
-  return getEditablePages(siteVertical.value)
+  const capabilities = cmsCapabilities.value
+  if (!siteVertical.value || !capabilities || capabilities.template === 'blawby') return []
+  const allowedPageIds = new Set(capabilities.pages.map(page => page.id))
+  return getEditablePages(siteVertical.value, capabilities.template).filter(page => allowedPageIds.has(page.id))
 })
 
 function resolveInitialPageId() {
@@ -526,7 +529,10 @@ function resolveInitialPageId() {
 const selectedPageId = ref(resolveInitialPageId())
 const currentPagePath = computed(() => pages.value.find(p => p.id === selectedPageId.value)?.path || '/')
 const selectedPageLabel = computed(() => pages.value.find(p => p.id === selectedPageId.value)?.label || '')
-const selectedPageScopeLabel = computed(() => pages.value.find(p => p.id === selectedPageId.value)?.scopeLabelKey === 'office' ? 'Office' : 'Location')
+const selectedPageScopeLabel = computed(() => {
+  const scope = pages.value.find(p => p.id === selectedPageId.value)?.scopeLabelKey
+  return scope === 'site' ? 'Site' : scope === 'office' ? 'Office' : 'Location'
+})
 
 const applyRouteContentScope = () => {
   const queryPage = route.query.page
@@ -603,9 +609,15 @@ const onPageChange = async (oldPageId?: string) => {
   }
 }
 
+let rollingBackPageSelection = false
 watch(selectedPageId, (newVal, oldVal) => {
   if (newVal !== oldVal) {
+    if (rollingBackPageSelection) {
+      rollingBackPageSelection = false
+      return
+    }
     if (localHasChanges.value && import.meta.client && !window.confirm('Discard unsaved changes and switch pages?')) {
+      rollingBackPageSelection = true
       selectedPageId.value = oldVal
       return
     }
@@ -737,6 +749,8 @@ function getErrorMessage(error: unknown, fallback: string): string {
     if (response && typeof response === 'object') {
       const responseData = (response as Record<string, unknown>)._data
       if (responseData && typeof responseData === 'object') {
+        const apiError = (responseData as Record<string, unknown>).error
+        if (typeof apiError === 'string' && apiError) return apiError
         const statusMessage = (responseData as Record<string, unknown>).statusMessage
         if (typeof statusMessage === 'string' && statusMessage) return statusMessage
       }

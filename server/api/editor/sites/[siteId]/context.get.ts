@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { createPreviewToken } from '~/server/utils/preview-token'
 import { queryAll, queryFirst } from '~/server/db'
+import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 
 interface SiteRow {
   id: string
@@ -121,15 +122,8 @@ export default defineEventHandler(async (event) => {
 
     // Get content registry for this site/theme
     const { getEditablePages } = await import('../../../../../config/content-registry')
-    const { ALL_VERTICALS, normalizeVertical } = await import('../../../../../utils/vertical-copy')
-    const normalizedVertical = normalizeVertical(site.vertical)
-    if (!ALL_VERTICALS.includes(normalizedVertical as import('../../../../../utils/vertical-copy').SiteVertical)) {
-      return jsonResponse({ error: `Unsupported site vertical: ${site.vertical}` }, { status: 422 })
-    }
-    const vertical = normalizedVertical as import('../../../../../utils/vertical-copy').SiteVertical
-    const template = site.theme_id === 'blawby-theme-v1' ? 'blawby' : site.theme_id === 'saya-theme-v1' ? 'saya' : null
-    if (!template) return jsonResponse({ error: `Unsupported public template: ${site.theme_id}` }, { status: 422 })
-    const editablePages = getEditablePages(vertical)
+    const { vertical, template } = resolveSiteCmsCapabilities(site.vertical, site.theme_id)
+    const editablePages = getEditablePages(vertical, template)
 
     // Build scopes array
     const scopes = [
@@ -171,6 +165,13 @@ export default defineEventHandler(async (event) => {
     
   } catch (error) {
     console.error('Failed to get editor context:', error)
+    if (error && typeof error === 'object') {
+      const statusCode = (error as { statusCode?: unknown }).statusCode
+      const statusMessage = (error as { statusMessage?: unknown }).statusMessage
+      if (statusCode === 422 && typeof statusMessage === 'string') {
+        return jsonResponse({ error: statusMessage }, { status: 422 })
+      }
+    }
     return jsonResponse({ 
       error: 'Failed to get editor context' 
     }, { status: 500 })
