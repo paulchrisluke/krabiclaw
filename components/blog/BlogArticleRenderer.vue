@@ -13,7 +13,7 @@
     <div class="space-y-4">
       <template v-for="(block, index) in blocks" :key="block.id || index">
         <section class="group relative">
-          <div v-if="editable" class="absolute right-full top-0 mr-2 flex items-center gap-1">
+          <div v-if="editable" class="mb-2 flex items-center gap-1 sm:absolute sm:right-full sm:top-0 sm:mb-0 sm:mr-2">
             <button class="flex size-8 shrink-0 items-center justify-center rounded-full border border-current/30 bg-transparent hover:bg-current/5 disabled:opacity-30" :disabled="index === 0" aria-label="Move block up" @click="$emit('move-block', index, -1)">
               <UIcon name="i-lucide-chevron-up" class="size-4" />
             </button>

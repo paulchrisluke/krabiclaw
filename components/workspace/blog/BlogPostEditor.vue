@@ -351,7 +351,7 @@ function moveBlock(index: number, delta: -1 | 1) {
 // the cursor (skipped entirely if there was nothing after it).
 function handleSplitInsert(index: number, payload: { after: string; blockType: 'image' | 'faq' | 'how_to'; editorMode: 'rich' | 'source' }) {
   const newBlocks: BlogEditorBlock[] = [{ type: payload.blockType, data: structuralBlockData(payload.blockType) }]
-  if (payload.after.trim()) newBlocks.push({ type: 'markdown', data: { markdown: payload.after, editor_mode: payload.editorMode } })
+  if (payload.after.length > 0) newBlocks.push({ type: 'markdown', data: { markdown: payload.after, editor_mode: payload.editorMode } })
   blocks.value.splice(index + 1, 0, ...newBlocks)
   ensureTrailingTextBlock()
 }

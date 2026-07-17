@@ -65,9 +65,9 @@ test('source-native Markdown operations preserve tables, HTML, links, lists, and
   assert.match(edited, /\| Name \| Value \|[\s\S]*<aside data-kind="legal">Raw <strong>HTML<\/strong><\/aside>/)
 })
 
-test('editor autosave preserves canonical empty documents and serializes draft creation', async () => {
+test('editor autosave requires canonical documents and serializes draft creation', async () => {
   const source = await readFile(new URL('../../components/workspace/blog/BlogPostEditor.vue', import.meta.url), 'utf8')
-  assert.match(source, /if \(loaded\.content_document\)[\s\S]*structuredClone\(loaded\.content_document\.blocks \|\| \[\]\)[\s\S]*else/)
+  assert.match(source, /if \(!loaded\.content_document\) throw new Error\('Blog content document is missing'\)[\s\S]*structuredClone\(loaded\.content_document\.blocks \|\| \[\]\)/)
   assert.match(source, /let createDraftPromise: Promise<BlogPost \| null> \| null = null/)
   assert.match(source, /if \(createDraftPromise\) return await createDraftPromise/)
   assert.match(source, /social_image_asset_id: form\.social_image_asset_id \|\| null/)

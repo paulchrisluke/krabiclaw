@@ -625,6 +625,7 @@ const navbarTitle = computed(() => {
     activity: 'Activity',
     analytics: 'Analytics',
     billing: 'Billing',
+    blog: 'Blog',
     chatgpt: 'ChatGPT',
     conversations: 'Conversations',
     content: 'Content',

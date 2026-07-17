@@ -90,11 +90,16 @@ function wrapSelection(prefix: string, suffix: string, placeholder: string) {
 }
 
 function prefixLines(prefix: string) {
-  const { start, end } = selection()
-  const lineStart = props.modelValue.lastIndexOf('\n', Math.max(0, start - 1)) + 1
-  const selected = props.modelValue.slice(lineStart, end)
+  const { element, start, end } = selection()
+  const lineStart = props.modelValue.lastIndexOf('\n', start - 1) + 1
+  const rangeEnd = end > lineStart && props.modelValue[end - 1] === '\n' ? end - 1 : end
+  const selected = props.modelValue.slice(lineStart, rangeEnd)
   const replacement = selected.split('\n').map(line => `${prefix}${line}`).join('\n')
-  replaceSelection(replacement, lineStart + prefix.length, lineStart + replacement.length)
+  emit('update:modelValue', replaceMarkdownRange(props.modelValue, lineStart, rangeEnd, replacement))
+  void nextTick(() => {
+    element.focus()
+    element.setSelectionRange(lineStart + prefix.length, lineStart + replacement.length)
+  })
 }
 
 function splitAtCursorAndInsert(blockType: 'image' | 'faq' | 'how_to') {
