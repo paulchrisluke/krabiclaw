@@ -5,9 +5,15 @@ import { existsSync } from 'node:fs'
 import { parsePhoneOrThrow } from '../utils/phone.ts'
 
 const args = process.argv.slice(2)
+const phoneArgIndex = args.indexOf('--phone')
+const phoneFilterRaw = phoneArgIndex >= 0 ? args[phoneArgIndex + 1] : null
+if (phoneArgIndex >= 0 && (!phoneFilterRaw || phoneFilterRaw.startsWith('--'))) {
+  console.error('--phone requires an E.164 phone number')
+  process.exit(1)
+}
 const targetCount = ['--local', '--staging', '--remote'].filter(flag => args.includes(flag)).length
 if (targetCount !== 1 || (!args.includes('--dry-run') && !args.includes('--apply'))) {
-  console.error('Usage: yarn site:backfill-whatsapp-members --local|--staging|--remote --dry-run|--apply [--confirm-production]')
+  console.error('Usage: yarn site:backfill-whatsapp-members --local|--staging|--remote --dry-run|--apply [--confirm-production] [--phone E164]')
   process.exit(1)
 }
 if (args.includes('--remote') && args.includes('--apply') && !args.includes('--confirm-production')) {
@@ -54,6 +60,7 @@ function run(sql) {
 function normalizePhone(value) {
   return parsePhoneOrThrow(String(value), { defaultCountry: 'TH' })
 }
+const phoneFilter = phoneFilterRaw ? normalizePhone(phoneFilterRaw) : null
 
 const configured = run(`
   SELECT o.id AS organization_id, o.name AS organization_name, s.id AS site_id,
@@ -78,6 +85,7 @@ for (const row of configured) {
 
 const report = []
 for (const group of groups.values()) {
+  if (phoneFilter && group.phone !== phoneFilter) continue
   const digits = group.phone.replace(/\D/g, '')
   const identity = run(`
     SELECT u.id AS user_id, u.email, u.phoneNumberVerified AS phone_verified,
@@ -95,6 +103,10 @@ for (const group of groups.values()) {
   const action = unsupportedMember ? `reject_non_operational_role:${identity.role}` : unsupportedPending ? `reject_incompatible_invitation_role:${pending.role || 'unset'}` : active ? 'ensure_scopes' : pending ? 'reuse_invitation' : 'create_invitation'
   const item = { ...group, identity, email, pending, active, unsupportedMember, unsupportedPending, existingScopes, pendingInvitationId: pending?.id ?? null, pendingScopes, proposedAction: action }
   report.push(item)
+}
+
+if (phoneFilter && report.length === 0) {
+  throw new Error(`No configured WhatsApp recipient matched --phone ${phoneFilter}`)
 }
 
 const unsupported = report.filter(item => item.unsupportedMember || item.unsupportedPending)
@@ -124,7 +136,7 @@ for (const item of report) {
   if (args.includes('--remote') && (createdInvitation || args.includes('--resend'))) {
     try {
       item.providerMessageId = await sendAccessInvitation(item.phone, item.organizationName, invitationId, item.scopes[0].siteId)
-      run(`INSERT INTO notifications (id, organization_id, site_id, location_id, channel, template, recipient, payload, status, provider_message_id, sent_at, created_at) VALUES ('${randomUUID()}', '${q(item.organizationId)}', '${q(item.scopes[0].siteId)}', ${item.scopes[0].locationId ? `'${q(item.scopes[0].locationId)}'` : 'NULL'}, 'whatsapp', 'dashboard_access_invitation', '${q(item.phone)}', '${q(JSON.stringify({ invitationId }))}', 'sent', ${item.providerMessageId ? `'${q(item.providerMessageId)}'` : 'NULL'}, datetime('now'), datetime('now'))`)
+      run(`INSERT INTO notifications (id, organization_id, site_id, location_id, channel, template, recipient, payload, status, provider_message_id, sent_at, created_at, related_submission_type, related_submission_id) VALUES ('${randomUUID()}', '${q(item.organizationId)}', '${q(item.scopes[0].siteId)}', ${item.scopes[0].locationId ? `'${q(item.scopes[0].locationId)}'` : 'NULL'}, 'whatsapp', 'dashboard_access_invitation', '${q(item.phone)}', '${q(JSON.stringify({ invitationId }))}', 'sent', ${item.providerMessageId ? `'${q(item.providerMessageId)}'` : 'NULL'}, datetime('now'), datetime('now'), 'invitation', '${q(invitationId)}')`)
     } catch (error) {
       if (createdInvitation) run(`DELETE FROM invitation WHERE id = '${q(invitationId)}'`)
       throw error
