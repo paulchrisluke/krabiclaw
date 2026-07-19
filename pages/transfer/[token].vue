@@ -133,7 +133,7 @@
 
             <!-- Not logged in -->
             <template v-if="!isAuthenticated && !sessionLoading">
-              <AuthGoogleAuthButton @activate="signInWithGoogle" />
+              <AuthGoogleAuthButton :loading="authLoading" @activate="signInWithGoogle" />
               <PlatformButton block variant="outline" size="xl" class="rounded-[10px]" :to="emailLoginUrl">
                 Sign in with email
               </PlatformButton>
@@ -265,6 +265,7 @@ const redirectingToCheckout = ref(false)
 const transferPath = computed(() => `/transfer/${encodeURIComponent(token)}`)
 const emailLoginUrl = computed(() => buildLoginUrl({ redirect: transferPath.value }))
 const authOperation = useAuthOperation()
+const authLoading = authOperation.loading
 const selectedInterval = ref<'month' | 'year'>('month')
 
 const activePricing = computed(() => {

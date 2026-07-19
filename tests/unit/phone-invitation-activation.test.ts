@@ -15,11 +15,13 @@ test('verified phone identity accepts the invitation without fallback when succe
 })
 
 test('verified phone identity reloads the invitation when the new session cookie is not yet usable', async () => {
+  let accepted = false
   let fallbacks = 0
   await completeVerifiedInvitation({
-    accept: async () => {},
+    accept: async () => { accepted = true },
     isAccepted: () => false,
     fallback: () => { fallbacks++ },
   })
+  assert.equal(accepted, true)
   assert.equal(fallbacks, 1)
 })

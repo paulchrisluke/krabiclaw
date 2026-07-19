@@ -38,7 +38,7 @@ export function createPhoneOtpController(dependencies: PhoneOtpControllerDepende
       if (result.error) throw new Error(result.error.message || fallback)
       return { ok: true, phone }
     } catch (error) {
-      update(true, error instanceof Error ? error.message : fallback)
+      currentError = error instanceof Error ? error.message : fallback
       return { ok: false }
     } finally {
       update(false, currentError)
@@ -53,8 +53,8 @@ export function createPhoneOtpController(dependencies: PhoneOtpControllerDepende
     ),
     verifyOtp: (phoneInput: string, code: string) => {
       const trimmedCode = code.trim()
-      if (trimmedCode.length !== 6) {
-        dependencies.onStateChange?.({ loading, error: 'Please enter a 6-digit code' })
+      if (!/^\d{6}$/.test(trimmedCode)) {
+        update(false, 'Please enter a 6-digit code')
         return Promise.resolve<PhoneOtpResult>({ ok: false })
       }
       return run(

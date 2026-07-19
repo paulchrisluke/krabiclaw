@@ -1,6 +1,6 @@
 export function scheduleOtpDelivery(
   delivery: Promise<unknown>,
-  waitUntil?: (task: Promise<unknown>) => void,
+  waitUntil?: (_task: Promise<unknown>) => void,
   log: (message: string) => void = message => console.error(message),
 ) {
   const guarded = delivery.catch((error) => {

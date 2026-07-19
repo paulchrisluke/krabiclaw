@@ -16,6 +16,7 @@
 
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
+import { requiresEmailVerification } from '~/shared/auth/email-sign-in'
 import { FORM_INPUT_CLASS } from '~/utils/form-constants'
 
 const props = withDefaults(defineProps<{ callbackUrl: string; initialEmail?: string }>(), { initialEmail: '' })
@@ -29,7 +30,7 @@ async function submit() {
   const result = await run(() => authClient.signIn.email({ email: normalizedEmail, password: password.value, callbackURL: props.callbackUrl }), 'Sign in failed. Please try again.')
   if (result?.error) {
     error.value = result.error.message || 'Sign in failed. Please try again.'
-    if (/verif/i.test(error.value)) emit('verificationRequired', normalizedEmail)
+    if (requiresEmailVerification(result.error)) emit('verificationRequired', normalizedEmail)
   }
 }
 </script>

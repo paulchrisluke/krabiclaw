@@ -34,7 +34,7 @@ async function createTransferFixtureSite(request: APIRequestContext, baseURL: st
   const res = await request.post(`${baseURL}/api/sites`, {
     data: {
       name: `Transfer Fixture ${suffix}`,
-      subdomain: `transfer-fixture-${suffix}`,
+      subdomain: `e2e-transfer-fixture-${suffix}`,
       vertical: 'experience',
     },
   })
@@ -51,7 +51,7 @@ async function createTransferFixtureSite(request: APIRequestContext, baseURL: st
 test.describe('site transfer handoff flow', () => {
   test.describe.configure({ mode: 'serial' })
 
-  test('paid handoff stays pending until checkout completes and reminders can be forced', async ({ request, baseURL }) => {
+  test('paid handoff stays pending until checkout completes and reminders can be forced', async ({ page, request, baseURL }) => {
     test.setTimeout(60_000)
     test.skip(
       !testEnv('STRIPE_SECRET_KEY') || !testEnv('NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'),
@@ -96,6 +96,15 @@ test.describe('site transfer handoff flow', () => {
     expect(created.id).toEqual(expect.any(String))
     expect(created.token).toEqual(expect.any(String))
     expect(created.requires_payment).toBe(true)
+
+    await page.context().clearCookies()
+    await page.goto(`${baseURL}/transfer/${created.token}`, { waitUntil: 'load' })
+    const emailLogin = page.getByRole('link', { name: 'Sign in with email' })
+    await expect(emailLogin).toBeVisible()
+    await expect(emailLogin).toHaveAttribute(
+      'href',
+      `/login?redirect=${encodeURIComponent(`/transfer/${created.token}`)}`,
+    )
 
     const reminders = await request.post(`${baseURL}/api/dev/site-transfer-reminders`, {
       headers: devLoginHeaders(),
