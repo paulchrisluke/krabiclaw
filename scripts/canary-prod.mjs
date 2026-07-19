@@ -110,7 +110,7 @@ async function main() {
     const verify = await fetchJson(request, `${baseUrl}/api/auth/phone-number/verify`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      data: { phoneNumber: phone, code: otp, callbackURL: '/api/post-login' },
+      data: { phoneNumber: phone, code: otp },
     })
     if (verify.res.status() >= 400) {
       throw new Error(`OTP verify failed (${verify.res.status()}): ${verify.text}`)

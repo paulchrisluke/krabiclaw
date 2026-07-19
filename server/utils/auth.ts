@@ -13,6 +13,7 @@ import { phoneTemporaryEmail } from '~/server/utils/phone-invitations'
 import { parsePhoneOrThrow, PHONE_METADATA_VERSION } from '~/utils/phone'
 import { notifyNewUserSignup } from '~/server/utils/notification-center'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
+import { scheduleOtpDelivery } from '~/server/utils/auth-otp-delivery'
 import { validatePassword } from '~/utils/password-validation'
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/site-events'
 import type { InferSelectModel } from 'drizzle-orm'
@@ -293,8 +294,8 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
         impersonationSessionDuration: 60 * 60,
       }),
       phoneNumber({
-        sendOTP: async ({ phoneNumber: phone, code }) => {
-          await sendWhatsAppOtp(env, phone, code)
+        sendOTP: ({ phoneNumber: phone, code }) => {
+          scheduleOtpDelivery(sendWhatsAppOtp(env, phone, code), options.waitUntil)
         },
         otpLength: 6,
         expiresIn: 300,
