@@ -34,14 +34,20 @@ test('phone invitation verifies identity, accepts access, and opens the scoped d
   expect([200, 207]).toContain(locationUpdate.status())
   expect((await locationUpdate.json() as { warning?: string }).warning).toBeUndefined()
 
-  const invitation = localD1Query<{ id: string }>(`
-    SELECT id FROM invitation
-    WHERE organizationId = 'org-pottery-house'
-      AND email = ${sqlValue(invitationEmail)}
-      AND status = 'pending'
-    ORDER BY createdAt DESC LIMIT 1
-  `)[0]
-  expect(invitation?.id).toEqual(expect.any(String))
+  let invitation: { id: string } | undefined
+  await expect.poll(() => {
+    invitation = localD1Query<{ id: string }>(`
+      SELECT id FROM invitation
+      WHERE organizationId = 'org-pottery-house'
+        AND email = ${sqlValue(invitationEmail)}
+        AND status = 'pending'
+      ORDER BY createdAt DESC LIMIT 1
+    `)[0]
+    return invitation?.id
+  }, {
+    message: 'WhatsApp access update did not create a pending invitation',
+    timeout: 15_000,
+  }).toEqual(expect.any(String))
   if (!invitation) throw new Error('WhatsApp access update did not create a pending invitation')
 
   await page.context().clearCookies()
