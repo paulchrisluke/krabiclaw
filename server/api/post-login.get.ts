@@ -6,6 +6,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { queryFirst } from '~/server/db'
 import { userHasLinkedCustomers } from '~/server/utils/guest-claims'
+import { validatedInternalPath } from '~/shared/auth/return-target'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -14,17 +15,7 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return sendRedirect(event, '/login')
 
-  const requestedRedirect = getQuery(event).redirect
-  let redirect: string | null = null
-  if (typeof requestedRedirect === 'string' && !requestedRedirect.includes('\\')) {
-    try {
-      const internalOrigin = 'https://krabiclaw.internal'
-      const resolved = new URL(requestedRedirect, internalOrigin)
-      if (requestedRedirect.startsWith('/') && resolved.origin === internalOrigin) redirect = `${resolved.pathname}${resolved.search}${resolved.hash}`
-    } catch {
-      redirect = null
-    }
-  }
+  const redirect = validatedInternalPath(getQuery(event).redirect)
   if (redirect) return sendRedirect(event, redirect)
 
   const user = session.user as typeof session.user & { role?: string }

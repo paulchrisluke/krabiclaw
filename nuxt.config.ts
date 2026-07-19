@@ -334,6 +334,11 @@ export default defineNuxtConfig({
       prefix: 'Platform',
     },
     {
+      path: '~/components/auth',
+      prefix: 'Auth',
+      pathPrefix: false,
+    },
+    {
       path: '~/components/ui',
       pathPrefix: false,
     },

@@ -1,6 +1,5 @@
 <template>
-  <div class="flex flex-1 items-center justify-center px-6 py-12">
-    <div class="w-full max-w-xl">
+  <div>
       <h1 class="m-0 mb-2 text-[36px] font-extrabold tracking-tight text-default">Choose a new password</h1>
       <p class="mb-7 text-[15px] text-muted">Use a strong password you haven’t used elsewhere.</p>
 
@@ -27,12 +26,11 @@
           </PlatformButton>
         </div>
       </form>
-    </div>
   </div>
 </template>
 
 <script setup>
-definePageMeta({ layout: 'platform', auth: false })
+definePageMeta({ layout: 'access', auth: false })
 
 import { authClient } from '~/lib/auth-client'
 import { validatePassword } from '~/utils/password-validation'
