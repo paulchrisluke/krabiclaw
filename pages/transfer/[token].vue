@@ -133,10 +133,8 @@
 
             <!-- Not logged in -->
             <template v-if="!isAuthenticated && !sessionLoading">
-              <PlatformButton block size="xl" class="rounded-[10px] shadow-sm hover:opacity-90" @click="signInWithGoogle">
-                Continue with Google
-              </PlatformButton>
-              <PlatformButton block variant="outline" size="xl" class="rounded-[10px]" :to="`/login?next=/transfer/${token}`">
+              <AuthGoogleAuthButton @activate="signInWithGoogle" />
+              <PlatformButton block variant="outline" size="xl" class="rounded-[10px]" :to="emailLoginUrl">
                 Sign in with email
               </PlatformButton>
               <p class="text-xs text-center text-muted">Sign in or create a free account to claim this site.</p>
@@ -221,12 +219,14 @@
 </template>
 
 <script setup lang="ts">
+import { buildLoginUrl } from '~/shared/auth/return-target'
+
 definePageMeta({ layout: false })
 
 const route = useRoute()
 const token = route.params.token as string
 
-const { isAuthenticated, sessionLoading, user } = useAuth()
+const { isAuthenticated, sessionLoading, user } = await useAuthSession()
 
 interface PricingInfo {
   base_cents: number
@@ -262,6 +262,9 @@ const accepting = ref(false)
 const acceptError = ref<string | null>(null)
 const accepted = ref(false)
 const redirectingToCheckout = ref(false)
+const transferPath = computed(() => `/transfer/${encodeURIComponent(token)}`)
+const emailLoginUrl = computed(() => buildLoginUrl({ redirect: transferPath.value }))
+const authOperation = useAuthOperation()
 const selectedInterval = ref<'month' | 'year'>('month')
 
 const activePricing = computed(() => {
@@ -322,11 +325,7 @@ async function acceptTransfer() {
 }
 
 async function signInWithGoogle() {
-  const { authClient } = await import('~/lib/auth-client')
-  await authClient.signIn.social({
-    provider: 'google',
-    callbackURL: `/transfer/${encodeURIComponent(token)}`,
-  })
+  await authOperation.signInWithGoogle(transferPath.value)
 }
 
 async function switchAccount() {

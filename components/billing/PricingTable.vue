@@ -148,8 +148,7 @@ const checkoutError = ref<string>('')
 async function handleUpgrade(planId: string) {
   const billingUrl = `${orgSettings.billing.value}?plan=${encodeURIComponent(planId)}`
   if (!isAuthenticated.value) {
-    const next = encodeURIComponent(billingUrl)
-    await navigateTo(`/login?next=${next}`)
+    await navigateTo({ path: '/login', query: { redirect: billingUrl } })
     return
   }
   await navigateTo(billingUrl)

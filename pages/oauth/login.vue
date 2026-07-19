@@ -62,11 +62,7 @@
           <div v-else class="space-y-3 py-1">
             <div v-if="error" role="alert" class="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">{{ error }}</div>
 
-            <!-- Google -->
-            <PlatformButton id="oauth-login-google" variant="outline" size="lg" block :loading="loading" @click="handleGoogleSignIn">
-              <PlatformGoogleIcon class="w-5 h-5" />
-              Continue with Google
-            </PlatformButton>
+            <AuthGoogleAuthButton :loading="loading || authLoading" @activate="handleGoogleSignIn" />
 
             <!-- Divider -->
             <div class="flex items-center gap-3 py-1">
@@ -75,63 +71,7 @@
               <div class="flex-1 h-px bg-default" />
             </div>
 
-            <!-- WhatsApp OTP — Step 1 -->
-            <div v-if="otpStep === 'phone'" class="space-y-3">
-              <SayaFormField v-slot="{ id }" label="WhatsApp number" name="oauth-phone">
-                <input
-                  :id="id"
-                  v-model="phone"
-                  type="tel"
-                  placeholder="+1 555 000 0000"
-                  :disabled="loading"
-                  :class="inputClass"
-                  @keydown.enter="handleSendOtp"
-                />
-              </SayaFormField>
-              <button
-                id="oauth-login-send-otp"
-                type="button"
-                :disabled="loading || !isPhoneValid"
-                class="inline-flex w-full items-center justify-center gap-2 rounded-[10px] bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
-                @click="handleSendOtp"
-              >
-                <SayaIcon :name="loading ? 'arrow-path' : 'chat-bubble-left-ellipsis'" :class="['size-4', loading && 'animate-spin']" />
-                Send code via WhatsApp
-              </button>
-            </div>
-
-            <!-- WhatsApp OTP — Step 2 -->
-            <div v-else-if="otpStep === 'code'" class="space-y-3">
-              <p class="text-sm text-muted">
-                A 6-digit code was sent to <strong class="text-default">{{ phone }}</strong> on WhatsApp.
-              </p>
-              <SayaFormField v-slot="{ id }" label="Verification code" name="oauth-code">
-                <input
-                  :id="id"
-                  v-model="code"
-                  type="text"
-                  inputmode="numeric"
-                  maxlength="6"
-                  placeholder="123456"
-                  :disabled="loading"
-                  :class="[inputClass, 'font-mono tracking-widest text-center']"
-                  @keydown.enter="handleVerifyOtp"
-                />
-              </SayaFormField>
-              <button
-                id="oauth-login-verify-otp"
-                type="button"
-                :disabled="code.length < 6 || loading"
-                class="inline-flex w-full items-center justify-center gap-2 rounded-[10px] bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
-                @click="handleVerifyOtp"
-              >
-                <SayaIcon v-if="loading" name="arrow-path" class="size-4 animate-spin" />
-                Verify and sign in
-              </button>
-              <PlatformButton variant="ghost" size="sm" block @click="otpStep = 'phone'; code = ''; error = null">
-                ← Use a different number
-              </PlatformButton>
-            </div>
+            <AuthPhoneOtpForm verify-label="Verify and sign in" @verified="finishOAuthPhoneSignIn" />
           </div>
         </div>
 
@@ -142,24 +82,16 @@
         </div>
       </div>
 
-      <p class="text-center text-xs text-dimmed mt-6">
-        Don't have an account?
-        <NuxtLink href="/signup" class="text-default underline underline-offset-2">Sign up</NuxtLink>
-      </p>
     </div>
   </div>
 </template>
 
 <script setup>
+import { oauthContinuationDestination } from '~/shared/auth/oauth-login'
+
 definePageMeta({ layout: false, auth: false })
 
 useSeoMeta({ robots: 'noindex, nofollow' })
-
-import { FORM_INPUT_CLASS } from '~/utils/form-constants'
-
-// Plain-Tailwind form styling — replaces UInput's default look now that this
-// page no longer depends on Nuxt UI (see SayaFormField.vue).
-const inputClass = FORM_INPUT_CLASS
 
 const route = useRoute()
 const oauthPrompt = computed(() =>
@@ -172,6 +104,8 @@ const isSelectAccountFlow = computed(() =>
 // ── Client metadata ───────────────────────────────────────────────────────────
 const clientName = ref('')
 const clientIcon = ref(null)
+const { user: sessionUser } = await useAuthSession()
+const existingSession = ref(sessionUser.value)
 
 onMounted(async () => {
   // 1. Fetch registered client name / icon for the banner
@@ -189,19 +123,9 @@ onMounted(async () => {
     }
   }
 
-  // 2. Check for an existing session — if found, show the confirm-account UI
-  try {
-    const session = await authClient.getSession()
-    if (session?.data?.user) {
-      existingSession.value = session.data.user
-    }
-  } catch {
-    // No session — show sign-in options
-  }
 })
 
 // ── Existing session state ────────────────────────────────────────────────────
-const existingSession = ref(null)
 const loading = ref(false)
 const accountInitial = computed(() =>
   (existingSession.value?.name || existingSession.value?.email || '?').charAt(0).toUpperCase()
@@ -213,23 +137,17 @@ const accountInitial = computed(() =>
  * prompt/consent checks with the now-active session and handle prompt=consent
  * correctly.
  */
-function continueWithSession() {
+async function continueWithSession() {
   loading.value = true
   if (isSelectAccountFlow.value) {
-    $fetch('/api/auth/oauth2/continue', {
-      method: 'POST',
-      body: { selected: true },
-    })
-      .then((result) => {
-        if (result?.url) {
-          window.location.href = result.url
-          return
-        }
-        window.location.href = `/api/auth/oauth2/authorize${window.location.search}`
-      })
-      .catch(() => {
-        window.location.href = `/api/auth/oauth2/authorize${window.location.search}`
-      })
+    const { data, error: continueError } = await authClient.oauth2.continue({ selected: true })
+    if (continueError) {
+      error.value = continueError.message || 'Could not continue authorization.'
+      loading.value = false
+      return
+    }
+    const destination = oauthContinuationDestination(data)
+    window.location.href = destination || `/api/auth/oauth2/authorize${window.location.search}`
     return
   }
 
@@ -252,72 +170,14 @@ async function switchAccount() {
 // ── Sign-in options (no existing session) ────────────────────────────────────
 const error = ref(null)
 
-// Must be absolute: Better Auth validates relative callbackURLs with a regex that rejects `:`, which
-// appears when redirect_uri is unencoded. Absolute URLs are validated by origin only, not query string.
-const oauthCallbackUrl = computed(() =>
-  typeof window !== 'undefined'
-    ? `${window.location.origin}/oauth/consent${window.location.search}`
-    : ''
-)
-
-const handleGoogleSignIn = async () => {
-  loading.value = true
-  error.value = null
-  try {
-    await authClient.signIn.social({
-      provider: 'google',
-      callbackURL: oauthCallbackUrl.value,
-    })
-  } catch {
-    error.value = 'Google sign in failed. Please try again.'
-    loading.value = false
-  }
+const { loading: authLoading, error: authError, signInWithGoogle } = useAuthOperation()
+watch(authError, value => { error.value = value })
+async function handleGoogleSignIn() {
+  await signInWithGoogle()
 }
 
-// WhatsApp OTP
-const otpStep = ref('phone')
-const phone = ref('')
-const code = ref('')
-
-const isPhoneValid = computed(() => {
-  const value = phone.value.trim()
-  if (!value) return false
-  return /^\+?[1-9]\d{1,14}$/.test(value.replace(/[\s\-\(\)]/g, ''))
-})
-
-const handleSendOtp = async () => {
-  if (!isPhoneValid.value) {
-    error.value = 'Please enter a valid phone number'
-    return
-  }
-  loading.value = true
-  error.value = null
-  try {
-    await authClient.phoneNumber.sendOtp({ phoneNumber: phone.value.trim() })
-    otpStep.value = 'code'
-  } catch (err) {
-    error.value = err?.message ?? 'Failed to send code. Check your number and try again.'
-  } finally {
-    loading.value = false
-  }
-}
-
-const handleVerifyOtp = async () => {
-  if (code.value.length < 6) return
-  loading.value = true
-  error.value = null
-  try {
-    await authClient.phoneNumber.verify({
-      phoneNumber: phone.value.trim(),
-      code: code.value.trim(),
-      callbackURL: oauthCallbackUrl.value,
-    })
-    window.location.href = oauthCallbackUrl.value
-  } catch (err) {
-    error.value = err?.message ?? 'Invalid or expired code. Please try again.'
-    code.value = ''
-  } finally {
-    loading.value = false
-  }
+function finishOAuthPhoneSignIn() {
+  // The OAuth Provider plugin resumes its signed authorization state when the
+  // phone verification response creates the session.
 }
 </script>

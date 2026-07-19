@@ -1,156 +1,39 @@
 <template>
-  <div class="flex-1 grid lg:grid-cols-2">
-
-    <!-- Mascot side -->
-    <aside class="hidden lg:flex flex-col items-center justify-center bg-elevated px-12 py-12">
-      <img src="/krabiclaw-login-mascot.png" alt="KrabicLaw mascot" class="w-full max-w-115 block" />
-      <p class="text-[14px] text-muted text-center max-w-sm mt-5 leading-relaxed">
-        "We launched our menu in 12 minutes and got our first online reservation the same night." —
-        <strong class="text-default">Saya, Kikuzuki Krabi</strong>
-      </p>
-    </aside>
-
-    <!-- Form side -->
-    <div class="flex items-center justify-center px-8 py-12">
-      <div class="w-full max-w-105">
-        <h1 class="text-[36px] font-extrabold tracking-tight text-default m-0 mb-2">Create your account</h1>
-        <p class="text-[15px] text-muted mb-7">Sign up, connect the KrabiClaw app in ChatGPT, and start editing through conversation.</p>
-
-        <div v-if="error" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">{{ error }}</div>
-
-        <div class="space-y-3">
-          <!-- Google -->
-          <PlatformButton variant="outline" size="lg" block :loading="loading" @click="handleGoogleSignIn">
-            <svg class="w-5 h-5" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            Continue with Google
-          </PlatformButton>
-
-          <!-- Divider -->
-          <div class="flex items-center gap-3 py-1">
-            <div class="flex-1 h-px bg-default" />
-            <span class="text-[12px] text-dimmed uppercase tracking-[0.18em]">or continue with</span>
-            <div class="flex-1 h-px bg-default" />
-          </div>
-
-          <!-- Email Signup -->
-          <form @submit.prevent="handleEmailSignup" class="space-y-3">
-            <SayaFormField v-slot="{ id, describedBy, invalid }" label="Email" name="email" :error="validationErrors.email">
-              <input :id="id" v-model="form.email" type="email" placeholder="you@example.com" :disabled="loading" autocomplete="email" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid" />
-            </SayaFormField>
-            <SayaFormField v-slot="{ id, describedBy, invalid }" label="Password" name="password" :error="validationErrors.password">
-              <input :id="id" v-model="form.password" type="password" placeholder="••••••••" :disabled="loading" autocomplete="new-password" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid" />
-            </SayaFormField>
-            <PlatformButton type="submit" size="lg" block :loading="loading">
-              Create Account
-            </PlatformButton>
-          </form>
-        </div>
-
-        <!-- Sign In Link -->
-        <div class="mt-6 text-center text-sm text-muted">
-          Already have an account?
-          <NuxtLink to="/login" class="text-primary font-semibold hover:underline no-underline">
-            Sign in →
-          </NuxtLink>
-        </div>
+  <div>
+    <h1 class="text-4xl font-extrabold tracking-tight text-default">Create your account</h1>
+    <p class="mt-2 mb-7 text-sm text-muted">Start building and managing your business online.</p>
+    <div v-if="error" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">{{ error }}</div>
+    <div class="space-y-3">
+      <AuthGoogleAuthButton :loading="loading" @activate="googleSignup" />
+      <div class="flex items-center gap-3 py-1">
+        <div class="h-px flex-1 bg-default" /><span class="text-xs uppercase tracking-widest text-dimmed">or</span><div class="h-px flex-1 bg-default" />
       </div>
+      <AuthEmailSignUpForm :callback-url="verificationCallback" @success="emailSignupComplete" />
     </div>
+    <p class="mt-6 text-center text-sm text-muted">Already have an account? <NuxtLink to="/login" class="font-semibold text-primary">Sign in</NuxtLink></p>
   </div>
 </template>
 
-<script setup>
-definePageMeta({
-  layout: 'platform',
-  auth: false
-})
+<script setup lang="ts">
+import { buildPostLoginUrl, validatedInternalPath } from '~/shared/auth/return-target'
 
-import { authClient } from '~/lib/auth-client'
-import { validatePassword } from '~/utils/password-validation'
-import { FORM_INPUT_CLASS } from '~/utils/form-constants'
+definePageMeta({ layout: 'access', auth: false })
+useSeoMeta({ robots: 'noindex, nofollow' })
 
+const route = useRoute()
 const router = useRouter()
 const { trackSignUp } = useAnalytics()
+const postLoginUrl = computed(() => buildPostLoginUrl({ redirect: validatedInternalPath(route.query.redirect) }))
+const verificationCallback = computed(() => `${useRequestURL().origin}/login?verified=1`)
+const { loading, error, signInWithGoogle } = useAuthOperation()
 
-// Plain-Tailwind form styling — replaces UInput's default look now that this
-// page no longer depends on Nuxt UI (see SayaFormField.vue).
-const inputClass = FORM_INPUT_CLASS
-const loading = ref(false)
-const error = ref(null)
-const validationErrors = ref({
-  email: '',
-  password: ''
-})
-const form = ref({
-  email: '',
-  password: ''
-})
-
-// Handle Google Sign In
-const handleGoogleSignIn = async () => {
-  loading.value = true
-  error.value = null
-  try {
-    await authClient.signIn.social({ provider: 'google', callbackURL: '/dashboard' })
-    trackSignUp('oauth_google')
-  } catch (err) {
-    console.error('Google sign-in error:', err)
-    error.value = 'Google sign in failed. Please try again.'
-  } finally {
-    loading.value = false
-  }
+async function googleSignup() {
+  await signInWithGoogle(postLoginUrl.value)
+  if (!error.value) trackSignUp('oauth_google')
 }
 
-const handleEmailSignup = async () => {
-  validationErrors.value.email = ''
-  validationErrors.value.password = ''
-  error.value = null
-
-  const email = form.value.email.trim()
-  const password = form.value.password
-
-  if (!email) {
-    validationErrors.value.email = 'Email is required.'
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    validationErrors.value.email = 'Please enter a valid email address.'
-  }
-
-  validationErrors.value.password = validatePassword(password)
-
-  if (validationErrors.value.email || validationErrors.value.password) {
-    error.value = 'Please correct the highlighted fields.'
-    return
-  }
-
-  loading.value = true
-  try {
-    const result = await authClient.signUp.email({
-      email,
-      password,
-      name: email.split('@')[0],
-      callbackURL: `${window.location.origin}/login?verified=1`
-    })
-
-    if (result?.error) {
-      error.value = result.error.message || 'Sign up failed. Please try again.'
-      return
-    }
-
-    trackSignUp('email')
-    await router.push('/login?signup=success')
-  } catch (err) {
-    console.error('Email sign-up error:', err)
-    error.value = 'Sign up failed. Please try again.'
-  } finally {
-    loading.value = false
-  }
+async function emailSignupComplete(email: string) {
+  trackSignUp('email')
+  await router.push({ path: '/login', query: { signup: 'success', email } })
 }
-
-useSeoMeta({
-  robots: 'noindex, nofollow'
-})
 </script>
