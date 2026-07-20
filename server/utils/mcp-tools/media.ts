@@ -1,11 +1,11 @@
 import type { McpToolDefinition } from './shared'
 import { chatgptFileInput, mediaAssetObject, siteTool } from './shared'
-import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
+import { VIDEO_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const MEDIA_TOOLS: McpToolDefinition[] = [
   siteTool({
       name: 'get_site_media_assets',
-      description: 'Use this to see the photos and videos already uploaded for a site — "what pictures do I have", "show me my photos". Use it first to find asset IDs before assigning images through business-level tools like set_logo, set_home_hero_image, set_about_story_image, set_home_story_image, set_location_hero_image, set_menu_item_image, set_post_image, or set_experience_image. Filter by kind="image" to narrow results. For video, call open_media_upload, or the matching scoped widget (open_home_hero_media_upload, open_location_media_upload, open_experience_media_upload) to launch the inline upload widget; the dashboard media library is a fallback only for chat clients that do not support inline widgets. After upload, call get_site_media_assets to get the public_url and place it on the page.',
+      description: 'Use this to see the photos and videos already uploaded for a site — "what pictures do I have", "show me my photos". Use it first to find asset IDs before assigning images through business-level tools like set_logo, set_home_hero_image, set_about_story_image, set_home_story_image, set_location_hero_image, set_menu_item_image, set_post_image, or set_experience_image. Filter by kind="image" to narrow results. For video, call open_video_upload to launch the inline upload widget. Images use direct ChatGPT attachments or native image generation. After upload, call get_site_media_assets to get the public_url and place it on the page.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -52,15 +52,14 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       },
     }),
   siteTool({
-      name: 'open_media_upload',
-      description: 'Launches the inline KrabiClaw media upload widget so the user can pick or drag an image or video without leaving the conversation. This is the primary path for video, and an alternative to the file-attachment path for images. After the widget reports a completed upload, call the matching assignment tool (set_home_hero_image, set_home_hero_video, set_logo, set_location_hero_image, set_location_hero_video, set_post_image, etc.) with the returned assetId. Prefer a scoped variant when the target is already known: open_home_hero_media_upload, open_location_media_upload, open_experience_media_upload, open_post_media_upload, or open_menu_item_media_upload.',
+      name: 'open_video_upload',
+      description: 'Launch the inline KrabiClaw video upload widget. Use this only when a video upload is required; images should arrive as direct ChatGPT attachments or through native image generation. The widget returns an active assetId and publicUrl. Then call the appropriate video assignment tool, such as set_home_hero_video, set_location_hero_video, or set_experience_video.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
-      uiResourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
+      uiResourceUri: VIDEO_UPLOAD_WIDGET_RESOURCE_URI,
       inputSchema: {
         category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'blog', 'other'], description: 'What this media will be used for.' },
-        accept: { type: 'string', enum: ['image', 'video', 'both'], description: 'Restrict the widget file picker. Defaults to both.' },
       },
       outputSchema: {
         type: 'object',

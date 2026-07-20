@@ -7,6 +7,7 @@ What it does:
 - records the screen with `ffmpeg`
 - opens ChatGPT in a persistent Playwright browser profile
 - steps through a prompt script for your Developer Mode connector demo
+- provides an assertion-based connector gate via `yarn test:mcp:chatgpt`
 
 What it does not do:
 
@@ -56,6 +57,18 @@ In terminal 2:
 ```bash
 yarn demo:chatgpt:web
 ```
+
+For acceptance testing rather than a guided recording, use the persistent
+profile assertion gate documented in
+[`docs/local-mcp-harness.md`](../../docs/local-mcp-harness.md):
+
+```bash
+yarn test:mcp:chatgpt
+```
+
+That command creates its own quick tunnel, runs the automated API/Playwright
+prerequisites, prints the exact `/api/mcp` URL to use for `devkrabiclaw`, and
+then runs the persistent-profile ChatGPT assertions before stopping the tunnel.
 
 The script will:
 

@@ -1130,6 +1130,7 @@ export const post_channel_jobs = sqliteTable("post_channel_jobs", {
 	published_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
+	uniqueIndex("post_channel_jobs_post_channel_unique").on(table.post_id, table.channel),
 	// WHERE post_id = ? in post-management.ts and mcp-executor/posts.ts (publish status checks).
 	index("post_channel_jobs_post_id_idx").on(table.post_id),
 ]);

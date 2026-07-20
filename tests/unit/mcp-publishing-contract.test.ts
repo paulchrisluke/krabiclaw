@@ -6,14 +6,20 @@ import { MEDIA_TOOLS } from '../../server/utils/mcp-tools/media.ts'
 import { POSTS_TOOLS } from '../../server/utils/mcp-tools/posts.ts'
 import { PostValidationError, validatePostInput } from '../../server/utils/post-management.ts'
 
-function tool(tools: typeof POSTS_TOOLS, name: string) {
-  const definition = tools.find(candidate => candidate.name === name)
+type ToolContract = {
+  name: string
+  inputSchema: { required?: readonly string[], properties?: Record<string, unknown> }
+  outputSchema?: { properties?: Record<string, unknown> }
+}
+
+function tool(tools: readonly unknown[], name: string): ToolContract {
+  const definition = (tools as readonly ToolContract[]).find(candidate => candidate.name === name)
   assert.ok(definition, `missing ${name}`)
   return definition
 }
 
 test('blog, post, and media MCP schemas expose the canonical writable contract', () => {
-  const blog = tool(BLOG_TOOLS as typeof POSTS_TOOLS, 'create_blog_post')
+  const blog = tool(BLOG_TOOLS, 'create_blog_post')
   assert.deepEqual(blog.inputSchema.required, ['title', 'content_blocks'])
   assert.equal(blog.inputSchema.properties?.body, undefined)
 
@@ -22,7 +28,7 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
     assert.ok(post.inputSchema.properties?.image_asset_id)
   }
 
-  const upload = tool(MEDIA_TOOLS as typeof POSTS_TOOLS, 'upload_user_media')
+  const upload = tool(MEDIA_TOOLS, 'upload_user_media')
   for (const property of ['asset_id', 'assetId', 'status', 'public_url', 'publicUrl']) {
     assert.ok(upload.outputSchema?.properties?.[property], `missing upload output ${property}`)
   }

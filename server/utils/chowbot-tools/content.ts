@@ -7,7 +7,7 @@ import { chowbotToolFromMcp } from './from-mcp'
 // see docs/tool-parity.md). clear_home_hero_image/clear_home_hero_video
 // were never offered to ChowBot either — no "clear" concept in its prompt
 // today, not added here to stay within migrating existing overlap.
-// open_home_hero_media_upload is a ChatGPT-app UI widget (uiResourceUri).
+// Video widget launchers are tenant-MCP-only and live in mcp-tools/media.ts.
 const CONTENT_DOMAIN_TOOL_NAMES = new Set([
   'get_page_fields',
   'update_page_content',

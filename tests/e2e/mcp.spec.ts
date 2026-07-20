@@ -15,21 +15,22 @@ async function mcpRequest(
   request: APIRequestContext,
   baseURL: string,
   options: {
-    method: 'server/discover' | 'tools/list' | 'tools/call' | 'bad/method'
+    method: 'initialize' | 'notifications/initialized' | 'server/discover' | 'tools/list' | 'tools/call' | 'resources/list' | 'resources/read' | 'bad/method'
     id?: string | number
     siteId?: string
     toolName?: string
     args?: Record<string, unknown>
     extraHeaders?: Record<string, string>
+    params?: Record<string, unknown>
   },
 ) {
   const payload = {
     jsonrpc: '2.0',
     id: options.id ?? `${options.method}-${Date.now()}`,
     method: options.method,
-    params: options.method === 'tools/call'
+    params: options.params ?? (options.method === 'tools/call'
       ? { name: options.toolName, arguments: options.args ?? {} }
-      : options.siteId ? { site_id: options.siteId } : {},
+      : options.siteId ? { site_id: options.siteId } : {}),
     _meta: {
       'io.modelcontextprotocol/version': MCP_VERSION,
       'io.modelcontextprotocol/method': options.method,
@@ -152,6 +153,245 @@ async function loginAsFreshMcpUser(request: APIRequestContext, baseURL: string) 
 }
 
 test.describe('stateless MCP server', () => {
+  test('ChatGPT sequence and video widget produce an active, public, assignable asset', async ({ page, request, baseURL }) => {
+    test.setTimeout(90_000)
+    await loginAsFreshMcpUser(request, baseURL!)
+    const siteId = await ensureSite(request, baseURL!)
+    let assetId = ''
+
+    const initialize = await mcpRequest(request, baseURL!, {
+      method: 'initialize',
+      params: { protocolVersion: MCP_VERSION, capabilities: {}, clientInfo: { name: 'openai-mcp', version: '1.0.0' } },
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(initialize.status()).toBe(200)
+    expect((await initialize.json() as { result?: { capabilities?: { tools?: unknown } } }).result?.capabilities?.tools).toBeDefined()
+
+    const initialized = await mcpRequest(request, baseURL!, {
+      method: 'notifications/initialized',
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(initialized.status()).toBe(202)
+
+    const tools = await mcpRequest(request, baseURL!, {
+      method: 'tools/list',
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(tools.status()).toBe(200)
+    const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, _meta?: Record<string, unknown> }> } }
+    expect(toolsBody.result.tools.filter(tool => tool.name.startsWith('open_') && tool.name.includes('upload')).map(tool => tool.name)).toEqual(['open_video_upload'])
+    const openVideoTool = toolsBody.result.tools.find(tool => tool.name === 'open_video_upload')
+    expect(openVideoTool?._meta?.['openai/widgetAccessible']).toBe(true)
+
+    const currentUser = await mcpRequest(request, baseURL!, {
+      method: 'tools/call', toolName: 'get_current_user', args: {},
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(currentUser.status()).toBe(200)
+
+    const resources = await mcpRequest(request, baseURL!, { method: 'resources/list' })
+    expect(resources.status()).toBe(200)
+    const resourcesBody = await resources.json() as { result: { resources: Array<{ uri: string }> } }
+    expect(resourcesBody.result.resources).toHaveLength(1)
+    expect(resourcesBody.result.resources[0]?.uri).toBe('ui://widget/video-upload@v1.html')
+
+    const resource = await mcpRequest(request, baseURL!, {
+      method: 'resources/read',
+      params: { uri: resourcesBody.result.resources[0]!.uri },
+    })
+    expect(resource.status()).toBe(200)
+    const resourceBody = await resource.json() as { result: { contents: Array<{ text: string }> } }
+    const html = resourceBody.result.contents[0]!.text
+    const scriptSrc = html.match(/<script[^>]+src="([^"]+)"/)?.[1]
+    expect(scriptSrc).toBeTruthy()
+    const script = await request.get(scriptSrc!)
+    expect(script.status()).toBe(200)
+
+    await page.exposeFunction('krabiclawWidgetCallTool', async (name: string, args: Record<string, unknown>) => {
+      const response = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: name, args })
+      const body = await response.json()
+      if (response.status() !== 200) throw new Error(`MCP ${name} returned ${response.status()}: ${JSON.stringify(body)}`)
+      return body.result
+    })
+    const installHostMock = ({ targetSiteId, downloadUrl }: { targetSiteId: string, downloadUrl: string }) => {
+      const calls: string[] = []
+      Object.defineProperty(window, '__krabiclawWidgetCalls', { value: calls })
+      Object.defineProperty(window, 'openai', {
+        value: {
+          toolInput: { site_id: targetSiteId, category: 'other' },
+          async uploadFile(file: File) {
+            calls.push(`uploadFile:${file.name}:${file.type}:${file.size}`)
+            return { fileId: 'file_widget_e2e_video' }
+          },
+          async getFileDownloadUrl({ fileId }: { fileId: string }) {
+            calls.push(`getFileDownloadUrl:${fileId}`)
+            return { downloadUrl }
+          },
+          async callTool(name: string, args: Record<string, unknown>) {
+            calls.push(`callTool:${name}`)
+            return await (window as unknown as { krabiclawWidgetCallTool(name: string, args: Record<string, unknown>): Promise<unknown> }).krabiclawWidgetCallTool(name, args)
+          },
+        },
+      })
+    }
+
+    try {
+      const htmlWithoutScript = html.replace(/<script[^>]+src="[^"]+"><\/script>/, '')
+      await page.setContent(htmlWithoutScript)
+      await page.evaluate(installHostMock, { targetSiteId: siteId, downloadUrl: `${baseURL}/api/mcp-test/tiny-video` })
+      await page.addScriptTag({ url: scriptSrc })
+      const fixtureResponse = await request.get(`${baseURL}/api/mcp-test/tiny-video`)
+      expect(fixtureResponse.status()).toBe(200)
+      const fixture = await fixtureResponse.body()
+      expect(fixture.byteLength).toBeGreaterThan(1_000)
+      await page.locator('input[type=file]').setInputFiles({ name: 'tiny-widget-e2e.mp4', mimeType: 'video/mp4', buffer: fixture })
+      await page.getByRole('button', { name: 'Upload video' }).click()
+      await expect(page.getByRole('status')).toContainText('is ready to assign')
+      const calls = await page.evaluate(() => (window as unknown as { __krabiclawWidgetCalls: string[] }).__krabiclawWidgetCalls)
+      expect(calls.map(call => call.split(':')[0])).toEqual(['uploadFile', 'getFileDownloadUrl', 'callTool'])
+      expect(calls[2]).toBe('callTool:upload_user_media')
+
+      const media = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'get_site_media_assets', args: { site_id: siteId, kind: 'video' },
+      })
+      expect(media.status()).toBe(200)
+      const assets = mcpData<{ assets: Array<{ id?: string, asset_id?: string, status?: string, public_url?: string, publicUrl?: string }> }>(await media.json()).assets
+      const uploaded = assets.find(asset => (asset.id ?? asset.asset_id) && (asset.public_url ?? asset.publicUrl))
+      expect(uploaded).toBeTruthy()
+      assetId = uploaded!.id ?? uploaded!.asset_id ?? ''
+      expect(uploaded!.status).toBe('active')
+      const publicUrl = uploaded!.public_url ?? uploaded!.publicUrl
+      expect((await request.get(publicUrl!)).status()).toBe(200)
+
+      const assign = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'set_home_hero_video', args: { site_id: siteId, asset_id: assetId },
+      })
+      if (assign.status() !== 200) console.error(await assign.text())
+      expect(assign.status()).toBe(200)
+    } finally {
+      if (assetId) {
+        await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'clear_home_hero_video', args: { site_id: siteId } })
+        await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_media_asset', args: { site_id: siteId, asset_id: assetId } })
+      }
+    }
+  })
+
+  test('posts publish immediately with validated types, real media, skipped social outcomes, and idempotency', async ({ request, baseURL }) => {
+    test.setTimeout(90_000)
+    await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
+    const siteId = MCP_MANAGED_SITE_ID
+    const createdPostIds: string[] = []
+
+    try {
+      const mediaResponse = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'get_site_media_assets', args: { site_id: siteId, kind: 'image' },
+      })
+      expect(mediaResponse.status()).toBe(200)
+      const mediaAssets = mcpData<{ assets: Array<{ id?: string, asset_id?: string, status?: string }> }>(await mediaResponse.json()).assets
+      const imageAsset = mediaAssets.find(asset => asset.status === 'active' && (asset.id ?? asset.asset_id))
+      expect(imageAsset).toBeTruthy()
+      const imageAssetId = imageAsset!.id ?? imageAsset!.asset_id!
+
+      const invalidEvent = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'create_post',
+        args: { site_id: siteId, title: 'Invalid event', body: 'Missing its start.', post_type: 'event' },
+      })
+      expect(invalidEvent.status()).toBe(400)
+      expect(await invalidEvent.text()).toContain('event_start')
+
+      const invalidOffer = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'create_post',
+        args: { site_id: siteId, title: 'Invalid offer', body: 'Missing terms.', post_type: 'offer' },
+      })
+      expect(invalidOffer.status()).toBe(400)
+      expect(await invalidOffer.text()).toMatch(/offer_coupon|offer_terms/)
+
+      const now = Date.now()
+      const create = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'create_post',
+        args: {
+          site_id: siteId,
+          title: `MCP immediate publication ${now}`,
+          body: 'Visible immediately through MCP and the public API.',
+          image_asset_id: imageAssetId,
+          gallery_media: [{ media_asset_id: imageAssetId, role: 'cover', alt_text: 'MCP seeded image' }],
+        },
+      })
+      if (create.status() !== 200) console.error(await create.text())
+      expect(create.status()).toBe(200)
+      const created = mcpData<{ id: string, slug: string }>(await create.json())
+      createdPostIds.push(created.id)
+
+      const read = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'get_post', args: { site_id: siteId, post_id: created.id },
+      })
+      expect(read.status()).toBe(200)
+      const firstPost = mcpData<{ post: { status: string, slug: string, published_at: string, image_asset_id: string, media: Array<{ mediaAssetId?: string }> } }>(await read.json()).post
+      expect(firstPost.status).toBe('published')
+      expect(firstPost.published_at).toEqual(expect.any(String))
+      expect(firstPost.image_asset_id).toBe(imageAssetId)
+      expect(firstPost.media.some(item => item.mediaAssetId === imageAssetId)).toBe(true)
+
+      const publicRead = await request.get(`${baseURL}/api/public/sites/${siteId}/posts/${encodeURIComponent(firstPost.slug)}`)
+      expect(publicRead.status()).toBe(200)
+      const publicPost = (await publicRead.json() as { post: { id: string, image_asset_id: string, media: Array<{ mediaAssetId?: string }> } }).post
+      expect(publicPost.id).toBe(created.id)
+      expect(publicPost.image_asset_id).toBe(imageAssetId)
+      expect(publicPost.media.some(item => item.mediaAssetId === imageAssetId)).toBe(true)
+
+      const publish = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'publish_post',
+        args: { site_id: siteId, post_id: created.id, channels: ['site', 'facebook'] },
+      })
+      expect(publish.status()).toBe(200)
+      const publishData = mcpData<{ channel_outcomes: Record<string, { status: string, reason?: string }> }>(await publish.json())
+      expect(publishData.channel_outcomes.site?.status).toBe('published')
+      expect(publishData.channel_outcomes.facebook?.status).toBe('skipped')
+      expect(publishData.channel_outcomes.facebook?.reason).toMatch(/not_connected|not_entitled|social_publishing_disabled/)
+
+      const repeat = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'publish_post',
+        args: { site_id: siteId, post_id: created.id, channels: ['site', 'facebook'] },
+      })
+      expect(repeat.status()).toBe(200)
+      const reread = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'get_post', args: { site_id: siteId, post_id: created.id },
+      })
+      const repeatedPost = mcpData<{ post: { published_at: string, channels: Array<{ channel: string }> } }>(await reread.json()).post
+      expect(repeatedPost.published_at).toBe(firstPost.published_at)
+      expect(repeatedPost.channels.filter(job => job.channel === 'site')).toHaveLength(1)
+      expect(repeatedPost.channels.filter(job => job.channel === 'facebook')).toHaveLength(1)
+
+      const eventStart = new Date(Date.now() + 86_400_000).toISOString()
+      const eventEnd = new Date(Date.now() + 90_000_000).toISOString()
+      const event = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'create_post',
+        args: { site_id: siteId, title: `Valid event ${now}`, body: 'Event details.', post_type: 'event', event_title: 'MCP Event', event_start: eventStart, event_end: eventEnd },
+      })
+      expect(event.status()).toBe(200)
+      const eventId = mcpData<{ id: string }>(await event.json()).id
+      createdPostIds.push(eventId)
+      const eventRead = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'get_post', args: { site_id: siteId, post_id: eventId } })
+      const eventPost = mcpData<{ post: { post_type: string, event_start: string, event_end: string } }>(await eventRead.json()).post
+      expect(eventPost).toMatchObject({ post_type: 'event', event_start: eventStart, event_end: eventEnd })
+
+      const offer = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'create_post',
+        args: { site_id: siteId, title: `Valid offer ${now}`, body: 'Offer details.', post_type: 'offer', offer_coupon: 'MCP20', offer_terms: 'Valid during the E2E window.' },
+      })
+      expect(offer.status()).toBe(200)
+      const offerId = mcpData<{ id: string }>(await offer.json()).id
+      createdPostIds.push(offerId)
+      const offerRead = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'get_post', args: { site_id: siteId, post_id: offerId } })
+      const offerPost = mcpData<{ post: { post_type: string, offer_coupon: string, offer_terms: string } }>(await offerRead.json()).post
+      expect(offerPost).toMatchObject({ post_type: 'offer', offer_coupon: 'MCP20', offer_terms: 'Valid during the E2E window.' })
+    } finally {
+      for (const postId of createdPostIds) {
+        await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_post', args: { site_id: siteId, post_id: postId } })
+      }
+    }
+  })
+
   test('tenant blog tools write the same canonical block document as the dashboard', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
     await loginAs(request, baseURL!, MCP_FREE_USER_ID)

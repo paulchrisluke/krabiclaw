@@ -1,5 +1,25 @@
 import { expect, test } from '@playwright/test'
+import { createHash } from 'node:crypto'
+import { importJWK, SignJWT } from 'jose'
 import { devLoginHeaders, isDeployedWorkerTarget } from './test-env'
+
+const PRIVATE_CLIENT_TEST_KEY_ID = 'krabiclaw-cimd-e2e-rs256'
+const PRIVATE_CLIENT_TEST_JWK = {
+  kty: 'RSA',
+  n: '0PJUgpQ_Fg1ArCJcwrncgB9r8EX2UVD7pvpNJN8d_E6n4c_yQ_LVC0jyzdAlWnRFXE2THja5mSMQ7ddEYBznURS563ki2qHbMxkkhsIvzR3BeWWOe_qhqWenjFx5le5VFZIg1kcUZ0nzR4IM8gX1BJSEERZUkydY5K584rv3dVVdWWhUwux1ES0gEqpjQle9iiRPQ6lU8lSpYLEI02rkjvtF7HB5wKtnr1wsTOA5hWLwaKnFKN-G4v5ITO0cFys9bN6024YL8bj4N7HvPA-uxDM7AjxHZkAZ9PE90v85QS3r49AysOQIOxM7pq9i3su_5kECwCcZuG9gddOGUOs1fw',
+  e: 'AQAB',
+  d: 'VAt1VMS-j2crQVHdD_JksCBzcUUi69hwMNzzVMZuMEOPIbRcFVrCuPRRvdlgfP7Ru2v0pi2K__7r209AUIyvupxkoEOsclaybd5KI-5N_epfHS5tXo8Uoahw63Ny8IzaKoAJt0cF_Pnw4i18eYlN4da_PIRH5pzoE6vfze-ffNDsN0QbPHLKdE3pwxkIl0h73pXtFK8PN6Et2efMRMBR9n7Mc1JhzgE64RgrPchC5RqTMioiEeNVvtgi-11-Is2gZFnbpNkbH8Fubm0PNg9wC6lnO2MnOOhUkwKx6yV1G16oytMjDUlQMxo1jaaS8p-duV4DbFDJBYM7yUhexvGtsQ',
+  p: '8DfWJ-BCJxyv7v8_CLFph4Gj0OcgByIGey3uIMcO7NzCLHmWQmfQyI7seIGEZDLFnY6mj2ECJlUVgo56ZGxl6ur3V54NPVolAvQkw0jtTOPaL0k7UcGpQ4fdaOgAE7_6EpXQomsBqqS1ccc2FL0wkBTnpYCG8UHgEfutVW-j_Yk',
+  q: '3qyL6Bq_cm4IRE3dMV4exCNihJwRAEqRJ5z6OGxq-W01AHNW7_mQ8-JIj_09qdJ6l9LripRpB4nmTrUcZf310ZcGAONr2jVLRtmbHuMJToLS0SffxSJiXNjIdn8SN5HFthO4rBKG-jUagwy3tsnIAsbfhLZOOulnQRINVFLAIMc',
+  dp: 'y3YvsKS0w1X7-g09gYprHLgEXYt1yDTcknarrB2OGbc9y9fMGkC-STEtP0BMN2X9lV7e2rBK1tbYGjW9mtNpW5lamF6pTh7NHHxXqwRY4fhXtBdt4-iJCkbIlPN0JUZEdHtqNDc4OSW6_TzDJLu9pzvdnIOJSE0IkZK_FI8zsik',
+  dq: 'a9C33SY2VD2amxfoZaLg2q8XYIYAZVe1eKy1KuSz1xlddF5kVcVMvglugOlpFfTnjuN9UJgTUqcecDWZDnkssNKjAYMcEYeEb0Wlqgrb0rvdP5BC9Lx1S-dbCKT2ORnH1SUvYYGHAVb9Az8BJOwGf_GzABsVPckNSaBn-9AlXrk',
+  qi: 'Zz2Dyw9UFsy1TGuBur55ihvvutD2V6Q0GfaYjrfoQ9kWmWV3DTofW5jYcW3i0YelASgasxix11mqnoGu6TE1bdeJmOdp-9PUHaU5Cpnsd2BlmAy4PMsRxWFpJc6Qf6OaQ8dzDV3I-f921RYnWxU4QvjYLW9GbKli3x1UunSSaI4',
+  alg: 'RS256',
+} as const
+
+function pkceChallenge(verifier: string) {
+  return createHash('sha256').update(verifier).digest('base64url')
+}
 
 function oauthAuthorizeUrl(baseURL: string, params: Record<string, string>) {
   return `${baseURL}/api/auth/oauth2/authorize?${new URLSearchParams(params).toString()}`
@@ -137,6 +157,106 @@ test.describe('OAuth discovery endpoints', () => {
     expect(secondRedirect.origin + secondRedirect.pathname).toBe(redirectUri)
     expect(secondRedirect.searchParams.get('code')).toBeTruthy()
     expect(secondRedirect.searchParams.get('state')).toBe('second-pass')
+  })
+
+  test('ChatGPT-shaped CIMD uses private_key_jwt and rejects assertion replay', async ({ request, baseURL }) => {
+    test.skip(isDeployedWorkerTarget(baseURL!), 'same-zone CIMD/JWKS self-fetch requires the public local tunnel')
+    const devHeaders = devLoginHeaders()
+    test.skip(!devHeaders, 'E2E_DEV_ROUTE_SECRET required for dev login')
+
+    const loginRes = await request.get(`${baseURL}/api/dev/login?userId=oauth-private-cimd-e2e`, {
+      headers: devHeaders,
+      maxRedirects: 0,
+    })
+    expect(loginRes.status()).toBe(302)
+    const cookieHeader = loginRes.headersArray()
+      .filter(header => header.name.toLowerCase() === 'set-cookie')
+      .map(header => header.value.split(';')[0])
+      .join('; ')
+    expect(cookieHeader).toBeTruthy()
+
+    const clientId = `${baseURL}/api/auth/oauth2/test-private-client-metadata?nonce=${Date.now()}`
+    const redirectUri = `${baseURL}/oauth/test-callback`
+    const verifier = 'krabiclaw-private-cimd-e2e-verifier-0123456789'
+    const authorizeParams = {
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      scope: 'openid offline_access tenant',
+      state: 'private-first',
+      code_challenge: pkceChallenge(verifier),
+      code_challenge_method: 'S256',
+      resource: `${baseURL}/api/mcp`,
+    }
+
+    const authorize = await request.get(oauthAuthorizeUrl(baseURL!, authorizeParams), {
+      headers: { Cookie: cookieHeader },
+      maxRedirects: 0,
+    })
+    expect(authorize.status()).toBe(302)
+    const consentUrl = new URL(authorize.headers()['location']!, baseURL)
+    expect(consentUrl.pathname).toBe('/oauth/consent')
+
+    const consent = await request.post(`${baseURL}/api/auth/oauth2/consent`, {
+      headers: { Cookie: cookieHeader, Origin: baseURL! },
+      data: { accept: true, oauth_query: consentUrl.search.slice(1) },
+    })
+    expect(consent.status()).toBe(200)
+    const consentBody = await consent.json() as { url: string }
+    const code = new URL(consentBody.url).searchParams.get('code')
+    expect(code).toBeTruthy()
+
+    const now = Math.floor(Date.now() / 1000)
+    const privateKey = await importJWK(PRIVATE_CLIENT_TEST_JWK, 'RS256')
+    const assertion = await new SignJWT({})
+      .setProtectedHeader({ alg: 'RS256', kid: PRIVATE_CLIENT_TEST_KEY_ID })
+      .setIssuer(clientId)
+      .setSubject(clientId)
+      .setAudience(`${baseURL}/api/auth/oauth2/token`)
+      .setIssuedAt(now)
+      .setExpirationTime(now + 120)
+      .setJti(`cimd-replay-${crypto.randomUUID()}`)
+      .sign(privateKey)
+
+    const token = await request.post(`${baseURL}/api/auth/oauth2/token`, {
+      headers: { Origin: baseURL! },
+      form: {
+        grant_type: 'authorization_code',
+        client_id: clientId,
+        code: code!,
+        redirect_uri: redirectUri,
+        code_verifier: verifier,
+        client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+        client_assertion: assertion,
+      },
+    })
+    expect(token.status()).toBe(200)
+    expect((await token.json() as { access_token?: string }).access_token).toBeTruthy()
+
+    const secondAuthorize = await request.get(oauthAuthorizeUrl(baseURL!, {
+      ...authorizeParams,
+      state: 'private-replay',
+    }), { headers: { Cookie: cookieHeader }, maxRedirects: 0 })
+    expect(secondAuthorize.status()).toBe(302)
+    const replayCode = new URL(secondAuthorize.headers()['location']!, baseURL).searchParams.get('code')
+    expect(replayCode).toBeTruthy()
+
+    const replay = await request.post(`${baseURL}/api/auth/oauth2/token`, {
+      headers: { Origin: baseURL! },
+      form: {
+        grant_type: 'authorization_code',
+        client_id: clientId,
+        code: replayCode!,
+        redirect_uri: redirectUri,
+        code_verifier: verifier,
+        client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+        client_assertion: assertion,
+      },
+    })
+    expect(replay.status()).toBeGreaterThanOrEqual(400)
+    const replayBody = await replay.json() as { error?: string, error_description?: string }
+    expect(replayBody.error).toBeTruthy()
+    expect(replayBody.error_description).toMatch(/assertion|replay|already/i)
   })
 
   test('unauthenticated MCP request returns 401 with WWW-Authenticate header', async ({ request, baseURL }) => {

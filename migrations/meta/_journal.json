@@ -351,6 +351,13 @@
       "when": 1784506562446,
       "tag": "0056_fancy_vargas",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "6",
+      "when": 1784510742022,
+      "tag": "0057_daily_madripoor",
+      "breakpoints": true
     }
   ]
 }

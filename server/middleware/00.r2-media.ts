@@ -6,10 +6,14 @@ import { defineEventHandler, getHeader, getRequestURL, sendStream, setHeader, se
 import { cloudflareEnv } from '~/server/utils/api-response'
 
 const MEDIA_HOST = 'media.krabiclaw.com'
+const WORKER_MEDIA_PREFIX = '/__media/'
 
 export default defineEventHandler(async (event) => {
   const host = (getHeader(event, 'host') || '').split(':')[0]
-  if (host !== MEDIA_HOST) return
+  const url = getRequestURL(event)
+  const isMediaHost = host === MEDIA_HOST
+  const isWorkerMediaPath = url.pathname.startsWith(WORKER_MEDIA_PREFIX)
+  if (!isMediaHost && !isWorkerMediaPath) return
 
   const env = cloudflareEnv(event)
   const bucket = env.MEDIA_BUCKET
@@ -17,8 +21,9 @@ export default defineEventHandler(async (event) => {
     return sendError(event, createError({ statusCode: 503, statusMessage: 'Media storage unavailable' }))
   }
 
-  const url = getRequestURL(event)
-  const key = url.pathname.replace(/^\/+/, '')
+  const key = isWorkerMediaPath
+    ? url.pathname.slice(WORKER_MEDIA_PREFIX.length)
+    : url.pathname.replace(/^\/+/, '')
   if (!key) {
     return sendError(event, createError({ statusCode: 400 }))
   }

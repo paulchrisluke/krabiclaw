@@ -1,6 +1,5 @@
 import type { McpToolDefinition } from './shared'
 import { postMutationResultObject, postObject, postPublishResultObject, siteTool } from './shared'
-import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const POSTS_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -130,27 +129,6 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
       },
       required: ['post_id', 'asset_id'],
       outputSchema: postMutationResultObject,
-    }),
-  siteTool({
-      name: 'open_post_media_upload',
-      description: 'Launches the inline media upload widget scoped to a specific post — image only for posts today. After the widget reports a completed upload, call set_post_image with the returned assetId and this post_id.',
-      domain: 'posts',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      uiResourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
-      inputSchema: {
-        post_id: { type: 'string' },
-      },
-      required: ['post_id'],
-      outputSchema: {
-        type: 'object',
-        properties: {
-          launched: { type: 'boolean' },
-          resourceUri: { type: 'string' },
-          post_id: { type: 'string' },
-        },
-        required: ['launched', 'resourceUri', 'post_id'],
-      },
     }),
   siteTool({
       name: 'publish_post',

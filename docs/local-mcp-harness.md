@@ -6,49 +6,78 @@ Cloudflare-backed dependencies, and the existing MCP smoke scripts.
 
 Recommended default: **hybrid local mode using a `trycloudflare.com` quick tunnel**
 
-- the app runs locally with `yarn dev:tunnel`
-- public HTTPS comes from `cloudflared tunnel --url http://localhost:3000` (a quick,
+- the app and tunnel are owned by `yarn test:mcp:local:tunnel`
+- public HTTPS comes from `cloudflared tunnel --url http://127.0.0.1:<allocated-port>` (a quick,
   account-less tunnel — see "Tunnel contract" below for why the named
   `krabiclaw-local` tunnel in [tunnel.yml](../tunnel.yml) does not currently work)
 - Better Auth, MCP, and the ChatGPT connector all point at the same public origin
 - `/api/dev/*` routes stay protected by `E2E_DEV_ROUTE_SECRET`
 - Cloudflare-backed behavior stays real where the connector depends on it
 
+## Mandatory gates
+
+Run the automated HTTPS/API/Playwright gate from the checkout under test:
+
+```bash
+yarn test:mcp:local:tunnel
+```
+
+This is the default MCP acceptance command. It starts and owns the quick
+tunnel and Nuxt processes, captures the generated `trycloudflare.com` origin,
+allocates a private local port so an existing `yarn dev` on port 3000 is left
+untouched,
+builds the versioned widget, applies migrations, seeds local D1, and runs both
+the authenticated API/write harness and `yarn test:e2e:mcp` with one worker
+against the public HTTPS origin. It writes non-secret evidence under
+`.wrangler/mcp-harness/<run-id>/`, removes its temporary env file, and stops
+both child processes on success, failure, or Ctrl-C.
+
+Run the real host gate as the second mandatory command:
+
+```bash
+yarn test:mcp:chatgpt
+```
+
+This command owns its quick tunnel and Nuxt lifecycle too. It first reruns the
+automated API/Playwright prerequisites against that tunnel, then keeps the same
+origin alive for the actual ChatGPT run. The first run may pause once for
+ChatGPT login or connector enablement; configure `devkrabiclaw` with the exact
+`https://<generated-origin>.trycloudflare.com/api/mcp` URL printed by the
+command. Later runs reuse `.playwright/chatgpt-profile`. The dedicated default
+fixture is `site-mcp-managed`; override it with `MCP_CHATGPT_SITE_ID` and
+`MCP_CHATGPT_USER_ID` together when intentionally testing another local fixture.
+This gate fails on ChatGPT connection
+errors, missing/errored telemetry, wrong site arguments, wrong persisted/public
+state, a missing widget, a failed real video upload, or a failed assignment.
+Screenshots plus a sanitized prompt/telemetry transcript are written under
+`.wrangler/chatgpt-connector/<run-id>/`.
+
+Neither command reports unit-test counts as MCP acceptance evidence.
+
 ## Environment contract
 
-Copy the MCP-specific values from [.env.mcp.local.example](../.env.mcp.local.example)
-into `.dev.vars` — **not** `.env`. `BETTER_AUTH_URL`, `NUXT_PUBLIC_PLATFORM_DOMAIN`,
-and `MCP_BASE_URL` are read from the Cloudflare-bound env (`server/utils/auth.ts`'s
-`CloudflareEnv`, sourced from wrangler's `getPlatformProxy` in
-`build/runtime/cloudflare-bindings-dev.ts`), which only ever loads `.dev.vars`.
-Putting them in `.env` silently does nothing for Better Auth's origin check.
+Keep private development credentials in `.dev.vars`, but do not edit its origin
+values for MCP testing. `scripts/test-mcp-local-tunnel.mjs` copies it to an
+untracked, mode-0600 file under `.wrangler/`, replaces the three origin values
+there, and supplies that path through `NUXT_CF_ENV_FILE`. The Cloudflare binding
+loader passes the explicit file to Wrangler's `getPlatformProxy({ envFiles })`.
+The generated file is deleted on exit.
 
-Required values:
+The generated test environment contains:
 
 - `BETTER_AUTH_URL`
 - `NUXT_PUBLIC_PLATFORM_DOMAIN`
 - `MCP_BASE_URL`
+- `MEDIA_BASE_URL=<origin>/__media`
 - `E2E_ALLOW_DEV_ROUTES=true`
 - `E2E_DEV_ROUTE_SECRET`
 - either `MCP_DEV_LOGIN=1` or `MCP_BEARER_TOKEN`
 
-`E2E_ALLOW_DEV_ROUTES` and `E2E_DEV_ROUTE_SECRET` are read directly from
-`process.env` by `assertDevRouteAllowed` in `server/utils/dev-route-auth.ts` —
-unlike `BETTER_AUTH_URL`/`NUXT_PUBLIC_PLATFORM_DOMAIN`/`MCP_BASE_URL`, putting
-them in `.dev.vars` alone is **not** enough once the dev server is exposed
-through a real tunnel hostname (it works on plain `localhost` because
-`assertDevRouteAllowed` short-circuits for local hostnames). Export both into
-the actual shell that runs `yarn dev:tunnel` before starting it, e.g.:
-
-```bash
-export E2E_ALLOW_DEV_ROUTES=true
-export E2E_DEV_ROUTE_SECRET=<same value as in .dev.vars>
-yarn dev:tunnel
-```
-
-Otherwise `/api/dev/login` and `/api/dev/mcp-telemetry` 403 even with a
-correct `x-dev-route-secret` header, because the server process never saw the
-expected secret.
+The orchestrator exports `E2E_ALLOW_DEV_ROUTES` and `E2E_DEV_ROUTE_SECRET` to
+the Nuxt process as well as placing them in the generated Wrangler env file.
+That detail matters: `assertDevRouteAllowed` reads `process.env`, while Better
+Auth reads the Cloudflare-bound env. The old manual setup commonly set only one
+side and produced a misleading `/api/dev/login` or telemetry `403`.
 
 Canonical local origin (once the named-tunnel route conflict below is fixed):
 
@@ -66,13 +95,10 @@ These three must match exactly:
 If they drift, ChatGPT connector auth will look like a reconnect or issuer/resource
 problem even when the app itself is healthy.
 
-### Switching back to plain local dev
+### Plain local dev remains unchanged
 
-`.dev.vars` is shared — plain `yarn dev` and `yarn dev:tunnel` both read the same
-file, and `yarn dev:tunnel`'s inline `BETTER_AUTH_URL=... NUXT_PUBLIC_PLATFORM_DOMAIN=...`
-prefix only sets `process.env` for the Nuxt/Node process; it does **not** reach
-the Cloudflare-bound `env` object the origin check reads, so it can't override
-`.dev.vars` for you.
+The automated gate never changes `.dev.vars`, so plain `yarn dev` can keep the
+localhost values below and needs no post-test restore:
 
 Plain dashboard/CMS local dev (`yarn dev` against `http://localhost:3000`, no
 tunnel) requires these three set back to the localhost origin:
@@ -83,18 +109,12 @@ NUXT_PUBLIC_PLATFORM_DOMAIN=http://localhost:3000
 MCP_BASE_URL=http://localhost:3000
 ```
 
-If you leave the tunnel origin (`https://local.krabiclaw.com` or a
-`trycloudflare.com` URL) in `.dev.vars` after an MCP session, plain `yarn dev`
-login breaks with `403 Invalid origin` on `POST /api/auth/sign-in/email` — the
-request's actual origin (`http://localhost:3000`) no longer matches
-`BETTER_AUTH_URL`. Restart `yarn dev` after editing `.dev.vars`; the wrangler
-platform proxy only reads it at boot.
+If these values were changed manually during an older MCP session, restore them
+once; future gate runs will not touch them.
 
-The MCP harness (`yarn dev:tunnel` + `cloudflared tunnel --url http://localhost:3000`
-+ `yarn test:mcp:local`) is for MCP/connector testing specifically, and its OAuth-true path always needs a
-human in the loop for the ChatGPT consent screen (see "Human + LLM handoff"
-below) — it is not a substitute for day-to-day dashboard/CMS dev, which should
-stay on plain `yarn dev` at `http://localhost:3000`.
+The MCP harness is for MCP/connector testing specifically. Its first real
+ChatGPT authorization needs a human for login/consent; day-to-day dashboard/CMS
+development should stay on plain `yarn dev` at `http://localhost:3000`.
 
 ## Tunnel contract
 
@@ -121,12 +141,10 @@ the `krabiclaw.com` zone, so the `*/*` route never sees it:
 cloudflared tunnel --url http://localhost:3000
 ```
 
-This prints a URL like `https://<random-words>.trycloudflare.com`. Set
-`BETTER_AUTH_URL`, `NUXT_PUBLIC_PLATFORM_DOMAIN`, and `MCP_BASE_URL` in
-`.dev.vars` to that URL, export `E2E_ALLOW_DEV_ROUTES`/`E2E_DEV_ROUTE_SECRET`
-into the shell as described above, then start (or restart) `yarn dev:tunnel`.
-The quick-tunnel URL is random per run — there is no standing hostname to keep
-in sync anywhere else, unlike the named tunnel.
+This prints a URL like `https://<random-words>.trycloudflare.com`.
+`yarn test:mcp:local:tunnel` captures it and creates the matching temporary env
+automatically. The URL is random per run, so a real ChatGPT connector must be
+refreshed or recreated for the current run.
 
 `scripts/check-local-mcp-harness.mjs` `skip`s a "non-canonical MCP base URL"
 check and a "tunnel.yml hostname mismatch" check when `BASE_URL` is a
@@ -177,48 +195,25 @@ Use the OAuth-true path when the bug involves:
 - file reference handling from ChatGPT
 - “works in one click, fails on reconnect” behavior
 
-## Startup
+## Automated startup and acceptance
 
-Tested sequence — follow this order exactly. The quick tunnel must start first
-because its URL doesn't exist until it prints one, and the local D1 database
-must be current before Better Auth initializes its OAuth provider.
+`yarn test:mcp:local:tunnel` performs this sequence in order:
 
-1. In terminal 1, start the quick tunnel and copy the printed
-   `https://<random-words>.trycloudflare.com` URL:
+1. apply local D1 migrations and seed fixtures;
+2. build `public/mcp-assets/video-upload-widget.v1.js`;
+3. allocate a private local port, start `cloudflared tunnel --url` against it,
+   and capture the public URL;
+4. create the private temporary env file with matching `BETTER_AUTH_URL`,
+   `NUXT_PUBLIC_PLATFORM_DOMAIN`, and `MCP_BASE_URL`;
+5. start Nuxt with that file and wait for OAuth discovery;
+6. run `check-local-mcp-harness.mjs --write-smoke` through the tunnel;
+7. run `PLAYWRIGHT_PREVIEW_URL=<tunnel> PLAYWRIGHT_WORKERS=1 yarn test:e2e:mcp`;
+8. when invoked by `yarn test:mcp:chatgpt`, run the actual ChatGPT profile gate
+   before the origin is stopped;
+9. remove the env file and terminate its child processes.
 
-   ```bash
-   cloudflared tunnel --url http://localhost:3000
-   ```
-
-2. Set `BETTER_AUTH_URL`, `NUXT_PUBLIC_PLATFORM_DOMAIN`, and `MCP_BASE_URL` in
-   `.dev.vars` to that URL (see "Working alternative: `trycloudflare.com`
-   quick tunnel" above).
-
-3. Prepare the local D1 database from the same checkout that will run the dev
-   server. A new worktree has its own `.wrangler/state`, even when it shares
-   `node_modules` or local env files with another checkout:
-
-   ```bash
-   yarn schema:local
-   yarn seed:local
-   ```
-
-   Do not skip this. A missing/currently stale Better Auth table can leave the
-   protected-resource document healthy while the authorization-server metadata
-   or token exchange fails later with a generic ChatGPT "does not implement
-   OAuth" or "problem connecting" message.
-
-4. In terminal 2, export the dev-route secret into the shell and start the dev
-   server:
-
-   ```bash
-   export E2E_ALLOW_DEV_ROUTES=true
-   export E2E_DEV_ROUTE_SECRET=<same value as in .dev.vars>
-   yarn dev:tunnel
-   ```
-
-5. Confirm OAuth discovery before configuring ChatGPT. All three requests must
-   return `200`, and every advertised URL must use the same quick-tunnel origin:
+For manual inspection, all three discovery requests must return `200`, and
+every advertised URL must use the same quick-tunnel origin:
 
    ```bash
    curl -i "$MCP_BASE_URL/.well-known/oauth-protected-resource"
@@ -226,7 +221,7 @@ must be current before Better Auth initializes its OAuth provider.
    curl -i "$MCP_BASE_URL/.well-known/openid-configuration"
    ```
 
-6. In ChatGPT Developer Mode, create the connector with the MCP route, not just
+In ChatGPT Developer Mode, create the connector with the MCP route, not just
    the origin:
 
    ```text
@@ -238,11 +233,10 @@ must be current before Better Auth initializes its OAuth provider.
    registration; retrying the cached connector may fail before any request
    reaches the tunnel.
 
-Then run the preflight harness:
-
-```bash
-yarn test:mcp:local
-```
+When widget code changes, follow the host refresh loop from the OpenAI deployment
+guide: rebuild the widget, restart the MCP server, and refresh/recreate the
+Developer Mode connector so ChatGPT does not keep the prior resource catalog.
+See [OpenAI Apps SDK deployment](https://developers.openai.com/apps-sdk/deploy/).
 
 What it checks:
 
@@ -256,7 +250,7 @@ What it checks:
 8. `/api/dev/login` and `/api/dev/mcp-telemetry` are reachable with the dev secret
 9. `scripts/check-mcp-app-contract.mjs` passes
 
-Do not treat a partial run as a pass. In particular, OAuth discovery succeeding
+Do not treat a partial or skipped run as a pass. In particular, OAuth discovery succeeding
 does not prove that authorization-code exchange, authenticated MCP initialize,
 or `tools/list` works.
 
@@ -302,12 +296,11 @@ with a successful `initialize`.
   catalog response size and MCP App resources. The local harness must catch
   missing widget assets such as a declared script returning `404`.
 
-By default this is **non-destructive**.
-
-To run the authenticated write-smoke flows too:
+For low-level debugging, the inner harness can still be run against an already
+running correctly configured server:
 
 ```bash
-yarn test:mcp:local -- --write-smoke
+yarn test:mcp:local -- --write-smoke --base-url https://<tunnel>.trycloudflare.com
 ```
 
 That runs:
@@ -316,7 +309,9 @@ That runs:
 - `scripts/check-mcp-ops-flow.mjs`
 - `scripts/check-mcp-image-flow.mjs`
 
-If you do not pass `MCP_SITE_ID`, the write-smoke scripts may create scratch data.
+The mandatory orchestration command always enables these write flows. If you do
+not pass `MCP_SITE_ID`, they create `e2e-`-marked scratch data for the next seed
+sweep.
 
 ## Reusable test login for the ChatGPT consent screen
 
@@ -368,9 +363,9 @@ logic. Verify this flow locally via the tunnel harness; do not rely on
 `e2e-smoke`/`e2e-staging` for it until the CIMD test fixture is hosted off-zone
 or the platform restriction is otherwise worked around.
 
-## Human + LLM handoff
+## Human + agent handoff
 
-The LLM can fully drive:
+The agent can fully drive:
 
 - MCP contract checks
 - edit/ops/image smoke scripts
@@ -379,13 +374,12 @@ The LLM can fully drive:
 - local tunnel preflight verification
 - Cloudflare tunnel contract verification against the real `krabiclaw-local` tunnel
 
-The human is still required for the ChatGPT-hosted part:
+The human is required only for the first ChatGPT-hosted bootstrap:
 
-1. start the app and tunnel
-2. confirm the tunnel hostname matches the auth origin
-3. connect the app in ChatGPT Developer Mode
-4. approve OAuth in the browser
-5. optionally capture a fresh `MCP_BEARER_TOKEN`
+1. sign in to the persistent Playwright profile if it is new;
+2. connect/enable the quick-tunnel MCP URL in ChatGPT Developer Mode;
+3. approve OAuth.
 
-After that handoff, the LLM can rerun the harness, replay bearer-token flows,
-and compare telemetry before/after the manual ChatGPT step.
+After that handoff, `yarn test:mcp:chatgpt` opens a new chat, sends the golden
+prompts, uploads the video through the widget, polls telemetry, verifies public
+state, captures evidence, and cleans up the created post/blog/video.

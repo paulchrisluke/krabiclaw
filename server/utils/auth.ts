@@ -3,7 +3,9 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { hashPassword } from 'better-auth/crypto'
 import { admin, anonymous, jwt, organization, phoneNumber } from 'better-auth/plugins'
 import { oauthProvider } from '@better-auth/oauth-provider'
+import type { SchemaClient, Scope } from '@better-auth/oauth-provider'
 import { cimd } from '@better-auth/cimd'
+import type { GenericEndpointContext } from '@better-auth/core'
 import { getHeaders } from 'h3'
 import type { H3Event } from 'h3'
 import { createDb, execute, schema } from '~/server/db'
@@ -21,6 +23,74 @@ import { organizationAccessControl, organizationRoles } from '~/utils/organizati
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
+type OAuthClientHookData = Record<string, unknown> & {
+  clientId?: unknown
+  scopes?: unknown
+}
+
+const CIMD_TENANT_SCOPES = ['openid', 'offline_access', 'tenant'] as const
+
+function isUrlClientId(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' || (import.meta.dev && url.protocol === 'http:')
+  } catch {
+    return false
+  }
+}
+
+function normalizeOAuthClientScopes(data: OAuthClientHookData) {
+  if (Array.isArray(data.scopes)) return
+
+  return {
+    data: {
+      ...data,
+      // The adapter serializes string[] fields as JSON. Letting SQLite apply
+      // oauthClient.scopes' historical empty-string default makes the adapter
+      // JSON.parse('') on the first CIMD registration response. URL clients
+      // without metadata scopes are tenant connectors, not platform clients.
+      scopes: isUrlClientId(data.clientId) ? [...CIMD_TENANT_SCOPES] : [],
+    },
+  }
+}
+
+async function normalizeCimdClientAuthentication(data: {
+  client: SchemaClient<Scope[]>
+  metadata: Record<string, unknown>
+  ctx: GenericEndpointContext
+}) {
+  const { client, metadata, ctx } = data
+  const advertisedMethods = metadata.token_endpoint_auth_methods_supported
+  const jwksUri = metadata.jwks_uri
+  const supportsPrivateKeyJwt = Array.isArray(advertisedMethods)
+    && advertisedMethods.includes('private_key_jwt')
+    && typeof jwksUri === 'string'
+    && jwksUri.length > 0
+
+  const update: Record<string, unknown> = {}
+  if (!Array.isArray(client.scopes) || client.scopes.length === 0) {
+    update.scopes = [...CIMD_TENANT_SCOPES]
+  }
+  if (supportsPrivateKeyJwt) {
+    // ChatGPT currently advertises both `none` and `private_key_jwt` in the
+    // plural capability field. CIMD only reads the singular preference and
+    // otherwise registers `none`, even though ChatGPT exchanges the code with
+    // a signed client assertion. Prefer the authenticated method when a JWKS
+    // URI is actually supplied.
+    update.tokenEndpointAuthMethod = 'private_key_jwt'
+    update.public = false
+    update.jwksUri = jwksUri
+  }
+
+  if (Object.keys(update).length === 0) return
+  Object.assign(client, update)
+  await ctx.context.adapter.update({
+    model: 'oauthClient',
+    where: [{ field: 'clientId', value: client.clientId }],
+    update,
+  })
+}
 
 export interface CloudflareEnv {
   DB: D1Database
@@ -93,6 +163,10 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
       schema,
     }),
     databaseHooks: {
+      oauthClient: {
+        create: { before: normalizeOAuthClientScopes },
+        update: { before: normalizeOAuthClientScopes },
+      },
       user: {
         create: {
           after: async (user) => {
@@ -286,6 +360,8 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
       }),
       cimd({
         allowLoopback: import.meta.dev,
+        onClientCreated: normalizeCimdClientAuthentication,
+        onClientRefreshed: normalizeCimdClientAuthentication,
       }),
       organization({ ac: organizationAccessControl, roles: organizationRoles }),
       admin({

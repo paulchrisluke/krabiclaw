@@ -7,7 +7,6 @@ import { getFacebookPagesConnection, getLinkedInstagramAccount, publishToInstagr
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { isConversationalToolGroupEnabled } from '~/server/utils/conversational-tool-surface'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 import { attachViewUrlToRecord, NOT_HANDLED, mutationContextPayload, normalizeChannelsInput, omit, optionalString, requireActiveImageAsset, requiredString } from './shared'
 
 async function asMcpValidationError<T>(work: () => Promise<T>): Promise<T> {
@@ -144,18 +143,6 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         },
         `Updated image for "${post.title ?? post.id}".`,
         { post: hydratedSetImagePost },
-      );
-    }
-    case "open_post_media_upload": {
-      const postId = requiredString(args, "post_id");
-      return renderStructuredResponse(
-        {
-          launched: true,
-          resourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
-          post_id: postId,
-          context: { site_id: site.siteId, post_id: postId, accept: "image" },
-        },
-        "Media upload widget launched for this post.",
       );
     }
     case "publish_post": {

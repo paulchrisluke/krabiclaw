@@ -1,7 +1,6 @@
 import type { McpToolDefinition } from './shared'
 import { bookingObject, bookingsSummaryObject, experienceMutationResultObject, experienceObject, experienceWriteSchema, siteTool } from './shared'
 import { EXPERIENCE_STATUSES } from '~/server/utils/experiences'
-import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -66,7 +65,7 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'set_experience_video',
-      description: 'Assign a saved video asset as an experience video. Upload the video first via open_experience_media_upload (or upload_user_media if you already have a resolved file reference), then call get_site_media_assets to find its asset id.',
+      description: 'Assign a saved video asset as an experience video. Upload the video first via open_video_upload (or upload_user_media if you already have a resolved file reference), then pass its asset id here.',
       domain: 'experiences',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -76,28 +75,6 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
       },
       required: ['experience_id', 'asset_id'],
       outputSchema: experienceMutationResultObject,
-    }),
-  siteTool({
-      name: 'open_experience_media_upload',
-      description: 'Launches the inline media upload widget scoped to a specific experience — image or video. After the widget reports a completed upload, call set_experience_image or set_experience_video with the returned assetId and this experience_id.',
-      domain: 'experiences',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      uiResourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
-      inputSchema: {
-        experience_id: { type: 'string', description: 'Experience id or slug.' },
-        accept: { type: 'string', enum: ['image', 'video', 'both'], description: 'Restrict the widget file picker. Defaults to both.' },
-      },
-      required: ['experience_id'],
-      outputSchema: {
-        type: 'object',
-        properties: {
-          launched: { type: 'boolean' },
-          resourceUri: { type: 'string' },
-          experience_id: { type: 'string' },
-        },
-        required: ['launched', 'resourceUri', 'experience_id'],
-      },
     }),
   siteTool({
       name: 'reorder_experience_gallery',

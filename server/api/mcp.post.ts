@@ -65,11 +65,40 @@ function shouldUseLeanToolCatalog(event: H3Event) {
   return userAgent.includes("openai-mcp/")
 }
 
+function safeMcpEnvelopeDetails(event: H3Event, body: unknown) {
+  const record = body && typeof body === "object" && !Array.isArray(body)
+    ? body as Record<string, unknown>
+    : null;
+  const params = record?.params && typeof record.params === "object" && !Array.isArray(record.params)
+    ? record.params as Record<string, unknown>
+    : null;
+  const meta = record?._meta && typeof record._meta === "object" && !Array.isArray(record._meta)
+    ? record._meta as Record<string, unknown>
+    : null;
+  return {
+    ray_id: getHeader(event, "cf-ray") ?? null,
+    user_agent: getHeader(event, "user-agent") ?? null,
+    content_type: getHeader(event, "content-type") ?? null,
+    content_length: getHeader(event, "content-length") ?? null,
+    body_kind: body === null ? "null" : Array.isArray(body) ? "array" : typeof body,
+    envelope_keys: record ? Object.keys(record).sort() : [],
+    params_keys: params ? Object.keys(params).sort() : [],
+    meta_keys: meta ? Object.keys(meta).sort() : [],
+    has_id: Boolean(record && Object.hasOwn(record, "id")),
+    jsonrpc_type: typeof record?.jsonrpc,
+    method_type: typeof record?.method,
+    header_method: getHeader(event, "mcp-method") ?? null,
+    has_header_version: Boolean(getHeader(event, "mcp-protocol-version")),
+    has_header_name: Boolean(getHeader(event, "mcp-name")),
+  };
+}
+
 export default defineEventHandler(async (event) => {
   const requestStartedAt = Date.now();
   let requestId: string | number | null | undefined;
   let requestMethod: string | undefined;
   let requestToolName: string | undefined;
+  let requestEnvelope: ReturnType<typeof safeMcpEnvelopeDetails> | null = null;
   try {
     // Return 401 with WWW-Authenticate before any protocol parsing so OAuth
     // clients (e.g. ChatGPT) can discover the authorization server on first touch.
@@ -130,6 +159,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const body = await readBody(event);
+    requestEnvelope = safeMcpEnvelopeDetails(event, body);
 
     // ChatGPT occasionally sends an empty-body health probe — ignore silently.
     if (!body || (typeof body === "object" && Object.keys(body).length === 0)) {
@@ -190,8 +220,9 @@ This entire flow runs within the current conversation — do not tell the user t
 7. After upload_user_photo returns assetId/publicUrl, call the appropriate assignment tool such as set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, set_blog_post_image, or set_experience_image.
 8. Reply with the exact site, placement, assetId, and publicUrl that were updated.
 
-**Videos (and an alternative image path):**
-- Call open_media_upload (or open_experience_media_upload when scoped to a specific experience) to launch the inline upload widget so the user can pick or drag a file without leaving the conversation. After it reports a completed upload, call the matching assignment tool (set_home_hero_video, set_location_hero_video, set_experience_video, etc.) with the returned assetId.
+**Videos:**
+- Call open_video_upload only when a video is required. After it reports a completed upload, call the matching assignment tool (set_home_hero_video, set_location_hero_video, set_experience_video, etc.) with the returned assetId.
+- For images, use a direct ChatGPT attachment or native image generation; the video widget does not accept images.
 - If you already have a resolved ChatGPT file reference for a video (or an image), you can call upload_user_media directly instead of opening the widget.
 - The dashboard media library remains a fallback only for chat clients that do not support inline widgets.
 
@@ -389,6 +420,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
               ? {
                   ui: { resourceUri: tool.uiResourceUri },
                   "openai/outputTemplate": tool.uiResourceUri,
+                  "openai/widgetAccessible": true,
                 }
               : {}),
           },
@@ -610,19 +642,15 @@ Common workflows: update menus and items, create and publish site posts, triage 
           : mcpError.code === MCP_ERROR.parse
             ? 400
             : 500);
-    // Temporary: log all MCP errors so wrangler tail can capture them
-    console.error(
-      "[MCP]",
+    console.error("[MCP_ERROR]", JSON.stringify({
       status,
-      mcpError.code,
-      mcpError.message,
-      "method:",
-      requestMethod ?? null,
-      "tool:",
-      requestToolName ?? null,
-      "request_id:",
-      requestId ?? null,
-    );
+      code: mcpError.code,
+      message: mcpError.message,
+      method: requestMethod ?? null,
+      tool: requestToolName ?? null,
+      request_id: requestId ?? null,
+      ...(status === 400 ? { envelope: requestEnvelope ?? safeMcpEnvelopeDetails(event, undefined) } : {}),
+    }));
     if (status >= 500 && error instanceof Error) console.error(error.stack ?? error.message);
     if (status === 401) {
       const cfEnv = cloudflareEnv(event);
