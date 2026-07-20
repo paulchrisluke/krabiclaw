@@ -332,7 +332,7 @@ function normalizeGalleryForForm(items: unknown): GalleryFormItem[] {
     gallery.push({
       media_asset_id: mediaAssetId,
       caption: typeof record.caption === 'string' ? record.caption : '',
-      alt_text: typeof record.altText === 'string' ? record.altText : typeof record.alt_text === 'string' ? record.alt_text : '',
+      alt_text: typeof record.alt === 'string' ? record.alt : typeof record.alt_text === 'string' ? record.alt_text : '',
       public_url: typeof record.url === 'string' ? record.url : typeof record.public_url === 'string' ? record.public_url : null,
       thumbnail_url: typeof record.thumbnailUrl === 'string' ? record.thumbnailUrl : typeof record.thumbnail_url === 'string' ? record.thumbnail_url : null,
       kind: typeof record.kind === 'string' ? record.kind : null,
