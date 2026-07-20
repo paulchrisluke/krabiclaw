@@ -43,6 +43,12 @@ function spawnLogged(command, args, { env = process.env, logName, inherit = fals
   })
   children.add(child)
   child.once('exit', () => children.delete(child))
+  // spawn() failures (e.g. `cloudflared` not on PATH) emit an unhandled
+  // 'error' event with no listener otherwise, crashing the harness with a raw
+  // Node stack trace instead of one of this script's clear, actionable errors.
+  child.once('error', (error) => {
+    console.error(`# Failed to spawn ${command}: ${error.message}`)
+  })
   if (!inherit) {
     const log = createWriteStream(resolve(artifactDir, logName), { flags: 'a' })
     child.stdout.pipe(log)

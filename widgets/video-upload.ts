@@ -6,9 +6,9 @@ type ToolResult = {
 
 type OpenAIHost = {
   toolInput?: Record<string, unknown>
-  uploadFile(file: File): Promise<{ fileId: string }>
-  getFileDownloadUrl(input: { fileId: string }): Promise<{ downloadUrl: string }>
-  callTool(name: string, args: Record<string, unknown>): Promise<ToolResult>
+  uploadFile(_file: File): Promise<{ fileId: string }>
+  getFileDownloadUrl(_input: { fileId: string }): Promise<{ downloadUrl: string }>
+  callTool(_name: string, _args: Record<string, unknown>): Promise<ToolResult>
 }
 
 declare global {

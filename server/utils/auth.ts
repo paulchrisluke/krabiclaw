@@ -40,16 +40,34 @@ function isUrlClientId(value: unknown): value is string {
   }
 }
 
-function normalizeOAuthClientScopes(data: OAuthClientHookData) {
+// The adapter serializes string[] fields as JSON. Letting SQLite apply
+// oauthClient.scopes' historical empty-string default makes the adapter
+// JSON.parse('') on the first CIMD registration response. URL clients
+// without metadata scopes are tenant connectors, not platform clients.
+//
+// create and update need different defaulting rules here: a fresh row with
+// no scopes value at all must still get a real array so the invalid empty-
+// string column default never applies. An update that doesn't touch scopes
+// must leave the persisted value alone — defaulting there would silently
+// wipe whatever scopes an unrelated update (renaming a client, rotating
+// jwksUri) happens to pass through this same hook.
+function normalizeOAuthClientScopesOnCreate(data: OAuthClientHookData) {
   if (Array.isArray(data.scopes)) return
 
   return {
     data: {
       ...data,
-      // The adapter serializes string[] fields as JSON. Letting SQLite apply
-      // oauthClient.scopes' historical empty-string default makes the adapter
-      // JSON.parse('') on the first CIMD registration response. URL clients
-      // without metadata scopes are tenant connectors, not platform clients.
+      scopes: isUrlClientId(data.clientId) ? [...CIMD_TENANT_SCOPES] : [],
+    },
+  }
+}
+
+function normalizeOAuthClientScopesOnUpdate(data: OAuthClientHookData) {
+  if (Array.isArray(data.scopes) || !('scopes' in data)) return
+
+  return {
+    data: {
+      ...data,
       scopes: isUrlClientId(data.clientId) ? [...CIMD_TENANT_SCOPES] : [],
     },
   }
@@ -164,8 +182,8 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
     }),
     databaseHooks: {
       oauthClient: {
-        create: { before: normalizeOAuthClientScopes },
-        update: { before: normalizeOAuthClientScopes },
+        create: { before: normalizeOAuthClientScopesOnCreate },
+        update: { before: normalizeOAuthClientScopesOnUpdate },
       },
       user: {
         create: {

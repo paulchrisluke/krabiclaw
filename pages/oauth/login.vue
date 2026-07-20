@@ -71,7 +71,12 @@
               <div class="flex-1 h-px bg-default" />
             </div>
 
-            <AuthEmailSignInForm :callback-url="oauthAuthorizeUrl" />
+            <AuthEmailSignInForm :callback-url="oauthAuthorizeUrl" @verification-required="showVerification" />
+
+            <div v-if="verificationEmail" class="rounded-xl border border-default p-3 space-y-2">
+              <p class="text-sm text-muted">Verify your email before signing in.</p>
+              <PlatformButton variant="outline" block :loading="resendingVerification" @click="resendVerification">Resend verification</PlatformButton>
+            </div>
 
             <div class="flex items-center gap-3 py-1">
               <div class="flex-1 h-px bg-default" />
@@ -188,5 +193,30 @@ async function handleGoogleSignIn() {
 function finishOAuthPhoneSignIn() {
   // The OAuth Provider plugin resumes its signed authorization state when the
   // phone verification response creates the session.
+}
+
+// ── Email verification recovery (mirrors pages/login.vue) ───────────────────
+const verificationEmail = ref('')
+const resendingVerification = ref(false)
+
+function showVerification(email) {
+  verificationEmail.value = email
+}
+
+async function resendVerification() {
+  if (!verificationEmail.value || resendingVerification.value) return
+  resendingVerification.value = true
+  error.value = null
+  try {
+    const result = await authClient.sendVerificationEmail({
+      email: verificationEmail.value,
+      callbackURL: oauthAuthorizeUrl.value,
+    })
+    if (result?.error) error.value = result.error.message || 'Could not resend verification email.'
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not resend verification email.'
+  } finally {
+    resendingVerification.value = false
+  }
 }
 </script>

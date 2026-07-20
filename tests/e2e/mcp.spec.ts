@@ -213,6 +213,9 @@ test.describe('stateless MCP server', () => {
       if (response.status() !== 200) throw new Error(`MCP ${name} returned ${response.status()}: ${JSON.stringify(body)}`)
       return body.result
     })
+    type WidgetBridge = {
+      krabiclawWidgetCallTool(_name: string, _args: Record<string, unknown>): Promise<unknown>
+    }
     const installHostMock = ({ targetSiteId, downloadUrl }: { targetSiteId: string, downloadUrl: string }) => {
       const calls: string[] = []
       Object.defineProperty(window, '__krabiclawWidgetCalls', { value: calls })
@@ -229,7 +232,7 @@ test.describe('stateless MCP server', () => {
           },
           async callTool(name: string, args: Record<string, unknown>) {
             calls.push(`callTool:${name}`)
-            return await (window as unknown as { krabiclawWidgetCallTool(name: string, args: Record<string, unknown>): Promise<unknown> }).krabiclawWidgetCallTool(name, args)
+            return await (window as unknown as WidgetBridge).krabiclawWidgetCallTool(name, args)
           },
         },
       })

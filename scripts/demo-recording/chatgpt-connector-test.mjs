@@ -214,6 +214,7 @@ async function main() {
         }
       } catch (cleanupError) {
         evidence.cleanup.error = sanitizeText(cleanupError instanceof Error ? cleanupError.message : cleanupError)
+        console.error(`# Cleanup failed, fixtures may remain: ${evidence.cleanup.error}`)
       }
     }
     fs.writeFileSync(path.join(artifactDir, 'evidence.json'), JSON.stringify(evidence, null, 2))
