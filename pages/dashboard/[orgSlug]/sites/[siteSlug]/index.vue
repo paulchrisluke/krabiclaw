@@ -261,12 +261,34 @@ interface SiteEvent {
   actor_name: string | null; actor_image: string | null; location_title: string | null
 }
 
+const requestEvent = useRequestEvent()
+
 const { data, pending } = await useAsyncData(
   `dashboard-home-${route.params.orgSlug}-${route.params.siteSlug}`,
   async () => {
-    const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined
     await dashboardState.refresh()
-    return $fetch<{ locations: Location[]; credits: Credits | null; events: SiteEvent[] }>('/api/dashboard/home', { headers })
+
+    // Bypass the self-fetch entirely on the server — see "Nested SSR self-fetch
+    // loses Cloudflare bindings" in CLAUDE.md. dashboardState.refresh() above is
+    // already correctly org/site-scoped (it sends x-dashboard-org-slug/site-slug
+    // explicitly from the route), so reuse its result instead of re-deriving org/site
+    // from a second, easy-to-miss header build on this call.
+    if (import.meta.server) {
+      if (!requestEvent) return { locations: [], credits: null, events: [] }
+      const organization = dashboardState.organization.value
+      const site = dashboardState.site.value
+      if (!organization || !site) return { locations: [], credits: null, events: [] }
+
+      const [{ cloudflareEnv }, { getDashboardHomeData }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/dashboard-home'),
+      ])
+      const db = cloudflareEnv(requestEvent).db
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+      return await getDashboardHomeData(db, organization.id, site.id)
+    }
+
+    return $fetch<{ locations: Location[]; credits: Credits | null; events: SiteEvent[] }>('/api/dashboard/home')
   },
   // Reuse the SSR payload on first hydration (avoids a redundant duplicate fetch
   // on initial load), but force a fresh fetch on every subsequent client-side

@@ -49,24 +49,35 @@ interface DashboardContextResponse {
   managedServiceEnabled: boolean
 }
 
+// dashboard-site-header.client.ts attaches x-dashboard-org-slug/site-slug on every
+// dashboard-scoped /api/* call, but only client-side. On SSR (a direct full-page
+// load of a nested /dashboard/{orgSlug}/sites/{siteSlug}/... route) that plugin
+// never runs, so any page/composable doing its own SSR fetch to a dashboard/billing/
+// integration endpoint must build these headers itself — this is the one correct
+// implementation; nothing else should hand-roll a cookie-only header set.
+// `overrides` lets a caller (e.g. a per-request site-slug filter) set additional
+// headers without losing the org/site ones already on the returned Headers instance
+// (spreading a Headers object with `{ ...headers }` silently drops its entries).
+export function buildDashboardRequestHeaders(overrides?: Record<string, string>): Headers {
+  const route = useRoute()
+  const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
+  const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
+  const headers = new Headers(import.meta.server ? useRequestHeaders(['cookie']) : undefined)
+  if (orgSlug) headers.set('x-dashboard-org-slug', orgSlug)
+  if (siteSlug) headers.set('x-dashboard-site-slug', siteSlug)
+  if (overrides) {
+    for (const [key, value] of Object.entries(overrides)) headers.set(key, value)
+  }
+  return headers
+}
+
 export function useDashboardSite() {
   // Only initialize state on client to avoid hydration mismatches
   const state = useState<DashboardContextResponse | null>('dashboard:site-context', () => null)
   const pending = useState<boolean>('dashboard:site-context:pending', () => false)
 
   async function refresh() {
-    // dashboard-site-header.client.ts attaches x-dashboard-site-slug on every /api/dashboard/*
-    // call, but only client-side. On SSR (a direct full-page load of a nested
-    // /dashboard/{orgSlug}/sites/{siteSlug}/... route) that plugin never runs, so without this
-    // the request falls back to context.ts's "auto-select if the org has exactly one site" path
-    // and returns site: null for any org with 2+ sites. Read the same siteSlug route segment
-    // here so SSR resolves the right site too.
-    const route = useRoute()
-    const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
-    const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
-    const headers = new Headers(import.meta.server ? useRequestHeaders(['cookie']) : undefined)
-    if (orgSlug) headers.set('x-dashboard-org-slug', orgSlug)
-    if (siteSlug) headers.set('x-dashboard-site-slug', siteSlug)
+    const headers = buildDashboardRequestHeaders()
 
     pending.value = true
     try {
@@ -78,7 +89,7 @@ export function useDashboardSite() {
   }
 
   async function selectLocation(locationId: string) {
-    const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined
+    const headers = buildDashboardRequestHeaders()
 
     await $fetch('/api/dashboard/location-preference', {
       method: 'PATCH',

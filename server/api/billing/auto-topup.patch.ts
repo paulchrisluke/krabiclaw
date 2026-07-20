@@ -3,7 +3,8 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { requireBillingAccess } from '~/server/utils/billing'
-import { execute, queryFirst } from '~/server/db'
+import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
+import { execute } from '~/server/db'
 
 const VALID_BUNDLES = new Set([500, 2500, 5000])
 
@@ -15,12 +16,10 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const member = await queryFirst<{ organizationId: string }>(
-    db, 'SELECT organizationId FROM member WHERE userId = ? LIMIT 1', [session.user.id],
-  )
-  if (!member) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
+  const organization = await resolveRequestedOrganization(event, db, session.user.id)
+  if (!organization) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
 
-  const orgId = member.organizationId
+  const orgId = organization.id
 
   try {
     await requireBillingAccess(env, db, orgId, session.user.id)

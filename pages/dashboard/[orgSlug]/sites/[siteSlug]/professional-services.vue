@@ -65,7 +65,7 @@ interface ComplianceRecord extends Record<string, unknown> {
 }
 
 const siteId = await useDashboardSiteId()
-const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined
+const headers = buildDashboardRequestHeaders()
 const toast = useToast()
 const saving = ref(false)
 const serviceAreaTypes = [

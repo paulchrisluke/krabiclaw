@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, getPriceIdForPlan, requireBillingAccess } from '../../utils/billing'
 import { isManagedServiceEnabled } from '../../utils/feature-flags'
+import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import { execute, queryFirst } from '~/server/db'
 
 interface CheckoutRequest {
@@ -41,21 +42,13 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  // Resolve org — either passed explicitly or detected from session
-  let organizationId = body.organizationId
-  if (!organizationId) {
-    const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string }
-    const activeOrgId = typeof sessionRecord.activeOrganizationId === 'string' ? sessionRecord.activeOrganizationId : ''
-    const userOrg = await queryFirst<{ organizationId: string }>(db, `
-      SELECT o.id AS organizationId FROM organization o
-      JOIN member m ON o.id = m.organizationId
-      WHERE m.userId = ?
-      ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC LIMIT 1
-    `, [session.user.id, activeOrgId])
-    if (!userOrg) return jsonResponse({ error: 'No organization found' }, { status: 404 })
-    organizationId = userOrg.organizationId
-  }
-  const orgId = organizationId!
+  // Resolve org — from the current dashboard header, or an explicit param that
+  // must agree with it. Never guessed from session/oldest-membership.
+  const organization = await resolveRequestedOrganization(event, db, session.user.id, {
+    explicitOrganizationId: body.organizationId ?? null,
+  })
+  if (!organization) return jsonResponse({ error: 'No organization found' }, { status: 404 })
+  const orgId = organization.id
 
   // Resolve site — must be passed explicitly for multi-site orgs
   const siteId = body.siteId

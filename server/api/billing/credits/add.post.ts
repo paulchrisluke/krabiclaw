@@ -4,6 +4,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe } from '~/server/utils/billing'
+import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import { execute, queryFirst } from '~/server/db'
 
 const BUNDLE_PRICE_MAP: Record<number, keyof NodeJS.ProcessEnv> = {
@@ -32,12 +33,10 @@ export default defineEventHandler(async (event) => {
     if (!Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount)) {
       return jsonResponse({ error: 'amount must be a positive integer' }, { status: 400 })
     }
-    const member = await queryFirst<{ organizationId: string }>(
-      db, 'SELECT organizationId FROM member WHERE userId = ? LIMIT 1', [session.user.id],
-    )
-    if (!member) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
+    const organization = await resolveRequestedOrganization(event, db, session.user.id)
+    if (!organization) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
 
-    const orgId = member.organizationId
+    const orgId = organization.id
     const now = new Date().toISOString()
     await execute(db,
       `INSERT INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at, updated_at)
@@ -66,13 +65,11 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Credit bundle not configured' }, { status: 503 })
   }
 
-  const member = await queryFirst<{ organizationId: string; slug: string | null }>(
-    db, 'SELECT m.organizationId, o.slug FROM member m JOIN organization o ON o.id = m.organizationId WHERE m.userId = ? LIMIT 1', [session.user.id],
-  )
-  if (!member) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
+  const organization = await resolveRequestedOrganization(event, db, session.user.id)
+  if (!organization) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
 
-  const orgId = member.organizationId
-  const orgSlug = member.slug
+  const orgId = organization.id
+  const orgSlug = organization.slug
 
   const billing = await queryFirst<{ stripe_customer_id: string | null }>(
     db, 'SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1', [orgId],

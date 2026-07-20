@@ -1,7 +1,17 @@
-// Every /api/dashboard/* call needs to know which organization and site the route names.
-// Routes carry those explicitly as `orgSlug` and `siteSlug` segments
-// (/dashboard/{orgSlug}/sites/{siteSlug}/...), so this plugin forwards them as headers instead of requiring
-// each of the ~70 call sites across the dashboard to thread it through manually.
+// Every dashboard-scoped API call needs to know which organization and site the
+// route names. Routes carry those explicitly as `orgSlug` and `siteSlug` segments
+// (/dashboard/{orgSlug}/sites/{siteSlug}/...), so this plugin forwards them as headers
+// instead of requiring every call site across the dashboard, billing, and
+// integrations surfaces to thread it through manually.
+//
+// The header is attached to ANY relative same-origin /api/* request whenever the
+// current route has an orgSlug — not just /api/dashboard/*. An earlier version of
+// this plugin only matched /api/dashboard/*, which meant /api/billing/* and
+// /api/integrations/* calls never got the header and silently fell back to Better
+// Auth's session-wide activeOrganizationId (which can be stale relative to the org
+// the URL actually names) — a real cross-tenant data/billing leak, not just a
+// missed optimization. Match broadly here instead of growing a prefix allowlist
+// one incident at a time.
 //
 // This must stay client-only. Bare `$fetch()` calls everywhere in this codebase
 // resolve to the literal `globalThis.$fetch` (Nuxt does not auto-import a
@@ -36,13 +46,12 @@ export default defineNuxtPlugin(() => {
 
   globalThis.$fetch = $fetch.create({
     onRequest({ request, options }) {
-      if (typeof request !== 'string' || !request.startsWith('/api/dashboard')) return
+      if (typeof request !== 'string' || !request.startsWith('/api/')) return
       const orgSlug = route.params.orgSlug
+      if (typeof orgSlug !== 'string' || !orgSlug) return
       const siteSlug = route.params.siteSlug
       const headers = new Headers(options.headers as HeadersInit)
-      if (typeof orgSlug === 'string' && orgSlug) {
-        headers.set('x-dashboard-org-slug', orgSlug)
-      }
+      headers.set('x-dashboard-org-slug', orgSlug)
       if (typeof siteSlug === 'string' && siteSlug) {
         headers.set('x-dashboard-site-slug', siteSlug)
       }
