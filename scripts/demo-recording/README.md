@@ -5,8 +5,8 @@ This folder helps capture the web portion of the OpenAI app submission demo.
 What it does:
 
 - records the screen with `ffmpeg`
-- opens ChatGPT in a persistent Playwright browser profile
-- steps through a prompt script for your Developer Mode connector demo
+- includes a legacy Playwright-guided recording helper, which ChatGPT may block
+- provides a normal-browser, telemetry-asserted connector gate via `yarn test:mcp:chatgpt`
 
 What it does not do:
 
@@ -57,12 +57,28 @@ In terminal 2:
 yarn demo:chatgpt:web
 ```
 
-The script will:
+For acceptance testing rather than a guided recording, use the normal-browser
+telemetry gate documented in
+[`docs/local-mcp-harness.md`](../../docs/local-mcp-harness.md):
+
+```bash
+yarn test:mcp:chatgpt
+```
+
+That command creates its own quick tunnel, runs the automated API/Playwright
+prerequisites, prints the exact `/api/mcp` URL to use for `devkrabiclaw`, and
+then pauses while you use a normal ChatGPT browser and verifies each expected
+tool call through KrabiClaw telemetry before stopping the tunnel.
+
+The older `yarn demo:chatgpt:web` recording helper will:
 
 - reuse a persistent profile in `.playwright/chatgpt-profile`
 - open `https://chatgpt.com/`
 - wait for you to sign in and turn on your Developer Mode connector
 - send prompts from `scripts/demo-recording/prompts.example.json`
+
+ChatGPT and Google may detect and block that Playwright-launched browser. It is
+not MCP acceptance evidence and is not used by `yarn test:mcp:chatgpt`.
 
 You can customize the prompt sequence:
 

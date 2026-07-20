@@ -51,6 +51,7 @@ export default defineNuxtModule({
         configPath,
         persistDir,
         environment: nitroConfig.cloudflareDev?.environment,
+        envFiles: nitroConfig.cloudflareDev?.envFiles,
         // Default to local-only bindings so tenant dev does not depend on a
         // remote Workers AI proxy session. Opt back in explicitly when needed.
         remoteBindings: process.env.NUXT_CF_REMOTE_BINDINGS === 'true',

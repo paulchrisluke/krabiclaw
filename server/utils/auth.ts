@@ -3,7 +3,9 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { hashPassword } from 'better-auth/crypto'
 import { admin, anonymous, jwt, organization, phoneNumber } from 'better-auth/plugins'
 import { oauthProvider } from '@better-auth/oauth-provider'
+import type { SchemaClient, Scope } from '@better-auth/oauth-provider'
 import { cimd } from '@better-auth/cimd'
+import type { GenericEndpointContext } from '@better-auth/core'
 import { getHeaders } from 'h3'
 import type { H3Event } from 'h3'
 import { createDb, execute, schema } from '~/server/db'
@@ -21,6 +23,98 @@ import { organizationAccessControl, organizationRoles } from '~/utils/organizati
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
+type OAuthClientHookData = Record<string, unknown> & {
+  clientId?: unknown
+  scopes?: unknown
+}
+
+const CIMD_TENANT_SCOPES = ['openid', 'offline_access', 'tenant'] as const
+
+function isUrlClientId(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' || (import.meta.dev && url.protocol === 'http:')
+  } catch {
+    return false
+  }
+}
+
+// The adapter serializes string[] fields as JSON. Letting SQLite apply
+// oauthClient.scopes' historical empty-string default makes the adapter
+// JSON.parse('') on the first CIMD registration response. URL clients
+// without metadata scopes are tenant connectors, not platform clients.
+//
+// create and update need different defaulting rules here: a fresh row with
+// no scopes value at all must still get a real array so the invalid empty-
+// string column default never applies. An update that doesn't touch scopes
+// must leave the persisted value alone — defaulting there would silently
+// wipe whatever scopes an unrelated update (renaming a client, rotating
+// jwksUri) happens to pass through this same hook.
+function normalizeOAuthClientScopesOnCreate(data: OAuthClientHookData) {
+  if (Array.isArray(data.scopes)) return
+
+  return {
+    data: {
+      ...data,
+      scopes: isUrlClientId(data.clientId) ? [...CIMD_TENANT_SCOPES] : [],
+    },
+  }
+}
+
+function normalizeOAuthClientScopesOnUpdate(data: OAuthClientHookData) {
+  if (Array.isArray(data.scopes) || !('scopes' in data)) return
+  // clientId isn't necessarily part of every update payload (the row is
+  // targeted by a WHERE clause, not by data.clientId). Without it there's no
+  // way to tell a CIMD tenant connector from a non-URL client, and guessing
+  // "non-URL" would misclassify a URL client and overwrite its real scopes.
+  // Leave scopes untouched rather than guess.
+  if (typeof data.clientId !== 'string') return
+
+  return {
+    data: {
+      ...data,
+      scopes: isUrlClientId(data.clientId) ? [...CIMD_TENANT_SCOPES] : [],
+    },
+  }
+}
+
+async function normalizeCimdClientAuthentication(data: {
+  client: SchemaClient<Scope[]>
+  metadata: Record<string, unknown>
+  ctx: GenericEndpointContext
+}) {
+  const { client, metadata, ctx } = data
+  const advertisedMethods = metadata.token_endpoint_auth_methods_supported
+  const jwksUri = metadata.jwks_uri
+  const supportsPrivateKeyJwt = Array.isArray(advertisedMethods)
+    && advertisedMethods.includes('private_key_jwt')
+    && typeof jwksUri === 'string'
+    && jwksUri.length > 0
+
+  const update: Record<string, unknown> = {}
+  if (!Array.isArray(client.scopes) || client.scopes.length === 0) {
+    update.scopes = [...CIMD_TENANT_SCOPES]
+  }
+  if (supportsPrivateKeyJwt) {
+    // ChatGPT currently advertises both `none` and `private_key_jwt` in the
+    // plural capability field. CIMD only reads the singular preference and
+    // otherwise registers `none`, even though ChatGPT exchanges the code with
+    // a signed client assertion. Prefer the authenticated method when a JWKS
+    // URI is actually supplied.
+    update.tokenEndpointAuthMethod = 'private_key_jwt'
+    update.public = false
+    update.jwksUri = jwksUri
+  }
+
+  if (Object.keys(update).length === 0) return
+  Object.assign(client, update)
+  await ctx.context.adapter.update({
+    model: 'oauthClient',
+    where: [{ field: 'clientId', value: client.clientId }],
+    update,
+  })
+}
 
 export interface CloudflareEnv {
   DB: D1Database
@@ -93,6 +187,10 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
       schema,
     }),
     databaseHooks: {
+      oauthClient: {
+        create: { before: normalizeOAuthClientScopesOnCreate },
+        update: { before: normalizeOAuthClientScopesOnUpdate },
+      },
       user: {
         create: {
           after: async (user) => {
@@ -216,6 +314,13 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
     },
     plugins: [
       jwt({
+        jwks: {
+          // OpenID Connect Discovery requires RS256 support, and ChatGPT
+          // validates the returned ID token before it ever initializes MCP.
+          // Better Auth defaults to EdDSA, which produced a successful token
+          // response followed by ChatGPT's generic connection failure.
+          keyPairConfig: { alg: 'RS256' },
+        },
         jwt: {
           // Explicit issuer so oauthProvider's getOAuthServerConfig advertises the
           // same value as authorization_servers in /.well-known/oauth-protected-resource.
@@ -248,6 +353,13 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
         },
       }),
       oauthProvider({
+        schema: {
+          oauthClient: {
+            fields: {
+              scopes: 'scopesJson',
+            },
+          },
+        },
         loginPage: '/oauth/login',
         consentPage: '/oauth/consent',
         allowPublicClientPrelogin: true,
@@ -270,11 +382,17 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
             identifier: `${authBaseUrl}/api/mcp`,
             name: 'KrabiClaw tenant MCP',
             allowedScopes: ['openid', 'offline_access', 'tenant'],
+            // Pin access-token issuance so Better Auth lazily provisions the
+            // new RSA key before it creates the ID token. This safely rotates
+            // away from existing EdDSA rows while leaving their public keys
+            // available for already-issued token verification.
+            signingAlgorithm: 'RS256',
           },
           {
             identifier: `${authBaseUrl}/api/mcp/platform`,
             name: 'KrabiClaw platform MCP',
             allowedScopes: ['openid', 'offline_access', 'platform_admin'],
+            signingAlgorithm: 'RS256',
           },
         ],
         // Well-known metadata is served at /api/auth/.well-known/* by the plugin's
@@ -286,6 +404,8 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
       }),
       cimd({
         allowLoopback: import.meta.dev,
+        onClientCreated: normalizeCimdClientAuthentication,
+        onClientRefreshed: normalizeCimdClientAuthentication,
       }),
       organization({ ac: organizationAccessControl, roles: organizationRoles }),
       admin({

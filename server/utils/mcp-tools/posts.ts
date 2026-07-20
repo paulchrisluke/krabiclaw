@@ -1,6 +1,5 @@
 import type { McpToolDefinition } from './shared'
 import { postMutationResultObject, postObject, postPublishResultObject, siteTool } from './shared'
-import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const POSTS_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -35,7 +34,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'create_post',
-      description: 'Create and publish a post. Use post_type to create a promotion or event instead of a standard update: "offer" for a discount/special (pair with offer_coupon/offer_terms), "event" for a scheduled happening (pair with event_title/event_start/event_end), or "update" for general news. Defaults to "standard". Use this for time-boxed announcements that fan out to Facebook/Instagram/GMB, not evergreen content — for the site\'s own long-form articles use create_blog_post, and for a permanent bookable offering with its own page/pricing/availability (e.g. a new class, package, or group-booking option) use create_experience instead.',
+      description: 'Create a time-boxed, social-style announcement (tonight\'s event, a limited offer, quick news) and publish it to the website immediately unless scheduled_for is provided. This does not publish to social channels; use publish_post with explicit channels for social publication. Use post_type "offer" for a discount/special (requires offer_coupon or offer_terms), "event" for a scheduled happening (requires event_start), or "update" for general news. Defaults to "standard". For long-form, evergreen, SEO-indexed articles (site history, guides, "why choose us") use create_blog_post instead — this tool has no SEO fields and does not appear in site navigation.',
       domain: 'posts',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -46,6 +45,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
         seo_title: { type: 'string', description: 'Optional SEO title for the public post page.' },
         seo_description: { type: 'string', description: 'Optional SEO/meta description for the public post page.' },
         og_image_asset_id: { type: 'string', description: 'Optional Open Graph image asset id. Defaults to the cover image when omitted.' },
+        image_asset_id: { type: 'string', description: 'Optional active image asset id to use as the canonical post cover.' },
         gallery_media: {
           type: 'array',
           description: 'Optional ordered gallery media for the public post page. Use active media asset ids from get_site_media_assets or uploaded/generated media.',
@@ -88,6 +88,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
         seo_title: { type: ['string', 'null'] },
         seo_description: { type: ['string', 'null'] },
         og_image_asset_id: { type: ['string', 'null'] },
+        image_asset_id: { type: ['string', 'null'], description: 'Active image asset id for the canonical post cover. Pass null to clear it.' },
         gallery_media: {
           type: 'array',
           description: 'Replace the ordered public post gallery. Omit to leave unchanged.',
@@ -128,27 +129,6 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
       },
       required: ['post_id', 'asset_id'],
       outputSchema: postMutationResultObject,
-    }),
-  siteTool({
-      name: 'open_post_media_upload',
-      description: 'Launches the inline media upload widget scoped to a specific post — image only for posts today. After the widget reports a completed upload, call set_post_image with the returned assetId and this post_id.',
-      domain: 'posts',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      uiResourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
-      inputSchema: {
-        post_id: { type: 'string' },
-      },
-      required: ['post_id'],
-      outputSchema: {
-        type: 'object',
-        properties: {
-          launched: { type: 'boolean' },
-          resourceUri: { type: 'string' },
-          post_id: { type: 'string' },
-        },
-        required: ['launched', 'resourceUri', 'post_id'],
-      },
     }),
   siteTool({
       name: 'publish_post',

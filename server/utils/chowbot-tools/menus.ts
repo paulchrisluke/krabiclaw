@@ -3,7 +3,7 @@ import { MENUS_TOOLS } from '~/server/utils/mcp-tools/menus'
 import { chowbotToolFromMcp } from './from-mcp'
 
 export const MENUS_CHOWBOT_TOOLS: AiTool[] = [
-  // open_menu_item_media_upload launches a ChatGPT-app UI widget
+  // open_video_upload launches a ChatGPT-app UI widget
   // (uiResourceUri) that only that host can render — not applicable to
   // ChowBot's own chat surface, so it's excluded from the derived set.
   ...MENUS_TOOLS.filter((tool) => !tool.uiResourceUri).map(chowbotToolFromMcp),

@@ -2,7 +2,7 @@ import type { AiTool } from '~/server/utils/ai-gateway'
 import { EXPERIENCES_TOOLS } from '~/server/utils/mcp-tools/experiences'
 import { chowbotToolFromMcp } from './from-mcp'
 
-// open_experience_media_upload is a ChatGPT-app UI widget (uiResourceUri).
+// Video widget launchers are tenant-MCP-only and live in mcp-tools/media.ts.
 // reorder_experience_gallery and list_all_experience_bookings (site-wide
 // summary, distinct from the per-experience list_experience_bookings) were
 // never offered to ChowBot — not added here to stay within migrating

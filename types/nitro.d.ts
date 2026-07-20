@@ -5,6 +5,7 @@ declare module 'nitropack' {
     cloudflareDev?: {
       configPath?: string
       persistDir?: string
+      envFiles?: string[]
       silent?: boolean
       environment?: string
     }

@@ -2,7 +2,7 @@ import type { McpExecutorContext } from './shared'
 import { deleteMediaAsset, listMediaAssets, updateMediaAssetMetadata } from '~/server/utils/media-asset-manager'
 import { hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
-import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
+import { VIDEO_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import {
@@ -86,7 +86,10 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       });
 
       return {
+        asset_id: uploaded.assetId,
         assetId: uploaded.assetId,
+        status: "active",
+        public_url: uploaded.publicUrl,
         publicUrl: uploaded.publicUrl,
         thumbnailUrl: uploaded.thumbnailUrl,
         kind: resolved.kind,
@@ -97,16 +100,15 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         context: await mutationContextPayload(site),
       };
     }
-    case "open_media_upload": {
+    case "open_video_upload": {
       const category = optionalString(args, "category") ?? null;
-      const accept = optionalString(args, "accept") ?? "both";
       return renderStructuredResponse(
         {
           launched: true,
-          resourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
-          context: { site_id: site.siteId, category, accept },
+          resourceUri: VIDEO_UPLOAD_WIDGET_RESOURCE_URI,
+          context: { site_id: site.siteId, category },
         },
-        "Media upload widget launched.",
+        "Video upload widget launched.",
       );
     }
     case "update_media_asset": {

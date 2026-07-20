@@ -183,7 +183,7 @@ export default defineNuxtConfig({
       watch: {
         ignored: ['**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
       },
-      allowedHosts: ['.trycloudflare.com', 'local.krabiclaw.com']
+      allowedHosts: ['.trycloudflare.com', 'local.krabiclaw.com', '.krabiclaw.com']
     },
   },
 
@@ -458,6 +458,9 @@ export default defineNuxtConfig({
       // when wrangler config auto-discovery fails from an unexpected cwd.
       configPath: './wrangler.toml',
       persistDir: '.wrangler/state/v3',
+      // The MCP tunnel harness supplies one generated, untracked env file so
+      // its public origin never requires mutating the developer's .dev.vars.
+      envFiles: process.env.NUXT_CF_ENV_FILE ? [process.env.NUXT_CF_ENV_FILE] : undefined,
       silent: true,
     },
     experimental: {

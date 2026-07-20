@@ -52,6 +52,17 @@ VALUES (${sqlValue(locationId)}, ${sqlValue(orgId)}, ${sqlValue(siteId)}, 'main'
 
 UPDATE sites SET primary_location_id = ${sqlValue(locationId)} WHERE id = ${sqlValue(siteId)};
 
+INSERT OR REPLACE INTO media_assets
+  (id, organization_id, site_id, location_id, kind, provider, source,
+   cloudflare_image_id, public_url, thumbnail_url, mime_type, file_name,
+   alt_text, category, status, created_at, updated_at)
+VALUES
+  (${sqlValue(`media-${siteId}-fixture-image`)}, ${sqlValue(orgId)}, ${sqlValue(siteId)}, ${sqlValue(locationId)},
+   'image', 'cloudflare_images', 'uploaded', ${sqlValue(`fixture-${siteId}`)},
+   'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/public',
+   'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/public',
+   'image/jpeg', ${sqlValue(`${siteId}-fixture.jpg`)}, 'Seeded MCP image fixture', 'other', 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
 ${renderSiteBillingSql(siteId, orgId, { status, plan }, sqlValue)}
 
 ${renderSiteEntitlementsSql(siteId, orgId, plan, sqlValue)}`

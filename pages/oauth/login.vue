@@ -71,6 +71,20 @@
               <div class="flex-1 h-px bg-default" />
             </div>
 
+            <AuthEmailSignInForm :callback-url="oauthAuthorizeUrl" @verification-required="showVerification" />
+
+            <div v-if="verificationEmail" class="rounded-xl border border-default p-3 space-y-2">
+              <p class="text-sm text-muted">Verify your email before signing in.</p>
+              <p v-if="verificationResent" role="status" class="text-sm text-green-600">Verification email sent to {{ verificationEmail }}.</p>
+              <PlatformButton variant="outline" block :loading="resendingVerification" @click="resendVerification">Resend verification</PlatformButton>
+            </div>
+
+            <div class="flex items-center gap-3 py-1">
+              <div class="flex-1 h-px bg-default" />
+              <span class="text-[12px] text-dimmed uppercase tracking-[0.18em]">or</span>
+              <div class="flex-1 h-px bg-default" />
+            </div>
+
             <AuthPhoneOtpForm verify-label="Verify and sign in" @verified="finishOAuthPhoneSignIn" />
           </div>
         </div>
@@ -100,6 +114,7 @@ const oauthPrompt = computed(() =>
 const isSelectAccountFlow = computed(() =>
   oauthPrompt.value.split(' ').includes('select_account')
 )
+const oauthAuthorizeUrl = computed(() => `/api/auth/oauth2/authorize${route.fullPath.slice(route.path.length)}`)
 
 // ── Client metadata ───────────────────────────────────────────────────────────
 const clientName = ref('')
@@ -179,5 +194,34 @@ async function handleGoogleSignIn() {
 function finishOAuthPhoneSignIn() {
   // The OAuth Provider plugin resumes its signed authorization state when the
   // phone verification response creates the session.
+}
+
+// ── Email verification recovery (mirrors pages/login.vue) ───────────────────
+const verificationEmail = ref('')
+const resendingVerification = ref(false)
+const verificationResent = ref(false)
+
+function showVerification(email) {
+  verificationEmail.value = email
+  verificationResent.value = false
+}
+
+async function resendVerification() {
+  if (!verificationEmail.value || resendingVerification.value) return
+  resendingVerification.value = true
+  error.value = null
+  verificationResent.value = false
+  try {
+    const result = await authClient.sendVerificationEmail({
+      email: verificationEmail.value,
+      callbackURL: oauthAuthorizeUrl.value,
+    })
+    if (result?.error) error.value = result.error.message || 'Could not resend verification email.'
+    else verificationResent.value = true
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not resend verification email.'
+  } finally {
+    resendingVerification.value = false
+  }
 }
 </script>
