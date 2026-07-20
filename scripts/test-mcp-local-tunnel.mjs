@@ -61,7 +61,13 @@ function spawnLogged(command, args, { env = process.env, logName, inherit = fals
 async function run(command, args, env = process.env) {
   console.log(`> ${command} ${args.join(' ')}`)
   const child = spawnLogged(command, args, { env, inherit: true })
-  const code = await new Promise(resolveExit => child.once('exit', code => resolveExit(code ?? 1)))
+  // spawn() failures (missing binary) only ever emit 'error', not 'exit' — awaiting
+  // 'exit' alone would hang forever in that case. spawnLogged() already logs the
+  // error; race it here too so this promise actually settles either way.
+  const code = await new Promise((resolveExit, reject) => {
+    child.once('exit', code => resolveExit(code ?? 1))
+    child.once('error', reject)
+  })
   if (code !== 0) throw new Error(`${command} ${args.join(' ')} exited ${code}`)
 }
 

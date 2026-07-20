@@ -9,7 +9,7 @@ CREATE TABLE `oauthClientAssertion` (
 UPDATE `oauthClient`
 SET `scopes` = '["openid","offline_access","tenant"]'
 WHERE (`scopes` IS NULL OR `scopes` = '')
-  AND (`clientId` LIKE 'https://%' OR `clientId` LIKE 'http://localhost/%');
+  AND (`clientId` LIKE 'https://%' OR `clientId` LIKE 'http://localhost/%' OR `clientId` LIKE 'http://localhost:%');
 --> statement-breakpoint
 -- ChatGPT metadata advertises private_key_jwt in the plural supported-methods
 -- field. Older registrations lost that preference and its JWKS URI because the

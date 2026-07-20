@@ -365,6 +365,13 @@
       "when": 1784515663539,
       "tag": "0058_volatile_dreadnoughts",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "6",
+      "when": 1784524236622,
+      "tag": "0059_mysterious_doorman",
+      "breakpoints": true
     }
   ]
 }

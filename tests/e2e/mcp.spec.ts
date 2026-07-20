@@ -249,7 +249,13 @@ test.describe('stateless MCP server', () => {
       expect(fixture.byteLength).toBeGreaterThan(1_000)
       await page.locator('input[type=file]').setInputFiles({ name: 'tiny-widget-e2e.mp4', mimeType: 'video/mp4', buffer: fixture })
       await page.getByRole('button', { name: 'Upload video' }).click()
-      await expect(page.getByRole('status')).toContainText('is ready to assign')
+      // The real chain here is: fetch the fixture, stream it to Cloudflare
+      // Images, then respond — reproduced locally through a real HTTPS tunnel
+      // in well under 10s, but has consistently needed longer against the
+      // deployed preview Worker in CI (observed: still "Uploading…" at the
+      // default 10s timeout on three consecutive runs, no error surfaced).
+      // Widen this one assertion rather than the whole test's budget.
+      await expect(page.getByRole('status')).toContainText('is ready to assign', { timeout: 30_000 })
       const calls = await page.evaluate(() => (window as unknown as { __krabiclawWidgetCalls: string[] }).__krabiclawWidgetCalls)
       expect(calls.map(call => call.split(':')[0])).toEqual(['uploadFile', 'getFileDownloadUrl', 'callTool'])
       expect(calls[2]).toBe('callTool:upload_user_media')

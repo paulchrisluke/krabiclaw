@@ -64,6 +64,12 @@ function normalizeOAuthClientScopesOnCreate(data: OAuthClientHookData) {
 
 function normalizeOAuthClientScopesOnUpdate(data: OAuthClientHookData) {
   if (Array.isArray(data.scopes) || !('scopes' in data)) return
+  // clientId isn't necessarily part of every update payload (the row is
+  // targeted by a WHERE clause, not by data.clientId). Without it there's no
+  // way to tell a CIMD tenant connector from a non-URL client, and guessing
+  // "non-URL" would misclassify a URL client and overwrite its real scopes.
+  // Leave scopes untouched rather than guess.
+  if (typeof data.clientId !== 'string') return
 
   return {
     data: {

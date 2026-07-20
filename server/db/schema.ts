@@ -827,7 +827,10 @@ export const oauthAccessToken = sqliteTable("oauthAccessToken", {
 	clientId: text().notNull(),
 	userId: text(),
 	token: text().notNull().unique(),
-	scopes: text().default("").notNull(),
+	// Better Auth serializes this as JSON string[]; unlike oauthClient this table
+	// has no foreign-key references pointing into it, so unlike scopesJson's
+	// additive workaround there this default can be corrected directly.
+	scopes: text().default("[]").notNull(),
 	authorizationCodeId: text(),
 	resources: text(),
 	requestedUserInfoClaims: text(),

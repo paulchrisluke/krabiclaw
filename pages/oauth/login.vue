@@ -75,6 +75,7 @@
 
             <div v-if="verificationEmail" class="rounded-xl border border-default p-3 space-y-2">
               <p class="text-sm text-muted">Verify your email before signing in.</p>
+              <p v-if="verificationResent" role="status" class="text-sm text-green-600">Verification email sent to {{ verificationEmail }}.</p>
               <PlatformButton variant="outline" block :loading="resendingVerification" @click="resendVerification">Resend verification</PlatformButton>
             </div>
 
@@ -198,21 +199,25 @@ function finishOAuthPhoneSignIn() {
 // ── Email verification recovery (mirrors pages/login.vue) ───────────────────
 const verificationEmail = ref('')
 const resendingVerification = ref(false)
+const verificationResent = ref(false)
 
 function showVerification(email) {
   verificationEmail.value = email
+  verificationResent.value = false
 }
 
 async function resendVerification() {
   if (!verificationEmail.value || resendingVerification.value) return
   resendingVerification.value = true
   error.value = null
+  verificationResent.value = false
   try {
     const result = await authClient.sendVerificationEmail({
       email: verificationEmail.value,
       callbackURL: oauthAuthorizeUrl.value,
     })
     if (result?.error) error.value = result.error.message || 'Could not resend verification email.'
+    else verificationResent.value = true
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not resend verification email.'
   } finally {
