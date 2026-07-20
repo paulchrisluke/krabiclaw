@@ -138,6 +138,7 @@ const galleryMedia = computed(() => {
   const media = props.post.media ?? []
   const coverId = coverMedia.value?.id || coverMedia.value?.mediaAssetId
   const source = gallery.length ? gallery : media
+  if (!coverId) return source
   return source.filter(item => item.id !== coverId && item.mediaAssetId !== coverId)
 })
 
@@ -156,10 +157,15 @@ let copiedTimeout: ReturnType<typeof setTimeout> | undefined
 
 async function copyUrl() {
   if (!import.meta.client) return
-  await navigator.clipboard?.writeText(window.location.href)
-  copied.value = true
-  clearTimeout(copiedTimeout)
-  copiedTimeout = setTimeout(() => { copied.value = false }, 2000)
+  if (!navigator.clipboard?.writeText) return
+  try {
+    await navigator.clipboard.writeText(window.location.href)
+    copied.value = true
+    clearTimeout(copiedTimeout)
+    copiedTimeout = setTimeout(() => { copied.value = false }, 2000)
+  } catch {
+    // clipboard write failed (e.g. permission denial); leave state unchanged
+  }
 }
 
 onUnmounted(() => clearTimeout(copiedTimeout))
