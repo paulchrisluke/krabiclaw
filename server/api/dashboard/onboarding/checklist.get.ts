@@ -96,15 +96,15 @@ export default defineEventHandler(async (event) => {
     const menuItems = await queryFirst<{ c: number }>(db, `
       SELECT COUNT(*) as c FROM menu_items mi
       JOIN menus m ON mi.menu_id = m.id
-      WHERE m.site_id = ? AND mi.source != 'template'
+      WHERE m.site_id = ?
     `, [siteId])
 
     const experiences = await queryFirst<{ c: number }>(db, `
-      SELECT COUNT(*) as c FROM experiences WHERE site_id = ? AND source != 'template'
+      SELECT COUNT(*) as c FROM experiences WHERE site_id = ?
     `, [siteId])
 
     const offerings = await queryFirst<{ c: number }>(db, `
-      SELECT COUNT(*) as c FROM offerings WHERE site_id = ? AND source != 'template'
+      SELECT COUNT(*) as c FROM offerings WHERE site_id = ?
     `, [siteId])
 
     const story = await queryFirst<{ c: number }>(db, `
