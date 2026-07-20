@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
-import { devLoginHeaders } from './test-env'
+import { devLoginHeaders, isDeployedWorkerTarget } from './test-env'
 import { loginAs } from './helpers/auth'
 import { MCP_FREE_USER_ID, MCP_GROWTH_USER_ID, MCP_MANAGED_USER_ID } from './helpers/plan-fixtures'
 
@@ -154,6 +154,16 @@ async function loginAsFreshMcpUser(request: APIRequestContext, baseURL: string) 
 
 test.describe('stateless MCP server', () => {
   test('ChatGPT sequence and video widget produce an active, public, assignable asset', async ({ page, request, baseURL }) => {
+    // The widget's downloadUrl points at this same app's own /api/mcp-test/tiny-video
+    // fixture, so the server-side upload_user_media executor's fetch(downloadUrl) is a
+    // same-zone Worker self-fetch on a deployed Cloudflare Worker — the same platform
+    // restriction already documented and skipped for in oauth-discovery.spec.ts's CIMD
+    // tests (reproduces deterministically as a Cloudflare 522, not app logic; confirmed
+    // by reproducing the exact same code successfully through a real public tunnel
+    // locally). In real ChatGPT usage the download_url is externally hosted (OpenAI's
+    // servers), never same-zone, so this is a test-fixture artifact, not a product bug.
+    // Covered instead by the local MCP harness (yarn test:mcp:chatgpt, docs/local-mcp-harness.md).
+    test.skip(isDeployedWorkerTarget(baseURL!), 'Same-zone self-fetch of the tiny-video test fixture is not supported on deployed Cloudflare Workers — verify via the local MCP tunnel harness instead')
     test.setTimeout(90_000)
     await loginAsFreshMcpUser(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)
