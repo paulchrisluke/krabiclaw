@@ -6,6 +6,10 @@ const editorPath = new URL('../../pages/dashboard/[orgSlug]/sites/[siteSlug]/con
 const editorSource = readFileSync(editorPath, 'utf8')
 const linksSource = readFileSync(new URL('../../composables/useDashboardSiteLinks.ts', import.meta.url), 'utf8')
 const layoutSource = readFileSync(new URL('../../layouts/dashboard.vue', import.meta.url), 'utf8')
+// Dashboard shell refactor (#316) moved sidebar navigation-item construction
+// (including the Content link) out of layouts/dashboard.vue and into
+// composables/useDashboardNavigation.ts.
+const navigationSource = readFileSync(new URL('../../composables/useDashboardNavigation.ts', import.meta.url), 'utf8')
 
 test('universal CMS is site scoped and no longer depends on the dashboard self-fetch proxy', () => {
   assert.match(linksSource, /content: `\$\{siteBase\}\/content`/)
@@ -24,7 +28,8 @@ test('universal CMS uses one page-level save model', () => {
 
 test('dashboard content navigation does not force a location page', () => {
   assert.doesNotMatch(layoutSource, /content\?page=location/)
-  assert.match(layoutSource, /`\$\{siteBase\.value\}\/content`/)
+  assert.doesNotMatch(navigationSource, /content\?page=location/)
+  assert.match(navigationSource, /`\$\{siteBase\.value\}\/content`/)
 })
 
 test('CMS status never fabricates a Live state from local dirty state', () => {

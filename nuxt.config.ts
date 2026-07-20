@@ -359,6 +359,11 @@ export default defineNuxtConfig({
       pathPrefix: false,
     },
     {
+      path: '~/components/dashboard',
+      prefix: 'Dashboard',
+      pathPrefix: false,
+    },
+    {
       path: '~/components/workspace/media',
       pathPrefix: false,
     },

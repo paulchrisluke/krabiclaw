@@ -197,6 +197,17 @@ const dashboardLayoutSource = readFileSync(
   new URL('../../layouts/dashboard.vue', import.meta.url),
   'utf8',
 )
+// Dashboard shell refactor (#316) moved sidebar nav-item construction out of
+// layouts/dashboard.vue into a declarative builder (dashboard-navigation.ts)
+// resolved by composables/useDashboardNavigation.ts.
+const dashboardNavConfigSource = readFileSync(
+  new URL('../../config/dashboard-navigation.ts', import.meta.url),
+  'utf8',
+)
+const dashboardNavComposableSource = readFileSync(
+  new URL('../../composables/useDashboardNavigation.ts', import.meta.url),
+  'utf8',
+)
 
 test('bare dashboard delegates to the server-side authenticated entry router', () => {
   assert.match(dashboardEntrySource, /navigateTo\('\/api\/post-login'/)
@@ -205,6 +216,8 @@ test('bare dashboard delegates to the server-side authenticated entry router', (
 })
 
 test('general Content sidebar link opens the site-scoped content page', () => {
-  assert.match(dashboardLayoutSource, /label: 'Content', icon: 'i-lucide-copy', to: `\$\{siteBase\.value\}\/content`/)
-  assert.doesNotMatch(dashboardLayoutSource, /label: 'Content'[^\n]+content\?page=location/)
+  assert.match(dashboardNavConfigSource, /label: 'Content', icon: 'i-lucide-copy', to: paths\.content/)
+  assert.match(dashboardNavComposableSource, /content: `\$\{siteBase\.value\}\/content`/)
+  assert.doesNotMatch(dashboardNavConfigSource, /label: 'Content'[^\n]+content\?page=location/)
+  assert.doesNotMatch(dashboardNavComposableSource, /content\?page=location/)
 })
