@@ -1,29 +1,24 @@
 <template>
-  <UPage>
-    <UPageBody>
-      <div class="max-w-3xl space-y-6">
+  <DashboardPage id="activity" title="Activity" width="narrow">
+    <template #toolbar>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
+        <UFormField label="Site">
+          <USelect v-model="filters.siteId" :items="siteOptions" class="w-full" />
+        </UFormField>
+        <UFormField label="Location">
+          <USelect v-model="filters.locationId" :items="locationOptions" :disabled="!filters.siteId" class="w-full" />
+        </UFormField>
+        <UFormField label="Type">
+          <USelect v-model="filters.eventType" :items="eventTypeOptions" class="w-full" />
+        </UFormField>
+        <UFormField label="Actor">
+          <USelect v-model="filters.actorId" :items="actorOptions" class="w-full" />
+        </UFormField>
+      </div>
+    </template>
 
-        <UCard>
-          <template #header>
-            <h2 class="font-semibold text-highlighted">Activity</h2>
-          </template>
-
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-            <UFormField label="Site">
-              <USelect v-model="filters.siteId" :items="siteOptions" class="w-full" />
-            </UFormField>
-            <UFormField label="Location">
-              <USelect v-model="filters.locationId" :items="locationOptions" :disabled="!filters.siteId" class="w-full" />
-            </UFormField>
-            <UFormField label="Type">
-              <USelect v-model="filters.eventType" :items="eventTypeOptions" class="w-full" />
-            </UFormField>
-            <UFormField label="Actor">
-              <USelect v-model="filters.actorId" :items="actorOptions" class="w-full" />
-            </UFormField>
-          </div>
-
-          <ClientOnly>
+    <UCard>
+      <ClientOnly>
             <template #fallback>
               <div v-if="pending" class="space-y-3">
                 <USkeleton v-for="i in 5" :key="i" class="h-12 w-full" />
@@ -62,12 +57,9 @@
                 <UButton label="Load more" color="neutral" variant="soft" :loading="loadingMore" @click="loadMore" />
               </div>
             </div>
-          </ClientOnly>
-        </UCard>
-
-      </div>
-    </UPageBody>
-  </UPage>
+      </ClientOnly>
+    </UCard>
+  </DashboardPage>
 </template>
 
 <script setup lang="ts">

@@ -1,7 +1,6 @@
 <template>
-  <UPage>
-    <UPageBody>
-      <div class="max-w-2xl space-y-6">
+  <DashboardPage id="support" title="Support">
+    <div class="space-y-6">
 
         <!--
           managedServiceEnabled is a global marketing/checkout flag (whether
@@ -145,9 +144,8 @@
           </UCard>
         </template>
 
-      </div>
-    </UPageBody>
-  </UPage>
+    </div>
+  </DashboardPage>
 </template>
 
 <script setup lang="ts">
