@@ -66,6 +66,7 @@ function shouldUseLeanToolCatalog(event: H3Event) {
 }
 
 export default defineEventHandler(async (event) => {
+  const requestStartedAt = Date.now();
   let requestId: string | number | null | undefined;
   let requestMethod: string | undefined;
   let requestToolName: string | undefined;
@@ -143,6 +144,20 @@ export default defineEventHandler(async (event) => {
       && typeof request.params?.name === "string"
       ? request.params.name
       : undefined;
+
+    if (import.meta.dev) {
+      event.node.res.once("finish", () => {
+        console.info("[MCP_REQUEST]", JSON.stringify({
+          method: requestMethod ?? null,
+          request_id: requestId ?? null,
+          status: event.node.res.statusCode,
+          duration_ms: Date.now() - requestStartedAt,
+          content_length: event.node.res.getHeader("content-length") ?? null,
+          ray_id: getHeader(event, "cf-ray") ?? null,
+          user_agent: getHeader(event, "user-agent") ?? null,
+        }));
+      });
+    }
 
     // MCP protocol handshake — required before any tools/list or tools/call
     if (request.method === "initialize") {

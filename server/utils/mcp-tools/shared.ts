@@ -407,6 +407,17 @@ export const postPublishResultObject = {
     slug: { type: ['string', 'null'] },
     public_url: { type: ['string', 'null'] },
     channels: { type: 'array', items: { type: 'string' } },
+    channel_outcomes: {
+      type: 'object',
+      additionalProperties: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', enum: ['published', 'skipped', 'failed'] },
+          reason: { type: ['string', 'null'] },
+        },
+        required: ['status'],
+      },
+    },
     context: { type: 'object' },
   },
   required: ['ok', 'entity', 'id'],

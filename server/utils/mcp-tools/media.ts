@@ -18,7 +18,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'upload_user_media',
-      description: 'Canonical inline upload path for user-provided images, videos, and Markdown documents (.md/.markdown). Accepts a resolved ChatGPT file reference and validates the actual bytes. Markdown files are stored in the media library; after upload, call analyze_document with the returned assetId. Images and videos remain available to the matching assignment tools. For a video, poster_file may provide a thumbnail. Only call this tool when the host supplied a real file/file_id reference; never invent one.',
+      description: 'Canonical inline upload path for user-provided images, videos, and Markdown documents (.md/.markdown). Accepts a resolved ChatGPT file reference and validates the actual bytes. The returned asset_id is active and immediately assignable. For a video, poster_file may provide a thumbnail. Only call this tool when the host supplied a real file/file_id reference; never invent one.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -39,13 +39,16 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: {
           assetId: { type: 'string' },
+          asset_id: { type: 'string' },
           publicUrl: { type: 'string' },
+          public_url: { type: 'string' },
+          status: { type: 'string', enum: ['active'] },
           thumbnailUrl: { type: ['string', 'null'] },
           kind: { type: 'string', enum: ['image', 'video', 'file'] },
           posterWarning: { type: ['string', 'null'] },
           nextStep: { type: 'string' },
         },
-        required: ['assetId', 'publicUrl', 'kind'],
+        required: ['asset_id', 'assetId', 'status', 'public_url', 'publicUrl', 'kind'],
       },
     }),
   siteTool({

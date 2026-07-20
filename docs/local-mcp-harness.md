@@ -179,9 +179,9 @@ Use the OAuth-true path when the bug involves:
 
 ## Startup
 
-Tested sequence — the tunnel must start first because its URL doesn't exist
-until it prints one, and that URL is what you set in `.dev.vars` before
-starting the dev server:
+Tested sequence — follow this order exactly. The quick tunnel must start first
+because its URL doesn't exist until it prints one, and the local D1 database
+must be current before Better Auth initializes its OAuth provider.
 
 1. In terminal 1, start the quick tunnel and copy the printed
    `https://<random-words>.trycloudflare.com` URL:
@@ -194,7 +194,21 @@ starting the dev server:
    `.dev.vars` to that URL (see "Working alternative: `trycloudflare.com`
    quick tunnel" above).
 
-3. In terminal 2, export the dev-route secret into the shell and start the dev
+3. Prepare the local D1 database from the same checkout that will run the dev
+   server. A new worktree has its own `.wrangler/state`, even when it shares
+   `node_modules` or local env files with another checkout:
+
+   ```bash
+   yarn schema:local
+   yarn seed:local
+   ```
+
+   Do not skip this. A missing/currently stale Better Auth table can leave the
+   protected-resource document healthy while the authorization-server metadata
+   or token exchange fails later with a generic ChatGPT "does not implement
+   OAuth" or "problem connecting" message.
+
+4. In terminal 2, export the dev-route secret into the shell and start the dev
    server:
 
    ```bash
@@ -202,6 +216,27 @@ starting the dev server:
    export E2E_DEV_ROUTE_SECRET=<same value as in .dev.vars>
    yarn dev:tunnel
    ```
+
+5. Confirm OAuth discovery before configuring ChatGPT. All three requests must
+   return `200`, and every advertised URL must use the same quick-tunnel origin:
+
+   ```bash
+   curl -i "$MCP_BASE_URL/.well-known/oauth-protected-resource"
+   curl -i "$MCP_BASE_URL/.well-known/oauth-authorization-server"
+   curl -i "$MCP_BASE_URL/.well-known/openid-configuration"
+   ```
+
+6. In ChatGPT Developer Mode, create the connector with the MCP route, not just
+   the origin:
+
+   ```text
+   https://<random-words>.trycloudflare.com/api/mcp
+   ```
+
+   The connector URL changes whenever the quick tunnel is restarted. Delete and
+   recreate a failed connector if ChatGPT cached an earlier failed OAuth
+   registration; retrying the cached connector may fail before any request
+   reaches the tunnel.
 
 Then run the preflight harness:
 
@@ -220,6 +255,52 @@ What it checks:
 7. unauthenticated `server/discover` and `tools/call` behave correctly
 8. `/api/dev/login` and `/api/dev/mcp-telemetry` are reachable with the dev secret
 9. `scripts/check-mcp-app-contract.mjs` passes
+
+Do not treat a partial run as a pass. In particular, OAuth discovery succeeding
+does not prove that authorization-code exchange, authenticated MCP initialize,
+or `tools/list` works.
+
+## Proving a real ChatGPT connection
+
+After completing OAuth in ChatGPT, verify the server-side sequence instead of
+relying only on ChatGPT's generic success/error message. A healthy connection
+has all of these signals:
+
+1. `[OAUTH_TOKEN]` reports `status: 200`, with access, refresh, and ID tokens
+   issued.
+2. `[MCP_AUTH]` reports `credential_accepted` for user agent `openai-mcp/...`.
+3. MCP `initialize` returns `200`.
+4. `notifications/initialized` returns `202`.
+5. `tools/list` or a first `tools/call` succeeds.
+6. `/api/dev/mcp-telemetry` records the tool call as `success`.
+
+ChatGPT may send an early probe without `mcp-protocol-version`; a single
+`400 Missing MCP protocol version` is harmless when it immediately retries
+with a successful `initialize`.
+
+### OAuth/CIMD failure signatures
+
+- `oauthClient.scopes = ''` followed by `Unexpected end of JSON input`: the
+  OAuth client schema/default is incompatible with Better Auth's JSON-array
+  contract. Fix the source schema/registration path; valid stored values are
+  JSON arrays, not empty strings.
+- `invalid_scope` in the ChatGPT callback: the registered client's allowed
+  scopes do not include the resource's requested scope (`tenant` for
+  `/api/mcp`, `platform_admin` for `/api/mcp/platform`).
+- `invalid_client` during token exchange when ChatGPT uses
+  `private_key_jwt`: inspect the CIMD client record's token authentication
+  method and JWKS URI. ChatGPT publishes its keys at the `jwks_uri` in its
+  client metadata document.
+- `oauthClientAssertion was not found in the schema object`: the Better Auth
+  OAuth replay-protection model/table is missing. Add it to `server/db/schema.ts`,
+  generate a migration, and apply it locally before retrying.
+- OAuth token exchange succeeds but no `/api/mcp` request follows: ChatGPT
+  rejected or cached the connector after OAuth. Check tunnel/server access logs;
+  if there is genuinely no request, remove and recreate the connector before
+  changing MCP tools.
+- Auth is accepted and `tools/list` succeeds, then the connection fails: inspect
+  catalog response size and MCP App resources. The local harness must catch
+  missing widget assets such as a declared script returning `404`.
 
 By default this is **non-destructive**.
 

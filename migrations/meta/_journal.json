@@ -344,6 +344,13 @@
       "when": 1784211569075,
       "tag": "0055_woozy_beyonder",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "6",
+      "when": 1784506562446,
+      "tag": "0056_fancy_vargas",
+      "breakpoints": true
     }
   ]
 }

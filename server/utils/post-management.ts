@@ -167,6 +167,43 @@ function cleanString(value: unknown): string | null {
   return trimmed ? trimmed : null
 }
 
+type PostWritableInput = {
+  body?: string
+  post_type?: string
+  event_start?: string | null
+  event_end?: string | null
+  offer_coupon?: string | null
+  offer_terms?: string | null
+}
+
+export function validatePostInput(data: PostWritableInput, existing?: PostWritableInput) {
+  const postType = data.post_type ?? existing?.post_type ?? 'standard'
+  if (!['standard', 'offer', 'event', 'update'].includes(postType)) {
+    throw new PostValidationError('post_type must be one of standard, offer, event, or update')
+  }
+
+  const eventStart = data.event_start !== undefined ? cleanString(data.event_start) : cleanString(existing?.event_start)
+  const eventEnd = data.event_end !== undefined ? cleanString(data.event_end) : cleanString(existing?.event_end)
+  if (postType === 'event') {
+    if (!eventStart) throw new PostValidationError('event_start is required when post_type is "event"')
+    const startTime = Date.parse(eventStart)
+    if (!Number.isFinite(startTime)) throw new PostValidationError('event_start must be a valid ISO 8601 datetime')
+    if (eventEnd) {
+      const endTime = Date.parse(eventEnd)
+      if (!Number.isFinite(endTime)) throw new PostValidationError('event_end must be a valid ISO 8601 datetime')
+      if (endTime <= startTime) throw new PostValidationError('event_end must be later than event_start')
+    }
+  }
+
+  if (postType === 'offer') {
+    const coupon = data.offer_coupon !== undefined ? cleanString(data.offer_coupon) : cleanString(existing?.offer_coupon)
+    const terms = data.offer_terms !== undefined ? cleanString(data.offer_terms) : cleanString(existing?.offer_terms)
+    if (!coupon && !terms) {
+      throw new PostValidationError('offer_coupon or offer_terms is required when post_type is "offer"')
+    }
+  }
+}
+
 function normalizeRole(value: unknown): 'cover' | 'gallery' {
   return value === 'cover' ? 'cover' : 'gallery'
 }
@@ -262,6 +299,17 @@ async function replacePostMedia(
 
   await execute(db, `DELETE FROM post_media WHERE post_id = ? AND organization_id = ? AND site_id = ?`, [postId, organizationId, siteId])
 
+  const queries = postMediaInsertQueries(organizationId, siteId, postId, coverAssetId, galleryInput)
+  if (queries.length > 0) await executeBatch(db, queries)
+}
+
+function postMediaInsertQueries(
+  organizationId: string,
+  siteId: string,
+  postId: string,
+  coverAssetId: string | null | undefined,
+  galleryInput: PostMediaInput[],
+) {
   const now = new Date().toISOString()
   const rows: PostMediaInput[] = []
   if (coverAssetId) rows.push({ media_asset_id: coverAssetId, role: 'cover', sort_order: 0 })
@@ -278,7 +326,7 @@ async function replacePostMedia(
 
   rows.push(...deduplicatedGallery)
 
-  const queries = rows.map((item, index) => ({
+  return rows.map((item, index) => ({
     query: `
       INSERT INTO post_media (id, organization_id, site_id, post_id, media_asset_id, role, sort_order, caption, alt_text, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -297,7 +345,6 @@ async function replacePostMedia(
       now,
     ],
   }))
-  if (queries.length > 0) await executeBatch(db, queries)
 }
 
 async function syncPostCoverMedia(
@@ -522,6 +569,7 @@ export async function createPost(
   createdBy: string,
   env: DomainEnv,
 ): Promise<Post> {
+  validatePostInput(data)
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   const status = data.status ?? (data.scheduled_for ? 'scheduled' : 'published')
@@ -529,9 +577,10 @@ export async function createPost(
   const title = cleanString(data.title)
   const body = data.body.trim()
   let slug = await allocatePostSlug(db, siteId, cleanString(data.slug) ?? title ?? body.slice(0, 80) ?? id)
-  const imageAssetId = cleanString(data.image_asset_id)
-  const ogImageAssetId = cleanString(data.og_image_asset_id)
   const galleryMedia = normalizeMediaInputs(data.gallery_media) ?? []
+  const galleryCoverId = galleryMedia.find(item => item.role === 'cover')?.media_asset_id ?? null
+  const imageAssetId = cleanString(data.image_asset_id) ?? galleryCoverId
+  const ogImageAssetId = cleanString(data.og_image_asset_id) ?? imageAssetId
 
   if (imageAssetId) await requireActiveMediaAsset(db, organizationId, siteId, imageAssetId, 'image_asset_id')
   if (ogImageAssetId) await requireActiveMediaAsset(db, organizationId, siteId, ogImageAssetId, 'og_image_asset_id')
@@ -540,16 +589,15 @@ export async function createPost(
   // Retry slug allocation on unique constraint conflict (race condition)
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      await execute(
-        db,
-        `
+      await executeBatch(db, [{
+        query: `
         INSERT INTO posts (id, organization_id, site_id, location_id, slug, post_type, title, body, image_asset_id,
           seo_title, seo_description, og_image_asset_id,
           cta_type, cta_url, event_title, event_start, event_end, offer_coupon, offer_terms,
           status, scheduled_for, published_at, created_by, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
-        [
+        params: [
           id, organizationId, siteId,
           data.location_id ?? null, slug, data.post_type ?? 'standard',
           title, body, imageAssetId,
@@ -559,7 +607,7 @@ export async function createPost(
           data.offer_coupon ?? null, data.offer_terms ?? null,
           status, data.scheduled_for ?? null, publishedAt, createdBy, now, now,
         ],
-      )
+      }, ...postMediaInsertQueries(organizationId, siteId, id, imageAssetId, galleryMedia)])
       break
     } catch (err) {
       const message = String((err as ApiValue)?.message || err || '')
@@ -570,8 +618,6 @@ export async function createPost(
       throw err
     }
   }
-
-  await replacePostMedia(db, organizationId, siteId, id, imageAssetId, galleryMedia)
 
   const createdPost = await getPost(db, organizationId, siteId, id, env)
   if (!createdPost) throw new Error('Post not found after creation')
@@ -631,6 +677,8 @@ export async function updatePost(
     [postId, organizationId, siteId],
   )
   if (!existing) return null
+
+  validatePostInput(data, existing)
 
   const now = new Date().toISOString()
   const sets: string[] = ['updated_at = ?']
@@ -767,7 +815,7 @@ export async function publishPost(
   const publishedChannels = channels.filter(channel => channel === 'site')
 
   const post = await getPost(db, organizationId, siteId, postId, env)
-  if (post) {
+  if (post && existing.status !== 'published') {
     await fireSiteEventSafe({
       db,
       organizationId,

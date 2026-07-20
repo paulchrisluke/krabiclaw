@@ -878,6 +878,11 @@ export const oauthClient = sqliteTable("oauthClient", {
 	referenceId: text(),
 });
 
+export const oauthClientAssertion = sqliteTable("oauthClientAssertion", {
+	id: text().primaryKey(),
+	expiresAt: integer({ mode: "timestamp" }).notNull(),
+});
+
 export const oauthResource = sqliteTable("oauthResource", {
 	id: text().primaryKey(),
 	identifier: text().notNull().unique(),

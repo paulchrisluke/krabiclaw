@@ -86,7 +86,10 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       });
 
       return {
+        asset_id: uploaded.assetId,
         assetId: uploaded.assetId,
+        status: "active",
+        public_url: uploaded.publicUrl,
         publicUrl: uploaded.publicUrl,
         thumbnailUrl: uploaded.thumbnailUrl,
         kind: resolved.kind,
