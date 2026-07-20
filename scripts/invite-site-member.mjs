@@ -36,7 +36,7 @@ function buildInviteUrl(baseUrl, invitationId, siteId) {
 function runWranglerJson(targetArgs, sql) {
   const result = spawnSync(
     'yarn',
-    ['wrangler', 'd1', 'execute', 'DB', ...targetArgs, '--command', sql, '--json'],
+    ['--silent', 'wrangler', 'd1', 'execute', 'DB', ...targetArgs, '--command', sql, '--json'],
     { encoding: 'utf8' }
   )
 
