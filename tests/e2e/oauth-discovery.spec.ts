@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { createHash } from 'node:crypto'
-import { importJWK, SignJWT } from 'jose'
+import { decodeProtectedHeader, importJWK, SignJWT } from 'jose'
 import { devLoginHeaders, isDeployedWorkerTarget } from './test-env'
 
 const PRIVATE_CLIENT_TEST_KEY_ID = 'krabiclaw-cimd-e2e-rs256'
@@ -56,6 +56,11 @@ test.describe('OAuth discovery endpoints', () => {
     expect(typeof body.authorization_endpoint).toBe('string')
     expect(typeof body.token_endpoint).toBe('string')
     expect(typeof body.jwks_uri).toBe('string')
+    expect(Array.isArray(body.id_token_signing_alg_values_supported)).toBe(true)
+    // OpenID Connect Discovery requires RS256 support. ChatGPT validates the
+    // ID token after code exchange and will abort before MCP initialize when
+    // the provider advertises only Better Auth's EdDSA default.
+    expect(body.id_token_signing_alg_values_supported as string[]).toContain('RS256')
     expect(body.registration_endpoint).toBeUndefined()
     expect(body.client_id_metadata_document_supported).toBe(true)
   })
@@ -231,7 +236,10 @@ test.describe('OAuth discovery endpoints', () => {
       },
     })
     expect(token.status()).toBe(200)
-    expect((await token.json() as { access_token?: string }).access_token).toBeTruthy()
+    const tokenBody = await token.json() as { access_token?: string, id_token?: string }
+    expect(tokenBody.access_token).toBeTruthy()
+    expect(tokenBody.id_token).toBeTruthy()
+    expect(decodeProtectedHeader(tokenBody.id_token!).alg).toBe('RS256')
 
     const secondAuthorize = await request.get(oauthAuthorizeUrl(baseURL!, {
       ...authorizeParams,

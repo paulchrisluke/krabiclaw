@@ -71,6 +71,14 @@
               <div class="flex-1 h-px bg-default" />
             </div>
 
+            <AuthEmailSignInForm :callback-url="oauthAuthorizeUrl" />
+
+            <div class="flex items-center gap-3 py-1">
+              <div class="flex-1 h-px bg-default" />
+              <span class="text-[12px] text-dimmed uppercase tracking-[0.18em]">or</span>
+              <div class="flex-1 h-px bg-default" />
+            </div>
+
             <AuthPhoneOtpForm verify-label="Verify and sign in" @verified="finishOAuthPhoneSignIn" />
           </div>
         </div>
@@ -100,6 +108,7 @@ const oauthPrompt = computed(() =>
 const isSelectAccountFlow = computed(() =>
   oauthPrompt.value.split(' ').includes('select_account')
 )
+const oauthAuthorizeUrl = computed(() => `/api/auth/oauth2/authorize${route.fullPath.slice(route.path.length)}`)
 
 // ── Client metadata ───────────────────────────────────────────────────────────
 const clientName = ref('')

@@ -358,6 +358,13 @@
       "when": 1784510742022,
       "tag": "0057_daily_madripoor",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "6",
+      "when": 1784515663539,
+      "tag": "0058_volatile_dreadnoughts",
+      "breakpoints": true
     }
   ]
 }

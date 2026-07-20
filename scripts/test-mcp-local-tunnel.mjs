@@ -177,6 +177,20 @@ async function main() {
   console.log('# Preparing local D1 and the versioned widget asset')
   await run('yarn', ['schema:local'])
   await run('yarn', ['seed:local'])
+  let localCredentials = new Map()
+  if (runChatGPTGate) {
+    if (existsSync(resolve(root, '.env'))) localCredentials = parseEnv(readFileSync(resolve(root, '.env'), 'utf8'))
+    const localEmail = process.env.LOCAL_MCP_TEST_EMAIL || localCredentials.get('LOCAL_MCP_TEST_EMAIL') || ''
+    const localPassword = process.env.LOCAL_MCP_TEST_PASSWORD || localCredentials.get('LOCAL_MCP_TEST_PASSWORD') || ''
+    await run('node', ['scripts/provision-local-mcp-test-user.mjs'], {
+      ...process.env,
+      LOCAL_MCP_TEST_EMAIL: localEmail,
+      LOCAL_MCP_TEST_PASSWORD: localPassword,
+      MCP_CHATGPT_USER_ID: process.env.MCP_CHATGPT_USER_ID || 'user-mcp-managed',
+    })
+    localCredentials.set('LOCAL_MCP_TEST_EMAIL', localEmail)
+    localCredentials.set('LOCAL_MCP_TEST_PASSWORD', localPassword)
+  }
   await run('yarn', ['build:widgets'])
 
   console.log('# Starting a Cloudflare quick tunnel')
@@ -212,6 +226,8 @@ async function main() {
     PORT: String(port),
     MCP_CHATGPT_SITE_ID: process.env.MCP_CHATGPT_SITE_ID || 'site-mcp-managed',
     MCP_CHATGPT_USER_ID: process.env.MCP_CHATGPT_USER_ID || 'user-mcp-managed',
+    LOCAL_MCP_TEST_EMAIL: localCredentials.get('LOCAL_MCP_TEST_EMAIL') || '',
+    LOCAL_MCP_TEST_PASSWORD: localCredentials.get('LOCAL_MCP_TEST_PASSWORD') || '',
   }
 
   console.log('# Starting Nuxt with the generated Cloudflare env file')
@@ -229,8 +245,13 @@ async function main() {
   console.log('# Running Playwright MCP gates through the tunnel')
   await run('yarn', ['test:e2e:mcp', '--workers=1'], gateEnv)
 
+  const nuxtLog = readFileSync(resolve(artifactDir, 'nuxt.log'), 'utf8')
+  if (nuxtLog.includes('[Better Auth]: Error parsing JSON')) {
+    throw new Error('OAuth/CIMD registration emitted a Better Auth JSON parse error. See nuxt.log in the evidence directory.')
+  }
+
   if (runChatGPTGate) {
-    console.log('# Running the actual ChatGPT persistent-profile connector gate')
+    console.log('# Running the actual ChatGPT normal-browser connector gate')
     console.log(`# Configure or refresh ${process.env.CHATGPT_CONNECTOR_NAME || 'devkrabiclaw'} with: ${origin}/api/mcp`)
     await run('node', ['scripts/demo-recording/chatgpt-connector-test.mjs'], gateEnv)
   }

@@ -290,6 +290,13 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
     },
     plugins: [
       jwt({
+        jwks: {
+          // OpenID Connect Discovery requires RS256 support, and ChatGPT
+          // validates the returned ID token before it ever initializes MCP.
+          // Better Auth defaults to EdDSA, which produced a successful token
+          // response followed by ChatGPT's generic connection failure.
+          keyPairConfig: { alg: 'RS256' },
+        },
         jwt: {
           // Explicit issuer so oauthProvider's getOAuthServerConfig advertises the
           // same value as authorization_servers in /.well-known/oauth-protected-resource.
@@ -322,6 +329,13 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
         },
       }),
       oauthProvider({
+        schema: {
+          oauthClient: {
+            fields: {
+              scopes: 'scopesJson',
+            },
+          },
+        },
         loginPage: '/oauth/login',
         consentPage: '/oauth/consent',
         allowPublicClientPrelogin: true,
@@ -344,11 +358,17 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
             identifier: `${authBaseUrl}/api/mcp`,
             name: 'KrabiClaw tenant MCP',
             allowedScopes: ['openid', 'offline_access', 'tenant'],
+            // Pin access-token issuance so Better Auth lazily provisions the
+            // new RSA key before it creates the ID token. This safely rotates
+            // away from existing EdDSA rows while leaving their public keys
+            // available for already-issued token verification.
+            signingAlgorithm: 'RS256',
           },
           {
             identifier: `${authBaseUrl}/api/mcp/platform`,
             name: 'KrabiClaw platform MCP',
             allowedScopes: ['openid', 'offline_access', 'platform_admin'],
+            signingAlgorithm: 'RS256',
           },
         ],
         // Well-known metadata is served at /api/auth/.well-known/* by the plugin's

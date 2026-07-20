@@ -846,6 +846,11 @@ export const oauthClient = sqliteTable("oauthClient", {
 	clientSecret: text(),
 	name: text().notNull(),
 	redirectUris: text().notNull(),
+	// Better Auth models this field as string[]. The historical `scopes`
+	// column defaults to an invalid empty JSON string and cannot be altered
+	// safely without rebuilding this referenced table, so auth maps its logical
+	// scopes field to this additive canonical column instead.
+	scopesJson: text().default("[]").notNull(),
 	scopes: text().default("").notNull(),
 	public: integer().default(0).notNull(),
 	requirePkce: integer().default(1).notNull(),

@@ -40,17 +40,22 @@ yarn test:mcp:chatgpt
 
 This command owns its quick tunnel and Nuxt lifecycle too. It first reruns the
 automated API/Playwright prerequisites against that tunnel, then keeps the same
-origin alive for the actual ChatGPT run. The first run may pause once for
-ChatGPT login or connector enablement; configure `devkrabiclaw` with the exact
+origin alive for the actual ChatGPT run. Configure `devkrabiclaw` in your
+normal, human-controlled ChatGPT browser with the exact
 `https://<generated-origin>.trycloudflare.com/api/mcp` URL printed by the
-command. Later runs reuse `.playwright/chatgpt-profile`. The dedicated default
-fixture is `site-mcp-managed`; override it with `MCP_CHATGPT_SITE_ID` and
-`MCP_CHATGPT_USER_ID` together when intentionally testing another local fixture.
-This gate fails on ChatGPT connection
-errors, missing/errored telemetry, wrong site arguments, wrong persisted/public
-state, a missing widget, a failed real video upload, or a failed assignment.
-Screenshots plus a sanitized prompt/telemetry transcript are written under
-`.wrangler/chatgpt-connector/<run-id>/`.
+command. Do not use a Playwright-launched browser for ChatGPT or Google login;
+those hosts detect and block the automated browser. The terminal prints each
+golden prompt and independently polls KrabiClaw telemetry after you send it.
+
+The dedicated default fixture is `site-mcp-managed`; override it with
+`MCP_CHATGPT_SITE_ID` and `MCP_CHATGPT_USER_ID` together when intentionally
+testing another local fixture. This gate fails on a user-reported ChatGPT
+connection error, missing/errored telemetry, wrong site arguments, wrong
+persisted/public state, a missing widget, a failed real video upload, or a
+failed assignment. A sanitized prompt/telemetry transcript is written under
+`.wrangler/chatgpt-connector/<run-id>/`. Browser screenshots are not automated;
+capture one manually only when the ChatGPT UI itself shows a failure that server
+telemetry cannot describe.
 
 Neither command reports unit-test counts as MCP acceptance evidence.
 
@@ -208,8 +213,8 @@ Use the OAuth-true path when the bug involves:
 5. start Nuxt with that file and wait for OAuth discovery;
 6. run `check-local-mcp-harness.mjs --write-smoke` through the tunnel;
 7. run `PLAYWRIGHT_PREVIEW_URL=<tunnel> PLAYWRIGHT_WORKERS=1 yarn test:e2e:mcp`;
-8. when invoked by `yarn test:mcp:chatgpt`, run the actual ChatGPT profile gate
-   before the origin is stopped;
+8. when invoked by `yarn test:mcp:chatgpt`, pause for the normal-browser ChatGPT
+   actions and verify each expected call through telemetry before the origin is stopped;
 9. remove the env file and terminate its child processes.
 
 For manual inspection, all three discovery requests must return `200`, and
@@ -320,11 +325,16 @@ scripts. They do not help with the one step that still requires a human: the
 real Better Auth OAuth consent screen ChatGPT shows during connector setup and
 on reconnect.
 
-To avoid re-signing-up every time, add a standing test account's credentials
-to your local `.env` as `LOCAL_MCP_TEST_EMAIL` / `LOCAL_MCP_TEST_PASSWORD`
-(see [.env.mcp.local.example](../.env.mcp.local.example)) and reuse it at the
-real `/login` page when ChatGPT redirects there. Never commit real values for
-these — they stay local-only, same as any other `.env` secret.
+Add dedicated test credentials to your local `.env` as
+`LOCAL_MCP_TEST_EMAIL` / `LOCAL_MCP_TEST_PASSWORD` (see
+[.env.mcp.local.example](../.env.mcp.local.example)).
+`yarn test:mcp:chatgpt` hashes the password and provisions a credential account
+for the freshly seeded `user-mcp-managed` fixture in local D1. The OAuth login
+page then accepts those credentials through Better Auth's real email/password
+sign-in flow. The generated SQL file is mode `0600`, is always deleted, and the
+command never prints the email, password, or password hash. Never commit the
+values; the provisioning script is deliberately local-only and always invokes
+Wrangler with `--local`.
 
 ## Tool catalog size and `tools/list`
 
@@ -374,12 +384,15 @@ The agent can fully drive:
 - local tunnel preflight verification
 - Cloudflare tunnel contract verification against the real `krabiclaw-local` tunnel
 
-The human is required only for the first ChatGPT-hosted bootstrap:
+The human controls the ChatGPT UI in a normal browser:
 
-1. sign in to the persistent Playwright profile if it is new;
-2. connect/enable the quick-tunnel MCP URL in ChatGPT Developer Mode;
-3. approve OAuth.
+1. create or refresh the connector with the printed quick-tunnel MCP URL;
+2. sign in with the provisioned local test credentials and approve OAuth;
+3. open a new connector-enabled chat;
+4. copy each deterministic prompt printed by the terminal;
+5. choose the printed tiny-video fixture path when the widget opens.
 
-After that handoff, `yarn test:mcp:chatgpt` opens a new chat, sends the golden
-prompts, uploads the video through the widget, polls telemetry, verifies public
-state, captures evidence, and cleans up the created post/blog/video.
+After each Enter press, the terminal gate polls sanitized MCP telemetry for the
+expected tool, arguments, status, user, and site, then checks persisted/public
+state. It never controls or inspects ChatGPT's browser. On success or failure it
+records evidence and attempts to clean up the created post/blog/video.
