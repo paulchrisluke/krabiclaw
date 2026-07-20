@@ -31,9 +31,9 @@
     <div v-if="uploading" class="flex flex-col gap-1.5">
       <div class="flex items-center justify-between gap-2">
         <span class="text-xs font-medium text-default">Uploading...</span>
-        <span class="text-xs text-muted">Please don't close this tab</span>
+        <span class="text-xs text-muted">{{ Math.round(uploadProgress) }}%</span>
       </div>
-      <UProgress animation="carousel" color="primary" size="xs" />
+      <UProgress :value="uploadProgress" color="primary" size="xs" />
     </div>
 
     <!-- Error -->
@@ -161,6 +161,7 @@ const ALL_MEDIA_KIND = 'all'
 const assets = ref<MediaAsset[]>([])
 const loading = ref(false)
 const uploading = ref(false)
+const uploadProgress = ref(0)
 const uploadError = ref<string | null>(null)
 const isDragging = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -275,16 +276,41 @@ async function upload(file: File) {
 
 async function uploadImage(file: File) {
   uploading.value = true
+  uploadProgress.value = 0
   try {
     const { assetId, uploadUrl } = await $fetch<{ assetId: string; uploadUrl: string; imageId: string }>(
       `/api/dashboard/editor/media/request-upload`,
       { method: 'POST', body: { filename: file.name, locationId: props.locationId } }
     )
 
+    uploadProgress.value = 30
+
     const form = new FormData()
     form.append('file', file)
-    const res = await fetch(uploadUrl, { method: 'POST', body: form })
-    if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
+
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', uploadUrl)
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          uploadProgress.value = 30 + (e.loaded / e.total) * 50
+        }
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve()
+        } else {
+          reject(new Error(`Upload failed: ${xhr.status}`))
+        }
+      }
+
+      xhr.onerror = () => reject(new Error('Upload failed'))
+      xhr.send(form)
+    })
+
+    uploadProgress.value = 80
 
     const confirmEndpoint = `/api/dashboard/editor/media/${assetId}/confirm`
     let asset: MediaAsset | null = null
@@ -309,6 +335,7 @@ async function uploadImage(file: File) {
       throw new Error(`Confirmation failed for asset ${assetId}`)
     }
 
+    uploadProgress.value = 100
     toast.add({ title: 'File uploaded', color: 'success' })
     await loadAssets()
     emit('uploaded', asset)
@@ -316,6 +343,7 @@ async function uploadImage(file: File) {
     uploadError.value = getErrorMessage(err, 'Upload failed.')
   } finally {
     uploading.value = false
+    uploadProgress.value = 0
   }
 }
 
@@ -325,11 +353,39 @@ async function uploadVideo(file: File) {
     return
   }
   uploading.value = true
+  uploadProgress.value = 0
   try {
     const form = new FormData()
     form.append('file', file)
     if (props.locationId) form.append('locationId', props.locationId)
-    const asset = await $fetch<MediaAsset>(`/api/dashboard/editor/media/upload`, { method: 'POST', body: form })
+
+    const asset = await new Promise<MediaAsset>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', '/api/dashboard/editor/media/upload')
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          uploadProgress.value = (e.loaded / e.total) * 100
+        }
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const response = JSON.parse(xhr.responseText)
+            resolve(response)
+          } catch {
+            reject(new Error('Invalid response'))
+          }
+        } else {
+          reject(new Error(`Upload failed: ${xhr.status}`))
+        }
+      }
+
+      xhr.onerror = () => reject(new Error('Upload failed'))
+      xhr.send(form)
+    })
+
     toast.add({ title: 'File uploaded', color: 'success' })
     await loadAssets()
     emit('uploaded', asset)
@@ -337,6 +393,7 @@ async function uploadVideo(file: File) {
     uploadError.value = getErrorMessage(err, 'Upload failed.')
   } finally {
     uploading.value = false
+    uploadProgress.value = 0
   }
 }
 
