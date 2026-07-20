@@ -3,7 +3,8 @@
 // status, so the org billing page can show per-site plans under one Stripe customer.
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { queryAll, queryFirst } from '~/server/db'
+import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
+import { queryAll } from '~/server/db'
 
 interface SiteBillingRow {
   id: string
@@ -24,24 +25,11 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   const query = getQuery(event)
-  let organizationId = query.organizationId as string
-
-  if (!organizationId) {
-    const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string }
-    const activeOrganizationId = typeof sessionRecord.activeOrganizationId === 'string' ? sessionRecord.activeOrganizationId : ''
-    const userOrg = await queryFirst<{ id: string }>(db, `
-      SELECT o.id FROM organization o
-      JOIN member m ON o.id = m.organizationId
-      WHERE m.userId = ?
-      ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC
-      LIMIT 1
-    `, [session.user.id, activeOrganizationId])
-    if (!userOrg) return jsonResponse({ error: 'No organization found' }, { status: 404 })
-    organizationId = userOrg.id
-  }
-
-  const membership = await queryFirst(db, `SELECT role FROM member WHERE organizationId = ? AND userId = ? LIMIT 1`, [organizationId, session.user.id])
-  if (!membership) return jsonResponse({ error: 'Access denied' }, { status: 403 })
+  const organization = await resolveRequestedOrganization(event, db, session.user.id, {
+    explicitOrganizationId: typeof query.organizationId === 'string' ? query.organizationId : null,
+  })
+  if (!organization) return jsonResponse({ error: 'No organization found' }, { status: 404 })
+  const organizationId = organization.id
 
   const rows = await queryAll<SiteBillingRow>(db, `
     SELECT s.id, s.brand_name, s.subdomain,
