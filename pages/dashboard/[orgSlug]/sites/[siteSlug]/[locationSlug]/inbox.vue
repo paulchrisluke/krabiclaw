@@ -1,78 +1,30 @@
 <template>
-  <UPage>
-    <UPageBody class="px-0 sm:px-0">
-      <div class="flex min-h-[calc(100vh-12rem)] flex-col overflow-hidden rounded-2xl border border-default bg-default lg:grid lg:grid-cols-[340px_minmax(0,1fr)_320px]">
-        <aside
-          class="border-b border-default lg:block lg:border-b-0 lg:border-r"
-          :class="mobileView === 'thread' ? 'hidden' : 'block'"
-        >
-          <div class="border-b border-default px-4 py-4">
-            <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Guest Threads</p>
-            <h1 class="mt-1 text-xl font-semibold text-highlighted">Inbox</h1>
-            <p class="mt-1 text-sm text-muted">Unified guest conversations across contact, reservations, and bookings.</p>
+  <div class="flex flex-1 overflow-hidden lg:grid lg:grid-cols-[340px_minmax(0,1fr)_320px]">
+    <aside
+      class="border-b border-default lg:block lg:border-b-0 lg:border-r bg-elevated"
+      :class="mobileView === 'thread' ? 'hidden' : 'block'"
+    >
+          <div class="border-b border-default px-3.5 py-3.5">
+            <h1 class="text-xl font-semibold text-highlighted">Inbox</h1>
           </div>
 
-          <div class="space-y-3 border-b border-default px-4 py-4">
-            <input
+          <div class="border-b border-default px-3.5 py-3.5">
+            <UInput
               v-model="search"
-              type="search"
               placeholder="Search guest, email, subject…"
-              class="w-full rounded-xl border border-default bg-elevated px-3 py-2.5 text-sm outline-none transition focus:border-primary"
-            >
-
-            <div class="grid grid-cols-2 gap-2">
-              <select v-model="typeFilter" class="rounded-xl border border-default bg-elevated px-3 py-2 text-sm">
-                <option value="">All types</option>
-                <option value="contact">Contact</option>
-                <option value="reservation">Reservations</option>
-                <option value="experience_booking">Bookings</option>
-              </select>
-              <select v-model="inboxStatusFilter" class="rounded-xl border border-default bg-elevated px-3 py-2 text-sm">
-                <option value="">All states</option>
-                <option value="open">Open</option>
-                <option value="waiting_on_owner">Waiting on owner</option>
-                <option value="waiting_on_guest">Waiting on guest</option>
-                <option value="closed">Closed</option>
-              </select>
-            </div>
-
-            <label class="flex items-center gap-2 text-sm text-muted">
-              <input v-model="unreadOnly" type="checkbox" class="rounded border-default">
-              Unread only
-            </label>
+              icon="i-lucide-search"
+              size="sm"
+            />
           </div>
 
           <div class="max-h-[28rem] overflow-y-auto lg:max-h-none lg:min-h-0 lg:flex-1">
-            <button
+            <ThreadRow
               v-for="thread in threads"
               :key="thread.id"
-              type="button"
-              class="flex w-full flex-col gap-2 border-b border-default px-4 py-4 text-left transition hover:bg-elevated"
-              :class="selectedThreadId === thread.id ? 'bg-elevated' : ''"
-              @click="selectThread(thread.id)"
-            >
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                  <div class="flex items-center gap-2">
-                    <p class="truncate text-sm font-semibold text-highlighted">{{ thread.guest_name }}</p>
-                    <span v-if="thread.unread_count > 0" class="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-white">
-                      {{ thread.unread_count }}
-                    </span>
-                  </div>
-                  <p class="mt-1 truncate text-xs text-muted">{{ threadSecondaryLine(thread) }}</p>
-                </div>
-                <span class="shrink-0 text-[11px] text-muted">{{ formatRelative(thread.last_message_at || thread.created_at) }}</span>
-              </div>
-
-              <div class="flex flex-wrap items-center gap-2 text-[11px]">
-                <span class="rounded-full border border-default px-2 py-0.5 text-muted">{{ threadTypeLabel(thread.submission_type) }}</span>
-                <span class="rounded-full border border-default px-2 py-0.5 text-muted">{{ thread.location_title || 'Site-wide' }}</span>
-                <span class="rounded-full border border-default px-2 py-0.5 text-muted">{{ threadStateLabel(thread.inbox_status) }}</span>
-                <span class="rounded-full border border-default px-2 py-0.5 text-muted">{{ thread.operational_status }}</span>
-              </div>
-
-              <p class="line-clamp-2 text-sm text-default">{{ thread.last_message_preview || 'Open thread' }}</p>
-            </button>
+              :thread="thread"
+              :active="selectedThreadId === thread.id"
+              @select="selectThread"
+            />
 
             <div v-if="!loadingThreads && threads.length === 0" class="px-6 py-12 text-center">
               <UIcon name="i-lucide-inbox" class="mx-auto size-8 text-muted" />
@@ -83,10 +35,10 @@
         </aside>
 
         <section
-          class="min-h-0 flex-col border-b border-default lg:flex lg:border-b-0 lg:border-r"
+          class="min-h-0 flex-col border-b border-default lg:flex lg:border-b-0 lg:border-r bg-default"
           :class="mobileView === 'list' ? 'hidden' : 'flex'"
         >
-          <div class="border-b border-default px-4 py-4" v-if="selectedDetail">
+          <div class="border-b border-default px-3.5 py-3.5 bg-elevated" v-if="selectedDetail">
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div class="flex min-w-0 items-start gap-2">
                 <UButton
@@ -99,26 +51,18 @@
                   aria-label="Back to guest threads"
                   @click="closeMobileThread"
                 />
+                <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-default">
+                  {{ selectedDetail.thread.guest_name.charAt(0) }}
+                </div>
                 <div class="min-w-0">
-                  <h2 class="text-lg font-semibold text-highlighted">{{ selectedDetail.thread.guest_name }}</h2>
-                  <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
-                    <span>{{ threadTypeLabel(selectedDetail.thread.submission_type) }}</span>
-                    <span>•</span>
-                    <span>{{ selectedDetail.source.location_title || 'Site-wide' }}</span>
-                    <span>•</span>
-                    <span>{{ threadStateLabel(selectedDetail.thread.inbox_status) }}</span>
+                  <h2 class="text-sm font-semibold text-highlighted">{{ selectedDetail.thread.guest_name }}</h2>
+                  <div class="mt-1 flex flex-wrap items-center gap-2">
+                    <TypeBadge :type="selectedDetail.thread.submission_type" size="xs" />
+                    <UBadge variant="subtle" color="neutral" size="xs">{{ selectedDetail.source.location_title || 'Site-wide' }}</UBadge>
                   </div>
                 </div>
               </div>
-              <div class="flex gap-2">
-                <UButton size="sm" color="neutral" variant="ghost" @click="markSeen" :disabled="selectedDetail.thread.unread_count === 0">Mark seen</UButton>
-                <select v-model="selectedInboxStatus" class="rounded-xl border border-default bg-elevated px-3 py-2 text-sm" @change="updateInboxStatus">
-                  <option value="open">Open</option>
-                  <option value="waiting_on_owner">Waiting on owner</option>
-                  <option value="waiting_on_guest">Waiting on guest</option>
-                  <option value="closed">Closed</option>
-                </select>
-              </div>
+              <StatusBadge :status="selectedDetail.thread.inbox_status" size="xs" />
             </div>
           </div>
 
@@ -127,23 +71,25 @@
               <USkeleton v-for="i in 6" :key="i" class="h-16 rounded-xl" />
             </div>
             <div v-else-if="selectedDetail" class="flex h-full min-h-0 flex-col">
-              <div class="flex items-center gap-2 border-b border-default px-4 py-2 text-xs lg:hidden">
-                <button
-                  type="button"
-                  class="rounded-full px-3 py-1.5"
-                  :class="mobileTab === 'conversation' ? 'bg-primary text-white' : 'bg-elevated text-muted'"
-                  @click="mobileTab = 'conversation'"
-                >
-                  Conversation
-                </button>
-                <button
-                  type="button"
-                  class="rounded-full px-3 py-1.5"
-                  :class="mobileTab === 'details' ? 'bg-primary text-white' : 'bg-elevated text-muted'"
-                  @click="mobileTab = 'details'"
-                >
-                  Details
-                </button>
+              <div class="px-4 pb-0 pt-2.5 lg:hidden">
+                <div class="inline-flex gap-0.5 bg-muted border border-default rounded-lg p-0.5">
+                  <button
+                    type="button"
+                    class="h-7 px-3 rounded text-xs font-semibold border-0 cursor-pointer"
+                    :class="mobileTab === 'conversation' ? 'bg-elevated text-default shadow-sm' : 'bg-transparent text-muted'"
+                    @click="mobileTab = 'conversation'"
+                  >
+                    Conversation
+                  </button>
+                  <button
+                    type="button"
+                    class="h-7 px-3 rounded text-xs font-semibold border-0 cursor-pointer"
+                    :class="mobileTab === 'details' ? 'bg-elevated text-default shadow-sm' : 'bg-transparent text-muted'"
+                    @click="mobileTab = 'details'"
+                  >
+                    Details
+                  </button>
+                </div>
               </div>
 
               <div class="min-h-0 flex-1" :class="mobileTab === 'details' ? 'hidden lg:block' : 'block'">
@@ -152,6 +98,7 @@
                   :messages="selectedDetail.timeline"
                   :loading="replySaving"
                   :disabled="replySaving"
+                  :cancelable="false"
                   empty-title="No replies yet"
                   empty-description="This thread will grow here as guests reply."
                   @submit="sendReply"
@@ -169,74 +116,45 @@
         </section>
 
         <aside
-          class="min-h-0 overflow-y-auto"
+          class="min-h-0 overflow-y-auto bg-muted"
           :class="mobileView === 'list' || mobileTab === 'conversation' ? 'hidden lg:block' : 'block'"
         >
           <div v-if="selectedDetail" class="space-y-4 p-4">
-            <UCard :ui="{ body: 'p-4' }">
-              <h3 class="text-sm font-semibold text-highlighted">Guest</h3>
-              <div class="mt-3 space-y-2 text-sm">
-                <p><span class="text-muted">Name:</span> {{ selectedDetail.source.guest_name }}</p>
-                <p v-if="selectedDetail.source.guest_email"><span class="text-muted">Email:</span> {{ selectedDetail.source.guest_email }}</p>
-                <p v-if="selectedDetail.source.guest_phone"><span class="text-muted">Phone:</span> {{ selectedDetail.source.guest_phone }}</p>
+            <ContextCard title="Guest">
+              <div class="space-y-2">
+                <p class="font-semibold text-default">{{ selectedDetail.source.guest_name }}</p>
+                <p v-if="selectedDetail.source.guest_email" class="flex items-center gap-2 text-dimmed">
+                  <UIcon name="i-lucide-mail" class="size-3" />
+                  {{ selectedDetail.source.guest_email }}
+                </p>
+                <p v-if="selectedDetail.source.guest_phone" class="flex items-center gap-2 text-dimmed">
+                  <UIcon name="i-lucide-phone" class="size-3" />
+                  {{ selectedDetail.source.guest_phone }}
+                </p>
               </div>
-            </UCard>
+            </ContextCard>
 
-            <UCard :ui="{ body: 'p-4' }">
-              <h3 class="text-sm font-semibold text-highlighted">Submission details</h3>
-              <div class="mt-3 space-y-2 text-sm">
-                <template v-if="selectedDetail.source.submission_type === 'contact'">
-                  <p v-if="selectedDetail.source.subject"><span class="text-muted">Subject:</span> {{ selectedDetail.source.subject }}</p>
-                  <p v-if="selectedDetail.source.experience_title"><span class="text-muted">Regarding:</span> {{ selectedDetail.source.experience_title }}</p>
-                  <p><span class="text-muted">Submitted:</span> {{ formatDate(selectedDetail.source.created_at) }}</p>
-                  <p class="whitespace-pre-wrap"><span class="text-muted">Message:</span> {{ selectedDetail.source.message }}</p>
-                </template>
-                <template v-else-if="selectedDetail.source.submission_type === 'reservation'">
-                  <p><span class="text-muted">Location:</span> {{ selectedDetail.source.location_title }}</p>
-                  <p><span class="text-muted">Date:</span> {{ selectedDetail.source.date }}</p>
-                  <p><span class="text-muted">Time:</span> {{ selectedDetail.source.time }}</p>
-                  <p><span class="text-muted">Guests:</span> {{ selectedDetail.source.guests }}</p>
-                  <p v-if="selectedDetail.source.requests"><span class="text-muted">Requests:</span> {{ selectedDetail.source.requests }}</p>
-                </template>
-                <template v-else>
-                  <p><span class="text-muted">Location:</span> {{ selectedDetail.source.location_title }}</p>
-                  <p><span class="text-muted">Experience:</span> {{ selectedDetail.source.experience_title }}</p>
-                  <p><span class="text-muted">Date:</span> {{ selectedDetail.source.booking_date }}</p>
-                  <p><span class="text-muted">Time:</span> {{ selectedDetail.source.time_slot }}</p>
-                  <p><span class="text-muted">Party size:</span> {{ selectedDetail.source.party_size }}</p>
-                  <p v-if="selectedDetail.source.notes"><span class="text-muted">Notes:</span> {{ selectedDetail.source.notes }}</p>
-                </template>
-              </div>
-            </UCard>
+            <SubmissionDetails :source="selectedDetail.source" />
 
-            <UCard :ui="{ body: 'p-4' }">
-              <h3 class="text-sm font-semibold text-highlighted">Operational actions</h3>
-              <div class="mt-3 flex flex-wrap gap-2">
-                <template v-if="selectedDetail.source.submission_type === 'contact'">
-                  <UButton size="sm" color="neutral" variant="ghost" @click="updateContactStatus('read')">Mark read</UButton>
-                  <UButton size="sm" color="neutral" variant="soft" @click="updateContactStatus('replied')">Mark replied</UButton>
-                </template>
-                <template v-else-if="selectedDetail.source.submission_type === 'reservation'">
-                  <UButton size="sm" color="success" variant="ghost" @click="updateReservationStatus('confirmed')">Confirm</UButton>
-                  <UButton size="sm" color="neutral" variant="ghost" @click="updateReservationStatus('completed')">Complete</UButton>
-                  <UButton size="sm" color="error" variant="ghost" @click="updateReservationStatus('cancelled')">Cancel</UButton>
-                </template>
-                <template v-else>
-                  <UButton size="sm" color="success" variant="ghost" @click="updateBookingStatus('confirmed')">Confirm</UButton>
-                  <UButton size="sm" color="neutral" variant="ghost" @click="completeBooking">Complete</UButton>
-                  <UButton size="sm" color="error" variant="ghost" @click="updateBookingStatus('cancelled')">Cancel</UButton>
-                </template>
-              </div>
-            </UCard>
+            <OperationalActions
+              :type="selectedDetail.source.submission_type"
+              @confirm="handleConfirm"
+              @complete="handleComplete"
+              @cancel="handleCancel"
+            />
           </div>
         </aside>
       </div>
-    </UPageBody>
-  </UPage>
 </template>
 
 <script setup lang="ts">
 import GuestThreadConversation from '~/components/conversation/GuestThreadConversation.vue'
+import TypeBadge from '~/components/workspace/dashboard/TypeBadge.vue'
+import StatusBadge from '~/components/workspace/dashboard/StatusBadge.vue'
+import ContextCard from '~/components/workspace/dashboard/ContextCard.vue'
+import ThreadRow from '~/components/workspace/dashboard/ThreadRow.vue'
+import SubmissionDetails from '~/components/workspace/dashboard/SubmissionDetails.vue'
+import OperationalActions from '~/components/workspace/dashboard/OperationalActions.vue'
 
 definePageMeta({ layout: 'dashboard' })
 
@@ -337,12 +255,16 @@ const replySaving = ref(false)
 const mobileView = ref<'list' | 'thread'>('list')
 const mobileTab = ref<'conversation' | 'details'>('conversation')
 const search = ref('')
-const typeFilter = ref<string>('')
-const inboxStatusFilter = ref<string>('')
-const unreadOnly = ref(false)
 const selectedInboxStatus = ref<InboxStatus>('open')
 const { buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 const _headerLinks = computed(() => buildHeaderLinks())
+
+const statusOptions = computed(() => [
+  { label: 'Open', value: 'open' },
+  { label: 'Waiting on owner', value: 'waiting_on_owner' },
+  { label: 'Waiting on guest', value: 'waiting_on_guest' },
+  { label: 'Closed', value: 'closed' }
+])
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -359,9 +281,6 @@ async function loadThreads() {
       query: {
         location_id: selectedLocationId.value,
         search: search.value || undefined,
-        type: typeFilter.value || undefined,
-        inbox_status: inboxStatusFilter.value || undefined,
-        unread: unreadOnly.value ? '1' : undefined,
       },
     })
     threads.value = res.threads ?? []
@@ -575,6 +494,30 @@ async function completeBooking() {
   }
 }
 
+function handleConfirm() {
+  if (selectedDetail.value?.source.submission_type === 'reservation') {
+    updateReservationStatus('confirmed')
+  } else {
+    updateBookingStatus('confirmed')
+  }
+}
+
+function handleComplete() {
+  if (selectedDetail.value?.source.submission_type === 'reservation') {
+    updateReservationStatus('completed')
+  } else {
+    completeBooking()
+  }
+}
+
+function handleCancel() {
+  if (selectedDetail.value?.source.submission_type === 'reservation') {
+    updateReservationStatus('cancelled')
+  } else {
+    updateBookingStatus('cancelled')
+  }
+}
+
 function threadTypeLabel(type: SubmissionType) {
   if (type === 'contact') return 'Contact'
   if (type === 'reservation') return 'Reservation'
@@ -586,35 +529,6 @@ function threadStateLabel(status: InboxStatus) {
   if (status === 'waiting_on_guest') return 'Waiting on guest'
   return status.charAt(0).toUpperCase() + status.slice(1)
 }
-
-function threadSecondaryLine(thread: ThreadSummary) {
-  if (thread.submission_type === 'contact') return thread.experience_title || thread.subject || 'Website message'
-  if (thread.submission_type === 'reservation') return thread.last_message_preview || 'Reservation thread'
-  return thread.experience_title || 'Experience booking'
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value))
-}
-
-function formatRelative(value: string) {
-  const delta = Date.now() - new Date(value).getTime()
-  const minutes = Math.round(delta / 60000)
-  if (minutes < 60) return `${Math.max(minutes, 1)}m`
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) return `${hours}h`
-  const days = Math.round(hours / 24)
-  return `${days}d`
-}
-
-watch([typeFilter, inboxStatusFilter, unreadOnly], () => {
-  void loadThreads()
-})
 
 watch(search, () => {
   if (searchTimer) clearTimeout(searchTimer)

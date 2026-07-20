@@ -173,8 +173,8 @@
                 <span>{{ (credits.balance + credits.lifetime_used).toLocaleString() }} total granted</span>
               </div>
               <UProgress
-                :model-value="credits.lifetime_used"
-                :max="credits.balance + credits.lifetime_used || 1"
+                v-model="creditsUsageProgress"
+                :max="100"
                 :color="credits.balance < 50 ? 'error' : credits.balance < 200 ? 'warning' : 'primary'"
               />
             </div>
@@ -315,6 +315,13 @@ const { trackPlanViewed, trackCheckoutStarted, trackPaymentMethodAdded } = useAn
 const loading = ref(true)
 const billing = ref<ApiRecord | null>(null)
 const credits = ref<ApiRecord | null>(null)
+
+const creditsUsageProgress = computed(() => {
+  if (!credits.value) return 0
+  const total = credits.value.balance + credits.value.lifetime_used
+  if (total === 0) return 0
+  return (credits.value.lifetime_used / total) * 100
+})
 
 interface SiteBillingSummary {
   siteId: string

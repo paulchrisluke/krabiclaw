@@ -17,7 +17,7 @@
     </div>
 
     <UDashboardGroup unit="rem" :min-size="14" :default-size="18" :max-size="24">
-      <UDashboardSidebar resizable collapsible>
+      <UDashboardSidebar resizable collapsible class="dashboard-sidebar">
         <template #header="{ collapsed }">
           <template v-if="inLocationWorkspace">
             <div v-if="collapsed" class="flex items-center justify-center w-full">

@@ -48,7 +48,7 @@
               <div class="flex items-center justify-between text-xs text-muted">
                 <span>{{ checklistCompletedCount }} of {{ checklistItems.length }} complete</span>
               </div>
-              <UProgress :value="(checklistCompletedCount / checklistItems.length) * 100" class="h-1.5" />
+              <UProgress v-model="checklistProgress" class="h-1.5" />
             </div>
 
             <div class="space-y-2">
@@ -111,7 +111,7 @@
           <UCard>
             <p class="text-xs text-muted">AI Credits</p>
             <p class="mt-1 text-2xl font-semibold text-highlighted tabular-nums">{{ credits.balance.toLocaleString() }}</p>
-            <UProgress :model-value="credits.balance" :max="credits.balance + credits.lifetime_used"
+            <UProgress v-model="creditsProgress" :max="100"
               :color="credits.balance < 100 ? 'error' : credits.balance < 500 ? 'warning' : 'primary'" size="xs" class="mt-2" />
           </UCard>
           <UCard>
@@ -294,6 +294,17 @@ const checklistItems = computed(() => buildOnboardingChecklistItems(onboardingDa
 const checklistStarterPrompt = computed(() => buildOnboardingStarterPrompt(onboardingData.value, checklistItems.value))
 const checklistCompletedCount = computed(() => checklistItems.value.filter(i => i.complete).length)
 const checklistAllDone = computed(() => checklistItems.value.length > 0 && checklistCompletedCount.value === checklistItems.value.length)
+const checklistProgress = computed(() => {
+  if (checklistItems.value.length === 0) return 0
+  return (checklistCompletedCount.value / checklistItems.value.length) * 100
+})
+
+const creditsProgress = computed(() => {
+  if (!credits.value) return 0
+  const total = credits.value.balance + credits.value.lifetime_used
+  if (total === 0) return 0
+  return (credits.value.balance / total) * 100
+})
 
 const checklistDismissKey = computed(() => `kc_checklist_dismissed_${route.params.orgSlug}`)
 const checklistDismissed = ref(false)
