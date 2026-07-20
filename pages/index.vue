@@ -662,12 +662,12 @@ const featuredReviews = computed(() =>
 
 // Recent posts — shown in the "Lately" section (posts only, each links to /posts)
 const recentPosts = computed(() => {
-  const posts = (googlePosts.value || []).filter(p => p.media?.[0]?.googleUrl)
+  const posts = (googlePosts.value || []).filter(p => p.media?.[0]?.url)
   return posts.slice(0, 4).map((post, i) => ({
-    id: post.name?.split('/').pop() || String(i),
-    image: post.media?.[0]?.googleUrl || null,
+    id: post.slug || String(i),
+    image: post.media?.[0]?.url || null,
     imageKind: post.media?.[0]?.kind || 'image',
-    text: post.summary || post.name || '',
+    text: post.summary || '',
     alt: post.summary || 'Post image',
     wide: i === 0,
   }))

@@ -11,16 +11,16 @@
     <div :class="['grid gap-8', layoutClass]">
       <article
         v-for="(post, index) in displayedPosts"
-        :id="getPostSlug(post.name) || `post-${index}`"
-        :key="getPostSlug(post.name) || `post-${index}`"
+        :id="post.slug || `post-${index}`"
+        :key="post.slug || `post-${index}`"
         class="flex flex-col bg-default border border-default rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 group cursor-pointer"
         @click="openPost(post)"
       >
         <div class="aspect-4/5 overflow-hidden bg-muted relative">
           <template v-if="post.media?.[0]">
             <video
-              v-if="post.media[0].mediaFormat === 'VIDEO'"
-              :src="post.media[0].googleUrl"
+              v-if="post.media[0].kind === 'video'"
+              :src="post.media[0].url"
               autoplay
               muted
               loop
@@ -29,7 +29,7 @@
             />
             <img
               v-else
-              :src="post.media[0].googleUrl"
+              :src="post.media[0].url"
               :alt="post.title || t('saya.posts.image_alt')"
               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
@@ -93,52 +93,6 @@
         {{ t('saya.posts.view_all') }}
       </NuxtLink>
     </div>
-
-    <!-- Full-screen lightbox for post details -->
-    <SayaLightbox
-      v-if="selectedPost"
-      v-model:open="modalOpen"
-      :items="lightboxItems"
-      :index="0"
-      :title="selectedPost.title || t('saya.posts.business_update')"
-    >
-      <template #caption>
-        <time :datetime="selectedPost.createTime" class="text-[10px] text-white/60 font-bold uppercase tracking-widest mb-2 block">
-          {{ formatDate(selectedPost.createTime) }}
-        </time>
-        <div class="text-white/90 text-sm leading-relaxed whitespace-pre-line line-clamp-6">{{ selectedPost.summary }}</div>
-        <div v-if="selectedPost.event" class="mt-4 rounded-xl bg-white/10 backdrop-blur-md p-3 text-sm">
-          <p class="mb-1 font-bold text-white">{{ t('saya.posts.event_details_label') }}</p>
-          <p class="text-white/90">{{ selectedPost.event.title }} • {{ formatDate(selectedPost.event.startDate) }}</p>
-        </div>
-        <div v-if="selectedPost.offer" class="mt-4 rounded-xl bg-white/10 backdrop-blur-md p-3 text-sm">
-          <p class="mb-1 font-bold text-white">{{ t('saya.posts.special_offer_label') }}</p>
-          <p class="text-white/90">{{ selectedPost.offer.title }} <span v-if="selectedPost.offer.couponCode">• {{ t('saya.posts.code_label') }} {{ selectedPost.offer.couponCode }}</span></p>
-        </div>
-        <div v-if="selectedPostPath" class="mt-4 flex flex-wrap gap-2">
-          <NuxtLink
-            :to="selectedPostPath"
-            class="inline-flex items-center justify-center rounded-full bg-white px-5 py-2.5 text-base font-medium text-black no-underline transition hover:bg-zinc-200"
-          >
-            {{ t('saya.posts.read_full_story') }}
-          </NuxtLink>
-          <button
-            type="button"
-            class="inline-flex items-center justify-center rounded-full bg-white/15 px-5 py-2.5 text-base font-medium text-white transition hover:bg-white/25"
-            @click="copySelectedPostUrl"
-          >
-            {{ t('saya.posts.copy_link') }}
-          </button>
-        </div>
-        <NuxtLink
-          v-if="selectedPost.callToAction && selectedPost.callToAction.url"
-          :to="selectedPost.callToAction.url"
-          class="mt-4 inline-flex items-center justify-center rounded-full bg-white px-5 py-2.5 text-base font-medium text-black no-underline transition hover:bg-zinc-200"
-        >
-          {{ (selectedPost.callToAction.actionType ?? '').replaceAll('_', ' ') }}
-        </NuxtLink>
-      </template>
-    </SayaLightbox>
   </AppSection>
 </template>
 
@@ -157,38 +111,9 @@ const props = defineProps({
   showEmptyState: { type: Boolean, default: true }
 })
 
-const modalOpen = ref(false)
-const selectedPost = ref(null)
-const selectedPostPathOverride = ref('')
-
-async function openPost(post) {
-  const path = resolvePostPath(post)
-  if (path) {
-    await navigateTo(path)
-    return
-  }
-  openModal(post, '')
+function openPost(post) {
+  return navigateTo(resolvePostPath(post))
 }
-
-function openModal(post, path = '') {
-  selectedPost.value = post
-  selectedPostPathOverride.value = path
-  modalOpen.value = true
-}
-
-const lightboxItems = computed(() => {
-  const media = selectedPost.value?.media || selectedPost.value?.gallery || []
-  return media
-    .filter(item => item?.googleUrl || item?.url)
-    .map(item => ({
-      url: item.googleUrl || item.url,
-      kind: item.mediaFormat === 'VIDEO' || item.kind === 'video' ? 'video' : 'image',
-      alt: item.alt || item.altText || selectedPost.value.title || t('saya.posts.image_alt'),
-      description: item.caption || selectedPost.value.summary
-    }))
-})
-
-const selectedPostPath = computed(() => selectedPostPathOverride.value || (selectedPost.value ? resolvePostPath(selectedPost.value) : ''))
 
 const displayedPosts = computed(() => {
   return props.limit ? props.posts.slice(0, props.limit) : props.posts
@@ -205,19 +130,7 @@ const { formatDate } = useLocaleDate()
 
 const { t } = useI18n()
 
-// Helper to extract a safe slug from post.name (last path segment, no slashes)
-function getPostSlug(name) {
-  if (!name) return ''
-  return name.split('/').pop()
-}
-
 function resolvePostPath(post) {
   return post?.publicPath || post?.public_path || ''
-}
-
-async function copySelectedPostUrl() {
-  if (!selectedPostPath.value || !import.meta.client) return
-  const url = new URL(selectedPostPath.value, window.location.origin).toString()
-  await navigator.clipboard?.writeText(url)
 }
 </script>

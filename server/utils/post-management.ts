@@ -38,14 +38,11 @@ export interface PublicPostMedia {
   id?: string
   mediaAssetId?: string
   url: string
-  googleUrl: string
   thumbnailUrl?: string | null
   kind: 'image' | 'video'
-  mediaFormat: 'IMAGE' | 'VIDEO'
   role?: 'cover' | 'gallery'
   caption?: string | null
   alt?: string | null
-  altText?: string | null
   width?: number | null
   height?: number | null
 }
@@ -113,7 +110,6 @@ interface SiteUrlRow {
 interface PublishedPostSummary {
   id: string
   slug: string
-  name: string
   title: string
   summary: string
   createTime: string | null
@@ -417,14 +413,11 @@ function publicMediaFromRows(rows: PostMediaItem[] | undefined, fallback?: Publi
       id: row.id,
       mediaAssetId: row.media_asset_id,
       url: row.public_url!,
-      googleUrl: row.public_url!,
       thumbnailUrl: row.thumbnail_url,
       kind: row.kind === 'video' ? 'video' as const : 'image' as const,
-      mediaFormat: row.kind === 'video' ? 'VIDEO' as const : 'IMAGE' as const,
       role: row.role,
       caption: row.caption,
       alt: row.alt_text,
-      altText: row.alt_text,
       width: row.width ?? null,
       height: row.height ?? null,
     }))
@@ -432,13 +425,10 @@ function publicMediaFromRows(rows: PostMediaItem[] | undefined, fallback?: Publi
   return [{
     mediaAssetId: fallback.image_asset_id ?? undefined,
     url: fallback.public_url,
-    googleUrl: fallback.public_url,
     thumbnailUrl: fallback.thumbnail_url ?? null,
     kind: fallback.kind === 'video' ? 'video' : 'image',
-    mediaFormat: fallback.kind === 'video' ? 'VIDEO' : 'IMAGE',
     role: 'cover',
     alt: fallback.title ?? null,
-    altText: fallback.title ?? null,
     width: 'width' in fallback ? fallback.width ?? null : null,
     height: 'height' in fallback ? fallback.height ?? null : null,
   }]
@@ -469,7 +459,6 @@ function formatPublishedPost(row: PublishedPostRow, mediaRows: PostMediaItem[] |
   return {
     id: row.id,
     slug,
-    name: `posts/${slug}`,
     title: row.title ?? '',
     summary: row.body,
     createTime: row.published_at ?? row.created_at,
