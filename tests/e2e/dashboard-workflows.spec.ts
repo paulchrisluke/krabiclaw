@@ -18,8 +18,15 @@ test.describe('dashboard workflow smoke', () => {
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json()
-    const orgHeaders = dashboardOrgHeaders(context.organization.slug)
+    // A brand-new dev-login user has no organization yet (signup no longer
+    // auto-creates one — see server/utils/dashboard-context.ts), so the org
+    // slug isn't known until after ensureSite creates one via POST /api/sites.
     const siteId = await ensureSite(request, baseURL!, context.site?.id ?? null)
+
+    const contextAfterSiteRes = await request.get(`${baseURL}/api/dashboard/context`)
+    expect(contextAfterSiteRes.status()).toBe(200)
+    const contextAfterSite = await contextAfterSiteRes.json()
+    const orgHeaders = dashboardOrgHeaders(contextAfterSite.organization.slug)
 
     const subject = 'general'
 
