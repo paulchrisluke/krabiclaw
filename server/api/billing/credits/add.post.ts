@@ -23,6 +23,11 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody(event).catch(() => ({}))
 
+  const organization = await resolveRequestedOrganization(event, db, session.user.id)
+  if (!organization) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
+  const orgId = organization.id
+  const orgSlug = organization.slug
+
   // Dev-only direct top-up — accepts either { amount } or { bundle }
   if (import.meta.dev) {
     const raw = body.amount ?? body.bundle
@@ -33,10 +38,6 @@ export default defineEventHandler(async (event) => {
     if (!Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount)) {
       return jsonResponse({ error: 'amount must be a positive integer' }, { status: 400 })
     }
-    const organization = await resolveRequestedOrganization(event, db, session.user.id)
-    if (!organization) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
-
-    const orgId = organization.id
     const now = new Date().toISOString()
     await execute(db,
       `INSERT INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at, updated_at)
@@ -64,12 +65,6 @@ export default defineEventHandler(async (event) => {
   if (!priceId) {
     return jsonResponse({ error: 'Credit bundle not configured' }, { status: 503 })
   }
-
-  const organization = await resolveRequestedOrganization(event, db, session.user.id)
-  if (!organization) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
-
-  const orgId = organization.id
-  const orgSlug = organization.slug
 
   const billing = await queryFirst<{ stripe_customer_id: string | null }>(
     db, 'SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1', [orgId],

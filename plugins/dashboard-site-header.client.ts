@@ -58,9 +58,8 @@ export default defineNuxtPlugin(() => {
       options.headers = headers
     },
     onResponseError({ request, response }) {
-      if (typeof request !== 'string' || !request.startsWith('/api/dashboard')) return
-      const endpoint = typeof request === 'string' ? request : String(request)
-      trackApiError(endpoint, response.status, undefined)
+      if (typeof request !== 'string' || !request.startsWith('/api/')) return
+      trackApiError(request, response.status, undefined)
     },
   })
 })

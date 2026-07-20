@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   const organization = await resolveRequestedOrganization(event, db, session.user.id)
-  if (!organization) return jsonResponse({ card: null })
+  if (!organization) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
 
   try {
     await requireBillingAccess(env, db, organization.id, session.user.id)

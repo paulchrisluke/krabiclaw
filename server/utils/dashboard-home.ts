@@ -38,6 +38,14 @@ export interface DashboardHomeData {
   events: DashboardHomeEvent[]
 }
 
+function safeJsonParse(value: string): unknown {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
 // Shared by server/api/dashboard/home.get.ts and the dashboard home page's SSR
 // branch — see the "Nested SSR self-fetch loses Cloudflare bindings" rule in
 // CLAUDE.md for why the page can't just $fetch its own API route during SSR.
@@ -93,7 +101,7 @@ export async function getDashboardHomeData(db: DbClient, organizationId: string,
     credits,
     events: events.map(e => ({
       ...e,
-      metadata: e.metadata ? JSON.parse(e.metadata) : null,
+      metadata: e.metadata ? safeJsonParse(e.metadata) : null,
     })),
   }
 }

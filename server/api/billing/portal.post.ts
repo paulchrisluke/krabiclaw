@@ -56,14 +56,14 @@ export default defineEventHandler(async (event) => {
     }
 
     // Require billing access
-    await requireBillingAccess(env, db, organizationId, session.user.id)
+    await requireBillingAccess(env, db, resolvedOrganization.id, session.user.id)
 
     // Get organization with Stripe customer
     const organization = await queryFirst<{ slug: string | null; stripe_customer_id: string | null }>(db, `
       SELECT o.name, o.slug, b.stripe_customer_id FROM organization o
       LEFT JOIN organization_billing b ON o.id = b.organization_id
       WHERE o.id = ?
-    `, [organizationId])
+    `, [resolvedOrganization.id])
     
     if (!organization) {
       return jsonResponse({ 
