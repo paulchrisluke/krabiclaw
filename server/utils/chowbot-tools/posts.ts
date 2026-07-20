@@ -2,7 +2,7 @@ import type { AiTool } from '~/server/utils/ai-gateway'
 import { POSTS_TOOLS } from '~/server/utils/mcp-tools/posts'
 import { chowbotToolFromMcp } from './from-mcp'
 
-// open_post_media_upload is a ChatGPT-app UI widget (uiResourceUri).
+// Video widget launchers are tenant-MCP-only and live in mcp-tools/media.ts.
 // publish_post's channels/targets fields are derived along with everything
 // else, but chowbot-agent.ts's publish_post case always overrides channels
 // to ["site"] regardless of what's passed — ChowBot has no social_publishing

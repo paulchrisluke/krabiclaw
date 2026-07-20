@@ -20,10 +20,18 @@ export default defineEventHandler(async (event) => {
   let sql = `
     SELECT
       id,
+      organization_id,
+      site_id,
+      location_id,
+      user_id,
       mcp_surface,
+      request_id,
       method,
       tool_name,
       tool_domain,
+      is_mutating,
+      arguments_summary_json,
+      result_summary_json,
       status,
       error_code,
       error_message,

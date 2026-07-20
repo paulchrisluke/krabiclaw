@@ -8,6 +8,8 @@
   },
   "scripts": {
     "build": "nuxi build --preset=cloudflare-module",
+    "prebuild": "yarn build:widgets",
+    "build:widgets": "vite build --config vite.config.widgets.ts",
     "postbuild": "node patch.cjs",
     "build:cf": "nuxt build",
     "ai-search:sync": "node --experimental-strip-types scripts/ai-search-sync.ts",
@@ -93,6 +95,7 @@
     "client:deploy": "node scripts/client-deploy.mjs",
     "test:mcp": "node scripts/test-mcp-oauth.mjs",
     "test:mcp:local": "node scripts/check-local-mcp-harness.mjs",
+    "test:mcp:local:tunnel": "node scripts/test-mcp-local-tunnel.mjs",
     "test:mcp:auth-registration": "node scripts/check-mcp-auth-registration.mjs",
     "test:mcp:app": "node scripts/check-mcp-app-contract.mjs",
     "test:mcp:platform": "node scripts/check-platform-mcp-app-contract.mjs",
@@ -115,7 +118,9 @@
     "perf:lighthouse": "node scripts/lighthouse-check.mjs",
     "demo:record:list-devices": "bash scripts/demo-recording/list-avfoundation-devices.sh",
     "demo:record:web": "bash scripts/demo-recording/start-screen-recording.sh",
-    "demo:chatgpt:web": "node scripts/demo-recording/chatgpt-demo.mjs"
+    "demo:chatgpt:web": "node scripts/demo-recording/chatgpt-demo.mjs",
+    "test:mcp:chatgpt": "node scripts/test-mcp-local-tunnel.mjs --chatgpt",
+    "test:mcp:chatgpt:manual": "node scripts/demo-recording/chatgpt-connector-test.mjs"
   },
   "//resolutions": "kysely pinned to 0.28.17: @better-auth/kysely-adapter (bundled transitively by better-auth even though this app only uses drizzleAdapter) imports DEFAULT_MIGRATION_TABLE from the top-level kysely package, which kysely 0.29.x stopped re-exporting from its main barrel. That breaks yarn build's Nitro/Rollup bundling pass. Remove this pin once better-auth's kysely-adapter fixes its import path or drops the kysely dependency.",
   "resolutions": {

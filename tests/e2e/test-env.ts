@@ -155,3 +155,12 @@ export function devLoginHeaders(): Record<string, string> | undefined {
   const secret = testEnv('E2E_DEV_ROUTE_SECRET')
   return secret ? { 'x-dev-route-secret': secret } : undefined
 }
+
+// /api/dashboard/* routes resolve their org strictly from this header (see
+// resolveRequestedOrganization in server/utils/dashboard-context.ts) — the
+// session's activeOrganizationId is only consulted by the handful of callers
+// that opt out of URL-scoped context (e.g. /api/dashboard/context itself).
+// Any test hitting an org-scoped dashboard route must attach this.
+export function dashboardOrgHeaders(orgSlug: string): Record<string, string> {
+  return { 'x-dashboard-org-slug': orgSlug }
+}

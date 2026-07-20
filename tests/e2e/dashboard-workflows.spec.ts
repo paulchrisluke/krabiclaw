@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { ensureSite } from './helpers/ensure-site'
-import { devLoginHeaders, devLoginUrl } from './test-env'
+import { dashboardOrgHeaders, devLoginHeaders, devLoginUrl } from './test-env'
 
 test.describe('dashboard workflow smoke', () => {
   test('public contact submission writes a server-owned site event', async ({ request, baseURL }) => {
@@ -18,7 +18,15 @@ test.describe('dashboard workflow smoke', () => {
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json()
+    // A brand-new dev-login user has no organization yet (signup no longer
+    // auto-creates one — see server/utils/dashboard-context.ts), so the org
+    // slug isn't known until after ensureSite creates one via POST /api/sites.
     const siteId = await ensureSite(request, baseURL!, context.site?.id ?? null)
+
+    const contextAfterSiteRes = await request.get(`${baseURL}/api/dashboard/context`)
+    expect(contextAfterSiteRes.status()).toBe(200)
+    const contextAfterSite = await contextAfterSiteRes.json()
+    const orgHeaders = dashboardOrgHeaders(contextAfterSite.organization.slug)
 
     const subject = 'general'
 
@@ -32,7 +40,7 @@ test.describe('dashboard workflow smoke', () => {
     })
     expect(contactRes.status()).toBe(201)
 
-    const eventsRes = await request.get(`${baseURL}/api/dashboard/events?limit=50`)
+    const eventsRes = await request.get(`${baseURL}/api/dashboard/events?limit=50`, { headers: orgHeaders })
     expect(eventsRes.status()).toBe(200)
     const eventsBody = await eventsRes.json() as {
       events: Array<{ event_type: string; entity_type: string | null; metadata: Record<string, unknown> | null }>
@@ -51,8 +59,14 @@ test.describe('dashboard workflow smoke', () => {
     const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
     expect(login.status()).toBeLessThan(400)
 
+    const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
+    expect(contextRes.status()).toBe(200)
+    const context = await contextRes.json()
+    const orgHeaders = dashboardOrgHeaders(context.organization.slug)
+
     const title = `E2E Work Request ${Date.now()}`
     const postRes = await request.post(`${baseURL}/api/dashboard/work-requests`, {
+      headers: orgHeaders,
       data: {
         type: 'content_update',
         title,
@@ -77,7 +91,7 @@ test.describe('dashboard workflow smoke', () => {
     expect(body.success).toBe(true)
     expect(body.id).toEqual(expect.any(String))
 
-    const listRes = await request.get(`${baseURL}/api/dashboard/work-requests`)
+    const listRes = await request.get(`${baseURL}/api/dashboard/work-requests`, { headers: orgHeaders })
     expect(listRes.status()).toBe(200)
     const listBody = await listRes.json()
     expect(Array.isArray(listBody.requests)).toBe(true)

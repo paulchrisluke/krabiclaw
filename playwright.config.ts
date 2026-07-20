@@ -25,7 +25,9 @@ export default defineConfig({
   // Remote D1 write suites can opt back down with PLAYWRIGHT_WORKERS=1. Two
   // workers keeps the read-heavy smoke/path-gated suites quick without placing
   // unbounded pressure on the shared preview and staging databases.
-  workers: process.env.CI ? Number(process.env.PLAYWRIGHT_WORKERS || 2) : undefined,
+  workers: process.env.PLAYWRIGHT_WORKERS
+    ? Number(process.env.PLAYWRIGHT_WORKERS)
+    : process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL,

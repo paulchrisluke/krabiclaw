@@ -344,6 +344,34 @@
       "when": 1784211569075,
       "tag": "0055_woozy_beyonder",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "6",
+      "when": 1784506562446,
+      "tag": "0056_fancy_vargas",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "6",
+      "when": 1784510742022,
+      "tag": "0057_daily_madripoor",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "6",
+      "when": 1784515663539,
+      "tag": "0058_volatile_dreadnoughts",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "6",
+      "when": 1784524236622,
+      "tag": "0059_mysterious_doorman",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { devLoginHeaders, devLoginUrl } from './test-env'
+import { dashboardOrgHeaders, devLoginHeaders, devLoginUrl } from './test-env'
 
 test.describe('dashboard API smoke', () => {
   test('dashboard APIs work after dev login', async ({ request, baseURL }) => {
@@ -10,8 +10,9 @@ test.describe('dashboard API smoke', () => {
     expect(contextResponse.status()).toBe(200)
     const contextBody = await contextResponse.json()
     expect(contextBody.organization?.id).toEqual(expect.any(String))
+    const orgHeaders = dashboardOrgHeaders(contextBody.organization.slug)
 
-    const requestsResponse = await request.get(`${baseURL}/api/dashboard/work-requests`)
+    const requestsResponse = await request.get(`${baseURL}/api/dashboard/work-requests`, { headers: orgHeaders })
     expect(requestsResponse.status()).toBe(200)
     const requestsBody = await requestsResponse.json()
     expect(Array.isArray(requestsBody.requests)).toBe(true)
@@ -24,6 +25,7 @@ test.describe('dashboard API smoke', () => {
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json()
+    const orgHeaders = dashboardOrgHeaders(context.organization.slug)
     const siteId = context?.site?.id as string | undefined
     const hasSite = Boolean(siteId)
 
@@ -31,6 +33,7 @@ test.describe('dashboard API smoke', () => {
 
     if (!hasSite) {
       const saveRes = await request.post(`${baseURL}/api/dashboard/editor/content/save`, {
+        headers: orgHeaders,
         data: {
           page: 'home',
           changes: {
@@ -62,7 +65,7 @@ test.describe('dashboard API smoke', () => {
     const hero = contentBody.fields.find((entry) => entry.field === 'hero')
     expect(hero?.hero_title).toBe(uniqueTitle)
 
-    const eventsRes = await request.get(`${baseURL}/api/dashboard/events?limit=50`)
+    const eventsRes = await request.get(`${baseURL}/api/dashboard/events?limit=50`, { headers: orgHeaders })
     expect(eventsRes.status()).toBe(200)
     const eventsBody = await eventsRes.json() as {
       events: Array<{ event_type: string; entity_type: string | null; metadata: Record<string, unknown> | null }>

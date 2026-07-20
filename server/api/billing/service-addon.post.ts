@@ -4,6 +4,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, requireBillingAccess } from '~/server/utils/billing'
+import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import { execute, queryFirst, type DbClient } from '~/server/db'
 
 type AddonType = 'translation' | 'seasonal' | 'gbp_setup'
@@ -84,26 +85,15 @@ export default defineEventHandler(async (event) => {
     }, { status: 503 })
   }
 
-  // Resolve org from session
-  const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string }
-  const activeOrgId = typeof sessionRecord.activeOrganizationId === 'string'
-    ? sessionRecord.activeOrganizationId : ''
+  const organization = await resolveRequestedOrganization(event, db, session.user.id, {
+    explicitOrganizationId: body.organizationId ?? null,
+  })
+  if (!organization) return jsonResponse({ error: 'No organization found' }, { status: 404 })
 
-  const userOrg = await queryFirst<{ organizationId: string; slug: string | null }>(db, `
-    SELECT o.id AS organizationId, o.slug
-    FROM organization o
-    JOIN member m ON o.id = m.organizationId
-    WHERE m.userId = ?
-    ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC
-    LIMIT 1
-  `, [session.user.id, activeOrgId])
-
-  if (!userOrg) return jsonResponse({ error: 'No organization found' }, { status: 404 })
-
-  const orgId = userOrg.organizationId
+  const orgId = organization.id
   let orgSlug: string | null = null
   try {
-    orgSlug = await ensureOrganizationSlug(db, orgId, userOrg.slug)
+    orgSlug = await ensureOrganizationSlug(db, orgId, organization.slug)
   } catch (error) {
     console.error('Failed to ensure organization slug for service add-on checkout:', error)
   }

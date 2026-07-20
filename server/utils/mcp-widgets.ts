@@ -5,7 +5,8 @@
 
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 
-export const MEDIA_UPLOAD_WIDGET_RESOURCE_URI = "ui://media-upload";
+export const VIDEO_UPLOAD_WIDGET_RESOURCE_URI = "ui://widget/video-upload@v1.html";
+export const VIDEO_UPLOAD_WIDGET_ASSET_PATH = "/mcp-assets/video-upload-widget.v1.js";
 
 export interface McpAppResourceDefinition {
   uri: string;
@@ -16,9 +17,9 @@ export interface McpAppResourceDefinition {
 
 export const MCP_APP_RESOURCES: McpAppResourceDefinition[] = [
   {
-    uri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
-    name: "KrabiClaw Media Upload",
-    description: "Inline image/video upload widget for the tenant media library.",
+    uri: VIDEO_UPLOAD_WIDGET_RESOURCE_URI,
+    name: "KrabiClaw Video Upload",
+    description: "Inline video upload widget for the tenant media library.",
     mimeType: "text/html;profile=mcp-app",
   },
 ];
@@ -36,17 +37,17 @@ export interface McpAppResourceContent {
   };
 }
 
-function mediaUploadWidgetHtml(baseUrl: string): string {
+function videoUploadWidgetHtml(baseUrl: string): string {
   return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>KrabiClaw Media Upload</title>
+    <title>KrabiClaw Video Upload</title>
   </head>
   <body>
     <div id="app"></div>
-    <script src="${baseUrl}/mcp-assets/media-upload-widget.js"></script>
+    <script src="${baseUrl}${VIDEO_UPLOAD_WIDGET_ASSET_PATH}"></script>
   </body>
 </html>`;
 }
@@ -61,7 +62,7 @@ export async function readMcpAppResource(
   }
 
   const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
-  const text = mediaUploadWidgetHtml(normalizedBaseUrl);
+  const text = videoUploadWidgetHtml(normalizedBaseUrl);
 
   let origin: string;
   try {

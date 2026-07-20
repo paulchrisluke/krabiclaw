@@ -45,7 +45,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'create_blog_post',
-      description: 'Create a draft blog post for this site by default. Always review the draft at edit_url in the tenant-themed editor. Set publish=true only when explicitly requested; scheduled_for schedules publication. category is free text for tenant blogs.',
+      description: 'Create a long-form, evergreen, SEO-indexed article (site history, guides, "why choose us") as a draft by default. Always review the draft at edit_url in the tenant-themed editor. Set publish=true only when explicitly requested; scheduled_for schedules publication. category is free text for tenant blogs. For time-boxed, social-style announcements (tonight\'s event, a limited offer) that publish immediately and can fan out to Facebook/Instagram/GMB, use create_post instead.',
       domain: 'blog',
       minimumRole: 'editor',
       confirmRequired: false,

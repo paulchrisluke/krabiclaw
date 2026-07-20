@@ -67,6 +67,76 @@ interface DashboardContextOptions {
   requireOrganization?: boolean
 }
 
+export interface ResolveOrganizationOptions {
+  // From an explicit caller-supplied param (e.g. billing's body/query organizationId).
+  // Still membership-checked — never trusted outright.
+  explicitOrganizationId?: string | null
+  // The Better Auth session's session.activeOrganizationId, if the caller wants it
+  // considered at all. Pass null/undefined to make this resolution strictly
+  // header/explicit-param-only (the required behavior for billing and any other
+  // URL-scoped route — a stale session-wide active org must never silently stand
+  // in for the org actually named in the request).
+  activeOrganizationId?: string | null
+}
+
+// The one place "which org is this request for" gets decided. Both explicit params
+// and the x-dashboard-org-slug header are membership-checked before being trusted;
+// if both are present and disagree, that's a client bug (stale cached org id vs.
+// current URL) and must fail loudly rather than silently pick one. activeOrganizationId
+// is the last resort and only consulted when the caller explicitly passes it in —
+// callers that have URL context (any /dashboard/{orgSlug}/... or billing/integration
+// route reachable from one) must never pass it.
+export async function resolveRequestedOrganization(
+  event: H3Event,
+  db: DbClient,
+  userId: string,
+  options: ResolveOrganizationOptions = {}
+): Promise<DashboardOrganizationRow | null> {
+  const organizationSlug = getHeader(event, 'x-dashboard-org-slug')
+  const explicitOrganizationId = options.explicitOrganizationId ?? null
+
+  const headerOrg = organizationSlug
+    ? await queryFirst<DashboardOrganizationRow>(db, `
+        SELECT o.id, o.name, o.slug, o.logo, m.role, m.id AS memberId
+        FROM organization o
+        JOIN member m ON o.id = m.organizationId
+        WHERE m.userId = ? AND o.slug = ?
+        LIMIT 1
+      `, [userId, organizationSlug])
+    : null
+
+  if (explicitOrganizationId) {
+    if (headerOrg && headerOrg.id !== explicitOrganizationId) {
+      throw createError({
+        statusCode: 400,
+        message: 'Organization context conflict: the requested organization does not match the current dashboard context.',
+      })
+    }
+    if (headerOrg) return headerOrg
+
+    return await queryFirst<DashboardOrganizationRow>(db, `
+      SELECT o.id, o.name, o.slug, o.logo, m.role, m.id AS memberId
+      FROM organization o
+      JOIN member m ON o.id = m.organizationId
+      WHERE m.userId = ? AND o.id = ?
+      LIMIT 1
+    `, [userId, explicitOrganizationId])
+  }
+
+  if (headerOrg) return headerOrg
+
+  const activeOrganizationId = options.activeOrganizationId ?? null
+  if (!activeOrganizationId) return null
+
+  return await queryFirst<DashboardOrganizationRow>(db, `
+    SELECT o.id, o.name, o.slug, o.logo, m.role, m.id AS memberId
+    FROM organization o
+    JOIN member m ON o.id = m.organizationId
+    WHERE m.userId = ? AND o.id = ?
+    LIMIT 1
+  `, [userId, activeOrganizationId])
+}
+
 async function resolveSingleOrgSite(db: DbClient, organizationId: string): Promise<DashboardSiteRow | null> {
   const sites = await queryAll<DashboardSiteRow>(db, `
     SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
@@ -137,37 +207,18 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     throw createError({ statusCode: 401, message: 'Authentication required' })
   }
 
-  const organizationSlug = getHeader(event, 'x-dashboard-org-slug')
+  // Session-wide activeOrganizationId is only ever considered when this specific
+  // caller has declared it has no URL-scoped org context (requireOrganization: false —
+  // the dashboard boot-discovery endpoint and the notifications badge, both of which
+  // run outside any /dashboard/{orgSlug}/... route). Every other caller must resolve
+  // strictly from x-dashboard-org-slug; a missing header there is a real error, not
+  // a cue to guess from a session field that can be stale relative to the URL.
   const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string | null }
-  const activeOrganizationId = typeof sessionRecord.activeOrganizationId === 'string'
+  const activeOrganizationId = options.requireOrganization === false && typeof sessionRecord.activeOrganizationId === 'string'
     ? sessionRecord.activeOrganizationId
     : null
-  if (!organizationSlug && !activeOrganizationId && options.requireOrganization !== false) {
-    throw createError({
-      statusCode: 400,
-      message: 'Organization context is required. Use /dashboard/{orgSlug} routes or select an active organization.',
-    })
-  }
 
-  const organization = organizationSlug
-    ? await queryFirst<DashboardOrganizationRow>(db, `
-    SELECT o.id, o.name, o.slug, o.logo, m.role, m.id AS memberId
-    FROM organization o
-    JOIN member m ON o.id = m.organizationId
-    WHERE m.userId = ?
-      AND o.slug = ?
-    LIMIT 1
-  `, [session.user.id, organizationSlug])
-    : activeOrganizationId
-      ? await queryFirst<DashboardOrganizationRow>(db, `
-    SELECT o.id, o.name, o.slug, o.logo, m.role, m.id AS memberId
-    FROM organization o
-    JOIN member m ON o.id = m.organizationId
-    WHERE m.userId = ?
-      AND o.id = ?
-    LIMIT 1
-  `, [session.user.id, activeOrganizationId])
-    : null
+  const organization = await resolveRequestedOrganization(event, db, session.user.id, { activeOrganizationId })
 
   if (!organization) {
     if (options.requireOrganization === false) {
@@ -180,7 +231,13 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         site: null,
       }
     }
-    throw createError({ statusCode: 404, message: 'Organization not found' })
+    const hasHeader = Boolean(getHeader(event, 'x-dashboard-org-slug'))
+    throw createError({
+      statusCode: hasHeader ? 404 : 400,
+      message: hasHeader
+        ? 'Organization not found'
+        : 'Organization context is required. Use /dashboard/{orgSlug} routes.',
+    })
   }
   assertDashboardPathPermission(organization.role, event.path)
 

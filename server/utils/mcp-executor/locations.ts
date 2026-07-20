@@ -5,7 +5,6 @@ import { createLocation, deleteLocation, syncLocationWhatsAppAccess, updateLocat
 import { getLocationForMcp, hydrateSeededLocationForOnboarding } from '~/server/utils/mcp-workflows'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, omit, optionalString, requireActiveImageAsset, requireActiveVideoAsset, requiredString, requiredStringArray, workspaceContextPayload, workspaceLocationsPayload } from './shared'
 import { queryFirst } from '~/server/db'
 
@@ -357,19 +356,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         },
         `Cleared hero video for "${clearedVideoLocation.title}".`,
         { location: clearedVideoLocation },
-      );
-    }
-    case "open_location_media_upload": {
-      const locationId = requiredString(args, "location_id");
-      const accept = optionalString(args, "accept") ?? "both";
-      return renderStructuredResponse(
-        {
-          launched: true,
-          resourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
-          location_id: locationId,
-          context: { site_id: site.siteId, location_id: locationId, accept },
-        },
-        "Media upload widget launched for this location.",
       );
     }
     case "delete_location": {

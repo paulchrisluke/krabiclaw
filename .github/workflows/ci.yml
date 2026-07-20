@@ -148,10 +148,35 @@ jobs:
               - 'server/api/**/reservations/**'
               - 'tests/e2e/notifications.spec.ts'
             mcp:
+              - '.github/workflows/ci.yml'
+              - 'build/cloudflare-dev-module.ts'
+              - 'build/runtime/cloudflare-bindings-dev.ts'
+              - 'docs/local-mcp-harness.md'
+              - 'docs/media-workflow-contract.md'
+              - 'migrations/**'
+              - 'nuxt.config.ts'
+              - 'package.json'
+              - 'pages/oauth/login.vue'
+              - 'playwright.config.ts'
+              - 'scripts/check-*mcp*.mjs'
+              - 'scripts/demo-recording/**'
+              - 'scripts/test-mcp-local-tunnel.mjs'
+              - 'server/api/auth/**'
+              - 'server/api/dev/mcp-telemetry.get.ts'
+              - 'server/api/mcp-test/tiny-video.get.ts'
               - 'server/api/mcp.post.ts'
+              - 'server/db/schema.ts'
+              - 'server/middleware/00.r2-media.ts'
+              - 'server/middleware/dev-connector-logging.ts'
+              - 'server/utils/auth.ts'
               - 'server/utils/mcp*/**'
               - 'server/utils/mcp*'
               - 'tests/e2e/mcp.spec.ts'
+              - 'tests/e2e/oauth-discovery.spec.ts'
+              - 'types/nitro.d.ts'
+              - 'vite.config.widgets.ts'
+              - 'widgets/**'
+              - 'wrangler.toml'
             seo:
               - 'app.vue'
               - 'layouts/**'
@@ -321,8 +346,10 @@ jobs:
           PLAYWRIGHT_PREVIEW_URL: https://preview.krabiclaw.com
           POTTERY_HOUSE_CHANGED: ${{ needs.changes.outputs.pottery_house }}
           BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
+          MCP_CHANGED: ${{ needs.changes.outputs.mcp }}
         run: |
           yarn test:e2e:smoke
+          [ "$MCP_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:mcp
           if [ "$POTTERY_HOUSE_CHANGED" = "true" ]; then
             yarn test:e2e:pottery-house
           fi

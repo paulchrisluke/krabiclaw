@@ -261,12 +261,51 @@ interface SiteEvent {
   actor_name: string | null; actor_image: string | null; location_title: string | null
 }
 
+const requestEvent = useRequestEvent()
+
 const { data, pending } = await useAsyncData(
   `dashboard-home-${route.params.orgSlug}-${route.params.siteSlug}`,
   async () => {
-    const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined
+    // Bypass the self-fetch entirely on the server — see "Nested SSR self-fetch
+    // loses Cloudflare bindings" in CLAUDE.md. dashboardState.refresh() does its
+    // own $fetch to /api/dashboard/context, which has the exact same nested-fetch
+    // problem during SSR — call getDashboardContext directly against the real
+    // request event instead, and only use dashboardState.refresh() client-side.
+    if (import.meta.server) {
+      if (!requestEvent) {
+        throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      }
+
+      const [{ cloudflareEnv }, { getDashboardContext }, { getDashboardHomeData }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/dashboard-context'),
+        import('~/server/utils/dashboard-home'),
+      ])
+
+      // getDashboardContext resolves org/site from the x-dashboard-org-slug/site-slug
+      // headers (see plugins/dashboard-site-header.client.ts), which the real inbound
+      // SSR request never carries — this route's params are already the authoritative
+      // source for them, so set the headers directly on the real event rather than
+      // re-deriving them through a second fetch.
+      const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
+      const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
+      if (orgSlug) requestEvent.node.req.headers['x-dashboard-org-slug'] = orgSlug
+      if (siteSlug) requestEvent.node.req.headers['x-dashboard-site-slug'] = siteSlug
+
+      // requireOrganization defaults to true, so a missing/inaccessible organization
+      // throws here rather than needing a manual null check. A missing site is a
+      // legitimate state (mirrors home.get.ts's own `!site` branch, e.g. onboarding
+      // in progress) and returns empty data rather than erroring.
+      const context = await getDashboardContext(requestEvent, { requireSite: false })
+      if (!context.site) return { locations: [], credits: null, events: [] }
+
+      const db = cloudflareEnv(requestEvent).db
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+      return await getDashboardHomeData(db, context.organization.id, context.site.id)
+    }
+
     await dashboardState.refresh()
-    return $fetch<{ locations: Location[]; credits: Credits | null; events: SiteEvent[] }>('/api/dashboard/home', { headers })
+    return $fetch<{ locations: Location[]; credits: Credits | null; events: SiteEvent[] }>('/api/dashboard/home')
   },
   // Reuse the SSR payload on first hydration (avoids a redundant duplicate fetch
   // on initial load), but force a fresh fetch on every subsequent client-side

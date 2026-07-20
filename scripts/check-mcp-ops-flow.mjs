@@ -238,21 +238,18 @@ async function main() {
   expectStatus('publish_post succeeds', postPublish)
   expectValue('publish_post returns published post id', Boolean(data(postPublish.body)?.id), postPublish.body)
 
-  // social_publishing is gated behind CONVERSATIONAL_TOOLS_SOCIAL_PUBLISHING_ENABLED
-  // (server/utils/conversational-tool-surface.ts) and is off by default in every
-  // environment, so a facebook-only publish rejects before ever reaching the
-  // facebook-connection check — expect the surface-disabled error, not a 409.
-  const socialOnlyPublish = await mcp(headers, 'publish_post', {
+  const combinedPublish = await mcp(headers, 'publish_post', {
     site_id: siteId,
     post_id: postId,
-    channels: ['facebook'],
+    channels: ['site', 'facebook'],
   })
-  expectStatus('publish_post with disconnected facebook is rejected', socialOnlyPublish, 400)
+  expectStatus('publish_post keeps site success when facebook is disconnected', combinedPublish)
+  const combinedOutcome = data(combinedPublish.body)?.channel_outcomes
   expectValue(
-    'publish_post with disconnected facebook explains social publishing is unavailable',
-    typeof socialOnlyPublish.body?.error?.message === 'string'
-      && socialOnlyPublish.body.error.message.includes('Social publishing is not exposed'),
-    socialOnlyPublish.body,
+    'publish_post reports site published and facebook skipped',
+    combinedOutcome?.site?.status === 'published'
+      && combinedOutcome?.facebook?.status === 'skipped',
+    combinedPublish.body,
   )
 
   const posts = await mcp(headers, 'list_posts', { site_id: siteId })

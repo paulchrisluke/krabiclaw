@@ -1,5 +1,5 @@
 import type { McpExecutorContext } from './shared'
-import { execute, queryAll, queryFirst } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { createError } from 'h3'
 import { createPost, deletePost, getPost, listPosts, PostValidationError, publishPost, updatePost } from '~/server/utils/post-management'
@@ -7,7 +7,6 @@ import { getFacebookPagesConnection, getLinkedInstagramAccount, publishToInstagr
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { isConversationalToolGroupEnabled } from '~/server/utils/conversational-tool-surface'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 import { attachViewUrlToRecord, NOT_HANDLED, mutationContextPayload, normalizeChannelsInput, omit, optionalString, requireActiveImageAsset, requiredString } from './shared'
 
 async function asMcpValidationError<T>(work: () => Promise<T>): Promise<T> {
@@ -146,53 +145,30 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         { post: hydratedSetImagePost },
       );
     }
-    case "open_post_media_upload": {
-      const postId = requiredString(args, "post_id");
-      return renderStructuredResponse(
-        {
-          launched: true,
-          resourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
-          post_id: postId,
-          context: { site_id: site.siteId, post_id: postId, accept: "image" },
-        },
-        "Media upload widget launched for this post.",
-      );
-    }
     case "publish_post": {
       const channels = normalizeChannelsInput(args);
-      if (
-        channels.some((channel) => channel !== "site") &&
-        !isConversationalToolGroupEnabled(site.env, "social_publishing")
-      ) {
-        throw mcpProtocolError(
-          MCP_ERROR.invalidParams,
-          "Social publishing is not exposed on this conversational surface. Publish to the site here, or use the dashboard for Facebook, Instagram, and Google Business publishing.",
-        );
-      }
       const postId = requiredString(args, "post_id");
       const wantsFacebook = channels.includes("facebook");
       const wantsInstagram = channels.includes("instagram");
+      const wantsGmb = channels.includes("gmb");
+      const socialEnabled = isConversationalToolGroupEnabled(site.env, "social_publishing");
 
       let facebookConnection: Awaited<ReturnType<typeof getFacebookPagesConnection>> | null = null;
+      let socialSkipReason: string | null = null;
       if (wantsFacebook || wantsInstagram) {
-        if (!(await hasSiteEntitlement(site.db, site.siteId, "managed_service"))) {
-          throw createError({
-            statusCode: 403,
-            statusMessage:
-              "Facebook and Instagram publishing require a Managed or SEO Accelerator plan.",
-          });
-        }
-        facebookConnection = await getFacebookPagesConnection(
-          site.env as never,
-          site.organizationId,
-          site.siteId,
-        );
-        if (!facebookConnection?.facebook_page_id || !facebookConnection.encrypted_page_token) {
-          throw createError({
-            statusCode: 409,
-            statusMessage:
-              "Connect a Facebook Page before publishing to Facebook or Instagram.",
-          });
+        if (!socialEnabled) {
+          socialSkipReason = "social_publishing_disabled";
+        } else if (!(await hasSiteEntitlement(site.db, site.siteId, "managed_service"))) {
+          socialSkipReason = "not_entitled";
+        } else {
+          facebookConnection = await getFacebookPagesConnection(
+            site.env as never,
+            site.organizationId,
+            site.siteId,
+          );
+          if (!facebookConnection?.facebook_page_id || !facebookConnection.encrypted_page_token) {
+            socialSkipReason = "not_connected";
+          }
         }
       }
 
@@ -208,7 +184,24 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         throw createError({ statusCode: 404, statusMessage: "Post not found" });
       const now = new Date().toISOString();
 
-      if (wantsFacebook || wantsInstagram) {
+      if (socialSkipReason) {
+        const unavailableChannels = channels.filter(channel => channel === "facebook" || channel === "instagram");
+        if (unavailableChannels.length > 0) {
+          await executeBatch(site.db, unavailableChannels.map(channel => ({
+            query: `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = ?`,
+            params: [socialSkipReason, postId, channel],
+          })));
+        }
+      }
+      if (wantsGmb) {
+        await execute(
+          site.db,
+          `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'gmb'`,
+          ["not_connected", postId],
+        );
+      }
+
+      if ((wantsFacebook || wantsInstagram) && !socialSkipReason) {
         const pageToken = facebookConnection!.encrypted_page_token!;
         const pageId = facebookConnection!.facebook_page_id!;
 
@@ -306,6 +299,9 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
       const publishedChannels = channelJobs.filter(j => j.status === 'published').map(j => j.channel);
       const failedChannels = channelJobs.filter(j => j.status === 'failed').map(j => ({ channel: j.channel, error: j.error }));
       const skippedChannels = channelJobs.filter(j => j.status === 'skipped').map(j => ({ channel: j.channel, error: j.error }));
+      const channelOutcomes = Object.fromEntries(channelJobs
+        .filter(job => channels.includes(job.channel as never) && job.status !== 'pending')
+        .map(job => [job.channel, { status: job.status, ...(job.error ? { reason: job.error } : {}) }]));
 
       const publishContext = await mutationContextPayload(site, {
         locationId: post && typeof post.location_id === "string" ? post.location_id : null,
@@ -336,6 +332,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           slug: post.slug,
           public_url: hydratedPublishedPost?.public_url ?? null,
           channels: publishedChannels,
+          channel_outcomes: channelOutcomes,
           context: publishContext,
           ...(hasFailures ? {
             failed_channels: failedChannels,

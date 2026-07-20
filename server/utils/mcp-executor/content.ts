@@ -4,7 +4,6 @@ import { deleteContentField, getEditorContent, updateHomeHero, updatePageContent
 import { getProfessionalServiceContent, upsertProfessionalServiceContent } from '~/server/utils/professional-services-editor'
 import { getMediaAsset } from '~/server/utils/media-asset-manager'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { MEDIA_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 import { attachViewUrlToRecord, NOT_HANDLED, getCurrentHomeHeroState, mutationContextPayload, objectRecord, optionalString, requireActiveImageAsset, requireActiveVideoAsset, requiredString, rethrowAsInvalidParams } from './shared'
 
 export async function handleContentTools(ctx: McpExecutorContext): Promise<unknown> {
@@ -270,18 +269,6 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
-    case "open_home_hero_media_upload": {
-      const locationId = optionalString(args, "location_id") ?? null;
-      const accept = optionalString(args, "accept") ?? "both";
-      return renderStructuredResponse(
-        {
-          launched: true,
-          resourceUri: MEDIA_UPLOAD_WIDGET_RESOURCE_URI,
-          context: { site_id: site.siteId, location_id: locationId, accept },
-        },
-        "Media upload widget launched for the homepage hero.",
-      );
-    }
     case "set_about_story_image":
       try {
         const assetId = requiredString(args, "asset_id");

@@ -827,7 +827,10 @@ export const oauthAccessToken = sqliteTable("oauthAccessToken", {
 	clientId: text().notNull(),
 	userId: text(),
 	token: text().notNull().unique(),
-	scopes: text().default("").notNull(),
+	// Better Auth serializes this as JSON string[]; unlike oauthClient this table
+	// has no foreign-key references pointing into it, so unlike scopesJson's
+	// additive workaround there this default can be corrected directly.
+	scopes: text().default("[]").notNull(),
 	authorizationCodeId: text(),
 	resources: text(),
 	requestedUserInfoClaims: text(),
@@ -846,6 +849,11 @@ export const oauthClient = sqliteTable("oauthClient", {
 	clientSecret: text(),
 	name: text().notNull(),
 	redirectUris: text().notNull(),
+	// Better Auth models this field as string[]. The historical `scopes`
+	// column defaults to an invalid empty JSON string and cannot be altered
+	// safely without rebuilding this referenced table, so auth maps its logical
+	// scopes field to this additive canonical column instead.
+	scopesJson: text().default("[]").notNull(),
 	scopes: text().default("").notNull(),
 	public: integer().default(0).notNull(),
 	requirePkce: integer().default(1).notNull(),
@@ -876,6 +884,11 @@ export const oauthClient = sqliteTable("oauthClient", {
 	type: text(),
 	dpopBoundAccessTokens: integer().default(0).notNull(),
 	referenceId: text(),
+});
+
+export const oauthClientAssertion = sqliteTable("oauthClientAssertion", {
+	id: text().primaryKey(),
+	expiresAt: integer({ mode: "timestamp" }).notNull(),
 });
 
 export const oauthResource = sqliteTable("oauthResource", {
@@ -1125,6 +1138,7 @@ export const post_channel_jobs = sqliteTable("post_channel_jobs", {
 	published_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
+	uniqueIndex("post_channel_jobs_post_channel_unique").on(table.post_id, table.channel),
 	// WHERE post_id = ? in post-management.ts and mcp-executor/posts.ts (publish status checks).
 	index("post_channel_jobs_post_id_idx").on(table.post_id),
 ]);
