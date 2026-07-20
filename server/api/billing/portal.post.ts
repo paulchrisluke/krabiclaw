@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, requireBillingAccess } from '../../utils/billing'
+import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import { queryFirst } from '~/server/db'
 
 interface PortalRequest {
@@ -45,15 +46,24 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    // Reject a body organizationId that disagrees with the current dashboard
+    // URL/header context instead of trusting the body alone.
+    const resolvedOrganization = await resolveRequestedOrganization(event, db, session.user.id, {
+      explicitOrganizationId: organizationId,
+    })
+    if (!resolvedOrganization) {
+      return jsonResponse({ error: 'Organization not found' }, { status: 404 })
+    }
+
     // Require billing access
-    await requireBillingAccess(env, db, organizationId, session.user.id)
-    
+    await requireBillingAccess(env, db, resolvedOrganization.id, session.user.id)
+
     // Get organization with Stripe customer
     const organization = await queryFirst<{ slug: string | null; stripe_customer_id: string | null }>(db, `
       SELECT o.name, o.slug, b.stripe_customer_id FROM organization o
       LEFT JOIN organization_billing b ON o.id = b.organization_id
       WHERE o.id = ?
-    `, [organizationId])
+    `, [resolvedOrganization.id])
     
     if (!organization) {
       return jsonResponse({ 

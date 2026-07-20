@@ -7,6 +7,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, getPriceIdForPlan, requireBillingAccess, applySiteSubscription } from '~/server/utils/billing'
+import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import { queryFirst } from '~/server/db'
 import type Stripe from 'stripe'
 
@@ -37,6 +38,14 @@ export default defineEventHandler(async (event) => {
   )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   const orgId = site.organization_id
+
+  // Cross-check the site's own org against the current dashboard URL context (when
+  // present) — a stale client-side siteId must never act on a different org than
+  // the one the caller's URL/header names.
+  const organization = await resolveRequestedOrganization(event, db, session.user.id, {
+    explicitOrganizationId: orgId,
+  })
+  if (!organization) return jsonResponse({ error: 'Site does not belong to your organization' }, { status: 403 })
 
   try {
     await requireBillingAccess(env, db, orgId, session.user.id)

@@ -80,8 +80,8 @@ if (!dashboard.state.value) await dashboard.refresh()
 const toast = useToast()
 
 // Bare $fetch (globalThis override in dashboard-site-header.client.ts) does not
-// forward cookies during SSR — must attach them explicitly, same as useDashboardSite.ts.
-const requestHeaders = import.meta.server ? useRequestHeaders(['cookie']) : undefined
+// run during SSR — must attach dashboard headers explicitly, same as useDashboardSite.ts.
+const requestHeaders = buildDashboardRequestHeaders()
 
 interface SiteEvent {
   id: string; event_type: string; site_id: string; location_id: string | null
@@ -108,7 +108,7 @@ const eventTypeOptions = computed(() => [
 ])
 
 interface Member { userId: string; name: string }
-const { data: membersData } = await useFetch<{ members: Member[] }>('/api/dashboard/members')
+const { data: membersData } = await useFetch<{ members: Member[] }>('/api/dashboard/members', { headers: requestHeaders })
 const actorOptions = computed(() => [
   { label: 'Everyone', value: '' },
   ...(membersData.value?.members ?? []).map(m => ({ label: m.name, value: m.userId })),
@@ -124,7 +124,7 @@ watch(() => filters.siteId, async (siteId) => {
   if (!site?.subdomain) return
   try {
     const res = await $fetch<{ locations: Location[] }>('/api/dashboard/locations', {
-      headers: { ...requestHeaders, 'x-dashboard-site-slug': site.subdomain },
+      headers: buildDashboardRequestHeaders({ 'x-dashboard-site-slug': site.subdomain }),
     })
     locationsForSite.value = res.locations
   } catch (err) {
