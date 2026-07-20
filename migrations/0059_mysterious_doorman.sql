@@ -17,7 +17,7 @@ CREATE TABLE `__new_oauthAccessToken` (
 	`confirmation` text
 );
 --> statement-breakpoint
-INSERT INTO `__new_oauthAccessToken`("id", "clientId", "userId", "token", "scopes", "authorizationCodeId", "resources", "requestedUserInfoClaims", "expiresAt", "createdAt", "sessionId", "referenceId", "refreshId", "revoked", "confirmation") SELECT "id", "clientId", "userId", "token", "scopes", "authorizationCodeId", "resources", "requestedUserInfoClaims", "expiresAt", "createdAt", "sessionId", "referenceId", "refreshId", "revoked", "confirmation" FROM `oauthAccessToken`;--> statement-breakpoint
+INSERT INTO `__new_oauthAccessToken`("id", "clientId", "userId", "token", "scopes", "authorizationCodeId", "resources", "requestedUserInfoClaims", "expiresAt", "createdAt", "sessionId", "referenceId", "refreshId", "revoked", "confirmation") SELECT "id", "clientId", "userId", "token", COALESCE("scopes", '[]'), "authorizationCodeId", "resources", "requestedUserInfoClaims", "expiresAt", "createdAt", "sessionId", "referenceId", "refreshId", "revoked", "confirmation" FROM `oauthAccessToken`;--> statement-breakpoint
 DROP TABLE `oauthAccessToken`;--> statement-breakpoint
 ALTER TABLE `__new_oauthAccessToken` RENAME TO `oauthAccessToken`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint
