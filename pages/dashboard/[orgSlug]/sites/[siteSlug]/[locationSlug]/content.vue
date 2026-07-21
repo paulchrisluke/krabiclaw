@@ -1,5 +1,5 @@
 <template>
-  <CmsContentEditor :site-id="siteId" scope="site" />
+  <CmsContentEditor :site-id="siteId" scope="location" />
 </template>
 
 <script setup lang="ts">

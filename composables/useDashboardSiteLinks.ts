@@ -124,7 +124,10 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
     return `${paths.value.site}/${location?.slug ?? locationId}`
   }
   const locationMenuPath = (locationId: string) => `${locationPath(locationId)}/menu`
-  const locationContentPath = (locationId: string) => appendQuery(`${paths.value.content}`, { page: 'location', location: locationId })
+  // Points at the location-scoped content editor (a distinct route from
+  // paths.value.content, which is site-scoped only) — see
+  // pages/dashboard/[orgSlug]/sites/[siteSlug]/[locationSlug]/content.vue.
+  const locationContentPath = (locationId: string) => appendQuery(`${locationPath(locationId)}/content`, { page: 'location' })
 
   const menuPath = (locationId?: string | null) => {
     if (locationId) {
