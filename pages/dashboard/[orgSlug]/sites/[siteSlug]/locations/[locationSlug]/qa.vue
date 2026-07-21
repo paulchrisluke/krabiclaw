@@ -85,10 +85,9 @@ interface QaRow {
   sort_order: number
 }
 
-const siteId = await useDashboardSiteId()
+const _siteId = await useDashboardSiteId()
 const dashboardLocation = useDashboardLocation()
 const toast = useToast()
-const sitePublicUrl = ref<string | null>(null)
 const locationId = computed(() => dashboardLocation.currentLocationId.value)
 const qaRows = ref<QaRow[]>([])
 const loading = ref(true)
@@ -96,16 +95,6 @@ const saving = ref(false)
 const deletingId = ref<string | null>(null)
 const editingId = ref<string | null>(null)
 const form = reactive({ question: '', answer: '' })
-const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
-
-const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'Content', icon: 'i-lucide-layers', to: paths.value.content, color: 'neutral' as const, variant: 'soft' as const }
-]))
-
-async function loadContext() {
-  const settingsRes = await $fetch<{ settings: { public_url: string | null } }>(`/api/dashboard/settings`)
-  sitePublicUrl.value = settingsRes.settings.public_url
-}
 
 async function loadQa() {
   if (!locationId.value) {
@@ -222,7 +211,6 @@ async function deleteQa(item: QaRow) {
 
 onMounted(async () => {
   try {
-    await loadContext()
     await loadQa()
   } catch (error) {
     loading.value = false

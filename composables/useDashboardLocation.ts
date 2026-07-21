@@ -39,12 +39,15 @@ export function useDashboardLocation() {
       (siteSlug ? parts[i + 1] === siteSlug : true)
     )
 
-    if (sitesIndex !== -1 && parts.length > sitesIndex + 2) {
-      parts[sitesIndex + 2] = targetSlug
+    // Location pages live under .../sites/:siteSlug/locations/:locationSlug/...
+    // — locationSlug is 3 segments after 'sites' (siteSlug, then the literal
+    // 'locations' segment, then the slug itself), not 2.
+    if (sitesIndex !== -1 && parts.length > sitesIndex + 3 && parts[sitesIndex + 2] === 'locations') {
+      parts[sitesIndex + 3] = targetSlug
       return `/${parts.join('/')}`
     }
 
-    if (orgSlug && siteSlug) return `/dashboard/${orgSlug}/sites/${siteSlug}/${targetSlug}`
+    if (orgSlug && siteSlug) return `/dashboard/${orgSlug}/sites/${siteSlug}/locations/${targetSlug}`
     return route.path
   }
 

@@ -176,11 +176,6 @@ const toast = useToast()
 const { trackPostCreated, trackPostPublished } = useAnalytics()
 const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
-const sitePublicUrl = ref<string | null>(null)
-const { buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
-const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'New post', icon: 'i-lucide-plus', color: 'primary' as const, onClick: openCompose }
-]))
 
 // Posts list
 const posts = ref<ApiRecord[]>([])
@@ -211,15 +206,6 @@ const loadPosts = async () => {
   } catch { toast.add({ description: 'Failed to load posts', color: 'error' }) } finally { loading.value = false }
 }
 
-async function loadSitePublicUrl() {
-  try {
-    const response = await $fetch<{ success: boolean; settings: { public_url?: string | null } }>(`/api/dashboard/settings`)
-    sitePublicUrl.value = response.settings?.public_url || null
-  } catch {
-    sitePublicUrl.value = null
-  }
-}
-
 async function loadFacebookConnection() {
   try {
     const res = await $fetch<{ connected: boolean }>('/api/integrations/facebook-pages/connection')
@@ -230,7 +216,7 @@ async function loadFacebookConnection() {
 }
 
 onMounted(async () => {
-  await Promise.all([loadPosts(), loadSitePublicUrl(), loadFacebookConnection()])
+  await Promise.all([loadPosts(), loadFacebookConnection()])
 })
 
 // Selection / compose

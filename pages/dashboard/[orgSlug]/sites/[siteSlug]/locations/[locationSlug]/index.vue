@@ -502,21 +502,16 @@ let locationLoadToken = 0
 const connectingGoogle = ref(false)
 const syncingPlace = ref(false)
 const placeSyncResult = ref('')
-const { paths, buildHeaderLinks, locationMenuPath, locationContentPath, locationPath } = useDashboardSiteLinks(siteId, computed(() => {
+const { paths, locationMenuPath, locationContentPath, locationPath } = useDashboardSiteLinks(siteId, computed(() => {
   const value = site.value?.public_url
   return typeof value === 'string' ? value : null
 }))
 
 const _locationAddress = computed(() => location.value?.address?.addressLines?.join(', ') || '')
-const publicLocationUrl = computed(() => {
+const _publicLocationUrl = computed(() => {
   if (!location.value?.slug || !site.value?.public_url) return ''
   return `${site.value.public_url.replace(/\/$/, '')}/locations/${location.value.slug}`
 })
-
-const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'All Locations', icon: 'i-lucide-arrow-left', to: paths.value.locations, color: 'neutral' as const, variant: 'soft' as const },
-  { label: 'Preview', icon: 'i-lucide-external-link', to: publicLocationUrl.value, target: '_blank', color: 'neutral' as const, variant: 'outline' as const, disabled: !publicLocationUrl.value }
-], { includePreview: false }))
 
 const locationTabs = computed(() => [
   { label: 'Overview', icon: 'i-lucide-house', active: true, to: locationPath(locationId.value) },

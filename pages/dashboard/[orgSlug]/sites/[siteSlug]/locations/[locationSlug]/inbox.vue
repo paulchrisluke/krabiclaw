@@ -325,7 +325,6 @@ const toast = useToast()
 const route = useRoute()
 const router = useRouter()
 const dashboardLocation = useDashboardLocation()
-const sitePublicUrl = ref<string | null>(null)
 const selectedLocationId = computed(() => dashboardLocation.currentLocationId.value)
 const loadingThreads = ref(false)
 const loadingDetail = ref(false)
@@ -341,15 +340,8 @@ const typeFilter = ref<string>('')
 const inboxStatusFilter = ref<string>('')
 const unreadOnly = ref(false)
 const selectedInboxStatus = ref<InboxStatus>('open')
-const { buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
-const _headerLinks = computed(() => buildHeaderLinks())
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
-
-async function loadBaseContext() {
-  const settingsRes = await $fetch<{ settings: { public_url: string | null } }>('/api/dashboard/settings')
-  sitePublicUrl.value = settingsRes.settings.public_url
-}
 
 async function loadThreads() {
   if (!selectedLocationId.value) return
@@ -638,7 +630,6 @@ watch(() => route.query.thread, async () => {
 
 onMounted(async () => {
   try {
-    await loadBaseContext()
     await loadThreads()
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load inbox', color: 'error' })

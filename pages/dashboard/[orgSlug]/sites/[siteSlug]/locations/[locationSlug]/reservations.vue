@@ -101,22 +101,15 @@ const route = useRoute()
 const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
 if (!dashboard.state.value) await dashboard.refresh()
-const sitePublicUrl = ref<string | null>(null)
 const reservations = ref<ReservationSubmission[]>([])
 const loading = ref(true)
 const notificationPhoneMissing = ref(false)
-const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
 const currentLocationSlug = computed(() => dashboardLocation.currentLocationSlug.value)
 
 const locationSettingsPath = computed(() =>
-  `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/${currentLocationSlug.value ?? route.params.locationSlug}`
+  `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/locations/${currentLocationSlug.value ?? route.params.locationSlug}`
 )
-
-const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'Edit reservation page', icon: 'i-lucide-file-text', to: `${paths.value.content}?page=reservations`, color: 'primary' as const, variant: 'soft' as const },
-  { label: 'Inbox', icon: 'i-lucide-inbox', to: paths.value.inbox, color: 'neutral' as const, variant: 'ghost' as const }
-]))
 
 const newCount = computed(() => reservations.value.filter(item => item.status === 'new').length)
 const confirmedCount = computed(() => reservations.value.filter(item => item.status === 'confirmed').length)
@@ -136,16 +129,10 @@ async function loadReservations() {
 
   loading.value = true
   try {
-    const [settingsResult, locationsResult, notificationsResult] = await Promise.allSettled([
-      $fetch<{ settings: { public_url: string | null } }>(`/api/dashboard/settings`),
+    const [locationsResult, notificationsResult] = await Promise.allSettled([
       $fetch<{ locations: Array<{ id: string; slug: string; notification_phone: string | null }> }>(`/api/dashboard/locations`),
       $fetch<{ notifications: { whatsapp_phone: string | null; channels: string[] } }>(`/api/dashboard/editor/notifications`),
     ])
-    if (settingsResult.status === 'fulfilled') {
-      sitePublicUrl.value = settingsResult.value.settings.public_url
-    } else {
-      console.warn('reservation_settings_load_failed', settingsResult.reason)
-    }
     if (locationsResult.status !== 'fulfilled') throw locationsResult.reason
     const current = locationsResult.value.locations.find(loc => loc.id === locationId) ?? null
 

@@ -192,7 +192,6 @@ const siteId = await useDashboardSiteId()
 const toast = useToast()
 const route = useRoute()
 const dashboardLocation = useDashboardLocation()
-const sitePublicUrl = ref<string | null>(null)
 const reviews = ref<ReviewRow[]>([])
 const loading = ref(true)
 const saving = ref(false)
@@ -214,12 +213,7 @@ const reviewForm = reactive({
   status: 'approved',
   created_at: new Date().toISOString().slice(0, 10)
 })
-const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 const currentLocation = computed(() => dashboardLocation.currentLocation.value)
-
-const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'Location details', icon: 'i-lucide-map-pin', to: paths.value.locations, color: 'neutral' as const, variant: 'soft' as const }
-]))
 
 const statusItems = [
   { id: 'all', label: 'All statuses' },
@@ -273,15 +267,6 @@ async function loadReviews() {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load reviews', color: 'error' })
   } finally {
     loading.value = false
-  }
-}
-
-async function loadReviewContext() {
-  try {
-    const settingsRes = await $fetch<{ settings: { public_url: string | null } }>(`/api/dashboard/settings`)
-    sitePublicUrl.value = settingsRes.settings.public_url
-  } catch {
-    sitePublicUrl.value = null
   }
 }
 
@@ -411,7 +396,6 @@ async function deleteReview(review: ReviewRow) {
 }
 
 onMounted(async () => {
-  await loadReviewContext()
   await loadReviews()
 })
 watch(() => currentLocation.value?.id, () => {

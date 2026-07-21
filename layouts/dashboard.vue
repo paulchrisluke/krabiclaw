@@ -307,13 +307,13 @@ const siteSlugFromRoute = computed(() => {
 // once that state has been populated from an earlier page in the same session.
 const activeSiteSlug = computed(() => siteSlugFromRoute.value)
 const siteBase = computed(() => orgBase.value && activeSiteSlug.value ? `${orgBase.value}/sites/${activeSiteSlug.value}` : null)
-// Flat shape, deliberately, matching useDashboardSiteLinks.ts's own reverted
-// locationBase: the canonical /sites/:site/locations/:location shape 404s
-// until issue #316 phase 4 actually moves pages/dashboard/[orgSlug]/sites/
-// [siteSlug]/[locationSlug]/ into that directory. Move the two together.
-const locationsBase = computed(() => siteBase.value)
+// locationsBase is the prefix for a specific location's own routes
+// (.../sites/:site/locations/:location/...) — distinct from siteBase, which
+// is what "New Location" and the site-scope switcher link to (the site
+// overview page doubles as the locations list; there's no dedicated one).
+const locationsBase = computed(() => siteBase.value ? `${siteBase.value}/locations` : null)
 const currentLocationSlug = dashboardLocation.routeLocationSlug
-const locationBase = computed(() => siteBase.value && currentLocationSlug.value ? `${siteBase.value}/${currentLocationSlug.value}` : null)
+const locationBase = computed(() => locationsBase.value && currentLocationSlug.value ? `${locationsBase.value}/${currentLocationSlug.value}` : null)
 const settingsBase = computed(() => orgBase.value ? `${orgBase.value}/settings` : null)
 
 const isAdminRoute = computed(() => route.path.startsWith('/admin'))

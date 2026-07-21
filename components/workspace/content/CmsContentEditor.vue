@@ -449,11 +449,19 @@ const cmsManagers = computed(() => {
     if (manager.scope === 'location' && !location) {
       return { ...manager, icon: iconBySection[manager.section], to: undefined }
     }
-    const routePath = manager.route.replace(':location', location ?? '')
+    // manager.route for a location-scoped manager is ":location/rest", relative
+    // to that location's own base — matches locationBase in useDashboardSiteLinks
+    // and managerHref in layouts/dashboard.vue, both of which build off
+    // paths.value.site + '/locations/' + slug, not paths.value.site directly.
+    if (manager.scope === 'location') {
+      const rel = manager.route.replace(/^:location\/?/, '')
+      const to = rel ? `${paths.value.site}/locations/${location}/${rel}` : `${paths.value.site}/locations/${location}`
+      return { ...manager, icon: iconBySection[manager.section], to }
+    }
     return {
       ...manager,
       icon: iconBySection[manager.section],
-      to: routePath ? `${paths.value.site}/${routePath}` : paths.value.site,
+      to: manager.route ? `${paths.value.site}/${manager.route}` : paths.value.site,
     }
   })
 })

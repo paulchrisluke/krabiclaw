@@ -63,24 +63,18 @@ if (!siteId) {
 const loading = ref(true)
 const error = ref<string | null>(null)
 const defaultCurrency = ref('THB')
-const sitePublicUrl = ref<string | null>(null)
-const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
+const { paths } = useDashboardSiteLinks(siteId)
 const locations = computed(() => dashboard.locations.value as BusinessLocation[])
 
 const selectedLocation = computed(() => dashboardLocation.currentLocation.value)
-
-const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'Locations', icon: 'i-lucide-map-pin', to: paths.value.locations, color: 'neutral' as const, variant: 'soft' as const }
-]))
 
 const loadMenuWorkspace = async () => {
   loading.value = true
   error.value = null
   try {
-    const settingsResponse = await $fetch<{ success: boolean; settings: { default_currency?: string; public_url?: string | null } }>(`/api/dashboard/settings`)
+    const settingsResponse = await $fetch<{ success: boolean; settings: { default_currency?: string } }>(`/api/dashboard/settings`)
     if (!settingsResponse.success) throw new Error('Failed to load settings')
     defaultCurrency.value = settingsResponse.settings?.default_currency || 'THB'
-    sitePublicUrl.value = settingsResponse.settings?.public_url || null
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load menu workspace'
   } finally {

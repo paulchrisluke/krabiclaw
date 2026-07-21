@@ -68,7 +68,7 @@ export default defineEventHandler(async (event) => {
         LIMIT 1
       `, [locationId, organizationId, siteId])
       return location?.slug
-        ? `${siteBase}/${encodeURIComponent(location.slug)}?gb=${status}`
+        ? `${siteBase}/locations/${encodeURIComponent(location.slug)}?gb=${status}`
         : `${siteBase}?gb=${status}`
     } catch (e) {
       console.error('Google Business redirect location query failed:', e)

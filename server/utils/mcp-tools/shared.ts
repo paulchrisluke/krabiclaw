@@ -895,7 +895,7 @@ export const siteListItem = {
     organizationName: { type: ['string', 'null'] },
     name: { type: 'string', description: 'Brand name or subdomain slug.' },
     subdomain: { type: 'string' },
-    orgSlug: { type: 'string', description: 'Organization slug — combine with this site\'s subdomain and locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/{locationSlug}' },
+    orgSlug: { type: 'string', description: 'Organization slug — combine with this site\'s subdomain and locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/locations/{locationSlug}' },
     publicUrl: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['draft', 'live', 'paused'] },
     active: { type: 'boolean', description: 'True when this is the currently active MCP site context.' },

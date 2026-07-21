@@ -145,20 +145,9 @@ definePageMeta({ layout: 'dashboard' })
 import VideoPosterPrompt from '~/components/workspace/media/VideoPosterPrompt.vue'
 import { IMAGE_MAX_SIZE_BYTES, VIDEO_MAX_SIZE_BYTES } from '~/composables/useMediaUpload'
 
-const siteId = await useDashboardSiteId()
+const _siteId = await useDashboardSiteId()
 const siteApiBase = `/api/dashboard/editor`
 const toast = useToast()
-const sitePublicUrl = ref<string | null>(null)
-const { buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
-const _headerLinks = computed(() => buildHeaderLinks([
-  {
-    label: 'Upload',
-    icon: 'i-lucide-upload',
-    color: 'primary' as const,
-    disabled: uploadLoading.value,
-    onClick: openUploadPicker
-  }
-]))
 
 interface MediaAsset {
   id: string
@@ -393,19 +382,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-async function loadSitePublicUrl() {
-  try {
-    const response = await $fetch<{ success: boolean; settings: { public_url?: string | null } }>(`/api/dashboard/settings`)
-    sitePublicUrl.value = response.settings?.public_url || null
-  } catch (e) {
-    if (import.meta.dev) {
-      console.error(`[media] Failed to load public URL for site ${siteId}`, e)
-    }
-    sitePublicUrl.value = null
-  }
-}
-
 onMounted(async () => {
-  await Promise.all([load(), loadSitePublicUrl()])
+  await load()
 })
 </script>

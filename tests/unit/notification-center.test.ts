@@ -172,7 +172,7 @@ test('canonical guest-reply deep link targets the exact dashboard inbox thread',
     orgSlug: 'krabi-team',
     siteSlug: 'sunset-cafe',
     locationSlug: 'ao-nang',
-  }, 'thread/with spaces'), 'https://staging.krabiclaw.com/dashboard/krabi-team/sites/sunset-cafe/ao-nang/inbox?thread=thread%2Fwith+spaces')
+  }, 'thread/with spaces'), 'https://staging.krabiclaw.com/dashboard/krabi-team/sites/sunset-cafe/locations/ao-nang/inbox?thread=thread%2Fwith+spaces')
 })
 
 test('notification migration preserves legacy rows while adding per-user read and delivery relations', () => {

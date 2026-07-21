@@ -119,10 +119,9 @@ interface MediaAsset {
   category: string | null
 }
 
-const siteId = await useDashboardSiteId()
+const _siteId = await useDashboardSiteId()
 const dashboardLocation = useDashboardLocation()
 const toast = useToast()
-const sitePublicUrl = ref<string | null>(null)
 const locationId = computed(() => dashboardLocation.currentLocationId.value)
 const assets = ref<MediaAsset[]>([])
 const attachableAssets = ref<MediaAsset[]>([])
@@ -133,13 +132,7 @@ const categoryFilter = ref('all')
 const fileInput = ref<HTMLInputElement | null>(null)
 const posterPromptOpen = ref(false)
 const pendingVideoFile = ref<File | null>(null)
-const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 const { uploading, error: uploadError, pendingRetryFile, upload } = useMediaUpload()
-
-const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'Media library', icon: 'i-lucide-layout-dashboard', to: paths.value.media, color: 'neutral' as const, variant: 'soft' as const },
-  { label: 'Edit photo page', icon: 'i-lucide-file-text', to: `${paths.value.content}?page=location`, color: 'neutral' as const, variant: 'ghost' as const }
-]))
 
 const categoryItems = [
   { id: 'all', label: 'All categories' },
@@ -158,11 +151,6 @@ const filteredAssets = computed(() => {
 
 function categoryLabel(category: string | null) {
   return categoryItems.find(item => item.id === (category || 'other'))?.label ?? 'Other'
-}
-
-async function loadContext() {
-  const settingsRes = await $fetch<{ settings: { public_url: string | null } }>(`/api/dashboard/settings`)
-  sitePublicUrl.value = settingsRes.settings.public_url
 }
 
 async function loadPhotos() {
@@ -306,7 +294,6 @@ function categoryMenu(asset: MediaAsset) {
 
 onMounted(async () => {
   try {
-    await loadContext()
     await loadPhotos()
   } catch (error) {
     loading.value = false

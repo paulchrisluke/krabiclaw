@@ -82,15 +82,10 @@ interface OrderForm {
 
 const siteId = await useDashboardSiteId()
 const toast = useToast()
-const sitePublicUrl = ref<string | null>(null)
 const locations = ref<Array<LocationRow & { addressText: string; form: OrderForm }>>([])
 const loading = ref(true)
 const savingId = ref<string | null>(null)
-const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
-
-const _headerLinks = computed(() => buildHeaderLinks([
-  { label: 'Edit order page', icon: 'i-lucide-file-text', to: `${paths.value.content}?page=order`, color: 'primary' as const, variant: 'soft' as const }
-]))
+const { paths } = useDashboardSiteLinks(siteId)
 
 function addressText(address: LocationRow['address']) {
   return address?.addressLines?.filter(Boolean).join(', ') ?? ''
@@ -127,11 +122,7 @@ function previewLinks(location: { form: OrderForm }) {
 async function loadOrder() {
   loading.value = true
   try {
-    const [settingsRes, locationsRes] = await Promise.all([
-      $fetch<{ settings: { public_url: string | null } }>(`/api/dashboard/settings`),
-      $fetch<{ locations: LocationRow[] }>(`/api/dashboard/locations`)
-    ])
-    sitePublicUrl.value = settingsRes.settings.public_url
+    const locationsRes = await $fetch<{ locations: LocationRow[] }>(`/api/dashboard/locations`)
     locations.value = (locationsRes.locations ?? []).map(location => ({
       ...location,
       addressText: addressText(location.address),

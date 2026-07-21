@@ -346,8 +346,6 @@ const dashboardLocation = useDashboardLocation()
 
 const sitePublicUrl = ref<string | null>(null)
 const defaultCurrency = ref('THB')
-const { buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
-const _headerLinks = computed(() => buildHeaderLinks())
 
 interface LocationRow {
   id: string
