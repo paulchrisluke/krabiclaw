@@ -267,7 +267,6 @@ function getThemeIcon(pref: 'system' | 'light' | 'dark') {
   return 'i-lucide-moon'
 }
 
-const billingStatus = ref<{ billing: { plan: string } } | null>(null)
 const platformStatus = ref<'normal' | 'loading' | 'error'>('loading')
 const dashboardContextError = ref<unknown>(null)
 
@@ -580,11 +579,6 @@ onMounted(async () => {
     await dashboard.refresh()
   }
   checkPlatformStatus().catch(console.error)
-  try {
-    billingStatus.value = await $fetch<{ billing: { plan: string } }>('/api/billing/status')
-  } catch (err) {
-    console.error('Failed to load billing status:', err)
-  }
 
   // Track dashboard visit
   const segment = route.path.split('/').filter(Boolean).at(2)
