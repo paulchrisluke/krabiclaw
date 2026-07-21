@@ -158,10 +158,10 @@ async function loadTransferContext() {
     // header, so it works for a transferred site with no subdomain yet
     // (custom-domain-only) instead of silently losing that site's locations.
     const [locsRes, notifRes] = await Promise.all([
-      $fetch<{ success: boolean; locations: LocationRow[] }>(`/api/sites/${siteId.value}/locations`).catch(() => null),
+      $fetch<{ success: boolean; locations: LocationRow[] }>(`/api/sites/${siteId.value}/locations`),
       $fetch<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>(
         `/api/editor/sites/${siteId.value}/notifications`
-      ).catch(() => null),
+      ),
     ])
 
     locations.value = locsRes?.locations ?? []

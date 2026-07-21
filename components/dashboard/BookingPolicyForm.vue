@@ -86,7 +86,11 @@ function patch(next: Partial<BookingPolicyPatch>) {
 }
 
 function updateNumber(field: keyof BookingPolicyPatch, next: number | null | undefined) {
-  patch({ [field]: next === null ? null : Math.max(0, Math.trunc(next)) })
+  if (next == null || (next as unknown) === '') {
+    patch({ [field]: null })
+  } else if (Number.isFinite(next)) {
+    patch({ [field]: Math.max(0, Math.trunc(next)) })
+  }
 }
 
 function updateBoolean(field: keyof BookingPolicyPatch, next: boolean | 'indeterminate') {

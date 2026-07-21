@@ -742,7 +742,7 @@ async function toggleSlotOverride(slot: SlotAvailability) {
         override_date: availabilityDate.value,
         time_slot: slot.time_slot,
         status: slot.is_closed ? 'open' : 'closed',
-        capacity_override: capacityInput ? Number(capacityInput) : null,
+        capacity_override: capacityInput != null && capacityInput !== '' ? Number(capacityInput) : null,
       },
     })
     await loadAvailability()

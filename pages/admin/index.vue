@@ -6,9 +6,7 @@
           <UDashboardSidebarCollapse />
         </template>
         <template #trailing>
-          <UButton color="neutral" variant="ghost" size="xs" :loading="queueLoading" @click="loadQueue">
-            <UIcon name="i-lucide-refresh-cw" class="size-4" />
-          </UButton>
+          <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-refresh-cw" aria-label="Refresh queue" :loading="queueLoading" @click="loadQueue" />
         </template>
       </UDashboardNavbar>
     </template>

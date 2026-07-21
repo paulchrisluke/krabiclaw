@@ -126,7 +126,7 @@
             </p>
 
             <UFormField label="Plan to invite them to">
-              <USelect v-model="handoffPlan" :options="PLAN_OPTIONS" value-attribute="value" label-attribute="label" class="w-full" />
+              <USelect v-model="handoffPlan" :items="PLAN_OPTIONS" class="w-full" />
             </UFormField>
 
             <UFormField label="Stripe coupon code (optional)">
@@ -271,12 +271,10 @@
             <div class="border-t border-default pt-4 space-y-3">
               <p class="text-sm font-semibold text-highlighted">Record cash payment</p>
               <div class="flex gap-2">
-                <USelect v-model="cashPlan" :options="CASH_PLAN_OPTIONS" value-attribute="value" label-attribute="label" class="flex-1" size="sm" />
+                <USelect v-model="cashPlan" :items="CASH_PLAN_OPTIONS" class="flex-1" size="sm" />
                 <USelect
                   v-model="cashInterval"
-                  :options="[{ label: 'Monthly', value: 'month' }, { label: 'Annual', value: 'year' }]"
-                  value-attribute="value"
-                  label-attribute="label"
+                  :items="[{ label: 'Monthly', value: 'month' }, { label: 'Annual', value: 'year' }]"
                   size="sm"
                   class="w-32"
                 />
