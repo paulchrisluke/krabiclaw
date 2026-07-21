@@ -1,6 +1,14 @@
 <template>
-  <UPage class="h-full">
-    <UPageBody>
+  <UDashboardPanel id="site-overview">
+    <template #header>
+      <UDashboardNavbar :title="siteName">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
       <div v-if="pending" class="space-y-6">
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <USkeleton v-for="i in 4" :key="i" class="h-20 rounded-xl" />
@@ -96,7 +104,7 @@
               <UButton to="/docs/integrations/mcp-setup" size="sm">
                 Open setup docs
               </UButton>
-              <UButton :to="`/dashboard/${route.params.orgSlug}/~/settings/chatgpt`" variant="outline" color="neutral" size="sm">
+              <UButton :to="`/dashboard/${route.params.orgSlug}/settings/chatgpt`" variant="outline" color="neutral" size="sm">
                 Open ChatGPT settings
               </UButton>
               <UButton variant="ghost" color="neutral" size="sm" @click="dismissChecklist">
@@ -234,8 +242,8 @@
           </ul>
         </UCard>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
@@ -317,6 +325,7 @@ const { data, pending } = await useAsyncData(
 )
 
 const locations = computed(() => data.value?.locations ?? [])
+const siteName = computed(() => dashboardState.site.value?.brand_name ?? 'Overview')
 const isProfessionalService = computed(() => ['service', 'professional_service'].includes(dashboardState.site.value?.vertical ?? ''))
 const siteDashboardPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}`)
 const credits = computed(() => data.value?.credits ?? null)

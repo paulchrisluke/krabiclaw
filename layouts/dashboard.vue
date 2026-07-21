@@ -17,132 +17,18 @@
     </div>
 
     <UDashboardGroup unit="rem" :min-size="14" :default-size="18" :max-size="24">
-      <UDashboardSidebar resizable collapsible>
+      <UDashboardSidebar
+        resizable
+        collapsible
+        :menu="{ close: false }"
+        :ui="{ header: 'h-auto min-h-(--ui-header-height) items-start py-2.5' }"
+      >
         <template #header="{ collapsed }">
-          <template v-if="inLocationWorkspace">
-            <div v-if="collapsed" class="flex items-center justify-center w-full">
-              <UButton
-                :to="siteBase ?? orgBase ?? '/dashboard'"
-                icon="i-lucide-arrow-left"
-                color="neutral"
-                variant="ghost"
-                size="sm"
-                aria-label="Back to Dashboard"
-              />
-            </div>
-            <NuxtLink
-              v-else
-              :to="siteBase ?? orgBase ?? '/dashboard'"
-              class="flex items-center gap-2 px-2.5 py-1.5 text-sm font-semibold text-muted hover:text-highlighted hover:bg-muted rounded-lg transition-colors w-full"
-            >
-              <UIcon name="i-lucide-arrow-left" class="size-4 shrink-0" />
-              <span class="truncate">{{ currentLocation?.title ?? 'Location' }}</span>
-            </NuxtLink>
-          </template>
-
-          <template v-else-if="inSettingsWorkspace">
-            <div v-if="collapsed" class="flex items-center justify-center w-full">
-              <UButton
-                :to="orgBase ?? '/dashboard'"
-                icon="i-lucide-arrow-left"
-                color="neutral"
-                variant="ghost"
-                size="sm"
-                aria-label="Back to Dashboard"
-              />
-            </div>
-            <NuxtLink
-              v-else
-              :to="orgBase ?? '/dashboard'"
-              class="flex items-center gap-2 px-2.5 py-1.5 text-sm font-semibold text-muted hover:text-highlighted hover:bg-muted rounded-lg transition-colors w-full"
-            >
-              <UIcon name="i-lucide-arrow-left" class="size-4 shrink-0" />
-              <span class="truncate">Back to Dashboard</span>
-            </NuxtLink>
-          </template>
-
-          <template v-else-if="inConversationsWorkspace">
-            <div v-if="collapsed" class="flex items-center justify-center w-full">
-              <UButton
-                :to="siteBase ?? orgBase ?? '/dashboard'"
-                icon="i-lucide-arrow-left"
-                color="neutral"
-                variant="ghost"
-                size="sm"
-                aria-label="Back to Dashboard"
-              />
-            </div>
-            <NuxtLink
-              v-else
-              :to="siteBase ?? orgBase ?? '/dashboard'"
-              class="flex items-center gap-2 px-2.5 py-1.5 text-sm font-semibold text-muted hover:text-highlighted hover:bg-muted rounded-lg transition-colors w-full"
-            >
-              <UIcon name="i-lucide-arrow-left" class="size-4 shrink-0" />
-              <span class="truncate">Back to Dashboard</span>
-            </NuxtLink>
-          </template>
-
-          <UDropdownMenu
-            v-else
-            :items="organizationMenuItems"
-            :content="{ align: 'start', collisionPadding: 12 }"
-            :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width) min-w-64' }"
-          >
-            <UButton
-              :avatar="organizationAvatar"
-              :label="collapsed ? undefined : organizationLabel"
-              trailing-icon="i-lucide-chevrons-up-down"
-              color="neutral"
-              variant="ghost"
-              class="w-full data-[state=open]:bg-elevated"
-              :block="collapsed"
-              :ui="{ label: 'truncate text-left', trailingIcon: 'text-dimmed ms-auto' }"
-            />
-          </UDropdownMenu>
+          <DashboardScopeHeader :model="scopeHeaderModel" :collapsed="collapsed" />
         </template>
 
         <template #default="{ collapsed }">
-          <template v-if="inConversationsWorkspace">
-            <div class="flex flex-col gap-3 px-2">
-              <UTooltip :text="collapsed ? 'New conversation' : undefined">
-                <UButton
-                  icon="i-lucide-plus"
-                  :label="collapsed ? undefined : 'New conversation'"
-                  color="primary"
-                  variant="soft"
-                  size="sm"
-                  :block="!collapsed"
-                  @click="newChowBotChat"
-                />
-              </UTooltip>
-
-              <ClientOnly>
-                <div v-if="!collapsed" class="space-y-1">
-                  <UButton
-                    v-for="conv in siteConversations"
-                    :key="conv.id"
-                    :label="conv.title"
-                    :icon="conv.active_channel === 'whatsapp' ? 'i-simple-icons-whatsapp' : 'i-lucide-message-square'"
-                    :color="conv.id === activeConversationId ? 'primary' : 'neutral'"
-                    :variant="conv.id === activeConversationId ? 'soft' : 'ghost'"
-                    size="sm"
-                    class="w-full justify-start"
-                    :ui="{ label: 'truncate text-left' }"
-                    @click="loadChowBotChat(conv)"
-                  />
-                  <p v-if="!siteConversations.length" class="px-1 py-2 text-xs text-muted">
-                    No conversations yet
-                  </p>
-                </div>
-                <template #fallback>
-                  <div v-if="!collapsed" class="space-y-1">
-                    <USkeleton v-for="i in 4" :key="i" class="h-8 rounded-lg" />
-                  </div>
-                </template>
-              </ClientOnly>
-            </div>
-          </template>
-          <div v-else class="flex flex-col gap-2 px-2">
+          <div class="flex flex-col gap-2">
             <PlatformCommandSearchTrigger
               surface="dashboard"
               :compact="collapsed"
@@ -155,7 +41,6 @@
               orientation="vertical"
             />
           </div>
-
         </template>
 
         <template #footer="{ collapsed }">
@@ -209,7 +94,7 @@
                       </span>
                     </div>
                     <UButton
-                      to="/dashboard/account/settings"
+                      to="/dashboard/account/profile"
                       variant="ghost"
                       color="neutral"
                       icon="i-lucide-settings"
@@ -306,52 +191,9 @@
         </template>
       </UDashboardSidebar>
 
-      <UDashboardPanel>
-        <template #header>
-          <UDashboardNavbar>
-            <span class="text-sm font-semibold text-highlighted">{{ navbarTitle }}</span>
-            <template #left>
-              <UDropdownMenu
-                v-if="!inAdminWorkspace && site"
-                :items="locationMenuItems"
-                :content="{ align: 'start', collisionPadding: 12 }"
-                :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width) min-w-64' }"
-              >
-                <UButton
-                  :label="selectedLocation?.title ?? 'No locations'"
-                  :avatar="{ icon: 'i-lucide-map-pin' }"
-                  trailing-icon="i-lucide-chevrons-up-down"
-                  color="neutral"
-                  variant="ghost"
-                  class="data-[state=open]:bg-elevated"
-                  :ui="{ label: 'truncate text-left max-w-48', trailingIcon: 'text-dimmed' }"
-                />
-              </UDropdownMenu>
-            </template>
+      <slot />
 
-            <template #right>
-              <DashboardNotificationCenter v-if="organization || inAdminWorkspace" />
-              <UColorModeButton variant="ghost" color="neutral" size="sm" />
-              <UTooltip v-if="!inAdminWorkspace && !inConversationsWorkspace && site" text="ChowBot">
-                <UButton
-                  icon="i-lucide-bot"
-                  color="neutral"
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Open ChowBot"
-                  @click="toggleChowbot"
-                />
-              </UTooltip>
-            </template>
-          </UDashboardNavbar>
-        </template>
-
-        <template #body>
-          <slot />
-        </template>
-      </UDashboardPanel>
-
-      <ChowBot v-if="!inConversationsWorkspace" />
+      <ChowBot v-if="!isConversationsRoute" />
     </UDashboardGroup>
     <PlatformCommandSearchModal surface="dashboard" />
     <BillingCreditPurchaseModal />
@@ -364,12 +206,42 @@
 <script setup lang="ts">
 import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
+import ChowBot from '~/components/workspace/dashboard/ChowBot.vue'
+import DashboardScopeHeader from '~/components/workspace/dashboard/DashboardScopeHeader.vue'
+import type { DashboardScopeHeaderModel } from '~/components/workspace/dashboard/DashboardScopeHeader.vue'
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
-import { useChowBot } from '~/composables/useChowBot'
 import { useAnalytics } from '~/composables/useAnalytics'
-import type { ChowBotConv } from '~/composables/useChowBotHistory'
-import { useChowBotHistory } from '~/composables/useChowBotHistory'
+import { resolveCmsCapabilities, type CmsManagerCapability, type CmsManagerId } from '~/config/cms-registry'
+import { resolvePublicTemplate } from '~/utils/template-registry'
+import type { SiteVertical } from '~/utils/vertical-copy'
+
+// ─────────────────────────────────────────────────────────────────────────
+// Dashboard shell architecture (issue #316 + its "Authoritative clarification:
+// progressive sidebar scope navigation" comment — read that comment before
+// changing anything here, it settles a design dispute this file went through).
+//
+// Invariants that must hold no matter what gets added later:
+// - Exactly one layout, one <UDashboardSidebar>, one <UNavigationMenu>. Never
+//   fork a second sidebar/layout per scope, per vertical, or per feature.
+// - `scope` is derived ONLY from explicit route params (locationSlug > siteSlug
+//   > orgSlug), never from route.path regexes, residual dashboard-context state,
+//   or a "last visited" fallback — those misclassify scope at ancestor routes
+//   once state has been populated from a deeper page in the same session.
+// - Nav is strictly scope-exclusive: a manager only appears when its OWN
+//   registry `scope` matches the current drill-in level (see managerNavItems).
+//   Site items must not leak into location scope and vice versa — this was a
+//   real bug here once, caused by checking "does siteBase/locationBase exist"
+//   instead of "does the manager's scope match the CURRENT scope".
+// - The parent ("← back") row is a normal UNavigationMenu item built from
+//   scopeHeaderModel.parent, not custom-styled markup living in the switcher
+//   header — this guarantees identical sizing/spacing to every other nav item
+//   by construction instead of hand-matching CSS.
+// - New verticals/templates need zero changes here — add the combination to
+//   cmsCapabilityRegistry and nav/capabilities update automatically. A new
+//   manager id (not just a new vertical reusing existing ids) needs an entry
+//   in MANAGER_GROUP/MANAGER_ICON below, nothing else.
+// ─────────────────────────────────────────────────────────────────────────
 
 interface AuthOrganization {
   id: string
@@ -395,8 +267,6 @@ function getThemeIcon(pref: 'system' | 'light' | 'dark') {
   return 'i-lucide-moon'
 }
 
-const chowBot = useChowBot()
-const chowBotHistory = useChowBotHistory()
 const billingStatus = ref<{ billing: { plan: string } } | null>(null)
 const platformStatus = ref<'normal' | 'loading' | 'error'>('loading')
 const dashboardContextError = ref<unknown>(null)
@@ -404,11 +274,7 @@ const dashboardContextError = ref<unknown>(null)
 async function checkPlatformStatus() {
   try {
     const res = await $fetch<{ status: string }>('/api/health')
-    if (res.status === 'ok') {
-      platformStatus.value = 'normal'
-    } else {
-      platformStatus.value = 'error'
-    }
+    platformStatus.value = res.status === 'ok' ? 'normal' : 'error'
   } catch (err) {
     console.error('Failed to fetch platform status:', err)
     platformStatus.value = 'error'
@@ -421,220 +287,270 @@ const sites = dashboard.sites
 const locations = dashboard.locations
 const activeSiteId = dashboard.siteId
 const dashboardLocation = useDashboardLocation()
-const selectedLocation = dashboardLocation.currentLocation
-
-const toggleChowbot = () => chowBot.toggle()
-const newChowBotChat = () => chowBot.startNewConversation()
-const loadChowBotChat = (conv: ChowBotConv) => chowBot.loadConversation(conv)
+const currentLocation = dashboardLocation.routeLocation
 
 const organizations = computed<readonly AuthOrganization[]>(() => unref(organizationsState)?.data ?? [])
 const impersonatedBy = computed(() => {
   const session = sessionData.value?.session as { impersonatedBy?: string } | undefined
   return session?.impersonatedBy
 })
-const inAdminWorkspace = computed(() => route.path.startsWith('/admin'))
-const orgSlug = computed(() => organization.value?.slug ?? null)
-const orgSettingsBase = computed(() => orgSlug.value ? `/dashboard/${orgSlug.value}/~/settings` : null)
 
+const orgSlug = computed(() => organization.value?.slug ?? null)
 const orgBase = computed(() => orgSlug.value ? `/dashboard/${orgSlug.value}` : null)
 
 const siteSlugFromRoute = computed(() => {
   const slug = route.params.siteSlug
   return typeof slug === 'string' ? slug : null
 })
-// The active site's slug — prefer the route segment (explicit), fall back to whatever
-// site dashboard-context.ts resolved (e.g. org root pages with no sites/ segment yet).
-const activeSiteSlug = computed(() => siteSlugFromRoute.value ?? site.value?.subdomain ?? null)
+// Route-strict, deliberately: every site/location-scoped page carries these
+// segments in its own path, so falling back to residual dashboard-context state
+// (e.g. the last-viewed site/location) would misclassify scope at org/site root
+// once that state has been populated from an earlier page in the same session.
+const activeSiteSlug = computed(() => siteSlugFromRoute.value)
 const siteBase = computed(() => orgBase.value && activeSiteSlug.value ? `${orgBase.value}/sites/${activeSiteSlug.value}` : null)
-const projectBase = computed(() => siteBase.value && dashboardLocation.currentLocationSlug.value ? `${siteBase.value}/${dashboardLocation.currentLocationSlug.value}` : siteBase.value)
-const currentLocation = dashboardLocation.currentLocation
-const inLocationWorkspace = dashboardLocation.inLocationWorkspace
+const locationsBase = computed(() => siteBase.value ? `${siteBase.value}/locations` : null)
+const currentLocationSlug = dashboardLocation.routeLocationSlug
+const locationBase = computed(() => locationsBase.value && currentLocationSlug.value ? `${locationsBase.value}/${currentLocationSlug.value}` : null)
+const settingsBase = computed(() => orgBase.value ? `${orgBase.value}/settings` : null)
 
-const inSettingsWorkspace = computed(() => {
-  if (route.path.startsWith('/dashboard/account')) return true
-  if (orgSettingsBase.value && route.path.startsWith(orgSettingsBase.value)) return true
-  return /^\/dashboard\/[^/]+\/~\/settings/.test(route.path)
+const isAdminRoute = computed(() => route.path.startsWith('/admin'))
+const isConversationsRoute = computed(() => Boolean(siteBase.value) && route.path.startsWith(`${siteBase.value}/conversations`))
+
+const vertical = computed(() => (site.value?.vertical ?? null) as SiteVertical | null)
+const templateSlug = computed(() => vertical.value ? resolvePublicTemplate({ vertical: vertical.value }).slug : null)
+const capabilities = computed(() => {
+  if (!vertical.value || !templateSlug.value) return null
+  try {
+    return resolveCmsCapabilities(vertical.value, templateSlug.value)
+  } catch {
+    return null
+  }
 })
-const inConversationsWorkspace = computed(() => {
-  if (!siteBase.value) return /^\/dashboard\/[^/]+\/sites\/[^/]+\/conversations(?:\/|$)/.test(route.path)
-  return route.path === `${siteBase.value}/conversations` || route.path.startsWith(`${siteBase.value}/conversations/`)
+
+const organizationLabel = computed(() => organization.value?.name ?? 'Organization')
+
+const siteLabel = computed(() => site.value?.brand_name ?? site.value?.subdomain ?? 'No site')
+const locationLabel = computed(() => currentLocation.value?.title ?? 'No locations')
+
+// Progressive drill-in: exactly one scope is active per route, and the sidebar's
+// single ContextSwitcher (this dropdown) and NavigationGroups both key off it —
+// there is no separate sidebar shell per scope, only scope-driven content inside
+// the one stable header/nav slots (see issue #316's "one stable sidebar" rule).
+const scope = computed<'organization' | 'site' | 'location'>(() => {
+  if (currentLocationSlug.value) return 'location'
+  if (activeSiteSlug.value) return 'site'
+  return 'organization'
 })
-const siteConversations = computed(() => activeSiteId.value ? chowBotHistory.forSite(activeSiteId.value) : [])
-const activeConversationId = computed(() => chowBot.conversationId.value)
 
-const organizationLabel = computed(() => organization.value?.name ?? 'Restaurant')
-const organizationAvatar = computed(() => ({
-  src: organization.value?.logo ?? undefined,
-  alt: organizationLabel.value,
-  icon: organization.value?.logo ? undefined : 'i-lucide-building-2'
-}))
-
-const organizationMenuItems = computed(() => [
-  organizations.value.map((org) => ({
-    label: org.name,
-    avatar: { src: org.logo ?? undefined, icon: org.logo ? undefined : 'i-lucide-building-2' },
-    icon: org.id === organization.value?.id ? 'i-lucide-check' : undefined,
-    onSelect: () => switchOrganization(org.id)
-  })),
-  [
-    {
-      label: 'New business',
-      icon: 'i-lucide-plus',
-      to: '/dashboard/onboarding'
+// One reusable scope-header model, per issue #316's authoritative clarification:
+// the parent row is a visible, always-present part of this single component at
+// every scope — never a menu item, never a separate per-scope implementation.
+const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
+  if (scope.value === 'location') {
+    return {
+      scope: 'location',
+      current: { label: locationLabel.value, icon: 'i-lucide-map-pin' },
+      parent: siteBase.value ? { label: siteLabel.value, to: siteBase.value } : null,
+      peers: locations.value.map((location) => ({
+        label: location.title,
+        icon: 'i-lucide-map-pin',
+        active: location.id === currentLocation.value?.id,
+        to: locationsBase.value ? `${locationsBase.value}/${location.slug}` : undefined
+      })),
+      createAction: siteBase.value ? { label: 'New Location', to: `${siteBase.value}/new` } : undefined
     }
-  ],
-  sites.value.map((s) => ({
-    label: s.brand_name ?? s.subdomain ?? 'Site',
-    icon: s.subdomain === activeSiteSlug.value ? 'i-lucide-check' : 'i-lucide-globe',
-    to: orgBase.value && s.subdomain ? `${orgBase.value}/sites/${s.subdomain}` : undefined
-  })),
-  [
-    {
-      label: 'Add site',
-      icon: 'i-lucide-plus',
-      to: orgBase.value ? `${orgBase.value}/sites/new` : undefined
+  }
+
+  if (scope.value === 'site') {
+    return {
+      scope: 'site',
+      current: { label: siteLabel.value, icon: 'i-lucide-globe' },
+      parent: orgBase.value ? { label: organizationLabel.value, to: orgBase.value } : null,
+      peers: sites.value.map((s) => ({
+        label: s.brand_name ?? s.subdomain ?? 'Site',
+        icon: 'i-lucide-globe',
+        active: s.subdomain === activeSiteSlug.value,
+        to: orgBase.value && s.subdomain ? `${orgBase.value}/sites/${s.subdomain}` : undefined
+      })),
+      createAction: orgBase.value ? { label: 'New Site', to: `${orgBase.value}/sites/new` } : undefined
     }
-  ]
-])
+  }
 
-const locationMenuItems = computed(() => [
-  locations.value.map((location) => ({
-    label: location.title,
-    icon: location.id === currentLocation.value?.id ? 'i-lucide-check' : 'i-lucide-map-pin',
-    onSelect: () => dashboardLocation.selectLocation(location.id)
-  })),
-  [
-    {
-      label: 'All locations',
-      icon: 'i-lucide-layout-dashboard',
-      to: siteBase.value ?? orgBase.value ?? '/dashboard'
-    }
-  ]
-])
+  return {
+    scope: 'organization',
+    current: {
+      label: organizationLabel.value,
+      avatar: organization.value?.logo ?? undefined,
+      icon: organization.value?.logo ? undefined : 'i-lucide-building-2'
+    },
+    parent: null,
+    peers: organizations.value.map((org) => ({
+      label: org.name,
+      avatar: org.logo ?? undefined,
+      icon: org.logo ? undefined : 'i-lucide-building-2',
+      active: org.id === organization.value?.id,
+      onSelect: () => switchOrganization(org.id)
+    })),
+    createAction: { label: 'New Organization', to: '/dashboard/onboarding' }
+  }
+})
 
-const mainNavigation = computed(() => [
-  [
-    { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: siteBase.value ?? orgBase.value ?? '/dashboard' },
-    { label: 'Conversations', icon: 'i-lucide-messages-square', to: siteBase.value ? `${siteBase.value}/conversations` : '/dashboard' },
-  ],
-  [
-    { label: 'Translations', icon: 'i-lucide-languages', to: siteBase.value ? `${siteBase.value}/translations` : '/dashboard' },
-    { label: 'Activity', icon: 'i-lucide-activity', to: orgBase.value ? `${orgBase.value}/activity` : '/dashboard' },
-  ],
-  ...(orgSettingsBase.value ? [[{ label: 'Settings', icon: 'i-lucide-settings', to: orgSettingsBase.value }]] : []),
-])
+type NavGroupId = 'Content' | 'Operate' | 'Reputation' | 'Publishing' | 'Settings'
 
-const locationNavigation = computed(() => {
-  const project = projectBase.value
-  if (!project) return [[]]
+// A NEW VERTICAL never requires touching this layout: add its combination to
+// cmsCapabilityRegistry (config/cms-registry.ts) and nav updates automatically
+// via resolveCmsCapabilities. The one exception is a genuinely NEW manager id
+// (not just a new vertical using existing ids like menu/reviews/blog) — that
+// needs an entry in both maps below, or it silently renders with no group/icon.
+const MANAGER_GROUP: Partial<Record<CmsManagerId, NavGroupId>> = {
+  media: 'Content',
+  tenant_pages: 'Content',
+  compliance: 'Content',
+  menu: 'Operate',
+  reservations: 'Operate',
+  experiences: 'Operate',
+  offerings: 'Operate',
+  reviews: 'Reputation',
+  qa: 'Reputation',
+  blog: 'Publishing',
+  settings: 'Settings',
+}
+
+const MANAGER_ICON: Partial<Record<CmsManagerId, string>> = {
+  media: 'i-lucide-image',
+  tenant_pages: 'i-lucide-file-text',
+  compliance: 'i-lucide-shield-check',
+  menu: 'i-lucide-utensils',
+  reservations: 'i-lucide-calendar-check',
+  experiences: 'i-lucide-ticket',
+  offerings: 'i-lucide-briefcase',
+  reviews: 'i-lucide-star',
+  qa: 'i-lucide-message-circle-question',
+  blog: 'i-lucide-pencil',
+  settings: 'i-lucide-settings',
+}
+
+function managerHref(manager: CmsManagerCapability): string | null {
+  if (manager.id === 'settings') return settingsBase.value
+  if (manager.scope === 'location') {
+    if (!locationBase.value) return null
+    const rel = manager.route.replace(/^:location\/?/, '')
+    return rel ? `${locationBase.value}/${rel}` : locationBase.value
+  }
+  if (!siteBase.value) return null
+  return manager.route ? `${siteBase.value}/${manager.route}` : siteBase.value
+}
+
+// Strict scope-exclusivity: a manager only appears in nav when its OWN
+// registry scope ('site' | 'location') matches the current drill-in level.
+// Without this, a manager still resolves an href whenever siteBase/locationBase
+// merely *exist* — which they do at every deeper scope too — so site-scoped
+// items (Blog, Reviews, Settings) would keep showing while drilled into a
+// location, and org-level items would keep showing at site scope. Each scope
+// must show only its own level's nav, not the union of it and its ancestors.
+function managerNavItems(group: NavGroupId) {
+  const managers = capabilities.value?.managers ?? []
+  const seen = new Set<string>()
+  const items: { label: string; icon?: string; to: string }[] = []
+  for (const manager of managers) {
+    if (MANAGER_GROUP[manager.id] !== group) continue
+    if (manager.scope !== scope.value) continue
+    const href = managerHref(manager)
+    if (!href || seen.has(href)) continue
+    seen.add(href)
+    items.push({ label: manager.label, icon: MANAGER_ICON[manager.id], to: href })
+  }
+  return items
+}
+
+const overviewGroup = computed(() => {
+  if (scope.value !== 'organization' || !orgBase.value) return []
   return [
-    [
-      { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: project },
-    ],
-    [
-      { label: 'Content', icon: 'i-lucide-copy', to: `${siteBase.value}/content` },
-    ],
-    [
-      { label: 'Inbox', icon: 'i-lucide-inbox', to: `${project}/inbox` },
-    ],
+    { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: orgBase.value },
+    { label: 'Activity', icon: 'i-lucide-activity', to: `${orgBase.value}/activity` },
+    // Org settings (general/domains/members/billing) are organization-level,
+    // not site-level, so they belong here regardless of the CMS registry's
+    // per-site 'settings' manager (a distinct, site-scoped branding/SEO
+    // concern handled by managerNavItems('Settings') at site scope instead).
+    { label: 'Settings', icon: 'i-lucide-settings', to: settingsBase.value ?? `${orgBase.value}/settings` },
   ]
 })
 
-const adminManagedServiceEnabled = ref(false)
-watch(inAdminWorkspace, (isAdmin) => {
-  if (!isAdmin) return
-  $fetch<{ managedServiceEnabled: boolean }>('/api/admin/feature-flags')
-    .then((res) => { adminManagedServiceEnabled.value = res.managedServiceEnabled })
-    .catch(() => {})
-}, { immediate: true })
+// The parent row renders as a plain UNavigationMenu item (same size/padding as
+// every other item) rather than custom-styled markup in the switcher header —
+// guarantees visual consistency by construction instead of hand-matching CSS.
+function parentNavItem() {
+  const parent = scopeHeaderModel.value.parent
+  return parent ? [{ label: parent.label, icon: 'i-lucide-chevron-left', to: parent.to }] : []
+}
 
-const adminTab = computed(() => String(route.query.tab || 'queue'))
-const adminNavigation = computed(() => [[
-  ...(adminManagedServiceEnabled.value
-    ? [{ label: 'Work Queue', icon: 'i-lucide-list-todo', to: '/admin?tab=work', active: adminTab.value === 'work' }]
-    : []),
-  { label: 'Add-ons',  icon: 'i-lucide-inbox',           to: '/admin?tab=queue',     active: adminTab.value === 'queue' },
-  { label: 'Clients',  icon: 'i-lucide-building-2',       to: '/admin?tab=clients',   active: adminTab.value === 'clients' },
-  { label: 'Members',  icon: 'i-lucide-user-plus',        to: '/admin?tab=members',   active: adminTab.value === 'members' },
-  { label: 'Analytics',icon: 'i-lucide-chart-bar',      to: '/admin?tab=analytics', active: adminTab.value === 'analytics' },
-  { label: 'Domains',  icon: 'i-lucide-globe',            to: '/admin?tab=domains',   active: adminTab.value === 'domains' },
-  { label: 'Users',    icon: 'i-lucide-users',            to: '/admin?tab=users',     active: adminTab.value === 'users' },
-  { label: 'Content',  icon: 'i-lucide-file-text',        to: '/admin?tab=content',   active: adminTab.value === 'content' },
-  { label: 'Blog',     icon: 'i-lucide-pencil',           to: '/admin?tab=blog',      active: adminTab.value === 'blog' },
-]])
-
-const _utilityNavigation = computed(() => [[
-  { label: 'Account', icon: 'i-lucide-user-cog', to: '/dashboard/account/settings' }
-]])
-
-const accountSettingsNavigation = computed(() => [[
-  { label: 'Account Profile', icon: 'i-lucide-user', to: '/dashboard/account/settings' },
-  { label: 'Authentication', icon: 'i-lucide-shield', to: '/dashboard/account/settings/authentication' },
-  { label: 'Billing Items', icon: 'i-lucide-receipt', to: '/dashboard/account/settings/billing-items' },
-]])
-
-const orgSettingsNavigation = computed(() => {
-  const org = orgSettingsBase.value
-  if (!org) return [[]]
-  return [[
-    { label: 'General', icon: 'i-lucide-sliders-horizontal', to: `${org}/general` },
-    { label: 'ChatGPT', icon: 'i-lucide-bot', to: `${org}/chatgpt` },
-    { label: 'Domains', icon: 'i-lucide-globe', to: `${org}/domains` },
-    { label: 'Analytics', icon: 'i-lucide-chart-bar', to: `${org}/analytics` },
-    { label: 'Billing', icon: 'i-lucide-credit-card', to: `${org}/billing` },
-    { label: 'Members', icon: 'i-lucide-users', to: `${org}/members` },
-  ]]
+const siteOverviewGroup = computed(() => {
+  if (scope.value !== 'site' || !siteBase.value) return []
+  return [
+    ...parentNavItem(),
+    { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: siteBase.value },
+    { label: 'Conversations', icon: 'i-lucide-messages-square', to: `${siteBase.value}/conversations` },
+    { label: 'Translations', icon: 'i-lucide-languages', to: `${siteBase.value}/translations` },
+  ]
 })
 
-const settingsNavigation = computed(() => {
-  const onOrgSettings = orgSettingsBase.value && route.path.startsWith(orgSettingsBase.value)
-  return onOrgSettings ? orgSettingsNavigation.value : accountSettingsNavigation.value
+const locationOverviewGroup = computed(() => {
+  if (scope.value !== 'location' || !locationBase.value) return []
+  return [
+    ...parentNavItem(),
+    { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: locationBase.value },
+    { label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox` },
+  ]
 })
+
+const contentGroup = computed(() => {
+  const items: { label: string; icon?: string; to: string }[] = []
+  if (scope.value === 'site' && siteBase.value) items.push({ label: 'Content', icon: 'i-lucide-copy', to: `${siteBase.value}/content` })
+  if (scope.value === 'location' && locationBase.value) items.push({ label: 'Content', icon: 'i-lucide-copy', to: `${locationBase.value}/content` })
+  items.push(...managerNavItems('Content'))
+  return items
+})
+
+const operateGroup = computed(() => managerNavItems('Operate'))
+const reputationGroup = computed(() => managerNavItems('Reputation'))
+const publishingGroup = computed(() => managerNavItems('Publishing'))
+
+const settingsGroup = computed(() => {
+  if (route.path.startsWith('/dashboard/account')) {
+    return [
+      { label: 'Profile', icon: 'i-lucide-user', to: '/dashboard/account/profile' },
+      { label: 'Authentication', icon: 'i-lucide-shield', to: '/dashboard/account/authentication' },
+      { label: 'Billing Items', icon: 'i-lucide-receipt', to: '/dashboard/account/billing-items' },
+    ]
+  }
+  return managerNavItems('Settings')
+})
+
+const adminGroup = computed(() => [
+  { label: 'Add-ons', icon: 'i-lucide-inbox', to: '/admin' },
+  ...(dashboard.managedServiceEnabled.value ? [{ label: 'Work Queue', icon: 'i-lucide-list-todo', to: '/admin/work' }] : []),
+  { label: 'Clients', icon: 'i-lucide-building-2', to: '/admin/clients' },
+  { label: 'Members', icon: 'i-lucide-user-plus', to: '/admin/members' },
+  { label: 'Analytics', icon: 'i-lucide-chart-bar', to: '/admin/analytics' },
+  { label: 'Domains', icon: 'i-lucide-globe', to: '/admin/domains' },
+  { label: 'Users', icon: 'i-lucide-users', to: '/admin/users' },
+  { label: 'Content', icon: 'i-lucide-file-text', to: '/admin/content' },
+  { label: 'Blog', icon: 'i-lucide-pencil', to: '/admin/blog' },
+  { label: 'Docs', icon: 'i-lucide-book-open', to: '/admin/docs' },
+])
 
 const navigationItems = computed(() => {
-  if (inAdminWorkspace.value) return adminNavigation.value
-  if (inConversationsWorkspace.value) return []
-  if (inSettingsWorkspace.value) return settingsNavigation.value
-  if (inLocationWorkspace.value) return locationNavigation.value
-  return mainNavigation.value
-})
-
-const navbarTitle = computed(() => {
-  if (inAdminWorkspace.value) return 'Platform Admin'
-  const parts = route.path.split('/').filter(Boolean)
-  // /dashboard/{org}/~/settings/{page} or /dashboard/{org}/sites/{site}/{locationSlug?}/{page}
-  const segment = parts.at(2) === '~'
-    ? parts.at(4)
-    : parts.at(2) === 'sites'
-      ? (inLocationWorkspace.value ? parts.at(5) : parts.at(4))
-      : parts.at(2)
-  if (!segment) return 'Overview'
-  const labels: Record<string, string> = {
-    account: 'Account',
-    activity: 'Activity',
-    analytics: 'Analytics',
-    billing: 'Billing',
-    blog: 'Blog',
-    chatgpt: 'ChatGPT',
-    conversations: 'Conversations',
-    content: 'Content',
-    experiences: 'Experiences',
-    inbox: 'Inbox',
-    locations: 'Locations',
-    media: 'Media',
-    menu: 'Menu',
-    order: 'Orders',
-    pages: 'Pages',
-    photos: 'Photos',
-    posts: 'Posts',
-    qa: 'Q&A',
-    reservations: 'Reservations',
-    reviews: 'Reviews',
-    settings: 'Settings',
-    setup: 'Setup',
-    translations: 'Translations'
-  }
-  return labels[segment] ?? 'Dashboard'
+  if (isAdminRoute.value) return [adminGroup.value]
+  const groups: { label: string; icon?: string; to: string }[][] = []
+  if (overviewGroup.value.length) groups.push(overviewGroup.value)
+  if (siteOverviewGroup.value.length) groups.push(siteOverviewGroup.value)
+  if (locationOverviewGroup.value.length) groups.push(locationOverviewGroup.value)
+  if (contentGroup.value.length) groups.push(contentGroup.value)
+  if (operateGroup.value.length) groups.push(operateGroup.value)
+  if (reputationGroup.value.length) groups.push(reputationGroup.value)
+  if (publishingGroup.value.length) groups.push(publishingGroup.value)
+  if (settingsGroup.value.length) groups.push(settingsGroup.value)
+  return groups
 })
 
 async function switchOrganization(organizationId: string) {
@@ -645,11 +561,6 @@ async function switchOrganization(organizationId: string) {
   await dashboard.refresh()
   await navigateTo('/dashboard')
 }
-
-watch(activeSiteId, (siteId) => {
-  if (!import.meta.client || !siteId) return
-  chowBotHistory.load(siteId).catch(console.error)
-}, { immediate: true })
 
 // Load dashboard context during SSR so nav links render stable org-scoped routes.
 if (route.path.startsWith('/dashboard') && !dashboard.state.value) {
@@ -670,7 +581,7 @@ onMounted(async () => {
   } catch (err) {
     console.error('Failed to load billing status:', err)
   }
-  
+
   // Track dashboard visit
   const segment = route.path.split('/').filter(Boolean).at(2)
   if (segment && activeSiteId.value) {
@@ -694,7 +605,7 @@ async function stopImpersonating() {
   try {
     await $fetch('/api/admin/impersonation/stop', { method: 'POST' })
     await refreshSession()
-    await navigateTo('/admin?tab=users')
+    await navigateTo('/admin/users')
   } catch (error) {
     console.error('Failed to stop impersonation:', error)
     toast.add({

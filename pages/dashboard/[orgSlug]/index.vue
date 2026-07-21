@@ -1,16 +1,22 @@
 <template>
-  <UPage class="h-full">
-    <UPageBody>
+  <UDashboardPanel id="org-overview">
+    <template #header>
+      <UDashboardNavbar title="Dashboard">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+        <template #right>
+          <UButton icon="i-lucide-plus" label="Add site" size="sm" color="primary" variant="soft" :to="`/dashboard/${orgSlug}/sites/new`" />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
       <div v-if="pending" class="space-y-4">
         <USkeleton v-for="i in 3" :key="i" class="h-24 rounded-xl" />
       </div>
 
       <div v-else class="space-y-6">
-        <div class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold text-highlighted">Sites</h2>
-          <UButton icon="i-lucide-plus" label="Add site" size="sm" color="primary" variant="soft" :to="`/dashboard/${orgSlug}/sites/new`" />
-        </div>
-
         <div v-if="sitesWithSubdomain.length === 0" class="py-16 text-center">
           <UIcon name="i-lucide-globe" class="size-8 text-muted mx-auto mb-3" />
           <p class="text-sm text-muted">No sites available.</p>
@@ -36,8 +42,8 @@
           </NuxtLink>
         </div>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
@@ -45,7 +51,6 @@ definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Dashboard | KrabiClaw', robots: 'noindex, nofollow' })
 
 const route = useRoute()
-const router = useRouter()
 const orgSlug = route.params.orgSlug as string
 const dashboard = useDashboardSite()
 const pending = ref(true)
@@ -56,10 +61,6 @@ const sitesWithSubdomain = computed(() => sites.value.filter((site): site is (ty
 onMounted(async () => {
   try {
     await dashboard.refresh()
-    // A single-site org skips the picker entirely — go straight to that site's overview.
-    if (sites.value.length === 1 && sites.value[0]!.subdomain) {
-      await router.replace(`/dashboard/${orgSlug}/sites/${sites.value[0]!.subdomain}`)
-    }
   } finally {
     pending.value = false
   }
