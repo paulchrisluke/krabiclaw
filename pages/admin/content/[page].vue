@@ -1,43 +1,74 @@
 <template>
-  <div class="p-4 lg:p-6 max-w-4xl">
-    <h1 class="text-2xl font-bold text-default capitalize mb-6">Edit {{ page }}</h1>
+  <UDashboardPanel id="admin-content-page">
+    <template #header>
+      <UDashboardNavbar :title="`Edit ${page}`">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+        <template #trailing>
+          <UButton to="/admin/content" color="neutral" variant="soft" icon="i-lucide-arrow-left" size="sm">Content</UButton>
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <div v-if="loading" class="text-center py-12">
-      <p class="text-muted">Loading...</p>
-    </div>
-
-    <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-lg p-6">
-      <p class="text-red-600">{{ error }}</p>
-    </div>
-
-    <UCard v-else>
-      <UFormField label="Page content">
-        <UTextarea id="content" v-model="content" :rows="20" placeholder="Enter page content..." class="mb-4" />
-      </UFormField>
-      <div class="flex gap-4">
-        <UButton @click="saveContent" :loading="saving">Save</UButton>
-        <UButton color="neutral" variant="soft" :loading="deleting" @click="deleteContent">Delete</UButton>
-        <UButton variant="outline" to="/admin/content">Cancel</UButton>
+    <template #body>
+      <div v-if="loading" class="text-center py-12">
+        <p class="text-muted">Loading...</p>
       </div>
-    </UCard>
-  </div>
+
+      <UAlert
+        v-else-if="error"
+        color="error"
+        variant="soft"
+        icon="i-lucide-triangle-alert"
+        :description="error"
+      />
+
+      <UCard v-else>
+        <div class="space-y-4">
+          <UFormField label="Page content">
+            <UTextarea id="content" v-model="content" :rows="20" placeholder="Enter page content..." />
+          </UFormField>
+          <div class="flex gap-3 border-t border-default pt-4">
+            <UButton :loading="saving" @click="saveContent">Save</UButton>
+            <UButton color="error" variant="ghost" :loading="deleting" @click="deleteConfirmOpen = true">Delete</UButton>
+            <UButton variant="ghost" color="neutral" to="/admin/content">Cancel</UButton>
+          </div>
+        </div>
+      </UCard>
+    </template>
+  </UDashboardPanel>
+
+  <UModal v-model:open="deleteConfirmOpen" :ui="{ content: 'max-w-md' }">
+    <template #content>
+      <div class="p-6">
+        <h3 class="text-lg font-semibold text-default mb-2">Delete content?</h3>
+        <p class="text-sm text-muted mb-6">Delete all content for <strong>{{ page }}</strong>? This cannot be undone.</p>
+        <div class="flex justify-end gap-2">
+          <UButton variant="ghost" color="neutral" @click="deleteConfirmOpen = false">Cancel</UButton>
+          <UButton color="error" :loading="deleting" @click="confirmDelete">Delete</UButton>
+        </div>
+      </div>
+    </template>
+  </UModal>
 </template>
 
-<script setup>
-definePageMeta({ layout: 'dashboard' })
+<script setup lang="ts">
+definePageMeta({ layout: 'dashboard', middleware: 'admin' })
 
 const route = useRoute()
-const page = route.params.page
+const toast = useToast()
+const page = route.params.page as string
 
-await useAuth()
 const content = ref('')
 const loading = ref(true)
 const error = ref('')
 const saving = ref(false)
 const deleting = ref(false)
+const deleteConfirmOpen = ref(false)
 
-function validatePage(value) {
-  return !!value && /^[a-zA-Z0-9_-]+$/.test(String(value))
+function validatePage(value: string) {
+  return !!value && /^[a-zA-Z0-9_-]+$/.test(value)
 }
 
 onMounted(async () => {
@@ -47,9 +78,8 @@ onMounted(async () => {
       loading.value = false
       return
     }
-
-    const response = await $fetch(`/api/admin/content/${page}`)
-    content.value = response.content || ''
+    const response = await $fetch<{ content?: string }>(`/api/admin/content/${page}`)
+    content.value = response.content ?? ''
   } catch (err) {
     console.error('Failed to load content:', err)
     error.value = 'Failed to load content'
@@ -60,47 +90,42 @@ onMounted(async () => {
 
 async function saveContent() {
   if (!validatePage(page)) {
-    alert('Invalid page parameter')
+    toast.add({ title: 'Invalid page parameter', color: 'error' })
     return
   }
-
   saving.value = true
   try {
     await $fetch(`/api/admin/content/${page}`, {
       method: 'POST',
-      body: { content: content.value }
+      body: { content: content.value },
     })
-    alert('Content saved successfully!')
+    toast.add({ title: 'Content saved', color: 'success' })
   } catch (err) {
     console.error('Failed to save content:', err)
-    alert('Failed to save content')
+    toast.add({ title: 'Failed to save content', color: 'error' })
   } finally {
     saving.value = false
   }
 }
 
-async function deleteContent() {
+async function confirmDelete() {
   if (!validatePage(page)) {
-    alert('Invalid page parameter')
+    toast.add({ title: 'Invalid page parameter', color: 'error' })
     return
   }
-
-  if (!confirm(`Delete all content for ${page}?`)) {
-    return
-  }
-
   deleting.value = true
   try {
-    await $fetch(`/api/admin/content/${page}`, {
-      method: 'DELETE'
-    })
+    await $fetch(`/api/admin/content/${page}`, { method: 'DELETE' })
     content.value = ''
-    alert('Content deleted successfully!')
+    deleteConfirmOpen.value = false
+    toast.add({ title: 'Content deleted', color: 'success' })
   } catch (err) {
     console.error('Failed to delete content:', err)
-    alert('Failed to delete content')
+    toast.add({ title: 'Failed to delete content', color: 'error' })
   } finally {
     deleting.value = false
   }
 }
+
+useSeoMeta({ title: `Edit ${page} | Admin`, robots: 'noindex, nofollow' })
 </script>

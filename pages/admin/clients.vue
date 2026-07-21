@@ -280,7 +280,7 @@
                 />
               </div>
               <div class="flex gap-2">
-                <UInput v-model.number="cashLocalRate" type="number" placeholder="Rate (e.g. 1500)" :min="0" size="sm" class="flex-1" />
+                <UInputNumber v-model="cashLocalRate" placeholder="Rate (e.g. 1500)" :min="0" size="sm" class="flex-1" />
                 <UInput v-model="cashLocalCurrency" placeholder="Currency (e.g. THB)" size="sm" class="w-28" />
               </div>
               <p class="text-xs text-muted">Local rate + currency power the billing reminder emails.</p>
