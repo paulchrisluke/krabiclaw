@@ -44,7 +44,7 @@ test('universal CMS content route is scoped by siteId and no longer depends on t
 test('universal CMS uses one page-level save model', () => {
   assert.doesNotMatch(editorSource, /id="field-apply-btn"/)
   assert.doesNotMatch(editorSource, /const applyField/)
-  assert.match(editorSource, /currentValues\.value\[activeField\.value\] !== editingValue\.value/)
+  assert.match(editorSource, /\(currentValues\.value\[activeField\.value\] \|\| ''\) !== editingValue\.value/)
   assert.match(editorSource, /onBeforeRouteLeave/)
   assert.match(editorSource, /Discard unsaved content changes/)
 })

@@ -572,7 +572,11 @@ const postPreviewUpdate = () => {
 }
 
 watch(editingValue, () => {
-  if (activeField.value && !contentLoading.value && currentValues.value[activeField.value] !== editingValue.value) {
+  // selectField() seeds editingValue from currentValues.value[key] || '', so an
+  // absent value and an empty string must compare equal here too — otherwise
+  // merely selecting a never-filled-in field (undefined vs '') looks like an
+  // edit and flips localHasChanges before the user has typed anything.
+  if (activeField.value && !contentLoading.value && (currentValues.value[activeField.value] || '') !== editingValue.value) {
     currentValues.value = { ...currentValues.value, [activeField.value]: editingValue.value }
     localHasChanges.value = true
   }

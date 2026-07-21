@@ -18,15 +18,13 @@ function safeJsonParse(value: string): unknown {
 // malformed/legacy rows that predate that normalization rather than trusting an
 // unchecked cast, which would otherwise silently hand callers a shape that
 // doesn't match what they expect from the address contract.
-function parseLocationAddress(value: string | null): { addressLines?: string[] } | null {
+function parseLocationAddress(value: string | null): { addressLines: string[] } | null {
   if (!value) return null
   const parsed = safeJsonParse(value)
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
   const addressLines = (parsed as Record<string, unknown>).addressLines
-  if (addressLines !== undefined && (!Array.isArray(addressLines) || !addressLines.every(line => typeof line === 'string'))) {
-    return null
-  }
-  return { addressLines: addressLines as string[] | undefined }
+  if (!Array.isArray(addressLines) || !addressLines.every(line => typeof line === 'string')) return null
+  return { addressLines }
 }
 
 export interface DashboardOrganizationRow {

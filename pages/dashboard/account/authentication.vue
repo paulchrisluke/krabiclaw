@@ -19,7 +19,7 @@
           </div>
 
           <UCard variant="soft">
-            <div class="divide-y divide-border">
+            <div class="divide-y divide-default">
               <!-- Email -->
               <div class="flex items-center justify-between p-4 sm:px-6">
                 <div class="flex items-center gap-4">
@@ -43,7 +43,8 @@
                   <UIcon name="i-logos-google-icon" class="size-6" />
                   <div>
                     <p class="font-medium text-highlighted">Google</p>
-                    <p class="text-sm text-muted">Connected to {{ sessionData?.user?.email }}</p>
+                    <p v-if="googleConnected" class="text-sm text-muted">Connected to {{ sessionData?.user?.email }}</p>
+                    <p v-else class="text-sm text-muted">Not connected</p>
                   </div>
                 </div>
               </div>
@@ -75,11 +76,21 @@
 </template>
 
 <script setup lang="ts">
-// -nocheck
+import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
 
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Authentication | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 const { data: sessionData } = useAuth()
+
+const googleConnected = ref(false)
+onMounted(async () => {
+  try {
+    const { data } = await authClient.listAccounts()
+    googleConnected.value = data?.some(account => account.providerId === 'google') ?? false
+  } catch {
+    googleConnected.value = false
+  }
+})
 </script>

@@ -54,9 +54,10 @@
         <UCard :ui="{ body: 'p-6' }">
           <div class="space-y-4">
             <UFormField label="Display Name" name="displayName" help="Please enter your full name, or a display name you are comfortable with.">
-              <UInput 
-                v-model="nameInput" 
+              <UInput
+                v-model="nameInput"
                 class="max-w-md"
+                @input="nameTouched = true"
                 @keydown.enter="saveName"
               />
             </UFormField>
@@ -82,9 +83,10 @@
         <UCard :ui="{ body: 'p-6' }" v-if="organization">
           <div class="space-y-4">
             <UFormField label="Organization Name" name="organizationName" help="This is your primary workspace name.">
-              <UInput 
-                v-model="orgNameInput" 
+              <UInput
+                v-model="orgNameInput"
                 class="max-w-md"
+                @input="orgNameTouched = true"
                 @keydown.enter="saveOrgName"
               />
             </UFormField>
@@ -130,10 +132,11 @@
         <UCard :ui="{ body: 'p-6' }">
           <div class="space-y-4">
             <UFormField label="Phone Number" name="phoneNumber" help="Enter a phone number to receive important service updates by WhatsApp.">
-              <UInput 
-                v-model="phoneInput" 
+              <UInput
+                v-model="phoneInput"
                 class="max-w-md"
                 placeholder="+1234567890"
+                @input="phoneTouched = true"
                 @keydown.enter="requestPhoneVerify"
               />
             </UFormField>
@@ -364,9 +367,17 @@ async function saveName() {
   }
 }
 
+// useAuth()'s session resolves asynchronously, so nameInput starts as '' before
+// the real name arrives. Gating the sync on nameDirty breaks the moment that
+// happens: dirty is computed against sessionData too, so populating the name
+// alone (no user input at all) flips '' !== 'RealName' to dirty and the sync
+// never runs — the field is stuck blank. nameTouched tracks only genuine user
+// edits (set from @input, a native DOM event a programmatic ref assignment
+// never dispatches), independent of what the comparison side is doing.
+const nameTouched = ref(false)
 watch(() => sessionData.value?.user?.name, (newVal) => {
-  if (newVal && !nameDirty.value) nameInput.value = newVal
-})
+  if (newVal !== undefined && !nameTouched.value) nameInput.value = newVal || ''
+}, { immediate: true })
 
 // Organization Name
 const orgNameInput = ref(organization.value?.name || '')
@@ -390,9 +401,10 @@ async function saveOrgName() {
   }
 }
 
+const orgNameTouched = ref(false)
 watch(() => organization.value?.name, (newVal) => {
-  if (newVal && !orgNameDirty.value) orgNameInput.value = newVal
-})
+  if (newVal !== undefined && !orgNameTouched.value) orgNameInput.value = newVal || ''
+}, { immediate: true })
 
 // Phone Number
 const phoneInput = ref(sessionData.value?.user?.phoneNumber || '')
@@ -442,9 +454,10 @@ async function verifyPhone() {
   }
 }
 
+const phoneTouched = ref(false)
 watch(() => sessionData.value?.user?.phoneNumber, (newVal) => {
-  if (newVal && !phoneDirty.value) phoneInput.value = newVal
-})
+  if (newVal !== undefined && !phoneTouched.value) phoneInput.value = newVal || ''
+}, { immediate: true })
 
 // User ID
 async function copyUserId() {
@@ -518,5 +531,5 @@ async function confirmDeleteAccount() {
   }
 }
 
-useSeoMeta({ title: 'Settings | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Profile | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>
