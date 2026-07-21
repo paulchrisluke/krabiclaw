@@ -15,21 +15,6 @@
 
     <template #body>
       <div class="space-y-6">
-        <UCard variant="soft">
-          <div class="flex flex-wrap gap-1">
-            <UButton
-              v-for="tab in locationTabs"
-              :key="tab.label"
-              :to="tab.to"
-              :icon="tab.icon"
-              :variant="tab.active ? 'soft' : 'ghost'"
-              :color="tab.active ? 'primary' : 'neutral'"
-            >
-              {{ tab.label }}
-            </UButton>
-          </div>
-        </UCard>
-
         <p class="text-sm text-muted">{{ rangeLabel }}</p>
 
         <UCard variant="soft">
@@ -215,20 +200,8 @@ interface AnalyticsResponse {
 
 const toast = useToast()
 const dashboard = useDashboardSite()
-const dashboardLocation = useDashboardLocation()
 if (!dashboard.state.value) await dashboard.refresh()
 const siteId = await useDashboardSiteId()
-
-const locationId = computed(() => dashboardLocation.currentLocationId.value ?? '')
-const { locationPath, locationMenuPath, locationContentPath, paths } = useDashboardSiteLinks(siteId)
-
-const locationTabs = computed(() => [
-  { label: 'Overview', icon: 'i-lucide-house', active: false, to: locationPath(locationId.value) },
-  { label: 'Analytics', icon: 'i-lucide-chart-bar', active: true, to: `${locationPath(locationId.value)}/analytics` },
-  { label: 'Content', icon: 'i-lucide-file-text', active: false, to: locationContentPath(locationId.value) },
-  { label: 'Menu', icon: 'i-lucide-list', active: false, to: locationMenuPath(locationId.value) },
-  { label: 'Details', icon: 'i-lucide-map-pin', active: false, to: `${paths.value.settings}?tab=locations&locationId=${locationId.value}` }
-])
 
 const presets: Array<{ key: PresetKey; label: string }> = [
   { key: 'last_52_weeks', label: 'Last 52 weeks' },

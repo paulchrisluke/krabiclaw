@@ -407,23 +407,6 @@ async function applyRouteSelection() {
     return
   }
 
-  const legacyReply = typeof route.query.reply === 'string' ? route.query.reply : null
-  const tab = typeof route.query.tab === 'string' ? route.query.tab : null
-  if (legacyReply) {
-    const mappedType: SubmissionType | null = tab === 'contact'
-      ? 'contact'
-      : tab === 'reservations'
-        ? 'reservation'
-        : tab === 'bookings'
-          ? 'experience_booking'
-          : null
-    const match = threads.value.find(thread => thread.submission_id === legacyReply && (!mappedType || thread.submission_type === mappedType))
-    if (match) {
-      await selectThread(match.id)
-      return
-    }
-  }
-
   selectedThreadId.value = null
   selectedDetail.value = null
   mobileView.value = 'list'
@@ -449,8 +432,6 @@ async function selectThread(threadId: string) {
     ),
     thread: threadId,
   }
-  delete query.reply
-  delete query.tab
   await router.push({ query })
   await loadThreads()
 }
