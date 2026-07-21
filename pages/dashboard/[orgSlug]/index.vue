@@ -30,7 +30,7 @@
             :to="`/dashboard/${orgSlug}/sites/${s.subdomain}`"
             class="group block"
           >
-            <UCard class="h-full transition-shadow group-hover:shadow-md cursor-pointer">
+            <UCard variant="soft" class="h-full cursor-pointer">
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
                   <p class="text-sm font-semibold text-highlighted truncate">{{ s.brand_name ?? s.subdomain }}</p>

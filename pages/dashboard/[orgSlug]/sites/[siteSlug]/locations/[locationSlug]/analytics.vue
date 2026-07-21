@@ -1,8 +1,21 @@
 <template>
-  <UPage>
-    <UPageBody>
+  <UDashboardPanel id="location-analytics">
+    <template #header>
+      <UDashboardNavbar title="Analytics">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+        <template #trailing>
+          <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="loading" @click="loadAnalytics">
+            Refresh
+          </UButton>
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
       <div class="space-y-6">
-        <UCard>
+        <UCard variant="soft">
           <div class="flex flex-wrap gap-1">
             <UButton
               v-for="tab in locationTabs"
@@ -17,17 +30,9 @@
           </div>
         </UCard>
 
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 class="text-2xl font-semibold text-highlighted">Analytics</h1>
-            <p class="mt-1 text-sm text-muted">{{ rangeLabel }}</p>
-          </div>
-          <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="loading" @click="loadAnalytics">
-            Refresh
-          </UButton>
-        </div>
+        <p class="text-sm text-muted">{{ rangeLabel }}</p>
 
-        <UCard>
+        <UCard variant="soft">
           <div class="grid gap-4 lg:grid-cols-[13rem_1fr]">
             <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
               <UButton
@@ -56,7 +61,7 @@
         </UCard>
 
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <UCard v-for="metric in metricCards" :key="metric.label">
+          <UCard v-for="metric in metricCards" :key="metric.label" variant="soft">
             <div class="flex items-start justify-between gap-3">
               <div>
                 <p class="text-sm text-muted">{{ metric.label }}</p>
@@ -68,7 +73,7 @@
           </UCard>
         </div>
 
-        <UCard>
+        <UCard variant="soft">
           <template #header>
             <div class="flex items-center justify-between gap-3">
               <h2 class="font-semibold text-highlighted">Traffic trend</h2>
@@ -94,7 +99,7 @@
         </UCard>
 
         <div class="grid gap-4 xl:grid-cols-2">
-          <UCard>
+          <UCard variant="soft">
             <template #header>
               <h2 class="font-semibold text-highlighted">Countries</h2>
             </template>
@@ -111,7 +116,7 @@
             </div>
           </UCard>
 
-          <UCard>
+          <UCard variant="soft">
             <template #header>
               <h2 class="font-semibold text-highlighted">Referrers</h2>
             </template>
@@ -127,7 +132,7 @@
             </div>
           </UCard>
 
-          <UCard>
+          <UCard variant="soft">
             <template #header>
               <h2 class="font-semibold text-highlighted">Devices</h2>
             </template>
@@ -144,7 +149,7 @@
             </div>
           </UCard>
 
-          <UCard>
+          <UCard variant="soft">
             <template #header>
               <h2 class="font-semibold text-highlighted">Cities</h2>
             </template>
@@ -162,7 +167,7 @@
           </UCard>
         </div>
 
-        <UCard>
+        <UCard variant="soft">
           <template #header>
             <h2 class="font-semibold text-highlighted">Top pages</h2>
           </template>
@@ -178,8 +183,8 @@
           </div>
         </UCard>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

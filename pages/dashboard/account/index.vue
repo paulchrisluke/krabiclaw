@@ -10,7 +10,7 @@
 
     <template #body>
       <div class="max-w-4xl space-y-4">
-        <UCard v-for="item in items" :key="item.to" class="transition-shadow hover:shadow-md">
+        <UCard v-for="item in items" :key="item.to" variant="soft">
           <NuxtLink :to="item.to" class="flex items-center justify-between gap-4">
             <div class="flex items-center gap-4">
               <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">

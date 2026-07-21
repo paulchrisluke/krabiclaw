@@ -18,7 +18,7 @@
             <p class="text-sm text-muted">Customize how you access your account. Link your social profiles or phone number for seamless, secure authentication.</p>
           </div>
 
-          <UCard :ui="{ body: 'p-0 sm:p-0' }">
+          <UCard variant="soft">
             <div class="divide-y divide-border">
               <!-- Email -->
               <div class="flex items-center justify-between p-4 sm:px-6">

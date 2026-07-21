@@ -1,7 +1,14 @@
 <template>
-  <UPage>
+  <UDashboardPanel id="location-orders">
+    <template #header>
+      <UDashboardNavbar title="Orders">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <UPageBody>
+    <template #body>
       <div v-if="loading" class="space-y-3">
         <USkeleton v-for="i in 3" :key="i" class="h-48 rounded-lg" />
       </div>
@@ -13,14 +20,14 @@
       </div>
 
       <div v-else class="space-y-4">
-        <UCard v-for="location in locations" :key="location.id">
+        <UCard v-for="location in locations" :key="location.id" variant="soft">
           <template #header>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 class="font-semibold text-highlighted">{{ location.title }}</h2>
                 <p class="text-sm text-muted">{{ location.city || location.addressText || 'Location ordering links' }}</p>
               </div>
-              <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-map-pin" :to="`${paths.locations}/${location.id}`">Location details</UButton>
+              <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-map-pin" :to="locationPath(location.id)">Location details</UButton>
             </div>
           </template>
 
@@ -57,8 +64,8 @@
           </div>
         </UCard>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
@@ -85,7 +92,7 @@ const toast = useToast()
 const locations = ref<Array<LocationRow & { addressText: string; form: OrderForm }>>([])
 const loading = ref(true)
 const savingId = ref<string | null>(null)
-const { paths } = useDashboardSiteLinks(siteId)
+const { paths, locationPath } = useDashboardSiteLinks(siteId)
 
 function addressText(address: LocationRow['address']) {
   return address?.addressLines?.filter(Boolean).join(', ') ?? ''

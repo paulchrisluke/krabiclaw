@@ -1,17 +1,24 @@
 <template>
-  <UPage>
+  <UDashboardPanel id="location-reservations">
+    <template #header>
+      <UDashboardNavbar title="Reservations">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <UPageBody>
+    <template #body>
       <div class="mb-4 grid gap-3 md:grid-cols-3">
-        <UCard>
+        <UCard variant="soft">
           <p class="text-sm text-muted">New requests</p>
           <p class="mt-2 text-3xl font-semibold text-highlighted">{{ newCount }}</p>
         </UCard>
-        <UCard>
+        <UCard variant="soft">
           <p class="text-sm text-muted">Confirmed</p>
           <p class="mt-2 text-3xl font-semibold text-highlighted">{{ confirmedCount }}</p>
         </UCard>
-        <UCard>
+        <UCard variant="soft">
           <p class="text-sm text-muted">Total</p>
           <p class="mt-2 text-3xl font-semibold text-highlighted">{{ reservations.length }}</p>
         </UCard>
@@ -35,12 +42,12 @@
         <USkeleton v-for="i in 5" :key="i" class="h-24 rounded-lg" />
       </div>
 
-      <UCard v-else-if="reservations.length === 0" class="border-dashed" :ui="{ body: 'px-6 py-12 text-center' }">
+      <UCard v-else-if="reservations.length === 0" variant="soft" class="border-dashed">
         <UIcon name="i-lucide-calendar-days" class="mx-auto size-9 text-muted" />
         <p class="mt-3 text-sm font-medium text-highlighted">No reservation requests yet</p>
       </UCard>
 
-      <UCard v-else :ui="{ body: 'p-0 sm:p-0' }">
+      <UCard v-else variant="soft">
         <div v-for="reservation in reservations" :key="reservation.id" class="flex flex-col gap-3 border-b border-default p-4 last:border-0 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div class="flex flex-wrap items-center gap-2">
@@ -68,8 +75,8 @@
           </div>
         </div>
       </UCard>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

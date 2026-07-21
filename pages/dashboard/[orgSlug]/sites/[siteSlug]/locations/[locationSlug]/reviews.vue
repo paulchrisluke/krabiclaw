@@ -1,12 +1,19 @@
 <template>
-  <UPage>
+  <UDashboardPanel id="location-reviews">
+    <template #header>
+      <UDashboardNavbar title="Reviews">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+        <template #trailing>
+          <USelect v-model="statusFilter" :items="statusItems" value-key="id" label-key="label" class="w-44" />
+          <UButton icon="i-lucide-plus" color="primary" variant="soft" :disabled="!currentLocation" @click="startCreate">Add review</UButton>
+          <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadReviews">Refresh</UButton>
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <UPageBody>
-      <div class="mb-4 flex flex-wrap items-center gap-2">
-        <USelect v-model="statusFilter" :items="statusItems" value-key="id" label-key="label" class="w-44" />
-        <UButton icon="i-lucide-plus" color="primary" variant="soft" :disabled="!currentLocation" @click="startCreate">Add review</UButton>
-        <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadReviews">Refresh</UButton>
-      </div>
+    <template #body>
 
       <div v-if="loading" class="space-y-3">
         <USkeleton v-for="i in 4" :key="i" class="h-32 rounded-lg" />
@@ -120,23 +127,23 @@
               <USkeleton v-for="i in 3" :key="i" class="h-16 rounded-lg" />
             </div>
             <div v-else-if="customerPanel" class="mt-6 grid gap-4 md:grid-cols-2">
-              <UCard :ui="{ body: 'p-4 sm:p-4' }">
+              <UCard variant="soft">
                 <p class="text-xs font-medium uppercase tracking-wide text-muted">Account</p>
                 <p class="mt-2 text-sm text-default">Auth user: {{ customerPanel.customer.user_id || 'Not linked' }}</p>
                 <p class="mt-1 text-sm text-default">Stripe: {{ customerPanel.customer.stripe_customer_id || 'None' }}</p>
                 <p class="mt-1 text-sm text-default">Source: {{ customerPanel.customer.source }}</p>
               </UCard>
-              <UCard :ui="{ body: 'p-4 sm:p-4' }">
+              <UCard variant="soft">
                 <p class="text-xs font-medium uppercase tracking-wide text-muted">Review requests</p>
                 <p class="mt-2 text-sm text-default">{{ customerPanel.reviewRequests.length }} total</p>
                 <p class="mt-1 text-sm text-default">{{ customerPanel.reviewRequests.filter(request => request.submitted_at).length }} submitted</p>
               </UCard>
-              <UCard :ui="{ body: 'p-4 sm:p-4' }">
+              <UCard variant="soft">
                 <p class="text-xs font-medium uppercase tracking-wide text-muted">Bookings</p>
                 <p class="mt-2 text-sm text-default">{{ customerPanel.reservations.length }} reservations</p>
                 <p class="mt-1 text-sm text-default">{{ customerPanel.experienceBookings.length }} experience bookings</p>
               </UCard>
-              <UCard :ui="{ body: 'p-4 sm:p-4' }">
+              <UCard variant="soft">
                 <p class="text-xs font-medium uppercase tracking-wide text-muted">Reviews</p>
                 <p class="mt-2 text-sm text-default">{{ customerPanel.reviews.length }} reviews</p>
                 <p class="mt-1 text-sm text-default">{{ customerPanel.reviews.filter(review => review.status === 'approved').length }} approved</p>
@@ -145,8 +152,8 @@
           </div>
         </template>
       </UModal>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

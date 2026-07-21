@@ -15,7 +15,7 @@
         <section class="space-y-4">
           <h3 class="text-xl font-semibold text-highlighted">Personal</h3>
 
-          <UCard :ui="{ body: 'p-4 sm:p-6', footer: 'px-4 py-3 sm:px-6 bg-elevated/30' }">
+          <UCard variant="soft">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-3">
                 <UIcon name="i-lucide-user" class="size-6 text-muted" />
@@ -54,11 +54,7 @@
           </div>
 
           <div v-else class="space-y-6">
-            <UCard 
-              v-for="item in billingItems" 
-              :key="item.organization.id"
-              :ui="{ body: 'p-4 sm:p-6', footer: 'px-4 py-3 sm:px-6 bg-elevated/30' }"
-            >
+            <UCard v-for="item in billingItems" :key="item.organization.id" variant="soft">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
                   <UAvatar :src="item.organization.logo || undefined" :alt="item.organization.name" :ui="{ root: 'rounded-md' }" size="sm" />
