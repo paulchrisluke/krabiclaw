@@ -587,7 +587,8 @@ async function save() {
   }
   saving.value = true
   try {
-    const parseNumber = (value: string | number): number | null => {
+    const parseNumber = (value: string | number | null | undefined): number | null => {
+      if (value == null) return null
       const str = String(value)
       if (!str.trim()) return null
       const parsed = Number(str)
@@ -692,7 +693,7 @@ const availabilityLoading = ref(false)
 const availabilitySlots = ref<SlotAvailability[]>([])
 const availabilityTimezone = ref<string | null>(null)
 const existingOverrides = ref<SlotOverride[]>([])
-const slotCapacityOverrides = reactive<Record<string, string>>({})
+const slotCapacityOverrides = reactive<Record<string, number | null>>({})
 const savingOverride = ref<string | null>(null)
 
 function openAvailability(exp: ApiRecord) {
@@ -742,7 +743,7 @@ async function toggleSlotOverride(slot: SlotAvailability) {
         override_date: availabilityDate.value,
         time_slot: slot.time_slot,
         status: slot.is_closed ? 'open' : 'closed',
-        capacity_override: capacityInput != null && capacityInput !== '' ? Number(capacityInput) : null,
+        capacity_override: capacityInput != null ? capacityInput : null,
       },
     })
     await loadAvailability()

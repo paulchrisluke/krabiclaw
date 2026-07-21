@@ -1,6 +1,6 @@
 export const formatDate = (dateString: string | null | undefined) => {
   if (!dateString) return '—'
-  const isDateOnly = /^\\d{4}-\\d{2}-\\d{2}$/.test(dateString)
+  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(dateString)
   const d = new Date(dateString)
   if (Number.isNaN(d.getTime())) return '—'
   return d.toLocaleDateString('en-US', {

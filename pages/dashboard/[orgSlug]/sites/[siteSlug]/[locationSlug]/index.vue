@@ -761,15 +761,17 @@ const setDetailsActive = (v: boolean | 'indeterminate') => {
   detailsForm.status = v ? 'active' : 'inactive'
 }
 
-const optionalNumber = (value: string) => {
-  const trimmed = value.trim()
+const optionalNumber = (value: string | number | null | undefined): number | null => {
+  if (value == null) return null
+  const trimmed = String(value).trim()
   if (!trimmed) return null
   const parsed = Number(trimmed)
   return Number.isFinite(parsed) ? parsed : null
 }
 
-const optionalInteger = (value: string) => {
-  const trimmed = value.trim()
+const optionalInteger = (value: string | number | null | undefined): number | null => {
+  if (value == null) return null
+  const trimmed = String(value).trim()
   if (!trimmed) return null
   const parsed = Number(trimmed)
   return Number.isInteger(parsed) ? parsed : null
