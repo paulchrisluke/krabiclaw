@@ -43,7 +43,9 @@
                   <UIcon name="i-logos-google-icon" class="size-6" />
                   <div>
                     <p class="font-medium text-highlighted">Google</p>
-                    <p v-if="googleConnected" class="text-sm text-muted">Connected to {{ sessionData?.user?.email }}</p>
+                    <p v-if="googleStatus === 'loading'" class="text-sm text-muted">Checking…</p>
+                    <p v-else-if="googleStatus === 'connected'" class="text-sm text-muted">Connected</p>
+                    <p v-else-if="googleStatus === 'error'" class="text-sm text-muted">Unable to check connection status</p>
                     <p v-else class="text-sm text-muted">Not connected</p>
                   </div>
                 </div>
@@ -84,13 +86,22 @@ useSeoMeta({ title: 'Authentication | KrabiClaw Dashboard', robots: 'noindex, no
 
 const { data: sessionData } = useAuth()
 
-const googleConnected = ref(false)
+// listAccounts() doesn't expose a per-account email (only providerId/accountId/
+// scopes) — there's no Google-specific email to show, so "connected" renders a
+// generic label rather than implying we know a per-provider address. A failed
+// lookup is shown distinctly from "not connected" too, since defaulting an
+// error to false would misreport a real Google-linked account as unlinked.
+const googleStatus = ref<'loading' | 'connected' | 'not-connected' | 'error'>('loading')
 onMounted(async () => {
   try {
-    const { data } = await authClient.listAccounts()
-    googleConnected.value = data?.some(account => account.providerId === 'google') ?? false
+    const { data, error } = await authClient.listAccounts()
+    if (error) {
+      googleStatus.value = 'error'
+      return
+    }
+    googleStatus.value = data?.some(account => account.providerId === 'google') ? 'connected' : 'not-connected'
   } catch {
-    googleConnected.value = false
+    googleStatus.value = 'error'
   }
 })
 </script>
