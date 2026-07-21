@@ -470,6 +470,7 @@ const overviewGroup = computed(() => {
   if (scope.value !== 'organization' || !orgBase.value) return []
   return [
     { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: orgBase.value },
+    { label: 'Sites', icon: 'i-lucide-globe', to: `${orgBase.value}/sites` },
     { label: 'Activity', icon: 'i-lucide-activity', to: `${orgBase.value}/activity` },
     // Org settings (general/domains/members/billing) are organization-level,
     // not site-level, so they belong here regardless of the CMS registry's
@@ -492,8 +493,9 @@ const siteOverviewGroup = computed(() => {
   return [
     ...parentNavItem(),
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: siteBase.value },
-    { label: 'Conversations', icon: 'i-lucide-messages-square', to: `${siteBase.value}/conversations` },
-    { label: 'Translations', icon: 'i-lucide-languages', to: `${siteBase.value}/translations` },
+    { label: 'Locations', icon: 'i-lucide-map-pin', to: locationsBase.value ?? `${siteBase.value}/locations` },
+    { label: 'Assistant', icon: 'i-lucide-bot', to: `${siteBase.value}/conversations` },
+    // { label: 'Translations', icon: 'i-lucide-languages', to: `${siteBase.value}/translations` },
   ]
 })
 
