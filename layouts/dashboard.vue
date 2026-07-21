@@ -21,7 +21,7 @@
         resizable
         collapsible
         :menu="{ close: false }"
-        :ui="{ header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', root: 'relative hidden lg:flex flex-col min-h-svh min-w-16 w-(--width) shrink-0 bg-elevated', body: 'flex flex-col gap-4 flex-1 overflow-y-auto px-3 py-1', content: 'lg:hidden bg-elevated' }"
+        :ui="{ root: 'bg-elevated', header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', body: 'px-3 py-1', content: 'bg-elevated' }"
       >
         <template #header="{ collapsed }">
           <DashboardScopeHeader :model="scopeHeaderModel" :collapsed="collapsed" />

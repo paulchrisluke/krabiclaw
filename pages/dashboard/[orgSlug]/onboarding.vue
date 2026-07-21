@@ -1,11 +1,13 @@
 <template>
   <div class="flex h-screen flex-col overflow-hidden bg-muted text-highlighted">
 
-    <!-- Body: wizard left, preview right -->
+    <!-- Body: wizard left, preview right. Single column with vertical scroll
+         below sm so the wizard pane (min 24rem) never gets hard-clipped by
+         overflow-hidden on narrow viewports; two-column split from sm up. -->
     <div
-      v-if="loaded"
-      class="grid min-h-0 flex-1 overflow-hidden"
-      style="grid-template-columns: minmax(24rem, 45%) 1fr; grid-template-rows: minmax(0, 1fr)"
+      v-if="loaded && !loadError"
+      class="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto sm:grid-cols-[minmax(24rem,45%)_1fr] sm:overflow-hidden"
+      style="grid-template-rows: minmax(0, 1fr)"
     >
       <TransferOnboardingWizard
         :site-id="siteId"
@@ -29,6 +31,16 @@
         @select-page="selectedPage = $event"
         @select-location="selectedLocationId = $event"
       />
+    </div>
+
+    <div v-else-if="loadError" class="flex min-h-0 flex-1 items-center justify-center">
+      <div class="flex flex-col items-center gap-3 text-center">
+        <UIcon name="i-lucide-triangle-alert" class="size-6 text-error" />
+        <p class="text-sm text-muted">We couldn't load your site. Please try again.</p>
+        <UButton size="sm" color="neutral" variant="soft" @click="loadTransferContext">
+          Try again
+        </UButton>
+      </div>
     </div>
 
     <div v-else class="flex min-h-0 flex-1 items-center justify-center">
@@ -62,6 +74,7 @@ interface LocationRow {
 }
 
 const loaded = ref(false)
+const loadError = ref(false)
 const siteId = ref('')
 const siteName = ref('Your Site')
 const siteVertical = ref<SiteVertical>('restaurant')
@@ -109,7 +122,9 @@ const iframeSrc = computed(() => {
   return url.toString()
 })
 
-onMounted(async () => {
+async function loadTransferContext() {
+  loaded.value = false
+  loadError.value = false
   try {
     const ctx = await $fetch<{
       success: boolean
@@ -131,20 +146,19 @@ onMounted(async () => {
       plan.value = ctx.site.plan ?? 'free'
     }
 
-    if (!siteId.value) return
+    // A missing site is a genuine load failure, not "nothing to show yet" —
+    // render the retry/error state rather than a wizard with an empty siteId.
+    if (!siteId.value) {
+      loadError.value = true
+      return
+    }
 
-    // This route has no siteSlug segment, so the dashboard-site-header plugin never
-    // attaches a header — set it explicitly so /api/dashboard/locations resolves the
-    // same site /api/dashboard/context just found instead of hitting the generic
-    // multi-site-ambiguity 400. A transferred site without a subdomain (custom-domain-only)
-    // has no header value to send, so skip the call rather than letting it 404 and take
-    // down the already-resolved notifRes via Promise.all's fail-fast rejection.
+    // /api/sites/:siteId/locations is keyed purely by siteId + session
+    // membership — unlike /api/dashboard/locations, it needs no site-slug
+    // header, so it works for a transferred site with no subdomain yet
+    // (custom-domain-only) instead of silently losing that site's locations.
     const [locsRes, notifRes] = await Promise.all([
-      subdomain.value
-        ? $fetch<{ locations: LocationRow[] }>('/api/dashboard/locations', {
-            headers: { 'x-dashboard-site-slug': subdomain.value },
-          }).catch(() => null)
-        : Promise.resolve(null),
+      $fetch<{ success: boolean; locations: LocationRow[] }>(`/api/sites/${siteId.value}/locations`).catch(() => null),
       $fetch<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>(
         `/api/editor/sites/${siteId.value}/notifications`
       ).catch(() => null),
@@ -159,10 +173,13 @@ onMounted(async () => {
     }
   } catch (e) {
     console.error('transfer_onboarding_load_failed', e)
+    loadError.value = true
   } finally {
     loaded.value = true
   }
-})
+}
+
+onMounted(loadTransferContext)
 
 function finish() {
   router.push(`/dashboard/${orgSlug.value}`)
