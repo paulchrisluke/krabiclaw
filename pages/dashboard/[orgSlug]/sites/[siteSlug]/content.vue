@@ -612,6 +612,15 @@ const onPageChange = async (oldPageId?: string) => {
 let rollingBackPageSelection = false
 watch(selectedPageId, (newVal, oldVal) => {
   if (newVal !== oldVal) {
+    // Templates with no field-editable pages (e.g. blawby) set selectedPageId to ''
+    // via applyRouteContentScope(). There's no page to load in that case — matches
+    // the onMounted guard below, which already skips loadPageContent() when
+    // pages.value is empty. Without this, the '' transition still fired
+    // loadPageContent() with an empty pageId (404), whose catch rolled the value
+    // back to the previous page id and fired this watcher again with a pageId
+    // that also has no content rows (400) — two guaranteed failures and an error
+    // toast on every load of a blawby-template site's Content page.
+    if (!pages.value.length) return
     if (rollingBackPageSelection) {
       rollingBackPageSelection = false
       return
@@ -766,6 +775,10 @@ function getErrorMessage(error: unknown, fallback: string): string {
 const loadPageContent = async () => {
   const version = ++loadVersion.value
   if (requiresLocationSelection.value) return
+  // No selected page means no field-editable page exists for this template
+  // (see the pages.value.length guard on the selectedPageId watcher above) —
+  // there is nothing to fetch.
+  if (!selectedPageId.value) return
   contentLoading.value = true
   try {
     const res = await $fetch<{ fields: ApiRecord[] }>(
