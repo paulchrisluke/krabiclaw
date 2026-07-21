@@ -17,7 +17,7 @@
       <div class="flex gap-4">
         <UButton @click="saveContent" :loading="saving">Save</UButton>
         <UButton color="neutral" variant="soft" :loading="deleting" @click="deleteContent">Delete</UButton>
-        <UButton variant="outline" to="/admin?tab=content">Cancel</UButton>
+        <UButton variant="outline" to="/admin/content">Cancel</UButton>
       </div>
     </UCard>
   </div>

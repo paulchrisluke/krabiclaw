@@ -1,3 +1,10 @@
+export const formatDate = (dateString: string | null | undefined) => {
+  if (!dateString) return '—'
+  const d = new Date(dateString)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
 export const formatGoogleTime = (time: { hours?: number; minutes?: number } | null | undefined) => {
   if (!time || time.hours === undefined || time.minutes === undefined) return ''
   const h = time.hours % 12 || 12
