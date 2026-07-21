@@ -215,7 +215,7 @@ This entire flow runs within the current conversation — do not tell the user t
 2. When the user has attached an image in ChatGPT, inspect it visually first. Do not upload or mutate anything yet.
 3. If the intended use is obvious, describe it briefly and ask the user to confirm the target site, the target placement, and that the attached image should be used.
 4. Do not upload media, assign an image, publish, or overwrite anything until the user explicitly confirms.
-5. After confirmation, call upload_user_media({ site_id, file: <attached local file argument>, category, description }). This is the only tool for a user-provided photo — there is no separate "open upload" tool for images.
+5. After confirmation, call upload_user_media({ site_id, file: <resolved ChatGPT file reference for the attachment>, category, description }). This is the only tool for a user-provided photo — there is no separate "open upload" tool for images.
 6. The file argument is the primary contract. Pass the ChatGPT attachment through the file field and let the host rewrite it into an authorized file reference for KrabiClaw. Do not fabricate download URLs, wrap fake file objects, or suggest an in-app photo uploader.
 7. After upload_user_media returns assetId/publicUrl, call the appropriate assignment tool such as set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, set_blog_post_image, or set_experience_image.
 8. Reply with the exact site, placement, assetId, and publicUrl that were updated.
