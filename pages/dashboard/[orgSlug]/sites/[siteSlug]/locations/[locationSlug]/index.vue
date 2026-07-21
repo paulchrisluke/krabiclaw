@@ -25,21 +25,6 @@
       />
 
       <div v-else-if="location" class="space-y-6">
-        <UCard>
-          <div class="flex flex-wrap gap-1">
-            <UButton
-              v-for="tab in locationTabs"
-              :key="tab.label"
-              :to="tab.to"
-              :icon="tab.icon"
-              :variant="tab.active ? 'soft' : 'ghost'"
-              :color="tab.active ? 'primary' : 'neutral'"
-            >
-              {{ tab.label }}
-            </UButton>
-          </div>
-        </UCard>
-
         <div class="grid gap-4 md:grid-cols-4 xl:grid-cols-6">
           <UCard>
             <p class="text-sm text-muted">Phone</p>
@@ -57,54 +42,19 @@
             <p class="text-sm text-muted">Menus</p>
             <p class="mt-2 font-semibold text-highlighted">{{ menus.length }}</p>
           </UCard>
-          <NuxtLink :to="analyticsPath" class="block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-            <UCard class="h-full transition-colors hover:bg-muted/40">
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <p class="text-sm text-muted">Pageviews</p>
-                  <p class="mt-2 text-xl font-semibold text-highlighted">{{ analyticsLoading ? '...' : formatCount(analyticsSummary.pageViews) }}</p>
-                </div>
-                <UIcon name="i-lucide-chart-bar" class="size-5 text-muted" />
-              </div>
-              <p class="mt-2 text-xs text-muted">Last 30 days</p>
-            </UCard>
-          </NuxtLink>
-          <NuxtLink :to="analyticsPath" class="block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-            <UCard class="h-full transition-colors hover:bg-muted/40">
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <p class="text-sm text-muted">Unique visitors</p>
-                  <p class="mt-2 text-xl font-semibold text-highlighted">{{ analyticsLoading ? '...' : formatCount(analyticsSummary.uniqueVisitors) }}</p>
-                </div>
-                <UIcon name="i-lucide-users" class="size-5 text-muted" />
-              </div>
-              <p class="mt-2 text-xs text-muted">Last 30 days</p>
-            </UCard>
-          </NuxtLink>
+          <UCard>
+            <p class="text-sm text-muted">Pageviews</p>
+            <p class="mt-2 text-xl font-semibold text-highlighted">{{ analyticsLoading ? '...' : formatCount(analyticsSummary.pageViews) }}</p>
+            <p class="mt-2 text-xs text-muted">Last 30 days</p>
+          </UCard>
+          <UCard>
+            <p class="text-sm text-muted">Unique visitors</p>
+            <p class="mt-2 text-xl font-semibold text-highlighted">{{ analyticsLoading ? '...' : formatCount(analyticsSummary.uniqueVisitors) }}</p>
+            <p class="mt-2 text-xs text-muted">Last 30 days</p>
+          </UCard>
         </div>
 
-        <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-          <UCard>
-            <template #header>
-              <h2 class="font-semibold text-highlighted">Local Work</h2>
-            </template>
-
-            <div class="grid gap-3 md:grid-cols-2">
-              <UButton
-                v-for="action in workspaceActions"
-                :key="action.label"
-                :to="action.to"
-                :icon="action.icon"
-                color="neutral"
-                variant="soft"
-                block
-                class="justify-start"
-              >
-                {{ action.label }}
-              </UButton>
-            </div>
-          </UCard>
-
+        <div class="xl:max-w-[22rem]">
           <UCard>
             <template #header>
               <div class="flex items-center gap-2">
@@ -356,67 +306,6 @@
             </div>
           </UCard>
         </UCard>
-
-        <UCard>
-          <template #header>
-            <div class="flex items-center justify-between gap-3">
-              <h2 class="font-semibold text-highlighted">Manual Reviews</h2>
-              <UButton size="sm" icon="i-lucide-plus" @click="startNewReview">Add review</UButton>
-            </div>
-          </template>
-
-          <div class="space-y-5">
-            <UCard v-if="reviewFormVisible">
-              <div class="grid gap-4 md:grid-cols-2">
-                <UFormField label="Guest Name">
-                  <UInput v-model="reviewForm.author_name" />
-                </UFormField>
-                <UFormField label="Rating">
-                  <UInputNumber v-model="reviewForm.rating" :min="1" :max="5" :step="1" class="w-full" />
-                </UFormField>
-                <UFormField label="Title">
-                  <UInput v-model="reviewForm.title" />
-                </UFormField>
-                <UFormField label="Date">
-                  <UInput v-model="reviewForm.created_at" type="date" />
-                </UFormField>
-              </div>
-              <UFormField class="mt-4" label="Review">
-                <UTextarea v-model="reviewForm.content" :rows="4" />
-              </UFormField>
-              <div class="mt-4 flex justify-end gap-2">
-                <UButton color="neutral" variant="ghost" @click="cancelReviewEdit">Cancel</UButton>
-                <UButton :loading="reviewSaving" @click="saveReview">Save review</UButton>
-              </div>
-            </UCard>
-
-            <div v-if="reviewsLoading" class="flex items-center gap-3 text-sm text-muted">
-              <UIcon name="i-lucide-refresh-cw" class="size-4 animate-spin" />
-              Loading reviews...
-            </div>
-            <UCard v-else-if="manualReviews.length === 0" class="border-dashed" :ui="{ body: 'px-6 py-10 sm:px-6 sm:py-10 text-center' }">
-              <UIcon name="i-lucide-star" class="mx-auto size-8 text-muted" />
-              <p class="mt-3 text-sm text-muted">No manual reviews yet.</p>
-            </UCard>
-            <UCard v-else :ui="{ body: 'p-0 sm:p-0' }">
-              <div v-for="review in manualReviews" :key="review.id" class="flex flex-col gap-3 p-4 md:flex-row md:items-start md:justify-between">
-                <div class="min-w-0">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <p class="font-medium text-highlighted">{{ review.author_name }}</p>
-                    <UBadge color="neutral" variant="soft">{{ review.rating }} stars</UBadge>
-                    <UBadge :color="review.status === 'approved' ? 'success' : 'neutral'" variant="soft">{{ review.status }}</UBadge>
-                  </div>
-                  <p v-if="review.title" class="mt-2 text-sm font-medium text-highlighted">{{ review.title }}</p>
-                  <p class="mt-1 text-sm text-muted">{{ review.content }}</p>
-                </div>
-                <div class="flex shrink-0 gap-2">
-                  <UButton size="xs" color="neutral" variant="soft" icon="i-lucide-square-pen" @click="editReview(review)">Edit</UButton>
-                  <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" @click="deleteReview(review)">Delete</UButton>
-                </div>
-              </div>
-            </UCard>
-          </div>
-        </UCard>
       </div>
     </template>
   </UDashboardPanel>
@@ -453,18 +342,6 @@ interface BusinessLocation {
   hero_video_asset_id?: string | null
   notification_phone?: string | null
   timezone?: string | null
-}
-
-interface ManualReview {
-  id: string
-  author_name: string
-  rating: number
-  title: string | null
-  content: string
-  status: string
-  source: string
-  created_at: string
-  updated_at: string
 }
 
 interface GbConnection {
@@ -509,41 +386,14 @@ let locationLoadToken = 0
 const connectingGoogle = ref(false)
 const syncingPlace = ref(false)
 const placeSyncResult = ref('')
-const { paths, locationMenuPath, locationContentPath, locationPath } = useDashboardSiteLinks(siteId, computed(() => {
-  const value = site.value?.public_url
-  return typeof value === 'string' ? value : null
-}))
-
 const _locationAddress = computed(() => location.value?.address?.addressLines?.join(', ') || '')
 const _publicLocationUrl = computed(() => {
   if (!location.value?.slug || !site.value?.public_url) return ''
   return `${site.value.public_url.replace(/\/$/, '')}/locations/${location.value.slug}`
 })
 
-const locationTabs = computed(() => [
-  { label: 'Overview', icon: 'i-lucide-house', active: true, to: locationPath(locationId.value) },
-  { label: 'Analytics', icon: 'i-lucide-chart-bar', active: false, to: `${locationPath(locationId.value)}/analytics` },
-  { label: 'Content', icon: 'i-lucide-file-text', active: false, to: locationContentPath(locationId.value) },
-  { label: 'Menu', icon: 'i-lucide-list', active: false, to: locationMenuPath(locationId.value) },
-  { label: 'Details', icon: 'i-lucide-map-pin', active: false, to: `${paths.value.settings}?tab=locations&locationId=${locationId.value}` }
-])
-
-const analyticsPath = computed(() => `${locationPath(locationId.value)}/analytics`)
-
-const workspaceActions = computed(() => [
-  { label: 'Edit Local Content', icon: 'i-lucide-file-text', to: locationContentPath(locationId.value) },
-  { label: 'Edit Local Menu', icon: 'i-lucide-list', to: locationMenuPath(locationId.value) },
-  { label: 'Edit Location Details', icon: 'i-lucide-settings', to: `${paths.value.settings}?tab=locations&locationId=${locationId.value}` },
-  { label: 'Edit Brand Content', icon: 'i-lucide-store', to: paths.value.content }
-])
-
 const detailsSaving = ref(false)
 const detailsSaved = ref(false)
-const reviewsLoading = ref(false)
-const reviewSaving = ref(false)
-const reviewFormVisible = ref(false)
-const editingReviewId = ref<string | null>(null)
-const manualReviews = ref<ManualReview[]>([])
 const analyticsLoading = ref(false)
 const analyticsSummary = reactive({
   pageViews: 0,
@@ -583,14 +433,6 @@ const openingHours = ref<DayHours[]>(WEEKDAYS.map(day => ({
   openTime: '09:00',
   closeTime: '22:00'
 })))
-
-const reviewForm = reactive({
-  author_name: '',
-  rating: 5 as number,
-  title: '',
-  content: '',
-  created_at: ''
-})
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object') {
@@ -877,101 +719,6 @@ async function syncGooglePlace() {
   }
 }
 
-function resetReviewForm() {
-  editingReviewId.value = null
-  reviewForm.author_name = ''
-  reviewForm.rating = 5
-  reviewForm.title = ''
-  reviewForm.content = ''
-  reviewForm.created_at = new Date().toISOString().slice(0, 10)
-}
-
-function startNewReview() {
-  resetReviewForm()
-  reviewFormVisible.value = true
-}
-
-function editReview(review: ManualReview) {
-  editingReviewId.value = review.id
-  reviewForm.author_name = review.author_name
-  reviewForm.rating = review.rating
-  reviewForm.title = review.title ?? ''
-  reviewForm.content = review.content
-  reviewForm.created_at = review.created_at ? review.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
-  reviewFormVisible.value = true
-}
-
-function cancelReviewEdit() {
-  reviewFormVisible.value = false
-  resetReviewForm()
-}
-
-async function loadManualReviews() {
-  reviewsLoading.value = true
-  try {
-    const response = await $fetch<{ success: boolean; reviews: ManualReview[] }>(
-      `/api/dashboard/locations/${locationId.value}/reviews`
-    )
-    if (!response.success) throw new Error('Failed to load manual reviews')
-    manualReviews.value = response.reviews
-  } catch (err) {
-    toast.add({ description: getErrorMessage(err, 'Failed to load manual reviews'), color: 'error' })
-  } finally {
-    reviewsLoading.value = false
-  }
-}
-
-async function saveReview() {
-  reviewSaving.value = true
-  try {
-    const body = {
-      author_name: reviewForm.author_name,
-      rating: reviewForm.rating,
-      title: reviewForm.title || null,
-      content: reviewForm.content,
-      status: 'approved',
-      created_at: reviewForm.created_at ? `${reviewForm.created_at}T00:00:00.000Z` : new Date().toISOString()
-    }
-    if (editingReviewId.value) {
-      const response = await $fetch<{ success: boolean; review: ManualReview }>(
-        `/api/dashboard/locations/${locationId.value}/reviews/${editingReviewId.value}`,
-        { method: 'PATCH', body }
-      )
-      if (!response.success) throw new Error('Failed to update review')
-      const idx = manualReviews.value.findIndex(review => review.id === editingReviewId.value)
-      if (idx !== -1) manualReviews.value[idx] = response.review
-    } else {
-      const response = await $fetch<{ success: boolean; review: ManualReview }>(
-        `/api/dashboard/locations/${locationId.value}/reviews`,
-        { method: 'POST', body }
-      )
-      if (!response.success) throw new Error('Failed to create review')
-      manualReviews.value.unshift(response.review)
-    }
-    reviewFormVisible.value = false
-    resetReviewForm()
-    toast.add({ description: 'Review saved', color: 'success' })
-  } catch (err) {
-    toast.add({ description: getErrorMessage(err, 'Failed to save review'), color: 'error' })
-  } finally {
-    reviewSaving.value = false
-  }
-}
-
-async function deleteReview(review: ManualReview) {
-  if (!confirm(`Delete review from "${review.author_name}"? This cannot be undone.`)) return
-  reviewSaving.value = true
-  try {
-    await $fetch(`/api/dashboard/locations/${locationId.value}/reviews/${review.id}`, { method: 'DELETE' })
-    manualReviews.value = manualReviews.value.filter(item => item.id !== review.id)
-    toast.add({ description: 'Review deleted', color: 'neutral' })
-  } catch (err) {
-    toast.add({ description: getErrorMessage(err, 'Failed to delete review'), color: 'error' })
-  } finally {
-    reviewSaving.value = false
-  }
-}
-
 const loadLocationWorkspace = async () => {
   loading.value = true
   error.value = null
@@ -1002,11 +749,9 @@ const { evaluateAndSuggest } = useUpsellTriggers()
 
 onMounted(async () => {
   const currentToken = ++locationLoadToken
-  const workspaceLoaded = await loadLocationWorkspace()
+  await loadLocationWorkspace()
   if (currentToken !== locationLoadToken) return
   await Promise.all([loadAnalyticsSummary(), loadGbConnection()])
-  if (currentToken !== locationLoadToken) return
-  if (workspaceLoaded) await loadManualReviews()
   if (currentToken !== locationLoadToken) return
 
   if (route.query.gb === 'connected') {
@@ -1020,11 +765,9 @@ onMounted(async () => {
 
 watch(() => dashboardLocation.currentLocationId.value, async () => {
   const currentToken = ++locationLoadToken
-  const workspaceLoaded = await loadLocationWorkspace()
+  await loadLocationWorkspace()
   if (currentToken !== locationLoadToken) return
   await Promise.all([loadAnalyticsSummary(), loadGbConnection()])
-  if (currentToken !== locationLoadToken) return
-  if (workspaceLoaded) await loadManualReviews()
 })
 
 useSeoMeta({ title: 'Location Workspace | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

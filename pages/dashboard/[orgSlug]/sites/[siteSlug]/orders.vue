@@ -1,5 +1,5 @@
 <template>
-  <UDashboardPanel id="location-orders">
+  <UDashboardPanel id="site-orders">
     <template #header>
       <UDashboardNavbar title="Orders">
         <template #leading>

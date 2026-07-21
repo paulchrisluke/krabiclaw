@@ -493,6 +493,7 @@ const siteOverviewGroup = computed(() => {
   return [
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: siteBase.value },
     { label: 'Locations', icon: 'i-lucide-map-pin', to: locationsBase.value ?? `${siteBase.value}/locations` },
+    { label: 'Orders', icon: 'i-lucide-shopping-bag', to: `${siteBase.value}/orders` },
     { label: 'Assistant', icon: 'i-lucide-bot', to: `${siteBase.value}/conversations` },
     // { label: 'Translations', icon: 'i-lucide-languages', to: `${siteBase.value}/translations` },
   ]
@@ -500,16 +501,15 @@ const siteOverviewGroup = computed(() => {
 
 const locationOverviewGroup = computed(() => {
   if (scope.value !== 'location' || !locationBase.value) return []
-  const items = [
+  return [
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: locationBase.value },
     { label: 'Analytics', icon: 'i-lucide-chart-bar', to: `${locationBase.value}/analytics` },
     { label: 'Content', icon: 'i-lucide-file-text', to: `${locationBase.value}/content` },
+    { label: 'Posts', icon: 'i-lucide-megaphone', to: `${locationBase.value}/posts` },
+    { label: 'Photos', icon: 'i-lucide-image', to: `${locationBase.value}/photos` },
+    { label: 'Q&A', icon: 'i-lucide-message-circle-question', to: `${locationBase.value}/qa` },
+    { label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox` },
   ]
-  if (settingsBase.value && currentLocation.value?.id) {
-    items.push({ label: 'Details', icon: 'i-lucide-map-pin', to: `${settingsBase.value}?tab=locations&locationId=${currentLocation.value.id}` })
-  }
-  items.push({ label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox` })
-  return items
 })
 
 const parentGroup = computed(() => parentNavItem())
