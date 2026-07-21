@@ -215,15 +215,15 @@ This entire flow runs within the current conversation — do not tell the user t
 2. When the user has attached an image in ChatGPT, inspect it visually first. Do not upload or mutate anything yet.
 3. If the intended use is obvious, describe it briefly and ask the user to confirm the target site, the target placement, and that the attached image should be used.
 4. Do not upload media, assign an image, publish, or overwrite anything until the user explicitly confirms.
-5. After confirmation, call upload_user_photo({ site_id, file: <attached local file argument>, category, description }). upload_user_media is the newer generic path (image or video) and is also acceptable here if you already have a resolved file reference.
+5. After confirmation, call upload_user_media({ site_id, file: <attached local file argument>, category, description }). This is the only tool for a user-provided photo — there is no separate "open upload" tool for images.
 6. The file argument is the primary contract. Pass the ChatGPT attachment through the file field and let the host rewrite it into an authorized file reference for KrabiClaw. Do not fabricate download URLs, wrap fake file objects, or suggest an in-app photo uploader.
-7. After upload_user_photo returns assetId/publicUrl, call the appropriate assignment tool such as set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, set_blog_post_image, or set_experience_image.
+7. After upload_user_media returns assetId/publicUrl, call the appropriate assignment tool such as set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, set_blog_post_image, or set_experience_image.
 8. Reply with the exact site, placement, assetId, and publicUrl that were updated.
 
 **Videos:**
-- Call open_video_upload only when a video is required. After it reports a completed upload, call the matching assignment tool (set_home_hero_video, set_location_hero_video, set_experience_video, etc.) with the returned assetId.
-- For images, use a direct ChatGPT attachment or native image generation; the video widget does not accept images.
-- If you already have a resolved ChatGPT file reference for a video (or an image), you can call upload_user_media directly instead of opening the widget.
+- Call open_video_upload only when a video is required — this is the one and only widget-launching tool, and it is video-only. After it reports a completed upload, call the matching assignment tool (set_home_hero_video, set_location_hero_video, set_experience_video, etc.) with the returned assetId.
+- For images, always use upload_user_media (step 5 above) or native image generation — never open_video_upload, and there is no "open_media_upload"/"open_image_upload" tool.
+- If you already have a resolved ChatGPT file reference for a video, you can call upload_user_media directly instead of opening the widget.
 - The dashboard media library remains a fallback only for chat clients that do not support inline widgets.
 
 ## Choosing a content type

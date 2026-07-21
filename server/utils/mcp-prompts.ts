@@ -229,7 +229,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           "If the user hasn't already attached photos in this conversation, ask them to attach the photos they want to add directly in ChatGPT.",
           "For each attached photo, inspect it visually first, then ask the user (or infer from context) where it should go: the homepage main photo, a specific location's main photo, the about/story section, a menu item, an experience, or a post.",
           "Confirm the target site and placement with the user before uploading anything.",
-          "After confirmation, call upload_user_photo for each photo, then immediately call the matching assignment tool (set_home_hero_image, set_location_hero_image, set_menu_item_image, set_experience_image, set_post_image, set_about_story_image, set_home_story_image, or set_logo).",
+          "After confirmation, call upload_user_media for each photo, then immediately call the matching assignment tool (set_home_hero_image, set_location_hero_image, set_menu_item_image, set_experience_image, set_post_image, set_about_story_image, set_home_story_image, or set_logo).",
           "Reply confirming exactly where each photo was placed.",
         ].join(" "),
       };
