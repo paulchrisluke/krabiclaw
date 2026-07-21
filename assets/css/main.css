@@ -34,7 +34,7 @@
   --color-coral-300: #FFB5A9;
   --color-coral-400: #FF9A8C;
   --color-coral-500: #FB7461;
-  --color-coral-600: #E87F67;
+  --color-coral-600: #D66A5A;
   --color-coral-700: #C56B5C;
   --color-coral-800: #9E544D;
   --color-coral-900: #7B423E;
@@ -68,16 +68,16 @@
   --kc-navy-500:    #4A5380;
   --kc-navy-300:    #8C92B0;
 
-  --kc-coral:       #FB7461;
-  --kc-coral-600:   #E87F67;
-  --kc-coral-400:   #FF9A8C;
-  --kc-coral-200:   #FFCCC2;
-  --kc-coral-50:    #FFF1ED;
+  --kc-coral:       var(--color-coral-500);
+  --kc-coral-600:   var(--color-coral-600);
+  --kc-coral-400:   var(--color-coral-400);
+  --kc-coral-200:   var(--color-coral-200);
+  --kc-coral-50:    var(--color-coral-50);
 
-  --kc-teal:        #2BB5B5;
-  --kc-teal-600:    #239595;
-  --kc-teal-400:    #5DCBCB;
-  --kc-teal-100:    #D6F0EF;
+  --kc-teal:        var(--color-teal-500);
+  --kc-teal-600:    var(--color-teal-600);
+  --kc-teal-400:    var(--color-teal-400);
+  --kc-teal-100:    var(--color-teal-100);
 
   --kc-cream:       #F8F6F3;
   --kc-cream-elev:  #FFFFFF;
@@ -152,8 +152,8 @@
 */
 .dark .platform-theme {
   --ui-primary:           #FB7461;
-  /* WCAG foreground: #FB7461 has ~3.2:1 with white (fails AA), but 6.6:1 with cream */
-  --primary-foreground:   var(--kc-cream-elev);
+  /* WCAG foreground: #FB7461 has ~2.7:1 with white/cream (fails AA), but ~5.5:1 with navy */
+  --primary-foreground:   var(--kc-navy);
   --ui-secondary:         #5DCBCB;
   --ui-success:           #34D399;
   --ui-info:              #60A5FA;

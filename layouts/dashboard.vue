@@ -169,17 +169,17 @@
                       <span
                         class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
                         :class="{
-                          'bg-emerald-500': platformStatus === 'normal',
-                          'bg-amber-500': platformStatus === 'loading',
-                          'bg-red-500': platformStatus === 'error'
+                          'bg-success': platformStatus === 'normal',
+                          'bg-warning': platformStatus === 'loading',
+                          'bg-error': platformStatus === 'error'
                         }"
                       />
                       <span
                         class="relative inline-flex size-2 rounded-full"
                         :class="{
-                          'bg-emerald-500': platformStatus === 'normal',
-                          'bg-amber-500': platformStatus === 'loading',
-                          'bg-red-500': platformStatus === 'error'
+                          'bg-success': platformStatus === 'normal',
+                          'bg-warning': platformStatus === 'loading',
+                          'bg-error': platformStatus === 'error'
                         }"
                       />
                     </span>
