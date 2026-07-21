@@ -243,7 +243,6 @@ import { categories, difficultyLevels } from '~/config/documentation'
 import { getErrorMessage } from '~/utils/errors'
 import { createEmptyFaqItem, createEmptyHowToStep } from '~/composables/useBlogForm'
 import { useDocForm } from '~/composables/useDocForm'
-import { categoryToSlug } from '~/utils/docs-categories'
 import { PLATFORM_DOC_NAV_SECTION_LABELS } from '~/utils/platform-content-nav'
 import { parseOptionalNumber } from '~/utils/optional-number'
 
