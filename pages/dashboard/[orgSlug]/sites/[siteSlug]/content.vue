@@ -513,6 +513,14 @@ const selectLocation = async (id: string) => {
 const siteVertical = computed<SiteVertical | null>(() => siteData.value ? siteData.value.vertical as SiteVertical : null)
 const pages = computed(() => {
   const capabilities = cmsCapabilities.value
+  // blawby's cms-registry pages (including home/about/contact) are tagged
+  // editor: 'professional_services', not 'site_content' — the backend
+  // (assertSiteContentPage in mcp-workflows.ts) rejects them with a 400 for
+  // any template other than site_content-editor templates. There is no
+  // professional_services page-content editor implementation yet (tracked
+  // in issue #323), so this template is excluded here rather than showing
+  // a page selector that 400s on every page. Do not remove this without
+  // that editor existing first.
   if (!siteVertical.value || !capabilities || capabilities.template === 'blawby') return []
   const allowedPageIds = new Set(capabilities.pages.map(page => page.id))
   return getEditablePages(siteVertical.value, capabilities.template).filter(page => allowedPageIds.has(page.id))
