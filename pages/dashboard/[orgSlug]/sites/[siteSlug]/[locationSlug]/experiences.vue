@@ -602,7 +602,7 @@ async function save() {
       sale_ends_at: form.sale_ends_at.trim() || null,
       duration_minutes: parseNumber(form.duration_minutes),
       max_capacity: parseNumber(form.max_capacity),
-      featured_sort_order: parseNumber(form.featured_sort_order),
+      featured_sort_order: parseNumber(form.featured_sort_order) ?? 0,
       time_slots: slotsMode.value === 'flat' && timeSlotsInput.value
         ? timeSlotsInput.value.split(',').map(s => s.trim()).filter(Boolean)
         : null,

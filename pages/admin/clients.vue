@@ -252,7 +252,7 @@
           </div>
 
           <!-- Mark month paid (active cash subs only) -->
-          <template v-if="billingStatus.status === 'active' && billingStatus.sites_billing?.[0]?.payment_method === 'cash'">
+          <template v-if="billingStatus.status === 'active' && billingStatus.sites_billing?.some(s => s.site_id === billingClient?.site_id && s.payment_method === 'cash')">
             <div class="border-t border-default pt-4 space-y-3">
               <p class="text-sm font-semibold text-highlighted">Mark month paid</p>
               <p class="text-xs text-muted">
@@ -458,6 +458,7 @@ async function openBilling(client: Client) {
   markPaidError.value = ''
   forceAcceptResult.value = null
   forceAcceptError.value = ''
+  selectedCashSiteId.value = client.site_id
   cashPlan.value = client.plan !== 'free' ? client.plan : 'growth'
   cashInterval.value = 'year'
   cashLocalRate.value = null
@@ -507,8 +508,7 @@ async function recordCashPayment() {
 }
 
 async function markMonthPaid() {
-  const cashSites = billingStatus.value?.sites_billing?.filter(s => s.payment_method === 'cash') ?? []
-  const siteId = selectedCashSiteId.value || cashSites[0]?.site_id || billingClient.value?.site_id
+  const siteId = billingClient.value?.site_id
   if (!siteId) return
   markPaying.value = true
   markPaidResult.value = null

@@ -72,12 +72,12 @@ import * as z from 'zod'
 
 type InviteForm = {
   email: string
-  role: string
+  role: 'member' | 'admin'
 }
 
 const schema = z.object({
   email: z.string().email('Enter a valid email address'),
-  role: z.string()
+  role: z.enum(['member', 'admin'])
 })
 
 const form = defineModel<InviteForm>('form', { required: true })

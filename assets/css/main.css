@@ -67,13 +67,11 @@
   --kc-navy-700:    #2C3360;
   --kc-navy-500:    #4A5380;
   --kc-navy-300:    #8C92B0;
-
   --kc-coral:       var(--color-coral-500);
   --kc-coral-600:   var(--color-coral-600);
   --kc-coral-400:   var(--color-coral-400);
   --kc-coral-200:   var(--color-coral-200);
   --kc-coral-50:    var(--color-coral-50);
-
   --kc-teal:        var(--color-teal-500);
   --kc-teal-600:    var(--color-teal-600);
   --kc-teal-400:    var(--color-teal-400);
@@ -99,12 +97,12 @@
     oklch(0.73 0.16 240),
     oklch(0.71 0.16 300)
   );
-
 }
 
 /* ── Platform theme ───────────────────────────────────────── */
 .platform-theme {
   --ui-primary:           var(--kc-coral-500);
+
   /* WCAG foreground: coral-500 (#FB7461) with navy (#1F2547) gives ~5.5:1 contrast (passes AA). */
   --primary-foreground:   var(--kc-navy);
   --ui-secondary:         var(--kc-teal-600);
@@ -151,6 +149,7 @@
 */
 .dark .platform-theme {
   --ui-primary:           #FB7461;
+
   /* WCAG foreground: #FB7461 has ~2.7:1 with white/cream (fails AA), but ~5.5:1 with navy */
   --primary-foreground:   var(--kc-navy);
   --ui-secondary:         #5DCBCB;

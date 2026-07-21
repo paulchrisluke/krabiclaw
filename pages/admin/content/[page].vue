@@ -67,8 +67,10 @@ const saving = ref(false)
 const deleting = ref(false)
 const deleteConfirmOpen = ref(false)
 
+const ALLOWED_PAGES = ['about', 'contact', 'help']
+
 function validatePage(value: string) {
-  return !!value && /^[a-zA-Z0-9_-]+$/.test(value)
+  return ALLOWED_PAGES.includes(value)
 }
 
 onMounted(async () => {

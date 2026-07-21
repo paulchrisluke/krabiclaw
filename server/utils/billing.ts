@@ -1,5 +1,6 @@
 import Stripe from 'stripe'
 import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
+import { betterAuthTimestampToIso, type BetterAuthTimestamp } from '~/server/utils/better-auth-timestamps'
 
 type EntitlementValue = string | number | boolean
 type EntitlementsMap = Record<string, EntitlementValue>
@@ -316,6 +317,69 @@ export async function verifyStripeWebhook(
 export async function updateSubscriptionQuantity(
   _env: BillingEnv, _db: D1Database, _organizationId: string,
 ): Promise<void> {}
+
+// ── User billing items ────────────────────────────────────────────────────────
+
+export interface UserBillingItem {
+  organization: {
+    id: string
+    name: string
+    logo: string | null
+    createdAt: string
+    role: string
+  }
+  billing: {
+    plan: string
+    subscriptionStatus?: string | null
+    organizationId: string
+  }
+  userRole: string
+}
+
+export async function getUserBillingItems(
+  env: BillingEnv,
+  db: D1Database,
+  userId: string,
+): Promise<UserBillingItem[]> {
+  const orgRows = await queryAll<{ id: string, name: string, logo: string | null, createdAt: BetterAuthTimestamp, role: string }>(db, `
+    SELECT o.id, o.name, o.logo, o.createdAt, m.role
+    FROM organization o
+    JOIN member m ON o.id = m.organizationId
+    WHERE m.userId = ?
+    ORDER BY o.createdAt ASC
+  `, [userId])
+
+  const organizations = orgRows.map(org => ({
+    ...org,
+    createdAt: betterAuthTimestampToIso(org.createdAt, 'organization.createdAt')
+  }))
+
+  if (!organizations || organizations.length === 0) {
+    return []
+  }
+
+  const billingItems = await Promise.all(
+    organizations.map(async (org) => {
+      try {
+        const billingStatus = await getOrganizationBillingStatus(env, db, org.id)
+        return {
+          organization: org,
+          billing: { ...billingStatus, organizationId: org.id },
+          userRole: org.role
+        }
+      } catch (error) {
+        console.error(`Failed to get billing status for org ${org.id}:`, error)
+        return {
+          organization: org,
+          billing: { plan: 'free', subscriptionStatus: 'active', organizationId: org.id },
+          userRole: org.role
+        }
+      }
+    })
+  )
+
+  return billingItems
+}
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 

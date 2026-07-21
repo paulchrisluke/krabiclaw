@@ -125,6 +125,15 @@ const iframeSrc = computed(() => {
 async function loadTransferContext() {
   loaded.value = false
   loadError.value = false
+  siteId.value = ''
+  siteName.value = 'Your Site'
+  siteVertical.value = 'restaurant'
+  subdomain.value = ''
+  plan.value = 'free'
+  ownerPhone.value = null
+  locations.value = []
+  selectedLocationId.value = null
+  selectedPage.value = 'home'
   try {
     const ctx = await $fetch<{
       success: boolean

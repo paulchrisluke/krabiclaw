@@ -4,9 +4,12 @@ import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { queryFirst } from '~/server/db'
 
+const ALLOWED_PAGES = ['about', 'contact', 'help']
+
 export default defineEventHandler(async (event) => {
   const page = getRouterParam(event, 'page')
   if (!page) return jsonResponse({ error: 'Page required' }, { status: 400 })
+  if (!ALLOWED_PAGES.includes(page)) return jsonResponse({ error: 'Invalid page' }, { status: 400 })
 
   const env = cloudflareEnv(event)
   const db = env.DB

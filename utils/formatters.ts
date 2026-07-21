@@ -3,6 +3,17 @@ export const formatDate = (dateString: string | null | undefined) => {
   const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(dateString)
   const d = new Date(dateString)
   if (Number.isNaN(d.getTime())) return '—'
+
+  if (isDateOnly) {
+    const [year, month, day] = dateString.split('-').map(Number)
+    const parsedYear = d.getUTCFullYear()
+    const parsedMonth = d.getUTCMonth() + 1
+    const parsedDay = d.getUTCDate()
+    if (year !== parsedYear || month !== parsedMonth || day !== parsedDay) {
+      return '—'
+    }
+  }
+
   return d.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',

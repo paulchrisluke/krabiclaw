@@ -121,7 +121,7 @@
             </UFormField>
             <UButton
               :loading="invitingClient"
-              :disabled="inviteMode === 'existing' && !selectedOrg"
+              :disabled="inviteMode === 'existing' && (!selectedOrg || selectedOrg.hasOwner || selectedOrg.hasPendingInvitation)"
               @click="inviteClient"
             >
               Generate invite link
@@ -295,12 +295,10 @@ async function inviteClient() {
       })
       clientInviteResult.value = res
       clientEmail.value = ''
-      // Existing-org mode only: reset the org picker's search state and re-run the
-      // search so the just-invited org drops out of the "no owner" browse list. The
-      // new-org branch below has no equivalent search state to reset.
+      // Existing-org mode only: reset the org picker's search state. The watch on
+      // orgSearchTerm will trigger the debounced search automatically.
       selectedOrg.value = undefined
       orgSearchTerm.value = ''
-      await runOrgSearch('')
     } catch (err: unknown) {
       clientInviteResult.value = { error: getErrorMessage(err, 'Failed to create invitation') }
     } finally {

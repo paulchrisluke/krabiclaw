@@ -259,7 +259,7 @@ const notifForm = reactive({
   locations: props.locations.map(l => ({ id: l.id, title: l.title, notificationPhone: l.notification_phone ?? '' })),
 })
 
-const inviteForm = reactive({ email: '', role: 'member' })
+const inviteForm = reactive<{ email: string; role: 'member' | 'admin' }>({ email: '', role: 'member' })
 const savingNotifs = ref(false)
 const inviting = ref(false)
 const inviteSuccess = ref(false)

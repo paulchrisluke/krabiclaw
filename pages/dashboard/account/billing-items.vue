@@ -49,7 +49,7 @@
             </UButton>
           </div>
 
-          <div v-else-if="!billingItems?.length" class="text-sm text-muted">
+          <div v-else-if="!billingItems || billingItems.length === 0" class="text-sm text-muted">
             You are not a member of any sites.
           </div>
 
@@ -111,8 +111,27 @@ interface BillingItem {
   }
 }
 
-const { data: response, status, error, refresh } = useFetch<{ items: BillingItem[] }>('/api/user/billing-items')
-const billingItems = computed(() => response.value?.items ?? [])
+const { data: billingItems, status, error, refresh } = await useAsyncData(
+  'user-billing-items',
+  async () => {
+    if (import.meta.server) {
+      const requestEvent = useRequestEvent()
+      if (!requestEvent) return []
+      const [{ cloudflareEnv }, { getUserBillingItems }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/billing'),
+      ])
+      const env = cloudflareEnv(requestEvent)
+      const db = env.db
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+      const session = await import('~/server/utils/auth').then(m => m.getAuthSession(requestEvent, env))
+      if (!session?.user?.id) return []
+      return await getUserBillingItems(env, db.$client, session.user.id)
+    }
+    const response = await $fetch<{ items: BillingItem[] }>('/api/user/billing-items')
+    return response?.items ?? []
+  }
+)
 
 const goToWorkspaceBilling = async (orgId: string) => {
   await router.push({ path: orgSettings.billing.value, query: { organizationId: orgId } })
