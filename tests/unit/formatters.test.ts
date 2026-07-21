@@ -31,13 +31,15 @@ test('formatDate: YYYY-MM-DD input preserves calendar date regardless of local t
   assert.equal(result, 'Jul 25, 2026')
 })
 
-test('formatDate: ISO datetime strings are formatted in local time (existing behaviour)', () => {
-  // Full ISO strings already include offset information; the formatter must
-  // NOT force UTC for them. In America/Los_Angeles (UTC-7 in July), midnight
-  // UTC on 2026-07-25 is 5pm local on 2026-07-24 — the calendar date rolling
-  // back a day is exactly what proves this input isn't forced to UTC.
+test('formatDate: ISO datetime strings are also formatted in UTC, not the runtime local timezone', () => {
+  // formatDate is used on SSR'd public pages (e.g. reviews/[reviewId].vue,
+  // reservations/confirmed.vue) — the server always runs in UTC (Cloudflare
+  // Workers) while the client hydrates in the visitor's own timezone. Any
+  // divergence in the rendered calendar date between those two renders is a
+  // Vue hydration mismatch, not just a formatting preference, so both
+  // date-only and full-ISO inputs must format in UTC unconditionally.
   const result = runInTimezone("formatDate('2026-07-25T00:00:00Z')", 'America/Los_Angeles')
-  assert.equal(result, 'Jul 24, 2026')
+  assert.equal(result, 'Jul 25, 2026')
 })
 
 test('formatDate: null/empty returns em-dash', () => {

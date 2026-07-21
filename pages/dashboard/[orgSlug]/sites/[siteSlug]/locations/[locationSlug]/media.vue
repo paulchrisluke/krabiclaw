@@ -70,7 +70,7 @@
         <div v-for="i in 14" :key="i" class="aspect-square rounded-lg bg-elevated animate-pulse" />
       </div>
 
-      <div v-else-if="filtered.length === 0" class="py-16 text-center">
+      <div v-else-if="assets.length === 0" class="py-16 text-center">
         <UIcon name="i-lucide-image" class="mx-auto size-10 text-muted" />
         <p class="mt-4 text-sm font-medium text-highlighted">No media yet</p>
         <p class="mt-1 text-xs text-muted">Upload images or videos to get started.</p>
@@ -78,7 +78,7 @@
 
       <div v-else class="grid grid-cols-4 gap-3 sm:grid-cols-5 lg:grid-cols-7">
         <div
-          v-for="asset in filtered"
+          v-for="asset in assets"
           :key="asset.id"
           class="group relative aspect-square overflow-hidden rounded-lg border-2 transition-all"
           :class="selected.has(asset.id) ? 'border-primary' : 'border-transparent'"
@@ -223,11 +223,6 @@ const kindTabs = [
   { label: 'Videos', value: 'video' },
 ]
 
-const filtered = computed(() => {
-  if (!search.value) return assets.value
-  return assets.value.filter(a => (a.file_name ?? '').toLowerCase().includes(search.value.toLowerCase()))
-})
-
 async function load() {
   loading.value = true
   offset.value = 0
@@ -235,6 +230,7 @@ async function load() {
   try {
     const params = new URLSearchParams({ limit: String(LIMIT), offset: '0' })
     if (kindFilter.value) params.set('kind', kindFilter.value)
+    if (search.value) params.set('search', search.value)
     const res = await $fetch<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
     assets.value = res.media ?? []
     hasMore.value = assets.value.length === LIMIT
@@ -255,6 +251,7 @@ async function loadMore() {
   try {
     const params = new URLSearchParams({ limit: String(LIMIT), offset: String(requestOffset) })
     if (kindFilter.value) params.set('kind', kindFilter.value)
+    if (search.value) params.set('search', search.value)
     const res = await $fetch<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
     const more = res.media ?? []
     assets.value.push(...more)
@@ -391,5 +388,11 @@ function formatSize(bytes: number): string {
 
 onMounted(async () => {
   await load()
+})
+
+let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined
+watch(search, () => {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => { void load() }, 300)
 })
 </script>

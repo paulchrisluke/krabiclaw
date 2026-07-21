@@ -161,17 +161,17 @@
   --ui-bg-elevated:       #1F2547;
   --ui-bg-muted:          #141836;
   --ui-bg-accented:       #1A1E3A;
-  --ui-bg-inverted:       #080A18;
+  --ui-bg-inverted:       var(--kc-cream-elev);
   --ui-text:              #EEF0F8;
   --ui-text-muted:        #9CA4C6;
   --ui-text-dimmed:       #6B7198;
   --ui-text-toned:        #A1A1AA;
   --ui-text-highlighted:  #FFFFFF;
-  --ui-text-inverted:     #EEF0F8;
+  --ui-text-inverted:     var(--kc-navy);
   --ui-border:            rgba(255,255,255,9%);
   --ui-border-muted:      rgba(255,255,255,5%);
   --ui-border-accented:   rgba(255,255,255,12%);
-  --ui-border-inverted:   rgba(255,255,255,15%);
+  --ui-border-inverted:   var(--kc-cream-elev);
 }
 
 /* Dark mode wordmark: swap navy text to cream */

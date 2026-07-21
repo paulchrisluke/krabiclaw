@@ -52,7 +52,7 @@ const _backPath = computed(() => menuPath())
 const pageError = computed(() => menuId.value ? null : 'Menu ID is required to edit an item')
 
 onMounted(async () => {
-  defaultCurrency.value = await fetchMenuCurrency()
+  defaultCurrency.value = (await fetchMenuCurrency()) ?? defaultCurrency.value
 })
 
 useSeoMeta({ title: computed(() => `${itemName.value || 'Menu Item'} | KrabiClaw Dashboard`), robots: 'noindex, nofollow' })

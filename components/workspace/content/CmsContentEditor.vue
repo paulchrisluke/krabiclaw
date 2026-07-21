@@ -348,12 +348,15 @@ const loadEditorContext = async () => {
     siteLocations.value = response.context.locations || []
     siteEntitlements.value = response.context.site.entitlements || {}
     previewToken.value = response.context.previewToken
-    applyRouteContentScope()
   } catch (error) {
     console.error('Failed to load editor context:', error)
     cmsLoadError.value = getErrorMessage(error, 'Failed to load editor context')
     toast.add({ description: cmsLoadError.value, color: 'error' })
+    return
   }
+  // Outside the try/catch: a bad pageId should surface as a real 404 (thrown
+  // via createError), not get caught here and rewritten into a generic toast.
+  applyRouteContentScope()
 }
 
 // ─── Location Scope ───────────────────────────────────────────────────

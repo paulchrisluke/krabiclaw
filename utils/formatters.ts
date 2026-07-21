@@ -14,11 +14,15 @@ export const formatDate = (dateString: string | null | undefined) => {
     }
   }
 
+  // Always format in UTC, not the runtime's local timezone — this must render
+  // identically during SSR (server runs in UTC) and client-side hydration
+  // (the visitor's browser may be in any timezone), or Vue's hydration
+  // mismatch check flags every date on the page.
   return d.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
-    ...(isDateOnly ? { timeZone: 'UTC' } : {})
+    timeZone: 'UTC'
   })
 }
 

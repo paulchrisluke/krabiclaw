@@ -9,7 +9,7 @@
     </template>
 
     <template #body>
-      <p class="mb-6 text-sm text-muted">Manage the canonical organization details used by Blawby pages, ChowBot, MCP, and structured data.</p>
+      <p class="mb-6 text-sm text-muted">Manage the canonical organization details used by KrabiClaw pages, ChowBot, MCP, and structured data.</p>
 
       <UCard>
         <div v-if="pending" class="space-y-4">

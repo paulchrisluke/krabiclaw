@@ -1615,7 +1615,7 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
       channel: 'whatsapp',
       template: 'new_reservation',
       title: 'Owner WhatsApp — new reservation',
-      text: 'New reservation request: Alex Carter, Mon, Jul 14, 2026 at 7:00 PM, 2 guests. Phone: +1 555 123 4567. Email: alex@example.com. Location: Main Dining Room. Special requests: Window seat.',
+      text: 'New reservation request: Alex Carter, Tue, Jul 14, 2026 at 7:00 PM, 2 guests. Phone: +1 555 123 4567. Email: alex@example.com. Location: Main Dining Room. Special requests: Window seat.',
     },
     {
       id: 'owner-reservation-cancelled-whatsapp',
@@ -1623,7 +1623,7 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
       channel: 'whatsapp',
       template: 'reservation_cancelled',
       title: 'Owner WhatsApp — reservation cancelled',
-      text: 'Reservation cancelled: Alex Carter, Mon, Jul 14, 2026 at 7:00 PM, 2 guests. Phone: +1 555 123 4567. Location: Main Dining Room.',
+      text: 'Reservation cancelled: Alex Carter, Tue, Jul 14, 2026 at 7:00 PM, 2 guests. Phone: +1 555 123 4567. Location: Main Dining Room.',
     },
     {
       id: 'owner-new-experience-booking-whatsapp',

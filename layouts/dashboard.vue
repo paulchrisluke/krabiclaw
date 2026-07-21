@@ -99,6 +99,7 @@
                       color="neutral"
                       icon="i-lucide-settings"
                       size="sm"
+                      aria-label="Account settings"
                       class="text-muted hover:text-highlighted hover:bg-muted shrink-0"
                       @click="close"
                     />

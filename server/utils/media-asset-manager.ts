@@ -86,12 +86,13 @@ export async function getMediaAsset(db: DbClient, id: string, siteId: string): P
 export async function listMediaAssets(
   db: DbClient,
   siteId: string,
-  opts: { kind?: string; locationId?: string; limit?: number; offset?: number } = {}
+  opts: { kind?: string; locationId?: string; search?: string; limit?: number; offset?: number } = {}
 ): Promise<MediaAsset[]> {
   const conditions = [`site_id = ?`, `status = 'active'`]
   const params: SqlBindValue[] = [siteId]
   if (opts.kind) { conditions.push(`kind = ?`); params.push(opts.kind) }
   if (opts.locationId) { conditions.push(`location_id = ?`); params.push(opts.locationId) }
+  if (opts.search) { conditions.push(`file_name LIKE ? ESCAPE '\\'`); params.push(`%${opts.search.replace(/[\\%_]/g, '\\$&')}%`) }
   params.push(opts.limit ?? 50, opts.offset ?? 0)
   const results = await queryAll<MediaAsset>(
     db,

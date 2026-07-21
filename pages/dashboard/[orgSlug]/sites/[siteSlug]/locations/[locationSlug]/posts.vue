@@ -67,6 +67,9 @@
             <div v-if="!loading && posts.length === 0" class="px-4 py-10 text-center">
               <UIcon name="i-lucide-newspaper" class="mx-auto size-8 text-muted" />
               <p class="mt-3 text-sm text-muted">No posts yet. Use the AI composer or write one manually.</p>
+              <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-pencil" class="mt-3" @click="openCompose">
+                New post
+              </UButton>
             </div>
 
             <!-- Post rows -->

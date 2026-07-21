@@ -173,6 +173,7 @@
                   color="neutral"
                   variant="ghost"
                   icon="i-lucide-clipboard"
+                  aria-label="Copy user ID"
                   @click="copyUserId"
                 />
               </div>
@@ -186,13 +187,13 @@
         </UCard>
 
         <!-- Danger Zone -->
-        <UCard :ui="{ root: 'border border-red-500 dark:border-red-800 transition-colors', body: 'p-6', footer: 'p-4 bg-red-50/50 dark:bg-red-950/20 border-t border-red-200 dark:border-red-900/50' }">
+        <UCard class="border-error transition-colors" :ui="{ body: 'p-6', footer: 'p-0' }">
           <div class="space-y-1">
             <h3 class="text-base font-semibold text-highlighted">Delete Account</h3>
             <p class="text-sm text-muted">Permanently remove your Personal Account and all of its contents from the platform. This action is not reversible, so please continue with caution.</p>
           </div>
           <template #footer>
-            <div class="flex items-center justify-end">
+            <div class="flex items-center justify-end border-t border-error/20 bg-error/5 p-4">
               <UButton color="error" variant="solid" @click="deleteModalOpen = true">
                 Delete Personal Account
               </UButton>

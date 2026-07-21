@@ -78,7 +78,7 @@ const selectedLocation = computed(() => dashboardLocation.currentLocation.value)
 const loadMenuWorkspace = async () => {
   loading.value = true
   try {
-    defaultCurrency.value = await fetchMenuCurrency()
+    defaultCurrency.value = (await fetchMenuCurrency()) ?? defaultCurrency.value
   } finally {
     loading.value = false
   }

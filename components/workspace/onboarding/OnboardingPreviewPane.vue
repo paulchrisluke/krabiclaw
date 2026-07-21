@@ -152,7 +152,12 @@ const currentTabIsLocationScoped = computed(() => tabs.value.find(tab => tab.id 
 const displayUrl = computed(() => {
   if (!props.siteDomain) return ''
   const template = resolvePublicTemplate({ vertical: props.vertical })
-  const path = getEditablePages(props.vertical, template.slug).find(page => page.id === props.selectedPage)?.path ?? '/'
+  // professional_service's "Services" tab id is the offerings route itself
+  // (see secondaryTab above), not a content-registry page id — resolve it
+  // the same way before falling back to the registry lookup for other pages.
+  const path = props.vertical === 'professional_service' && props.selectedPage === secondaryTab.value?.id
+    ? template.serviceRoutes.offeringsIndex ?? '/'
+    : getEditablePages(props.vertical, template.slug).find(page => page.id === props.selectedPage)?.path ?? '/'
   return props.siteDomain + (path === '/' ? '' : path)
 })
 

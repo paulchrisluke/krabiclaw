@@ -53,7 +53,7 @@ const _backPath = computed(() => menuPath())
 const pageError = computed(() => menuId.value ? null : 'Menu ID is required to create an item')
 
 onMounted(async () => {
-  defaultCurrency.value = await fetchMenuCurrency()
+  defaultCurrency.value = (await fetchMenuCurrency()) ?? defaultCurrency.value
 })
 
 useSeoMeta({ title: 'Create Menu Item | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

@@ -130,15 +130,21 @@ function workTypeIcon(type: string) { return WORK_TYPE_ICONS[type] ?? 'i-lucide-
 function workTypeColor(type: string) { return WORK_TYPE_COLORS[type] ?? 'bg-muted text-muted' }
 function priorityColor(p: string) { return PRIORITY_COLORS[p] ?? 'neutral' }
 
+let workRequestToken = 0
+
 async function loadWorkRequests() {
+  const requestToken = ++workRequestToken
+  const showDone = workShowDone.value
   workLoading.value = true
   try {
-    const res = await $fetch<{ requests: WorkRequest[] }>(`/api/admin/work-requests?done=${workShowDone.value ? '1' : '0'}`)
+    const res = await $fetch<{ requests: WorkRequest[] }>(`/api/admin/work-requests?done=${showDone ? '1' : '0'}`)
+    if (requestToken !== workRequestToken || showDone !== workShowDone.value) return
     workRequests.value = res.requests
   } catch {
+    if (requestToken !== workRequestToken) return
     toast.add({ title: 'Failed to load work requests', color: 'error' })
   } finally {
-    workLoading.value = false
+    if (requestToken === workRequestToken) workLoading.value = false
   }
 }
 

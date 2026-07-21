@@ -13,6 +13,22 @@ function safeJsonParse(value: string): unknown {
   }
 }
 
+// business_locations.address is written exclusively as { addressLines: string[] }
+// (see normalizeAddressLines in location-management.ts) — this guards against
+// malformed/legacy rows that predate that normalization rather than trusting an
+// unchecked cast, which would otherwise silently hand callers a shape that
+// doesn't match what they expect from the address contract.
+function parseLocationAddress(value: string | null): { addressLines?: string[] } | null {
+  if (!value) return null
+  const parsed = safeJsonParse(value)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const addressLines = (parsed as Record<string, unknown>).addressLines
+  if (addressLines !== undefined && (!Array.isArray(addressLines) || !addressLines.every(line => typeof line === 'string'))) {
+    return null
+  }
+  return { addressLines: addressLines as string[] | undefined }
+}
+
 export interface DashboardOrganizationRow {
   id: string
   name: string
@@ -364,7 +380,7 @@ export async function listDashboardLocations(db: DbClient, organizationId: strin
   return locations.map((location) => ({
     ...location,
     is_primary: Boolean(location.is_primary),
-    address: location.address ? safeJsonParse(location.address) as { addressLines?: string[] } | null : null
+    address: parseLocationAddress(location.address)
   }))
 }
 

@@ -73,7 +73,7 @@ const cmsManagers = computed(() => {
       return { ...manager, icon: iconBySection[manager.section], to: undefined }
     }
     if (manager.scope === 'location') {
-      const rel = manager.route.replace(/^:location\/?/, '')
+      const rel = manager.route ? manager.route.replace(/^:location\/?/, '') : ''
       const to = rel ? `${paths.value.site}/locations/${location}/${rel}` : `${paths.value.site}/locations/${location}`
       return { ...manager, icon: iconBySection[manager.section], to }
     }
