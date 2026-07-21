@@ -64,13 +64,13 @@
             <UInput v-model="form.nav_title" placeholder="Short sidebar label" />
           </UFormField>
           <UFormField label="Nav Order" hint="Optional">
-            <UInput v-model="form.nav_order" type="number" min="0" placeholder="10" />
+            <UInputNumber v-model="form.nav_order" :min="0" placeholder="10" class="w-full" />
           </UFormField>
           <UFormField label="Section Order" hint="Optional">
-            <UInput v-model="form.nav_section_order" type="number" min="0" placeholder="20" />
+            <UInputNumber v-model="form.nav_section_order" :min="0" placeholder="20" class="w-full" />
           </UFormField>
           <UFormField label="Featured Order" hint="Optional">
-            <UInput v-model="form.featured_order" type="number" min="0" placeholder="1" />
+            <UInputNumber v-model="form.featured_order" :min="0" placeholder="1" class="w-full" />
           </UFormField>
           <UFormField label="Hide From Nav">
             <USwitch v-model="form.hide_from_nav" />

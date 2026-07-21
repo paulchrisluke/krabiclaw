@@ -2,29 +2,29 @@
   <div class="space-y-5">
     <div class="grid gap-4 sm:grid-cols-2">
       <UFormField label="Confirmation SLA (minutes)">
-        <UInput :model-value="numberInputValue(value.host_confirmation_sla_minutes)" type="number" min="0" @update:model-value="updateNumber('host_confirmation_sla_minutes', $event)" />
+        <UInputNumber :model-value="value.host_confirmation_sla_minutes" :min="0" class="w-full" @update:model-value="updateNumber('host_confirmation_sla_minutes', $event)" />
       </UFormField>
       <UFormField label="Free cancellation cutoff (minutes)">
-        <UInput :model-value="numberInputValue(value.free_cancellation_until_minutes)" type="number" min="0" @update:model-value="updateNumber('free_cancellation_until_minutes', $event)" />
+        <UInputNumber :model-value="value.free_cancellation_until_minutes" :min="0" class="w-full" @update:model-value="updateNumber('free_cancellation_until_minutes', $event)" />
       </UFormField>
       <UFormField label="Advance notice (minutes)">
-        <UInput :model-value="numberInputValue(value.advance_notice_minutes)" type="number" min="0" @update:model-value="updateNumber('advance_notice_minutes', $event)" />
+        <UInputNumber :model-value="value.advance_notice_minutes" :min="0" class="w-full" @update:model-value="updateNumber('advance_notice_minutes', $event)" />
       </UFormField>
       <UFormField label="Late arrival grace (minutes)">
-        <UInput :model-value="numberInputValue(value.late_arrival_grace_minutes)" type="number" min="0" @update:model-value="updateNumber('late_arrival_grace_minutes', $event)" />
+        <UInputNumber :model-value="value.late_arrival_grace_minutes" :min="0" class="w-full" @update:model-value="updateNumber('late_arrival_grace_minutes', $event)" />
       </UFormField>
       <UFormField label="Deposit trigger party size">
-        <UInput :model-value="numberInputValue(value.deposit_trigger_party_size)" type="number" min="0" @update:model-value="updateNumber('deposit_trigger_party_size', $event)" />
+        <UInputNumber :model-value="value.deposit_trigger_party_size" :min="0" class="w-full" @update:model-value="updateNumber('deposit_trigger_party_size', $event)" />
       </UFormField>
       <UFormField label="Minimum guest age" v-if="policyType === 'experience'">
-        <UInput :model-value="numberInputValue(value.minimum_guest_age)" type="number" min="0" @update:model-value="updateNumber('minimum_guest_age', $event)" />
+        <UInputNumber :model-value="value.minimum_guest_age" :min="0" class="w-full" @update:model-value="updateNumber('minimum_guest_age', $event)" />
       </UFormField>
     </div>
 
     <div class="space-y-3">
       <UCheckbox :model-value="Boolean(value.reschedule_allowed)" label="Allow rescheduling" @update:model-value="updateBoolean('reschedule_allowed', $event)" />
       <UFormField v-if="value.reschedule_allowed" label="Reschedule cutoff (minutes)">
-        <UInput :model-value="numberInputValue(value.reschedule_cutoff_minutes)" type="number" min="0" @update:model-value="updateNumber('reschedule_cutoff_minutes', $event)" />
+        <UInputNumber :model-value="value.reschedule_cutoff_minutes" :min="0" class="w-full" @update:model-value="updateNumber('reschedule_cutoff_minutes', $event)" />
       </UFormField>
       <UCheckbox :model-value="Boolean(value.deposit_required)" label="Deposit may be required" @update:model-value="updateBoolean('deposit_required', $event)" />
       <UCheckbox :model-value="Boolean(value.special_requests_allowed)" label="Allow special requests" @update:model-value="updateBoolean('special_requests_allowed', $event)" />
@@ -85,18 +85,8 @@ function patch(next: Partial<BookingPolicyPatch>) {
   emit('update:modelValue', { ...props.modelValue, ...next })
 }
 
-function normalizeNumber(value: string | number | null | undefined) {
-  if (value === '' || value === null || value === undefined) return null
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : null
-}
-
-function numberInputValue(value: number | null | undefined) {
-  return value == null ? undefined : String(value)
-}
-
-function updateNumber(field: keyof BookingPolicyPatch, next: string | number | null | undefined) {
-  patch({ [field]: normalizeNumber(next) })
+function updateNumber(field: keyof BookingPolicyPatch, next: number | null | undefined) {
+  patch({ [field]: next === null ? null : Math.max(0, Math.trunc(next)) })
 }
 
 function updateBoolean(field: keyof BookingPolicyPatch, next: boolean | 'indeterminate') {

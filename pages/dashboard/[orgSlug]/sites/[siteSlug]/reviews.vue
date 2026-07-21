@@ -44,7 +44,7 @@
           <div class="space-y-4">
             <div class="grid grid-cols-2 gap-3">
               <UFormField label="Reviewer"><UInput v-model="form.author_name" /></UFormField>
-              <UFormField label="Rating"><UInput v-model.number="form.rating" type="number" min="1" max="5" step="1" /></UFormField>
+              <UFormField label="Rating"><UInputNumber v-model="form.rating" :min="1" :max="5" :step="1" class="w-full" /></UFormField>
             </div>
             <UFormField label="Title"><UInput v-model="form.title" /></UFormField>
             <UFormField label="Review"><UTextarea v-model="form.content" :rows="5" /></UFormField>

@@ -79,7 +79,7 @@
             <h2 class="text-lg font-semibold text-highlighted">{{ editingReviewId ? 'Edit review' : 'Add review' }}</h2>
             <div class="mt-5 grid gap-4 md:grid-cols-2">
               <UFormField label="Rating">
-                <UInput v-model="reviewForm.rating" type="number" min="1" max="5" step="1" />
+                <UInputNumber v-model="reviewForm.rating" :min="1" :max="5" :step="1" class="w-full" />
               </UFormField>
               <UFormField label="Guest name">
                 <UInput v-model="reviewForm.author_name" />

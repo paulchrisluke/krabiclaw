@@ -283,10 +283,10 @@
               <div class="space-y-5">
                 <div class="grid gap-5 sm:grid-cols-2">
                   <UFormField label="Rating">
-                    <UInput v-model="detailsForm.rating" type="number" min="0" max="5" step="0.1" />
+                    <UInputNumber v-model="detailsForm.rating" :min="0" :max="5" :step="0.1" class="w-full" />
                   </UFormField>
                   <UFormField label="Review Count">
-                    <UInput v-model="detailsForm.review_count" type="number" min="0" step="1" />
+                    <UInputNumber v-model="detailsForm.review_count" :min="0" :step="1" class="w-full" />
                   </UFormField>
                   <UFormField label="Price Level">
                     <UInput v-model="detailsForm.price_level" />
@@ -365,7 +365,7 @@
                   <UInput v-model="reviewForm.author_name" />
                 </UFormField>
                 <UFormField label="Rating">
-                  <UInput v-model="reviewForm.rating" type="number" min="1" max="5" step="1" />
+                  <UInputNumber v-model="reviewForm.rating" :min="1" :max="5" :step="1" class="w-full" />
                 </UFormField>
                 <UFormField label="Title">
                   <UInput v-model="reviewForm.title" />

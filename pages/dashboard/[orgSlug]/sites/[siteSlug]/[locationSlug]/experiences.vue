@@ -125,13 +125,13 @@
           </UFormField>
           <div class="grid gap-5 sm:grid-cols-2">
             <UFormField label="Price amount" :help="`Numeric amount in ${defaultCurrency}. Leave empty for free or contact-only pricing.`">
-              <UInput v-model="form.price_amount" type="number" min="0" step="any" :placeholder="`e.g. 1500`" class="w-full" />
+              <UInputNumber v-model="form.price_amount" :min="0" :step="0.01" :placeholder="`e.g. 1500`" class="w-full" />
             </UFormField>
             <UFormField label="Price display override" help='Optional. Overrides the displayed price text, e.g. "Ask us" or "Free".'>
               <UInput v-model="form.price" placeholder="Ask us" class="w-full" />
             </UFormField>
             <UFormField label="Compare-at price" :help="`Optional. Regular/pre-sale price in ${defaultCurrency}, shown struck through when running a sale. Leave empty when not on sale.`">
-              <UInput v-model="form.compare_at_price_amount" type="number" min="0" step="any" class="w-full" />
+              <UInputNumber v-model="form.compare_at_price_amount" :min="0" :step="0.01" class="w-full" />
             </UFormField>
             <UFormField label="Sale starts" help="Optional. Leave empty to start immediately.">
               <UInput v-model="form.sale_starts_at" type="date" class="w-full" />
@@ -140,10 +140,10 @@
               <UInput v-model="form.sale_ends_at" type="date" class="w-full" />
             </UFormField>
             <UFormField label="Duration (minutes)">
-              <UInput v-model="form.duration_minutes" type="number" min="0" class="w-full" />
+              <UInputNumber v-model="form.duration_minutes" :min="0" class="w-full" />
             </UFormField>
             <UFormField label="Max capacity">
-              <UInput v-model="form.max_capacity" type="number" min="1" class="w-full" />
+              <UInputNumber v-model="form.max_capacity" :min="1" class="w-full" />
             </UFormField>
             <UFormField label="Status">
               <USelect
@@ -156,7 +156,7 @@
               <UCheckbox v-model="form.featured" />
             </UFormField>
             <UFormField label="Featured sort order" help="Lower numbers appear first">
-              <UInput v-model="form.featured_sort_order" type="number" min="0" class="w-full" />
+              <UInputNumber v-model="form.featured_sort_order" :min="0" class="w-full" />
             </UFormField>
           </div>
           <UFormField label="Time slots">
@@ -279,10 +279,9 @@
               </span>
               <UBadge v-if="slot.is_closed" color="error" variant="soft" size="xs">Closed</UBadge>
               <UBadge v-else-if="slot.is_full" color="warning" variant="soft" size="xs">Full</UBadge>
-              <UInput
+              <UInputNumber
                 v-model="slotCapacityOverrides[slot.time_slot]"
-                type="number"
-                min="0"
+                :min="0"
                 placeholder="Capacity override"
                 class="ml-auto w-36"
               />
