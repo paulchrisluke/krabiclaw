@@ -408,10 +408,10 @@ async function loadDoc() {
     form.category = res.doc.category ?? ''
     form.nav_section = res.doc.nav_section ?? ''
     form.nav_title = res.doc.nav_title ?? ''
-    form.nav_order = res.doc.nav_order != null ? String(res.doc.nav_order) : ''
-    form.nav_section_order = res.doc.nav_section_order != null ? String(res.doc.nav_section_order) : ''
+    form.nav_order = res.doc.nav_order ?? null
+    form.nav_section_order = res.doc.nav_section_order ?? null
     form.hide_from_nav = Boolean(res.doc.hide_from_nav)
-    form.featured_order = res.doc.featured_order != null ? String(res.doc.featured_order) : ''
+    form.featured_order = res.doc.featured_order ?? null
     form.difficulty_level = res.doc.difficulty_level ?? ''
     form.seo_description = res.doc.seo_description ?? ''
     form.seo_keywords = res.doc.seo_keywords ?? ''

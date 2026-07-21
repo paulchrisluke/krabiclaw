@@ -104,9 +104,8 @@
 
 /* ── Platform theme ───────────────────────────────────────── */
 .platform-theme {
-  --ui-primary:           var(--kc-coral-600);
-  /* WCAG foreground: coral (#E87F67) has only ~2.75:1 contrast with white (fails AA).
-     Navy text gives 7.64:1 against coral — use it for all bg-primary surfaces. */
+  --ui-primary:           var(--kc-coral-500);
+  /* WCAG foreground: coral-500 (#FB7461) with navy (#1F2547) gives ~5.5:1 contrast (passes AA). */
   --primary-foreground:   var(--kc-navy);
   --ui-secondary:         var(--kc-teal-600);
   --ui-success:           var(--kc-success);

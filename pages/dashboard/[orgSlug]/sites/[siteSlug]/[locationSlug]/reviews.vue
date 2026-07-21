@@ -208,7 +208,7 @@ const editingReviewId = ref<string | null>(null)
 const reviewForm = reactive({
   location_id: '',
   author_name: '',
-  rating: '5',
+  rating: 5 as number,
   title: '',
   content: '',
   status: 'approved',
@@ -231,7 +231,7 @@ const statusItems = [
 const statusItemsWithoutAll = statusItems.filter(item => item.id !== 'all')
 
 const canSaveReview = computed(() =>
-  Boolean(currentLocation.value?.id && reviewForm.author_name.trim() && reviewForm.content.trim() && Number(reviewForm.rating) >= 1 && Number(reviewForm.rating) <= 5)
+  Boolean(currentLocation.value?.id && reviewForm.author_name.trim() && reviewForm.content.trim() && reviewForm.rating >= 1 && reviewForm.rating <= 5)
 )
 
 const filteredReviews = computed(() => reviews.value.filter((review) => {
@@ -309,7 +309,7 @@ function resetReviewForm(locationId = currentLocation.value?.id ?? '') {
   editingReviewId.value = null
   reviewForm.location_id = locationId
   reviewForm.author_name = ''
-  reviewForm.rating = '5'
+  reviewForm.rating = 5
   reviewForm.title = ''
   reviewForm.content = ''
   reviewForm.status = 'approved'
@@ -325,7 +325,7 @@ function startEdit(review: ReviewRow) {
   editingReviewId.value = review.id
   reviewForm.location_id = review.location_id
   reviewForm.author_name = review.author_name ?? ''
-  reviewForm.rating = String(review.rating)
+  reviewForm.rating = review.rating
   reviewForm.title = review.title ?? ''
   reviewForm.content = review.content ?? ''
   reviewForm.status = review.status

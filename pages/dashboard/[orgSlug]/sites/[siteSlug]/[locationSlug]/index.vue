@@ -559,8 +559,8 @@ const detailsForm = reactive({
   maps_url: '',
   google_review_url: '',
   google_place_id: '',
-  rating: '',
-  review_count: '',
+  rating: null as number | null,
+  review_count: null as number | null,
   price_level: '',
   address: '',
   short_description: '',
@@ -584,7 +584,7 @@ const openingHours = ref<DayHours[]>(WEEKDAYS.map(day => ({
 
 const reviewForm = reactive({
   author_name: '',
-  rating: '5',
+  rating: 5 as number,
   title: '',
   content: '',
   created_at: ''
@@ -647,8 +647,8 @@ function fillDetailsForm(loc: BusinessLocation) {
   detailsForm.maps_url = loc.maps_url ?? ''
   detailsForm.google_review_url = loc.google_review_url ?? ''
   detailsForm.google_place_id = loc.google_place_id ?? ''
-  detailsForm.rating = loc.rating === null || loc.rating === undefined ? '' : String(loc.rating)
-  detailsForm.review_count = loc.review_count === null || loc.review_count === undefined ? '' : String(loc.review_count)
+  detailsForm.rating = loc.rating ?? null
+  detailsForm.review_count = loc.review_count ?? null
   detailsForm.price_level = loc.price_level ?? ''
   detailsForm.address = loc.address?.addressLines?.join('\n') ?? ''
   detailsForm.short_description = loc.short_description ?? ''
@@ -876,7 +876,7 @@ async function syncGooglePlace() {
 function resetReviewForm() {
   editingReviewId.value = null
   reviewForm.author_name = ''
-  reviewForm.rating = '5'
+  reviewForm.rating = 5
   reviewForm.title = ''
   reviewForm.content = ''
   reviewForm.created_at = new Date().toISOString().slice(0, 10)
@@ -890,7 +890,7 @@ function startNewReview() {
 function editReview(review: ManualReview) {
   editingReviewId.value = review.id
   reviewForm.author_name = review.author_name
-  reviewForm.rating = String(review.rating)
+  reviewForm.rating = review.rating
   reviewForm.title = review.title ?? ''
   reviewForm.content = review.content
   reviewForm.created_at = review.created_at ? review.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
@@ -920,10 +920,9 @@ async function loadManualReviews() {
 async function saveReview() {
   reviewSaving.value = true
   try {
-    const rating = Number(reviewForm.rating)
     const body = {
       author_name: reviewForm.author_name,
-      rating: Number.isInteger(rating) ? rating : 5,
+      rating: reviewForm.rating,
       title: reviewForm.title || null,
       content: reviewForm.content,
       status: 'approved',

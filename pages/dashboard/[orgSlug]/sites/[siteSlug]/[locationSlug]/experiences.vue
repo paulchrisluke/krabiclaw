@@ -453,12 +453,12 @@ const emptyForm = () => ({
   video_url: null as string | null,
   images: [] as Array<{ _key: string; asset_id: string | null; url: string | null; kind: 'image' | 'video' }>,
   price: '',
-  price_amount: '',
-  compare_at_price_amount: '',
+  price_amount: null as number | null,
+  compare_at_price_amount: null as number | null,
   sale_starts_at: '',
   sale_ends_at: '',
-  duration_minutes: '',
-  max_capacity: '',
+  duration_minutes: null as number | null,
+  max_capacity: null as number | null,
   available_note: '',
   highlights_input: '',
   included_items_input: '',
@@ -466,7 +466,7 @@ const emptyForm = () => ({
   meeting_point: '',
   status: 'active' as 'active' | 'inactive' | 'sold_out',
   featured: false,
-  featured_sort_order: 0,
+  featured_sort_order: 0 as number,
 })
 
 const form = reactive(emptyForm())
@@ -529,12 +529,12 @@ function openEdit(exp: ApiRecord) {
     video_url: exp.video_url ?? null,
     images: Array.isArray(exp.images) ? exp.images.map((img: { asset_id?: string | null; url: string | null; kind: 'image' | 'video' }) => ({ _key: crypto.randomUUID(), asset_id: img.asset_id ?? null, url: img.url, kind: img.kind })) : [],
     price: exp.price ?? '',
-    price_amount: exp.price_amount != null ? String(exp.price_amount) : '',
-    compare_at_price_amount: exp.compare_at_price_amount != null ? String(exp.compare_at_price_amount) : '',
+    price_amount: exp.price_amount ?? null,
+    compare_at_price_amount: exp.compare_at_price_amount ?? null,
     sale_starts_at: exp.sale_starts_at ? String(exp.sale_starts_at).slice(0, 10) : '',
     sale_ends_at: exp.sale_ends_at ? String(exp.sale_ends_at).slice(0, 10) : '',
-    duration_minutes: exp.duration_minutes != null ? String(exp.duration_minutes) : '',
-    max_capacity: exp.max_capacity != null ? String(exp.max_capacity) : '',
+    duration_minutes: exp.duration_minutes ?? null,
+    max_capacity: exp.max_capacity ?? null,
     available_note: exp.available_note ?? '',
     highlights_input: arrayToLines(exp.highlights),
     included_items_input: arrayToLines(exp.included_items),
@@ -542,7 +542,7 @@ function openEdit(exp: ApiRecord) {
     meeting_point: exp.meeting_point ?? '',
     status: exp.status ?? 'active',
     featured: exp.featured ?? false,
-    featured_sort_order: exp.featured_sort_order != null ? String(exp.featured_sort_order) : '0',
+    featured_sort_order: exp.featured_sort_order ?? 0,
   })
   timeSlotsInput.value = Array.isArray(exp.time_slots) ? exp.time_slots.join(', ') : (exp.time_slots ?? '')
   for (const day of weekdayNames) recurringInputs[day] = exp.recurring_slots?.[day]?.join(', ') ?? ''
