@@ -232,7 +232,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'set_home_hero_image',
-      description: 'Use this when the user wants to change the main photo at the top of the homepage — also called the cover photo, banner, big photo, first image people see, or hero image. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id. Use this immediately after upload_user_photo when the user wants their uploaded image on the homepage. If this page already has a hero video, that video keeps display priority until you call clear_home_hero_video.',
+      description: 'Use this when the user wants to change the main photo at the top of the homepage — also called the cover photo, banner, big photo, first image people see, or hero image. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id. Use this immediately after upload_user_media when the user wants their uploaded image on the homepage. If this page already has a hero video, that video keeps display priority until you call clear_home_hero_video.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: false,
