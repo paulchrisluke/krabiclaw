@@ -4,44 +4,16 @@
       <div class="flex min-w-0 items-center gap-2">
         <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="sm" aria-label="Go back" @click="handleBack" />
         <div class="h-6 w-px bg-gray-200 " />
-        <div class="min-w-0">
-          <div class="flex items-center gap-2">
-            <p class="truncate text-sm font-semibold text-highlighted ">{{ siteName }}</p>
-            <UBadge :color="localHasChanges ? 'warning' : 'neutral'" variant="soft" size="xs">
-              {{ localHasChanges ? 'Unsaved changes' : siteStatusLabel }}
-            </UBadge>
-          </div>
-          <p class="truncate text-xs text-muted">{{ siteDomain }}</p>
-        </div>
-      </div>
-
-      <!-- Location tabs — only shown for pages scoped to a location (registry-driven, see contentRegistry) -->
-      <div v-if="currentPageIsLocationScoped" class="hidden min-w-0 items-center gap-1 md:flex">
-        <UButton
-          v-for="loc in siteLocations"
-          :key="loc.id"
-          :label="loc.title"
-          size="sm"
-          :color="selectedLocationId === loc.id ? 'primary' : 'neutral'"
-          :variant="selectedLocationId === loc.id ? 'soft' : 'ghost'"
-          @click="selectLocation(loc.id)"
+        <span
+          class="size-2 shrink-0 rounded-full"
+          :class="localHasChanges ? 'bg-warning' : 'bg-success'"
+          :aria-label="localHasChanges ? 'Unsaved changes' : siteStatusLabel"
+          role="img"
         />
-      </div>
-
-      <!-- Page selector always visible -->
-      <div v-if="pages.length" class="hidden min-w-0 items-center gap-2 md:flex">
-        <USelect
-          id="content-page-selector"
-          v-model="selectedPageId"
-          :items="pages"
-          value-key="id"
-          label-key="label"
-          class="w-44"
-        />
+        <p class="truncate text-sm font-semibold text-highlighted ">{{ siteName }}</p>
       </div>
 
       <div class="flex items-center gap-2">
-        <UColorModeButton variant="ghost" color="neutral" size="sm" />
         <UButton
           v-if="pages.length"
           :href="iframeSrc || undefined"
@@ -117,25 +89,36 @@
 
     <div v-else class="grid min-h-0 flex-1 grid-cols-[20rem_minmax(0,1fr)_22rem] overflow-hidden">
       <aside class="flex min-h-0 flex-col border-r border-default bg-default  ">
-        <!-- Mobile: location tabs + page selector -->
-        <div class="border-b border-default p-3 md:hidden">
-          <div class="space-y-2">
-            <div v-if="currentPageIsLocationScoped" class="flex flex-wrap gap-1">
-              <UButton
-                v-for="loc in siteLocations"
-                :key="loc.id"
-                :label="loc.title"
-                size="xs"
-                :color="selectedLocationId === loc.id ? 'primary' : 'neutral'"
-                :variant="selectedLocationId === loc.id ? 'soft' : 'ghost'"
-                @click="selectLocation(loc.id)"
-              />
-            </div>
-            <USelect
-              v-model="selectedPageId"
-              :items="pages"
-              value-key="id"
-              label-key="label"
+        <div v-if="pages.length" class="border-b border-default p-3">
+          <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Pages</p>
+          <div class="space-y-0.5">
+            <UButton
+              v-for="page in pages"
+              :key="page.id"
+              :label="page.label"
+              size="sm"
+              block
+              :color="selectedPageId === page.id ? 'primary' : 'neutral'"
+              :variant="selectedPageId === page.id ? 'soft' : 'ghost'"
+              class="justify-start"
+              @click="selectedPageId = page.id"
+            />
+          </div>
+        </div>
+
+        <div v-if="currentPageIsLocationScoped && siteLocations.length > 1" class="border-b border-default p-3">
+          <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Locations</p>
+          <div class="space-y-0.5">
+            <UButton
+              v-for="loc in siteLocations"
+              :key="loc.id"
+              :label="loc.title"
+              size="sm"
+              block
+              :color="selectedLocationId === loc.id ? 'primary' : 'neutral'"
+              :variant="selectedLocationId === loc.id ? 'soft' : 'ghost'"
+              class="justify-start"
+              @click="selectLocation(loc.id)"
             />
           </div>
         </div>
@@ -143,7 +126,6 @@
         <div class="border-b border-default p-3">
           <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Universal CMS</p>
           <div class="grid grid-cols-2 gap-1">
-            <UButton label="Pages" icon="i-lucide-files" size="xs" variant="soft" block />
             <UButton
               v-for="manager in cmsManagers"
               :key="manager.id"
@@ -245,35 +227,10 @@
       </aside>
 
       <main class="flex min-w-0 flex-col overflow-hidden bg-elevated">
-        <div class="flex h-11 shrink-0 items-center justify-between border-b border-default bg-default px-4  ">
-          <div class="flex min-w-0 items-center gap-2">
-            <UIcon name="i-lucide-globe" class="size-4 text-muted" />
-            <p class="truncate text-sm text-muted">{{ siteDomain }}{{ currentPagePath }}</p>
-          </div>
-          <UBadge color="neutral" variant="subtle" size="xs">Preview</UBadge>
-        </div>
-
         <div class="min-h-0 flex-1 overflow-auto p-4">
-          <UCard :ui="{ root: 'relative mx-auto h-full min-h-[40rem] max-w-7xl overflow-hidden', body: 'p-0 sm:p-0 h-full' }">
-        <iframe
-          id="site-preview-frame"
-          ref="previewFrame"
-          :src="iframeSrc"
-          class="w-full h-full border-0 transition-opacity duration-300"
-          :class="{ 'opacity-40': iframeLoading }"
-          @load="iframeLoading = false"
-        />
-        <Transition enter-active-class="transition-opacity duration-200" enter-from-class="opacity-0" enter-to-class="opacity-100" leave-active-class="transition-opacity duration-150" leave-from-class="opacity-100" leave-to-class="opacity-0">
-            <UCard v-if="iframeLoading" class="absolute inset-0 flex items-center justify-center pointer-events-none" :ui="{ root: '' }">
-              <UCard :ui="{ body: 'px-4 py-3 sm:px-4 sm:py-3' }">
-                <div class="flex items-center gap-3">
-                  <UIcon name="i-lucide-refresh-cw" class="size-4 animate-spin text-muted" />
-                  <p class="text-sm text-muted">Loading preview...</p>
-                </div>
-              </UCard>
-            </UCard>
-          </Transition>
-        </UCard>
+          <div class="mx-auto h-full max-w-7xl">
+            <SitePreviewFrame ref="previewFrameComponent" :iframe-src="iframeSrc" />
+          </div>
         </div>
       </main>
 
@@ -414,11 +371,6 @@ const config = useRuntimeConfig()
 const { paths, contentPath } = useDashboardSiteLinks(props.siteId)
 const { handleBack } = useEditorNavigation(props.siteId)
 
-const platformHostname = computed(() => {
-  const domain = config.public.freeSiteDomain
-  return domain.replace(/^https?:\/\//, '')
-})
-
 // ─── Site Context ───────────────────────────────────────────────────────
 const siteData = ref<ApiRecord | null>(null)
 const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])
@@ -465,7 +417,6 @@ const cmsManagers = computed(() => {
     }
   })
 })
-const siteDomain = computed(() => siteData.value?.subdomain ? `${siteData.value.subdomain}.${platformHostname.value}` : 'localhost:3000')
 const sitePreviewBaseUrl = computed(() => {
   if (!siteData.value?.id) return ''
   const platformBase = (config.public.platformDomain || config.public.freeSiteDomain).replace(/\/$/, '')
@@ -524,6 +475,10 @@ const selectLocation = async (id: string) => {
 }
 
 // ─── Pages ────────────────────────────────────────────────────────────
+// Page/location selection here still reads/writes ?page=/?location= query
+// params instead of a real route segment — inconsistent with the rest of
+// #316, which replaced the equivalent query-tab patterns elsewhere (admin's
+// ?tab=, ~/settings) with real routes. Tracked, not forgotten: issue #324.
 const siteVertical = computed<SiteVertical | null>(() => siteData.value ? siteData.value.vertical as SiteVertical : null)
 const pages = computed(() => {
   const capabilities = cmsCapabilities.value
@@ -588,8 +543,10 @@ const previewPagePath = computed(() => {
 })
 
 // ─── Iframe ───────────────────────────────────────────────────────────
-const previewFrame = ref<HTMLIFrameElement>()
-const iframeLoading = ref(true)
+// SitePreviewFrame owns the actual <iframe>/loading-state; we only need to
+// reach into its exposed element for the admin:focus/admin:content-update
+// postMessage protocol below.
+const previewFrameComponent = ref<{ previewFrame?: HTMLIFrameElement } | null>(null)
 const previewReloadToken = ref(0)
 const iframeSrc = computed(() => {
   if (!sitePreviewBaseUrl.value) return ''
@@ -670,7 +627,6 @@ watch(selectedPageId, (newVal, oldVal) => {
 watch(() => dashboardLocation.currentLocationId.value, async (newVal, oldVal) => {
   selectedLocationId.value = newVal
   if (newVal !== oldVal) {
-    iframeLoading.value = true
     activeField.value = null
     const previousValues = { ...currentValues.value }
 
@@ -725,8 +681,9 @@ const selectField = (key: string) => {
 
   // Find which group this field belongs to
   const group = currentPageGroups.value.find(g => g.fields.includes(key))
-  if (group && previewFrame.value?.contentWindow && previewOrigin.value) {
-    previewFrame.value.contentWindow.postMessage({
+  const previewFrameEl = previewFrameComponent.value?.previewFrame
+  if (group && previewFrameEl?.contentWindow && previewOrigin.value) {
+    previewFrameEl.contentWindow.postMessage({
       type: 'admin:focus',
       field: key,
       group: group.id
@@ -735,9 +692,10 @@ const selectField = (key: string) => {
 }
 
 const postPreviewUpdate = () => {
-  if (!activeField.value || !previewFrame.value?.contentWindow || !previewOrigin.value) return
+  const previewFrameEl = previewFrameComponent.value?.previewFrame
+  if (!activeField.value || !previewFrameEl?.contentWindow || !previewOrigin.value) return
 
-  previewFrame.value.contentWindow.postMessage({
+  previewFrameEl.contentWindow.postMessage({
     type: 'admin:content-update',
     page: selectedPageId.value,
     field: activeField.value,
@@ -863,7 +821,6 @@ const handleSaveContent = async () => {
       credentials: 'include'
     })
     localHasChanges.value = false
-    iframeLoading.value = true
     previewReloadToken.value = Date.now()
   } catch (error) {
     const msg = getErrorMessage(error, 'Unknown error')
@@ -884,7 +841,6 @@ const handleDiscard = async () => {
     localHasChanges.value = false
     await loadPageContent()
     toast.add({ description: 'Unsaved changes discarded', color: 'info' })
-    iframeLoading.value = true
     previewReloadToken.value = Date.now()
   } catch {
     toast.add({ description: 'Failed to discard', color: 'error' })
