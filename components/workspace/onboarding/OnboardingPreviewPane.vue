@@ -92,7 +92,7 @@
 
     <!-- Preview scroll area -->
     <div v-else class="min-h-0 flex-1 overflow-auto p-5">
-      <SitePreviewFrame :iframe-src="iframeSrc" />
+      <SitePreviewFrame :iframe-src="iframeSrc" :display-url="displayUrl" />
     </div>
   </div>
 </template>
@@ -146,6 +146,15 @@ const tabs = computed(() => {
 })
 
 const currentTabIsLocationScoped = computed(() => tabs.value.find(tab => tab.id === props.selectedPage)?.locationScoped === true)
+
+// The URL a real visitor would see — distinct from iframeSrc, which points at
+// the internal /preview/site/:id route that actually serves draft content.
+const displayUrl = computed(() => {
+  if (!props.siteDomain) return ''
+  const template = resolvePublicTemplate({ vertical: props.vertical })
+  const path = getEditablePages(props.vertical, template.slug).find(page => page.id === props.selectedPage)?.path ?? '/'
+  return props.siteDomain + (path === '/' ? '' : path)
+})
 
 const selectedLocation = computed(() =>
   props.siteLocations.find(l => l.id === props.selectedLocationId) ?? props.siteLocations[0] ?? null

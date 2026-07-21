@@ -15,7 +15,6 @@
 
       <div class="flex items-center gap-2">
         <UButton
-          v-if="props.pageId"
           :href="iframeSrc || undefined"
           target="_blank"
           icon="i-lucide-external-link"
@@ -26,7 +25,6 @@
           :disabled="!iframeSrc"
         />
         <UButton
-          v-if="props.pageId"
           :disabled="!localHasChanges || saving"
           :loading="saving"
           color="primary"
@@ -41,36 +39,6 @@
     <div v-if="cmsLoadError" class="flex min-h-0 flex-1 items-center justify-center bg-muted p-6">
       <UAlert color="error" variant="soft" title="Content unavailable" :description="cmsLoadError" class="max-w-xl" />
     </div>
-
-    <UPage v-else-if="cmsCapabilities?.template === 'blawby'" class="min-h-0 flex-1 overflow-auto bg-muted">
-      <UPageBody class="mx-auto w-full max-w-5xl p-6">
-        <h1 class="text-2xl font-semibold text-highlighted">Professional service content</h1>
-        <p class="mt-2 text-sm text-muted">Each editor below writes the canonical data rendered by Blawby, MCP, and ChowBot.</p>
-        <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <UCard v-for="manager in cmsManagers" :key="manager.id">
-            <UIcon :name="manager.icon" class="size-5 text-primary" />
-            <h2 class="mt-3 font-semibold text-highlighted">{{ manager.label }}</h2>
-            <UButton :to="manager.to" :disabled="!manager.to" label="Open editor" class="mt-4" size="sm" />
-          </UCard>
-        </div>
-      </UPageBody>
-    </UPage>
-
-    <!-- Page index: no specific page selected, show a real navigable list -->
-    <UPage v-else-if="!props.pageId" class="min-h-0 flex-1 overflow-auto bg-muted">
-      <UPageBody class="mx-auto w-full max-w-5xl p-6">
-        <h1 class="text-2xl font-semibold text-highlighted">Pages</h1>
-        <p class="mt-2 text-sm text-muted">Choose a page to edit its content.</p>
-        <div v-if="pages.length" class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <UCard v-for="page in pages" :key="page.id">
-            <UIcon name="i-lucide-file-text" class="size-5 text-primary" />
-            <h2 class="mt-3 font-semibold text-highlighted">{{ page.label }}</h2>
-            <UButton :to="`${contentIndexPath}/${page.id}`" label="Edit" class="mt-4" size="sm" />
-          </UCard>
-        </div>
-        <UAlert v-else color="neutral" variant="soft" title="No editable pages" description="This template has no field-editable pages for this scope." class="mt-6" />
-      </UPageBody>
-    </UPage>
 
     <!-- No locations added yet (only blocks location-scoped pages) -->
     <div
@@ -106,23 +74,6 @@
 
     <div v-else class="grid min-h-0 flex-1 grid-cols-[20rem_minmax(0,1fr)_22rem] overflow-hidden">
       <aside class="flex min-h-0 flex-col border-r border-default bg-default  ">
-        <div v-if="pages.length" class="border-b border-default p-3">
-          <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Pages</p>
-          <div class="space-y-0.5">
-            <UButton
-              v-for="page in pages"
-              :key="page.id"
-              :label="page.label"
-              :to="`${contentIndexPath}/${page.id}`"
-              size="sm"
-              block
-              :color="selectedPageId === page.id ? 'primary' : 'neutral'"
-              :variant="selectedPageId === page.id ? 'soft' : 'ghost'"
-              class="justify-start"
-            />
-          </div>
-        </div>
-
         <div v-if="currentPageIsLocationScoped && siteLocations.length > 1" class="border-b border-default p-3">
           <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Locations</p>
           <div class="space-y-0.5">
@@ -228,7 +179,7 @@
       <main class="flex min-w-0 flex-col overflow-hidden bg-elevated">
         <div class="min-h-0 flex-1 overflow-auto p-4">
           <div class="mx-auto h-full max-w-7xl">
-            <SitePreviewFrame ref="previewFrameComponent" :iframe-src="iframeSrc" />
+            <SitePreviewFrame ref="previewFrameComponent" :iframe-src="iframeSrc" :display-url="displayUrl" />
           </div>
         </div>
       </main>
@@ -360,9 +311,9 @@ const props = defineProps<{
    *  not this component, so a template's page/location split stays declared
    *  in one place (cms-registry.ts) rather than duplicated per host. */
   scope: 'site' | 'location'
-  /** Real route param for the selected page (content/[pageId].vue). Absent
-   *  means "index mode" — show the page-selection list instead of the editor. */
-  pageId?: string
+  /** Real route param for the selected page (content/[pageId].vue) — page
+   *  selection itself lives one level up, in ContentPageIndex.vue. */
+  pageId: string
 }>()
 
 const dashboardLocation = useDashboardLocation()
@@ -382,40 +333,6 @@ const siteStatusLabel = computed(() => String(siteData.value?.status || 'unknown
 const cmsCapabilities = computed(() => {
   if (!siteData.value) return null
   return resolveCmsCapabilities(siteData.value.vertical as SiteVertical, siteData.value.template as PublicTemplateSlug)
-})
-const cmsManagers = computed(() => {
-  const capabilities = cmsCapabilities.value
-  if (!capabilities) return []
-  const location = siteLocations.value.find(candidate => candidate.id === selectedLocationId.value)?.slug
-    ?? siteLocations.value[0]?.slug
-  const iconBySection = {
-    collections: 'i-lucide-database',
-    locations: 'i-lucide-map-pin',
-    media: 'i-lucide-image',
-    site: 'i-lucide-settings',
-  } as const
-  return capabilities.managers.map((manager) => {
-    if (manager.id === 'settings') {
-      return { ...manager, icon: iconBySection[manager.section], to: paths.value.settingsGeneral }
-    }
-    if (manager.scope === 'location' && !location) {
-      return { ...manager, icon: iconBySection[manager.section], to: undefined }
-    }
-    // manager.route for a location-scoped manager is ":location/rest", relative
-    // to that location's own base — matches locationBase in useDashboardSiteLinks
-    // and managerHref in layouts/dashboard.vue, both of which build off
-    // paths.value.site + '/locations/' + slug, not paths.value.site directly.
-    if (manager.scope === 'location') {
-      const rel = manager.route.replace(/^:location\/?/, '')
-      const to = rel ? `${paths.value.site}/locations/${location}/${rel}` : `${paths.value.site}/locations/${location}`
-      return { ...manager, icon: iconBySection[manager.section], to }
-    }
-    return {
-      ...manager,
-      icon: iconBySection[manager.section],
-      to: manager.route ? `${paths.value.site}/${manager.route}` : paths.value.site,
-    }
-  })
 })
 const sitePreviewBaseUrl = computed(() => {
   if (!siteData.value?.id) return ''
@@ -492,12 +409,7 @@ const pages = computed(() => {
     .filter(page => allowedPageIds.has(page.id) && page.scope === props.scope)
 })
 
-// Index-mode link base: props.scope === 'location' pages live under
-// paths.value.project (the current location's base), site-scoped pages
-// under paths.value.content — matches content.vue vs locations/[locationSlug]/content.vue.
-const contentIndexPath = computed(() => props.scope === 'location' ? `${paths.value.project}/content` : paths.value.content)
-
-const selectedPageId = computed(() => props.pageId ?? '')
+const selectedPageId = computed(() => props.pageId)
 const currentPagePath = computed(() => pages.value.find(p => p.id === selectedPageId.value)?.path || '/')
 const selectedPageLabel = computed(() => pages.value.find(p => p.id === selectedPageId.value)?.label || '')
 const selectedPageScopeLabel = computed(() => {
@@ -506,7 +418,7 @@ const selectedPageScopeLabel = computed(() => {
 })
 
 const applyRouteContentScope = () => {
-  if (props.pageId && pages.value.length && !pages.value.some(page => page.id === props.pageId)) {
+  if (!pages.value.some(page => page.id === props.pageId)) {
     throw createError({ statusCode: 404, statusMessage: `Page is not available for this site: ${props.pageId}` })
   }
   // Location scope always comes from the real /locations/[locationSlug] route
@@ -540,6 +452,17 @@ const iframeSrc = computed(() => {
   return url.toString()
 })
 
+// The URL a real visitor would actually see — distinct from iframeSrc, which
+// points at the internal /preview/site/:id route. Matches the subdomain +
+// freeSiteDomain pattern already used for siteDomain in onboarding.vue.
+const platformHostname = computed(() => (config.public.freeSiteDomain as string).replace(/^https?:\/\//, ''))
+const siteDomain = computed(() => siteData.value?.subdomain ? `${siteData.value.subdomain}.${platformHostname.value}` : '')
+const displayUrl = computed(() => {
+  if (!siteDomain.value) return ''
+  const subPath = previewPagePath.value === '/' ? '' : previewPagePath.value
+  return siteDomain.value + subPath
+})
+
 const previewOrigin = computed(() => {
   if (!iframeSrc.value) return null
   try {
@@ -553,7 +476,7 @@ const previewOrigin = computed(() => {
 // generically by the onBeforeRouteLeave() unsaved-changes confirm below —
 // this just reloads content when the pageId route param actually changes.
 watch(() => props.pageId, async (newVal, oldVal) => {
-  if (newVal === oldVal || !newVal) return
+  if (newVal === oldVal) return
   activeField.value = null
   openGroups.value = ['hero']
   localHasChanges.value = false
@@ -700,10 +623,6 @@ function getErrorMessage(error: unknown, fallback: string): string {
 const loadPageContent = async () => {
   const version = ++loadVersion.value
   if (requiresLocationSelection.value) return
-  // No selected page means no field-editable page exists for this template
-  // (see the pages.value.length guard on the selectedPageId watcher above) —
-  // there is nothing to fetch.
-  if (!selectedPageId.value) return
   contentLoading.value = true
   try {
     const res = await $fetch<{ fields: ApiRecord[] }>(
@@ -738,7 +657,7 @@ const loadPageContent = async () => {
 // Load on mount
 onMounted(async () => {
   await loadEditorContext()
-  if (props.pageId) await loadPageContent()
+  await loadPageContent()
 })
 
 // ─── Actions ──────────────────────────────────────────────────────────

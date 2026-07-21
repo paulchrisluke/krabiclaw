@@ -2,22 +2,35 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-// The field-editing engine lives in CmsContentEditor.vue (shared by the
-// site-scoped and location-scoped content/index.vue host pages, plus their
-// content/[pageId].vue siblings) since #316 phase 3 split the formerly-
-// monolithic content.vue into thin per-scope hosts plus this shared
-// component; issue #324 later replaced the ?page=/?location= query-param
-// scheme those hosts used with real content/[pageId] routes.
+// The field-editing engine lives in CmsContentEditor.vue, rendered only by
+// the content/[pageId].vue editor routes (site-scoped and location-scoped).
+// Page selection itself lives one level up in ContentPageIndex.vue, rendered
+// by the content/index.vue routes as an ordinary UDashboardPanel page — #316
+// phase 3 first split the formerly-monolithic content.vue into per-scope
+// hosts plus CmsContentEditor.vue; issue #324 later replaced the
+// ?page=/?location= query-param scheme those hosts used with real
+// content/[pageId] routes, and a follow-up pass moved page *selection* out
+// of the full-screen editor entirely so the editor only ever renders one
+// already-chosen page.
 const editorPath = new URL('../../components/workspace/content/CmsContentEditor.vue', import.meta.url)
 const editorSource = readFileSync(editorPath, 'utf8')
+const pageIndexSource = readFileSync(new URL('../../components/workspace/content/ContentPageIndex.vue', import.meta.url), 'utf8')
 const linksSource = readFileSync(new URL('../../composables/useDashboardSiteLinks.ts', import.meta.url), 'utf8')
 const layoutSource = readFileSync(new URL('../../layouts/dashboard.vue', import.meta.url), 'utf8')
-const siteContentHostSource = readFileSync(
+const siteContentIndexHostSource = readFileSync(
   new URL('../../pages/dashboard/[orgSlug]/sites/[siteSlug]/content/index.vue', import.meta.url),
   'utf8',
 )
-const locationContentHostSource = readFileSync(
+const locationContentIndexHostSource = readFileSync(
   new URL('../../pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/content/index.vue', import.meta.url),
+  'utf8',
+)
+const siteContentEditorHostSource = readFileSync(
+  new URL('../../pages/dashboard/[orgSlug]/sites/[siteSlug]/content/[pageId].vue', import.meta.url),
+  'utf8',
+)
+const locationContentEditorHostSource = readFileSync(
+  new URL('../../pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/content/[pageId].vue', import.meta.url),
   'utf8',
 )
 
@@ -46,11 +59,12 @@ test('CMS status never fabricates a Live state from local dirty state', () => {
   assert.match(editorSource, /siteStatusLabel/)
 })
 
-test('CMS content host page disables SSR; editor uses $fetch for client-side fetching and avoids useFetch/useRequestFetch', () => {
-  // The content host page explicitly opts out of SSR, so the nested self-fetch
+test('CMS editor host pages disable SSR; editor uses $fetch for client-side fetching and avoids useFetch/useRequestFetch', () => {
+  // The editor host page explicitly opts out of SSR, so the nested self-fetch
   // / cloudflareEnv pattern is not needed — verifying ssr: false is present is
   // the equivalent contract for this surface.
-  assert.match(siteContentHostSource, /ssr:\s*false/)
+  assert.match(siteContentEditorHostSource, /ssr:\s*false/)
+  assert.match(locationContentEditorHostSource, /ssr:\s*false/)
 
   // The editor component must never introduce useFetch or useRequestFetch —
   // those bypass cloudflare bindings in SSR (see AGENTS.md) and are
@@ -62,9 +76,11 @@ test('CMS content host page disables SSR; editor uses $fetch for client-side fet
   assert.match(editorSource, /\$fetch/)
 })
 
-test('CMS content host pages render shared editor with siteId prop', () => {
-  assert.match(siteContentHostSource, /<CmsContentEditor[^>]*:site-id="siteId"/)
-  assert.match(locationContentHostSource, /<CmsContentEditor[^>]*:site-id="siteId"/)
+test('CMS content editor host pages render the shared editor with siteId and pageId props', () => {
+  assert.match(siteContentEditorHostSource, /<CmsContentEditor[^>]*:site-id="siteId"/)
+  assert.match(siteContentEditorHostSource, /<CmsContentEditor[^>]*:page-id="pageId"/)
+  assert.match(locationContentEditorHostSource, /<CmsContentEditor[^>]*:site-id="siteId"/)
+  assert.match(locationContentEditorHostSource, /<CmsContentEditor[^>]*:page-id="pageId"/)
 })
 
 test('page selection uses real content/[pageId] routes, not ?page=/?location= query params (issue #324)', () => {
@@ -72,5 +88,19 @@ test('page selection uses real content/[pageId] routes, not ?page=/?location= qu
   assert.doesNotMatch(editorSource, /route\.query\.location/)
   assert.doesNotMatch(linksSource, /query:\s*page\s*\?\s*\{\s*page\s*\}/)
   assert.doesNotMatch(linksSource, /page:\s*'location'/)
-  assert.match(editorSource, /pageId\?:\s*string/)
+  assert.match(editorSource, /pageId:\s*string/)
+})
+
+test('page selection lives in ContentPageIndex, not in the full-screen editor', () => {
+  // CmsContentEditor requires a pageId — it never renders a page picker itself.
+  assert.doesNotMatch(editorSource, /pageId\?:\s*string/)
+  assert.doesNotMatch(editorSource, /uppercase tracking-wide text-muted">Pages</)
+
+  // The index host pages use the ordinary dashboard shell, not the full-screen
+  // editor layout — page selection is dashboard chrome, not part of the editor.
+  assert.match(siteContentIndexHostSource, /layout:\s*'dashboard'/)
+  assert.match(locationContentIndexHostSource, /layout:\s*'dashboard'/)
+  assert.match(siteContentIndexHostSource, /<ContentPageIndex/)
+  assert.match(locationContentIndexHostSource, /<ContentPageIndex/)
+  assert.match(pageIndexSource, /getEditablePages/)
 })
