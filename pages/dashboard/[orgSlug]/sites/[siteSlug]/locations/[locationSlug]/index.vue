@@ -387,7 +387,7 @@
               <UIcon name="i-lucide-refresh-cw" class="size-4 animate-spin" />
               Loading reviews...
             </div>
-            <UCard v-else-if="manualReviews.length === 0" :ui="{ root: 'border-dashed', body: 'px-6 py-10 sm:px-6 sm:py-10 text-center' }">
+            <UCard v-else-if="manualReviews.length === 0" class="border-dashed" :ui="{ body: 'px-6 py-10 sm:px-6 sm:py-10 text-center' }">
               <UIcon name="i-lucide-star" class="mx-auto size-8 text-muted" />
               <p class="mt-3 text-sm text-muted">No manual reviews yet.</p>
             </UCard>

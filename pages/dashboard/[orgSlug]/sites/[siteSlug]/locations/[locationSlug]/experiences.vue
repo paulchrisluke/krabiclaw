@@ -17,7 +17,7 @@
         <USkeleton v-for="i in 3" :key="i" class="h-20 w-full rounded-lg" />
       </div>
 
-      <UCard v-else-if="experiences.length === 0" :ui="{ root: 'border border-dashed border-default', body: 'py-20 sm:py-20 text-center' }">
+      <UCard v-else-if="experiences.length === 0" class="border border-dashed border-default" :ui="{ body: 'py-20 sm:py-20 text-center' }">
         <UIcon name="i-lucide-ticket" class="mx-auto size-10 text-muted" />
         <p class="mt-4 text-sm font-semibold text-highlighted">No experiences yet</p>
         <p class="mt-1 text-sm text-muted">Create your first bookable experience — a tasting menu, a chef's table, a cooking class.</p>
@@ -328,7 +328,6 @@
 </template>
 
 <script setup lang="ts">
-// -nocheck
 import type { Experience, SlotAvailability, SlotOverride, WeekdayName } from '~/server/utils/experiences'
 import type { BookingPolicyPatch, RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
 import BookingPolicyForm from '~/components/dashboard/BookingPolicyForm.vue'

@@ -101,7 +101,7 @@
 
 /* ── Platform theme ───────────────────────────────────────── */
 .platform-theme {
-  --ui-primary:           var(--kc-coral-500);
+  --ui-primary:           var(--kc-coral);
 
   /* WCAG foreground: coral-500 (#FB7461) with navy (#1F2547) gives ~5.5:1 contrast (passes AA). */
   --primary-foreground:   var(--kc-navy);

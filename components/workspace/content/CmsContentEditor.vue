@@ -627,7 +627,10 @@ const onPageChange = async (oldPageId?: string) => {
   try {
     await loadPageContent()
   } catch (_) {
-    if (oldPageId) selectedPageId.value = oldPageId
+    if (oldPageId) {
+      rollingBackPageSelection = true
+      selectedPageId.value = oldPageId
+    }
     currentValues.value = previousValues
   }
 }
@@ -675,7 +678,7 @@ watch(() => dashboardLocation.currentLocationId.value, async (newVal, oldVal) =>
     try {
       await loadPageContent()
     } catch (_) {
-      if (oldVal !== undefined) selectedLocationId.value = oldVal
+      if (oldVal) await dashboardLocation.selectLocation(oldVal, { replace: true })
       currentValues.value = previousValues
     }
   }

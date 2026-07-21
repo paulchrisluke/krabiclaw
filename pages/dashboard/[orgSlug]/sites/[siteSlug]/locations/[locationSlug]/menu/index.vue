@@ -70,13 +70,11 @@ const selectedLocation = computed(() => dashboardLocation.currentLocation.value)
 
 const loadMenuWorkspace = async () => {
   loading.value = true
-  error.value = null
   try {
     const settingsResponse = await $fetch<{ success: boolean; settings: { default_currency?: string } }>(`/api/dashboard/settings`)
-    if (!settingsResponse.success) throw new Error('Failed to load settings')
-    defaultCurrency.value = settingsResponse.settings?.default_currency || 'THB'
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load menu workspace'
+    defaultCurrency.value = (settingsResponse.success && settingsResponse.settings?.default_currency) || 'THB'
+  } catch {
+    defaultCurrency.value = 'THB'
   } finally {
     loading.value = false
   }
