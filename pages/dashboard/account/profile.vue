@@ -53,15 +53,13 @@
         <!-- Display Name -->
         <UCard :ui="{ body: 'p-6' }">
           <div class="space-y-4">
-            <div class="space-y-1">
-              <h3 class="text-base font-medium text-highlighted">Display Name</h3>
-              <p class="text-sm text-muted">Please enter your full name, or a display name you are comfortable with.</p>
-            </div>
-            <UInput 
-              v-model="nameInput" 
-              class="max-w-md"
-              @keydown.enter="saveName"
-            />
+            <UFormField label="Display Name" name="displayName" help="Please enter your full name, or a display name you are comfortable with.">
+              <UInput 
+                v-model="nameInput" 
+                class="max-w-md"
+                @keydown.enter="saveName"
+              />
+            </UFormField>
           </div>
           <template #footer>
             <div class="flex items-center justify-between text-sm text-muted">
@@ -83,17 +81,13 @@
         <!-- Organization / Default Team -->
         <UCard :ui="{ body: 'p-6' }" v-if="organization">
           <div class="space-y-4">
-            <div class="space-y-1">
-              <h3 class="text-base font-medium text-highlighted">Organization Name</h3>
-              <p class="text-sm text-muted">This is your primary workspace name.</p>
-            </div>
-            <div class="flex items-center gap-2 max-w-md">
+            <UFormField label="Organization Name" name="organizationName" help="This is your primary workspace name.">
               <UInput 
                 v-model="orgNameInput" 
-                class="flex-1"
+                class="max-w-md"
                 @keydown.enter="saveOrgName"
               />
-            </div>
+            </UFormField>
           </div>
           <template #footer>
             <div class="flex items-center justify-between text-sm text-muted">
@@ -135,16 +129,14 @@
         <!-- Phone Number -->
         <UCard :ui="{ body: 'p-6' }">
           <div class="space-y-4">
-            <div class="space-y-1">
-              <h3 class="text-base font-medium text-highlighted">Your Phone Number</h3>
-              <p class="text-sm text-muted">Enter a phone number to receive important service updates by WhatsApp.</p>
-            </div>
-            <UInput 
-              v-model="phoneInput" 
-              class="max-w-md"
-              placeholder="+1234567890"
-              @keydown.enter="requestPhoneVerify"
-            />
+            <UFormField label="Phone Number" name="phoneNumber" help="Enter a phone number to receive important service updates by WhatsApp.">
+              <UInput 
+                v-model="phoneInput" 
+                class="max-w-md"
+                placeholder="+1234567890"
+                @keydown.enter="requestPhoneVerify"
+              />
+            </UFormField>
             <div v-if="sessionData?.user?.phoneNumberVerified && phoneInput === sessionData?.user?.phoneNumber" class="flex items-center gap-2 mt-2">
               <UIcon name="i-lucide-circle-check" class="text-success size-5" />
               <span class="text-sm text-success">Verified</span>
@@ -170,24 +162,21 @@
         <!-- User ID -->
         <UCard :ui="{ body: 'p-6' }">
           <div class="space-y-4">
-            <div class="space-y-1">
-              <h3 class="text-base font-medium text-highlighted">User ID</h3>
-              <p class="text-sm text-muted">This is your unique user ID within the platform.</p>
-            </div>
-            <div class="flex items-center gap-2 max-w-md">
-              <UInput 
-                :model-value="sessionData?.user?.id" 
-                readonly
-                class="font-mono text-sm flex-1"
-                :ui="{ root: 'bg-muted/50 cursor-text' }"
-              />
-              <UButton
-                color="neutral"
-                variant="ghost"
-                icon="i-lucide-clipboard"
-                @click="copyUserId"
-              />
-            </div>
+            <UFormField label="User ID" name="userId" help="This is your unique user ID within the platform.">
+              <div class="flex items-center gap-2 max-w-md">
+                <UInput 
+                  :model-value="sessionData?.user?.id" 
+                  readonly
+                  class="font-mono text-sm flex-1"
+                />
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  icon="i-lucide-clipboard"
+                  @click="copyUserId"
+                />
+              </div>
+            </UFormField>
           </div>
           <template #footer>
             <div class="flex items-center justify-between text-sm text-muted">

@@ -1,10 +1,17 @@
 <template>
-  <UPage>
+  <UDashboardPanel id="location-experiences">
+    <template #header>
+      <UDashboardNavbar title="Experiences">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+        <template #trailing>
+          <UButton v-if="!loading" icon="i-lucide-plus" size="sm" @click="openCreate">Add experience</UButton>
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <UPageBody>
-      <div v-if="!loading" class="mb-4 flex items-center justify-end">
-        <UButton icon="i-lucide-plus" @click="openCreate">Add experience</UButton>
-      </div>
+    <template #body>
 
       <div v-if="loading" class="space-y-3">
         <USkeleton v-for="i in 3" :key="i" class="h-20 w-full rounded-lg" />
@@ -50,7 +57,7 @@
           </div>
         </UCard>
       </div>
-    </UPageBody>
+    </template>
 
     <!-- Create / Edit slide-over -->
     <USlideover v-model:open="sliderOpen" :title="editing ? 'Edit experience' : 'New experience'" side="right">
@@ -317,7 +324,7 @@
         </div>
       </template>
     </UModal>
-  </UPage>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
