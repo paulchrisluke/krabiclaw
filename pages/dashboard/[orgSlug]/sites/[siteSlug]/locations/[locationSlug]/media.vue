@@ -1,7 +1,14 @@
 <template>
-  <UPage>
+  <UDashboardPanel id="location-media">
+    <template #header>
+      <UDashboardNavbar title="Media">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <UPageBody>
+    <template #body>
       <!-- Filters -->
       <div class="mb-4 flex flex-wrap items-center gap-2">
         <UInput v-model="search" placeholder="Search files…" icon="i-lucide-search" size="sm" class="w-56" />
@@ -135,8 +142,8 @@
         @update:open="posterPromptOpen = $event"
         @submit="submitVideoUpload"
       />
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

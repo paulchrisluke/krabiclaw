@@ -1,6 +1,14 @@
 <template>
-  <UPage>
-    <UPageBody class="px-0 sm:px-0">
+  <UDashboardPanel id="location-inbox">
+    <template #header>
+      <UDashboardNavbar title="Inbox">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
       <div class="flex min-h-[calc(100vh-12rem)] flex-col overflow-hidden rounded-2xl border border-default bg-default lg:grid lg:grid-cols-[340px_minmax(0,1fr)_320px]">
         <aside
           class="border-b border-default lg:block lg:border-b-0 lg:border-r"
@@ -8,7 +16,6 @@
         >
           <div class="border-b border-default px-4 py-4">
             <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Guest Threads</p>
-            <h1 class="mt-1 text-xl font-semibold text-highlighted">Inbox</h1>
             <p class="mt-1 text-sm text-muted">Unified guest conversations across contact, reservations, and bookings.</p>
           </div>
 
@@ -231,8 +238,8 @@
           </div>
         </aside>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="conversations-list" resizable :min-size="18" :default-size="22" :max-size="30" class="min-h-0!">
     <template #header>
-      <UDashboardNavbar title="Conversations">
+      <UDashboardNavbar title="Assistant">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>

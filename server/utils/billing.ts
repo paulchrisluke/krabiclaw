@@ -329,7 +329,7 @@ export interface UserBillingItem {
     role: string
   }
   billing: {
-    plan: string
+    plan: string | null
     subscriptionStatus?: string | null
     organizationId: string
   }
@@ -371,7 +371,7 @@ export async function getUserBillingItems(
         console.error(`Failed to get billing status for org ${org.id}:`, error)
         return {
           organization: org,
-          billing: { plan: 'free', subscriptionStatus: 'active', organizationId: org.id },
+          billing: { plan: null, subscriptionStatus: 'error', organizationId: org.id },
           userRole: org.role
         }
       }

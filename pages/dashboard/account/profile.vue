@@ -446,10 +446,14 @@ watch(() => sessionData.value?.user?.phoneNumber, (newVal) => {
 })
 
 // User ID
-function copyUserId() {
+async function copyUserId() {
   if (!sessionData.value?.user?.id) return
-  navigator.clipboard.writeText(sessionData.value.user.id)
-  toast.add({ title: 'User ID copied', icon: 'i-lucide-circle-check', color: 'success' })
+  try {
+    await navigator.clipboard.writeText(sessionData.value.user.id)
+    toast.add({ title: 'User ID copied', icon: 'i-lucide-circle-check', color: 'success' })
+  } catch {
+    toast.add({ title: 'Failed to copy', color: 'error' })
+  }
 }
 
 // Danger Zone

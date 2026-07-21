@@ -1,7 +1,14 @@
 <template>
-  <UPage>
+  <UDashboardPanel id="location-overview">
+    <template #header>
+      <UDashboardNavbar :title="location?.title || 'Location'">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <UPageBody>
+    <template #body>
       <UCard v-if="loading">
         <div class="flex items-center gap-3 text-sm text-muted">
           <UIcon name="i-lucide-refresh-cw" class="size-4 animate-spin" />
@@ -411,8 +418,8 @@
           </div>
         </UCard>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

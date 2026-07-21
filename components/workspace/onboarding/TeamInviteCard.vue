@@ -13,7 +13,7 @@
     </template>
 
     <div class="px-4 pb-4 space-y-3">
-      <UForm :schema="schema" :state="form" class="flex flex-col gap-2" @submit.prevent="$emit('submit')">
+      <UForm :schema="schema" :state="form" class="flex flex-col gap-2" @submit="$emit('submit')">
         <div class="flex gap-2">
           <UFormField name="email" class="flex-1">
             <UInput

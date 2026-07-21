@@ -215,8 +215,8 @@
               <USelect
                 v-model="currencyForm.currency"
                 :items="CURRENCY_OPTIONS"
-                value-attribute="value"
-                label-attribute="label"
+                value-key="value"
+                label-key="label"
                 class="w-full"
               />
             </UFormField>

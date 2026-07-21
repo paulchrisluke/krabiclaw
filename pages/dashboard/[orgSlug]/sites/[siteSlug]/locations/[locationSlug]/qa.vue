@@ -1,11 +1,17 @@
 <template>
-  <UPage>
+  <UDashboardPanel id="location-qa">
+    <template #header>
+      <UDashboardNavbar title="Q&A">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+        <template #trailing>
+          <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadQa">Refresh</UButton>
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <UPageBody>
-      <div class="mb-4 flex flex-wrap items-center gap-2">
-        <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadQa">Refresh</UButton>
-      </div>
-
+    <template #body>
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <div class="space-y-3">
           <div v-if="loading" class="space-y-3">
@@ -68,8 +74,8 @@
           </div>
         </UCard>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

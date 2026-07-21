@@ -55,7 +55,7 @@
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
                   <p class="text-sm font-semibold text-highlighted truncate">{{ location.title }}</p>
-                  <p class="text-xs text-muted">{{ location.city || location.addressText || 'Location' }}</p>
+                  <p class="text-xs text-muted">{{ location.city || addressText(location.address) || 'Location' }}</p>
                 </div>
                 <UBadge
                   v-if="location.status"
@@ -79,9 +79,8 @@ useSeoMeta({ title: 'Locations | KrabiClaw', robots: 'noindex, nofollow' })
 
 const route = useRoute()
 const dashboard = useDashboardSite()
-const dashboardLocation = useDashboardLocation()
 
-const locations = computed(() => dashboardLocation.locations.value)
+const locations = computed(() => dashboard.locations.value)
 
 function addressText(address: { addressLines?: string[] } | null) {
   return address?.addressLines?.filter(Boolean).join(', ') ?? ''

@@ -62,7 +62,7 @@ interface DomainEvent { id: string; domain: string | null; event_type: string; m
 const domains = ref<Domain[]>([])
 const domainEvents = ref<DomainEvent[]>([])
 const domainSearch = ref('')
-const domainsLoading = ref(false)
+const domainsLoading = ref(true)
 const syncingDomainId = ref<string | null>(null)
 
 async function loadDomains() {

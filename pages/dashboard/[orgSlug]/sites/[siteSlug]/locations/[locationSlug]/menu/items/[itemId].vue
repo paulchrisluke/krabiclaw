@@ -1,7 +1,14 @@
 <template>
-  <UPage>
+  <UDashboardPanel id="location-menu-item">
+    <template #header>
+      <UDashboardNavbar :title="itemName || 'Menu Item'">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <UPageBody>
+    <template #body>
       <UAlert
         v-if="pageError"
         color="error"
@@ -18,8 +25,8 @@
         :default-currency="defaultCurrency"
         @update:item-name="itemName = $event"
       />
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
@@ -45,12 +52,7 @@ const _backPath = computed(() => menuPath())
 const pageError = computed(() => menuId.value ? null : 'Menu ID is required to edit an item')
 
 onMounted(async () => {
-  try {
-    const response = await $fetch<{ success: boolean; settings: { default_currency?: string } }>(`/api/dashboard/settings`)
-    if (response.success) defaultCurrency.value = response.settings?.default_currency || 'THB'
-  } catch {
-    defaultCurrency.value = 'THB'
-  }
+  defaultCurrency.value = await fetchMenuCurrency()
 })
 
 useSeoMeta({ title: computed(() => `${itemName.value || 'Menu Item'} | KrabiClaw Dashboard`), robots: 'noindex, nofollow' })

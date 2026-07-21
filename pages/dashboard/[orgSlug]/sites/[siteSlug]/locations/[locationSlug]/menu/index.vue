@@ -1,7 +1,14 @@
 <template>
-  <UPage>
+  <UDashboardPanel id="location-menu">
+    <template #header>
+      <UDashboardNavbar title="Menu">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <UPageBody>
+    <template #body>
       <div v-if="loading" class="space-y-4">
         <USkeleton class="h-10 w-56" />
         <USkeleton class="h-48 w-full" />
@@ -35,8 +42,8 @@
           :default-currency="defaultCurrency"
         />
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
@@ -71,10 +78,7 @@ const selectedLocation = computed(() => dashboardLocation.currentLocation.value)
 const loadMenuWorkspace = async () => {
   loading.value = true
   try {
-    const settingsResponse = await $fetch<{ success: boolean; settings: { default_currency?: string } }>(`/api/dashboard/settings`)
-    defaultCurrency.value = (settingsResponse.success && settingsResponse.settings?.default_currency) || 'THB'
-  } catch {
-    defaultCurrency.value = 'THB'
+    defaultCurrency.value = await fetchMenuCurrency()
   } finally {
     loading.value = false
   }

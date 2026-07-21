@@ -15,7 +15,7 @@
 
       <div class="flex items-center gap-2">
         <UButton
-          v-if="pages.length"
+          v-if="props.pageId"
           :href="iframeSrc || undefined"
           target="_blank"
           icon="i-lucide-external-link"
@@ -26,6 +26,7 @@
           :disabled="!iframeSrc"
         />
         <UButton
+          v-if="props.pageId"
           :disabled="!localHasChanges || saving"
           :loading="saving"
           color="primary"
@@ -52,6 +53,22 @@
             <UButton :to="manager.to" :disabled="!manager.to" label="Open editor" class="mt-4" size="sm" />
           </UCard>
         </div>
+      </UPageBody>
+    </UPage>
+
+    <!-- Page index: no specific page selected, show a real navigable list -->
+    <UPage v-else-if="!props.pageId" class="min-h-0 flex-1 overflow-auto bg-muted">
+      <UPageBody class="mx-auto w-full max-w-5xl p-6">
+        <h1 class="text-2xl font-semibold text-highlighted">Pages</h1>
+        <p class="mt-2 text-sm text-muted">Choose a page to edit its content.</p>
+        <div v-if="pages.length" class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <UCard v-for="page in pages" :key="page.id">
+            <UIcon name="i-lucide-file-text" class="size-5 text-primary" />
+            <h2 class="mt-3 font-semibold text-highlighted">{{ page.label }}</h2>
+            <UButton :to="`${contentIndexPath}/${page.id}`" label="Edit" class="mt-4" size="sm" />
+          </UCard>
+        </div>
+        <UAlert v-else color="neutral" variant="soft" title="No editable pages" description="This template has no field-editable pages for this scope." class="mt-6" />
       </UPageBody>
     </UPage>
 
@@ -96,12 +113,12 @@
               v-for="page in pages"
               :key="page.id"
               :label="page.label"
+              :to="`${contentIndexPath}/${page.id}`"
               size="sm"
               block
               :color="selectedPageId === page.id ? 'primary' : 'neutral'"
               :variant="selectedPageId === page.id ? 'soft' : 'ghost'"
               class="justify-start"
-              @click="selectedPageId = page.id"
             />
           </div>
         </div>
@@ -119,24 +136,6 @@
               :variant="selectedLocationId === loc.id ? 'soft' : 'ghost'"
               class="justify-start"
               @click="selectLocation(loc.id)"
-            />
-          </div>
-        </div>
-
-        <div class="border-b border-default p-3">
-          <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Universal CMS</p>
-          <div class="grid grid-cols-2 gap-1">
-            <UButton
-              v-for="manager in cmsManagers"
-              :key="manager.id"
-              :label="manager.label"
-              :icon="manager.icon"
-              :to="manager.to"
-              size="xs"
-              color="neutral"
-              variant="ghost"
-              block
-              class="justify-start"
             />
           </div>
         </div>
@@ -361,10 +360,11 @@ const props = defineProps<{
    *  not this component, so a template's page/location split stays declared
    *  in one place (cms-registry.ts) rather than duplicated per host. */
   scope: 'site' | 'location'
+  /** Real route param for the selected page (content/[pageId].vue). Absent
+   *  means "index mode" — show the page-selection list instead of the editor. */
+  pageId?: string
 }>()
 
-const route = useRoute()
-const router = useRouter()
 const dashboardLocation = useDashboardLocation()
 const toast = useToast()
 const config = useRuntimeConfig()
@@ -475,10 +475,6 @@ const selectLocation = async (id: string) => {
 }
 
 // ─── Pages ────────────────────────────────────────────────────────────
-// Page/location selection here still reads/writes ?page=/?location= query
-// params instead of a real route segment — inconsistent with the rest of
-// #316, which replaced the equivalent query-tab patterns elsewhere (admin's
-// ?tab=, ~/settings) with real routes. Tracked, not forgotten: issue #324.
 const siteVertical = computed<SiteVertical | null>(() => siteData.value ? siteData.value.vertical as SiteVertical : null)
 const pages = computed(() => {
   const capabilities = cmsCapabilities.value
@@ -496,15 +492,12 @@ const pages = computed(() => {
     .filter(page => allowedPageIds.has(page.id) && page.scope === props.scope)
 })
 
-function resolveInitialPageId() {
-  const queryPage = route.query.page
-  if (typeof queryPage === 'string' && pages.value.some(page => page.id === queryPage)) {
-    return queryPage
-  }
-  return pages.value[0]?.id ?? ''
-}
+// Index-mode link base: props.scope === 'location' pages live under
+// paths.value.project (the current location's base), site-scoped pages
+// under paths.value.content — matches content.vue vs locations/[locationSlug]/content.vue.
+const contentIndexPath = computed(() => props.scope === 'location' ? `${paths.value.project}/content` : paths.value.content)
 
-const selectedPageId = ref(resolveInitialPageId())
+const selectedPageId = computed(() => props.pageId ?? '')
 const currentPagePath = computed(() => pages.value.find(p => p.id === selectedPageId.value)?.path || '/')
 const selectedPageLabel = computed(() => pages.value.find(p => p.id === selectedPageId.value)?.label || '')
 const selectedPageScopeLabel = computed(() => {
@@ -513,29 +506,13 @@ const selectedPageScopeLabel = computed(() => {
 })
 
 const applyRouteContentScope = () => {
-  const queryPage = route.query.page
-  if (!pages.value.length) {
-    if (typeof queryPage === 'string') {
-      throw createError({ statusCode: 404, statusMessage: `Page fields are not available for this template: ${queryPage}` })
-    }
-    selectedPageId.value = ''
-    return
+  if (props.pageId && pages.value.length && !pages.value.some(page => page.id === props.pageId)) {
+    throw createError({ statusCode: 404, statusMessage: `Page is not available for this site: ${props.pageId}` })
   }
-  if (typeof queryPage === 'string' && pages.value.some(page => page.id === queryPage)) {
-    selectedPageId.value = queryPage
-  } else if (typeof queryPage === 'string') {
-    throw createError({ statusCode: 404, statusMessage: `Page is not available for this site: ${queryPage}` })
-  } else {
-    selectedPageId.value = pages.value[0]!.id
-  }
-  const requestedLocation = route.query.location
-  if (typeof requestedLocation === 'string') {
-    const location = siteLocations.value.find(candidate => candidate.id === requestedLocation || candidate.slug === requestedLocation)
-    if (!location) throw createError({ statusCode: 404, statusMessage: `Location is not available for this site: ${requestedLocation}` })
-    selectedLocationId.value = location.id
-  } else {
-    selectedLocationId.value = dashboardLocation.currentLocationId.value
-  }
+  // Location scope always comes from the real /locations/[locationSlug] route
+  // param (via useDashboardLocation), not a query override — this component
+  // never renders a location-scoped page outside that route.
+  selectedLocationId.value = dashboardLocation.currentLocationId.value
 }
 const previewPagePath = computed(() => {
   if (!selectedLocation.value) return currentPagePath.value
@@ -572,56 +549,20 @@ const previewOrigin = computed(() => {
   }
 })
 
-const onPageChange = async (oldPageId?: string) => {
-  const previousValues = { ...currentValues.value }
+// Page switching is real route navigation (content/[pageId]) now, guarded
+// generically by the onBeforeRouteLeave() unsaved-changes confirm below —
+// this just reloads content when the pageId route param actually changes.
+watch(() => props.pageId, async (newVal, oldVal) => {
+  if (newVal === oldVal || !newVal) return
   activeField.value = null
   openGroups.value = ['hero']
+  localHasChanges.value = false
   if (currentPageIsLocationScoped.value && !selectedLocationId.value && siteLocations.value.length > 0) {
     const primary = siteLocations.value.find(l => l.is_primary) ?? siteLocations.value[0]!
     await dashboardLocation.selectLocation(primary.id, { replace: true })
     selectedLocationId.value = primary.id
   }
-  try {
-    await loadPageContent()
-  } catch (_) {
-    if (oldPageId) {
-      rollingBackPageSelection = true
-      selectedPageId.value = oldPageId
-    }
-    currentValues.value = previousValues
-  }
-}
-
-let rollingBackPageSelection = false
-watch(selectedPageId, (newVal, oldVal) => {
-  if (newVal !== oldVal) {
-    // Templates with no field-editable pages (e.g. blawby) set selectedPageId to ''
-    // via applyRouteContentScope(). There's no page to load in that case — matches
-    // the onMounted guard below, which already skips loadPageContent() when
-    // pages.value is empty. Without this, the '' transition still fired
-    // loadPageContent() with an empty pageId (404), whose catch rolled the value
-    // back to the previous page id and fired this watcher again with a pageId
-    // that also has no content rows (400) — two guaranteed failures and an error
-    // toast on every load of a blawby-template site's Content page.
-    if (!pages.value.length) return
-    if (rollingBackPageSelection) {
-      rollingBackPageSelection = false
-      return
-    }
-    if (localHasChanges.value && import.meta.client && !window.confirm('Discard unsaved changes and switch pages?')) {
-      rollingBackPageSelection = true
-      selectedPageId.value = oldVal
-      return
-    }
-    localHasChanges.value = false
-    const { locationId: _locationId, ...restQuery } = route.query
-    const query = { ...restQuery, page: newVal }
-    router.replace({
-      path: route.path,
-      query
-    })
-    onPageChange(oldVal)
-  }
+  await loadPageContent()
 })
 
 watch(() => dashboardLocation.currentLocationId.value, async (newVal, oldVal) => {
@@ -669,7 +610,7 @@ const activeFieldRequiresGoogleUpgrade = computed(() =>
 const { open: openUpgradeModal } = useUpgradeModal()
 
 const fieldSupportsGoogle = (fieldKey: string): boolean =>
-  getFieldDef(selectedPageId.value, fieldKey)?.sources.includes('google') === true
+  getFieldDef(selectedPageId.value, fieldKey)?.sources?.includes('google') === true
 const fieldHasActiveGoogleSync = (fieldKey: string): boolean =>
   hasGoogleBusinessEntitlement.value && fieldSupportsGoogle(fieldKey)
 
@@ -797,7 +738,7 @@ const loadPageContent = async () => {
 // Load on mount
 onMounted(async () => {
   await loadEditorContext()
-  if (pages.value.length) await loadPageContent()
+  if (props.pageId) await loadPageContent()
 })
 
 // ─── Actions ──────────────────────────────────────────────────────────

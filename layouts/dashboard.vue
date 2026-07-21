@@ -469,6 +469,7 @@ function managerNavItems(group: NavGroupId) {
 const overviewGroup = computed(() => {
   if (scope.value !== 'organization' || !orgBase.value) return []
   return [
+    { label: 'Overview', type: 'label' },
     { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: orgBase.value },
     { label: 'Sites', icon: 'i-lucide-globe', to: `${orgBase.value}/sites` },
     { label: 'Activity', icon: 'i-lucide-activity', to: `${orgBase.value}/activity` },
@@ -491,6 +492,7 @@ function parentNavItem() {
 const siteOverviewGroup = computed(() => {
   if (scope.value !== 'site' || !siteBase.value) return []
   return [
+    { label: 'Site', type: 'label' },
     ...parentNavItem(),
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: siteBase.value },
     { label: 'Locations', icon: 'i-lucide-map-pin', to: locationsBase.value ?? `${siteBase.value}/locations` },
@@ -502,6 +504,7 @@ const siteOverviewGroup = computed(() => {
 const locationOverviewGroup = computed(() => {
   if (scope.value !== 'location' || !locationBase.value) return []
   return [
+    { label: 'Location', type: 'label' },
     ...parentNavItem(),
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: locationBase.value },
     { label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox` },
@@ -509,26 +512,45 @@ const locationOverviewGroup = computed(() => {
 })
 
 const contentGroup = computed(() => {
-  const items: { label: string; icon?: string; to: string }[] = []
+  const items: { label: string; icon?: string; to: string; type?: string }[] = []
   if (scope.value === 'site' && siteBase.value) items.push({ label: 'Content', icon: 'i-lucide-copy', to: `${siteBase.value}/content` })
   if (scope.value === 'location' && locationBase.value) items.push({ label: 'Content', icon: 'i-lucide-copy', to: `${locationBase.value}/content` })
-  items.push(...managerNavItems('Content'))
+  const managerItems = managerNavItems('Content')
+  if (managerItems.length > 0) {
+    items.push({ label: 'Content', type: 'label' })
+    items.push(...managerItems)
+  }
   return items
 })
 
-const operateGroup = computed(() => managerNavItems('Operate'))
-const reputationGroup = computed(() => managerNavItems('Reputation'))
-const publishingGroup = computed(() => managerNavItems('Publishing'))
+const operateGroup = computed(() => {
+  const items = managerNavItems('Operate')
+  if (items.length === 0) return items
+  return [{ label: 'Operate', type: 'label' }, ...items]
+})
+const reputationGroup = computed(() => {
+  const items = managerNavItems('Reputation')
+  if (items.length === 0) return items
+  return [{ label: 'Reputation', type: 'label' }, ...items]
+})
+const publishingGroup = computed(() => {
+  const items = managerNavItems('Publishing')
+  if (items.length === 0) return items
+  return [{ label: 'Publishing', type: 'label' }, ...items]
+})
 
 const settingsGroup = computed(() => {
   if (route.path.startsWith('/dashboard/account')) {
     return [
+      { label: 'Account', type: 'label' },
       { label: 'Profile', icon: 'i-lucide-user', to: '/dashboard/account/profile' },
       { label: 'Authentication', icon: 'i-lucide-shield', to: '/dashboard/account/authentication' },
       { label: 'Billing Items', icon: 'i-lucide-receipt', to: '/dashboard/account/billing-items' },
     ]
   }
-  return managerNavItems('Settings')
+  const items = managerNavItems('Settings')
+  if (items.length === 0) return items
+  return [{ label: 'Settings', type: 'label' }, ...items]
 })
 
 const adminGroup = computed(() => [

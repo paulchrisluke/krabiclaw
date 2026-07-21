@@ -1,10 +1,15 @@
 <template>
-  <UPage>
-    <UPageBody>
-      <div class="mb-6 space-y-1">
-        <h1 class="text-2xl font-semibold text-highlighted">Translations</h1>
-        <p class="text-sm text-muted">{{ headerDescription }}</p>
-      </div>
+  <UDashboardPanel id="site-translations">
+    <template #header>
+      <UDashboardNavbar title="Translations">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
+      <p class="mb-6 text-sm text-muted">{{ headerDescription }}</p>
       <div class="max-w-2xl space-y-6">
         <!-- No site yet -->
         <UAlert
@@ -174,8 +179,8 @@
           </UCard>
         </template>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

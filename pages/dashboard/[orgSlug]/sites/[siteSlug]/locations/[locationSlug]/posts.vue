@@ -1,7 +1,14 @@
 <template>
-  <UPage>
+  <UDashboardPanel id="location-posts">
+    <template #header>
+      <UDashboardNavbar title="Posts">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <UPageBody>
+    <template #body>
       <div class="grid gap-6 lg:grid-cols-[1fr_400px]">
         <!-- Left: AI compose + post list -->
         <div class="space-y-4">
@@ -164,8 +171,8 @@
           Select a post or generate one with AI
         </div>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

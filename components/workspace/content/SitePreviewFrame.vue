@@ -1,5 +1,5 @@
 <template>
-  <UCard :ui="{ root: 'overflow-hidden rounded-2xl shadow-lg', body: 'p-0 sm:p-0' }">
+  <UCard class="rounded-2xl shadow-lg" :ui="{ root: 'overflow-hidden', body: 'p-0 sm:p-0' }">
     <!-- Chrome bar -->
     <div class="flex items-center gap-2 border-b border-default bg-elevated px-3 py-2">
       <div class="flex gap-[5px]">

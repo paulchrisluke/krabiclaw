@@ -23,23 +23,37 @@
           <UButton label="Add your first site" size="sm" color="primary" class="mt-4" :to="`/dashboard/${orgSlug}/sites/new`" />
         </div>
 
-        <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <NuxtLink
-            v-for="s in sitesWithSubdomain"
-            :key="s.id"
-            :to="`/dashboard/${orgSlug}/sites/${s.subdomain}`"
-            class="group block"
-          >
-            <UCard variant="soft" class="h-full cursor-pointer">
-              <div class="flex items-start justify-between gap-2">
-                <div class="min-w-0">
-                  <p class="text-sm font-semibold text-highlighted truncate">{{ s.brand_name ?? s.subdomain }}</p>
-                  <p class="text-xs text-muted">{{ s.subdomain }}.krabiclaw.com</p>
+        <div v-else>
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-semibold text-highlighted">Sites</h2>
+            <UButton
+              v-if="sitesWithSubdomain.length > 3"
+              :to="`/dashboard/${orgSlug}/sites`"
+              size="sm"
+              color="neutral"
+              variant="ghost"
+            >
+              See all
+            </UButton>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <NuxtLink
+              v-for="s in previewSites"
+              :key="s.id"
+              :to="`/dashboard/${orgSlug}/sites/${s.subdomain}`"
+              class="group block"
+            >
+              <UCard variant="soft" class="h-full cursor-pointer">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <p class="text-sm font-semibold text-highlighted truncate">{{ s.brand_name ?? s.subdomain }}</p>
+                    <p class="text-xs text-muted">{{ s.subdomain }}.krabiclaw.com</p>
+                  </div>
+                  <UBadge :label="s.plan ?? 'free'" color="neutral" variant="soft" size="xs" />
                 </div>
-                <UBadge :label="s.plan ?? 'free'" color="neutral" variant="soft" size="xs" />
-              </div>
-            </UCard>
-          </NuxtLink>
+              </UCard>
+            </NuxtLink>
+          </div>
         </div>
       </div>
     </template>
@@ -57,6 +71,7 @@ const pending = ref(true)
 
 const sites = computed(() => dashboard.sites.value)
 const sitesWithSubdomain = computed(() => sites.value.filter((site): site is (typeof sites.value)[number] & { subdomain: string } => Boolean(site.subdomain)))
+const previewSites = computed(() => sitesWithSubdomain.value.slice(0, 3))
 
 onMounted(async () => {
   try {

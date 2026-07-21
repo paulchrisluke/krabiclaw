@@ -390,7 +390,7 @@ interface BillingStatus {
 }
 
 const clients = ref<Client[]>([])
-const clientsLoading = ref(false)
+const clientsLoading = ref(true)
 
 const PLAN_LABELS: Record<string, string> = {
   growth: 'Growth',

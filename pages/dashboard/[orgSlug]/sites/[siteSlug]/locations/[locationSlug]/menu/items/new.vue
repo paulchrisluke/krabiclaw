@@ -1,7 +1,14 @@
 <template>
-  <UPage>
+  <UDashboardPanel id="location-menu-item-new">
+    <template #header>
+      <UDashboardNavbar title="New Menu Item">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <UPageBody>
+    <template #body>
       <UAlert
         v-if="pageError"
         color="error"
@@ -17,8 +24,8 @@
         :initial-section="section"
         :default-currency="defaultCurrency"
       />
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
@@ -46,12 +53,7 @@ const _backPath = computed(() => menuPath())
 const pageError = computed(() => menuId.value ? null : 'Menu ID is required to create an item')
 
 onMounted(async () => {
-  try {
-    const response = await $fetch<{ success: boolean; settings: { default_currency?: string } }>(`/api/dashboard/settings`)
-    if (response.success) defaultCurrency.value = response.settings?.default_currency || 'THB'
-  } catch {
-    defaultCurrency.value = 'THB'
-  }
+  defaultCurrency.value = await fetchMenuCurrency()
 })
 
 useSeoMeta({ title: 'Create Menu Item | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

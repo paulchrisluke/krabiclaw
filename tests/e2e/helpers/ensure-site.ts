@@ -21,14 +21,19 @@ export async function ensureSite(request: APIRequestContext, baseURL: string, si
   // site's own name — correct for a real single-location business, but it
   // makes org/site/location indistinguishable at a glance while poking around
   // this fixture in a dev session. Give the location its own distinct title.
-  const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
-  if (contextRes.ok()) {
-    const context = await contextRes.json() as { selectedLocation?: { id?: string } }
-    const locationId = context.selectedLocation?.id
+  //
+  // Fetch locations scoped to the newly created site so we don't accidentally
+  // patch a location that belongs to a different site (e.g. the one that
+  // happens to be selected in the dashboard context).
+  const locRes = await request.get(`${baseURL}/api/sites/${body.siteId}/locations`)
+  if (locRes.ok()) {
+    const locBody = await locRes.json() as { locations?: { id?: string }[] }
+    const locationId = locBody.locations?.[0]?.id
     if (locationId) {
-      await request.patch(`${baseURL}/api/dashboard/locations/${locationId}`, {
+      const patchRes = await request.patch(`${baseURL}/api/dashboard/locations/${locationId}`, {
         data: { title: `E2E Location ${suffix}` },
       })
+      expect(patchRes.ok()).toBe(true)
     }
   }
 

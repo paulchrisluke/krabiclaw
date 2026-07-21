@@ -52,7 +52,7 @@ interface AdminUser { id: string; email: string; name: string | null; role: stri
 
 const users = ref<AdminUser[]>([])
 const userSearch = ref('')
-const usersLoading = ref(false)
+const usersLoading = ref(true)
 const impersonatingUserId = ref<string | null>(null)
 
 const userColumns = [

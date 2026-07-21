@@ -12,15 +12,6 @@ export interface DashboardActionLink {
   onClick?: () => void
 }
 
-function appendQuery(path: string, query: Record<string, string | null | undefined>): string {
-  const params = new URLSearchParams()
-  for (const [key, value] of Object.entries(query)) {
-    if (typeof value === 'string' && value.length > 0) params.set(key, value)
-  }
-  const queryString = params.toString()
-  return queryString ? `${path}?${queryString}` : path
-}
-
 export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: MaybeRef<string | null | undefined>, orgSlug?: MaybeRef<string | null | undefined>) {
   void siteId
   const dashboard = useDashboardSite()
@@ -122,10 +113,10 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
     return `${paths.value.site}/locations/${location?.slug ?? locationId}`
   }
   const locationMenuPath = (locationId: string) => `${locationPath(locationId)}/menu`
-  // Points at the location-scoped content editor (a distinct route from
-  // paths.value.content, which is site-scoped only) — see
-  // pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/content.vue.
-  const locationContentPath = (locationId: string) => appendQuery(`${locationPath(locationId)}/content`, { page: 'location' })
+  // Points at the location-scoped content editor's "location" page (a distinct
+  // route from paths.value.content, which is site-scoped only) — see
+  // pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/content/[pageId].vue.
+  const locationContentPath = (locationId: string) => `${locationPath(locationId)}/content/location`
 
   const menuPath = (locationId?: string | null) => {
     if (locationId) {
@@ -142,10 +133,7 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
     }
   }
 
-  const contentPath = (page?: string) => ({
-    path: paths.value.content,
-    query: page ? { page } : {}
-  })
+  const contentPath = (page?: string) => (page ? `${paths.value.content}/${page}` : paths.value.content)
 
   const editorBackPath = computed(() => paths.value.project)
 

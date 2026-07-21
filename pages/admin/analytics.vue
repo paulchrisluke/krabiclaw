@@ -54,7 +54,7 @@ interface Analytics {
 }
 
 const analytics = ref<Analytics | null>(null)
-const analyticsLoading = ref(false)
+const analyticsLoading = ref(true)
 
 const analyticsStats = computed(() => [
   { label: 'Users',         value: analytics.value?.metrics.users ?? '—' },
