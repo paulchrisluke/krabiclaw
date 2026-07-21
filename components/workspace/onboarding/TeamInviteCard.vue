@@ -13,23 +13,27 @@
     </template>
 
     <div class="px-4 pb-4 space-y-3">
-      <UForm :state="form" class="flex flex-col gap-2" @submit.prevent="$emit('submit')">
+      <UForm :schema="schema" :state="form" class="flex flex-col gap-2" @submit.prevent="$emit('submit')">
         <div class="flex gap-2">
-          <UInput
-            v-model="form.email"
-            type="email"
-            placeholder="teammate@example.com"
-            size="sm"
-            class="flex-1"
-            aria-label="Email address"
-          />
-          <USelect
-            v-model="form.role"
-            :items="roleOptions"
-            size="sm"
-            class="w-28"
-            aria-label="Team member role"
-          />
+          <UFormField name="email" class="flex-1">
+            <UInput
+              v-model="form.email"
+              type="email"
+              placeholder="teammate@example.com"
+              size="sm"
+              class="w-full"
+              aria-label="Email address"
+            />
+          </UFormField>
+          <UFormField name="role" class="w-28">
+            <USelect
+              v-model="form.role"
+              :items="roleOptions"
+              size="sm"
+              class="w-full"
+              aria-label="Team member role"
+            />
+          </UFormField>
         </div>
         <div class="flex gap-2">
           <UButton type="submit" size="sm" color="primary" :loading="loading" icon="i-lucide-send">
@@ -64,10 +68,17 @@
 </template>
 
 <script setup lang="ts">
+import * as z from 'zod'
+
 type InviteForm = {
   email: string
   role: string
 }
+
+const schema = z.object({
+  email: z.string().email('Enter a valid email address'),
+  role: z.string()
+})
 
 const form = defineModel<InviteForm>('form', { required: true })
 
