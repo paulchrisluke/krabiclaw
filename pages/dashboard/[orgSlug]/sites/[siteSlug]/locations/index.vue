@@ -35,7 +35,7 @@
         <NuxtLink
           v-for="location in locations"
           :key="location.id"
-          :to="`/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/${location.slug}`"
+          :to="locationPath(location.id)"
           class="group block"
         >
           <UCard variant="soft" class="h-full cursor-pointer">
@@ -79,6 +79,8 @@ useSeoMeta({ title: 'Locations | KrabiClaw', robots: 'noindex, nofollow' })
 
 const route = useRoute()
 const dashboard = useDashboardSite()
+const siteId = await useDashboardSiteId()
+const { locationPath } = useDashboardSiteLinks(siteId)
 
 const locations = computed(() => dashboard.locations.value)
 

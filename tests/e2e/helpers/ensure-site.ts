@@ -26,16 +26,14 @@ export async function ensureSite(request: APIRequestContext, baseURL: string, si
   // patch a location that belongs to a different site (e.g. the one that
   // happens to be selected in the dashboard context).
   const locRes = await request.get(`${baseURL}/api/sites/${body.siteId}/locations`)
-  if (locRes.ok()) {
-    const locBody = await locRes.json() as { locations?: { id?: string }[] }
-    const locationId = locBody.locations?.[0]?.id
-    if (locationId) {
-      const patchRes = await request.patch(`${baseURL}/api/dashboard/locations/${locationId}`, {
-        data: { title: `E2E Location ${suffix}` },
-      })
-      expect(patchRes.ok()).toBe(true)
-    }
-  }
+  expect(locRes.ok()).toBe(true)
+  const locBody = await locRes.json() as { locations?: { id?: string }[] }
+  const locationId = locBody.locations?.[0]?.id
+  expect(locationId).toEqual(expect.any(String))
+  const patchRes = await request.patch(`${baseURL}/api/dashboard/locations/${locationId}`, {
+    data: { title: `E2E Location ${suffix}` },
+  })
+  expect(patchRes.ok()).toBe(true)
 
   return body.siteId!
 }

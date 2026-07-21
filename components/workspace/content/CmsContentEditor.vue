@@ -660,6 +660,7 @@ const loadPageContent = async () => {
 // Load on mount
 onMounted(async () => {
   await loadEditorContext()
+  if (cmsLoadError.value) return
   await loadPageContent()
 })
 

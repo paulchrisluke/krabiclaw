@@ -214,6 +214,15 @@
             icon="i-lucide-mail"
             description="No pending invitations."
           />
+
+          <UAlert
+            v-if="pendingInvitationError"
+            class="mt-4"
+            color="error"
+            variant="soft"
+            icon="i-lucide-circle-alert"
+            :description="pendingInvitationError"
+          />
         </UCard>
 
         <UCard>
@@ -328,6 +337,7 @@ const inviteSuccessTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
 const removingMemberId = ref<string | null>(null)
 const cancellingInviteId = ref<string | null>(null)
 const memberError = ref<string | null>(null)
+const pendingInvitationError = ref<string | null>(null)
 const pendingRemoval = ref<{ memberId: string; assignments: PhoneAssignment[] } | null>(null)
 
 const invitationActionId = ref<string | null>(null)
@@ -419,7 +429,10 @@ const { data: session } = await authClient.useSession(useFetch)
 const activeOrgId = computed(() => session.value?.session?.activeOrganizationId ?? null)
 
 async function sendInvite() {
-  if (!activeOrgId.value) return
+  if (!activeOrgId.value) {
+    inviteError.value = 'No active organization selected. Reload the page and try again.'
+    return
+  }
   inviting.value = true
   inviteError.value = null
   inviteSuccess.value = false
@@ -449,14 +462,14 @@ async function sendInvite() {
 
 async function cancelInvitation(invitationId: string) {
   cancellingInviteId.value = invitationId
-  memberError.value = null
+  pendingInvitationError.value = null
 
   const { error } = await authClient.organization.cancelInvitation({ invitationId })
 
   cancellingInviteId.value = null
 
   if (error) {
-    memberError.value = error.message ?? 'Failed to cancel invitation.'
+    pendingInvitationError.value = error.message ?? 'Failed to cancel invitation.'
     return
   }
 

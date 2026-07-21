@@ -255,7 +255,7 @@ async function buildOwnerReviewsUrl(
   if (!slugs) return null
 
   const platformDomain = getPlatformDomain(env)
-  const base = `https://${platformDomain}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}/locations/${slugs.locationSlug}/reviews`
+  const base = `https://${platformDomain}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}/reviews`
   if (!opts.reviewId) return base
   return `${base}?${new URLSearchParams({ reply: opts.reviewId }).toString()}`
 }

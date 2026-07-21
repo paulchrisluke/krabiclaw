@@ -1,11 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
 
 import { formatDate } from '../../utils/formatters.ts'
 
-const formattersPath = fileURLToPath(new URL('../../utils/formatters.ts', import.meta.url))
+// Kept as a file: URL string (not converted via fileURLToPath) — a plain OS
+// path is not a valid import specifier on every platform (Windows drive
+// paths, or any path containing URL-significant characters), while a file:
+// URL always is.
+const formattersUrl = new URL('../../utils/formatters.ts', import.meta.url).href
 
 // formatDate's timezone handling only diverges from the runner's own local
 // timezone when that timezone isn't UTC, so both regression cases below run
@@ -13,7 +16,7 @@ const formattersPath = fileURLToPath(new URL('../../utils/formatters.ts', import
 // trusting whatever TZ the CI/dev machine happens to have.
 function runInTimezone(expression: string, timeZone: string): string {
   const script = `
-    const { formatDate } = await import(${JSON.stringify(formattersPath)});
+    const { formatDate } = await import(${JSON.stringify(formattersUrl)});
     process.stdout.write(String(${expression}));
   `
   return execFileSync(process.execPath, ['--experimental-strip-types', '--input-type=module', '--eval', script], {
