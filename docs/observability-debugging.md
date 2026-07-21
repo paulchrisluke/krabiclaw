@@ -112,29 +112,68 @@ Notes:
   `Syntax Error GraphQL` messages that look like a query problem but are
   actually a quoting problem.
 
-## What didn't work: Workers Observability / Logs telemetry API
+## What works: Workers Observability / Logs telemetry API
 
 `POST /accounts/{account_id}/workers/observability/telemetry/query` is the
-newer API behind the dashboard's "Logs" tab — this is what you'd want for
-reading actual `console.log` output (e.g. this codebase's structured
+API behind the dashboard's "Logs" tab — use this for reading actual
+`console.log`/`console.error` output (e.g. this codebase's structured
 `[MCP_AUTH]` credential_rejected/accepted lines), not just status codes.
 
-It did **not** work via direct API calls in this session:
+Earlier attempts in this doc concluded `queryId` must reference a query
+pre-saved via the dashboard UI, based on `{"errors":[{"detail":"Query not
+found"}]}` for every arbitrary `queryId` tried. **That conclusion was wrong
+— the request body shape was wrong, not the queryId.** The two actual bugs:
 
-- Omitting `queryId` → `{"issues":[{"path":["queryId"],"message":"Required"}]}`
-- Providing an arbitrary `queryId` string (top-level or nested under a
-  `queries` array) → `{"errors":[{"message":"Bad Request","detail":"Query not found"}]}`
+- `dataSource: { source: "workers" }` at the top level does not exist in the
+  schema — drop it entirely.
+- Filters go under `parameters.filters` (flat array), **not** a top-level
+  `filters` array, and **not** wrapped in a `{ kind: "group", ... }`
+  structure. Each filter is `{ key, operation, type, value }` — `type` is
+  required (`"string" | "number" | "boolean"`) alongside `operation`
+  (`"eq"`, `"includes"`, etc.).
+- `queryId` is still required on every call, but it does **not** need to
+  reference anything pre-existing — any string works as an ad-hoc query ID
+  when `parameters` is also provided. It's only used to load a *previously
+  saved* query's parameters when `parameters` is omitted.
 
-This strongly suggests `queryId` must reference a query already saved via
-the dashboard's Logs Explorer UI, not an ad-hoc identifier you can invent
-per-request. **Until someone figures out the correct flow (possibly:
-create/save a query in the dashboard once, then reference its real ID),
-use the dashboard directly**: Cloudflare dashboard → Workers & Pages →
-`krabiclaw` → Logs, filter by path/status/time range, and read the
-`[MCP_AUTH]` JSON log lines directly.
+Working request:
 
-If you get this working via the API, replace this section with the working
-request shape and remove this warning.
+```bash
+set -a; source .env; set +a
+ACCT="fa3dc6c06433f6b0ea78d95bce23ad91"
+FROM_MS=$(($(date -u +%s) * 1000 - 3600000))   # 1 hour ago, epoch millis
+TO_MS=$(($(date -u +%s) * 1000))
+
+cat > /tmp/obs-query.json << EOF
+{
+  "queryId": "any-string-you-want-1",
+  "timeframe": { "from": $FROM_MS, "to": $TO_MS },
+  "parameters": {
+    "filters": [
+      { "key": "\$metadata.service", "operation": "includes", "type": "string", "value": "krabiclaw" },
+      { "key": "\$metadata.level", "operation": "eq", "type": "string", "value": "error" }
+    ]
+  },
+  "view": "events"
+}
+EOF
+
+curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/$ACCT/workers/observability/telemetry/query" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+  --data-binary @/tmp/obs-query.json
+```
+
+Response shape: `result.events.events[]`, each with a `source` object
+containing `level`, `message`, and (for Workers) `$workers.event.request`
+(url/method/path) and `$workers.requestId`/`rayId` for cross-referencing
+against `httpRequestsAdaptiveGroups`. `timeframe.from`/`to` **must** be
+epoch milliseconds (integers), not ISO strings — the API 400s with a clear
+Zod error if you pass a string there.
+
+Useful `key` values for `filters`: `$metadata.service` (worker script
+name), `$metadata.level` (`error`/`warn`/`info`), `message` (substring
+match on the log line, works with `operation: "includes"`),
+`$workers.event.request.path` (HTTP path).
 
 ## Correlating the two
 
@@ -144,8 +183,8 @@ granularity — enough to confirm "yes, something is really failing" and rule
 out narrow theories (e.g. confirming `/api/mcp` had real 401s during a
 specific demo window, not just the expected single OAuth-discovery
 challenge). They cannot tell you *why* a specific request failed — for that,
-you need the actual log line, which requires the dashboard Logs UI per the
-limitation above.
+use the telemetry `query` API above (or the dashboard Logs UI) to read the
+actual log line.
 
 `server/utils/mcp-auth.ts`'s `logMcpAuth()` calls are the source of truth
 for the "why": every `credential_rejected` event logs `jwt_reason` /
