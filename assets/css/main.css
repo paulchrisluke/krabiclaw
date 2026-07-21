@@ -21,11 +21,11 @@
   --radius-3xl: 24px;
 
   /* Shadow tokens — navy-tinted, low-contrast */
-  --shadow-xs: 0 1px 2px rgba(31, 37, 71, 0.04);
-  --shadow-sm: 0 1px 3px rgba(31, 37, 71, 0.06), 0 1px 2px rgba(31, 37, 71, 0.04);
-  --shadow-md: 0 4px 12px rgba(31, 37, 71, 0.08);
-  --shadow-lg: 0 12px 32px rgba(31, 37, 71, 0.10);
-  --shadow-xl: 0 24px 48px rgba(31, 37, 71, 0.12);
+  --shadow-xs: 0 1px 2px rgba(31, 37, 71, 4%);
+  --shadow-sm: 0 1px 3px rgba(31, 37, 71, 6%), 0 1px 2px rgba(31, 37, 71, 4%);
+  --shadow-md: 0 4px 12px rgba(31, 37, 71, 8%);
+  --shadow-lg: 0 12px 32px rgba(31, 37, 71, 10%);
+  --shadow-xl: 0 24px 48px rgba(31, 37, 71, 12%);
 
   /* Coral palette — complete 50-950 for Nuxt UI */
   --color-coral-50: #FFF1ED;
@@ -170,10 +170,10 @@
   --ui-text-toned:        #A1A1AA;
   --ui-text-highlighted:  #FFFFFF;
   --ui-text-inverted:     #EEF0F8;
-  --ui-border:            rgba(255,255,255,0.09);
-  --ui-border-muted:      rgba(255,255,255,0.05);
-  --ui-border-accented:   rgba(255,255,255,0.12);
-  --ui-border-inverted:   rgba(255,255,255,0.15);
+  --ui-border:            rgba(255,255,255,9%);
+  --ui-border-muted:      rgba(255,255,255,5%);
+  --ui-border-accented:   rgba(255,255,255,12%);
+  --ui-border-inverted:   rgba(255,255,255,15%);
 }
 
 /* Dark mode wordmark: swap navy text to cream */
