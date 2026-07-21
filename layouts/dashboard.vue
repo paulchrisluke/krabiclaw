@@ -21,7 +21,7 @@
         resizable
         collapsible
         :menu="{ close: false }"
-        :ui="{ header: 'h-auto min-h-(--ui-header-height) items-start py-2.5' }"
+        :ui="{ header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', root: 'relative hidden lg:flex flex-col min-h-svh min-w-16 w-(--width) shrink-0 bg-elevated', body: 'flex flex-col gap-4 flex-1 overflow-y-auto px-3 py-1', content: 'lg:hidden bg-elevated' }"
       >
         <template #header="{ collapsed }">
           <DashboardScopeHeader :model="scopeHeaderModel" :collapsed="collapsed" />
@@ -308,9 +308,13 @@ const siteSlugFromRoute = computed(() => {
 // once that state has been populated from an earlier page in the same session.
 const activeSiteSlug = computed(() => siteSlugFromRoute.value)
 const siteBase = computed(() => orgBase.value && activeSiteSlug.value ? `${orgBase.value}/sites/${activeSiteSlug.value}` : null)
-const locationsBase = computed(() => siteBase.value ? `${siteBase.value}/locations` : null)
+// Flat shape, deliberately, matching useDashboardSiteLinks.ts's own reverted
+// locationBase: the canonical /sites/:site/locations/:location shape 404s
+// until issue #316 phase 4 actually moves pages/dashboard/[orgSlug]/sites/
+// [siteSlug]/[locationSlug]/ into that directory. Move the two together.
+const locationsBase = computed(() => siteBase.value)
 const currentLocationSlug = dashboardLocation.routeLocationSlug
-const locationBase = computed(() => locationsBase.value && currentLocationSlug.value ? `${locationsBase.value}/${currentLocationSlug.value}` : null)
+const locationBase = computed(() => siteBase.value && currentLocationSlug.value ? `${siteBase.value}/${currentLocationSlug.value}` : null)
 const settingsBase = computed(() => orgBase.value ? `${orgBase.value}/settings` : null)
 
 const isAdminRoute = computed(() => route.path.startsWith('/admin'))

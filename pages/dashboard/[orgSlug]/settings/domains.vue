@@ -180,16 +180,16 @@ const deletingId = ref<string | null>(null)
 
 const siteId = computed(() => dashboard.siteId.value)
 
-async function loadDomains() {
+async function loadDomains({ background = false }: { background?: boolean } = {}) {
   if (!siteId.value) return
-  loading.value = true
+  if (!background) loading.value = true
   try {
     const res = await $fetch<{ domains: Domain[] }>(`/api/sites/${siteId.value}/domains`)
     domains.value = res.domains
   } catch {
-    toast.add({ description: 'Failed to load domains', color: 'error' })
+    if (!background) toast.add({ description: 'Failed to load domains', color: 'error' })
   } finally {
-    loading.value = false
+    if (!background) loading.value = false
   }
 }
 
@@ -266,7 +266,7 @@ onMounted(async () => {
   // Poll every 15s while any custom domain is pending
   pollInterval = setInterval(() => {
     const hasPending = domains.value.some(d => d.type === 'custom' && d.status !== 'active')
-    if (hasPending) loadDomains()
+    if (hasPending) loadDomains({ background: true })
   }, 15000)
 })
 

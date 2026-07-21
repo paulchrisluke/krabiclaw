@@ -239,12 +239,9 @@ Do not add a new dev-only reset route or rely on Playwright `afterEach`/`afterAl
 
 Nuxt UI is the default for dashboard/admin surfaces. Saya public, high-traffic surfaces should avoid Nuxt UI interactive components when they affect every tenant page load.
 
-- Dashboard pages use:
-  - `UCard`
-  - `UPage`
-  - `UPageBody`
-- Dashboard pages do not use `UPageHeader`.
-- Dashboard page content goes directly in `UPageBody`.
+- Every `layout: 'dashboard'` page renders its own `UDashboardPanel` with a `#header` slot containing `UDashboardNavbar` (explicit `title`, `UDashboardSidebarCollapse` in `#leading`) and a `#body` slot for content. `UCard` is still the default content-grouping primitive inside `#body`.
+- Dashboard pages do not use `UPage`, `UPageBody`, or `UPageHeader` — that was the pre-issue-#316 pattern; the whole dashboard shell (`layouts/dashboard.vue` plus every page under `pages/dashboard/**` and `pages/admin/**`) was rewritten off it. See `docs/adr/0019-progressive-drill-in-dashboard-sidebar.md`.
+- `layout: 'editor'` pages (onboarding wizards, content editor, blog editor) are a separate, intentionally different case — they own their own full-screen chrome and do not use `UDashboardPanel` either.
 - Saya theme pages keep their raw layout shell and theme-specific components.
 - On `components/saya/**`, prefer native `<button>`, `<NuxtLink>`, `<a>`, Tailwind classes, and inline SVG for always-rendered header/footer paths.
 - Use `components/saya/SayaDropdown.vue` instead of `UDropdownMenu` on the Saya public surface.
@@ -385,7 +382,7 @@ POST /api/sites/[siteId]/domains
 Dashboard route:
 
 ```text
-/dashboard/[orgSlug]/~/settings/domains
+/dashboard/[orgSlug]/settings/domains
 ```
 
 Rules:

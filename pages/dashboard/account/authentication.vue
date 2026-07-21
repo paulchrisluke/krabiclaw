@@ -46,9 +46,6 @@
                     <p class="text-sm text-muted">Connected to {{ sessionData?.user?.email }}</p>
                   </div>
                 </div>
-                <UButton color="neutral" variant="soft" size="sm">
-                  Manage
-                </UButton>
               </div>
 
               <!-- WhatsApp (OTP) -->
@@ -63,7 +60,7 @@
                 </div>
                 <div class="flex items-center gap-4">
                   <UBadge v-if="sessionData?.user?.phoneNumberVerified" color="success" variant="subtle" size="sm">Verified</UBadge>
-                  <UButton color="neutral" variant="soft" size="sm" to="/dashboard/account/authentication">
+                  <UButton color="neutral" variant="soft" size="sm" to="/dashboard/account/profile">
                     {{ sessionData?.user?.phoneNumber ? 'Manage' : 'Add' }}
                   </UButton>
                 </div>

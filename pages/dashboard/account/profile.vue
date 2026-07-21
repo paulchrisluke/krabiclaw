@@ -21,10 +21,13 @@
                 Click on the avatar to upload a custom one from your files.
               </p>
             </div>
-            <div 
-              class="relative group cursor-pointer shrink-0" 
-              @click="openUploadPicker"
+            <button
+              type="button"
+              class="relative group cursor-pointer shrink-0"
+              aria-label="Upload a new avatar"
+              :disabled="uploadLoading"
               :class="{ 'opacity-50 pointer-events-none': uploadLoading }"
+              @click="openUploadPicker"
             >
               <AppAvatar
                 :src="sessionData?.user?.image ?? undefined"
@@ -38,7 +41,7 @@
                 <UIcon name="i-lucide-refresh-cw" class="size-6 animate-spin" v-else />
               </div>
               <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onFileSelect" />
-            </div>
+            </button>
           </div>
           <template #footer>
             <div class="flex items-center justify-between text-sm text-muted">
@@ -411,7 +414,7 @@ const otpVerifying = ref(false)
 const verifyError = ref('')
 
 async function requestPhoneVerify() {
-  if (!phoneDirty.value || !phoneInput.value.trim()) return
+  if (phoneSaving.value || !phoneDirty.value || !phoneInput.value.trim()) return
   phoneSaving.value = true
   try {
     const res = await authClient.phoneNumber.sendOtp({ phoneNumber: phoneInput.value.trim() })

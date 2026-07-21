@@ -308,6 +308,7 @@ definePageMeta({ layout: 'dashboard' })
 
 const { data: sessionData } = useAuth()
 const route = useRoute()
+const router = useRouter()
 const toast = useToast()
 const dashboard = useDashboardSite()
 const hasFacebookAccess = computed(() => {
@@ -549,6 +550,10 @@ onMounted(() => {
     toast.add({ title: 'Facebook access denied', description: 'You declined the Facebook authorization.', color: 'warning' })
   } else if (fbStatus === 'no_pages') {
     toast.add({ title: 'No Facebook Pages found', description: 'Your account has no Pages. Create a Facebook Page for your business and try again.', color: 'warning' })
+  }
+  if (fbStatus) {
+    const { fb: _fb, ...restQuery } = route.query
+    router.replace({ query: restQuery })
   }
 })
 

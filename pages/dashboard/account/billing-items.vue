@@ -42,6 +42,13 @@
             <USkeleton v-for="i in 2" :key="i" class="h-32 w-full rounded-lg" />
           </div>
 
+          <div v-else-if="error" class="space-y-3 text-sm">
+            <p class="text-muted">Failed to load your sites. Please try again.</p>
+            <UButton color="neutral" variant="soft" size="sm" @click="refresh()">
+              Retry
+            </UButton>
+          </div>
+
           <div v-else-if="!billingItems?.length" class="text-sm text-muted">
             You are not a member of any sites.
           </div>
@@ -104,7 +111,7 @@ interface BillingItem {
   }
 }
 
-const { data: response, status } = useFetch<{ items: BillingItem[] }>('/api/user/billing-items')
+const { data: response, status, error, refresh } = useFetch<{ items: BillingItem[] }>('/api/user/billing-items')
 const billingItems = computed(() => response.value?.items ?? [])
 
 const goToWorkspaceBilling = async (orgId: string) => {

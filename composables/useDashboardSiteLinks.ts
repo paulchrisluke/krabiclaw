@@ -34,14 +34,14 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
     const locationSlug = dashboardLocation.currentLocationSlug.value
     const orgBase = slug ? `${base}/${slug}` : base
     const siteBase = slug && siteSlug ? `${orgBase}/sites/${siteSlug}` : orgBase
-    const locationsBase = `${siteBase}/locations`
-    // Canonical location base — matches issue #316's target route shape
-    // (pages/dashboard/:org/sites/:site/locations/:location), not the old flat
-    // /sites/:site/:locationSlug shape. Callers under the still-unmoved
-    // pages/dashboard/[orgSlug]/sites/[siteSlug]/[locationSlug]/ directory will
-    // 404 against this until that directory moves (issue #316 phase 4) — an
-    // accepted mid-refactor gap, not a regression to work around here.
-    const locationBase = siteSlug && locationSlug ? `${locationsBase}/${locationSlug}` : siteBase
+    // Flat shape, deliberately: these paths are actively rendered in real header
+    // buttons on the still-unmoved pages/dashboard/[orgSlug]/sites/[siteSlug]/
+    // [locationSlug]/ pages (confirmed — not dead code). Switching to the
+    // canonical /sites/:site/locations/:location shape here 404s those buttons
+    // until issue #316 phase 4 moves the actual page files; do that move and
+    // this rewrite atomically, together, not one ahead of the other.
+    const locationsBase = siteBase
+    const locationBase = siteSlug && locationSlug ? `${siteBase}/${locationSlug}` : siteBase
     const settingsBase = `${orgBase}/settings`
     return {
       base,
