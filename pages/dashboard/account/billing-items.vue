@@ -1,7 +1,14 @@
 <template>
-  <UPage>
+  <UDashboardPanel id="account-billing-items">
+    <template #header>
+      <UDashboardNavbar title="Billing Items">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <UPageBody>
+    <template #body>
       <div class="max-w-4xl space-y-10">
         
         <!-- Personal Section -->
@@ -70,8 +77,8 @@
         </section>
 
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

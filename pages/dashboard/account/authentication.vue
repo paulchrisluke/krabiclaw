@@ -1,7 +1,14 @@
 <template>
-  <UPage>
+  <UDashboardPanel id="account-authentication">
+    <template #header>
+      <UDashboardNavbar title="Authentication">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <UPageBody>
+    <template #body>
       <div class="max-w-4xl space-y-10">
         
         <!-- Sign-in Methods -->
@@ -56,7 +63,7 @@
                 </div>
                 <div class="flex items-center gap-4">
                   <UBadge v-if="sessionData?.user?.phoneNumberVerified" color="success" variant="subtle" size="sm">Verified</UBadge>
-                  <UButton color="neutral" variant="soft" size="sm" to="/dashboard/account/settings">
+                  <UButton color="neutral" variant="soft" size="sm" to="/dashboard/account/authentication">
                     {{ sessionData?.user?.phoneNumber ? 'Manage' : 'Add' }}
                   </UButton>
                 </div>
@@ -66,8 +73,8 @@
         </section>
 
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

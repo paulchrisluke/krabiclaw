@@ -1,10 +1,14 @@
 <template>
-  <UPage>
-    <UPageBody>
-      <div class="mb-6 space-y-1">
-        <h1 class="text-2xl font-semibold text-highlighted">Analytics</h1>
-        <p class="text-sm text-muted">Connect your Google account to link Analytics and Search Console — no IDs or snippets to copy.</p>
-      </div>
+  <UDashboardPanel id="org-settings-analytics">
+    <template #header>
+      <UDashboardNavbar title="Analytics">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
       <div class="grid gap-4">
         <UCard>
           <template #header>
@@ -69,12 +73,13 @@
           </div>
         </UCard>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
+useSeoMeta({ title: 'Analytics | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 interface ConnectionInfo {
   provider_account_email: string

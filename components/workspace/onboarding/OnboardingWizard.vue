@@ -182,7 +182,7 @@
                 color="primary"
                 variant="outline"
                 icon="i-lucide-circle-arrow-up"
-                :to="`/dashboard/${importedOrgSlug}/~/settings/billing`"
+                :to="`/dashboard/${importedOrgSlug}/settings/billing`"
               >
                 Upgrade to Growth
               </UButton>
@@ -462,7 +462,7 @@ const brandWorkspacePath = computed(() => {
 
 const chatgptGuidePath = computed(() => {
   const slug = importedOrgSlug.value ?? props.existingOrgSlug ?? null
-  return slug ? `/dashboard/${slug}/~/settings/chatgpt` : '/docs/integrations/mcp-setup'
+  return slug ? `/dashboard/${slug}/settings/chatgpt` : '/docs/integrations/mcp-setup'
 })
 
 const chatgptStarterPrompt = computed(() => {

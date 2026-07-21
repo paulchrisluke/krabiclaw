@@ -34,33 +34,40 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
     const locationSlug = dashboardLocation.currentLocationSlug.value
     const orgBase = slug ? `${base}/${slug}` : base
     const siteBase = slug && siteSlug ? `${orgBase}/sites/${siteSlug}` : orgBase
-    const projectBase = siteSlug && locationSlug ? `${siteBase}/${locationSlug}` : siteBase
-    const settingsBase = `${orgBase}/~/settings`
+    const locationsBase = `${siteBase}/locations`
+    // Canonical location base — matches issue #316's target route shape
+    // (pages/dashboard/:org/sites/:site/locations/:location), not the old flat
+    // /sites/:site/:locationSlug shape. Callers under the still-unmoved
+    // pages/dashboard/[orgSlug]/sites/[siteSlug]/[locationSlug]/ directory will
+    // 404 against this until that directory moves (issue #316 phase 4) — an
+    // accepted mid-refactor gap, not a regression to work around here.
+    const locationBase = siteSlug && locationSlug ? `${locationsBase}/${locationSlug}` : siteBase
+    const settingsBase = `${orgBase}/settings`
     return {
       base,
       org: orgBase,
       site: siteBase,
-      project: projectBase,
+      project: locationBase,
       conversations: `${siteBase}/conversations`,
       content: `${siteBase}/content`,
-      menu: `${projectBase}/menu`,
-      posts: `${projectBase}/posts`,
-      reviews: `${projectBase}/reviews`,
-      photos: `${projectBase}/photos`,
-      qa: `${projectBase}/qa`,
-      inbox: `${projectBase}/inbox`,
-      reservations: `${projectBase}/reservations`,
-      order: `${projectBase}/order`,
-      media: `${projectBase}/media`,
-      locations: siteBase,
+      menu: `${locationBase}/menu`,
+      posts: `${locationBase}/posts`,
+      reviews: `${locationBase}/reviews`,
+      photos: `${locationBase}/photos`,
+      qa: `${locationBase}/qa`,
+      inbox: `${locationBase}/inbox`,
+      reservations: `${locationBase}/reservations`,
+      order: `${locationBase}/order`,
+      media: `${locationBase}/media`,
+      locations: locationsBase,
       translations: `${siteBase}/translations`,
       settings: settingsBase,
       settingsGeneral: `${settingsBase}/general`,
       settingsBilling: `${settingsBase}/billing`,
       // Account-level (no slug)
-      account: `${base}/account/settings`,
-      accountAuthentication: `${base}/account/settings/authentication`,
-      accountBillingItems: `${base}/account/settings/billing-items`,
+      account: `${base}/account/profile`,
+      accountAuthentication: `${base}/account/authentication`,
+      accountBillingItems: `${base}/account/billing-items`,
     }
   })
 

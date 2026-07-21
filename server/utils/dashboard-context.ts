@@ -148,7 +148,7 @@ async function resolveSingleOrgSite(db: DbClient, organizationId: string): Promi
   return sites.length === 1 ? sites[0]! : null
 }
 
-// Not a guess: the org-scoped /~/onboarding route has no siteSlug to attach a header
+// Not a guess: the org-scoped /onboarding route has no siteSlug to attach a header
 // from, and a recipient who already owned a site before accepting a handoff legitimately
 // ends up with 2+ sites. The site this route means is unambiguous — whichever site this
 // exact user most recently accepted a transfer into — so resolve it precisely instead of

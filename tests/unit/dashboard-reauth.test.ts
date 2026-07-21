@@ -12,7 +12,7 @@ test('isWhatsAppInboxDeepLinkPath rejects other dashboard routes', () => {
   assert.equal(isWhatsAppInboxDeepLinkPath('/dashboard/pottery-house'), false)
   assert.equal(isWhatsAppInboxDeepLinkPath('/dashboard/pottery-house/sites/main'), false)
   assert.equal(isWhatsAppInboxDeepLinkPath('/dashboard/pottery-house/sites/main/downtown'), false)
-  assert.equal(isWhatsAppInboxDeepLinkPath('/dashboard/pottery-house/~/settings/members'), false)
+  assert.equal(isWhatsAppInboxDeepLinkPath('/dashboard/pottery-house/settings/members'), false)
   assert.equal(isWhatsAppInboxDeepLinkPath('/dashboard/pottery-house/sites/main/downtown/reservations'), false)
 })
 

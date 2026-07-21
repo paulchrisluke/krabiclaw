@@ -1,6 +1,14 @@
 <template>
-  <UPage>
-    <UPageBody>
+  <UDashboardPanel id="org-settings-chatgpt">
+    <template #header>
+      <UDashboardNavbar title="ChatGPT">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
       <div class="max-w-4xl space-y-8">
         <section class="space-y-2">
           <p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">ChatGPT setup</p>
@@ -51,8 +59,8 @@
           </div>
         </UCard>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

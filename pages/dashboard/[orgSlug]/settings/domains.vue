@@ -1,10 +1,14 @@
 <template>
-  <UPage>
-    <UPageBody>
-      <div class="mb-6 space-y-1">
-        <h1 class="text-2xl font-semibold text-highlighted">Domains</h1>
-        <p class="text-sm text-muted">Custom domain setup and DNS configuration for your site.</p>
-      </div>
+  <UDashboardPanel id="org-settings-domains">
+    <template #header>
+      <UDashboardNavbar title="Domains">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
       <div class="grid gap-4">
 
         <!-- Current domains -->
@@ -138,8 +142,8 @@
         </UCard>
 
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

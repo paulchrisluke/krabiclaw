@@ -1,10 +1,14 @@
 <template>
-  <UPage>
-    <UPageBody>
-      <div class="mb-6 space-y-1">
-        <h1 class="text-2xl font-semibold text-highlighted">Settings</h1>
-        <p class="text-sm text-muted">Organization and account preferences for the dashboard.</p>
-      </div>
+  <UDashboardPanel id="org-settings-general">
+    <template #header>
+      <UDashboardNavbar title="General">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
       <div class="grid gap-4 lg:grid-cols-2">
         <UCard>
           <template #header>
@@ -103,7 +107,7 @@
               color="primary"
               variant="outline"
               icon="i-lucide-circle-arrow-up"
-              :to="`/dashboard/${route.params.orgSlug}/~/settings/billing`"
+              :to="`/dashboard/${route.params.orgSlug}/settings/billing`"
             >
               Upgrade to Growth
             </UButton>
@@ -243,8 +247,8 @@
           </div>
         </UCard>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 
   <!-- Delete Account Modal -->
   <UModal v-model:open="deleteModalOpen" :ui="{ content: 'max-w-md' }" @close="resetDeleteModal">

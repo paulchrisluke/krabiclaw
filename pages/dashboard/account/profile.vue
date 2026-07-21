@@ -1,7 +1,14 @@
 <template>
-  <UPage>
+  <UDashboardPanel id="account-profile">
+    <template #header>
+      <UDashboardNavbar title="Profile">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <UPageBody>
+    <template #body>
       <div class="max-w-4xl space-y-6">
         
         <!-- Avatar -->
@@ -201,8 +208,8 @@
           </template>
         </UCard>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 
   <!-- Delete Account Modal -->
   <UModal v-model:open="deleteModalOpen" :ui="{ content: 'max-w-md' }" @close="resetDeleteModal">

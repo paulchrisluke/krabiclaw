@@ -24,13 +24,13 @@ export function buildInvitationRedirectUrl(params: {
 
   const site = params.preferredSite
   if (site) {
-    if (site.onboarding_status !== 'active') return `${orgBase}/~/onboarding`
+    if (site.onboarding_status !== 'active') return `${orgBase}/onboarding`
     if (site.subdomain) return `${orgBase}/sites/${encodeURIComponent(site.subdomain)}`
   }
 
   if (params.fallbackSites.length === 1) {
     const onlySite = params.fallbackSites[0]!
-    if (onlySite.onboarding_status !== 'active') return `${orgBase}/~/onboarding`
+    if (onlySite.onboarding_status !== 'active') return `${orgBase}/onboarding`
     if (onlySite.subdomain) return `${orgBase}/sites/${encodeURIComponent(onlySite.subdomain)}`
   }
 

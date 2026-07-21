@@ -1,11 +1,14 @@
 <template>
-  <UPage>
-    <UPageHeader
-      title="Billing"
-      description="Manage the organization plan, limits, and Stripe subscription."
-    />
+  <UDashboardPanel id="org-settings-billing">
+    <template #header>
+      <UDashboardNavbar title="Billing">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <UPageBody>
+    <template #body>
       <div v-if="loading" class="space-y-6">
         <USkeleton class="h-28 w-full" />
         <div class="grid gap-4 lg:grid-cols-3">
@@ -289,8 +292,8 @@
           </UCard>
         </div>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 
   <BillingAutoTopupSettingsModal
     v-model:open="autoTopupModalOpen"

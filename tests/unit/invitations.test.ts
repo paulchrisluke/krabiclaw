@@ -42,7 +42,7 @@ test('buildInvitationRedirectUrl sends non-active sites through onboarding', () 
       preferredSite: { id: 's1', subdomain: 'pottery-house', onboarding_status: 'pending' },
       fallbackSites: [],
     }),
-    '/dashboard/pottery-house/~/onboarding',
+    '/dashboard/pottery-house/onboarding',
   )
 })
 

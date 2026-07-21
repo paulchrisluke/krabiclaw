@@ -1,6 +1,14 @@
 <template>
-  <UPage>
-    <UPageBody>
+  <UDashboardPanel id="org-settings-members">
+    <template #header>
+      <UDashboardNavbar title="Members">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
       <div class="space-y-4">
         <UCard>
           <template #header>
@@ -256,8 +264,8 @@
           />
         </UCard>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

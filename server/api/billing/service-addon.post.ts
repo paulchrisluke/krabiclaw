@@ -102,7 +102,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({
       error: 'Organization setup is incomplete',
       message: 'Complete your restaurant workspace setup before purchasing managed services.',
-      settingsUrl: '/dashboard/account/settings',
+      settingsUrl: '/dashboard/account/profile',
     }, { status: 400 })
   }
 
@@ -122,8 +122,8 @@ export default defineEventHandler(async (event) => {
     mode: 'payment',
     line_items: [{ price: priceId, quantity: 1 }],
     payment_intent_data: { setup_future_usage: 'off_session' },
-    success_url: `${origin}/dashboard/${encodedOrgSlug}/~/settings/billing?addon_success=${addonType}`,
-    cancel_url: `${origin}/dashboard/${encodedOrgSlug}/~/settings/billing`,
+    success_url: `${origin}/dashboard/${encodedOrgSlug}/settings/billing?addon_success=${addonType}`,
+    cancel_url: `${origin}/dashboard/${encodedOrgSlug}/settings/billing`,
     metadata: {
       organization_id: orgId,
       type: 'service_addon',

@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
   // Don't require the x-dashboard-site-slug header here: a location is fully
   // self-scoping once we know the org (the id is already in the URL), and some
   // callers — like the post-transfer onboarding wizard at the org-scoped
-  // /~/onboarding route — have no siteSlug route param to attach it from, and
+  // /onboarding route — have no siteSlug route param to attach it from, and
   // may legitimately belong to an org with multiple sites at the time of the call.
   const dashboard = await getDashboardContext(event, { requireSite: false })
   const { organization } = dashboard

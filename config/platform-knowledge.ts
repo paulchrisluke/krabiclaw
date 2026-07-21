@@ -278,7 +278,7 @@ export const PLATFORM_DASHBOARD_ROUTE_ENTRIES: PlatformDashboardRouteEntry[] = [
   {
     id: 'org-settings-general',
     title: 'Organization Settings',
-    pathTemplate: '/dashboard/:orgSlug/~/settings/general',
+    pathTemplate: '/dashboard/:orgSlug/settings/general',
     fallbackPath: '/dashboard',
     snippet: 'Edit organization name, defaults, and core settings.',
     body: 'Organization settings include general details, billing, ChatGPT configuration, domains, members, and analytics.',
@@ -290,7 +290,7 @@ export const PLATFORM_DASHBOARD_ROUTE_ENTRIES: PlatformDashboardRouteEntry[] = [
   {
     id: 'org-settings-billing',
     title: 'Billing Settings',
-    pathTemplate: '/dashboard/:orgSlug/~/settings/billing',
+    pathTemplate: '/dashboard/:orgSlug/settings/billing',
     fallbackPath: '/dashboard',
     snippet: 'Manage billing, plans, and payment status.',
     body: 'Billing settings show plan details, billing actions, and payment management for the current organization.',
@@ -302,7 +302,7 @@ export const PLATFORM_DASHBOARD_ROUTE_ENTRIES: PlatformDashboardRouteEntry[] = [
   {
     id: 'org-settings-domains',
     title: 'Domain Settings',
-    pathTemplate: '/dashboard/:orgSlug/~/settings/domains',
+    pathTemplate: '/dashboard/:orgSlug/settings/domains',
     fallbackPath: '/dashboard',
     snippet: 'Add and manage custom domains for your sites.',
     body: 'Domain settings is where customers connect custom domains, review DNS instructions, and manage canonical domain state.',
@@ -314,7 +314,7 @@ export const PLATFORM_DASHBOARD_ROUTE_ENTRIES: PlatformDashboardRouteEntry[] = [
   {
     id: 'org-settings-members',
     title: 'Member Settings',
-    pathTemplate: '/dashboard/:orgSlug/~/settings/members',
+    pathTemplate: '/dashboard/:orgSlug/settings/members',
     fallbackPath: '/dashboard',
     snippet: 'Invite teammates and manage organization members.',
     body: 'Member settings handles access control, team members, and role management.',
@@ -326,7 +326,7 @@ export const PLATFORM_DASHBOARD_ROUTE_ENTRIES: PlatformDashboardRouteEntry[] = [
   {
     id: 'org-settings-analytics',
     title: 'Analytics Settings',
-    pathTemplate: '/dashboard/:orgSlug/~/settings/analytics',
+    pathTemplate: '/dashboard/:orgSlug/settings/analytics',
     fallbackPath: '/dashboard',
     snippet: 'Configure analytics and Google Search Console connections.',
     body: 'Analytics settings lets customers connect GA4 and Search Console and manage reporting-related settings.',
