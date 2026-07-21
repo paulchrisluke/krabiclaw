@@ -480,6 +480,7 @@ const previewOrigin = computed(() => {
 // this just reloads content when the pageId route param actually changes.
 watch(() => props.pageId, async (newVal, oldVal) => {
   if (newVal === oldVal) return
+  applyRouteContentScope()
   activeField.value = null
   openGroups.value = ['hero']
   localHasChanges.value = false

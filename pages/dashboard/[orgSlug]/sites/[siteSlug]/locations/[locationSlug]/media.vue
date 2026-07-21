@@ -70,6 +70,12 @@
         <div v-for="i in 14" :key="i" class="aspect-square rounded-lg bg-elevated animate-pulse" />
       </div>
 
+      <div v-else-if="assets.length === 0 && (search || kindFilter)" class="py-16 text-center">
+        <UIcon name="i-lucide-search-x" class="mx-auto size-10 text-muted" />
+        <p class="mt-4 text-sm font-medium text-highlighted">No matches</p>
+        <p class="mt-1 text-xs text-muted">Try a different search term or filter.</p>
+      </div>
+
       <div v-else-if="assets.length === 0" class="py-16 text-center">
         <UIcon name="i-lucide-image" class="mx-auto size-10 text-muted" />
         <p class="mt-4 text-sm font-medium text-highlighted">No media yet</p>
@@ -223,7 +229,14 @@ const kindTabs = [
   { label: 'Videos', value: 'video' },
 ]
 
+// Guards against a debounced search reload (or a filter click) landing while
+// an earlier load()/loadMore() is still in flight — without this, a stale
+// response can overwrite assets/hasMore with results for a since-changed
+// search term or filter.
+let mediaRequestToken = 0
+
 async function load() {
+  const requestToken = ++mediaRequestToken
   loading.value = true
   offset.value = 0
   selected.value.clear()
@@ -232,20 +245,23 @@ async function load() {
     if (kindFilter.value) params.set('kind', kindFilter.value)
     if (search.value) params.set('search', search.value)
     const res = await $fetch<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
+    if (requestToken !== mediaRequestToken) return
     assets.value = res.media ?? []
     hasMore.value = assets.value.length === LIMIT
   } catch (err) {
+    if (requestToken !== mediaRequestToken) return
     if (import.meta.dev) console.error('Failed to load media:', err)
     assets.value = []
     hasMore.value = false
     toast.add({ title: getErrorMessage(err, 'Failed to load media'), color: 'error' })
   } finally {
-    loading.value = false
+    if (requestToken === mediaRequestToken) loading.value = false
   }
 }
 
 async function loadMore() {
   if (loadingMore.value) return
+  const requestToken = mediaRequestToken
   loadingMore.value = true
   const requestOffset = offset.value + LIMIT
   try {
@@ -253,15 +269,17 @@ async function loadMore() {
     if (kindFilter.value) params.set('kind', kindFilter.value)
     if (search.value) params.set('search', search.value)
     const res = await $fetch<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
+    if (requestToken !== mediaRequestToken) return
     const more = res.media ?? []
     assets.value.push(...more)
     offset.value = requestOffset
     hasMore.value = more.length === LIMIT
   } catch (err) {
+    if (requestToken !== mediaRequestToken) return
     if (import.meta.dev) console.error('Failed to load more media:', err)
     toast.add({ title: getErrorMessage(err, 'Failed to load more media'), color: 'error' })
   } finally {
-    loadingMore.value = false
+    if (requestToken === mediaRequestToken) loadingMore.value = false
   }
 }
 

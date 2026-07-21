@@ -144,7 +144,7 @@
             <NuxtLink
               v-for="location in previewLocations"
               :key="location.id"
-              :to="`${siteDashboardPath}/${location.slug}`"
+              :to="`${locationsBase}/${location.slug}`"
               class="group block"
             >
               <UCard variant="soft" class="h-full cursor-pointer">
