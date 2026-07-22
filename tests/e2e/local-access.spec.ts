@@ -6,6 +6,7 @@ import { collectPageErrors } from './helpers'
 const POTTERY_OWNER_USER_ID = 'user-pottery-house'
 const SITE_ID = 'site-pottery-house'
 const LOCATION_ID = 'loc-pottery-house'
+const SIBLING_LOCATION_ID = 'loc-pottery-beachfront'
 
 function localD1Query<T>(sql: string): T[] {
   const output = execFileSync('yarn', [
@@ -130,7 +131,40 @@ test('phone invitation verifies identity, accepts access, and opens the scoped d
   expect(dashboard.organization?.id).toBe('org-pottery-house')
   expect(dashboard.organization?.role).toBe('editor')
   expect(dashboard.site?.id).toBe(SITE_ID)
-  expect(dashboard.locations?.map(location => location.id)).toContain(LOCATION_ID)
+  expect(dashboard.locations?.map(location => location.id)).toEqual([LOCATION_ID])
+
+  const scopedHeaders = {
+    ...dashboardOrgHeaders('pottery-house-krabi'),
+    'x-dashboard-site-slug': 'pottery-house',
+  }
+  const locationsResponse = await page.request.get(`${baseURL}/api/dashboard/locations`, { headers: scopedHeaders })
+  expect(locationsResponse.status()).toBe(200)
+  expect((await locationsResponse.json() as { locations: Array<{ id: string }> }).locations.map(location => location.id)).toEqual([LOCATION_ID])
+
+  const homeResponse = await page.request.get(`${baseURL}/api/dashboard/home`, { headers: scopedHeaders })
+  expect(homeResponse.status()).toBe(200)
+  const home = await homeResponse.json() as { locations: Array<{ id: string }>; credits: unknown }
+  expect(home.locations.map(location => location.id)).toEqual([LOCATION_ID])
+  expect(home.credits).toBeNull()
+
+  expect((await page.request.get(`${baseURL}/api/dashboard/locations/${LOCATION_ID}`, { headers: scopedHeaders })).status()).toBe(200)
+  expect((await page.request.get(`${baseURL}/api/dashboard/locations/${SIBLING_LOCATION_ID}`, { headers: scopedHeaders })).status()).toBe(404)
+  expect((await page.request.patch(`${baseURL}/api/dashboard/locations/${SIBLING_LOCATION_ID}`, {
+    headers: scopedHeaders,
+    data: { title: 'Must not change' },
+  })).status()).toBe(404)
+  expect((await page.request.patch(`${baseURL}/api/dashboard/location-preference`, {
+    headers: scopedHeaders,
+    data: { locationId: SIBLING_LOCATION_ID },
+  })).status()).toBe(404)
+  expect((await page.request.get(`${baseURL}/api/dashboard/settings`, { headers: scopedHeaders })).status()).toBe(404)
+  expect((await page.request.post(`${baseURL}/api/dashboard/locations/add`, {
+    headers: scopedHeaders,
+    data: { name: 'Must not create' },
+  })).status()).toBe(404)
+  expect((await page.request.get(`${baseURL}/api/dashboard/editor/menus?locationId=${LOCATION_ID}`, { headers: scopedHeaders })).status()).toBe(200)
+  expect((await page.request.get(`${baseURL}/api/dashboard/editor/menus?locationId=${SIBLING_LOCATION_ID}`, { headers: scopedHeaders })).status()).toBe(404)
+  expect((await page.request.get(`${baseURL}/api/dashboard/onboarding/checklist?siteId=${SITE_ID}`, { headers: scopedHeaders })).status()).toBe(404)
 
   const acceptedResponse = await page.request.get(`${baseURL}/api/invitations/${invitation.id}?siteId=${SITE_ID}`)
   expect(acceptedResponse.status()).toBe(200)

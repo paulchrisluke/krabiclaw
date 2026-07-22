@@ -7,6 +7,7 @@ import type { H3Event } from 'h3'
 export interface SiteAccessRow {
   id: string
   organization_id: string
+  brand_name: string | null
   subdomain: string | null
   status: string
   onboarding_status: string | null
@@ -26,7 +27,7 @@ export async function loadMemberSiteRow(db: DbClient, siteId: string, userId: st
   // the scope check inside assertSiteWideAccess/assertLocationAccess/
   // assertSiteContextAccess (isScopedRole/isOrganizationWideRole both false).
   return await queryFirst<SiteAccessRow>(db, `
-    SELECT s.id, s.organization_id, s.subdomain, s.status, s.onboarding_status,
+    SELECT s.id, s.organization_id, s.brand_name, s.subdomain, s.status, s.onboarding_status,
            om.id AS member_id, om.role AS member_role
     FROM sites s
     JOIN member om ON s.organization_id = om.organizationId

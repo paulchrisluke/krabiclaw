@@ -78,31 +78,25 @@ export function assertOrganizationAccess(role: string): void {
   }
 }
 
-// Interim path allowlist for the /api/dashboard/** family (distinct from the
-// /api/editor/sites/[siteId]/** family, which is converted per-endpoint onto
-// the four access classes above — see docs/audits/0341-workstream-a-authorization.md).
-// Until every /api/dashboard/** route gets the same per-resource treatment,
-// a scoped editor (formerly location_manager) is restricted to this known-safe
-// subset rather than getting whatever access getDashboardContext's caller
-// happens to return. This restricts scoped editors only — org-wide roles are
-// unrestricted, and it does not itself grant location/site-wide access; the
-// underlying route must still enforce its own resource-level scope check.
-const SCOPED_ROLE_DASHBOARD_PATHS = [
-  '/api/dashboard/context',
-  '/api/dashboard/home',
-  '/api/dashboard/inbox',
-  '/api/dashboard/threads',
-  '/api/dashboard/reservations',
-  '/api/dashboard/experience-bookings',
-  '/api/dashboard/reviews',
-  '/api/dashboard/notifications',
-  '/api/dashboard/locations',
-  '/api/dashboard/location-preference',
-  '/api/dashboard/sites',
+// Deny-by-default boundary for dashboard handlers that resolve through
+// getDashboardContext. Each permitted route below is classified in the #341
+// authorization audit and applies its authoritative resource guard or filtered
+// query. The editor/AI proxy namespaces delegate to the already-audited
+// /api/editor/sites/[siteId]/** and selected /api/ai/[siteId]/** handlers.
+const SCOPED_ROLE_DASHBOARD_ROUTES = [
+  /^\/api\/dashboard\/context$/,
+  /^\/api\/dashboard\/home$/,
+  /^\/api\/dashboard\/settings$/,
+  /^\/api\/dashboard\/location-preference$/,
+  /^\/api\/dashboard\/locations(?:\/add|\/[^/]+)?$/,
+  /^\/api\/dashboard\/notifications(?:\/unread-count|\/read-all|\/[^/]+\/read)?$/,
+  /^\/api\/dashboard\/editor(?:\/.*)?$/,
+  /^\/api\/dashboard\/ai\/(?:agent|conversations(?:\/.*)?|credits|enhance-prompt|generate-image|menu\/extract|posts\/generate)$/,
 ]
 
 export function canScopedRoleUseDashboardPath(pathname: string): boolean {
-  return SCOPED_ROLE_DASHBOARD_PATHS.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`) || pathname.startsWith(`${prefix}?`))
+  const normalizedPath = pathname.split('?', 1)[0] ?? pathname
+  return SCOPED_ROLE_DASHBOARD_ROUTES.some(pattern => pattern.test(normalizedPath))
 }
 
 export function assertDashboardPathPermission(role: string, pathname: string): void {

@@ -1,6 +1,7 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { execute, queryFirst } from '~/server/db'
+import { assertLocationAccess } from '~/server/utils/member-access'
 
 interface LocationPreferenceBody {
   locationId: string
@@ -29,6 +30,13 @@ export default defineEventHandler(async (event) => {
   if (!location) {
     return jsonResponse({ error: 'Location not found' }, { status: 404 })
   }
+  await assertLocationAccess(db, {
+    memberId: organization.memberId,
+    role: organization.role,
+    organizationId: organization.id,
+    siteId: site.id,
+    locationId,
+  })
 
   const now = new Date().toISOString()
   await execute(db, `

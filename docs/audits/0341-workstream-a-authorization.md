@@ -66,7 +66,49 @@ aggregate across locations), never from the URL shape alone.
 - `server/utils/chowbot-conversations.ts` — `getSiteForMember`/`listSitesForMember` same site-wide requirement (ChowBot is whole-site conversational, no location scoping at this layer).
 - `server/utils/whatsapp-access.ts`, `server/utils/whatsapp-revocation.ts` — `LOCATION_MANAGER_ROLE` → `'editor'` literal / `isScopedRole()`.
 - `server/api/dashboard/organizations/members/[memberId]/remove.post.ts` — same.
-- `server/utils/dashboard-context.ts` — restored `assertDashboardPathPermission` (renamed internally to gate `isScopedRole`, not a specific role name) as an interim path allowlist for the **separate, not-yet-audited** `/api/dashboard/**` family (distinct from `/api/editor/sites/[siteId]/**`, which this document tracks).
+
+## `/api/dashboard/**` scoped-editor boundary
+
+`getDashboardContext` retains a deny-by-default route boundary for scoped
+editors. It is not an authorization substitute: every permitted route below
+also applies the listed authoritative guard or filters its query by
+`member_access_scope`. Routes not listed are rejected before their handler can
+use context-only site resolution. The generic proxy only permits the audited
+`editor` and explicit `ai` namespaces; arbitrary `/api/sites/[siteId]/**`
+proxying is not available to scoped editors.
+
+| Endpoint | Organization | Site-wide | Location | Conditional | Context-only | Guard used |
+|---|---|---|---|---|---|---|
+| `dashboard/context.get.ts` | | | | ✓ (site/location lists) | ✓ | `assertSiteContextAccess` in `getDashboardContext`; `listOrganizationSites` and `listDashboardLocations` filter by the member's scope rows |
+| `dashboard/home.get.ts` and SSR `getDashboardHomeData` caller | | | | ✓ | | locations and events use `EXISTS member_access_scope`; null-location aggregate events require a site-wide row; organization credit totals are omitted for scoped roles |
+| `dashboard/settings.get.ts`, `settings.patch.ts` | | ✓ | | | | `assertSiteWideAccess` after context resolution |
+| `dashboard/location-preference.patch.ts` | | | ✓ | | | requested location is loaded from the selected site, then `assertLocationAccess` |
+| `dashboard/locations/index.get.ts` | | | ✓ (filtered list) | | | `EXISTS member_access_scope`; site-wide rows include all locations, location rows include only exact locations |
+| `dashboard/locations/[id].get.ts`, `[id].patch.ts` | | | ✓ | | | target location supplies `site_id`; `assertLocationAccess`/`assertMemberScope` before return or mutation |
+| `dashboard/locations/add.post.ts` | | ✓ | | | | `assertSiteWideAccess` before preview, credit charge, or creation |
+| `dashboard/editor/menus.get.ts` | | | | ✓ (`locationId`; no location means site-wide) | | `assertResourceAccess` before `getMenus` |
+| `dashboard/[...path].ts` → `editor/**` | | | | ✓ (destination resource) | ✓ (destination context route only) | proxy context check plus the per-endpoint `/api/editor/sites/[siteId]/**` guards enumerated in this audit |
+| `dashboard/[...path].ts` → `ai/agent`, `ai/conversations/**` | | ✓ | | | | destination `getSiteForMember` requires a site-wide scope |
+| `dashboard/[...path].ts` → `ai/credits` | | ✓ | | | | destination `requireSiteAccess('site-wide')` |
+| `dashboard/[...path].ts` → `ai/enhance-prompt`, `ai/posts/generate` | | ✓ | | | | destination `assertSiteWideAccess` |
+| `dashboard/[...path].ts` → `ai/generate-image`, `ai/menu/extract` | | | | ✓ | | destination `assertResourceAccess`; new site-wide resources require `assertSiteWideAccess` |
+| `dashboard/notifications/index.get.ts`, `unread-count.get.ts`, `read-all.patch.ts`, `[notificationId]/read.patch.ts` | | | | ✓ | | `getNotificationAccess`: location notifications require exact/site-wide scope; null-location site notifications require site-wide scope; reads mutate only visible notifications |
+| `dashboard/sites/[siteId]/guest-threads/index.get.ts` | | | | ✓ (query location; no location means site-wide) | ✓ | `requireSiteAccess('context')` + `assertMemberScope`; list query is location-filtered |
+| `dashboard/sites/[siteId]/guest-threads/[threadId].get.ts`, `.patch.ts`, `/reply.post.ts` | | | | ✓ (thread row's own `location_id`) | ✓ | target thread lookup followed by `assertMemberScope` before read/mutation/reply |
+| `dashboard/onboarding/checklist.get.ts?siteId=…` | | ✓ | | | | explicit site path uses `requireSiteAccess('site-wide')`; it cannot expose sibling-site aggregate state to a location-scoped editor |
+
+Authenticated user-owned creation routes (`dashboard/site.post.ts`,
+`site/validate-subdomain.post.ts`, `onboarding/places-preview.post.ts`, and
+`onboarding/drafts/{manual,from-place,[draftId]/commit}.ts`) do not grant or
+read an existing organization's resources: drafts are keyed to the session
+user, commit re-checks `draft.user_id`, and site creation creates the caller's
+own organization/site. They therefore sit outside the member-scope matrix.
+
+The deny boundary rejects scoped editors from organization-wide dashboard
+routes (`members`, invitations, organization member removal, activity/events,
+work requests), onboarding mutations against an existing site, location copy,
+and any unknown catch-all proxy path. Those routes remain available to
+owner/admin callers and keep their existing organization-level checks.
 
 | `editor/sites/[siteId]/blog/[postId].delete.ts` | | ✓ | | | | inline SQL + `assertSiteWideAccess` (`blog_posts` has no `location_id`) |
 | `editor/sites/[siteId]/posts.get.ts` | | | | ✓ (query `location_id`) | | inline SQL + `assertResourceAccess` (`posts` table location_id nullable; distinct from `blog_posts` — this is the per-location "Posts" feature) |
@@ -152,9 +194,14 @@ migration lint, seed lint, and tool-parity checks passed; the scoped invitation
 Playwright flow passed 2/2; and the mandatory Pottery House fixture passed
 52/52 against `http://localhost:3000`. The two MCP role-visibility regressions
 from the first CI run also pass locally, including fail-closed tool discovery
-for inaccessible and blank site identifiers.
+for inaccessible and blank site identifiers. The scoped dashboard regression
+now proves context, home, and location lists filter sibling locations; exact
+location reads/preferences/mutations reject siblings; site settings,
+add-location, onboarding aggregates, and AI credits reject a location-only
+editor; and location-scoped menu reads accept only the authorized location.
 
-**Status: complete.** Every endpoint family listed above is converted. The
+**Workstream A status: complete.** Every endpoint family listed above,
+including the `/api/dashboard/**` deny boundary, is converted and audited. The
 repository-wide proof sweep, migration contract test, full unit suite,
 typecheck, lint, Drizzle check, and migration safety check are the completion
 evidence for this workstream.
