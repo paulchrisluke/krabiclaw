@@ -144,7 +144,9 @@ when the route organization changes, and surfaces the scope API's error body.
 the unit suite passed 478/478; typecheck, lint, Drizzle, migration safety,
 migration lint, seed lint, and tool-parity checks passed; the scoped invitation
 Playwright flow passed 2/2; and the mandatory Pottery House fixture passed
-52/52 against `http://localhost:3000`.
+52/52 against `http://localhost:3000`. The two MCP role-visibility regressions
+from the first CI run also pass locally, including fail-closed tool discovery
+for an inaccessible site.
 
 **Status: complete.** Every endpoint family listed above is converted. The
 repository-wide proof sweep, migration contract test, full unit suite,

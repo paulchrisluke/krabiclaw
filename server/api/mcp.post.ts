@@ -392,8 +392,10 @@ Common workflows: update menus and items, create and publish site posts, triage 
       const leanToolCatalog = shouldUseLeanToolCatalog(event)
       const tools = visibleSurfaceTools.filter((tool) => {
         // Without a site_id, return all tools so AI clients (e.g. ChatGPT) can discover
-        // the full capability set on first connection. Security is enforced at execution time.
-        if (!siteId || !siteCtx) return true;
+        // the full capability set on first connection. A supplied but inaccessible
+        // site must fail closed instead of receiving the unscoped catalog.
+        if (!siteId) return true;
+        if (!siteCtx) return false;
         if (!roleSatisfies(siteCtx.role, tool.minimumRole)) return false;
         if (
           tool.requiredEntitlement &&

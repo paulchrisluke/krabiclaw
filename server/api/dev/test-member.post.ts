@@ -54,6 +54,7 @@ export default defineEventHandler(async (event) => {
   const now = Math.floor(Date.now() / 1000)
   const idSuffix = crypto.randomUUID()
   const userId = `e2e-user-${idSuffix}`
+  const memberId = `member-${idSuffix}`
   const email = body.email?.trim().toLowerCase() || `e2e-${role}-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.test`
   const name = body.name?.trim() || `E2E ${role}`
 
@@ -65,7 +66,17 @@ export default defineEventHandler(async (event) => {
   await execute(db, `
     INSERT INTO member (id, organizationId, userId, role, createdAt)
     VALUES (?, ?, ?, ?, ?)
-  `, [`member-${idSuffix}`, ownerMembership.organizationId, userId, role, now])
+  `, [memberId, ownerMembership.organizationId, userId, role, now])
+
+  if (role === 'editor') {
+    await execute(db, `
+      INSERT OR IGNORE INTO member_access_scope
+        (id, member_id, organization_id, site_id, location_id, grant_source)
+      SELECT lower(hex(randomblob(16))), ?, ?, id, NULL, 'manual'
+      FROM sites
+      WHERE organization_id = ?
+    `, [memberId, ownerMembership.organizationId, ownerMembership.organizationId])
+  }
 
   return jsonResponse({
     success: true,
@@ -78,4 +89,3 @@ export default defineEventHandler(async (event) => {
     },
   })
 })
-
