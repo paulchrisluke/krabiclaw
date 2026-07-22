@@ -126,11 +126,30 @@ describe('Tenant Favicon – Unit Tests', () => {
   })
 
   describe('isCloudflareImagesUrl / getCloudflareImageVariantUrl', () => {
-    test('isCloudflareImagesUrl: detects imagedelivery.net URLs', () => {
+    test('isCloudflareImagesUrl: detects imagedelivery.net URLs (exact hostname)', () => {
+      // True positives — real Cloudflare Images URLs
       assert.equal(isCloudflareImagesUrl(POTTERY_HOUSE_LOGO), true)
       assert.equal(isCloudflareImagesUrl(KIKUZUKI_LOGO), true)
+
+      // True negatives — unrelated hosts
       assert.equal(isCloudflareImagesUrl('https://example.com/logo.jpg'), false)
       assert.equal(isCloudflareImagesUrl('https://cdn.myhost.com/favicon.ico'), false)
+
+      // Lookalike domain — subdomain: my-imagedelivery.net
+      assert.equal(isCloudflareImagesUrl('https://my-imagedelivery.net/account/image/public'), false)
+
+      // Lookalike domain — suffix: imagedelivery.net.evil.com
+      assert.equal(isCloudflareImagesUrl('https://imagedelivery.net.evil.com/account/image/public'), false)
+
+      // Path-only occurrence: imagedelivery.net appears in path, not hostname
+      assert.equal(isCloudflareImagesUrl('https://proxy.example.com/imagedelivery.net/account/image/public'), false)
+
+      // Query-string occurrence: imagedelivery.net appears in a query parameter
+      assert.equal(isCloudflareImagesUrl('https://example.com/img?src=https://imagedelivery.net/account/image/public'), false)
+
+      // Invalid / relative URL: should return false without throwing
+      assert.equal(isCloudflareImagesUrl('/imagedelivery.net/account/image/public'), false)
+      assert.equal(isCloudflareImagesUrl(''), false)
     })
 
     test('getCloudflareImageVariantUrl: replaces /public with w/h/fit/f params', () => {

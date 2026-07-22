@@ -43,9 +43,17 @@ export function isPlatformAssetUrl(url: string | null | undefined, env?: TenantH
 /**
  * Returns true if the given URL is a Cloudflare Images delivery URL that supports
  * flexible variant parameters (width, height, format, fit).
+ *
+ * Requires an exact hostname match on `imagedelivery.net` so that lookalike
+ * domains (`my-imagedelivery.net`, `imagedelivery.net.evil.com`) and URLs that
+ * merely contain the string in their path or query string are not mis-classified.
  */
 export function isCloudflareImagesUrl(url: string): boolean {
-  return url.includes('imagedelivery.net')
+  try {
+    return new URL(url).hostname === 'imagedelivery.net'
+  } catch {
+    return false
+  }
 }
 
 /**
