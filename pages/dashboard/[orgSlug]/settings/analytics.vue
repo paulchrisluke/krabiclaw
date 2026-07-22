@@ -89,7 +89,7 @@
               </p>
             </UFormField>
 
-            <UButton :loading="saving" :disabled="connectionSiteId !== siteId" @click="saveSelection">Save</UButton>
+            <UButton :loading="saving" :disabled="!siteId || connectionSiteId !== siteId" @click="saveSelection">Save</UButton>
           </div>
         </UCard>
       </div>
