@@ -1,6 +1,7 @@
 import type { H3Event } from 'h3'
 import { isIP } from 'node:net'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
+import { validateNoUnknownTopLevelArguments } from '~/server/utils/mcp-tool-validation'
 import { requireMcpUser } from '~/server/utils/mcp-auth'
 import { queryFirst } from '~/server/db'
 import { aggregatePlatformAnalyticsForDate, getPlatformAnalyticsSummary } from '~/server/utils/analytics'
@@ -476,6 +477,8 @@ export async function executePlatformMcpToolCall(
     requiredScopes: ['platform_admin'],
     requirePlatformAdmin: true,
   })
+
+  validateNoUnknownTopLevelArguments(tool.inputSchema, rawArguments)
 
   switch (toolName) {
     case 'get_platform_context': {

@@ -315,15 +315,19 @@ test.describe('stateless MCP server', () => {
         method: 'tools/call', toolName: 'create_post',
         args: { site_id: siteId, title: 'Invalid event', body: 'Missing its start.', post_type: 'event' },
       })
-      expect(invalidEvent.status()).toBe(400)
-      expect(await invalidEvent.text()).toContain('event_start')
+      expect(invalidEvent.status()).toBe(200)
+      const invalidEventBody = await invalidEvent.json()
+      expect(invalidEventBody.result?.isError).toBe(true)
+      expect(invalidEventBody.result?.content?.[0]?.text).toContain('event_start')
 
       const invalidOffer = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'create_post',
         args: { site_id: siteId, title: 'Invalid offer', body: 'Missing terms.', post_type: 'offer' },
       })
-      expect(invalidOffer.status()).toBe(400)
-      expect(await invalidOffer.text()).toMatch(/offer_coupon|offer_terms/)
+      expect(invalidOffer.status()).toBe(200)
+      const invalidOfferBody = await invalidOffer.json()
+      expect(invalidOfferBody.result?.isError).toBe(true)
+      expect(invalidOfferBody.result?.content?.[0]?.text).toMatch(/offer_coupon|offer_terms/)
 
       const now = Date.now()
       const create = await mcpRequest(request, baseURL!, {
@@ -421,7 +425,10 @@ test.describe('stateless MCP server', () => {
         method: 'tools/call', toolName: 'create_blog_post',
         args: { site_id: siteId, title: 'Legacy MCP body', body: 'Rejected' },
       })
-      expect(legacy.status()).toBe(400)
+      expect(legacy.status()).toBe(200)
+      const legacyBody = await legacy.json()
+      expect(legacyBody.result?.isError).toBe(true)
+      expect(legacyBody.result?.content?.[0]?.text).toContain('body')
 
       const create = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'create_blog_post',
@@ -462,6 +469,30 @@ test.describe('stateless MCP server', () => {
       const dashboardBody = await dashboardRead.json() as { post: { content_document: { blocks: Array<{ type: string; data: Record<string, unknown> }> } } }
       expect(dashboardBody.post.content_document.blocks.map(block => block.type)).toEqual(['heading', 'markdown', 'faq'])
       expect(dashboardBody.post.content_document.blocks[0]?.data.text).toBe('Edited through MCP')
+
+      // Regression for the 2026-07-22 incident: update_blog_post sent `body`
+      // instead of `content_blocks` and reported success without persisting
+      // anything, because content_blocks being absent looked like a
+      // legitimate no-content-change partial update.
+      const malformedUpdate = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'update_blog_post',
+        args: {
+          site_id: siteId,
+          post_id: postId,
+          expected_document_updated_at: created.expected_document_updated_at,
+          body: 'This should never be persisted.',
+        },
+      })
+      expect(malformedUpdate.status()).toBe(200)
+      const malformedUpdateBody = await malformedUpdate.json()
+      expect(malformedUpdateBody.result?.isError).toBe(true)
+      expect(malformedUpdateBody.result?.content?.[0]?.text).toContain('body')
+
+      const dashboardReadAfterRejectedUpdate = await request.get(`${baseURL}/api/editor/sites/${siteId}/blog/${postId}`)
+      expect(dashboardReadAfterRejectedUpdate.status()).toBe(200)
+      const dashboardBodyAfterRejectedUpdate = await dashboardReadAfterRejectedUpdate.json() as typeof dashboardBody
+      expect(dashboardBodyAfterRejectedUpdate.post.content_document.blocks.map(block => block.type)).toEqual(['heading', 'markdown', 'faq'])
+      expect(dashboardBodyAfterRejectedUpdate.post.content_document.blocks[0]?.data.text).toBe('Edited through MCP')
     } finally {
       if (postId) await request.delete(`${baseURL}/api/editor/sites/site-mcp-free/blog/${postId}`)
     }
@@ -1076,7 +1107,9 @@ test.describe('stateless MCP server', () => {
       toolName: 'create_experience',
       args: { site_id: siteId, title: 'Invalid MCP Experience', status: 'draft' },
     })
-    expect(invalidExperience.status()).toBe(400)
+    expect(invalidExperience.status()).toBe(200)
+    const invalidExperienceBody = await invalidExperience.json()
+    expect(invalidExperienceBody.result?.isError).toBe(true)
 
     const experienceReadBody = await experienceRead.json()
     const experienceSlug = mcpData<{ experience: { slug: string } }>(experienceReadBody).experience.slug

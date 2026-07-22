@@ -522,6 +522,12 @@ Common workflows: update menus and items, create and publish site posts, triage 
           errorMessage: describeErrorForTelemetry(toolError),
           durationMs: Date.now() - toolStartedAt,
         });
+        if (mcpErr.code === MCP_ERROR.invalidParams) {
+          return mcpSuccess(request.id, {
+            isError: true,
+            content: [{ type: "text", text: mcpErr.message }],
+          });
+        }
         throw toolError;
       }
 

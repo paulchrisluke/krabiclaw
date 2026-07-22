@@ -258,7 +258,31 @@ export default defineEventHandler(async (event) => {
           : Object.fromEntries(Object.entries(request.params ?? {}).filter(([key]) => key !== 'name'))
       requestToolArgs = rawArgs
 
-      const result = await executePlatformMcpToolCall(event, toolName, rawArgs)
+      let result: unknown
+      try {
+        result = await executePlatformMcpToolCall(event, toolName, rawArgs)
+      } catch (toolError) {
+        const mcpErr = asMcpError(toolError)
+        if (mcpErr.code === MCP_ERROR.invalidParams) {
+          logPlatformMcpEventDetached(event, env.DB, {
+            requestId: request.id,
+            method: request.method,
+            toolName,
+            toolDomain: PLATFORM_MCP_TOOL_DOMAIN,
+            isMutating: isMcpMutatingTool(PLATFORM_MCP_TOOLS.find(t => t.name === toolName)),
+            arguments: summarizePayloadShape(rawArgs),
+            status: 'error',
+            errorCode: mcpErr.code,
+            errorMessage: mcpErr.message,
+            durationMs: Date.now() - toolStart,
+          })
+          return mcpSuccess(request.id, {
+            isError: true,
+            content: [{ type: 'text', text: mcpErr.message }],
+          })
+        }
+        throw toolError
+      }
 
       // After any mutating tool call, purge KV HTML cache for every platform
       // hostname before returning. Platform blog/docs edits are tiny admin
