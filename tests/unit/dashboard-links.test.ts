@@ -66,3 +66,10 @@ test('buildDashboardUrl falls back to the default platform domain when env is un
   const url = buildDashboardUrl({ env: {}, organizationId: 'org_123' }, 'settings.domains')
   assert.equal(url, 'https://krabiclaw.com/dashboard/org_123/settings/domains')
 })
+
+test('location destinations reject missing location context', () => {
+  assert.throws(
+    () => buildDashboardUrl({ ...orgContext, locationSlug: null }, 'location.settings'),
+    /requires explicit site\/location context/,
+  )
+})

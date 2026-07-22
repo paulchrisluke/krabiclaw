@@ -78,17 +78,20 @@ export function useDashboardSite() {
   // Only initialize state on client to avoid hydration mismatches
   const state = useState<DashboardContextResponse | null>('dashboard:site-context', () => null)
   const pending = useState<boolean>('dashboard:site-context:pending', () => false)
+  const refreshGeneration = useState<number>('dashboard:site-context:generation', () => 0)
 
   async function refresh() {
     const headers = buildDashboardRequestHeaders()
+    const generation = ++refreshGeneration.value
 
     pending.value = true
     try {
-      state.value = await $fetch<DashboardContextResponse>('/api/dashboard/context', { headers })
+      const response = await $fetch<DashboardContextResponse>('/api/dashboard/context', { headers })
+      if (generation === refreshGeneration.value) state.value = response
+      return response
     } finally {
-      pending.value = false
+      if (generation === refreshGeneration.value) pending.value = false
     }
-    return state.value
   }
 
   const organization = computed(() => state.value?.organization ?? null)

@@ -185,12 +185,12 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
 - **One org can have multiple sites** — there is no unique-per-org constraint on sites. Sites are explicit everywhere — there is no "first site in org" fallback in dashboard routing or billing.
 - Each site has its own plan and Stripe subscription (`site_billing`). The Stripe *customer* stays at org level (`organization_billing.stripe_customer_id`) — one payment method covers every site in the org.
 - A new site always starts on `free`, even under a paid org. If the org already has another site on a paid plan and a saved card on file, the dashboard offers to auto-subscribe the new site immediately (`POST /api/billing/site-subscribe`, no Checkout redirect). Otherwise it's a normal Checkout upgrade later.
-- **Locations** are the persistent dashboard working context within a site, selected from the header on every dashboard page. For Saya (restaurant/experience) sites this is a physical location; Blawby's offerings are site-level by default and don't require a location to have a public street address (a professional-service tenant may serve a statewide/remote area).
+- **Sites** are the primary day-to-day dashboard context and selector. A location becomes the working context only inside that site's location workspace. For Saya (restaurant/experience) sites this is a physical location; Blawby's offerings are site-level by default and don't require a location to have a public street address (a professional-service tenant may serve a statewide/remote area).
 - Public tenant routes are template-specific: Saya remains location/experience-centric under `/locations/[slug]` and `/experiences/[slug]`; Blawby is offering-centric under `/services/[slug]` (see "Public Templates" above).
 - Dashboard routes follow the Vercel-style workspace shape, with an explicit site segment:
   - `/dashboard/{orgSlug}` — org root; lists sites, auto-redirects to the single site if the org has exactly one
   - `/dashboard/{orgSlug}/sites/{siteSlug}` — site workspace (`siteSlug` is the site's `subdomain`)
-  - `/dashboard/{orgSlug}/sites/{siteSlug}/{locationSlug}` — location workspace
+  - `/dashboard/{orgSlug}/sites/{siteSlug}/locations/{locationSlug}` — location workspace
   - `/dashboard/{orgSlug}/sites/new` — create another site under this org
   - `/dashboard/{orgSlug}/settings/billing` — org billing (lists every site's plan/subscription, not just one)
   - `/dashboard/account/settings` — personal account settings

@@ -50,9 +50,10 @@
 import { authClient } from '~/lib/auth-client'
 
 const route = useRoute()
+const router = useRouter()
 const toast = useToast()
 const dashboard = useDashboardSite()
-if (!dashboard.state.value) await dashboard.refresh()
+await dashboard.refresh()
 const organization = dashboard.organization
 if (!['owner', 'admin'].includes(organization.value?.role ?? '')) {
   throw createError({ statusCode: 404, statusMessage: 'Page not found' })
@@ -69,6 +70,19 @@ const managementLinks = computed(() => [
   { label: 'Analytics', description: 'Choose a site and configure its analytics connection.', icon: 'i-lucide-chart-bar', to: `${orgBase.value}/settings/analytics` },
   { label: 'ChatGPT', description: 'Configure the organization ChatGPT connection.', icon: 'i-lucide-message-square', to: `${orgBase.value}/settings/chatgpt` },
 ])
+
+let organizationLoadToken = 0
+watch(() => route.params.orgSlug, async (nextOrgSlug, previousOrgSlug) => {
+  if (nextOrgSlug === previousOrgSlug) return
+  const token = ++organizationLoadToken
+  await dashboard.refresh()
+  if (token !== organizationLoadToken) return
+  if (!['owner', 'admin'].includes(organization.value?.role ?? '')) {
+    await router.replace(`/dashboard/${String(nextOrgSlug)}`)
+    return
+  }
+  name.value = organization.value?.name ?? ''
+})
 
 async function save() {
   if (!organization.value || !dirty.value) return

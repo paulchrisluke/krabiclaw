@@ -295,12 +295,14 @@ const events = computed(() => data.value?.events ?? [])
 // Getting-started task list — data source for both the checklist card and its
 // per-item ChowBotPromptTrigger auto-send prompts.
 const { data: onboardingData, execute: loadOnboardingChecklist } = await useFetch<OnboardingChecklistResponse>('/api/dashboard/onboarding/checklist', {
+  key: computed(() => `dashboard-onboarding-checklist:${String(route.params.orgSlug)}:${String(route.params.siteSlug)}`),
   server: false,
   lazy: true,
   immediate: false,
 })
-watch(canManageSite, (allowed) => {
+watch([canManageSite, () => route.params.orgSlug, () => route.params.siteSlug], ([allowed]) => {
   if (allowed) void loadOnboardingChecklist()
+  else onboardingData.value = undefined
 }, { immediate: true })
 
 const checklistItems = computed(() => buildOnboardingChecklistItems(onboardingData.value))

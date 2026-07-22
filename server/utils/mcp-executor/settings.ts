@@ -16,7 +16,9 @@ export async function handleSettingsTools(ctx: McpExecutorContext): Promise<unkn
           `Unknown destination "${destination}". Valid destinations: ${Object.keys(DASHBOARD_DESTINATIONS).join(", ")}`,
         );
       }
-      const locationSlug = typeof args.location_slug === 'string' ? args.location_slug.trim() : null;
+      const locationSlug = destination.startsWith('location.')
+        ? requiredString(args, "location_slug")
+        : typeof args.location_slug === 'string' ? args.location_slug.trim() || null : null;
       return { url: buildDashboardUrl({ ...site, locationSlug }, destination) };
     }
     case "get_site_domains": {

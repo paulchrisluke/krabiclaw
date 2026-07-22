@@ -542,9 +542,10 @@ const optionalInteger = (value: string | number | null | undefined): number | nu
 }
 
 async function saveLocationDetails() {
+  const requestedLocationId = locationId.value
   detailsSaving.value = true
   try {
-    const response = await $fetch<{ success: boolean; location: BusinessLocation }>(`/api/dashboard/locations/${locationId.value}`, {
+    const response = await $fetch<{ success: boolean; location: BusinessLocation }>(`/api/dashboard/locations/${requestedLocationId}`, {
       method: 'PATCH',
       body: {
         title: detailsForm.title,
@@ -570,6 +571,7 @@ async function saveLocationDetails() {
         timezone: detailsForm.timezone || null,
       }
     })
+    if (locationId.value !== requestedLocationId) return
     if (!response.success) throw new Error('Failed to save location')
     location.value = response.location
     if (response.location.slug !== route.params.locationSlug) {
@@ -591,12 +593,17 @@ async function saveLocationDetails() {
 }
 
 const connectGoogleBusiness = async () => {
+  const requestedLocationId = locationId.value
   connectingGoogle.value = true
   try {
     const res = await $fetch<{ success: boolean; authUrl: string }>(
-      `/api/dashboard/locations/${locationId.value}/integrations/google-business/auth`,
+      `/api/dashboard/locations/${requestedLocationId}/integrations/google-business/auth`,
       { method: 'POST' }
     )
+    if (locationId.value !== requestedLocationId) {
+      connectingGoogle.value = false
+      return
+    }
     if (res.success && res.authUrl) {
       try {
         const parsed = new URL(res.authUrl)
@@ -620,12 +627,14 @@ const connectGoogleBusiness = async () => {
 
 async function syncGooglePlace() {
   if (!location.value?.google_place_id) return
+  const requestedLocationId = locationId.value
   syncingPlace.value = true
   try {
     const res = await $fetch<{ success: boolean; reviewsUpserted: number; place: { rating: number | null; ratingCount: number | null } }>(
       '/api/integrations/google-places/sync',
-      { method: 'POST', body: { locationId: locationId.value } }
+      { method: 'POST', body: { locationId: requestedLocationId } }
     )
+    if (locationId.value !== requestedLocationId) return
     const parts = ['Synced hours, address, and rating']
     if (res.reviewsUpserted > 0) parts.push(`${res.reviewsUpserted} new review${res.reviewsUpserted > 1 ? 's' : ''}`)
     if (res.place.rating) parts.push(`${res.place.rating} stars (${res.place.ratingCount?.toLocaleString()} reviews)`)
@@ -640,31 +649,40 @@ async function syncGooglePlace() {
 }
 
 const loadLocationWorkspace = async () => {
+  const requestedLocationId = locationId.value
+  const currentToken = ++locationLoadToken
+  if (!requestedLocationId) {
+    location.value = null
+    gbConnection.value = null
+    loading.value = false
+    return false
+  }
   loading.value = true
   error.value = null
   try {
     const [locationResponse, connectionResponse] = await Promise.all([
-      $fetch<{ success: boolean; location: BusinessLocation }>(`/api/dashboard/locations/${locationId.value}`),
-      $fetch<{ success: boolean; connection: GbConnection | null }>(`/api/dashboard/locations/${locationId.value}/integrations/google-business`),
+      $fetch<{ success: boolean; location: BusinessLocation }>(`/api/dashboard/locations/${requestedLocationId}`),
+      $fetch<{ success: boolean; connection: GbConnection | null }>(`/api/dashboard/locations/${requestedLocationId}/integrations/google-business`),
     ])
+    if (currentToken !== locationLoadToken || locationId.value !== requestedLocationId) return false
     if (!locationResponse.success) throw new Error('Failed to load location')
     location.value = locationResponse.location
     gbConnection.value = connectionResponse.connection
     return true
   } catch (err) {
+    if (currentToken !== locationLoadToken) return false
     error.value = err instanceof Error ? err.message : 'Failed to load location'
     return false
   } finally {
-    loading.value = false
+    if (currentToken === locationLoadToken) loading.value = false
   }
 }
 
 const { evaluateAndSuggest } = useUpsellTriggers()
 
 onMounted(async () => {
-  const currentToken = ++locationLoadToken
-  await loadLocationWorkspace()
-  if (currentToken !== locationLoadToken) return
+  const loaded = await loadLocationWorkspace()
+  if (!loaded) return
 
   if (route.query.gb === 'connected') {
     toast.add({ description: 'Google Business connected successfully', color: 'success' })
@@ -676,7 +694,6 @@ onMounted(async () => {
 })
 
 watch(() => dashboardLocation.currentLocationId.value, async () => {
-  ++locationLoadToken
   await loadLocationWorkspace()
 })
 

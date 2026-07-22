@@ -6,7 +6,7 @@ import {
   getFacebookPages,
   storeFacebookPagesConnection,
 } from '../../../utils/facebook-pages'
-import { queryFirst } from '~/server/db'
+import { getDashboardSiteRouteContext } from '~/server/utils/dashboard-redirects'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
 
@@ -51,15 +51,9 @@ export default defineEventHandler(async (event) => {
     try {
       const db = env.DB
       if (!db) return `/dashboard?fb=${status}`
-      const context = await queryFirst<{ organization_slug: string | null; site_slug: string | null }>(db, `
-        SELECT o.slug AS organization_slug, s.subdomain AS site_slug
-        FROM organization o
-        JOIN sites s ON s.organization_id = o.id
-        WHERE o.id = ? AND s.id = ?
-        LIMIT 1
-      `, [organizationId, siteId])
-      return context?.organization_slug && context.site_slug
-        ? `/dashboard/${encodeURIComponent(context.organization_slug)}/sites/${encodeURIComponent(context.site_slug)}/settings?fb=${status}`
+      const context = await getDashboardSiteRouteContext(db, organizationId, siteId)
+      return context
+        ? `/dashboard/${encodeURIComponent(context.organizationSlug)}/sites/${encodeURIComponent(context.siteSlug)}/settings?fb=${status}`
         : `/dashboard?fb=${status}`
     } catch (e) {
       console.error('Facebook Pages redirect organization query failed:', e)

@@ -29,10 +29,11 @@ export function useDashboardLocation() {
     const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
 
     if (inLocationWorkspace.value && typeof route.name === 'string') {
+      const { locationId: _legacyLocationId, ...query } = route.query
       return router.resolve({
         name: route.name,
         params: { ...route.params, locationSlug: targetSlug },
-        query: route.query,
+        query,
       }).fullPath
     }
 

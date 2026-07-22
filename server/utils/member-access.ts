@@ -89,7 +89,7 @@ const SCOPED_ROLE_DASHBOARD_ROUTES = [
   /^\/api\/dashboard\/context$/,
   /^\/api\/dashboard\/home$/,
   /^\/api\/dashboard\/settings$/,
-  /^\/api\/dashboard\/locations(?:\/add|\/[^/]+)?$/,
+  /^\/api\/dashboard\/locations(?:\/add|\/[^/]+(?:\/integrations\/google-business(?:\/auth)?)?)?$/,
   /^\/api\/dashboard\/onboarding\/checklist$/,
   /^\/api\/dashboard\/notifications(?:\/unread-count|\/read-all|\/[^/]+\/read)?$/,
   /^\/api\/dashboard\/editor(?:\/.*)?$/,

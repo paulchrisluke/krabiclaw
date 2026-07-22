@@ -89,7 +89,7 @@
               </p>
             </UFormField>
 
-            <UButton :loading="saving" @click="saveSelection">Save</UButton>
+            <UButton :loading="saving" :disabled="connectionSiteId !== siteId" @click="saveSelection">Save</UButton>
           </div>
         </UCard>
       </div>
@@ -137,6 +137,8 @@ const selectedGa4Property = ref<string | undefined>(undefined)
 const selectedSearchConsoleSite = ref<string | undefined>(undefined)
 const ga4Error = ref<string | null>(null)
 const searchConsoleError = ref<string | null>(null)
+const connectionSiteId = ref<string | null>(null)
+let connectionLoadGeneration = 0
 
 const ga4PropertyOptions = computed(() =>
   ga4Properties.value.map((p) => ({ label: `${p.propertyName} (${p.accountName})`, value: p.propertyId }))
@@ -146,10 +148,17 @@ const searchConsoleOptions = computed(() =>
 )
 
 async function loadConnection() {
-  if (!siteId.value) {
-    connection.value = null
-    ga4Properties.value = []
-    searchConsoleSites.value = []
+  const requestedSiteId = siteId.value
+  const generation = ++connectionLoadGeneration
+  connection.value = null
+  connectionSiteId.value = null
+  ga4Properties.value = []
+  searchConsoleSites.value = []
+  selectedGa4Property.value = undefined
+  selectedSearchConsoleSite.value = undefined
+  ga4Error.value = null
+  searchConsoleError.value = null
+  if (!requestedSiteId) {
     loading.value = false
     return
   }
@@ -162,9 +171,11 @@ async function loadConnection() {
       searchConsoleSites: SearchConsoleSite[]
       ga4Error: string | null
       searchConsoleError: string | null
-    }>(`/api/sites/${siteId.value}/integrations/google-analytics/properties`)
+    }>(`/api/sites/${requestedSiteId}/integrations/google-analytics/properties`)
 
+    if (generation !== connectionLoadGeneration || siteId.value !== requestedSiteId) return
     connection.value = res.connection
+    connectionSiteId.value = requestedSiteId
     ga4Properties.value = res.ga4Properties
     searchConsoleSites.value = res.searchConsoleSites
     ga4Error.value = res.ga4Error ?? null
@@ -172,20 +183,27 @@ async function loadConnection() {
     selectedGa4Property.value = res.connection?.ga4_property_id ?? undefined
     selectedSearchConsoleSite.value = res.connection?.search_console_site_url ?? undefined
   } catch {
-    toast.add({ description: 'Failed to load Google Analytics connection', color: 'error' })
+    if (generation === connectionLoadGeneration && siteId.value === requestedSiteId) {
+      toast.add({ description: 'Failed to load Google Analytics connection', color: 'error' })
+    }
   } finally {
-    loading.value = false
+    if (generation === connectionLoadGeneration) loading.value = false
   }
 }
 
 async function connectGoogle() {
-  if (!siteId.value) return
+  const requestedSiteId = siteId.value
+  if (!requestedSiteId) return
   connecting.value = true
   try {
     const res = await $fetch<{ success: boolean; authUrl: string }>(
-      `/api/sites/${siteId.value}/integrations/google-analytics/auth`,
+      `/api/sites/${requestedSiteId}/integrations/google-analytics/auth`,
       { method: 'POST' }
     )
+    if (siteId.value !== requestedSiteId) {
+      connecting.value = false
+      return
+    }
     if (res.success && res.authUrl) {
       const parsed = new URL(res.authUrl)
       if (parsed.protocol !== 'https:' || parsed.hostname !== 'accounts.google.com') {
@@ -202,10 +220,12 @@ async function connectGoogle() {
 }
 
 async function disconnectGoogle() {
-  if (!siteId.value) return
+  const requestedSiteId = siteId.value
+  if (!requestedSiteId || connectionSiteId.value !== requestedSiteId) return
   disconnecting.value = true
   try {
-    await $fetch(`/api/sites/${siteId.value}/integrations/google-analytics/disconnect`, { method: 'POST' })
+    await $fetch(`/api/sites/${requestedSiteId}/integrations/google-analytics/disconnect`, { method: 'POST' })
+    if (siteId.value !== requestedSiteId) return
     connection.value = null
     ga4Properties.value = []
     searchConsoleSites.value = []
@@ -220,11 +240,12 @@ async function disconnectGoogle() {
 }
 
 async function saveSelection() {
-  if (!siteId.value) return
+  const requestedSiteId = siteId.value
+  if (!requestedSiteId || connectionSiteId.value !== requestedSiteId) return
   saving.value = true
   try {
     const property = ga4Properties.value.find((p) => p.propertyId === selectedGa4Property.value)
-    await $fetch(`/api/sites/${siteId.value}/integrations/google-analytics/select`, {
+    await $fetch(`/api/sites/${requestedSiteId}/integrations/google-analytics/select`, {
       method: 'POST',
       body: {
         ga4_property_id: selectedGa4Property.value,
@@ -232,6 +253,7 @@ async function saveSelection() {
         search_console_site_url: selectedSearchConsoleSite.value
       }
     })
+    if (siteId.value !== requestedSiteId) return
     toast.add({ description: 'Saved', color: 'success' })
     await loadConnection()
   } catch (err) {

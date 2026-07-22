@@ -153,6 +153,7 @@ const connectingFacebook = ref(false)
 const notificationChannels = ref<string[]>(['email'])
 const whatsappPhone = ref('')
 const facebookConnection = ref<FacebookConnectionStatus | null>(null)
+let loadToken = 0
 
 const form = reactive({
   brand_name: '', brand_description: '', logo_url: '', contact_email: '', brand_color: '',
@@ -199,10 +200,11 @@ function fillForm(settings: SiteSettingsResponse) {
 }
 
 async function load() {
+  const token = ++loadToken
   loading.value = true
   loadError.value = null
   try {
-    if (!dashboard.state.value) await dashboard.refresh()
+    await dashboard.refresh()
     const [settings, notifications, facebook] = await Promise.all([
       $fetch<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings'),
       $fetch<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>('/api/dashboard/editor/notifications'),
@@ -210,24 +212,28 @@ async function load() {
         ? $fetch<FacebookConnectionStatus>('/api/integrations/facebook-pages/connection')
         : Promise.resolve<FacebookConnectionStatus>({ connected: false }),
     ])
+    if (token !== loadToken) return
     fillForm(settings.settings)
     whatsappPhone.value = notifications.notifications.whatsapp_phone ?? ''
     notificationChannels.value = notifications.notifications.channels?.length ? notifications.notifications.channels : ['email']
     facebookConnection.value = facebook
   } catch (error) {
+    if (token !== loadToken) return
     loadError.value = errorMessage(error, 'Failed to load site settings')
   } finally {
-    loading.value = false
+    if (token === loadToken) loading.value = false
   }
 }
 
 async function saveSiteSettings() {
+  const requestedSiteSlug = route.params.siteSlug
   saving.value = true
   try {
     const response = await $fetch<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', {
       method: 'PATCH',
       body: { ...form },
     })
+    if (route.params.siteSlug !== requestedSiteSlug) return
     fillForm(response.settings)
     toast.add({ description: 'Site settings saved', color: 'success' })
     await dashboard.refresh()
@@ -243,12 +249,14 @@ async function saveNotifications() {
     toast.add({ description: 'Select at least one notification channel', color: 'error' })
     return
   }
+  const requestedSiteSlug = route.params.siteSlug
   savingNotifications.value = true
   try {
     const response = await $fetch<{ notifications: { whatsapp_phone: string | null; channels: string[] } }>('/api/dashboard/editor/notifications', {
       method: 'PATCH',
       body: { whatsapp_phone: whatsappPhone.value.trim() || null, channels: notificationChannels.value },
     })
+    if (route.params.siteSlug !== requestedSiteSlug) return
     whatsappPhone.value = response.notifications.whatsapp_phone ?? ''
     notificationChannels.value = response.notifications.channels
     toast.add({ description: 'Notification settings saved', color: 'success' })
@@ -260,11 +268,20 @@ async function saveNotifications() {
 }
 
 async function startFacebookConnect() {
+  const requestedSiteSlug = route.params.siteSlug
   connectingFacebook.value = true
   try {
     const response = await $fetch<{ authUrl?: string; error?: string }>('/api/integrations/facebook-pages/auth', { method: 'POST' })
     if (!response.authUrl) throw new Error(response.error || 'No authorization URL returned')
-    window.location.href = response.authUrl
+    if (route.params.siteSlug !== requestedSiteSlug) {
+      connectingFacebook.value = false
+      return
+    }
+    const parsed = new URL(response.authUrl)
+    if (parsed.protocol !== 'https:' || parsed.hostname !== 'www.facebook.com') {
+      throw new Error('Invalid OAuth redirect URL')
+    }
+    window.location.href = parsed.toString()
   } catch (error) {
     toast.add({ description: errorMessage(error, 'Failed to connect Facebook'), color: 'error' })
     connectingFacebook.value = false
@@ -279,6 +296,10 @@ onMounted(async () => {
     const { fb: _fb, ...query } = route.query
     await router.replace({ query })
   }
+})
+
+watch(() => route.params.siteSlug, (nextSiteSlug, previousSiteSlug) => {
+  if (nextSiteSlug !== previousSiteSlug) void load()
 })
 
 useSeoMeta({ title: 'Site Settings | KrabiClaw', robots: 'noindex, nofollow' })

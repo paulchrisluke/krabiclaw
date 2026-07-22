@@ -597,7 +597,7 @@ VALUES (
   'set-up-notifications',
   'KrabiClaw alerts you about new bookings, messages, and reviews. By default that goes to your account email — no setup required. Add WhatsApp if you want alerts there too, and override the number for a specific location if it needs its own.
 
-## 1. Open Settings → General
+## 1. Open Site Settings
 
 Go to `/dashboard/{your-org}/sites/{your-site}/settings` and find the Notifications card.
 
@@ -623,7 +623,7 @@ Check that WhatsApp is actually selected as an alert channel — adding a number
 
 ### I want different alert numbers for different locations
 
-Set a site-wide default in Settings → General, then override it per location from that location''s own page. The location-level number always wins for that location.
+Set a site-wide default in Site Settings, then override it in Location Settings. The location-level number always wins for that location.
 
 ### I never set anything — am I getting alerts at all?
 

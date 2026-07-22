@@ -139,8 +139,11 @@ export default defineEventHandler(async (event) => {
     const hasPhotos = photoCount >= 3
     const hasAboutPage = !!aboutContent
     const hasContactEmail = !!site.contact_email
-    const orgSlug = site.organization_slug || site.organization_id
-    const siteSlug = site.subdomain || site.id
+    if (!site.organization_slug || !site.subdomain || (primaryLocation && !primaryLocation.slug)) {
+      return jsonResponse({ error: 'Site routing context is incomplete' }, { status: 500 })
+    }
+    const orgSlug = site.organization_slug
+    const siteSlug = site.subdomain
     const siteBase = `/dashboard/${orgSlug}/sites/${siteSlug}`
     const locationsBase = `${siteBase}/locations`
     const locationBase = primaryLocation ? `${locationsBase}/${primaryLocation.slug}` : null

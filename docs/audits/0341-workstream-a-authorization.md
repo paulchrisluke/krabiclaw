@@ -85,6 +85,7 @@ proxying is not available to scoped editors.
 | `dashboard/editor/notifications` proxy → `editor/sites/[siteId]/notifications.get.ts`, `.patch.ts` | | ✓ | | | | `requireSiteAccess` + `assertSiteWideAccess` |
 | `dashboard/locations/index.get.ts` | | | ✓ (filtered list) | | | `EXISTS member_access_scope`; site-wide rows include all locations, location rows include only exact locations |
 | `dashboard/locations/[id].get.ts`, `[id].patch.ts` | | | ✓ | | | target location supplies `site_id`; `assertLocationAccess`/`assertMemberScope` before return or mutation |
+| `dashboard/[...path].ts` → `locations/[id]/integrations/google-business`, `/auth` | | | ✓ | | | deny-by-default boundary permits only these exact descendants; destination `requireLocationAccess` checks the requested location before status read or OAuth start |
 | `dashboard/locations/add.post.ts` | | ✓ | | | | `assertSiteWideAccess` before preview, credit charge, or creation |
 | `dashboard/editor/menus.get.ts` | | | | ✓ (`locationId`; no location means site-wide) | | `assertResourceAccess` before `getMenus` |
 | `dashboard/[...path].ts` → `editor/**` | | | | ✓ (destination resource) | ✓ (destination context route only) | proxy context check plus the per-endpoint `/api/editor/sites/[siteId]/**` guards enumerated in this audit |
