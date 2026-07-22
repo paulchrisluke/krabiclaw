@@ -3,7 +3,7 @@ import test from 'node:test'
 
 import { validateNoUnknownTopLevelArguments } from '../../server/utils/mcp-tool-validation.ts'
 import { MCP_ERROR } from '../../server/utils/mcp-protocol.ts'
-import { PLATFORM_MCP_TOOLS } from '../../server/utils/platform-mcp-tools.ts'
+import { PLATFORM_INTERNAL_MCP_TOOLS, PLATFORM_MCP_TOOLS, PLATFORM_PUBLIC_MCP_TOOLS } from '../../server/utils/platform-mcp-tools.ts'
 import { BLOG_TOOLS } from '../../server/utils/mcp-tools/blog.ts'
 
 type ToolContract = {
@@ -29,10 +29,10 @@ function isInvalidParamsErrorContaining(text: string) {
     && (error as Error & { mcp?: { code?: number } }).mcp?.code === MCP_ERROR.invalidParams
 }
 
-test('validateNoUnknownTopLevelArguments rejects the exact 2026-07-22 incident payload', () => {
-  const updatePost = tool(PLATFORM_MCP_TOOLS, 'update_platform_blog_post')
+test('validateNoUnknownTopLevelArguments rejects the exact 2026-07-22 incident payload against the new metadata tool', () => {
+  const metadataTool = tool(PLATFORM_MCP_TOOLS, 'update_platform_blog_metadata')
   assert.throws(
-    () => validateNoUnknownTopLevelArguments(updatePost.inputSchema, {
+    () => validateNoUnknownTopLevelArguments(metadataTool.inputSchema, {
       post_id: '7593c000-12cf-4ed4-ad06-e3ce3b73c4a7',
       title: 'Can AI Really Manage My Restaurant Website?',
       body: 'markdown content that was silently dropped',
@@ -46,20 +46,58 @@ test('validateNoUnknownTopLevelArguments rejects the exact 2026-07-22 incident p
   )
 })
 
-test('validateNoUnknownTopLevelArguments accepts a valid content_blocks update', () => {
-  const updatePost = tool(PLATFORM_MCP_TOOLS, 'update_platform_blog_post')
-  assert.doesNotThrow(() => validateNoUnknownTopLevelArguments(updatePost.inputSchema, {
+test('validateNoUnknownTopLevelArguments accepts a valid replace_platform_blog_content call', () => {
+  const contentTool = tool(PLATFORM_MCP_TOOLS, 'replace_platform_blog_content')
+  assert.doesNotThrow(() => validateNoUnknownTopLevelArguments(contentTool.inputSchema, {
     post_id: 'post-1',
+    expected_document_updated_at: '2026-07-22T00:00:00.000Z',
     content_blocks: [{ type: 'markdown', data: { markdown: 'Hello' } }],
   }))
 })
 
-test('validateNoUnknownTopLevelArguments accepts an SEO-only partial update with no content_blocks', () => {
-  const updatePost = tool(PLATFORM_MCP_TOOLS, 'update_platform_blog_post')
-  assert.doesNotThrow(() => validateNoUnknownTopLevelArguments(updatePost.inputSchema, {
+test('validateNoUnknownTopLevelArguments accepts a metadata-only update_platform_blog_metadata call', () => {
+  const metadataTool = tool(PLATFORM_MCP_TOOLS, 'update_platform_blog_metadata')
+  assert.doesNotThrow(() => validateNoUnknownTopLevelArguments(metadataTool.inputSchema, {
     post_id: 'post-1',
+    expected_updated_at: '2026-07-22T00:00:00.000Z',
     seo_description: 'Updated description only.',
   }))
+})
+
+test('update_platform_blog_post is gone: absent from both PLATFORM_PUBLIC_MCP_TOOLS and the combined PLATFORM_MCP_TOOLS', () => {
+  assert.equal(PLATFORM_MCP_TOOLS.some(t => t.name === 'update_platform_blog_post'), false)
+  assert.equal(PLATFORM_PUBLIC_MCP_TOOLS.some(t => t.name === 'update_platform_blog_post'), false)
+})
+
+test('update_platform_blog_metadata requires expected_updated_at and at least one metadata field beyond it', () => {
+  const metadataTool = tool(PLATFORM_MCP_TOOLS, 'update_platform_blog_metadata')
+  assert.ok((metadataTool.inputSchema.required as string[]).includes('expected_updated_at'))
+  assert.ok((metadataTool.inputSchema.required as string[]).includes('post_id'))
+})
+
+test('replace_platform_blog_content requires content_blocks and expected_document_updated_at, with minItems: 1', () => {
+  const contentTool = tool(PLATFORM_MCP_TOOLS, 'replace_platform_blog_content')
+  const required = contentTool.inputSchema.required as string[]
+  assert.ok(required.includes('content_blocks'))
+  assert.ok(required.includes('expected_document_updated_at'))
+  const properties = contentTool.inputSchema.properties as Record<string, { minItems?: number }>
+  assert.equal(properties.content_blocks?.minItems, 1)
+})
+
+test('create_platform_blog_post requires a non-empty content_blocks array', () => {
+  const createTool = tool(PLATFORM_MCP_TOOLS, 'create_platform_blog_post')
+  const properties = createTool.inputSchema.properties as Record<string, { minItems?: number }>
+  assert.equal(properties.content_blocks?.minItems, 1)
+})
+
+test('PLATFORM_PUBLIC_MCP_TOOLS and PLATFORM_INTERNAL_MCP_TOOLS are disjoint and together form PLATFORM_MCP_TOOLS', () => {
+  const publicNames = new Set(PLATFORM_PUBLIC_MCP_TOOLS.map(t => t.name))
+  const internalNames = new Set(PLATFORM_INTERNAL_MCP_TOOLS.map(t => t.name))
+  for (const name of internalNames) assert.equal(publicNames.has(name), false, `${name} should not be in both registries`)
+  assert.equal(PLATFORM_MCP_TOOLS.length, PLATFORM_PUBLIC_MCP_TOOLS.length + PLATFORM_INTERNAL_MCP_TOOLS.length)
+  for (const name of ['get_content_document_outline', 'get_content_block', 'append_content_block', 'replace_content_block', 'delete_content_block', 'render_content_preview', 'publish_content_revision']) {
+    assert.ok(internalNames.has(name), `${name} should be internal`)
+  }
 })
 
 test('validateNoUnknownTopLevelArguments accepts a minimal publish call', () => {
@@ -116,7 +154,7 @@ test('validateNoUnknownTopLevelArguments accepts a valid tenant update_blog_post
   }))
 })
 
-test('create_platform_blog_post/update_platform_blog_post descriptions describe content_blocks, not the retired body/components/embed-tag authoring model', () => {
+test('create_platform_blog_post/replace_platform_blog_content descriptions describe content_blocks, not the retired body/components/embed-tag authoring model', () => {
   // Regression: SHARED_TOOL_DESCRIPTION_LINES told the model to send a flat
   // `body` string plus a separate `components[]` array with {{component
   // type="..."}} placeholder tags — an interface that predates content_blocks
@@ -124,7 +162,7 @@ test('create_platform_blog_post/update_platform_blog_post descriptions describe 
   // likely reason ChatGPT sessions kept sending `body`/`components` and
   // getting silently ignored (update) or rejected (create) instead of using
   // content_blocks, as documented in the 2026-07-22 incident.
-  for (const name of ['create_platform_blog_post', 'update_platform_blog_post']) {
+  for (const name of ['create_platform_blog_post', 'replace_platform_blog_content']) {
     const definition = tool(PLATFORM_MCP_TOOLS, name) as ToolContract & { description: string }
     assert.ok(definition.description.includes('content_blocks'), `${name} description should mention content_blocks`)
     assert.ok(!/\bcomponents\[\]/.test(definition.description), `${name} description should not reference the retired components[] shape`)

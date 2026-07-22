@@ -407,35 +407,51 @@ const BLOG_SUMMARY_SCHEMA = {
   additionalProperties: false,
 }
 
-const BLOG_RECORD_SCHEMA = {
+// The MCP-facing contract for a platform blog post: content_blocks is the
+// only structured-content representation and document_updated_at is the
+// only concurrency token — no body, no components, no internal document/
+// revision ids. Used as the single `post` shape returned by every high-level
+// blog tool (get/create/update-metadata/replace-content/publish/unpublish),
+// so callers see one vocabulary everywhere instead of a different shape per
+// operation.
+const PLATFORM_BLOG_POST_PROJECTION_SCHEMA = {
   type: 'object',
   properties: {
-    ...BLOG_SUMMARY_SCHEMA.properties,
-    components: {
-      type: 'array',
-      items: {
-        oneOf: [FAQ_COMPONENT_SCHEMA, HOW_TO_COMPONENT_SCHEMA, AI_ASSISTANCE_COMPONENT_SCHEMA],
-      },
-    },
-    content_document: {
-      type: 'object',
-      properties: {
-        document: {
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-            updated_at: { type: 'string' },
-            draft_revision_id: NULLABLE_STRING,
-            published_revision_id: NULLABLE_STRING,
-          },
-          required: ['id', 'updated_at', 'draft_revision_id', 'published_revision_id'],
-        },
-        blocks: { type: 'array', items: CONTENT_BLOCK_SCHEMA },
-      },
-      required: ['document', 'blocks'],
-    },
+    id: { type: 'string' },
+    title: { type: 'string' },
+    slug: { type: 'string' },
+    status: { type: 'string', enum: ['draft', 'published', 'scheduled', 'archived'] },
+    excerpt: NULLABLE_STRING,
+    category: NULLABLE_STRING,
+    ...NAV_FIELDS_SCHEMA,
+    published_at: NULLABLE_STRING,
+    created_at: { type: 'string' },
+    updated_at: { type: 'string' },
+    seo_title: NULLABLE_STRING,
+    ...SEO_FIELDS_SCHEMA,
+    featured_image: FEATURED_IMAGE_SCHEMA,
+    admin_edit_url: { type: 'string' },
+    public_path: NULLABLE_STRING,
+    public_url: NULLABLE_STRING,
+    preview_url: NULLABLE_STRING,
+    content_blocks: { type: 'array', items: CONTENT_BLOCK_SCHEMA },
+    document_updated_at: NULLABLE_STRING,
   },
-  required: [...BLOG_SUMMARY_SCHEMA.required, 'body', 'components', 'content_document'],
+  required: [
+    'id', 'title', 'slug', 'status', 'excerpt', 'category',
+    'nav_section', 'nav_title', 'nav_order', 'nav_section_order', 'hide_from_nav', 'featured_order',
+    'published_at', 'created_at', 'updated_at',
+    'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots', 'featured_image_asset_id',
+    'featured_image', 'admin_edit_url', 'public_path', 'public_url', 'preview_url',
+    'content_blocks', 'document_updated_at',
+  ],
+  additionalProperties: false,
+}
+
+const PLATFORM_BLOG_POST_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: { post: PLATFORM_BLOG_POST_PROJECTION_SCHEMA },
+  required: ['post'],
   additionalProperties: false,
 }
 
@@ -516,23 +532,6 @@ const DOC_RECORD_SCHEMA = {
   additionalProperties: false,
 }
 
-const BLOG_WRITE_RESPONSE_SCHEMA = {
-  type: 'object',
-  properties: {
-    success: { type: 'boolean' },
-    id: { type: 'string' },
-    slug: { type: 'string' },
-    published_at: NULLABLE_STRING,
-    admin_edit_url: { type: 'string' },
-    public_path: NULLABLE_STRING,
-    public_url: NULLABLE_STRING,
-    preview_url: NULLABLE_STRING,
-    post: BLOG_RECORD_SCHEMA,
-  },
-  required: ['success', 'id', 'slug', 'published_at', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'post'],
-  additionalProperties: false,
-}
-
 const DOC_WRITE_RESPONSE_SCHEMA = {
   type: 'object',
   properties: {
@@ -609,7 +608,9 @@ function writeTool(
   }
 }
 
-export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
+// Discoverable via tools/list. See PLATFORM_INTERNAL_MCP_TOOLS below for the
+// low-level content-block tools kept out of normal discovery.
+export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   readTool({
     name: 'get_platform_context',
     description: 'Get the current connected platform admin account context for internal KrabiClaw operations.',
@@ -823,148 +824,6 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     outputSchema: DELETE_RESPONSE_SCHEMA,
   }),
   readTool({
-    name: 'get_content_document_outline',
-    description: 'Get the block outline for a platform blog, platform doc, or tenant blog content document. Provide either document_id, or owner_type plus owner_id.',
-    inputSchema: {
-      type: 'object',
-      properties: CONTENT_DOCUMENT_LOOKUP_SCHEMA,
-      ...CONTENT_DOCUMENT_LOOKUP_REQUIREMENT,
-      additionalProperties: false,
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        document: {
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-            owner_type: { type: 'string', enum: CONTENT_DOCUMENT_OWNER_TYPE_ENUM },
-            owner_id: { type: 'string' },
-            draft_revision_id: NULLABLE_STRING,
-            published_revision_id: NULLABLE_STRING,
-            updated_at: { type: 'string' },
-          },
-          required: ['id', 'owner_type', 'owner_id', 'draft_revision_id', 'published_revision_id', 'updated_at'],
-          additionalProperties: false,
-        },
-        blocks: { type: 'array', items: CONTENT_BLOCK_SCHEMA },
-      },
-      required: ['document', 'blocks'],
-      additionalProperties: false,
-    },
-  }),
-  readTool({
-    name: 'get_content_block',
-    description: 'Fetch a single content block, including its data payload and updated_at value for optimistic replacement.',
-    inputSchema: {
-      type: 'object',
-      properties: { block_id: { type: 'string' } },
-      required: ['block_id'],
-      additionalProperties: false,
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        block: {
-          type: 'object',
-          properties: {
-            document_id: { type: 'string' },
-            ...CONTENT_BLOCK_SCHEMA.properties,
-          },
-          required: ['document_id', 'id', 'parent_block_id', 'type', 'position', 'level', 'updated_at', 'data'],
-          additionalProperties: false,
-        },
-      },
-      required: ['block'],
-      additionalProperties: false,
-    },
-  }),
-  writeTool({
-    name: 'append_content_block',
-    description: 'Append a block to a content document. Provide either document_id, or owner_type plus owner_id; after_block_id inserts after a specific block.',
-    openWorld: true,
-    inputSchema: {
-      type: 'object',
-      properties: {
-        ...CONTENT_DOCUMENT_LOOKUP_SCHEMA,
-        after_block_id: NULLABLE_STRING,
-        ...CONTENT_BLOCK_INPUT_PROPERTIES,
-      },
-      required: ['type', 'data'],
-      ...CONTENT_DOCUMENT_LOOKUP_REQUIREMENT,
-      additionalProperties: false,
-    },
-    outputSchema: CONTENT_BLOCK_WRITE_RESULT_SCHEMA,
-  }),
-  writeTool({
-    name: 'replace_content_block',
-    description: 'Replace one block data payload using optimistic concurrency. expected_updated_at must match the block returned by get_content_block or get_content_document_outline.',
-    openWorld: true,
-    inputSchema: {
-      type: 'object',
-      properties: {
-        block_id: { type: 'string' },
-        expected_updated_at: { type: 'string' },
-        data: CONTENT_BLOCK_DATA_SCHEMA,
-      },
-      required: ['block_id', 'expected_updated_at', 'data'],
-      additionalProperties: false,
-    },
-    outputSchema: CONTENT_BLOCK_WRITE_RESULT_SCHEMA,
-  }),
-  writeTool({
-    name: 'delete_content_block',
-    description: 'Delete one block using optimistic concurrency. expected_updated_at must match the block returned by get_content_block or get_content_document_outline.',
-    destructive: true,
-    openWorld: true,
-    inputSchema: {
-      type: 'object',
-      properties: {
-        block_id: { type: 'string' },
-        expected_updated_at: { type: 'string' },
-      },
-      required: ['block_id', 'expected_updated_at'],
-      additionalProperties: false,
-    },
-    outputSchema: CONTENT_BLOCK_WRITE_RESULT_SCHEMA,
-  }),
-  readTool({
-    name: 'render_content_preview',
-    description: 'Render the current content blocks back to a compatibility Markdown body without publishing.',
-    inputSchema: {
-      type: 'object',
-      properties: CONTENT_DOCUMENT_LOOKUP_SCHEMA,
-      ...CONTENT_DOCUMENT_LOOKUP_REQUIREMENT,
-      additionalProperties: false,
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        body_markdown: { type: 'string' },
-        blocks: { type: 'array', items: CONTENT_BLOCK_SCHEMA },
-      },
-      required: ['body_markdown', 'blocks'],
-      additionalProperties: false,
-    },
-  }),
-  writeTool({
-    name: 'publish_content_revision',
-    description: 'Publish the current draft revision for a platform blog, platform doc, or tenant blog content document. Provide either document_id, or owner_type plus owner_id.',
-    openWorld: true,
-    inputSchema: {
-      type: 'object',
-      properties: CONTENT_DOCUMENT_LOOKUP_SCHEMA,
-      ...CONTENT_DOCUMENT_LOOKUP_REQUIREMENT,
-      additionalProperties: false,
-    },
-    outputSchema: {
-      type: 'object',
-      properties: { success: { type: 'boolean' } },
-      required: ['success'],
-      additionalProperties: false,
-    },
-  }),
-  readTool({
     name: 'list_platform_blog_posts',
     description: 'List KrabiClaw platform blog posts. Optionally filter by published or draft status. For tenant sites, provide site_id to list site-scoped blog posts.',
     inputSchema: {
@@ -984,7 +843,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   readTool({
     name: 'get_platform_blog_post',
-    description: 'Fetch one platform blog post in the canonical component model with resolved media fields. For tenant sites, provide site_id to fetch site-scoped blog posts.',
+    description: 'Fetch one platform blog post with its canonical content_blocks and resolved media fields. For tenant sites, provide site_id to fetch site-scoped blog posts.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -994,12 +853,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       required: ['post_id'],
       additionalProperties: false,
     },
-    outputSchema: {
-      type: 'object',
-      properties: { post: BLOG_RECORD_SCHEMA },
-      required: ['post'],
-      additionalProperties: false,
-    },
+    outputSchema: PLATFORM_BLOG_POST_RESPONSE_SCHEMA,
   }),
   writeTool({
     name: 'create_platform_blog_post',
@@ -1009,7 +863,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         title: { type: 'string' },
-        content_blocks: { type: 'array', items: { type: 'object', properties: CONTENT_BLOCK_INPUT_PROPERTIES, required: ['type', 'data'], additionalProperties: false } },
+        content_blocks: { type: 'array', items: { type: 'object', properties: CONTENT_BLOCK_INPUT_PROPERTIES, required: ['type', 'data'], additionalProperties: false }, minItems: 1 },
         excerpt: { type: 'string' },
         category: { type: 'string', description: 'Platform posts use the documented platform categories; tenant categories are free text when site_id is provided.' },
         ...NAV_FIELDS_SCHEMA,
@@ -1021,48 +875,54 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       required: ['title', 'content_blocks'],
       additionalProperties: false,
     },
-    outputSchema: BLOG_WRITE_RESPONSE_SCHEMA,
+    outputSchema: PLATFORM_BLOG_POST_RESPONSE_SCHEMA,
   }),
   writeTool({
-    name: 'update_platform_blog_post',
-    description: PLATFORM_BLOG_TOOL_DESCRIPTION,
+    name: 'update_platform_blog_metadata',
+    description: 'Update a platform blog post\'s metadata (title, excerpt, category, nav, SEO fields, visibility, slug). Does not touch content — use replace_platform_blog_content for that — and does not publish/unpublish — use publish_platform_blog_post/unpublish_platform_blog_post for that. At least one metadata field besides post_id/expected_updated_at is required.',
     openWorld: true,
     inputSchema: {
       type: 'object',
       properties: {
         post_id: { type: 'string', description: 'Post id or slug.' },
+        expected_updated_at: { type: 'string', description: 'Concurrency token from the post\'s updated_at (get_platform_blog_post). A stale token is rejected with a conflict so two writers can\'t silently overwrite each other.' },
         title: { type: 'string' },
-        content_blocks: { type: 'array', items: { type: 'object', properties: CONTENT_BLOCK_INPUT_PROPERTIES, required: ['type', 'data'], additionalProperties: false } },
-        expected_document_updated_at: { type: 'string', description: 'Required when replacing content_blocks.' },
         excerpt: { type: 'string' },
         category: { type: 'string', description: 'Platform posts use the documented platform categories; tenant categories are free text when site_id is provided.' },
         ...NAV_FIELDS_SCHEMA,
         seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         ...SEO_FIELDS_SCHEMA,
-        publish: { type: 'boolean' },
-        unpublish: { type: 'boolean' },
+        visibility: { type: 'string', enum: ['public', 'unlisted'], description: 'Unlisted posts work by direct URL but are excluded from indexes, search, feeds, and sitemap.' },
+        slug: { type: ['string', 'null'], description: 'Manual URL slug override. Published slug changes preserve a permanent redirect by default.' },
+        redirect_old_slug: { type: 'boolean', description: 'Defaults true after first publish.' },
+        reset_slug_override: { type: 'boolean' },
         site_id: { type: 'string', description: 'Optional site id to update tenant blog posts instead of platform posts.' },
       },
-      required: ['post_id'],
+      required: ['post_id', 'expected_updated_at'],
       additionalProperties: false,
     },
-    outputSchema: {
+    outputSchema: PLATFORM_BLOG_POST_RESPONSE_SCHEMA,
+  }),
+  writeTool({
+    name: 'replace_platform_blog_content',
+    description: 'Replace a platform blog post\'s complete content_blocks set. This is a full replace, not a merge — include every block that should remain, not just the ones changing. Does not touch metadata (title, SEO, etc.) — use update_platform_blog_metadata for that.',
+    openWorld: true,
+    inputSchema: {
       type: 'object',
       properties: {
-        success: { type: 'boolean' },
-        admin_edit_url: { type: 'string' },
-        public_path: NULLABLE_STRING,
-        public_url: NULLABLE_STRING,
-        preview_url: NULLABLE_STRING,
-        post: BLOG_RECORD_SCHEMA,
+        post_id: { type: 'string', description: 'Post id or slug.' },
+        content_blocks: { type: 'array', description: 'Canonical ordered article blocks, replacing the complete draft block set.', items: { type: 'object', properties: CONTENT_BLOCK_INPUT_PROPERTIES, required: ['type', 'data'], additionalProperties: false }, minItems: 1 },
+        expected_document_updated_at: { type: 'string', description: 'Concurrency token from the post\'s document_updated_at (get_platform_blog_post). A stale token is rejected with a conflict.' },
+        site_id: { type: 'string', description: 'Optional site id to update tenant blog posts instead of platform posts.' },
       },
-      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'post'],
+      required: ['post_id', 'content_blocks', 'expected_document_updated_at'],
       additionalProperties: false,
     },
+    outputSchema: PLATFORM_BLOG_POST_RESPONSE_SCHEMA,
   }),
   writeTool({
     name: 'publish_platform_blog_post',
-    description: 'Publish a platform blog post immediately. If update and publish were both requested, call update_platform_blog_post then this tool, back to back.',
+    description: 'Publish a platform blog post immediately. If metadata/content updates and publish were both requested, call the relevant update tool then this tool, back to back.',
     openWorld: true,
     inputSchema: {
       type: 'object',
@@ -1073,19 +933,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       required: ['post_id'],
       additionalProperties: false,
     },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-        admin_edit_url: { type: 'string' },
-        public_path: NULLABLE_STRING,
-        public_url: NULLABLE_STRING,
-        preview_url: NULLABLE_STRING,
-        post: BLOG_RECORD_SCHEMA,
-      },
-      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'post'],
-      additionalProperties: false,
-    },
+    outputSchema: PLATFORM_BLOG_POST_RESPONSE_SCHEMA,
   }),
   writeTool({
     name: 'unpublish_platform_blog_post',
@@ -1100,19 +948,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       required: ['post_id'],
       additionalProperties: false,
     },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-        admin_edit_url: { type: 'string' },
-        public_path: NULLABLE_STRING,
-        public_url: NULLABLE_STRING,
-        preview_url: NULLABLE_STRING,
-        post: BLOG_RECORD_SCHEMA,
-      },
-      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'post'],
-      additionalProperties: false,
-    },
+    outputSchema: PLATFORM_BLOG_POST_RESPONSE_SCHEMA,
   }),
   writeTool({
     name: 'reorder_platform_blog_posts',
@@ -1366,6 +1202,159 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     outputSchema: DELETE_RESPONSE_SCHEMA,
   }),
 ]
+
+// Not returned by tools/list — these are a debug/support escape hatch for
+// editing a content document block-by-block, not the normal blog-authoring
+// path. Still fully dispatchable by name (see getPlatformMcpTool below,
+// which resolves against the combined PLATFORM_MCP_TOOLS), so an already-open
+// session or direct support access still works — only *discovery* of new
+// sessions is affected.
+export const PLATFORM_INTERNAL_MCP_TOOLS: PlatformMcpToolDefinition[] = [
+  readTool({
+    name: 'get_content_document_outline',
+    description: 'Get the block outline for a platform blog, platform doc, or tenant blog content document. Provide either document_id, or owner_type plus owner_id.',
+    inputSchema: {
+      type: 'object',
+      properties: CONTENT_DOCUMENT_LOOKUP_SCHEMA,
+      ...CONTENT_DOCUMENT_LOOKUP_REQUIREMENT,
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        document: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            owner_type: { type: 'string', enum: CONTENT_DOCUMENT_OWNER_TYPE_ENUM },
+            owner_id: { type: 'string' },
+            draft_revision_id: NULLABLE_STRING,
+            published_revision_id: NULLABLE_STRING,
+            updated_at: { type: 'string' },
+          },
+          required: ['id', 'owner_type', 'owner_id', 'draft_revision_id', 'published_revision_id', 'updated_at'],
+          additionalProperties: false,
+        },
+        blocks: { type: 'array', items: CONTENT_BLOCK_SCHEMA },
+      },
+      required: ['document', 'blocks'],
+      additionalProperties: false,
+    },
+  }),
+  readTool({
+    name: 'get_content_block',
+    description: 'Fetch a single content block, including its data payload and updated_at value for optimistic replacement.',
+    inputSchema: {
+      type: 'object',
+      properties: { block_id: { type: 'string' } },
+      required: ['block_id'],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        block: {
+          type: 'object',
+          properties: {
+            document_id: { type: 'string' },
+            ...CONTENT_BLOCK_SCHEMA.properties,
+          },
+          required: ['document_id', 'id', 'parent_block_id', 'type', 'position', 'level', 'updated_at', 'data'],
+          additionalProperties: false,
+        },
+      },
+      required: ['block'],
+      additionalProperties: false,
+    },
+  }),
+  writeTool({
+    name: 'append_content_block',
+    description: 'Append a block to a content document. Provide either document_id, or owner_type plus owner_id; after_block_id inserts after a specific block.',
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...CONTENT_DOCUMENT_LOOKUP_SCHEMA,
+        after_block_id: NULLABLE_STRING,
+        ...CONTENT_BLOCK_INPUT_PROPERTIES,
+      },
+      required: ['type', 'data'],
+      ...CONTENT_DOCUMENT_LOOKUP_REQUIREMENT,
+      additionalProperties: false,
+    },
+    outputSchema: CONTENT_BLOCK_WRITE_RESULT_SCHEMA,
+  }),
+  writeTool({
+    name: 'replace_content_block',
+    description: 'Replace one block data payload using optimistic concurrency. expected_updated_at must match the block returned by get_content_block or get_content_document_outline.',
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        block_id: { type: 'string' },
+        expected_updated_at: { type: 'string' },
+        data: CONTENT_BLOCK_DATA_SCHEMA,
+      },
+      required: ['block_id', 'expected_updated_at', 'data'],
+      additionalProperties: false,
+    },
+    outputSchema: CONTENT_BLOCK_WRITE_RESULT_SCHEMA,
+  }),
+  writeTool({
+    name: 'delete_content_block',
+    description: 'Delete one block using optimistic concurrency. expected_updated_at must match the block returned by get_content_block or get_content_document_outline.',
+    destructive: true,
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        block_id: { type: 'string' },
+        expected_updated_at: { type: 'string' },
+      },
+      required: ['block_id', 'expected_updated_at'],
+      additionalProperties: false,
+    },
+    outputSchema: CONTENT_BLOCK_WRITE_RESULT_SCHEMA,
+  }),
+  readTool({
+    name: 'render_content_preview',
+    description: 'Render the current content blocks back to a compatibility Markdown body without publishing.',
+    inputSchema: {
+      type: 'object',
+      properties: CONTENT_DOCUMENT_LOOKUP_SCHEMA,
+      ...CONTENT_DOCUMENT_LOOKUP_REQUIREMENT,
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        body_markdown: { type: 'string' },
+        blocks: { type: 'array', items: CONTENT_BLOCK_SCHEMA },
+      },
+      required: ['body_markdown', 'blocks'],
+      additionalProperties: false,
+    },
+  }),
+  writeTool({
+    name: 'publish_content_revision',
+    description: 'Publish the current draft revision for a platform blog, platform doc, or tenant blog content document. Provide either document_id, or owner_type plus owner_id.',
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: CONTENT_DOCUMENT_LOOKUP_SCHEMA,
+      ...CONTENT_DOCUMENT_LOOKUP_REQUIREMENT,
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: { success: { type: 'boolean' } },
+      required: ['success'],
+      additionalProperties: false,
+    },
+  }),
+]
+
+export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [...PLATFORM_PUBLIC_MCP_TOOLS, ...PLATFORM_INTERNAL_MCP_TOOLS]
 
 export function getPlatformMcpTool(name: string) {
   return PLATFORM_MCP_TOOLS.find(tool => tool.name === name) ?? null
