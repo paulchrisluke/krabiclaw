@@ -2,13 +2,12 @@ import { ref, computed } from 'vue'
 import { useRoute, navigateTo } from '#app'
 import { useTenantSite } from './useTenantSite'
 import { useEditorContext } from './useEditorContext'
-import { useToast as useAppToast } from './useToast'
 
 type PendingChanges = Record<string, string>
 
 export const useEditMode = (siteId?: string, locationId?: string | null) => {
   const route = useRoute()
-  const { addToast } = useAppToast()
+  const toast = useToast()
   const { currentLocationId } = useEditorContext(siteId)
 
   const editMode = computed(() => route.query.edit === 'true')
@@ -76,7 +75,7 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
       pendingChanges.value = {}
       hasChanges.value = false
     } catch {
-      addToast('Failed to save changes', 'error')
+      toast.add({ description: 'Failed to save changes', color: 'error' })
     } finally {
       saving.value = false
     }
@@ -90,9 +89,9 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
     try {
       pendingChanges.value = {}
       hasChanges.value = false
-      addToast('Unsaved changes discarded', 'info')
+      toast.add({ description: 'Unsaved changes discarded', color: 'info' })
     } catch {
-      addToast('Failed to discard', 'error')
+      toast.add({ description: 'Failed to discard', color: 'error' })
     } finally {
       discarding.value = false
     }

@@ -318,7 +318,6 @@
 
 <script setup lang="ts">
 import { useMenuEditor } from '~/composables/useMenuEditor'
-import { useToast } from '~/composables/useToast'
 import type { MenuItem, UpdateMenuItemRequest } from '~/server/types/menu'
 
 const props = defineProps<{
@@ -349,10 +348,10 @@ const handlePublish = async () => {
   if (!currentMenu.value) return
   try {
     await updateMenu(currentMenu.value.id, { status: 'published' })
-    toast.addToast('Menu published', 'success')
+    toast.add({ description: 'Menu published', color: 'success' })
   } catch (err) {
     console.error('handlePublish failed:', err)
-    toast.addToast('Failed to publish menu', 'error')
+    toast.add({ description: 'Failed to publish menu', color: 'error' })
   }
 }
 
@@ -360,10 +359,10 @@ const handleUnpublish = async () => {
   if (!currentMenu.value) return
   try {
     await updateMenu(currentMenu.value.id, { status: 'draft' })
-    toast.addToast('Menu unpublished', 'success')
+    toast.add({ description: 'Menu unpublished', color: 'success' })
   } catch (err) {
     console.error('handleUnpublish failed:', err)
-    toast.addToast('Failed to unpublish menu', 'error')
+    toast.add({ description: 'Failed to unpublish menu', color: 'error' })
   }
 }
 
@@ -390,10 +389,10 @@ const handleDeleteMenu = async () => {
     pendingSections.value = []
     newSectionName.value = ''
     showAddSectionForm.value = false
-    toast.addToast('Menu deleted', 'success')
+    toast.add({ description: 'Menu deleted', color: 'success' })
   } catch (err) {
     console.error('handleDeleteMenu failed:', err)
-    toast.addToast('Failed to delete menu', 'error')
+    toast.add({ description: 'Failed to delete menu', color: 'error' })
   }
 }
 
@@ -409,7 +408,7 @@ const handleCreateMenu = async () => {
     showCreateMenuForm.value = false
   } catch (err) {
     console.error('handleCreateMenu failed:', err)
-    toast.addToast('Failed to create menu', 'error')
+    toast.add({ description: 'Failed to create menu', color: 'error' })
   }
 }
 
@@ -438,7 +437,7 @@ const handleQuickUpdateItem = async (item: MenuItem, updates: UpdateMenuItemRequ
     if (currentMenu.value) await loadMenu(currentMenu.value.id)
   } catch (err) {
     console.error('handleQuickUpdateItem failed:', err)
-    toast.addToast('Failed to update item', 'error')
+    toast.add({ description: 'Failed to update item', color: 'error' })
   }
 }
 
@@ -498,7 +497,7 @@ const moveFeaturedItem = async (item: MenuItem, direction: -1 | 1) => {
   try {
     await saveFeaturedOrder(next)
     if (currentMenu.value) await loadMenu(currentMenu.value.id)
-    toast.addToast('Featured order updated', 'success')
+    toast.add({ description: 'Featured order updated', color: 'success' })
   } catch (err) {
     console.error('moveFeaturedItem failed:', err)
     try {
@@ -511,7 +510,7 @@ const moveFeaturedItem = async (item: MenuItem, direction: -1 | 1) => {
       console.error('moveFeaturedItem rollback failed:', rollbackErr)
     }
     if (currentMenu.value) await loadMenu(currentMenu.value.id)
-    toast.addToast('Failed to reorder featured dishes', 'error')
+    toast.add({ description: 'Failed to reorder featured dishes', color: 'error' })
   }
 }
 
@@ -531,10 +530,10 @@ const handleDeleteSection = async () => {
       pendingSections.value = pendingSections.value.filter((pending: string) => pending !== section)
       sectionDeleteTarget.value = null
       confirmDeleteSectionOpen.value = false
-      toast.addToast('Section deleted', 'success')
+      toast.add({ description: 'Section deleted', color: 'success' })
     } catch (err) {
       console.error('handleDeleteSection failed:', err)
-      toast.addToast('Failed to delete section', 'error')
+      toast.add({ description: 'Failed to delete section', color: 'error' })
     }
     return
   }
@@ -544,10 +543,10 @@ const handleDeleteSection = async () => {
     pendingSections.value = pendingSections.value.filter((pending: string) => pending !== section)
     sectionDeleteTarget.value = null
     confirmDeleteSectionOpen.value = false
-    toast.addToast('Section deleted', 'success')
+    toast.add({ description: 'Section deleted', color: 'success' })
   } catch (err) {
     console.error('handleDeleteSection failed:', err)
-    toast.addToast('Failed to delete section', 'error')
+    toast.add({ description: 'Failed to delete section', color: 'error' })
   }
 }
 
@@ -588,10 +587,10 @@ const moveSection = async (section: string, direction: -1 | 1) => {
 
   try {
     await saveSectionOrder(next)
-    toast.addToast('Section order updated', 'success')
+    toast.add({ description: 'Section order updated', color: 'success' })
   } catch (err) {
     console.error('moveSection failed:', err)
-    toast.addToast('Failed to reorder sections', 'error')
+    toast.add({ description: 'Failed to reorder sections', color: 'error' })
   }
 }
 
@@ -602,11 +601,11 @@ const handleAddSection = async () => {
     pendingSections.value.push(name)
     try {
       await saveSectionOrder([...allSections.value])
-      toast.addToast('Section created', 'success')
+      toast.add({ description: 'Section created', color: 'success' })
     } catch (err) {
       console.error('handleAddSection failed:', err)
       pendingSections.value = pendingSections.value.filter((section: string) => section !== name)
-      toast.addToast('Failed to create section', 'error')
+      toast.add({ description: 'Failed to create section', color: 'error' })
       return
     }
   }
@@ -644,7 +643,7 @@ const handleRenameSection = async (section: string) => {
       sectionEditName.value = ''
     } catch (err) {
       console.error('handleRenameSection failed:', err)
-      toast.addToast('Failed to rename section', 'error')
+      toast.add({ description: 'Failed to rename section', color: 'error' })
     }
     return
   }
@@ -652,10 +651,10 @@ const handleRenameSection = async (section: string) => {
     await renameMenuSection(section, name)
     editingSection.value = null
     sectionEditName.value = ''
-    toast.addToast('Section renamed', 'success')
+    toast.add({ description: 'Section renamed', color: 'success' })
   } catch (err) {
     console.error('handleRenameSection failed:', err)
-    toast.addToast('Failed to rename section', 'error')
+    toast.add({ description: 'Failed to rename section', color: 'error' })
   }
 }
 </script>

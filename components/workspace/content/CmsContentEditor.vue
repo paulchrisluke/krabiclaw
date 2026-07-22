@@ -289,9 +289,6 @@
         </div>
       </aside>
     </div>
-
-    <!-- Toast -->
-    <AppToast />
   </div>
 </template>
 

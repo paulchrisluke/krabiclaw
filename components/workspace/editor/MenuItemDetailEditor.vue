@@ -147,7 +147,6 @@
 </template>
 
 <script setup lang="ts">
-import { useToast } from '~/composables/useToast'
 import type { CreateMenuItemRequest, MenuItem, MenuWithItems, UpdateMenuItemRequest } from '~/server/types/menu'
 
 const props = defineProps<{
@@ -322,7 +321,7 @@ const handleSave = async () => {
         method: 'PATCH',
         body: payload.value
       })
-      toast.addToast('Item saved', 'success')
+      toast.add({ description: 'Item saved', color: 'success' })
     } else {
       const res = await $fetch<{ menuItem: MenuItem }>(`/api/editor/sites/${props.siteId}/menus/${props.menuId}/items`, {
         method: 'POST',
@@ -330,17 +329,17 @@ const handleSave = async () => {
       })
       if (res?.menuItem?.id) {
         trackMenuItemCreated(String(res.menuItem.id), props.siteId)
-        toast.addToast('Item created', 'success')
+        toast.add({ description: 'Item created', color: 'success' })
       } else {
         error.value = 'Invalid response: missing menuItem or id'
-        toast.addToast('Failed to create item', 'error')
+        toast.add({ description: 'Failed to create item', color: 'error' })
         return
       }
     }
     await router.push(backPath.value)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to save menu item'
-    toast.addToast('Failed to save item', 'error')
+    toast.add({ description: 'Failed to save item', color: 'error' })
   } finally {
     saving.value = false
   }
@@ -355,11 +354,11 @@ const handleDelete = async () => {
     await $fetch(`/api/editor/sites/${props.siteId}/menus/${props.menuId}/items/${props.itemId}`, {
       method: 'DELETE'
     })
-    toast.addToast('Item deleted', 'success')
+    toast.add({ description: 'Item deleted', color: 'success' })
     await router.push(backPath.value)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to delete menu item'
-    toast.addToast('Failed to delete item', 'error')
+    toast.add({ description: 'Failed to delete item', color: 'error' })
   } finally {
     deleting.value = false
   }
