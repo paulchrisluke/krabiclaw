@@ -1,17 +1,40 @@
 export default defineAppConfig({
   ui: {
+    colors: {
+      primary: 'coral',
+      secondary: 'teal',
+      success: 'emerald',
+      info: 'blue',
+      warning: 'amber',
+      error: 'red',
+      neutral: 'zinc'
+    },
+    button: {
+      compoundVariants: [
+        {
+          color: 'primary',
+          variant: 'solid',
+          class: 'text-on-primary'
+        }
+      ]
+    },
     input: {
-      slots: {
-        root: 'relative flex w-full items-center'
+      defaultVariants: {
+        size: 'md',
+        variant: 'outline'
       }
     },
     textarea: {
-      slots: {
-        root: 'relative flex w-full items-start'
+      defaultVariants: {
+        size: 'md',
+        variant: 'outline'
       }
     },
-    colors: {
-      neutral: 'zinc'
+    select: {
+      defaultVariants: {
+        size: 'md',
+        variant: 'outline'
+      }
     }
   }
 })

@@ -92,7 +92,7 @@
       <div class="mt-6 space-y-2">
         <p class="text-xs text-dimmed">
           You can remove this access at any time in your
-          <NuxtLink href="/dashboard/account/settings" class="underline underline-offset-2 hover:text-default transition-colors">account settings</NuxtLink>.
+          <NuxtLink href="/dashboard/account/profile" class="underline underline-offset-2 hover:text-default transition-colors">account settings</NuxtLink>.
         </p>
         <p class="text-xs text-dimmed">
           To learn more about how {{ clientName || 'this app' }} collects, uses, shares and protects your personal data please read

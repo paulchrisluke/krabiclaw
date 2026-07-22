@@ -28,17 +28,26 @@
   --saya-border-muted:  #F4F4F5;
 
   --ui-primary:         var(--saya-primary);
+  --ui-secondary:       #6366F1;
+  --ui-success:         #10B981;
+  --ui-info:            #3B82F6;
+  --ui-warning:         #F59E0B;
+  --ui-error:           #EF4444;
   --ui-bg:              var(--saya-bg);
   --ui-bg-elevated:     var(--saya-bg-alt);
   --ui-bg-muted:        var(--saya-bg-alt);
+  --ui-bg-accented:     #F4F4F5;
   --ui-bg-inverted:     var(--saya-bg-inverted);
   --ui-text:            var(--saya-fg);
   --ui-text-muted:      var(--saya-fg-muted);
   --ui-text-dimmed:     var(--saya-fg-dimmed);
+  --ui-text-toned:      #71717A;
   --ui-text-highlighted:var(--saya-fg);
   --ui-text-inverted:   var(--saya-fg-inverted);
   --ui-border:          var(--saya-border);
   --ui-border-muted:    var(--saya-border-muted);
+  --ui-border-accented: #D4D4D8;
+  --ui-border-inverted: #27272A;
   --ui-radius:          0.25rem; /* Platform-specific radius override */
 }
 
@@ -64,17 +73,26 @@
   --saya-border-muted:  #1E1E22;
 
   --ui-primary:         var(--saya-primary);
+  --ui-secondary:       #818CF8;
+  --ui-success:         #34D399;
+  --ui-info:            #60A5FA;
+  --ui-warning:         #FBBF24;
+  --ui-error:           #F87171;
   --ui-bg:              var(--saya-bg);
   --ui-bg-elevated:     var(--saya-bg-alt);
   --ui-bg-muted:        var(--saya-bg-alt);
+  --ui-bg-accented:     #18181B;
   --ui-bg-inverted:     var(--saya-bg-inverted);
   --ui-text:            var(--saya-fg);
   --ui-text-muted:      var(--saya-fg-muted);
   --ui-text-dimmed:     var(--saya-fg-dimmed);
+  --ui-text-toned:      #A1A1AA;
   --ui-text-highlighted:var(--saya-fg);
   --ui-text-inverted:   var(--saya-fg-inverted);
   --ui-border:          var(--saya-border);
   --ui-border-muted:    var(--saya-border-muted);
+  --ui-border-accented: #3F3F46;
+  --ui-border-inverted: #E4E4E7;
 }
 
 /* Saya display type — Instrument Serif, sentence case, never bold */

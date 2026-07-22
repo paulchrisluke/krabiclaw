@@ -4,6 +4,17 @@ When an internal API returns errors, nulls, or malformed data, fix the API contr
 
 ---
 
+## "Pre-existing" is not a stopping point
+
+The dashboard/CMS has repeatedly drifted because "pre-existing, out of scope" gets used as a reason to stop looking rather than a scoping decision. Concretely, in one session: a sidebar nav item silently pointed at a route with no page (`/admin/docs`), and a fetch ran unconditionally on every dashboard-layout mount and 404'd on every admin page — both were noted in passing as "pre-existing" and left alone until the user asked a single follow-up question. The fix in both cases took minutes once actually looked at.
+
+- Finding something wrong adjacent to your diff is not license to describe it and move on. Before calling anything "pre-existing" or "out of scope," actually open the file(s) and spend the few minutes it takes to know whether it's a one-line fix or a real redesign.
+- If it turns out to be small (missing route, dead fetch, stale reference, wrong link), fix it in the same pass — don't create a follow-up task for something you could finish now.
+- If it's genuinely large enough to defer, say so explicitly as a decision, with the reason ("this needs X because Y, deferring to phase Z") — not a one-line mention buried in a longer response that reads like the matter is settled.
+- Never use "pre-existing" to mean "I looked at it for less time than it deserved." That phrase should only ever mean "I fully understood this and concluded fixing it now is the wrong call," not "I didn't check."
+
+---
+
 ## Platform Strategy — Dual Surface
 
 KrabiClaw supports **both** the ChatGPT MCP app and the dashboard/ChowBot surfaces.
@@ -239,12 +250,9 @@ Do not add a new dev-only reset route or rely on Playwright `afterEach`/`afterAl
 
 Nuxt UI is the default for dashboard/admin surfaces. Saya public, high-traffic surfaces should avoid Nuxt UI interactive components when they affect every tenant page load.
 
-- Dashboard pages use:
-  - `UCard`
-  - `UPage`
-  - `UPageBody`
-- Dashboard pages do not use `UPageHeader`.
-- Dashboard page content goes directly in `UPageBody`.
+- Every `layout: 'dashboard'` page renders its own `UDashboardPanel` with a `#header` slot containing `UDashboardNavbar` (explicit `title`, `UDashboardSidebarCollapse` in `#leading`) and a `#body` slot for content. `UCard` is still the default content-grouping primitive inside `#body`.
+- Dashboard pages do not use `UPage`, `UPageBody`, or `UPageHeader` — that was the pre-issue-#316 pattern; the whole dashboard shell (`layouts/dashboard.vue` plus every page under `pages/dashboard/**` and `pages/admin/**`) was rewritten off it. See `docs/adr/0019-progressive-drill-in-dashboard-sidebar.md`.
+- `layout: 'editor'` pages (onboarding wizards, content editor, blog editor) are a separate, intentionally different case — they own their own full-screen chrome and do not use `UDashboardPanel` either.
 - Saya theme pages keep their raw layout shell and theme-specific components.
 - On `components/saya/**`, prefer native `<button>`, `<NuxtLink>`, `<a>`, Tailwind classes, and inline SVG for always-rendered header/footer paths.
 - Use `components/saya/SayaDropdown.vue` instead of `UDropdownMenu` on the Saya public surface.
@@ -385,7 +393,7 @@ POST /api/sites/[siteId]/domains
 Dashboard route:
 
 ```text
-/dashboard/[orgSlug]/~/settings/domains
+/dashboard/[orgSlug]/settings/domains
 ```
 
 Rules:

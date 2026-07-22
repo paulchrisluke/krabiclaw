@@ -29,7 +29,7 @@ const props = withDefaults(defineProps<{
   name: null,
   alt: null,
   size: 'md',
-  fallbackClass: 'bg-primary text-white text-sm font-semibold'
+  fallbackClass: 'bg-primary text-on-primary text-sm font-semibold'
 })
 
 const sizeClasses = {

@@ -5,6 +5,28 @@ import { getAuthSession } from '~/server/utils/auth'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { assertDashboardPathPermission, assertMemberSiteAccess, isOrganizationWideRole } from '~/server/utils/member-access'
 
+function safeJsonParse(value: string): unknown {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+// business_locations.address is written exclusively as { addressLines: string[] }
+// (see normalizeAddressLines in location-management.ts) — this guards against
+// malformed/legacy rows that predate that normalization rather than trusting an
+// unchecked cast, which would otherwise silently hand callers a shape that
+// doesn't match what they expect from the address contract.
+function parseLocationAddress(value: string | null): { addressLines: string[] } | null {
+  if (!value) return null
+  const parsed = safeJsonParse(value)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const addressLines = (parsed as Record<string, unknown>).addressLines
+  if (!Array.isArray(addressLines) || !addressLines.every(line => typeof line === 'string')) return null
+  return { addressLines }
+}
+
 export interface DashboardOrganizationRow {
   id: string
   name: string
@@ -47,6 +69,9 @@ export interface DashboardLocationRow {
   title: string
   is_primary: number | boolean
   status: string
+  city: string | null
+  address: string | null
+  hero_url: string | null
 }
 
 interface DashboardPreferenceRow {
@@ -148,7 +173,7 @@ async function resolveSingleOrgSite(db: DbClient, organizationId: string): Promi
   return sites.length === 1 ? sites[0]! : null
 }
 
-// Not a guess: the org-scoped /~/onboarding route has no siteSlug to attach a header
+// Not a guess: the org-scoped /onboarding route has no siteSlug to attach a header
 // from, and a recipient who already owned a site before accepting a handoff legitimately
 // ends up with 2+ sites. The site this route means is unambiguous — whichever site this
 // exact user most recently accepted a transfer into — so resolve it precisely instead of
@@ -339,16 +364,21 @@ export async function getDashboardSite(event: H3Event) {
 
 export async function listDashboardLocations(db: DbClient, organizationId: string, siteId: string, principal?: { memberId: string; role: string }) {
   const locations = await queryAll<DashboardLocationRow>(db, `
-    SELECT id, slug, title, is_primary, status
+    SELECT business_locations.id, business_locations.slug, business_locations.title,
+           business_locations.is_primary, business_locations.status,
+           business_locations.city, business_locations.address,
+           COALESCE(ma_hero.thumbnail_url, ma_hero.public_url) as hero_url
     FROM business_locations
-    WHERE organization_id = ? AND site_id = ? AND status = 'active'
+    LEFT JOIN media_assets ma_hero ON ma_hero.id = business_locations.hero_image_asset_id
+    WHERE business_locations.organization_id = ? AND business_locations.site_id = ? AND business_locations.status = 'active'
       ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member_access_scope mas WHERE mas.member_id = ? AND mas.organization_id = business_locations.organization_id AND mas.site_id = business_locations.site_id AND (mas.location_id IS NULL OR mas.location_id = business_locations.id))' : ''}
     ORDER BY is_primary DESC, title ASC
   `, principal && !isOrganizationWideRole(principal.role) ? [organizationId, siteId, principal.memberId] : [organizationId, siteId])
 
   return locations.map((location) => ({
     ...location,
-    is_primary: Boolean(location.is_primary)
+    is_primary: Boolean(location.is_primary),
+    address: parseLocationAddress(location.address)
   }))
 }
 

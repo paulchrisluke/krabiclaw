@@ -179,8 +179,8 @@ export default defineEventHandler(async (event) => {
         customer: customerId,
         mode: 'subscription',
         line_items: [{ price: priceId, quantity: 1 }],
-        success_url: `${origin}/dashboard/${slug}/~/onboarding?new=true`,
-        cancel_url: `${origin}/dashboard/${slug}/~/onboarding?new=true&payment=cancelled`,
+        success_url: `${origin}/dashboard/${slug}/onboarding?new=true`,
+        cancel_url: `${origin}/dashboard/${slug}/onboarding?new=true&payment=cancelled`,
         metadata: {
           type: 'site_transfer',
           organization_id: toOrgId,

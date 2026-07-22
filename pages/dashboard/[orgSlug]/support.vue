@@ -1,6 +1,14 @@
 <template>
-  <UPage>
-    <UPageBody>
+  <UDashboardPanel id="org-support">
+    <template #header>
+      <UDashboardNavbar title="Support">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
       <div class="max-w-2xl space-y-6">
 
         <!--
@@ -146,8 +154,8 @@
         </template>
 
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

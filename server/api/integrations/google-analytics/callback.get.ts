@@ -47,7 +47,7 @@ export default defineEventHandler(async (event) => {
 
     if (!organization?.slug) return `/dashboard?ga=${status}`
     const encodedOrgSlug = encodeURIComponent(organization.slug)
-    return `/dashboard/${encodedOrgSlug}/~/settings/analytics?ga=${status}`
+    return `/dashboard/${encodedOrgSlug}/settings/analytics?ga=${status}`
   }
 
   try {

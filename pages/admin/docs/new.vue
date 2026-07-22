@@ -1,12 +1,17 @@
 <template>
-  <div class="p-4 lg:p-6">
-    <div class="mb-6 flex items-center justify-between gap-3">
-      <div>
-        <h1 class="text-2xl font-bold text-default">New Documentation</h1>
-        <p class="mt-1 text-sm text-muted">Create a new documentation page.</p>
-      </div>
-      <UButton to="/admin" color="neutral" variant="soft" icon="i-lucide-arrow-left">Admin</UButton>
-    </div>
+  <UDashboardPanel id="admin-docs-new">
+    <template #header>
+      <UDashboardNavbar title="New Documentation">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+        <template #trailing>
+          <UButton to="/admin/docs" color="neutral" variant="soft" icon="i-lucide-arrow-left" size="sm">Docs</UButton>
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
 
     <UCard>
       <div class="space-y-4">
@@ -19,8 +24,6 @@
             <USelect
               v-model="form.category"
               :items="categoryItems"
-              value-key="value"
-              label-key="label"
               placeholder="Select a category"
             />
           </UFormField>
@@ -28,8 +31,6 @@
             <USelect
               v-model="form.difficulty_level"
               :items="difficultyItems"
-              value-key="value"
-              label-key="label"
               placeholder="Select difficulty"
             />
           </UFormField>
@@ -40,8 +41,6 @@
             <USelect
               v-model="form.nav_section"
               :items="navSectionItems"
-              value-key="value"
-              label-key="label"
               placeholder="Use category default"
             />
           </UFormField>
@@ -49,13 +48,13 @@
             <UInput v-model="form.nav_title" placeholder="Short sidebar label" />
           </UFormField>
           <UFormField label="Nav Order" hint="Optional">
-            <UInput v-model="form.nav_order" type="number" min="0" placeholder="10" />
+            <UInputNumber v-model="form.nav_order" :min="0" placeholder="10" class="w-full" />
           </UFormField>
           <UFormField label="Section Order" hint="Optional">
-            <UInput v-model="form.nav_section_order" type="number" min="0" placeholder="20" />
+            <UInputNumber v-model="form.nav_section_order" :min="0" placeholder="20" class="w-full" />
           </UFormField>
           <UFormField label="Featured Order" hint="Optional">
-            <UInput v-model="form.featured_order" type="number" min="0" placeholder="1" />
+            <UInputNumber v-model="form.featured_order" :min="0" placeholder="1" class="w-full" />
           </UFormField>
           <UFormField label="Hide From Nav">
             <USwitch v-model="form.hide_from_nav" />
@@ -82,8 +81,6 @@
           <USelect
             v-model="form.robots"
             :items="robotsItems"
-            value-key="value"
-            label-key="label"
             placeholder="Default (index,follow)"
           />
         </UFormField>
@@ -121,7 +118,7 @@
                   <UInput v-model="form.faq_label" placeholder="e.g. Frequently Asked Questions" />
                 </UFormField>
                 <UFormField label="Status">
-                  <USelect v-model="form.faq_status" :items="componentStatusItems" value-key="value" label-key="label" />
+                  <USelect v-model="form.faq_status" :items="componentStatusItems" />
                 </UFormField>
               </div>
               <div class="flex flex-wrap gap-4">
@@ -163,7 +160,7 @@
                   <UInput v-model="form.how_to_label" placeholder="e.g. How It Works" />
                 </UFormField>
                 <UFormField label="Status">
-                  <USelect v-model="form.how_to_status" :items="componentStatusItems" value-key="value" label-key="label" />
+                  <USelect v-model="form.how_to_status" :items="componentStatusItems" />
                 </UFormField>
               </div>
               <div class="flex flex-wrap gap-4">
@@ -216,7 +213,8 @@
         </div>
       </div>
     </UCard>
-  </div>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
@@ -232,7 +230,7 @@ interface CreateDocResponse {
   [key: string]: ApiValue
 }
 
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', middleware: 'admin' })
 
 const { form, canSave, canPublish, handleImageChange } = useDocForm()
 const categoryItems = computed(() => categories.map((item) => ({ label: item, value: item })))

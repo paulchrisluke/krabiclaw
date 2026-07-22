@@ -174,7 +174,7 @@ export default defineEventHandler(async (event) => {
         description: 'Upload your logo for a polished look across your site.',
         done: hasLogo,
         required: false,
-        action_url: `/dashboard/account/settings`
+        action_url: `/dashboard/account/profile`
       },
       {
         id: 'brand_description',
@@ -182,7 +182,7 @@ export default defineEventHandler(async (event) => {
         description: 'A short tagline used in SEO and your homepage.',
         done: hasBrandDescription,
         required: false,
-        action_url: `/dashboard/account/settings`
+        action_url: `/dashboard/account/profile`
       },
       {
         id: 'photos',
@@ -206,7 +206,7 @@ export default defineEventHandler(async (event) => {
         description: 'Let guests reach you directly from your website.',
         done: hasContactEmail,
         required: false,
-        action_url: `/dashboard/account/settings`
+        action_url: `/dashboard/account/profile`
       }
     ]
 

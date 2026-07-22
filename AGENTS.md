@@ -4,6 +4,17 @@ When an internal API returns errors, nulls, or malformed data, fix the API contr
 
 ---
 
+## "Pre-existing" is not a stopping point
+
+The dashboard/CMS has repeatedly drifted because "pre-existing, out of scope" gets used as a reason to stop looking rather than a scoping decision. Concretely, in one session: a sidebar nav item silently pointed at a route with no page (`/admin/docs`), and a fetch ran unconditionally on every dashboard-layout mount and 404'd on every admin page — both were noted in passing as "pre-existing" and left alone until the user asked a single follow-up question. The fix in both cases took minutes once actually looked at.
+
+- Finding something wrong adjacent to your diff is not license to describe it and move on. Before calling anything "pre-existing" or "out of scope," actually open the file(s) and spend the few minutes it takes to know whether it's a one-line fix or a real redesign.
+- If it turns out to be small (missing route, dead fetch, stale reference, wrong link), fix it in the same pass — don't create a follow-up task for something you could finish now.
+- If it's genuinely large enough to defer, say so explicitly as a decision, with the reason ("this needs X because Y, deferring to phase Z") — not a one-line mention buried in a longer response that reads like the matter is settled.
+- Never use "pre-existing" to mean "I looked at it for less time than it deserved." That phrase should only ever mean "I fully understood this and concluded fixing it now is the wrong call," not "I didn't check."
+
+---
+
 ## Platform Strategy — Dual Surface
 
 KrabiClaw supports **both** the ChatGPT MCP app and the dashboard/ChowBot surfaces.

@@ -37,6 +37,9 @@ interface DashboardLocation {
   title: string
   is_primary: boolean
   status: string
+  city: string | null
+  address: { addressLines?: string[] } | null
+  hero_url: string | null
 }
 
 interface DashboardContextResponse {

@@ -92,50 +92,7 @@
 
     <!-- Preview scroll area -->
     <div v-else class="min-h-0 flex-1 overflow-auto p-5">
-      <!-- Browser chrome frame -->
-      <UCard :ui="{ root: 'overflow-hidden rounded-2xl shadow-lg', body: 'p-0 sm:p-0' }">
-        <!-- Chrome bar -->
-        <div class="flex items-center gap-2 border-b border-default bg-elevated px-3 py-2">
-          <div class="flex gap-[5px]">
-            <i class="block size-[9px] rounded-full bg-default-300" />
-            <i class="block size-[9px] rounded-full bg-default-300" />
-            <i class="block size-[9px] rounded-full bg-default-300" />
-          </div>
-          <div class="flex h-6 flex-1 items-center gap-1.5 rounded-md border border-default bg-muted px-2.5 font-mono text-[10.5px] text-muted">
-            <UIcon name="i-lucide-lock" class="size-2.5 text-dimmed" />
-            {{ urlDisplay }}
-          </div>
-        </div>
-
-        <!-- Iframe -->
-        <div class="relative" style="min-height: 40rem">
-          <iframe
-            ref="previewFrame"
-            :src="iframeSrc"
-            class="h-full w-full border-0 transition-opacity duration-300"
-            :class="{ 'opacity-40': iframeLoading }"
-            style="min-height: 40rem"
-            @load="iframeLoading = false"
-          />
-          <Transition
-            enter-active-class="transition-opacity duration-200"
-            enter-from-class="opacity-0"
-            enter-to-class="opacity-100"
-            leave-active-class="transition-opacity duration-150"
-            leave-from-class="opacity-100"
-            leave-to-class="opacity-0"
-          >
-            <div v-if="iframeLoading" class="absolute inset-0 flex items-center justify-center pointer-events-none bg-elevated/60">
-              <UCard :ui="{ body: 'px-4 py-3 sm:px-4 sm:py-3' }">
-                <div class="flex items-center gap-3">
-                  <UIcon name="i-lucide-refresh-cw" class="size-4 animate-spin text-muted" />
-                  <p class="text-sm text-muted">Loading preview…</p>
-                </div>
-              </UCard>
-            </div>
-          </Transition>
-        </div>
-      </UCard>
+      <SitePreviewFrame :iframe-src="iframeSrc" :display-url="displayUrl" />
     </div>
   </div>
 </template>
@@ -161,13 +118,6 @@ const emit = defineEmits<{
   'select-page': [page: string]
   'select-location': [id: string]
 }>()
-
-const previewFrame = ref<HTMLIFrameElement>()
-const iframeLoading = ref(false)
-
-watch(() => props.iframeSrc, (newSrc, oldSrc) => {
-  if (newSrc && newSrc !== oldSrc) iframeLoading.value = true
-}, { immediate: true })
 
 // Derives the "core offering" tab (Menu / Experiences / Services) from the
 // same page registry the main CMS editor uses, instead of a hardcoded
@@ -197,6 +147,20 @@ const tabs = computed(() => {
 
 const currentTabIsLocationScoped = computed(() => tabs.value.find(tab => tab.id === props.selectedPage)?.locationScoped === true)
 
+// The URL a real visitor would see — distinct from iframeSrc, which points at
+// the internal /preview/site/:id route that actually serves draft content.
+const displayUrl = computed(() => {
+  if (!props.siteDomain) return ''
+  const template = resolvePublicTemplate({ vertical: props.vertical })
+  // professional_service's "Services" tab id is the offerings route itself
+  // (see secondaryTab above), not a content-registry page id — resolve it
+  // the same way before falling back to the registry lookup for other pages.
+  const path = props.vertical === 'professional_service' && props.selectedPage === secondaryTab.value?.id
+    ? template.serviceRoutes.offeringsIndex ?? '/'
+    : getEditablePages(props.vertical, template.slug).find(page => page.id === props.selectedPage)?.path ?? '/'
+  return props.siteDomain + (path === '/' ? '' : path)
+})
+
 const selectedLocation = computed(() =>
   props.siteLocations.find(l => l.id === props.selectedLocationId) ?? props.siteLocations[0] ?? null
 )
@@ -208,15 +172,4 @@ const cycleLocation = () => {
   const next = props.siteLocations[(idx + 1) % props.siteLocations.length]
   if (next) emit('select-location', next.id)
 }
-
-const urlDisplay = computed(() => {
-  if (!props.iframeSrc) return ''
-  try {
-    const url = new URL(props.iframeSrc)
-    // Show the clean domain/path, strip query params
-    return url.hostname + (url.pathname !== '/' ? url.pathname : '')
-  } catch {
-    return props.iframeSrc
-  }
-})
 </script>

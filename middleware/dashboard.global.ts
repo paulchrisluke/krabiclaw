@@ -23,6 +23,18 @@ import { isWhatsAppInboxDeepLinkPath } from '~/utils/dashboard-reauth'
 export default defineNuxtRouteMiddleware(async (to) => {
   if (to.path !== '/dashboard' && !to.path.startsWith('/dashboard/')) return
 
+  // "account" is a reserved top-level segment (pages/dashboard/account/**),
+  // never a real organization slug. Vue Router only falls through to the
+  // dynamic pages/dashboard/[orgSlug]/** route family for a path under
+  // /dashboard/account/* when no static file matches it exactly — and once
+  // that happens, org-context resolution ignores the URL param entirely and
+  // falls back to the session's own active organization, silently rendering
+  // the logged-in user's real org instead of a 404 (found via issue #316's
+  // required 404 check for the removed /dashboard/account/settings route).
+  if (to.params.orgSlug === 'account') {
+    throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+  }
+
   let allowed = false
 
   if (import.meta.server) {
