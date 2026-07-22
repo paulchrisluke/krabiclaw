@@ -6,6 +6,7 @@ import {
   mcpSuccess,
   MCP_ERROR,
   MCP_PROTOCOL_VERSION,
+  parseMcpToolCallArguments,
   readMcpRequest,
 } from "~/server/utils/mcp-protocol";
 import { executeMcpToolCall } from "~/server/utils/mcp-executor";
@@ -466,16 +467,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
     if (request.method === "tools/call") {
       const toolName =
         typeof request.params?.name === "string" ? request.params.name : "";
-      const rawArgs =
-        request.params?.arguments &&
-        typeof request.params.arguments === "object" &&
-        !Array.isArray(request.params.arguments)
-          ? (request.params.arguments as Record<string, unknown>)
-          : Object.fromEntries(
-              Object.entries(request.params ?? {}).filter(
-                ([key]) => key !== "name",
-              ),
-            );
+      const rawArgs = parseMcpToolCallArguments(request.params);
 
       assertConversationalToolEnabled(toolName, cfEnv as ApiRecord);
 
@@ -522,6 +514,12 @@ Common workflows: update menus and items, create and publish site posts, triage 
           errorMessage: describeErrorForTelemetry(toolError),
           durationMs: Date.now() - toolStartedAt,
         });
+        if (mcpErr.code === MCP_ERROR.invalidParams) {
+          return mcpSuccess(request.id, {
+            isError: true,
+            content: [{ type: "text", text: mcpErr.message }],
+          });
+        }
         throw toolError;
       }
 

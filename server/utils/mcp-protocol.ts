@@ -108,10 +108,49 @@ export function mcpProtocolError(code: number, message: string, data?: unknown) 
   return error
 }
 
+// Protocol-level fields that can legitimately appear alongside `arguments` in
+// a `tools/call` params object (or, for older clients that never nested
+// arguments under `arguments`, alongside the flattened tool arguments
+// themselves). These must never be misclassified as unknown tool arguments.
+const MCP_CALL_PROTOCOL_PARAM_KEYS = new Set(['name', '_meta', 'task'])
+
+// Shared by both MCP surfaces (server/api/mcp.post.ts, server/api/mcp/platform.post.ts)
+// so `tools/call` argument parsing — including malformed-envelope detection and
+// legacy flattened-argument support — stays a single canonical contract.
+export function parseMcpToolCallArguments(params: Record<string, unknown> | undefined): Record<string, unknown> {
+  const callParams = params ?? {}
+  if ('arguments' in callParams) {
+    const argsValue = callParams.arguments
+    if (!argsValue || typeof argsValue !== 'object' || Array.isArray(argsValue)) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, 'arguments must be an object.')
+    }
+    return argsValue as Record<string, unknown>
+  }
+  // Legacy flattened-arguments support: some older clients send tool
+  // arguments as top-level params fields instead of nesting them under
+  // `arguments`. Exclude protocol-level fields so they aren't misclassified
+  // as unknown tool arguments by strict-schema validation.
+  return Object.fromEntries(
+    Object.entries(callParams).filter(([key]) => !MCP_CALL_PROTOCOL_PARAM_KEYS.has(key)),
+  )
+}
+
 export function asMcpError(error: unknown): McpErrorShape {
   if (error && typeof error === 'object' && 'mcp' in error) {
     const shape = (error as { mcp: McpErrorShape }).mcp
     return { code: shape.code, message: shape.message, data: shape.data }
+  }
+
+  // Business-logic validation shared between REST dashboard routes and MCP
+  // tool executors (e.g. server/utils/experiences.ts) throws h3's createError
+  // with statusCode 400 rather than mcpProtocolError, since it has no MCP
+  // awareness. Treat that the same as invalidParams so tools/call converts it
+  // to an isError:true result instead of leaking a raw HTTP 400.
+  if (error && typeof error === 'object' && (error as { statusCode?: unknown }).statusCode === 400) {
+    const message = typeof (error as { statusMessage?: unknown }).statusMessage === 'string'
+      ? (error as { statusMessage: string }).statusMessage
+      : error instanceof Error ? error.message : 'Invalid request.'
+    return { code: MCP_ERROR.invalidParams, message }
   }
 
   if (error instanceof Error) {

@@ -92,11 +92,12 @@ export function renderPlatformMcpPrompt(name: string, args: Record<string, strin
       return {
         description: `Update and publish post: ${identifier}`,
         text: [
-          `Call get_platform_blog_post with post_id "${identifier}", convert this approved body into the complete canonical content_blocks array, then call update_platform_blog_post with content_blocks and expected_document_updated_at: ${body}`,
+          `Call get_platform_blog_post with post_id "${identifier}" and note its document_updated_at and updated_at tokens, then convert this approved body into the complete canonical content_blocks array and call replace_platform_blog_content with post_id, content_blocks, and expected_document_updated_at: ${body}`,
           'Compute the SEO fields (seo_description, canonical_url, robots) from the approved article.',
           'Only send featured_image_asset_id if the writer has already selected or uploaded a real platform media asset. Otherwise leave it unset or null.',
+          `If any metadata (title, excerpt, category, SEO fields, etc.) also needs to change, call update_platform_blog_metadata with post_id "${identifier}" and the returned updated_at as expected_updated_at — call get_platform_blog_post again first if replace_platform_blog_content already advanced it.`,
           notes ? `Additional instructions: ${notes}` : '',
-          `Immediately after the update succeeds, call publish_platform_blog_post with post_id "${identifier}" — do not stop to describe the publish step instead of executing it.`,
+          `Immediately after the content/metadata updates succeed, call publish_platform_blog_post with post_id "${identifier}" — do not stop to describe the publish step instead of executing it.`,
           'Report back what changed (fields updated, publish status) once both calls complete, including the returned admin_edit_url and public_url or public_path.',
         ].filter(Boolean).join(' '),
       }
