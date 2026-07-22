@@ -251,7 +251,7 @@
   </UDashboardPanel>
 
   <!-- Delete Account Modal -->
-  <UModal v-model:open="deleteModalOpen" :ui="{ content: 'max-w-md' }">
+  <UModal v-model:open="deleteModalOpen" :dismissible="!deleting" :ui="{ content: 'max-w-md' }">
     <template #content>
       <div class="p-6 space-y-4">
         <div>
@@ -380,7 +380,6 @@ watch(deleteModalOpen, (open) => {
   if (open) return
   deleteConfirmText.value = ''
   deleteError.value = ''
-  deleting.value = false
 })
 
 async function loadCurrency() {

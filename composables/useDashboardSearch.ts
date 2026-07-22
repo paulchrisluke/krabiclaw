@@ -41,7 +41,10 @@ export function useDashboardSearch() {
       })
       byLabel.set(label, items)
     }
-    return [...byLabel.entries()].map(([label, items]) => ({ id: label, label, items }))
+    // Results are already server-filtered against searchTerm — ignoreFilter stops
+    // CommandPalette's own client-side Fuse re-filtering from hiding relevant
+    // matches the server already decided to return.
+    return [...byLabel.entries()].map(([label, items]) => ({ id: label, label, items, ignoreFilter: true }))
   }
 
   async function runSearch() {

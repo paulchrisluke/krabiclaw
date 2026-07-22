@@ -643,6 +643,7 @@ const handleRenameSection = async (section: string) => {
       sectionEditName.value = ''
     } catch (err) {
       console.error('handleRenameSection failed:', err)
+      pendingSections.value = pendingSections.value.map((pending: string) => pending === name ? section : pending)
       toast.add({ description: 'Failed to rename section', color: 'error' })
     }
     return

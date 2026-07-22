@@ -32,13 +32,13 @@
   </UDashboardPanel>
 
   <!-- Delete post confirm modal -->
-  <UModal v-model:open="deleteConfirmOpen" title="Delete post?" :ui="{ content: 'max-w-md' }">
+  <UModal v-model:open="deleteConfirmOpen" title="Delete post?" :dismissible="deletingPostId === null" :ui="{ content: 'max-w-md' }">
     <template #body>
       <p class="text-sm text-muted">This action cannot be undone.</p>
     </template>
     <template #footer>
       <div class="flex w-full justify-end gap-2">
-        <UButton variant="ghost" color="neutral" @click="deleteConfirmOpen = false">Cancel</UButton>
+        <UButton variant="ghost" color="neutral" :disabled="deletingPostId !== null" @click="deleteConfirmOpen = false">Cancel</UButton>
         <UButton color="error" :loading="deletingPostId !== null" @click="confirmDeletePost">Delete</UButton>
       </div>
     </template>
@@ -70,6 +70,7 @@ async function loadBlogPosts() {
 }
 
 function openDeleteConfirm(id: string) {
+  if (deletingPostId.value !== null) return
   pendingDeletePostId.value = id
   deleteConfirmOpen.value = true
 }

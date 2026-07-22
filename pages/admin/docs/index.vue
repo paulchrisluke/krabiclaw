@@ -35,13 +35,13 @@
   </UDashboardPanel>
 
   <!-- Delete doc confirm modal -->
-  <UModal v-model:open="deleteConfirmOpen" title="Delete doc?" :ui="{ content: 'max-w-md' }">
+  <UModal v-model:open="deleteConfirmOpen" title="Delete doc?" :dismissible="deletingDocId === null" :ui="{ content: 'max-w-md' }">
     <template #body>
       <p class="text-sm text-muted">This action cannot be undone.</p>
     </template>
     <template #footer>
       <div class="flex w-full justify-end gap-2">
-        <UButton variant="ghost" color="neutral" @click="deleteConfirmOpen = false">Cancel</UButton>
+        <UButton variant="ghost" color="neutral" :disabled="deletingDocId !== null" @click="deleteConfirmOpen = false">Cancel</UButton>
         <UButton color="error" :loading="deletingDocId !== null" @click="confirmDeleteDoc">Delete</UButton>
       </div>
     </template>
@@ -73,6 +73,7 @@ async function loadDocs() {
 }
 
 function openDeleteConfirm(id: string) {
+  if (deletingDocId.value !== null) return
   pendingDeleteDocId.value = id
   deleteConfirmOpen.value = true
 }

@@ -98,7 +98,7 @@
 </template>
 
 <script setup lang="ts">
-import { buildDisplayUrl, getEditablePages } from '~/config/content-registry'
+import { buildDisplayUrl, getEditablePages, resolvePreviewPath } from '~/config/content-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
@@ -154,9 +154,13 @@ const displayUrl = computed(() => {
   // professional_service's "Services" tab id is the offerings route itself
   // (see secondaryTab above), not a content-registry page id — resolve it
   // the same way before falling back to the registry lookup for other pages.
-  const path = props.vertical === 'professional_service' && props.selectedPage === secondaryTab.value?.id
-    ? template.serviceRoutes.offeringsIndex ?? '/'
-    : getEditablePages(props.vertical, template.slug).find(page => page.id === props.selectedPage)?.path ?? '/'
+  if (props.vertical === 'professional_service' && props.selectedPage === secondaryTab.value?.id) {
+    return buildDisplayUrl(props.siteDomain ?? '', template.serviceRoutes.offeringsIndex ?? '/')
+  }
+  const page = getEditablePages(props.vertical, template.slug).find(p => p.id === props.selectedPage)
+  const path = page?.scope === 'location' && selectedLocation.value
+    ? resolvePreviewPath(props.selectedPage, { locationSlug: selectedLocation.value.slug })
+    : page?.path ?? '/'
   return buildDisplayUrl(props.siteDomain ?? '', path)
 })
 

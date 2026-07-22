@@ -292,7 +292,7 @@ Use `class` for border, background, rounded, and shadow styling.
 
 Before using any Nuxt UI component prop, slot, or event, verify it against the live docs (`ui.nuxt.com/docs/components/<name>`) or the `nuxt-ui` MCP tools. Do not guess based on a similar library, an older Nuxt UI major version, or what "seems like it should exist." Existing usage elsewhere in this codebase is not proof of correctness — copy-pasted mistakes have already propagated across multiple files this way (see the `UModal` `@close` incident below). Verify against the docs directly, every time, regardless of what the codebase already does.
 
-- `UModal` has no plain `close` event — only `close:prevent` and `update:open`. To react to a dismiss from any path (button click, Escape, outside-click), watch the `v-model:open` ref itself; a `@close` handler will silently never fire.
+- `UModal` has no plain `close` event. Of its close-related emits, only `close:prevent` (fired when a dismiss attempt is blocked, e.g. `dismissible: false`) and `update:open` (fired on every open/close transition) exist — it also emits `enter`/`after:enter`/`leave`/`after:leave` lifecycle events, which are unrelated to closing. To react to a dismiss from any path (button click, Escape, outside-click), watch the `v-model:open` ref itself; a `@close` handler will silently never fire.
 - If a fix involves reacting to a component closing/changing/submitting, confirm the actual emitted event name in the docs before wiring a handler to it.
 - If CodeRabbit (or any reviewer) suggests an API that doesn't hold up against the real docs, correct it and move on — do not adopt an unverified suggestion just because it was proposed with confidence.
 

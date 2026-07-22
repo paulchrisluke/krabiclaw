@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
 // Contract tests for the dashboard/Nuxt UI consolidation cleanup: AppAvatar,
@@ -15,7 +16,7 @@ const repoRoot = new URL('../../', import.meta.url)
 function walkSourceFiles(startDirs: string[]): string[] {
   const skip = new Set(['node_modules', '.output', '.git', '.nuxt', '.wrangler', 'dist'])
   const files: string[] = []
-  const stack = startDirs.map(dir => new URL(dir, repoRoot).pathname)
+  const stack = startDirs.map(dir => fileURLToPath(new URL(dir, repoRoot)))
   while (stack.length) {
     const dir = stack.pop()!
     let entries: string[]
