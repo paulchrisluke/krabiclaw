@@ -9,11 +9,21 @@ test.describe('dashboard functional smoke', () => {
     const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'load' })
     expect(login?.status()).toBeLessThan(400)
     await expect(page).toHaveURL(/\/dashboard/)
-    await expect(page.locator('body')).toContainText(/Overview|Create your restaurant workspace/)
+    // Neither "Overview" nor "Create your restaurant workspace" exist in the
+    // current UI (confirmed via full-repo grep) — stale text from before the
+    // dashboard Nuxt UI consolidation (#337). The "any suitable E2E test
+    // user" fallback (server/api/dev/login.get.ts) deterministically prefers
+    // a user who already has a site (ORDER BY has_site DESC), so this test
+    // in practice always lands on pages/dashboard/[orgSlug]/index.vue, whose
+    // real heading is "Sites" (never "Overview" — that string only exists as
+    // an internal, never-rendered UDashboardPanel id). The onboarding
+    // alternative kept for a genuinely site-less user matches the real
+    // OnboardingWizard.vue welcome kicker instead of the old placeholder text.
+    await expect(page.locator('body')).toContainText(/Sites|Let's build your site/)
 
     const dashboard = await page.goto(`${baseURL}/dashboard`, { waitUntil: 'load' })
     expect(dashboard?.status()).toBeLessThan(400)
-    await expect(page.locator('body')).toContainText(/Overview|Create your restaurant workspace/)
+    await expect(page.locator('body')).toContainText(/Sites|Let's build your site/)
 
     expect(errors).toEqual([])
   })
