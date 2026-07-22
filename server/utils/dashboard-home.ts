@@ -88,7 +88,7 @@ export async function getDashboardHomeData(
       WHERE bl.organization_id = ? AND bl.site_id = ?
       ${locationScopeClause}
       ORDER BY bl.is_primary DESC, bl.title ASC
-    `, scoped ? [organizationId, siteId, principal.memberId] : [organizationId, siteId]),
+    `, scoped && principal ? [organizationId, siteId, principal.memberId] : [organizationId, siteId]),
 
     scoped ? Promise.resolve(null) : queryFirst<{
       balance: number; lifetime_used: number; last_topped_up_at: string | null
@@ -115,7 +115,7 @@ export async function getDashboardHomeData(
       ${eventScopeClause}
       ORDER BY e.created_at DESC
       LIMIT 15
-    `, scoped ? [organizationId, siteId, principal.memberId] : [organizationId, siteId]),
+    `, scoped && principal ? [organizationId, siteId, principal.memberId] : [organizationId, siteId]),
   ])
 
   return {

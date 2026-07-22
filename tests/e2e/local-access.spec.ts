@@ -21,6 +21,8 @@ function sqlValue(value: string): string {
 
 test('owner can configure a site- or location-scoped editor invitation', async ({ page, baseURL }) => {
   test.setTimeout(60_000)
+  const inviteEmail = 'e2e-scoped-editor@playwright.example'
+  localD1Query(`DELETE FROM invitation WHERE organizationId = 'org-pottery-house' AND email = ${sqlValue(inviteEmail)}`)
   const pageErrors = collectPageErrors(page)
   await page.context().setExtraHTTPHeaders(devLoginHeaders() || {})
   const login = await page.goto(devLoginUrl(baseURL!, POTTERY_OWNER_USER_ID), { waitUntil: 'load' })
@@ -54,6 +56,20 @@ test('owner can configure a site- or location-scoped editor invitation', async (
   await locationSelect.click()
   await page.getByRole('option', { name: 'Pottery House — Beachfront at Klong Muang', exact: true }).click()
   await expect(locationSelect).toContainText('Pottery House — Beachfront at Klong Muang')
+
+  await page.getByRole('textbox', { name: 'Email address' }).fill(inviteEmail)
+  await page.getByRole('button', { name: 'Send invite' }).click()
+  await expect(page.getByText('Invitation sent.')).toBeVisible()
+
+  const rows = localD1Query<{ id: string; site_id: string; location_id: string | null }>(`
+    SELECT i.id, ias.site_id, ias.location_id
+    FROM invitation i
+    JOIN invitation_access_scope ias ON ias.invitation_id = i.id
+    WHERE i.organizationId = 'org-pottery-house' AND i.email = ${sqlValue(inviteEmail)} AND i.status = 'pending'
+  `)
+  expect(rows).toHaveLength(1)
+  expect(rows[0]).toMatchObject({ site_id: SITE_ID, location_id: SIBLING_LOCATION_ID })
+  localD1Query(`DELETE FROM invitation WHERE id = ${sqlValue(rows[0]!.id)}`)
 })
 
 test('phone invitation verifies identity, accepts access, and opens the scoped dashboard', async ({ page, baseURL }) => {

@@ -121,6 +121,7 @@ test('the audited /api/dashboard/** boundary is deny-by-default for scoped roles
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/editor/media'), true)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/ai/generate-image'), true)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/ai/credits'), true)
+  assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/onboarding/checklist?siteId=site-1'), true)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/reservations/abc'), false)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/settings'), true)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/members'), false)

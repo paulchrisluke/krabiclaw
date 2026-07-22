@@ -560,14 +560,7 @@ async function clearInvitation(invitationId: string) {
   }
 }
 
-const { data: session } = await authClient.useSession(useFetch)
-const activeOrgId = computed(() => session.value?.session?.activeOrganizationId ?? null)
-
 async function sendInvite() {
-  if (!activeOrgId.value) {
-    inviteError.value = 'No active organization selected. Reload the page and try again.'
-    return
-  }
   if (inviteForm.role === 'editor' && !inviteForm.siteId) {
     inviteError.value = 'Pick a site for this editor before sending.'
     return
@@ -577,37 +570,15 @@ async function sendInvite() {
   inviteSuccess.value = false
 
   try {
-    const { data, error } = await authClient.organization.inviteMember({
-      email: inviteForm.email,
-      role: inviteForm.role as 'member' | 'admin' | 'editor',
-      organizationId: activeOrgId.value,
+    await $fetch('/api/dashboard/invitations', {
+      method: 'POST',
+      body: {
+        email: inviteForm.email,
+        role: inviteForm.role as 'member' | 'admin' | 'editor',
+        siteId: inviteForm.role === 'editor' ? inviteForm.siteId : undefined,
+        locationId: inviteForm.role === 'editor' ? inviteForm.locationId || null : undefined,
+      },
     })
-
-    if (error) {
-      inviteError.value = error.message ?? 'Failed to send invite.'
-      return
-    }
-
-    if (inviteForm.role === 'editor') {
-      if (!data?.id) {
-        inviteError.value = 'The invitation was created without an id, so its access scope could not be attached.'
-        return
-      }
-      try {
-        await $fetch(`/api/dashboard/invitations/${data.id}/scope`, {
-          method: 'POST',
-          body: { siteId: inviteForm.siteId, locationId: inviteForm.locationId || null },
-        })
-      } catch (scopeErr) {
-        const { error: cancelError } = await authClient.organization.cancelInvitation({ invitationId: data.id })
-        const scopeErrData = scopeErr && typeof scopeErr === 'object' && 'data' in scopeErr ? (scopeErr as Record<string, { error?: string }>).data : null
-        const scopeMessage = scopeErrData?.error ?? (scopeErr instanceof Error ? scopeErr.message : 'The site/location scope could not be attached.')
-        inviteError.value = cancelError
-          ? `${scopeMessage} The unscoped invitation also could not be cancelled; cancel it from Pending invitations before retrying.`
-          : `${scopeMessage} The invitation was cancelled; please retry.`
-        return
-      }
-    }
 
     inviteForm.email = ''
     inviteForm.role = 'member'
@@ -620,7 +591,8 @@ async function sendInvite() {
     inviteSuccessTimeout.value = setTimeout(() => { inviteSuccess.value = false }, 4000)
     await refresh()
   } catch (err) {
-    inviteError.value = err instanceof Error ? err.message : 'Failed to send invite.'
+    const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
+    inviteError.value = errorData?.error ?? (err instanceof Error ? err.message : 'Failed to send invite.')
   } finally {
     inviting.value = false
   }

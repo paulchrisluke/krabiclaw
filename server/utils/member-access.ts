@@ -89,6 +89,7 @@ const SCOPED_ROLE_DASHBOARD_ROUTES = [
   /^\/api\/dashboard\/settings$/,
   /^\/api\/dashboard\/location-preference$/,
   /^\/api\/dashboard\/locations(?:\/add|\/[^/]+)?$/,
+  /^\/api\/dashboard\/onboarding\/checklist$/,
   /^\/api\/dashboard\/notifications(?:\/unread-count|\/read-all|\/[^/]+\/read)?$/,
   /^\/api\/dashboard\/editor(?:\/.*)?$/,
   /^\/api\/dashboard\/ai\/(?:agent|conversations(?:\/.*)?|credits|enhance-prompt|generate-image|menu\/extract|posts\/generate)$/,

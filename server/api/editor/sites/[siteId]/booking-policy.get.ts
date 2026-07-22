@@ -35,10 +35,15 @@ export default defineEventHandler(async (event) => {
   const locale = typeof query.locale === 'string' ? query.locale : 'en'
 
   const principal = { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
-  let resourceLocationId = locationId
-  if (!resourceLocationId && experienceId) {
+  if (locationId) {
+    const location = await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`, [locationId, siteId])
+    if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
+  }
+  let resourceLocationId = locationId ?? null
+  if (experienceId) {
     const experience = await queryFirst<{ location_id: string }>(db, `SELECT location_id FROM experiences WHERE id = ? AND site_id = ? LIMIT 1`, [experienceId, siteId])
-    resourceLocationId = experience?.location_id ?? null
+    if (!experience) return jsonResponse({ error: 'experience_id must reference an experience on this site' }, { status: 400 })
+    if (!locationId) resourceLocationId = experience.location_id
   }
   await assertResourceAccess(db, { ...principal, resourceLocationId })
 

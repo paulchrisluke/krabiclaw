@@ -1,8 +1,8 @@
 // POST /api/editor/sites/[siteId]/experience-bookings/[bookingId]/reply
-// Owner/admin sends an email reply to the guest who booked an experience.
-import { jsonResponse } from '~/server/utils/api-response'
-import { requireSiteAccess } from '~/server/utils/location-access'
-import { assertOrganizationAccess } from '~/server/utils/member-access'
+// An authorized site/location manager sends an email reply to the guest.
+import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { getAuthSession } from '~/server/utils/auth'
+import { assertResourceAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
 import { getSubmissionContact, insertSubmissionMessage, sendReplyEmail } from '~/server/utils/submission-messages'
 
@@ -11,8 +11,29 @@ export default defineEventHandler(async (event) => {
   const bookingId = getRouterParam(event, 'bookingId')
   if (!siteId || !bookingId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
-  const { env, db, session, site } = await requireSiteAccess(event, siteId, 'context')
-  assertOrganizationAccess(site.member_role)
+  const env = cloudflareEnv(event)
+  const db = env.DB
+  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
+  const session = await getAuthSession(event, env)
+  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
+
+  const booking = await queryFirst<{ id: string; location_id: string; organization_id: string; member_id: string; member_role: string }>(db, `
+    SELECT eb.id, eb.location_id, s.organization_id, m.id AS member_id, m.role AS member_role
+    FROM experience_bookings eb
+    JOIN sites s ON s.id = eb.site_id
+    JOIN member m ON m.organizationId = s.organization_id
+    WHERE eb.id = ? AND eb.site_id = ? AND m.userId = ?
+    LIMIT 1
+  `, [bookingId, siteId, session.user.id])
+  if (!booking) return jsonResponse({ error: 'Booking not found or access denied' }, { status: 404 })
+
+  await assertResourceAccess(db, {
+    memberId: booking.member_id,
+    role: booking.member_role,
+    organizationId: booking.organization_id,
+    siteId,
+    resourceLocationId: booking.location_id,
+  })
 
   const body = await readBody(event) as { channel?: unknown; body?: unknown }
   const channel = body.channel
@@ -48,7 +69,7 @@ export default defineEventHandler(async (event) => {
   await insertSubmissionMessage(db, {
     submissionType: 'experience_booking',
     submissionId: bookingId,
-    organizationId: site.organization_id,
+    organizationId: booking.organization_id,
     siteId,
     direction: 'out',
     channel: 'email',

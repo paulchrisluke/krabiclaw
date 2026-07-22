@@ -96,6 +96,15 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: `This invitation was sent to ${invitation.email}. Please sign in with that account.` }, { status: 403 })
   }
 
+  const pendingScopes = await queryAll<{ organization_id: string; site_id: string; location_id: string | null; grant_source: string }>(db, `
+    SELECT organization_id, site_id, location_id, grant_source
+    FROM invitation_access_scope
+    WHERE invitation_id = ?
+  `, [invitationId])
+  if (invitation.role === 'editor' && pendingScopes.length === 0) {
+    return jsonResponse({ error: 'This editor invitation has no assigned site or location. Ask an organization owner to replace it.' }, { status: 409 })
+  }
+
   const auth = createAuth(env)
   const acceptApi = auth.api as unknown as AcceptInvitationApi
 
@@ -134,11 +143,6 @@ export default defineEventHandler(async (event) => {
   if (!acceptedMember) {
     return jsonResponse({ error: 'Invitation was accepted but membership activation failed' }, { status: 500 })
   }
-  const pendingScopes = await queryAll<{ organization_id: string; site_id: string; location_id: string | null; grant_source: string }>(db, `
-    SELECT organization_id, site_id, location_id, grant_source
-    FROM invitation_access_scope
-    WHERE invitation_id = ?
-  `, [invitationId])
   if (pendingScopes.length > 0) {
     await executeBatch(db, [
       ...pendingScopes.map(scope => ({
