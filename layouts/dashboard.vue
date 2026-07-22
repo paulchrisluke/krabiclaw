@@ -29,11 +29,10 @@
 
         <template #default="{ collapsed }">
           <div class="flex flex-col gap-2">
-            <PlatformCommandSearchTrigger
-              surface="dashboard"
-              :compact="collapsed"
+            <UDashboardSearchButton
+              :collapsed="collapsed"
               label="Search dashboard, docs, help..."
-              aria-label="Open dashboard search"
+              class="w-full"
             />
             <UNavigationMenu
               :collapsed="collapsed"
@@ -192,11 +191,12 @@
         </template>
       </UDashboardSidebar>
 
+      <UDashboardSearch v-model:search-term="dashboardSearchTerm" :groups="dashboardSearchGroups" :loading="dashboardSearchLoading" />
+
       <slot />
 
       <ChowBot v-if="!isConversationsRoute" />
     </UDashboardGroup>
-    <PlatformCommandSearchModal surface="dashboard" />
     <BillingCreditPurchaseModal />
     <BillingServiceUpsellModal />
     <BillingSiteSubscribeModal />
@@ -205,8 +205,6 @@
 </template>
 
 <script setup lang="ts">
-import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
-import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import ChowBot from '~/components/workspace/dashboard/ChowBot.vue'
 import DashboardScopeHeader from '~/components/workspace/dashboard/DashboardScopeHeader.vue'
 import type { DashboardScopeHeaderModel } from '~/components/workspace/dashboard/DashboardScopeHeader.vue'
@@ -257,6 +255,7 @@ const { data: sessionData, signOut, refreshSession } = useAuth()
 const { trackDashboardVisited } = useAnalytics()
 const toast = useToast()
 const stoppingImpersonation = ref(false)
+const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups: dashboardSearchGroups } = useDashboardSearch()
 const dashboard = useDashboardSite()
 const organizationsState = authClient.useListOrganizations()
 
