@@ -29,9 +29,9 @@
               :class="{ 'opacity-50 pointer-events-none': uploadLoading }"
               @click="openUploadPicker"
             >
-              <AppAvatar
+              <UAvatar
                 :src="sessionData?.user?.image ?? undefined"
-                :name="sessionData?.user?.name || sessionData?.user?.email"
+                :text="getInitials(sessionData?.user?.name || sessionData?.user?.email)"
                 alt="User avatar"
                 size="3xl"
                 class="ring-1 ring-border group-hover:ring-primary transition-all"
@@ -208,7 +208,7 @@
   </UDashboardPanel>
 
   <!-- Delete Account Modal -->
-  <UModal v-model:open="deleteModalOpen" :ui="{ content: 'max-w-md' }" @close="resetDeleteModal">
+  <UModal v-model:open="deleteModalOpen" :dismissible="!deleting" :ui="{ content: 'max-w-md' }">
     <template #content>
       <div class="p-6 space-y-4">
         <div>
@@ -496,10 +496,13 @@ function getDeleteErrorBody(error: unknown): DeleteErrorBody {
 
 function resetDeleteModal() {
   deleteModalOpen.value = false
+}
+
+watch(deleteModalOpen, (open) => {
+  if (open) return
   deleteConfirmText.value = ''
   deleteError.value = ''
-  deleting.value = false
-}
+})
 
 async function confirmDeleteAccount() {
   if (deleteConfirmText.value !== 'DELETE') return

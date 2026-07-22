@@ -306,9 +306,8 @@
 
 <script setup lang="ts">
 
-import { useToast } from '~/composables/useToast'
 import { CREDIT_BUNDLES, type CreditBundleSize } from '~/shared/creditBundles'
-const { addToast } = useToast()
+const toast = useToast()
 
 definePageMeta({ layout: 'dashboard' })
 
@@ -385,7 +384,7 @@ async function purchaseCredits(bundle: 500 | 2500 | 5000) {
         method: 'POST', body: { bundle }
       })
       if (res.balance !== undefined) {
-        addToast(`Added ${bundle} credits. New balance: ${res.balance}`, 'success')
+        toast.add({ description: `Added ${bundle} credits. New balance: ${res.balance}`, color: 'success' })
         await loadCredits()
       }
     } catch { /* non-critical */ } finally {
@@ -516,7 +515,7 @@ onMounted(async () => {
   const { success, plan, canceled, siteId, ...restQuery } = route.query
 
   if (success === 'true') {
-    addToast('Payment successful. Your plan has been updated.', 'success')
+    toast.add({ description: 'Payment successful. Your plan has been updated.', color: 'success' })
   }
   if (canceled === 'true') {
     errorMessage.value = 'Payment was canceled. Your plan was not changed.'

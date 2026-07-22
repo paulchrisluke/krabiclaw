@@ -49,8 +49,6 @@
         <span class="text-sm">Loading your site…</span>
       </div>
     </div>
-
-    <AppToast />
   </div>
 </template>
 

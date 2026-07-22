@@ -210,7 +210,6 @@
 </template>
 
 <script setup lang="ts">
-import { useToast } from '~/composables/useToast'
 
 const props = defineProps<{
   siteId: string
@@ -343,7 +342,7 @@ async function runExtraction() {
     const msg = err instanceof Error ? err.message : (err && typeof err === 'object' && 'data' in err && typeof err.data === 'object' && err.data && 'error' in err.data && typeof err.data.error === 'string') ? err.data.error : 'Extraction failed. Please try again.'
     uploadError.value = msg
     step.value = 'idle'
-    toast.addToast(msg, 'error')
+    toast.add({ description: msg, color: 'error' })
   } finally {
     if (abortController.value === controller) abortController.value = null
   }
@@ -377,7 +376,7 @@ async function saveItems() {
 
     const totalFailures = deleteFailures + updateFailures
     if (totalFailures > 0) {
-      toast.addToast(`Failed to save ${totalFailures} item${totalFailures === 1 ? '' : 's'}. Please try again.`, 'error')
+      toast.add({ description: `Failed to save ${totalFailures} item${totalFailures === 1 ? '' : 's'}. Please try again.`, color: 'error' })
       return
     }
 
@@ -385,10 +384,10 @@ async function saveItems() {
     step.value = 'done'
     emit('imported', resultMenuId.value)
     trackMenuImported(props.siteId, 'ai')
-    toast.addToast(`${savedCount.value} item${savedCount.value === 1 ? '' : 's'} added to menu`, 'success')
+    toast.add({ description: `${savedCount.value} item${savedCount.value === 1 ? '' : 's'} added to menu`, color: 'success' })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Failed to save items. Please try again.'
-    toast.addToast(msg, 'error')
+    toast.add({ description: msg, color: 'error' })
   } finally {
     saving.value = false
   }

@@ -1,5 +1,5 @@
 <template>
-  <UModal v-model:open="isOpen" title="Subscribe this site" :ui="{ content: 'max-w-sm' }" @close="cancel">
+  <UModal v-model:open="isOpen" title="Subscribe this site" :ui="{ content: 'max-w-sm' }">
     <template #body>
       <div class="space-y-4">
         <p class="text-sm text-muted">
@@ -37,4 +37,8 @@
 
 <script setup lang="ts">
 const { isOpen, savedCard, subscribing, planLabel, confirm, cancel } = useSiteSubscribe()
+
+watch(isOpen, (open) => {
+  if (!open) cancel()
+})
 </script>

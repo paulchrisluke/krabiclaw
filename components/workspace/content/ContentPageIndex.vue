@@ -29,7 +29,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-import { getEditablePages } from '~/config/content-registry'
+import { getScopedEditablePages } from '~/config/content-registry'
 import { resolveCmsCapabilities } from '~/config/cms-registry'
 import type { PublicTemplateSlug } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
@@ -85,14 +85,11 @@ const cmsManagers = computed(() => {
   })
 })
 
-const pages = computed(() => {
-  const capabilities = cmsCapabilities.value
-  const vertical = siteData.value?.vertical as SiteVertical | undefined
-  if (!vertical || !capabilities || capabilities.template === 'blawby') return []
-  const allowedPageIds = new Set(capabilities.pages.map(page => page.id))
-  return getEditablePages(vertical, capabilities.template)
-    .filter(page => allowedPageIds.has(page.id) && page.scope === props.scope)
-})
+const pages = computed(() => getScopedEditablePages(
+  (siteData.value?.vertical as SiteVertical | undefined) ?? null,
+  cmsCapabilities.value,
+  props.scope,
+))
 
 onMounted(async () => {
   try {

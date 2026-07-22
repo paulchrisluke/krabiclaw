@@ -48,44 +48,49 @@
       </slot>
     </div>
 
-    <div class="bg-inverted text-inverted px-5 py-6 sm:px-10">
+    <!-- Fixed-dark caption bar — bg-inverted/text-inverted intentionally NOT
+         used here: those tokens invert with the visitor's light/dark mode
+         preference (see saya.css), which previously made this bar and its
+         text flip unpredictably instead of staying a consistent dark chrome
+         like Instagram/Facebook post captions. -->
+    <div class="bg-[var(--saya-surface-dark)] text-[var(--saya-on-surface-dark)] px-5 py-6 sm:px-10">
       <div class="mx-auto flex max-w-3xl items-start justify-between gap-4">
         <div class="min-w-0 flex-1">
-          <time v-if="post.createTime" :datetime="post.createTime" class="mb-2 block text-[10px] font-bold uppercase tracking-widest text-inverted/60">
+          <time v-if="post.createTime" :datetime="post.createTime" class="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[var(--saya-on-surface-dark)]/60">
             {{ formatDate(post.createTime) }}
           </time>
-          <h1 class="saya-display-md text-inverted">
+          <h1 class="saya-display-md text-[var(--saya-on-surface-dark)]">
             <em class="saya-italic">{{ post.title || t('saya.posts.business_update') }}</em>
           </h1>
-          <p v-if="post.location" class="mt-2 text-sm text-inverted/70">{{ post.location.title }}</p>
+          <p v-if="post.location" class="mt-2 text-sm text-[var(--saya-on-surface-dark)]/70">{{ post.location.title }}</p>
 
-          <div class="mt-4 text-base leading-7 text-inverted/90">
+          <div class="mt-4 text-base leading-7 text-[var(--saya-on-surface-dark)]/90">
             <p :class="['whitespace-pre-line', !descriptionExpanded && 'line-clamp-3']">{{ post.summary || post.body }}</p>
             <button
               v-if="descriptionTruncatable"
               type="button"
-              class="mt-1 text-sm font-semibold text-inverted/60 hover:text-inverted"
+              class="mt-1 text-sm font-semibold text-[var(--saya-on-surface-dark)]/60 hover:text-[var(--saya-on-surface-dark)]"
               @click="descriptionExpanded = !descriptionExpanded"
             >
               {{ descriptionExpanded ? t('saya.posts.show_less') : t('saya.posts.show_more') }}
             </button>
           </div>
 
-          <div v-if="post.event" class="mt-4 rounded-xl bg-inverted/10 p-3 text-sm backdrop-blur-md">
-            <p class="mb-1 font-bold text-inverted">{{ t('saya.posts.event_details_label') }}</p>
-            <p class="text-inverted/90">{{ post.event.title }} <span v-if="post.event.startDate">• {{ formatDate(post.event.startDate) }}</span></p>
+          <div v-if="post.event" class="mt-4 rounded-xl bg-[var(--saya-on-surface-dark)]/10 p-3 text-sm backdrop-blur-md">
+            <p class="mb-1 font-bold text-[var(--saya-on-surface-dark)]">{{ t('saya.posts.event_details_label') }}</p>
+            <p class="text-[var(--saya-on-surface-dark)]/90">{{ post.event.title }} <span v-if="post.event.startDate">• {{ formatDate(post.event.startDate) }}</span></p>
           </div>
-          <div v-if="post.offer" class="mt-4 rounded-xl bg-inverted/10 p-3 text-sm backdrop-blur-md">
-            <p class="mb-1 font-bold text-inverted">{{ t('saya.posts.special_offer_label') }}</p>
-            <p class="text-inverted/90">{{ post.offer.title }} <span v-if="post.offer.couponCode">• {{ t('saya.posts.code_label') }} {{ post.offer.couponCode }}</span></p>
-            <p v-if="post.offer.terms" class="mt-1 text-inverted/70">{{ post.offer.terms }}</p>
+          <div v-if="post.offer" class="mt-4 rounded-xl bg-[var(--saya-on-surface-dark)]/10 p-3 text-sm backdrop-blur-md">
+            <p class="mb-1 font-bold text-[var(--saya-on-surface-dark)]">{{ t('saya.posts.special_offer_label') }}</p>
+            <p class="text-[var(--saya-on-surface-dark)]/90">{{ post.offer.title }} <span v-if="post.offer.couponCode">• {{ t('saya.posts.code_label') }} {{ post.offer.couponCode }}</span></p>
+            <p v-if="post.offer.terms" class="mt-1 text-[var(--saya-on-surface-dark)]/70">{{ post.offer.terms }}</p>
           </div>
         </div>
 
         <div class="relative shrink-0">
           <button
             type="button"
-            class="flex size-10 items-center justify-center rounded-full border border-inverted/15 text-inverted transition hover:border-inverted/50"
+            class="flex size-10 items-center justify-center rounded-full border border-[var(--saya-on-surface-dark)]/15 text-[var(--saya-on-surface-dark)] transition hover:border-[var(--saya-on-surface-dark)]/50"
             :title="t('saya.posts.share')"
             @click="share"
           >
@@ -94,7 +99,7 @@
           <span
             v-if="shareStatus"
             role="status"
-            class="absolute top-full right-0 mt-1.5 whitespace-nowrap rounded bg-inverted/10 px-2 py-1 text-xs text-inverted/80"
+            class="absolute top-full right-0 mt-1.5 whitespace-nowrap rounded bg-[var(--saya-on-surface-dark)]/10 px-2 py-1 text-xs text-[var(--saya-on-surface-dark)]/80"
           >
             {{ shareStatus }}
           </span>
