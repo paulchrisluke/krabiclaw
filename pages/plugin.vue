@@ -8,7 +8,7 @@
             <div class="relative group shrink-0">
               <div class="absolute inset-0 rounded-[28px] blur-xl opacity-40 group-hover:opacity-60 transition-opacity duration-500" style="background: linear-gradient(135deg, var(--kc-coral), var(--kc-teal));"></div>
               <img
-                src="/web-app-manifest-192x192.png"
+                src="/platform/web-app-manifest-192x192.png"
                 alt="KrabiClaw app icon"
                 class="relative w-[100px] h-[100px] rounded-[28px] shadow-lg border border-default/20 transform group-hover:-translate-y-1 transition-transform duration-300 object-cover"
               >
@@ -159,7 +159,7 @@
               <strong>Beta Note:</strong> This developer setup is temporary. Once approved for the ChatGPT App Store, it will be a simple one-click install.
             </p>
             <div class="flex items-center justify-center gap-3">
-              <a href="/web-app-manifest-192x192.png" download class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline bg-primary/10 px-3 py-1.5 rounded-lg transition-colors">
+              <a href="/platform/web-app-manifest-192x192.png" download class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline bg-primary/10 px-3 py-1.5 rounded-lg transition-colors">
                 <PlatformIcon name="download" class="size-4" /> Download App Icon
               </a>
               <a href="/install-krabiclaw-chatgpt-plugin.png" target="_blank" class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline bg-primary/10 px-3 py-1.5 rounded-lg transition-colors">
