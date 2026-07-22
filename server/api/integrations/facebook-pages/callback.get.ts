@@ -6,7 +6,9 @@ import {
   getFacebookPages,
   storeFacebookPagesConnection,
 } from '../../../utils/facebook-pages'
-import { queryFirst } from '~/server/db'
+import { getDashboardSiteRouteContext } from '~/server/utils/dashboard-redirects'
+import { loadMemberSiteRow } from '~/server/utils/location-access'
+import { assertSiteWideAccess } from '~/server/utils/member-access'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -49,11 +51,9 @@ export default defineEventHandler(async (event) => {
     try {
       const db = env.DB
       if (!db) return `/dashboard?fb=${status}`
-      const organization = await queryFirst<{ slug: string | null }>(db, `
-        SELECT slug FROM organization WHERE id = ? LIMIT 1
-      `, [organizationId])
-      return organization?.slug
-        ? `/dashboard/${encodeURIComponent(organization.slug)}/settings/general?fb=${status}`
+      const context = await getDashboardSiteRouteContext(db, organizationId, siteId)
+      return context
+        ? `/dashboard/${encodeURIComponent(context.organizationSlug)}/sites/${encodeURIComponent(context.siteSlug)}/settings?fb=${status}`
         : `/dashboard?fb=${status}`
     } catch (e) {
       console.error('Facebook Pages redirect organization query failed:', e)
@@ -62,6 +62,17 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    const db = env.DB
+    if (!db) throw new Error('Database not available')
+    const siteAccess = await loadMemberSiteRow(db, siteId, userId)
+    if (!siteAccess || siteAccess.organization_id !== organizationId) throw new Error('Access denied')
+    await assertSiteWideAccess(db, {
+      memberId: siteAccess.member_id,
+      role: siteAccess.member_role,
+      organizationId,
+      siteId,
+    })
+
     // System-user access tokens from FLB never expire — no long-lived exchange needed
     const systemUserToken = await exchangeFacebookCode(env, code)
     const userInfo = await getFacebookUserInfo(systemUserToken)

@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Blog">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
         <template #trailing>
           <UButton size="sm" to="/admin/blog/new">New post</UButton>

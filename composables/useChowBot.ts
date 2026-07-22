@@ -35,7 +35,7 @@ export const useChowBot = () => {
   const dashboardLocation = useDashboardLocation()
   const siteId = computed(() => import.meta.server ? null : dashboard.siteId.value)
   const selectedLocation = computed(() => import.meta.server ? null : dashboardLocation.currentLocation.value)
-  const isConversationsWorkspace = computed(() => /^\/dashboard\/[^/]+\/conversations(?:\/|$)/.test(route.path))
+  const isConversationsWorkspace = computed(() => typeof route.name === 'string' && route.name.includes('conversations'))
   const agentLocationId = computed(() => {
     if (isConversationsWorkspace.value) return null
     return selectedLocation.value?.id ?? null
@@ -94,7 +94,7 @@ export const useChowBot = () => {
     if (names.has('create_post') || names.has('publish_post')) {
       target = paths.posts
     } else if (names.has('create_location') || names.has('update_location')) {
-      target = paths.org
+      target = paths.locations
     } else if ([...names].some(n => MENU_TOOLS.has(n))) {
       const locId = selectedLocation.value?.id ?? null
       target = locId ? dashboardLinks.locationMenuPath(locId) : paths.menu

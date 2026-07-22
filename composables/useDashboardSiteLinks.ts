@@ -21,17 +21,13 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
   const paths = computed(() => {
     const base = '/dashboard'
     const slug = orgSlug ? unref(orgSlug) : dashboard.organization.value?.slug
-    const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : dashboard.site.value?.subdomain
+    const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
     const locationSlug = dashboardLocation.currentLocationSlug.value
     const orgBase = slug ? `${base}/${slug}` : base
     const siteBase = slug && siteSlug ? `${orgBase}/sites/${siteSlug}` : orgBase
-    // paths.value.locations points at the site root (there is no dedicated
-    // locations list page — the site overview page doubles as one), distinct
-    // from the /locations/:location prefix used below for a specific location's
-    // own routes (see pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/).
-    const locationsBase = siteBase
+    const locationsBase = `${siteBase}/locations`
     const locationBase = siteSlug && locationSlug ? `${siteBase}/locations/${locationSlug}` : siteBase
-    const settingsBase = `${orgBase}/settings`
+    const orgSettingsBase = `${orgBase}/settings`
     return {
       base,
       org: orgBase,
@@ -52,9 +48,12 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
       media: `${locationBase}/media`,
       locations: locationsBase,
       translations: `${siteBase}/translations`,
-      settings: settingsBase,
-      settingsGeneral: `${settingsBase}/general`,
-      settingsBilling: `${settingsBase}/billing`,
+      settings: `${siteBase}/settings`,
+      siteSettings: `${siteBase}/settings`,
+      locationSettings: `${locationBase}/settings`,
+      orgSettings: orgSettingsBase,
+      settingsGeneral: `${orgSettingsBase}/general`,
+      settingsBilling: `${orgSettingsBase}/billing`,
       // Account-level (no slug)
       account: `${base}/account/profile`,
       accountAuthentication: `${base}/account/authentication`,

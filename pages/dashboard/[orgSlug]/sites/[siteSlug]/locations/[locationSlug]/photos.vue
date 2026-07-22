@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Photos">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
         <template #trailing>
           <USelect v-model="categoryFilter" :items="categoryItems" value-key="id" label-key="label" class="w-44" />

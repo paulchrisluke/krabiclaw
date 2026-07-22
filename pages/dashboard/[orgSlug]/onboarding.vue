@@ -189,6 +189,8 @@ async function loadTransferContext() {
 onMounted(loadTransferContext)
 
 function finish() {
-  router.push(`/dashboard/${orgSlug.value}`)
+  router.push(subdomain.value
+    ? `/dashboard/${orgSlug.value}/sites/${subdomain.value}`
+    : `/dashboard/${orgSlug.value}`)
 }
 </script>

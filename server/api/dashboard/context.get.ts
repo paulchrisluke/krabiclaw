@@ -2,9 +2,10 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import {
   getDashboardContext,
   listOrganizationSites,
-  resolveSelectedDashboardLocation
+  listDashboardLocations
 } from '~/server/utils/dashboard-context'
 import { isManagedServiceEnabled } from '~/server/utils/feature-flags'
+import { resolveDashboardSiteAccess } from '~/server/utils/member-access'
 
 export default defineEventHandler(async (event) => {
   const managedServiceEnabled = isManagedServiceEnabled(cloudflareEnv(event))
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event) => {
   // siteSlug route segment to attach a header from and needs to resolve the
   // specific site this user just received — see resolveRecentlyTransferredSite.
   const afterTransfer = getQuery(event).afterTransfer === 'true'
-  const { db, userId, organization, site } = await getDashboardContext(event, {
+  const { db, organization, site } = await getDashboardContext(event, {
     requireSite: false,
     requireOrganization: false,
     allowTransferFallback: afterTransfer,
@@ -28,7 +29,7 @@ export default defineEventHandler(async (event) => {
       site: null,
       sites: [],
       locations: [],
-      selectedLocation: null,
+      siteAccess: null,
       managedServiceEnabled
     })
   }
@@ -43,18 +44,17 @@ export default defineEventHandler(async (event) => {
       site: null,
       sites,
       locations: [],
-      selectedLocation: null,
+      siteAccess: null,
       managedServiceEnabled
     })
   }
 
-  const { locations, selectedLocation } = await resolveSelectedDashboardLocation(
-    db,
-    userId,
-    organization.id,
-    site.id,
-    principal
-  )
+  const locations = await listDashboardLocations(db, organization.id, site.id, principal)
+  const siteAccess = await resolveDashboardSiteAccess(db, {
+    ...principal,
+    organizationId: organization.id,
+    siteId: site.id,
+  })
 
   return jsonResponse({
     success: true,
@@ -62,7 +62,7 @@ export default defineEventHandler(async (event) => {
     site,
     sites,
     locations,
-    selectedLocation,
+    siteAccess,
     managedServiceEnabled
   })
 })

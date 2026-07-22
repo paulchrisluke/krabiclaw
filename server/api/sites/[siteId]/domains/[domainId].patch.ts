@@ -1,7 +1,7 @@
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { jsonResponse } from '~/server/utils/api-response'
 import { execute, queryFirst } from '~/server/db'
 import { setCanonicalDomain } from '~/server/utils/domains'
+import { requireSiteAccess } from '~/server/utils/location-access'
 
 interface DomainPatchBody {
   role?: 'canonical'
@@ -41,26 +41,11 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Unsupported role value' }, { status: 400 })
   }
 
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
-  const site = await queryFirst<{ id: string; organization_id: string; member_role: 'owner' | 'admin' }>(db, `
-    SELECT s.id, s.organization_id, m.role as member_role
-    FROM sites s
-    JOIN organization o ON s.organization_id = o.id
-    JOIN member m ON o.id = m.organizationId
-    WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin')
-    LIMIT 1
-  `, [siteId, session.user.id])
-  if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+  const { db, session, site } = await requireSiteAccess(event, siteId)
 
   try {
     if (body.role === 'canonical') {
-      const actorRole = site.member_role
+      const actorRole = site.member_role as 'owner' | 'admin' | 'editor'
       const domain = await setCanonicalDomain(db, siteId, domainId, actorRole, session.user.id)
       return jsonResponse({ success: true, domain })
     }

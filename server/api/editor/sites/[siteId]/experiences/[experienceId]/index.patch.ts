@@ -1,8 +1,9 @@
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { jsonResponse } from '~/server/utils/api-response'
 import { updateExperience } from '~/server/utils/experiences'
 import { InvalidFieldError, stringArrayOrNull } from '~/server/utils/validation-helpers'
 import { queryFirst } from '~/server/db'
+import { requireSiteAccess } from '~/server/utils/location-access'
+import { assertResourceAccess } from '~/server/utils/member-access'
 
 const optionalNumber = (value: unknown) => {
   if (value === null || value === undefined || value === '') return null
@@ -20,22 +21,16 @@ export default defineEventHandler(async (event) => {
   const experienceId = getRouterParam(event, 'experienceId')
   if (!siteId || !experienceId) return jsonResponse({ error: 'siteId and experienceId required' }, { status: 400 })
 
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
-  const site = await queryFirst<{ id: string }>(
-    db,
-    `SELECT s.id FROM sites s
-       JOIN member m ON m.organizationId = s.organization_id
-       WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin') LIMIT 1`,
-    [siteId, session.user.id],
-  )
-
-  if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+  const { db, site } = await requireSiteAccess(event, siteId, 'context')
+  const existing = await queryFirst<{ location_id: string }>(db, 'SELECT location_id FROM experiences WHERE id = ? AND site_id = ? LIMIT 1', [experienceId, siteId])
+  if (!existing) return jsonResponse({ error: 'Experience not found' }, { status: 404 })
+  const principal = {
+    memberId: site.member_id,
+    role: site.member_role,
+    organizationId: site.organization_id,
+    siteId,
+  }
+  await assertResourceAccess(db, { ...principal, resourceLocationId: existing.location_id })
 
   let body: Record<string, ApiValue>
   try { body = await readBody(event) } catch { return jsonResponse({ error: 'Invalid request body' }, { status: 400 }) }
@@ -96,6 +91,7 @@ export default defineEventHandler(async (event) => {
     if (!body.location_id) return jsonResponse({ error: 'location_id cannot be cleared' }, { status: 400 })
     const location = await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`, [String(body.location_id), siteId])
     if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
+    await assertResourceAccess(db, { ...principal, resourceLocationId: String(body.location_id) })
     updates.location_id = String(body.location_id)
   }
   if ('seo_title' in body) updates.seo_title = body.seo_title ? String(body.seo_title).trim() : null

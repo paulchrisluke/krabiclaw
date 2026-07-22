@@ -91,6 +91,7 @@ const publicPerfTestPage = process.env.PERF_PUBLIC_TEST_PAGE !== 'false'
 // integration exposes a way to scope its content scan at all.
 
 export default defineNuxtConfig({
+  ignore: ['**/.worktrees/**'],
   modules: [
     cloudflareDevModule,
     '@nuxt/scripts',
@@ -181,7 +182,7 @@ export default defineNuxtConfig({
   vite: {
     server: {
       watch: {
-        ignored: ['**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
+        ignored: ['**/.worktrees/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
       },
       allowedHosts: ['.trycloudflare.com', 'local.krabiclaw.com', '.krabiclaw.com']
     },
@@ -392,7 +393,7 @@ export default defineNuxtConfig({
   // Global watcher exclusions
   watchers: {
     chokidar: {
-      ignored: ['**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
+      ignored: ['**/.worktrees/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
     }
   },
 

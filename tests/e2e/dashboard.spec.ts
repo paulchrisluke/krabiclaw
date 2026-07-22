@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { collectPageErrors, setupTenantHeaders } from './helpers'
-import { devLoginHeaders, devLoginUrl } from './test-env'
+import { dashboardOrgHeaders, devLoginHeaders, devLoginUrl } from './test-env'
 
 test.describe('dashboard functional smoke', () => {
   test('dev login opens the owner dashboard', async ({ page, baseURL }) => {
@@ -75,5 +75,71 @@ test.describe('dashboard functional smoke', () => {
 
     const nonHydrationErrors = errors.filter((err) => !err.includes('Hydration completed but contains mismatches.'))
     expect(nonHydrationErrors).toEqual([])
+  })
+
+  test('canonical account, organization, site, and location routes render with responsive navigation', async ({ page, baseURL }) => {
+    test.setTimeout(90_000)
+    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
+    const login = await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
+    expect(login?.status()).toBeLessThan(400)
+
+    const routes = [
+      ['/dashboard/account/profile', 'Profile'],
+      ['/dashboard/pottery-house-krabi', 'Sites'],
+      ['/dashboard/pottery-house-krabi/settings', 'Organization Settings'],
+      ['/dashboard/pottery-house-krabi/sites/pottery-house', 'Pottery House Krabi'],
+      ['/dashboard/pottery-house-krabi/sites/pottery-house/locations', 'Locations'],
+      ['/dashboard/pottery-house-krabi/sites/pottery-house/settings', 'Site Settings'],
+      ['/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi', 'Location Overview'],
+      ['/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/settings', 'Location Settings'],
+    ] as const
+
+    for (const [path, visibleText] of routes) {
+      const response = await page.goto(`${baseURL}${path}`, { waitUntil: 'load' })
+      expect(response?.status(), path).toBeLessThan(400)
+      await expect(page.getByText(visibleText, { exact: true }).first()).toBeVisible()
+    }
+
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house`, { waitUntil: 'load' })
+    await expect(page.locator('[data-sidebar-control-ready="true"]')).toBeVisible()
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+    await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible()
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.reload({ waitUntil: 'load' })
+    await expect(page.locator('[data-sidebar-control-ready]')).toHaveAttribute('data-sidebar-control-ready', 'true')
+    await page.getByRole('button', { name: 'Open sidebar' }).first().click()
+    await expect(page.getByRole('link', { name: 'Locations', exact: true })).toBeVisible()
+
+    expect((await page.request.get(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/new`)).status()).toBe(404)
+    expect((await page.request.patch(`${baseURL}/api/dashboard/location-preference`, {
+      headers: {
+        ...dashboardOrgHeaders('pottery-house-krabi'),
+        'x-dashboard-site-slug': 'pottery-house',
+      },
+      data: { locationId: 'loc-pottery-house' },
+    })).status()).toBe(404)
+  })
+
+  test('site-wide manager reaches its site workspace but not organization settings', async ({ page, baseURL }) => {
+    test.setTimeout(60_000)
+    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
+    await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
+
+    const memberResponse = await page.request.post(`${baseURL}/api/dev/test-member`, {
+      headers: devLoginHeaders(),
+      data: { role: 'editor', organizationId: 'org-pottery-house', name: 'E2E Site Manager' },
+    })
+    expect(memberResponse.status()).toBe(200)
+    const member = await memberResponse.json() as { user: { id: string } }
+
+    await page.goto(devLoginUrl(baseURL!, member.user.id), { waitUntil: 'load' })
+    const siteSettings = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/settings`, { waitUntil: 'load' })
+    expect(siteSettings?.status()).toBeLessThan(400)
+    await expect(page.getByText('Site Settings', { exact: true }).first()).toBeVisible()
+
+    const organizationSettings = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/settings`, { waitUntil: 'load' })
+    expect(organizationSettings?.status()).toBe(404)
   })
 })

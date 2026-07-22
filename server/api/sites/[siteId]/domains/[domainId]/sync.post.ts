@@ -1,8 +1,8 @@
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { jsonResponse } from '~/server/utils/api-response'
 import { queryFirst } from '~/server/db'
 import { domainInstructions, syncDomainWithCloudflare } from '~/server/utils/domains'
 import { notifyDomainLifecycle } from '~/server/utils/domain-notifications'
+import { requireSiteAccess } from '~/server/utils/location-access'
 
 interface DomainRecordRow {
   id: string
@@ -16,22 +16,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Site ID and domain ID are required' }, { status: 400 })
   }
 
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
-  const site = await queryFirst<{ id: string; organization_id: string }>(db, `
-    SELECT s.id, s.organization_id
-    FROM sites s
-    JOIN organization o ON s.organization_id = o.id
-    JOIN member m ON o.id = m.organizationId
-    WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin')
-    LIMIT 1
-  `, [siteId, session.user.id])
-  if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+  const { env, db, session, site } = await requireSiteAccess(event, siteId)
 
   const domainRecord = await queryFirst<DomainRecordRow>(db, `
     SELECT id, site_id
@@ -44,7 +29,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const domain = await syncDomainWithCloudflare(env, db, domainId, 'owner', session.user.id)
+    const domain = await syncDomainWithCloudflare(env, db, domainId, site.member_role as 'owner' | 'admin' | 'editor', session.user.id)
     if (domain.site_id !== site.id) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
@@ -56,7 +41,7 @@ export default defineEventHandler(async (event) => {
       status: domain.status,
       title: `Domain synced: ${domain.domain}`,
       message: `${domain.domain} is now ${domain.status}.`,
-      dashboardUrl: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN}/dashboard/settings`
+      dashboardUrl: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN}/dashboard/${encodeURIComponent(site.organization_slug ?? site.organization_id)}/settings/domains?site=${encodeURIComponent(site.subdomain ?? site.id)}`
     })
     return jsonResponse({ success: true, domain: { ...domain, instructions: domainInstructions(domain) } })
   } catch (error) {

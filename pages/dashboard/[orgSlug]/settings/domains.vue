@@ -3,16 +3,35 @@
     <template #header>
       <UDashboardNavbar title="Domains">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
       <div class="grid gap-4">
+        <UCard>
+          <UFormField label="Site" description="Choose which site's domains to manage.">
+            <USelectMenu
+              v-model="selectedSiteSlug"
+              :items="siteOptions"
+              value-key="value"
+              placeholder="Select a site"
+              class="w-full sm:max-w-sm"
+            />
+          </UFormField>
+        </UCard>
+
+        <UCard v-if="!siteId">
+          <div class="py-6 text-center">
+            <UIcon name="i-lucide-globe" class="mx-auto size-8 text-muted" />
+            <p class="mt-3 font-medium text-highlighted">Select a site</p>
+            <p class="mt-1 text-sm text-muted">Domain settings are managed separately for each site.</p>
+          </div>
+        </UCard>
 
         <!-- Current domains -->
-        <UCard>
+        <UCard v-else>
           <template #header>
             <h2 class="font-semibold text-highlighted">Your domains</h2>
           </template>
@@ -113,7 +132,7 @@
         </UCard>
 
         <!-- Add custom domain -->
-        <UCard>
+        <UCard v-if="siteId">
           <template #header>
             <div>
               <h2 class="font-semibold text-highlighted">Add custom domain</h2>
@@ -167,58 +186,75 @@ interface Domain {
 }
 
 const toast = useToast()
-const dashboard = useDashboardSite()
+const { dashboard, siteOptions, selectedSiteSlug, selectedSiteId: siteId } = useOrganizationSettingsSite()
 const { trackDomainConnected } = useAnalytics()
 
-const loading = ref(true)
+const loading = ref(false)
 const domains = ref<Domain[]>([])
 const newDomain = ref('')
 const adding = ref(false)
 const addError = ref('')
 const syncingId = ref<string | null>(null)
 const deletingId = ref<string | null>(null)
-
-const siteId = computed(() => dashboard.siteId.value)
+let siteSelectionGeneration = 0
+let domainLoadGeneration = 0
 
 async function loadDomains({ background = false }: { background?: boolean } = {}) {
-  if (!siteId.value) return
+  const requestedSiteId = siteId.value
+  const selectionGeneration = siteSelectionGeneration
+  const loadGeneration = ++domainLoadGeneration
+  if (!requestedSiteId) {
+    domains.value = []
+    loading.value = false
+    return
+  }
   if (!background) loading.value = true
   try {
-    const res = await $fetch<{ domains: Domain[] }>(`/api/sites/${siteId.value}/domains`)
+    const res = await $fetch<{ domains: Domain[] }>(`/api/sites/${requestedSiteId}/domains`)
+    if (selectionGeneration !== siteSelectionGeneration || loadGeneration !== domainLoadGeneration || siteId.value !== requestedSiteId) return
     domains.value = res.domains
   } catch {
-    if (!background) toast.add({ description: 'Failed to load domains', color: 'error' })
+    if (!background && selectionGeneration === siteSelectionGeneration && siteId.value === requestedSiteId) {
+      toast.add({ description: 'Failed to load domains', color: 'error' })
+    }
   } finally {
-    if (!background) loading.value = false
+    if (!background && loadGeneration === domainLoadGeneration) loading.value = false
   }
 }
 
 async function addDomain() {
-  if (!siteId.value || !newDomain.value.trim()) return
+  const requestedSiteId = siteId.value
+  const selectionGeneration = siteSelectionGeneration
+  const requestedDomain = newDomain.value.trim()
+  if (!requestedSiteId || !requestedDomain) return
   adding.value = true
   addError.value = ''
   try {
-    const res = await $fetch<{ domains: Domain[] }>(`/api/sites/${siteId.value}/domains`, {
+    const res = await $fetch<{ domains: Domain[] }>(`/api/sites/${requestedSiteId}/domains`, {
       method: 'POST',
-      body: { domain: newDomain.value.trim(), include_www: true }
+      body: { domain: requestedDomain, include_www: true }
     })
+    if (selectionGeneration !== siteSelectionGeneration || siteId.value !== requestedSiteId) return
     domains.value.push(...res.domains)
-    trackDomainConnected(newDomain.value.trim(), siteId.value)
+    trackDomainConnected(requestedDomain, requestedSiteId)
     newDomain.value = ''
     toast.add({ description: 'Domain added — add the DNS records below to complete setup', color: 'success' })
   } catch (err: unknown) {
     const msg = (err as { data?: { error?: string } })?.data?.error ?? 'Failed to add domain'
-    addError.value = msg
+    if (selectionGeneration === siteSelectionGeneration && siteId.value === requestedSiteId) addError.value = msg
   } finally {
-    adding.value = false
+    if (selectionGeneration === siteSelectionGeneration) adding.value = false
   }
 }
 
 async function syncDomain(domainId: string) {
-  if (!siteId.value) return
+  const requestedSiteId = siteId.value
+  const selectionGeneration = siteSelectionGeneration
+  if (!requestedSiteId) return
   syncingId.value = domainId
   try {
-    await $fetch(`/api/sites/${siteId.value}/domains/${domainId}/sync`, { method: 'POST' })
+    await $fetch(`/api/sites/${requestedSiteId}/domains/${domainId}/sync`, { method: 'POST' })
+    if (selectionGeneration !== siteSelectionGeneration || siteId.value !== requestedSiteId) return
     await loadDomains()
   } catch {
     toast.add({ description: 'Sync failed', color: 'error' })
@@ -228,10 +264,13 @@ async function syncDomain(domainId: string) {
 }
 
 async function deleteDomain(domain: Domain) {
-  if (!siteId.value) return
+  const requestedSiteId = siteId.value
+  const selectionGeneration = siteSelectionGeneration
+  if (!requestedSiteId) return
   deletingId.value = domain.id
   try {
-    await $fetch(`/api/sites/${siteId.value}/domains/${domain.id}`, { method: 'DELETE' })
+    await $fetch(`/api/sites/${requestedSiteId}/domains/${domain.id}`, { method: 'DELETE' })
+    if (selectionGeneration !== siteSelectionGeneration || siteId.value !== requestedSiteId) return
     domains.value = domains.value.filter(d => d.id !== domain.id)
     toast.add({ description: `${domain.domain} removed`, color: 'success' })
   } catch {
@@ -266,13 +305,22 @@ let pollInterval: ReturnType<typeof setInterval> | null = null
 
 onMounted(async () => {
   if (!dashboard.state.value) await dashboard.refresh()
-  await loadDomains()
   // Poll every 15s while any custom domain is pending
   pollInterval = setInterval(() => {
     const hasPending = domains.value.some(d => d.type === 'custom' && d.status !== 'active')
     if (hasPending) loadDomains({ background: true })
   }, 15000)
 })
+
+watch(siteId, () => {
+  siteSelectionGeneration++
+  domainLoadGeneration++
+  domains.value = []
+  newDomain.value = ''
+  addError.value = ''
+  adding.value = false
+  void loadDomains()
+}, { immediate: true })
 
 onUnmounted(() => {
   if (pollInterval) clearInterval(pollInterval)

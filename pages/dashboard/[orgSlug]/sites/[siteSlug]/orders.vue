@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Orders">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
       </UDashboardNavbar>
     </template>
@@ -16,7 +16,7 @@
       <div v-else-if="locations.length === 0" class="rounded-lg border border-dashed border-default px-6 py-12 text-center">
         <UIcon name="i-lucide-map-pin" class="mx-auto size-9 text-muted" />
         <p class="mt-3 text-sm font-medium text-highlighted">Add a location before configuring orders</p>
-        <UButton class="mt-5" :to="paths.locations" icon="i-lucide-plus">Add location</UButton>
+        <UButton class="mt-5" :to="`${paths.locations}/new`" icon="i-lucide-plus">Add location</UButton>
       </div>
 
       <div v-else class="space-y-4">

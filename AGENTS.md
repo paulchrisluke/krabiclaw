@@ -411,7 +411,7 @@ POST /api/sites/[siteId]/domains
 Dashboard route:
 
 ```text
-/dashboard/[orgSlug]/~/settings/domains
+/dashboard/[orgSlug]/settings/domains
 ```
 
 Rules:

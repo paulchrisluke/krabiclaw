@@ -42,15 +42,15 @@ test('owner can configure a site- or location-scoped editor invitation', async (
   await editorOption.click()
   await expect(roleSelect).toContainText('Editor')
 
-  await expect(page.getByLabel('Site')).toBeVisible()
-  await expect(page.getByLabel('Location')).toBeDisabled()
+  await expect(page.getByRole('combobox', { name: 'Site' })).toBeVisible()
+  await expect(page.getByRole('combobox', { name: 'Location' })).toBeDisabled()
   await expect(page.getByText('Editors are always scoped to a site')).toBeVisible()
 
   const siteSelect = page.getByRole('combobox', { name: 'Site' })
   await siteSelect.click()
   await page.getByRole('option', { name: 'Pottery House Krabi', exact: true }).click()
   await expect(siteSelect).toContainText('Pottery House Krabi')
-  await expect(page.getByLabel('Location')).toBeEnabled()
+  await expect(page.getByRole('combobox', { name: 'Location' })).toBeEnabled()
 
   const locationSelect = page.getByRole('combobox', { name: 'Location' })
   await locationSelect.click()
@@ -181,6 +181,17 @@ test('phone invitation verifies identity, accepts access, and opens the scoped d
   expect((await page.request.get(`${baseURL}/api/dashboard/editor/menus?locationId=${LOCATION_ID}`, { headers: scopedHeaders })).status()).toBe(200)
   expect((await page.request.get(`${baseURL}/api/dashboard/editor/menus?locationId=${SIBLING_LOCATION_ID}`, { headers: scopedHeaders })).status()).toBe(404)
   expect((await page.request.get(`${baseURL}/api/dashboard/onboarding/checklist?siteId=${SITE_ID}`, { headers: scopedHeaders })).status()).toBe(404)
+
+  const locationOverview = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi`, { waitUntil: 'load' })
+  expect(locationOverview?.status()).toBeLessThan(400)
+  await expect(page.getByRole('link', { name: 'Settings' }).first()).toBeVisible()
+
+  const locationSettings = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/settings`, { waitUntil: 'load' })
+  expect(locationSettings?.status()).toBeLessThan(400)
+  await expect(page.getByText('Location Settings', { exact: true }).first()).toBeVisible()
+
+  const removedAddLocationRoute = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/new`, { waitUntil: 'load' })
+  expect(removedAddLocationRoute?.status()).toBe(404)
 
   const acceptedResponse = await page.request.get(`${baseURL}/api/invitations/${invitation.id}?siteId=${SITE_ID}`)
   expect(acceptedResponse.status()).toBe(200)

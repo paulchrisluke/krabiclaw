@@ -349,25 +349,37 @@ jobs:
           # versa) — producing a 404 with the wrong MIME type mid-test. A blind sleep
           # doesn't confirm propagation actually finished, so poll the specific asset
           # this build's own homepage HTML references instead.
-          asset_path=$(curl -sf "${CURL_TIMEOUT[@]}" "https://preview.krabiclaw.com/" | grep -oE '/_nuxt/entry\.[A-Za-z0-9_-]+\.css' | head -1)
-          if [ -n "$asset_path" ]; then
-            propagated=false
-            for i in $(seq 1 15); do
-              status=$(curl -s "${CURL_TIMEOUT[@]}" -o /dev/null -w "%{http_code}" "https://preview.krabiclaw.com${asset_path}")
-              if [ "$status" = "200" ]; then
-                echo "Asset $asset_path is live (attempt $i)"
+          propagated=false
+          stable_checks=0
+          for i in $(seq 1 30); do
+            tenant_html=$(curl -sf "${CURL_TIMEOUT[@]}" \
+              -H "x-preview-tenant: demo" \
+              -H "cache-control: no-store" \
+              "https://preview.krabiclaw.com/?e2e=asset-probe-$i" || true)
+            asset_path=$(printf '%s' "$tenant_html" | grep -oE '/_nuxt/entry\.[A-Za-z0-9_-]+\.css' | head -1)
+            asset_result=""
+            if [ -n "$asset_path" ]; then
+              asset_result=$(curl -sI "${CURL_TIMEOUT[@]}" -o /dev/null -w "%{http_code} %{content_type}" \
+                -H "x-preview-tenant: demo" \
+                -H "cache-control: no-store" \
+                "https://preview.krabiclaw.com${asset_path}" || true)
+            fi
+            if [[ "$asset_result" == "200 text/css"* ]]; then
+              stable_checks=$((stable_checks + 1))
+              echo "Asset $asset_path is live with CSS content (stable check $stable_checks/3, attempt $i)"
+              if [ "$stable_checks" -ge 3 ]; then
                 propagated=true
                 break
               fi
-              echo "Asset $asset_path not yet live (status $status), retrying... (attempt $i)"
-              sleep 2
-            done
-            if [ "$propagated" = false ]; then
-              echo "::warning::Asset $asset_path never returned 200 after 30s of polling — proceeding anyway, tests may hit the propagation race this step exists to avoid."
+            else
+              stable_checks=0
+              echo "Tenant entry asset is not stable yet (${asset_result:-no asset found}), retrying... (attempt $i)"
             fi
-          else
-            echo "Could not find an entry CSS reference in the homepage HTML — falling back to a fixed sleep."
-            sleep 5
+            sleep 2
+          done
+          if [ "$propagated" = false ]; then
+            echo "::error::Preview tenant entry asset did not return 200 text/css for three consecutive checks."
+            exit 1
           fi
       - name: Run smoke tests
         env:
@@ -505,25 +517,37 @@ jobs:
           # See the matching comment in the "Warm up preview Worker" step (e2e-smoke
           # job) — same Cloudflare edge-propagation race, poll for the real asset
           # instead of guessing a fixed sleep duration.
-          asset_path=$(curl -sf "${CURL_TIMEOUT[@]}" "https://staging.krabiclaw.com/" | grep -oE '/_nuxt/entry\.[A-Za-z0-9_-]+\.css' | head -1)
-          if [ -n "$asset_path" ]; then
-            propagated=false
-            for i in $(seq 1 20); do
-              status=$(curl -s "${CURL_TIMEOUT[@]}" -o /dev/null -w "%{http_code}" "https://staging.krabiclaw.com${asset_path}")
-              if [ "$status" = "200" ]; then
-                echo "Asset $asset_path is live (attempt $i)"
+          propagated=false
+          stable_checks=0
+          for i in $(seq 1 30); do
+            tenant_html=$(curl -sf "${CURL_TIMEOUT[@]}" \
+              -H "x-preview-tenant: demo" \
+              -H "cache-control: no-store" \
+              "https://staging.krabiclaw.com/?e2e=asset-probe-$i" || true)
+            asset_path=$(printf '%s' "$tenant_html" | grep -oE '/_nuxt/entry\.[A-Za-z0-9_-]+\.css' | head -1)
+            asset_result=""
+            if [ -n "$asset_path" ]; then
+              asset_result=$(curl -sI "${CURL_TIMEOUT[@]}" -o /dev/null -w "%{http_code} %{content_type}" \
+                -H "x-preview-tenant: demo" \
+                -H "cache-control: no-store" \
+                "https://staging.krabiclaw.com${asset_path}" || true)
+            fi
+            if [[ "$asset_result" == "200 text/css"* ]]; then
+              stable_checks=$((stable_checks + 1))
+              echo "Asset $asset_path is live with CSS content (stable check $stable_checks/3, attempt $i)"
+              if [ "$stable_checks" -ge 3 ]; then
                 propagated=true
                 break
               fi
-              echo "Asset $asset_path not yet live (status $status), retrying... (attempt $i)"
-              sleep 2
-            done
-            if [ "$propagated" = false ]; then
-              echo "::warning::Asset $asset_path never returned 200 after 40s of polling — proceeding anyway, tests may hit the propagation race this step exists to avoid."
+            else
+              stable_checks=0
+              echo "Tenant entry asset is not stable yet (${asset_result:-no asset found}), retrying... (attempt $i)"
             fi
-          else
-            echo "Could not find an entry CSS reference in the homepage HTML — falling back to a fixed sleep."
-            sleep 10
+            sleep 2
+          done
+          if [ "$propagated" = false ]; then
+            echo "::error::Staging tenant entry asset did not return 200 text/css for three consecutive checks."
+            exit 1
           fi
       - name: Run required smoke and changed subsystem suites
         env:

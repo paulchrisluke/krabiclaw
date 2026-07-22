@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Posts">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
       </UDashboardNavbar>
     </template>
@@ -194,6 +194,7 @@ const loading = ref(false)
 const activeTab = ref('all')
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
 const locationItemsWithoutAll = computed(() => locations.value.map(location => ({ value: location.id, label: location.title })))
+let postsLoadGeneration = 0
 
 function locationTitle(locationId: string | null) {
   if (!locationId) return 'All locations'
@@ -201,7 +202,9 @@ function locationTitle(locationId: string | null) {
 }
 
 const loadPosts = async () => {
-  if (!currentLocationId.value) {
+  const requestedLocationId = currentLocationId.value
+  const generation = ++postsLoadGeneration
+  if (!requestedLocationId) {
     posts.value = []
     loading.value = false
     return
@@ -210,18 +213,31 @@ const loadPosts = async () => {
   try {
     const query: Record<string, string> = {}
     if (activeTab.value !== 'all') query.status = activeTab.value
-    query.location_id = currentLocationId.value
+    query.location_id = requestedLocationId
     const res = await $fetch<{ posts: ApiRecord[] }>(`/api/editor/sites/${siteId}/posts`, { query })
+    if (generation !== postsLoadGeneration || currentLocationId.value !== requestedLocationId) return
     posts.value = res.posts ?? []
-  } catch { toast.add({ description: 'Failed to load posts', color: 'error' }) } finally { loading.value = false }
+  } catch {
+    if (generation === postsLoadGeneration) toast.add({ description: 'Failed to load posts', color: 'error' })
+  } finally {
+    if (generation === postsLoadGeneration) loading.value = false
+  }
 }
 
 async function loadFacebookConnection() {
+  const requestedLocationId = currentLocationId.value
+  facebookConnected.value = false
+  if (!requestedLocationId) return
   try {
-    const res = await $fetch<{ connected: boolean }>('/api/integrations/facebook-pages/connection')
-    facebookConnected.value = res.connected
+    const res = await $fetch<{ connected: boolean }>('/api/integrations/facebook-pages/connection', {
+      query: { locationId: requestedLocationId },
+    })
+    if (currentLocationId.value === requestedLocationId) facebookConnected.value = res.connected
   } catch {
-    facebookConnected.value = false
+    if (currentLocationId.value === requestedLocationId) {
+      facebookConnected.value = false
+      toast.add({ description: 'Failed to load Facebook connection status', color: 'error' })
+    }
   }
 }
 
@@ -533,6 +549,6 @@ watch(currentLocationId, () => {
   composing.value = false
   resetEditForm()
   selectedChannels.value = []
-  void loadPosts()
+  void Promise.all([loadPosts(), loadFacebookConnection()])
 })
 </script>

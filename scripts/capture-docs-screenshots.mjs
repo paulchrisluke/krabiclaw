@@ -153,14 +153,14 @@ async function captureDashboardPages(results, userId) {
   await shot('09-checklist')
 
   // Team invite page
-  await page.goto(`${BASE}/dashboard/${orgSlug}/~/settings/members`)
+  await page.goto(`${BASE}/dashboard/${orgSlug}/settings/members`)
   await page.waitForLoadState('networkidle')
   await page.waitForTimeout(500)
   await shot('10-team-invite')
 
   // Notifications card (Settings -> General) — close the ServiceUpsellModal
   // promo (components/billing/ServiceUpsellModal.vue) if it auto-opens.
-  await page.goto(`${BASE}/dashboard/${orgSlug}/~/settings/general`)
+  await page.goto(`${BASE}/dashboard/${orgSlug}/sites/${siteSlug}/settings`)
   await page.waitForLoadState('networkidle')
   const upsellClose = page.locator('button:has(.i-heroicons-x-mark)').first()
   if (await upsellClose.isVisible().catch(() => false)) await upsellClose.click()

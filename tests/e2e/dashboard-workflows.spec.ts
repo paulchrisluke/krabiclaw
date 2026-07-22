@@ -8,7 +8,7 @@ test.describe('dashboard workflow smoke', () => {
 
     // A fresh dedicated user rather than the shared default dev-login user:
     // /api/dashboard/context only auto-selects a site when the org has exactly
-    // one (see resolveSingleOrgSite), and the default user's org can end up with
+    // one, and the default user's org can end up with
     // zero or several sites depending on what else ran earlier in the suite.
     // Creating our own site keeps this deterministic.
     const suffix = Date.now()
