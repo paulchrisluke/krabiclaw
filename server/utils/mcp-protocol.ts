@@ -141,6 +141,18 @@ export function asMcpError(error: unknown): McpErrorShape {
     return { code: shape.code, message: shape.message, data: shape.data }
   }
 
+  // Business-logic validation shared between REST dashboard routes and MCP
+  // tool executors (e.g. server/utils/experiences.ts) throws h3's createError
+  // with statusCode 400 rather than mcpProtocolError, since it has no MCP
+  // awareness. Treat that the same as invalidParams so tools/call converts it
+  // to an isError:true result instead of leaking a raw HTTP 400.
+  if (error && typeof error === 'object' && (error as { statusCode?: unknown }).statusCode === 400) {
+    const message = typeof (error as { statusMessage?: unknown }).statusMessage === 'string'
+      ? (error as { statusMessage: string }).statusMessage
+      : error instanceof Error ? error.message : 'Invalid request.'
+    return { code: MCP_ERROR.invalidParams, message }
+  }
+
   if (error instanceof Error) {
     return { code: MCP_ERROR.internal, message: error.message }
   }
