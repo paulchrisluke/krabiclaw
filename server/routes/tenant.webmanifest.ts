@@ -1,7 +1,13 @@
 import { getRequestURL, setHeader } from 'h3'
 
 export default defineEventHandler((event) => {
-  const site = event.context.site as { brand_name?: string | null; logo_url?: string | null; favicon_url?: string | null } | undefined
+  const site = event.context.site as {
+    brand_name?: string | null
+    logo_url?: string | null
+    logo_mime_type?: string | null
+    favicon_url?: string | null
+  } | undefined
+
   const requestUrl = getRequestURL(event)
   const brandName = site?.brand_name?.trim() || 'KrabiClaw'
   const origin = requestUrl.origin
@@ -22,13 +28,13 @@ export default defineEventHandler((event) => {
     short_name: brandName.slice(0, 32),
     icons: [
       {
-        src: `${origin}/tenant-icon.png?v=${v}`,
+        src: `${origin}/tenant-icon-192.png?v=${v}`,
         sizes: '192x192',
         type: 'image/png',
         purpose: 'any maskable',
       },
       {
-        src: `${origin}/tenant-icon.png?v=${v}`,
+        src: `${origin}/tenant-icon-512.png?v=${v}`,
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any maskable',

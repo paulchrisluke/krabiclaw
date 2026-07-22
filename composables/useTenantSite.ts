@@ -14,6 +14,8 @@ interface TenantSiteInfo {
   brand_name?: string | null
   brand_description?: string | null
   logo_url?: string | null
+  logo_mime_type?: string | null
+  favicon_url?: string | null
   vertical?: string | null
   config?: {
     phone?: string | null
