@@ -171,6 +171,28 @@ test('create_platform_blog_post/replace_platform_blog_content descriptions descr
   }
 })
 
+test('create_platform_doc/update_platform_doc descriptions describe the legacy body/components model, not content_blocks (regression: SHARED_TOOL_DESCRIPTION_LINES leaked blog-only guidance into doc descriptions)', () => {
+  // Regression: the doc tools' inputSchema never had content_blocks — they
+  // still take body + components[] — but PLATFORM_DOC_TOOL_DESCRIPTION was
+  // built from the same SHARED_TOOL_DESCRIPTION_LINES as the blog tools,
+  // which told the model content_blocks[] is "the only structured-content
+  // authoring shape" and to call get_platform_blog_post for a concurrency
+  // token, both wrong for docs.
+  for (const name of ['create_platform_doc', 'update_platform_doc']) {
+    const definition = tool(PLATFORM_MCP_TOOLS, name) as ToolContract & { description: string }
+    assert.ok(!definition.description.includes('content_blocks'), `${name} description should not mention content_blocks`)
+    assert.ok(!definition.description.includes('get_platform_blog_post'), `${name} description should not reference get_platform_blog_post`)
+    assert.ok(definition.description.includes('body'), `${name} description should describe the body field`)
+  }
+})
+
+test('the platform blog post projection schema does not require featured_image_asset_id (regression: stale required field never present in properties or emitted by the executor)', () => {
+  const getPost = tool(PLATFORM_MCP_TOOLS, 'get_platform_blog_post') as ToolContract & {
+    outputSchema: { properties: { post: { required: string[] } } }
+  }
+  assert.ok(!getPost.outputSchema.properties.post.required.includes('featured_image_asset_id'))
+})
+
 test('validateNoUnknownTopLevelArguments rejects prototype property names as unknown args, not treats them as allowed', () => {
   // A naive `key in properties` check would incorrectly treat `constructor`/`toString`
   // as allowed (they're inherited from Object.prototype), even though the schema

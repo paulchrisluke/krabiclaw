@@ -441,7 +441,7 @@ const PLATFORM_BLOG_POST_PROJECTION_SCHEMA = {
     'id', 'title', 'slug', 'status', 'excerpt', 'category',
     'nav_section', 'nav_title', 'nav_order', 'nav_section_order', 'hide_from_nav', 'featured_order',
     'published_at', 'created_at', 'updated_at',
-    'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots', 'featured_image_asset_id',
+    'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots',
     'featured_image', 'admin_edit_url', 'public_path', 'public_url', 'preview_url',
     'content_blocks', 'document_updated_at',
   ],
@@ -561,21 +561,26 @@ const DELETE_RESPONSE_SCHEMA = {
 
 const SHARED_TOOL_DESCRIPTION_LINES = [
   'Set seo_description explicitly for the intended search snippet. Use canonical_url only for deliberate canonical consolidation. Use robots only for non-default index behavior. Set featured_image_asset_id only when the user has selected or uploaded a real platform media asset; otherwise leave it null.',
-  'Use content_blocks[] as the only structured-content authoring shape — there is no separate body field and no separate structured-component array. Each block is { type, data, id?, level?, parent_block_id? } and blocks render in array order, so place a block at the exact index where it should appear on the page instead of embedding a placeholder tag in prose. Block types: heading, markdown, image, gallery, faq, how_to, ai_assistance, cta, callout.',
-  'FAQ blocks (type: "faq") contain data.items[], each item { question: string, answer: string, position?: number }. How-To blocks (type: "how_to") contain data.steps[], each step { name: string, text: string, image_asset_id?: string|null, url?: string|null, position?: number } (name and text are both required strings; a missing name or text is the most common cause of a rejected update), and data may also include estimated_time, tool_items, and supply_items. AI Assistance blocks (type: "ai_assistance") contain data.prompts[], each prompt { prompt: string, title?: string|null, description?: string|null, copy_label?: string|null, position?: number }; each prompt is a writer-authored suggested prompt, not a generated answer. Keep AI Assistance prompts specific, actionable, page-aware, and rare enough to help the reader act.',
-  'On update: omitting content_blocks preserves the existing draft content exactly as-is; sending a non-empty content_blocks array replaces the complete draft block set (this is a full replace, not a merge — include every block that should remain, not just the ones changing). content_blocks: [] is rejected, not treated as "clear the document." expected_document_updated_at is required whenever content_blocks is sent — call get_platform_blog_post first to get the current token; a stale token is rejected with a conflict so two writers can\'t silently overwrite each other.',
   'Default writer workflow is draft first: create or update the draft, then report admin_edit_url so the writer can review it. If published, also report public_url or public_path. preview_url is null until draft previews are supported.',
   'Once the user has supplied or approved final content and you have computed the SEO fields, call this tool directly with those values — do not respond with a description of the call you would make instead of making it. If the user also asked to publish, follow this call with the corresponding publish tool in the same turn rather than waiting for a second request.',
 ]
 
 const PLATFORM_BLOG_TOOL_DESCRIPTION = [
   'Create or update a KrabiClaw platform blog post with full SEO and structured-content parity.',
-  ...SHARED_TOOL_DESCRIPTION_LINES,
+  SHARED_TOOL_DESCRIPTION_LINES[0],
+  'Use content_blocks[] as the only structured-content authoring shape — there is no separate body field and no separate structured-component array. Each block is { type, data, id?, level?, parent_block_id? } and blocks render in array order, so place a block at the exact index where it should appear on the page instead of embedding a placeholder tag in prose. Block types: heading, markdown, image, gallery, faq, how_to, ai_assistance, cta, callout.',
+  'FAQ blocks (type: "faq") contain data.items[], each item { question: string, answer: string, position?: number }. How-To blocks (type: "how_to") contain data.steps[], each step { name: string, text: string, image_asset_id?: string|null, url?: string|null, position?: number } (name and text are both required strings; a missing name or text is the most common cause of a rejected update), and data may also include estimated_time, tool_items, and supply_items. AI Assistance blocks (type: "ai_assistance") contain data.prompts[], each prompt { prompt: string, title?: string|null, description?: string|null, copy_label?: string|null, position?: number }; each prompt is a writer-authored suggested prompt, not a generated answer. Keep AI Assistance prompts specific, actionable, page-aware, and rare enough to help the reader act.',
+  'On update: omitting content_blocks preserves the existing draft content exactly as-is; sending a non-empty content_blocks array replaces the complete draft block set (this is a full replace, not a merge — include every block that should remain, not just the ones changing). content_blocks: [] is rejected, not treated as "clear the document." expected_document_updated_at is required whenever content_blocks is sent — call get_platform_blog_post first to get the current token; a stale token is rejected with a conflict so two writers can\'t silently overwrite each other.',
+  SHARED_TOOL_DESCRIPTION_LINES[1],
+  SHARED_TOOL_DESCRIPTION_LINES[2],
 ].join(' ')
 
 const PLATFORM_DOC_TOOL_DESCRIPTION = [
-  'Create or update a KrabiClaw platform documentation page with full SEO and structured-content parity.',
-  ...SHARED_TOOL_DESCRIPTION_LINES,
+  'Create or update a KrabiClaw platform documentation page with full SEO parity.',
+  SHARED_TOOL_DESCRIPTION_LINES[0],
+  'Use body as the markdown source and components[] for structured visual blocks (faq, how_to) referenced inline via {{component type="..."}} tags — this is the legacy component model, separate from the platform blog post authoring shape. Call get_platform_doc first to see the current body and components before updating.',
+  SHARED_TOOL_DESCRIPTION_LINES[1],
+  SHARED_TOOL_DESCRIPTION_LINES[2],
 ].join(' ')
 
 const PLATFORM_SECURITY_SCHEMES: Array<{ type: 'oauth2'; scopes: string[] }> = [

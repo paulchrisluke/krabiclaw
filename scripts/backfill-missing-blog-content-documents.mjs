@@ -122,14 +122,22 @@ for (const post of posts) {
 
   const publishedRevisionId = post.status === 'published' || post.status === 'scheduled' ? revisionId : null
 
-  run(`INSERT INTO content_documents (id, owner_type, owner_id, created_at, updated_at) VALUES (${q(docId)}, ${q(ownerType)}, ${q(post.id)}, ${q(now)}, ${q(now)})`)
-  run(`INSERT INTO content_revisions (id, document_id, snapshot_json, body_markdown, created_by, label, created_at) VALUES (${q(revisionId)}, ${q(docId)}, ${q(snapshotJson)}, ${q(post.body)}, NULL, ${q('Backfill: missing content_documents (2026-07-22 incident)')}, ${q(now)})`)
-  // draft_revision_id is always set; published_revision_id only for a post
-  // that was already published/scheduled — never silently publish a draft.
-  run(`UPDATE content_documents SET draft_revision_id = ${q(revisionId)}, published_revision_id = ${q(publishedRevisionId)}, updated_at = ${q(now)} WHERE id = ${q(docId)}`)
+  // Batched into one wrangler invocation (one D1 HTTP request, all-or-nothing)
+  // so a mid-post failure can't leave a content_documents row with no revision
+  // — the discovery query's `d.id IS NULL` filter would otherwise skip that
+  // post forever on rerun. D1 rejects raw BEGIN/COMMIT, so this relies on
+  // wrangler's single --command batching rather than an explicit transaction.
+  const statements = [
+    `INSERT INTO content_documents (id, owner_type, owner_id, created_at, updated_at) VALUES (${q(docId)}, ${q(ownerType)}, ${q(post.id)}, ${q(now)}, ${q(now)})`,
+    `INSERT INTO content_revisions (id, document_id, snapshot_json, body_markdown, created_by, label, created_at) VALUES (${q(revisionId)}, ${q(docId)}, ${q(snapshotJson)}, ${q(post.body)}, NULL, ${q('Backfill: missing content_documents (2026-07-22 incident)')}, ${q(now)})`,
+    // draft_revision_id is always set; published_revision_id only for a post
+    // that was already published/scheduled — never silently publish a draft.
+    `UPDATE content_documents SET draft_revision_id = ${q(revisionId)}, published_revision_id = ${q(publishedRevisionId)}, updated_at = ${q(now)} WHERE id = ${q(docId)}`,
+  ]
   if (post.status === 'scheduled') {
-    run(`UPDATE blog_posts SET scheduled_revision_id = ${q(revisionId)} WHERE id = ${q(post.id)}`)
+    statements.push(`UPDATE blog_posts SET scheduled_revision_id = ${q(revisionId)} WHERE id = ${q(post.id)}`)
   }
+  run(statements.join(';\n'))
   console.log(`  -> applied: content_documents=${docId} content_revisions=${revisionId}`)
 }
 
