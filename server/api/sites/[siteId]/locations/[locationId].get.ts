@@ -1,6 +1,7 @@
 // Get a business location for a site
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { assertLocationAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
 
 const parseJson = (value: ApiValue) => {
@@ -15,6 +16,8 @@ const parseJson = (value: ApiValue) => {
 interface SiteRow {
   id: string
   organization_id: string
+  member_id: string
+  member_role: string
 }
 
 interface LocationRow {
@@ -73,16 +76,18 @@ export default defineEventHandler(async (event) => {
 
   try {
     const site = await queryFirst<SiteRow>(db, `
-      SELECT s.id, s.organization_id
+      SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role
       FROM sites s
       JOIN member om ON s.organization_id = om.organizationId
-      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
+      WHERE s.id = ? AND om.userId = ?
       LIMIT 1
     `, [siteId, session.user.id])
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
+
+    await assertLocationAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, locationId })
 
     const location = await queryFirst<LocationRow>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.address, bl.city, bl.phone,
@@ -114,6 +119,7 @@ export default defineEventHandler(async (event) => {
       }
     })
   } catch (error) {
+    rethrowHttpError(error)
     console.error('Failed to get business location:', error)
     return jsonResponse({ error: 'Failed to get business location' }, { status: 500 })
   }

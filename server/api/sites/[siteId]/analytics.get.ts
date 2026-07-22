@@ -1,9 +1,10 @@
 // GET /api/sites/[siteId]/analytics - Owner-scoped analytics dashboard
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { defineEventHandler, getRouterParam, getQuery } from 'h3'
 import { queryAll, queryFirst } from '~/server/db'
 import { aggregateAnalyticsForDate, aggregateAnalyticsForRange } from '~/server/utils/analytics'
+import { assertSiteWideAccess } from '~/server/utils/member-access'
 
 interface AnalyticsSummary {
   pageViews: number
@@ -84,6 +85,8 @@ interface SiteAccessRow {
   id: string
   organization_id: string
   subdomain: string | null
+  member_id: string
+  member_role: string
 }
 
 interface TopPageJson {
@@ -169,10 +172,10 @@ export default defineEventHandler(async (event) => {
   try {
     // Verify user belongs to organization that owns the site
     const site = await queryFirst<SiteAccessRow>(db, `
-      SELECT s.id, s.organization_id, s.subdomain
+      SELECT s.id, s.organization_id, s.subdomain, m.id AS member_id, m.role AS member_role
       FROM sites s
       JOIN member m ON s.organization_id = m.organizationId
-      WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin', 'editor')
+      WHERE s.id = ? AND m.userId = ?
       LIMIT 1
     `, [siteId, session.user.id])
 
@@ -182,6 +185,8 @@ export default defineEventHandler(async (event) => {
         { status: 404 }
       )
     }
+
+    await assertSiteWideAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
 
     const query = getQuery(event)
     const rawStartDate = (query.startDate as string) || getDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
@@ -480,6 +485,7 @@ export default defineEventHandler(async (event) => {
       period: { startDate, endDate }
     })
   } catch (error) {
+    rethrowHttpError(error)
     const err = error instanceof Error ? error : new Error(String(error))
     console.error('Analytics fetch error:', err.message)
     return jsonResponse({ error: 'Failed to fetch analytics' }, { status: 500 })

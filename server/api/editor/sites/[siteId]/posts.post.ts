@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { createPost, PostValidationError } from '~/server/utils/post-management'
+import { assertResourceAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -17,13 +18,22 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   if (!body?.body?.trim()) return jsonResponse({ error: 'Post body is required' }, { status: 400 })
 
-  const site = await queryFirst<{ id: string; organization_id: string }>(db, `
-    SELECT s.id, s.organization_id FROM sites s
+  const site = await queryFirst<{ id: string; organization_id: string; member_id: string; member_role: string }>(db, `
+    SELECT s.id, s.organization_id, m.id AS member_id, m.role AS member_role FROM sites s
     JOIN organization o ON s.organization_id = o.id
     JOIN member m ON o.id = m.organizationId
-    WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin','editor') LIMIT 1
+    WHERE s.id = ? AND m.userId = ? LIMIT 1
   `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+
+  const targetLocationId = typeof body.location_id === 'string' && body.location_id ? body.location_id : null
+  await assertResourceAccess(db, {
+    memberId: site.member_id,
+    role: site.member_role,
+    organizationId: site.organization_id,
+    siteId,
+    resourceLocationId: targetLocationId,
+  })
 
   const imageAssetId = typeof body.image_asset_id === 'string' ? body.image_asset_id.trim() : ''
   if (imageAssetId) {

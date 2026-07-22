@@ -2,6 +2,7 @@
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { updateBookingStatusForSite } from '~/server/utils/experiences'
+import { assertResourceAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -16,14 +17,25 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await queryFirst(db, `
-    SELECT s.id
+  const site = await queryFirst<{ id: string; organization_id: string; member_id: string; member_role: string }>(db, `
+    SELECT s.id, s.organization_id, m.id AS member_id, m.role AS member_role
     FROM sites s
     JOIN member m ON s.organization_id = m.organizationId
-    WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin', 'editor')
+    WHERE s.id = ? AND m.userId = ?
     LIMIT 1
   `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Access denied' }, { status: 403 })
+
+  const booking = await queryFirst<{ location_id: string }>(db, `SELECT location_id FROM experience_bookings WHERE id = ? AND site_id = ? LIMIT 1`, [bookingId, siteId])
+  if (!booking) return jsonResponse({ error: 'Booking not found' }, { status: 404 })
+
+  await assertResourceAccess(db, {
+    memberId: site.member_id,
+    role: site.member_role,
+    organizationId: site.organization_id,
+    siteId,
+    resourceLocationId: booking.location_id,
+  })
 
   const body = await readBody(event) as { status?: unknown }
   const status = cleanString(body.status, 20)

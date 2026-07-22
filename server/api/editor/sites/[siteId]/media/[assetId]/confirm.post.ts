@@ -2,22 +2,28 @@
 // Called after client has uploaded directly to Cloudflare Images.
 // Marks the asset active and resolves the public URL.
 import { execute, queryFirst, type DbClient } from '~/server/db'
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { buildImageUrl, hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
 import { activateMediaAsset, getMediaAsset } from '~/server/utils/media-asset-manager'
+import { assertResourceAccess } from '~/server/utils/member-access'
 
-async function verifySiteAccess(db: DbClient, userId: string, siteId: string): Promise<boolean> {
-  const site = await queryFirst(db, `
-    SELECT s.id
+interface SiteMemberRow {
+  id: string
+  organization_id: string
+  member_id: string
+  member_role: string
+}
+
+async function loadSiteMember(db: DbClient, userId: string, siteId: string): Promise<SiteMemberRow | null> {
+  return await queryFirst<SiteMemberRow>(db, `
+    SELECT s.id, s.organization_id, m.id AS member_id, m.role AS member_role
     FROM sites s
     JOIN organization o ON s.organization_id = o.id
     JOIN member m ON o.id = m.organizationId
-    WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin', 'editor')
+    WHERE s.id = ? AND m.userId = ?
     LIMIT 1
   `, [siteId, userId])
-
-  return Boolean(site)
 }
 
 export default defineEventHandler(async (event) => {
@@ -32,11 +38,25 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const hasAccess = await verifySiteAccess(db, session.user.id, siteId)
-  if (!hasAccess) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
+  const site = await loadSiteMember(db, session.user.id, siteId)
+  if (!site) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
   const asset = await getMediaAsset(db, assetId, siteId)
   if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
+
+  try {
+    await assertResourceAccess(db, {
+      memberId: site.member_id,
+      role: site.member_role,
+      organizationId: site.organization_id,
+      siteId,
+      resourceLocationId: asset.location_id ?? null,
+    })
+  } catch (error) {
+    rethrowHttpError(error)
+    throw error
+  }
+
   if (asset.status !== 'pending') return jsonResponse({ error: 'Asset already confirmed' }, { status: 409 })
   if (!asset.cloudflare_image_id) return jsonResponse({ error: 'Asset has no Cloudflare image ID' }, { status: 422 })
   if (!hasCloudflareImagesConfig(env)) return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })

@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
   const threadId = getRouterParam(event, 'threadId')
   if (!siteId || !threadId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
-  const { db, site } = await requireSiteAccess(event, siteId, ['owner', 'admin', 'editor', 'location_manager'])
+  const { db, site } = await requireSiteAccess(event, siteId, 'context')
 
   const thread = await getGuestThreadById(db, threadId, siteId)
   if (!thread) return jsonResponse({ error: 'Thread not found' }, { status: 404 })

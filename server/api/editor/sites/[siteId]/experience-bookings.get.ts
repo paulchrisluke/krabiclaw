@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { listExperienceBookingsForSite } from '~/server/utils/experiences'
+import { assertResourceAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -13,10 +14,10 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await queryFirst(
+  const site = await queryFirst<{ organization_id: string; member_id: string; member_role: string }>(
     db,
-    `SELECT s.organization_id FROM sites s JOIN member m ON s.organization_id = m.organizationId
-     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin', 'editor') LIMIT 1`,
+    `SELECT s.organization_id, m.id AS member_id, m.role AS member_role FROM sites s JOIN member m ON s.organization_id = m.organizationId
+     WHERE s.id = ? AND m.userId = ? LIMIT 1`,
     [siteId, session.user.id],
   )
   if (!site) return jsonResponse({ error: 'Access denied' }, { status: 403 })
@@ -34,6 +35,17 @@ export default defineEventHandler(async (event) => {
     )
     if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
   }
+
+  // No location_id filter means every booking across the whole site — only a
+  // site-wide-scoped member may see that; a location-scoped editor must
+  // filter to their own location.
+  await assertResourceAccess(db, {
+    memberId: site.member_id,
+    role: site.member_role,
+    organizationId: site.organization_id,
+    siteId,
+    resourceLocationId: locationId,
+  })
 
   const bookings = await listExperienceBookingsForSite(db, siteId, { locationId })
   return jsonResponse({ bookings })

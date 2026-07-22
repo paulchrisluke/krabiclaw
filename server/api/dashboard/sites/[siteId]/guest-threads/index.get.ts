@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
-  const { db, site } = await requireSiteAccess(event, siteId, ['owner', 'admin', 'editor', 'location_manager'])
+  const { db, site } = await requireSiteAccess(event, siteId, 'context')
   const query = getQuery(event)
   const locationId = typeof query.location_id === 'string' && query.location_id.trim() ? query.location_id.trim() : null
   await assertMemberScope(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, locationId })

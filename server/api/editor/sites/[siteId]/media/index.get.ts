@@ -1,20 +1,26 @@
 // GET /api/editor/sites/[siteId]/media?kind=image&locationId=xxx&limit=50&offset=0
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getMediaAsset, listMediaAssets } from '~/server/utils/media-asset-manager'
 import { queryFirst, type DbClient } from '~/server/db'
+import { assertResourceAccess } from '~/server/utils/member-access'
 
-async function verifySiteAccess(db: DbClient, userId: string, siteId: string): Promise<boolean> {
-  const site = await queryFirst(db, `
-    SELECT s.id
+interface SiteMemberRow {
+  id: string
+  organization_id: string
+  member_id: string
+  member_role: string
+}
+
+async function loadSiteMember(db: DbClient, userId: string, siteId: string): Promise<SiteMemberRow | null> {
+  return await queryFirst<SiteMemberRow>(db, `
+    SELECT s.id, s.organization_id, m.id AS member_id, m.role AS member_role
     FROM sites s
     JOIN organization o ON s.organization_id = o.id
     JOIN member m ON o.id = m.organizationId
-    WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin', 'editor')
+    WHERE s.id = ? AND m.userId = ?
     LIMIT 1
   `, [siteId, userId])
-
-  return Boolean(site)
 }
 
 export default defineEventHandler(async (event) => {
@@ -28,9 +34,10 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const hasAccess = await verifySiteAccess(db, session.user.id, siteId)
-  if (!hasAccess) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
+  const site = await loadSiteMember(db, session.user.id, siteId)
+  if (!site) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
+  const principal = { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
   const query = getQuery(event)
   const id = typeof query.id === 'string' ? query.id : undefined
   const kind = typeof query.kind === 'string' ? query.kind : undefined
@@ -41,11 +48,24 @@ export default defineEventHandler(async (event) => {
   const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 100) : 50
   const offset = Number.isFinite(parsedOffset) ? Math.max(parsedOffset, 0) : 0
 
-  if (id) {
-    const asset = await getMediaAsset(db, id, siteId)
-    return jsonResponse({ media: asset ? [asset] : [] })
-  }
+  try {
+    if (id) {
+      const asset = await getMediaAsset(db, id, siteId)
+      if (asset) {
+        await assertResourceAccess(db, { ...principal, resourceLocationId: asset.location_id ?? null })
+      }
+      return jsonResponse({ media: asset ? [asset] : [] })
+    }
 
-  const assets = await listMediaAssets(db, siteId, { kind, locationId, search, limit, offset })
-  return jsonResponse({ media: assets })
+    // No locationId filter means "the whole site's media library" — only
+    // site-wide-scoped members may see that; a location-scoped editor must
+    // pass locationId explicitly and only ever gets that location's media.
+    await assertResourceAccess(db, { ...principal, resourceLocationId: locationId ?? null })
+
+    const assets = await listMediaAssets(db, siteId, { kind, locationId, search, limit, offset })
+    return jsonResponse({ media: assets })
+  } catch (error) {
+    rethrowHttpError(error)
+    throw error
+  }
 })

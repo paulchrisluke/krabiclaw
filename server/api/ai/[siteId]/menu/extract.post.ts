@@ -15,6 +15,7 @@ import { createMenu, createMenuItem } from '~/server/utils/menu-management'
 import { callAiGateway, imageBlock, textBlock, documentBlock } from '~/server/utils/ai-gateway'
 import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
+import { assertResourceAccess, assertSiteWideAccess } from '~/server/utils/member-access'
 import { execute, queryFirst } from '~/server/db'
 
 const EXTRACT_SYSTEM = `You are a restaurant menu data extractor. The user will provide a photo or scan of a restaurant menu (including AI-generated food photography with text overlays). Extract ONLY text you can actually see — do not infer or hallucinate dishes.
@@ -61,12 +62,12 @@ export default defineEventHandler(async (event) => {
   }
 
   // Verify user owns this site
-  const site = await queryFirst<{ id: string; organization_id: string; org_slug: string | null }>(db, `
-    SELECT s.id, s.organization_id, o.slug as org_slug
+  const site = await queryFirst<{ id: string; organization_id: string; org_slug: string | null; member_id: string; member_role: string }>(db, `
+    SELECT s.id, s.organization_id, o.slug as org_slug, om.id AS member_id, om.role AS member_role
     FROM sites s
     JOIN organization o ON s.organization_id = o.id
     JOIN member om ON o.id = om.organizationId
-    WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
+    WHERE s.id = ? AND om.userId = ?
     LIMIT 1
   `, [siteId, session.user.id])
 
@@ -216,17 +217,24 @@ export default defineEventHandler(async (event) => {
   }
 
   // Resolve or create a menu to append to
+  const principal = { memberId: site.member_id, role: site.member_role, organizationId: orgId, siteId }
   let menuId = formData.get('menuId') as string | null
   if (menuId) {
-    const existing = await queryFirst(db,
-      'SELECT id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1',
+    const existing = await queryFirst<{ id: string; location_id: string | null }>(db,
+      'SELECT id, location_id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1',
       [menuId, orgId, siteId]
     )
-    if (!existing) menuId = null
+    if (!existing) {
+      menuId = null
+    } else {
+      await assertResourceAccess(db, { ...principal, resourceLocationId: existing.location_id })
+    }
   }
 
   let menuCreatedInThisRequest = false
   if (!menuId) {
+    // A brand-new menu created here has no location — it's always site-wide.
+    await assertSiteWideAccess(db, principal)
     const menuName = (formData.get('menuName') as string | null)?.trim() || 'Imported Menu'
     const newMenu = await createMenu(db, orgId, siteId, { name: menuName }, session.user.id)
     menuId = newMenu.id

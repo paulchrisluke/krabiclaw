@@ -2,10 +2,11 @@
 // For images: returns a Cloudflare Images one-time uploadUrl + a pending assetId.
 // Client uploads directly to uploadUrl (multipart form), then calls /confirm.
 import { queryFirst } from '~/server/db'
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { deleteImage, hasCloudflareImagesConfig, requestImageUpload } from '~/server/utils/cloudflare-images'
 import { createMediaAsset } from '~/server/utils/media-asset-manager'
+import { assertResourceAccess } from '~/server/utils/member-access'
 
 interface SiteRow {
   id: string
@@ -34,12 +35,11 @@ export default defineEventHandler(async (event) => {
     )
     if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
-    const membership = await queryFirst(db, `
-      SELECT m.userId
+    const membership = await queryFirst<{ userId: string; member_id: string; member_role: string }>(db, `
+      SELECT m.userId, m.id AS member_id, m.role AS member_role
       FROM member m
       WHERE m.organizationId = ?
         AND m.userId = ?
-        AND m.role IN ('owner', 'admin', 'editor')
       LIMIT 1
     `, [site.organization_id, session.user.id])
     if (!membership) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
@@ -77,6 +77,14 @@ export default defineEventHandler(async (event) => {
       if (!location) return jsonResponse({ error: 'Invalid locationId' }, { status: 400 })
       locationId = trimmedLocationId
     }
+
+    await assertResourceAccess(db, {
+      memberId: membership.member_id,
+      role: membership.member_role,
+      organizationId: site.organization_id,
+      siteId,
+      resourceLocationId: locationId,
+    })
 
     let category: MediaCategory | null = null
     if (body?.category !== undefined && body?.category !== null && body?.category !== '') {
@@ -127,6 +135,7 @@ export default defineEventHandler(async (event) => {
 
     return jsonResponse({ assetId, uploadUrl, imageId })
   } catch (error) {
+    rethrowHttpError(error)
     const normalizedError = error instanceof Error ? error : new Error('Unknown image upload request error')
     console.error('media_request_upload_failed', { error: normalizedError.message, stack: normalizedError.stack })
     return jsonResponse({ 

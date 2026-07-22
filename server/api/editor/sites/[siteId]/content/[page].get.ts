@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getEditorContent } from '~/server/utils/mcp-workflows'
+import { assertResourceAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -35,20 +36,30 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Verify user belongs to organization that owns the site
-    const site = await queryFirst<{ id: string; organization_id: string; name: string; status: string; onboarding_status: string | null }>(db, `
-      SELECT s.id, s.organization_id, s.status, s.onboarding_status
+    const site = await queryFirst<{ id: string; organization_id: string; name: string; status: string; onboarding_status: string | null; member_id: string; member_role: string }>(db, `
+      SELECT s.id, s.organization_id, s.status, s.onboarding_status, om.id AS member_id, om.role AS member_role
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member om ON o.id = om.organizationId
-      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
+      WHERE s.id = ? AND om.userId = ?
       LIMIT 1
     `, [siteId, session.user.id])
-    
+
     if (!site) {
-      return jsonResponse({ 
-        error: 'Site not found or access denied' 
+      return jsonResponse({
+        error: 'Site not found or access denied'
       }, { status: 404 })
     }
+
+    // No locationId means the site-wide pages (home/about/contact); a
+    // location-scoped editor must pass their own location's id explicitly.
+    await assertResourceAccess(db, {
+      memberId: site.member_id,
+      role: site.member_role,
+      organizationId: site.organization_id,
+      siteId,
+      resourceLocationId: locationId ?? null,
+    })
 
     const content = await getEditorContent(db, site.organization_id, siteId, page, locationId)
 

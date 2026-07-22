@@ -2,6 +2,7 @@
 // Owner/admin sends an email reply to the guest who made the reservation.
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
+import { assertOrganizationAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
 import { getSubmissionContact, insertSubmissionMessage, sendReplyEmail } from '~/server/utils/submission-messages'
 
@@ -10,7 +11,8 @@ export default defineEventHandler(async (event) => {
   const submissionId = getRouterParam(event, 'submissionId')
   if (!siteId || !submissionId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
-  const { env, db, session, site } = await requireSiteAccess(event, siteId, ['owner', 'admin'])
+  const { env, db, session, site } = await requireSiteAccess(event, siteId, 'context')
+  assertOrganizationAccess(site.member_role)
 
   const body = await readBody(event) as { channel?: unknown; body?: unknown }
   const channel = body.channel

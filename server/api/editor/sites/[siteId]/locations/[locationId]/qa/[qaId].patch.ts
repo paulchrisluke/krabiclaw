@@ -2,6 +2,7 @@
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { updateLocationQa } from '~/server/utils/mcp-workflows'
+import { assertLocationAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -17,14 +18,16 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await queryFirst<{ organization_id: string }>(db, `
-    SELECT s.organization_id
+  const site = await queryFirst<{ organization_id: string; member_id: string; member_role: string }>(db, `
+    SELECT s.organization_id, m.id AS member_id, m.role AS member_role
     FROM sites s
     JOIN member m ON s.organization_id = m.organizationId
-    WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin', 'editor')
+    WHERE s.id = ? AND m.userId = ?
     LIMIT 1
   `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Access denied' }, { status: 403 })
+
+  await assertLocationAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, locationId })
 
   const rawBody = await readBody(event)
   if (typeof rawBody !== 'object' || rawBody === null || Array.isArray(rawBody)) {

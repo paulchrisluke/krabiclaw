@@ -1,7 +1,8 @@
 // GET /api/sites/[siteId]/setup-progress
 // Returns the ordered 10-step setup journey for the site overview card.
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { assertSiteWideAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
 
 export interface SetupStep {
@@ -55,19 +56,23 @@ export default defineEventHandler(async (event) => {
       public_url: string | null
       status: string
       last_published_at: string | null
+      member_id: string
+      member_role: string
     }>(db, `
       SELECT s.id, s.organization_id, s.brand_name, s.brand_description,
              s.logo_url, s.contact_email, s.subdomain, s.public_url,
-             s.status, s.last_published_at
+             s.status, s.last_published_at, om.id AS member_id, om.role AS member_role
       FROM sites s
       JOIN member om ON s.organization_id = om.organizationId
-      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
+      WHERE s.id = ? AND om.userId = ?
       LIMIT 1
     `, [siteId, session.user.id])
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
+
+    await assertSiteWideAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
 
     const orgId = site.organization_id
 
@@ -225,6 +230,7 @@ export default defineEventHandler(async (event) => {
 
     return jsonResponse({ success: true, progress })
   } catch (error) {
+    rethrowHttpError(error)
     console.error('Failed to get setup progress:', error)
     return jsonResponse({ error: 'Failed to get setup progress' }, { status: 500 })
   }

@@ -89,7 +89,7 @@ test('phone invitation verifies identity, accepts access, and opens the scoped d
     locations?: Array<{ id?: string }>
   }
   expect(dashboard.organization?.id).toBe('org-pottery-house')
-  expect(dashboard.organization?.role).toBe('location_manager')
+  expect(dashboard.organization?.role).toBe('editor')
   expect(dashboard.site?.id).toBe(SITE_ID)
   expect(dashboard.locations?.map(location => location.id)).toContain(LOCATION_ID)
 

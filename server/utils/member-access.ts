@@ -1,7 +1,36 @@
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { parsePhoneOrThrow } from '~/utils/phone'
 
-export const LOCATION_MANAGER_ROLE = 'location_manager' as const
+// #341 Workstream A: location_manager is retired as a distinct role. There
+// are now exactly two role tiers:
+//   - owner / admin: organization-wide, bypasses member_access_scope entirely.
+//   - editor: ALWAYS constrained through member_access_scope. A site-wide
+//     scope row (location_id IS NULL) makes an editor a "site manager" for
+//     that site; a scope row with location_id set makes them a "location
+//     manager" for that location only. An editor can hold multiple scope
+//     rows across sites/locations. There is no role-name distinction between
+//     "site manager" and "location manager" — it's the same role, editor,
+//     described entirely by which scope rows they hold.
+//
+// This file intentionally exposes FOUR different access-check functions
+// rather than one generic "does this member have any access to this site"
+// helper. Collapsing them into one would let a location-scoped editor reach
+// site-wide managers and settings the moment they can enter the site at all,
+// which is exactly what must not happen (see #341 Workstream A requirements):
+//   - assertOrganizationAccess: owner/admin only.
+//   - assertSiteWideAccess: org-wide roles, or an editor with a location_id
+//     IS NULL scope row for this site. Use for site settings, blog, site-wide
+//     media/QA/reviews (when the target row itself has no location_id), the
+//     contact-submissions inbox, translations, professional-services,
+//     analytics, domains.
+//   - assertLocationAccess: org-wide roles, an editor with a site-wide scope
+//     row, OR an editor with a scope row for this exact location. Use for any
+//     resource that is genuinely owned by one location (menus/media/reviews
+//     rows that have a location_id set, experiences, bookings, location QA).
+//   - assertSiteContextAccess: org-wide roles, or ANY scope row at all for
+//     this site (site-wide or a specific location) — enough to resolve site
+//     metadata and the caller's own accessible location(s) to navigate into,
+//     never full site settings or other locations' data.
 
 export interface MemberAccessScope {
   organizationId: string
@@ -15,26 +44,50 @@ export interface ResourceScope {
   locationId?: string | null
 }
 
+export interface MemberAccessPrincipal {
+  memberId: string
+  role: string
+  organizationId: string
+  siteId: string
+}
+
 export function isOrganizationWideRole(role: string): boolean {
   return role === 'owner' || role === 'admin'
 }
 
+// The only non-org-wide role left. Kept as a named predicate (rather than
+// inlining `role === 'editor'` everywhere) so a future additional scoped role
+// doesn't require touching every call site — see the retired
+// isOperationalRole/LOCATION_MANAGER_ROLE this replaced.
+export function isScopedRole(role: string): boolean {
+  return role === 'editor'
+}
+
+// "Does this role participate in dashboard/notification/operational flows at
+// all" — distinct from isOrganizationWideRole/isScopedRole, which describe
+// how (unrestricted vs. scope-checked), not whether. Used to reject roles
+// outside {owner, admin, editor} entirely (e.g. a future non-operational
+// Better Auth role) before any scope check is even attempted.
 export function isOperationalRole(role: string): boolean {
-  return isOrganizationWideRole(role) || role === 'editor' || role === LOCATION_MANAGER_ROLE
+  return isOrganizationWideRole(role) || isScopedRole(role)
 }
 
-export function canAccessResource(role: string, scopes: MemberAccessScope[], resource: ResourceScope): boolean {
-  if (isOrganizationWideRole(role)) return true
-  if (role !== LOCATION_MANAGER_ROLE) return false
-
-  return scopes.some(scope =>
-    scope.organizationId === resource.organizationId
-    && scope.siteId === resource.siteId
-    && (scope.locationId === null || scope.locationId === (resource.locationId ?? null)),
-  )
+export function assertOrganizationAccess(role: string): void {
+  if (!isOrganizationWideRole(role)) {
+    throw createError({ statusCode: 403, message: 'Organization-level access required' })
+  }
 }
 
-const LOCATION_MANAGER_DASHBOARD_PATHS = [
+// Interim path allowlist for the /api/dashboard/** family (distinct from the
+// /api/editor/sites/[siteId]/** family, which is converted per-endpoint onto
+// the four access classes above — see docs/audits/0341-workstream-a-authorization.md).
+// Until every /api/dashboard/** route gets the same per-resource treatment,
+// a scoped editor (formerly location_manager) is restricted to this known-safe
+// subset rather than getting whatever access getDashboardContext's caller
+// happens to return. This restricts scoped editors only — org-wide roles are
+// unrestricted, and it does not itself grant location/site-wide access; the
+// underlying route must still enforce its own resource-level scope check.
+const SCOPED_ROLE_DASHBOARD_PATHS = [
   '/api/dashboard/context',
   '/api/dashboard/home',
   '/api/dashboard/inbox',
@@ -48,12 +101,12 @@ const LOCATION_MANAGER_DASHBOARD_PATHS = [
   '/api/dashboard/sites',
 ]
 
-export function canLocationManagerUseDashboardPath(pathname: string): boolean {
-  return LOCATION_MANAGER_DASHBOARD_PATHS.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`) || pathname.startsWith(`${prefix}?`))
+export function canScopedRoleUseDashboardPath(pathname: string): boolean {
+  return SCOPED_ROLE_DASHBOARD_PATHS.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`) || pathname.startsWith(`${prefix}?`))
 }
 
 export function assertDashboardPathPermission(role: string, pathname: string): void {
-  if (role === LOCATION_MANAGER_ROLE && !canLocationManagerUseDashboardPath(pathname)) {
+  if (isScopedRole(role) && !canScopedRoleUseDashboardPath(pathname)) {
     throw createError({ statusCode: 403, message: 'This role cannot perform that dashboard action' })
   }
 }
@@ -66,32 +119,82 @@ export async function listMemberAccessScopes(db: DbClient, memberId: string): Pr
   `, [memberId])
 }
 
-export async function assertMemberScope(db: DbClient, input: ResourceScope & { memberId: string; role: string }): Promise<void> {
+/** Site-wide management access: site settings, blog, translations, professional-services, analytics, domains, contact-submissions inbox, and any menu/media/review/QA row whose own location_id is null. */
+export async function assertSiteWideAccess(db: DbClient, input: MemberAccessPrincipal): Promise<void> {
   if (isOrganizationWideRole(input.role)) return
-  if (input.role !== LOCATION_MANAGER_ROLE) {
-    throw createError({ statusCode: 403, message: 'Access denied' })
-  }
+  if (!isScopedRole(input.role)) throw createError({ statusCode: 403, message: 'Access denied' })
 
   const scope = await queryFirst<{ id: string }>(db, `
-    SELECT id
-    FROM member_access_scope
+    SELECT id FROM member_access_scope
+    WHERE member_id = ? AND organization_id = ? AND site_id = ? AND location_id IS NULL
+    LIMIT 1
+  `, [input.memberId, input.organizationId, input.siteId])
+  if (!scope) throw createError({ statusCode: 404, message: 'Site not found or access denied' })
+}
+
+/** Location management access: org-wide roles, a site-wide-scoped editor, or an editor scoped to this exact location. */
+export async function assertLocationAccess(db: DbClient, input: MemberAccessPrincipal & { locationId: string }): Promise<void> {
+  if (isOrganizationWideRole(input.role)) return
+  if (!isScopedRole(input.role)) throw createError({ statusCode: 403, message: 'Access denied' })
+
+  const scope = await queryFirst<{ id: string }>(db, `
+    SELECT id FROM member_access_scope
     WHERE member_id = ? AND organization_id = ? AND site_id = ?
       AND (location_id IS NULL OR location_id = ?)
     LIMIT 1
-  `, [input.memberId, input.organizationId, input.siteId, input.locationId ?? null])
-
+  `, [input.memberId, input.organizationId, input.siteId, input.locationId])
   if (!scope) throw createError({ statusCode: 404, message: 'Resource not found' })
 }
 
-export async function assertMemberSiteAccess(db: DbClient, input: Omit<ResourceScope, 'locationId'> & { memberId: string; role: string }): Promise<void> {
+/** A resource that may or may not belong to one location (e.g. a menu/media/review row) — dispatches to assertSiteWideAccess when the row's own location_id is null, assertLocationAccess otherwise. Check the TARGET ROW's location_id, never a caller-supplied param, since the row itself is the source of truth for its own scope. */
+export async function assertResourceAccess(db: DbClient, input: MemberAccessPrincipal & { resourceLocationId: string | null }): Promise<void> {
+  if (input.resourceLocationId === null) {
+    return assertSiteWideAccess(db, input)
+  }
+  return assertLocationAccess(db, { ...input, locationId: input.resourceLocationId })
+}
+
+/** Minimal site-context/discovery access: org-wide roles, or ANY scope row at all for this site — enough to resolve site metadata and navigate to the caller's own location(s). Never grants access to full site settings or other locations' data; callers must still trim their response to what the caller's own scope allows. */
+export async function assertSiteContextAccess(db: DbClient, input: MemberAccessPrincipal): Promise<void> {
   if (isOrganizationWideRole(input.role)) return
-  if (input.role !== LOCATION_MANAGER_ROLE) throw createError({ statusCode: 403, message: 'Access denied' })
+  if (!isScopedRole(input.role)) throw createError({ statusCode: 403, message: 'Access denied' })
+
   const scope = await queryFirst<{ id: string }>(db, `
     SELECT id FROM member_access_scope
     WHERE member_id = ? AND organization_id = ? AND site_id = ?
     LIMIT 1
   `, [input.memberId, input.organizationId, input.siteId])
-  if (!scope) throw createError({ statusCode: 404, message: 'Site not found' })
+  if (!scope) throw createError({ statusCode: 404, message: 'Site not found or access denied' })
+}
+
+/** Returns null for org-wide roles (unrestricted — every location), or the list of location ids a scoped editor may reach at this site. An empty array means the editor has scope rows for this site but none apply here (defensive; should not normally happen for a site-wide-scoped editor, since that case returns null via the site-wide row's own listing being irrelevant to a location filter). */
+export async function listAccessibleLocationIds(db: DbClient, input: MemberAccessPrincipal): Promise<string[] | null> {
+  if (isOrganizationWideRole(input.role)) return null
+  if (!isScopedRole(input.role)) throw createError({ statusCode: 403, message: 'Access denied' })
+
+  const rows = await queryAll<{ location_id: string | null }>(db, `
+    SELECT location_id FROM member_access_scope WHERE member_id = ? AND site_id = ?
+  `, [input.memberId, input.siteId])
+  if (rows.some(row => row.location_id === null)) return null
+  return rows.map(row => row.location_id).filter((id): id is string => Boolean(id))
+}
+
+// Backward-compatible aliases retained during the migration window this
+// commit series lands in. Both now route through the same site-wide-or-exact
+// -location check that assertLocationAccess implements — the distinction
+// this file used to make between "editor" (org-wide) and "location_manager"
+// (scope-checked) no longer exists; every non-org-wide role is scope-checked
+// the same way.
+export async function assertMemberScope(db: DbClient, input: ResourceScope & { memberId: string; role: string }): Promise<void> {
+  if (input.locationId) {
+    await assertLocationAccess(db, { ...input, locationId: input.locationId })
+    return
+  }
+  await assertSiteWideAccess(db, input)
+}
+
+export async function assertMemberSiteAccess(db: DbClient, input: Omit<ResourceScope, 'locationId'> & { memberId: string; role: string }): Promise<void> {
+  await assertSiteContextAccess(db, input)
 }
 
 export async function isAuthorizedWhatsAppRecipient(db: DbClient, input: ResourceScope & { phone: string; requireSiteWide?: boolean }): Promise<boolean> {

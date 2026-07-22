@@ -2,6 +2,7 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { upsertProfessionalServiceContent } from '~/server/utils/professional-services-editor'
+import { assertSiteWideAccess } from '~/server/utils/member-access'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -14,14 +15,16 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await queryFirst<{ id: string; organization_id: string }>(db, `
-    SELECT s.id, s.organization_id
+  const site = await queryFirst<{ id: string; organization_id: string; member_id: string; member_role: string }>(db, `
+    SELECT s.id, s.organization_id, m.id AS member_id, m.role AS member_role
       FROM sites s
       JOIN member m ON m.organizationId = s.organization_id
-     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin','editor')
+     WHERE s.id = ? AND m.userId = ?
      LIMIT 1
   `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+
+  await assertSiteWideAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
 
   let body: ApiRecord
   try {

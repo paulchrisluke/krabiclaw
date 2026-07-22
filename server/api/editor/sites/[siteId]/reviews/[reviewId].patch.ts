@@ -2,6 +2,7 @@
 // Allows owners/admins to set owner_reply, change status (approve/hide)
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
+import { assertOrganizationAccess } from '~/server/utils/member-access'
 import { replyToReview } from '~/server/utils/review-management'
 import { execute } from '~/server/db'
 import { updateOwnerEnteredSiteReview } from '~/server/utils/site-reviews'
@@ -10,7 +11,8 @@ export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const reviewId = getRouterParam(event, 'reviewId')
 
-  const { db, site } = await requireSiteAccess(event, siteId!, ['owner', 'admin'])
+  const { db, site } = await requireSiteAccess(event, siteId!, 'context')
+  assertOrganizationAccess(site.member_role)
 
   const body = await readBody(event)
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
