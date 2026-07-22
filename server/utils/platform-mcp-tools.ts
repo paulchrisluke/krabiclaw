@@ -421,6 +421,7 @@ const PLATFORM_BLOG_POST_PROJECTION_SCHEMA = {
     title: { type: 'string' },
     slug: { type: 'string' },
     status: { type: 'string', enum: ['draft', 'published', 'scheduled', 'archived'] },
+    visibility: { type: 'string', enum: ['public', 'unlisted'] },
     excerpt: NULLABLE_STRING,
     category: NULLABLE_STRING,
     ...NAV_FIELDS_SCHEMA,
@@ -438,7 +439,7 @@ const PLATFORM_BLOG_POST_PROJECTION_SCHEMA = {
     document_updated_at: NULLABLE_STRING,
   },
   required: [
-    'id', 'title', 'slug', 'status', 'excerpt', 'category',
+    'id', 'title', 'slug', 'status', 'visibility', 'excerpt', 'category',
     'nav_section', 'nav_title', 'nav_order', 'nav_section_order', 'hide_from_nav', 'featured_order',
     'published_at', 'created_at', 'updated_at',
     'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots',

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { validateNoUnknownTopLevelArguments } from '../../server/utils/mcp-tool-validation.ts'
@@ -191,6 +192,26 @@ test('the platform blog post projection schema does not require featured_image_a
     outputSchema: { properties: { post: { required: string[] } } }
   }
   assert.ok(!getPost.outputSchema.properties.post.required.includes('featured_image_asset_id'))
+})
+
+test('the platform blog post projection schema declares visibility (regression: update_platform_blog_metadata can write visibility but the canonical read/write response never surfaced it back)', () => {
+  const getPost = tool(PLATFORM_MCP_TOOLS, 'get_platform_blog_post') as ToolContract & {
+    outputSchema: { properties: { post: { properties: Record<string, unknown>; required: string[] } } }
+  }
+  assert.ok('visibility' in getPost.outputSchema.properties.post.properties)
+  assert.ok(getPost.outputSchema.properties.post.required.includes('visibility'))
+})
+
+test('update_platform_blog_metadata parses nullable SEO/media fields with a null-preserving parser, not one that silently converts null to undefined (regression: a request clearing canonical_url with null advanced the concurrency token but never actually cleared the column)', () => {
+  const source = readFileSync(new URL('../../server/utils/platform-mcp-executor.ts', import.meta.url), 'utf8')
+  const caseStart = source.indexOf("case 'update_platform_blog_metadata':")
+  const caseEnd = source.indexOf("case 'replace_platform_blog_content':")
+  assert.notEqual(caseStart, -1)
+  assert.notEqual(caseEnd, -1)
+  const caseBody = source.slice(caseStart, caseEnd)
+  for (const field of ['seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots', 'featured_image_asset_id']) {
+    assert.match(caseBody, new RegExp(`${field}: optionalNullableString\\(rawArguments, '${field}'\\)`), `${field} should be parsed with optionalNullableString`)
+  }
 })
 
 test('validateNoUnknownTopLevelArguments rejects prototype property names as unknown args, not treats them as allowed', () => {
