@@ -2,6 +2,15 @@
 
 :root {
   --font-saya: 'Instrument Serif', 'Iowan Old Style', Palatino, Georgia, serif;
+
+  /* Fixed dark surface pair — deliberately NOT re-scoped inside .dark
+     .saya-theme below, unlike --saya-bg-inverted/--saya-fg-inverted (which
+     invert with light/dark mode by design, e.g. for SayaFooter.vue). Used
+     for chrome that must always render dark regardless of the visitor's
+     device theme (e.g. SayaPostDetail's caption bar, matching how
+     Instagram/Facebook post ad chrome never changes with device theme). */
+  --saya-surface-dark:    #09090B;
+  --saya-on-surface-dark: #FAFAFA;
 }
 
 .saya-theme {
