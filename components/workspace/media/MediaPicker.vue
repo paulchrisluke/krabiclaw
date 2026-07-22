@@ -58,7 +58,6 @@
     v-model:open="isOpen"
     :title="panel === 'generate' ? 'Generate image' : title"
     :ui="{ content: 'max-w-2xl' }"
-    @close="panel = 'library'"
   >
     <template #body>
       <MediaLibraryGrid

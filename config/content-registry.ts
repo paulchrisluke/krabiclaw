@@ -1,5 +1,5 @@
 import type { SiteVertical } from '~/utils/vertical-copy'
-import { cmsCapabilityRegistry, resolveCmsCapabilities } from '~/config/cms-registry'
+import { cmsCapabilityRegistry, resolveCmsCapabilities, type CmsCapabilityDefinition } from '~/config/cms-registry'
 
 export type FieldSource = 'manual' | 'google' | 'static' | 'computed'
 
@@ -99,6 +99,32 @@ export function getEditablePages(vertical: SiteVertical, template: PublicTemplat
         ? 'site'
         : capability.locationVocabulary === 'office/service area' ? 'office' : 'location',
     }))
+}
+
+/** Resolves the editable pages a CMS host (editor sidebar, index grid) should list for one
+ *  scope — the one place that intersects a template's editable-page inventory with the
+ *  capabilities the tenant's vertical/template combination actually exposes. blawby has no
+ *  field-editable pages yet (professional_services editor gap, issue #323), so it always
+ *  returns an empty list rather than pages that would 400 against assertSiteContentPage. */
+export function getScopedEditablePages(
+  vertical: SiteVertical | null,
+  capabilities: CmsCapabilityDefinition | null,
+  scope: 'site' | 'location',
+): EditablePage[] {
+  if (!vertical || !capabilities || capabilities.template === 'blawby') return []
+  const allowedPageIds = new Set(capabilities.pages.map(page => page.id))
+  return getEditablePages(vertical, capabilities.template)
+    .filter(page => allowedPageIds.has(page.id) && page.scope === scope)
+}
+
+/** Builds the URL a real visitor would see for a resolved page path — the one place that
+ *  formats domain + path (treating the root path as no suffix), shared by every "visitor
+ *  display URL" bar (CmsContentEditor's header, OnboardingPreviewPane's toolbar). Each caller
+ *  still resolves its own `path` — they have different page inventories available (a full
+ *  location-aware CMS page list vs. onboarding's fixed home/offerings/about/contact tabs). */
+export function buildDisplayUrl(domain: string, path: string): string {
+  if (!domain) return ''
+  return domain + (path === '/' ? '' : path)
 }
 
 /** Resolves the public preview path for a page, given the currently selected location (if any). */

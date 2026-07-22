@@ -208,7 +208,7 @@
   </UDashboardPanel>
 
   <!-- Delete Account Modal -->
-  <UModal v-model:open="deleteModalOpen" :ui="{ content: 'max-w-md' }" @close="resetDeleteModal">
+  <UModal v-model:open="deleteModalOpen" :ui="{ content: 'max-w-md' }">
     <template #content>
       <div class="p-6 space-y-4">
         <div>
@@ -496,10 +496,14 @@ function getDeleteErrorBody(error: unknown): DeleteErrorBody {
 
 function resetDeleteModal() {
   deleteModalOpen.value = false
+}
+
+watch(deleteModalOpen, (open) => {
+  if (open) return
   deleteConfirmText.value = ''
   deleteError.value = ''
   deleting.value = false
-}
+})
 
 async function confirmDeleteAccount() {
   if (deleteConfirmText.value !== 'DELETE') return

@@ -98,7 +98,7 @@
 </template>
 
 <script setup lang="ts">
-import { getEditablePages } from '~/config/content-registry'
+import { buildDisplayUrl, getEditablePages } from '~/config/content-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
@@ -150,7 +150,6 @@ const currentTabIsLocationScoped = computed(() => tabs.value.find(tab => tab.id 
 // The URL a real visitor would see — distinct from iframeSrc, which points at
 // the internal /preview/site/:id route that actually serves draft content.
 const displayUrl = computed(() => {
-  if (!props.siteDomain) return ''
   const template = resolvePublicTemplate({ vertical: props.vertical })
   // professional_service's "Services" tab id is the offerings route itself
   // (see secondaryTab above), not a content-registry page id — resolve it
@@ -158,7 +157,7 @@ const displayUrl = computed(() => {
   const path = props.vertical === 'professional_service' && props.selectedPage === secondaryTab.value?.id
     ? template.serviceRoutes.offeringsIndex ?? '/'
     : getEditablePages(props.vertical, template.slug).find(page => page.id === props.selectedPage)?.path ?? '/'
-  return props.siteDomain + (path === '/' ? '' : path)
+  return buildDisplayUrl(props.siteDomain ?? '', path)
 })
 
 const selectedLocation = computed(() =>

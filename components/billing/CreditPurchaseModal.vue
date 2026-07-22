@@ -1,5 +1,5 @@
 <template>
-  <UModal v-model:open="isOpen" title="Confirm payment" :ui="{ content: 'max-w-sm' }" @close="cancel">
+  <UModal v-model:open="isOpen" title="Confirm payment" :ui="{ content: 'max-w-sm' }">
     <template #body>
       <div class="space-y-4">
         <!-- Line item -->
@@ -44,4 +44,8 @@
 
 <script setup lang="ts">
 const { isOpen, savedCard, paying, wantsAutoTopup, bundleLabel, bundlePrice, confirm, cancel } = useCreditPurchase()
+
+watch(isOpen, (open) => {
+  if (!open) cancel()
+})
 </script>

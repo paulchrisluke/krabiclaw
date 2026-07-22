@@ -298,7 +298,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 
-import { contentRegistry, getEditablePages, getFieldDef, resolvePreviewPath } from '~/config/content-registry'
+import { buildDisplayUrl, contentRegistry, getFieldDef, getScopedEditablePages, resolvePreviewPath } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
 import { resolveCmsCapabilities } from '~/config/cms-registry'
 import type { PublicTemplateSlug } from '~/utils/template-registry'
@@ -396,21 +396,7 @@ const selectLocation = async (id: string) => {
 
 // ─── Pages ────────────────────────────────────────────────────────────
 const siteVertical = computed<SiteVertical | null>(() => siteData.value ? siteData.value.vertical as SiteVertical : null)
-const pages = computed(() => {
-  const capabilities = cmsCapabilities.value
-  // blawby's cms-registry pages (including home/about/contact) are tagged
-  // editor: 'professional_services', not 'site_content' — the backend
-  // (assertSiteContentPage in mcp-workflows.ts) rejects them with a 400 for
-  // any template other than site_content-editor templates. There is no
-  // professional_services page-content editor implementation yet (tracked
-  // in issue #323), so this template is excluded here rather than showing
-  // a page selector that 400s on every page. Do not remove this without
-  // that editor existing first.
-  if (!siteVertical.value || !capabilities || capabilities.template === 'blawby') return []
-  const allowedPageIds = new Set(capabilities.pages.map(page => page.id))
-  return getEditablePages(siteVertical.value, capabilities.template)
-    .filter(page => allowedPageIds.has(page.id) && page.scope === props.scope)
-})
+const pages = computed(() => getScopedEditablePages(siteVertical.value, cmsCapabilities.value, props.scope))
 
 const selectedPageId = computed(() => props.pageId)
 const currentPagePath = computed(() => pages.value.find(p => p.id === selectedPageId.value)?.path || '/')
@@ -460,11 +446,7 @@ const iframeSrc = computed(() => {
 // freeSiteDomain pattern already used for siteDomain in onboarding.vue.
 const platformHostname = computed(() => (config.public.freeSiteDomain as string).replace(/^https?:\/\//, ''))
 const siteDomain = computed(() => siteData.value?.subdomain ? `${siteData.value.subdomain}.${platformHostname.value}` : '')
-const displayUrl = computed(() => {
-  if (!siteDomain.value) return ''
-  const subPath = previewPagePath.value === '/' ? '' : previewPagePath.value
-  return siteDomain.value + subPath
-})
+const displayUrl = computed(() => buildDisplayUrl(siteDomain.value, previewPagePath.value))
 
 const previewOrigin = computed(() => {
   if (!iframeSrc.value) return null

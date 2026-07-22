@@ -280,6 +280,16 @@ UCard `:ui` prop only accepts:
 
 Use `class` for border, background, rounded, and shadow styling.
 
+### Nuxt UI props/slots/events must be verified, not assumed
+
+Before using any Nuxt UI component prop, slot, or event, verify it against the live docs (`ui.nuxt.com/docs/components/<name>`) or the `nuxt-ui` MCP tools. Do not guess based on a similar library, an older Nuxt UI major version, or what "seems like it should exist." Existing usage elsewhere in this codebase is not proof of correctness — copy-pasted mistakes have already propagated across multiple files this way (see the `UModal` `@close` incident below). Verify against the docs directly, every time, regardless of what the codebase already does.
+
+- `UModal` has no plain `close` event — only `close:prevent` and `update:open`. To react to a dismiss from any path (button click, Escape, outside-click), watch the `v-model:open` ref itself; a `@close` handler will silently never fire.
+- If a fix involves reacting to a component closing/changing/submitting, confirm the actual emitted event name in the docs before wiring a handler to it.
+- If CodeRabbit (or any reviewer) suggests an API that doesn't hold up against the real docs, correct it and move on — do not adopt an unverified suggestion just because it was proposed with confidence.
+
+When you fix a bug caused by an unverified/incorrect API usage, do not leave a comment narrating the fix, the old broken behavior, or why the mistake happened. The code should read as if it were written correctly the first time — no "this used to be X because Y" comments. That history belongs in the commit message and PR description, not in the file.
+
 ---
 
 ## Saya Empty States
