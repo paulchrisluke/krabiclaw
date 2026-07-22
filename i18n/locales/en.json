@@ -47,11 +47,6 @@
       "title": "Latest Updates",
       "subtitle": "News & Events",
       "no_preview": "No preview available",
-      "badge": {
-        "event": "Event",
-        "offer": "Offer",
-        "update": "Update"
-      },
       "image_alt": "Restaurant update",
       "business_update": "Business Update",
       "event_details_label": "Event Details:",

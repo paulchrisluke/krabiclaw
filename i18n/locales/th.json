@@ -47,11 +47,6 @@
       "title": "อัปเดตล่าสุด",
       "subtitle": "ข่าวสารและกิจกรรม",
       "no_preview": "ไม่มีตัวอย่าง",
-      "badge": {
-        "event": "กิจกรรม",
-        "offer": "โปรโมชั่น",
-        "update": "อัปเดต"
-      },
       "image_alt": "อัปเดตจากเรา",
       "business_update": "อัปเดตธุรกิจ",
       "event_details_label": "รายละเอียดกิจกรรม:",

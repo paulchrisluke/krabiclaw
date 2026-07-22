@@ -1,23 +1,25 @@
 <template>
   <article class="relative">
-    <section class="relative min-h-[70vh] w-full overflow-hidden bg-black sm:min-h-[80vh]">
-      <video
-        v-if="coverMedia?.kind === 'video'"
-        :src="coverMedia.url"
-        autoplay
-        muted
-        loop
-        playsinline
-        class="absolute inset-0 h-full w-full object-cover"
-      />
-      <img
-        v-else-if="coverMedia"
-        :src="coverMedia.url"
-        :alt="coverMedia.alt || post.title || t('saya.posts.image_alt')"
-        class="absolute inset-0 h-full w-full object-cover"
-      >
+    <section class="relative flex min-h-[70vh] w-full flex-col justify-end bg-black sm:min-h-[80vh]">
+      <div class="absolute inset-0 overflow-hidden">
+        <video
+          v-if="coverMedia?.kind === 'video'"
+          :src="coverMedia.url"
+          autoplay
+          muted
+          loop
+          playsinline
+          class="h-full w-full object-cover"
+        />
+        <img
+          v-else-if="coverMedia"
+          :src="coverMedia.url"
+          :alt="coverMedia.alt || post.title || t('saya.posts.image_alt')"
+          class="h-full w-full object-cover"
+        >
+      </div>
 
-      <div class="absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-3 px-4 pt-4 sm:px-6">
+      <div class="absolute inset-x-0 top-0 z-20 px-4 pt-4 sm:px-6">
         <NuxtLink
           to="/posts"
           class="inline-flex items-center gap-2 rounded-full bg-black/30 px-4 py-2 text-sm font-medium text-white no-underline backdrop-blur-md transition hover:bg-black/50"
@@ -25,12 +27,13 @@
           <svg viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
           {{ t('saya.posts.back_to_updates') }}
         </NuxtLink>
-        <span class="inline-flex items-center rounded bg-black/80 px-2 py-0.5 text-[10px] font-medium text-white shadow-sm backdrop-blur">
-          {{ badgeLabel }}
-        </span>
       </div>
 
-      <div class="absolute inset-x-0 bottom-0 z-10 bg-linear-to-t from-black/90 via-black/55 to-transparent px-5 pb-10 pt-40 sm:px-10">
+      <!-- Content is in normal flow (not absolutely positioned against a fixed pt),
+           so a long heading/summary grows the section instead of overlapping the
+           back button above or clipping the CTAs below — both previously happened
+           depending on viewport aspect ratio. -->
+      <div class="relative z-10 bg-linear-to-t from-black/90 via-black/55 to-transparent px-5 pb-10 pt-24 sm:px-10">
         <div class="mx-auto max-w-3xl">
           <time v-if="post.createTime" :datetime="post.createTime" class="mb-2 block text-[10px] font-bold uppercase tracking-widest text-white/60">
             {{ formatDate(post.createTime) }}
@@ -140,12 +143,6 @@ const galleryMedia = computed(() => {
   const source = gallery.length ? gallery : media
   if (!coverId) return source
   return source.filter(item => item.id !== coverId && item.mediaAssetId !== coverId)
-})
-
-const badgeLabel = computed(() => {
-  if (props.post.event) return t('saya.posts.badge.event')
-  if (props.post.offer) return t('saya.posts.badge.offer')
-  return t('saya.posts.badge.update')
 })
 
 function formatCta(value: string | null | undefined) {
