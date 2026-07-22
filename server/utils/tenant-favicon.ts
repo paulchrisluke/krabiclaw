@@ -40,12 +40,24 @@ export function isPlatformAssetUrl(url: string | null | undefined, env?: TenantH
   return false
 }
 
+/**
+ * Returns true if the given URL is a Cloudflare Images delivery URL that supports
+ * flexible variant parameters (width, height, format, fit).
+ */
+export function isCloudflareImagesUrl(url: string): boolean {
+  return url.includes('imagedelivery.net')
+}
+
+/**
+ * Applies Cloudflare Images flexible variant parameters to a delivery URL.
+ * Only call after confirming isCloudflareImagesUrl() is true.
+ *
+ * Replaces the trailing variant segment (e.g. `/public`) with `/w=N,h=N,fit=pad,f=format`.
+ * `fit=pad` ensures the image is contained in the requested square without distortion.
+ */
 export function getCloudflareImageVariantUrl(url: string, width: number, height: number, format = 'png'): string {
   if (!url) return url
-  if (url.includes('imagedelivery.net')) {
-    return url.replace(/\/[a-zA-Z0-9_-]+$/, `/w=${width},h=${height},fit=pad,f=${format}`)
-  }
-  return url
+  return url.replace(/\/[a-zA-Z0-9_-]+$/, `/w=${width},h=${height},fit=pad,f=${format}`)
 }
 
 export function getTenantFaviconSvg(brandName?: string | null, logoUrl?: string | null): string {
@@ -64,7 +76,15 @@ export interface FaviconOptions {
   width?: number
   height?: number
   format?: string
+  /** When true, always return a real SVG response (200 image/svg+xml) regardless of source. */
   returnSvg?: boolean
+  /**
+   * When true, only redirect to the source URL if that URL can be transformed to
+   * the advertised format (currently: Cloudflare Images). If the source cannot be
+   * transformed, fall back to the SVG letter badge so the endpoint never returns a
+   * JPEG or PNG from a route that declares a different Content-Type.
+   */
+  requireFormatConversion?: boolean
 }
 
 export function handleFaviconRequest(event: H3Event, options: FaviconOptions) {
@@ -98,23 +118,37 @@ export function handleFaviconRequest(event: H3Event, options: FaviconOptions) {
 
   // 1. Configured tenant favicon (if present and not platform asset)
   if (faviconUrl && !isPlatformAssetUrl(faviconUrl, env)) {
-    let target = faviconUrl
     if (options.width && options.height) {
-      target = getCloudflareImageVariantUrl(target, options.width, options.height, options.format || 'png')
+      if (isCloudflareImagesUrl(faviconUrl)) {
+        const target = getCloudflareImageVariantUrl(faviconUrl, options.width, options.height, options.format || 'png')
+        return sendRedirect(event, target, 302)
+      } else if (options.requireFormatConversion) {
+        // Cannot guarantee the format — fall through to SVG badge
+      } else {
+        return sendRedirect(event, faviconUrl, 302)
+      }
+    } else {
+      return sendRedirect(event, faviconUrl, 302)
     }
-    return sendRedirect(event, target, 302)
   }
 
   // 2. Tenant logo
   if (logoUrl && !isPlatformAssetUrl(logoUrl, env)) {
-    let target = logoUrl
     if (options.width && options.height) {
-      target = getCloudflareImageVariantUrl(target, options.width, options.height, options.format || 'png')
+      if (isCloudflareImagesUrl(logoUrl)) {
+        const target = getCloudflareImageVariantUrl(logoUrl, options.width, options.height, options.format || 'png')
+        return sendRedirect(event, target, 302)
+      } else if (options.requireFormatConversion) {
+        // Cannot guarantee the format — fall through to SVG badge
+      } else {
+        return sendRedirect(event, logoUrl, 302)
+      }
+    } else {
+      return sendRedirect(event, logoUrl, 302)
     }
-    return sendRedirect(event, target, 302)
   }
 
-  // 3. Fallback generated SVG initial
+  // 3. Fallback: generated SVG letter badge (always valid format-neutral)
   const svg = getTenantFaviconSvg(site?.brand_name)
   setHeader(event, 'content-type', 'image/svg+xml')
   return svg
