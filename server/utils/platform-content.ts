@@ -1,12 +1,12 @@
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import {
+  createContentDocumentWithBlocks,
   deleteContentDocumentForOwner,
   publishCurrentContentRevision,
   getContentEditorSnapshot,
   getPublishedContentSnapshot,
   replaceContentDocumentBlocks,
   renderContentBlocksToMarkdown,
-  syncContentDocumentFromBlocks,
   syncContentDocumentFromMarkdown,
   unpublishContentDocument,
   type ContentDocumentOwnerType,
@@ -1498,58 +1498,65 @@ export async function createPlatformBlogPost(
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
     const slug = attempt === 0 ? slugBase : `${slugBase}-${randomSlugSuffix()}`
     try {
-      await execute(db, `
+      const blogPostInsert: BatchQuery = {
+        query: `
         INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, tags_json, nav_section, nav_title, nav_order, nav_section_order, hide_from_nav, featured_order, status, visibility, scheduled_for, scheduled_revision_id, seo_title, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, social_image_asset_id, author_id, published_at, first_published_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-        id,
-        organizationId,
-        siteId,
-        input.title,
-        slug,
-        canonicalBody,
-        input.excerpt ?? null,
-        input.category ?? null,
-        input.tags ? JSON.stringify(input.tags) : null,
-        input.nav_section ?? null,
-        input.nav_title ?? null,
-        input.nav_order != null ? Number(input.nav_order) : null,
-        input.nav_section_order != null ? Number(input.nav_section_order) : null,
-        normalizeHideFromNav(input.hide_from_nav) ?? 0,
-        input.featured_order != null ? Number(input.featured_order) : null,
-        publishStatus,
-        input.visibility ?? 'public',
-        scheduledFor,
-        null,
-        input.seo_title ?? null,
-        input.seo_description ?? null,
-        input.seo_keywords ?? null,
-        input.canonical_url ?? null,
-        input.robots ?? null,
-        input.featured_image_asset_id ?? null,
-        input.social_image_asset_id ?? null,
-        authorId,
-        publishedAt,
-        publishedAt,
-        now,
-        now,
-      ])
-
-      try {
-        const revision = await syncContentDocumentFromBlocks(db, {
-          ownerType: blogContentOwnerType(siteId), ownerId: id, blocks: canonicalBlocks,
-          createdBy: authorId, label: input.publish && !scheduledFor ? 'Published canonical blocks' : 'Draft canonical blocks',
-          publish: Boolean(input.publish && !scheduledFor),
-        })
-        if (scheduledFor) await execute(db, 'UPDATE blog_posts SET scheduled_revision_id = ? WHERE id = ?', [revision.revision_id, id])
-      } catch (err) {
-        try {
-          await deleteContentDocumentForOwner(db, blogContentOwnerType(siteId), id)
-          await execute(db, 'DELETE FROM blog_posts WHERE id = ?', [id])
-        } catch (cleanupErr) {
-          console.error('Failed to clean up blog post after create rollback:', cleanupErr)
-        }
-        throw err
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [
+          id,
+          organizationId,
+          siteId,
+          input.title,
+          slug,
+          canonicalBody,
+          input.excerpt ?? null,
+          input.category ?? null,
+          input.tags ? JSON.stringify(input.tags) : null,
+          input.nav_section ?? null,
+          input.nav_title ?? null,
+          input.nav_order != null ? Number(input.nav_order) : null,
+          input.nav_section_order != null ? Number(input.nav_section_order) : null,
+          normalizeHideFromNav(input.hide_from_nav) ?? 0,
+          input.featured_order != null ? Number(input.featured_order) : null,
+          publishStatus,
+          input.visibility ?? 'public',
+          scheduledFor,
+          null,
+          input.seo_title ?? null,
+          input.seo_description ?? null,
+          input.seo_keywords ?? null,
+          input.canonical_url ?? null,
+          input.robots ?? null,
+          input.featured_image_asset_id ?? null,
+          input.social_image_asset_id ?? null,
+          authorId,
+          publishedAt,
+          publishedAt,
+          now,
+          now,
+        ],
       }
+
+      // scheduled_revision_id references content_documents.draft_revision_id
+      // via subquery (not a value we have yet — writeRevisionFromBlocks
+      // generates the revision id internally) so this stays in the same
+      // atomic batch as everything else instead of a follow-up call.
+      const ownerType = blogContentOwnerType(siteId)
+      await createContentDocumentWithBlocks(db, ownerType, id, canonicalBlocks, {
+        bodyMarkdown: canonicalBody,
+        createdBy: authorId,
+        label: input.publish && !scheduledFor ? 'Published canonical blocks' : 'Draft canonical blocks',
+        publish: Boolean(input.publish && !scheduledFor),
+        additionalQueriesBefore: [blogPostInsert],
+        additionalQueriesAfter: scheduledFor
+          ? [{
+              query: `UPDATE blog_posts SET scheduled_revision_id = (
+                SELECT draft_revision_id FROM content_documents WHERE owner_type = ? AND owner_id = ?
+              ) WHERE id = ?`,
+              params: [ownerType, id, id],
+            }]
+          : undefined,
+      })
       const post = await getPlatformBlogPost(db, id, siteId)
       return {
         success: true,

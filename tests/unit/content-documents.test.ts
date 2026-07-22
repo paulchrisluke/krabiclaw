@@ -16,6 +16,9 @@ type Store = {
   platformDocs: Row[]
   beforeBatch?: (() => void) | null
   documentWriteTimestamp?: string
+  failQueryMatching?: string | null
+  standaloneContentDocumentInserts?: number
+  batchCallCount?: number
 }
 
 function createStore(): Store {
@@ -34,8 +37,16 @@ Object.assign(globalThis, {
   },
 })
 
+// Tracks whether the current execute() call is running inside executeBatch's
+// loop, so tests can assert that document creation goes through one batch
+// call and never a standalone top-level execute() (the bug that made the old
+// createPlatformBlogPost non-atomic: ensureContentDocument INSERTed outside
+// any batch).
+let insideExecuteBatch = false
+
 async function execute(db: Store, query: string, params: unknown[] = []) {
   if (query.startsWith('INSERT INTO content_documents')) {
+    if (!insideExecuteBatch) db.standaloneContentDocumentInserts = (db.standaloneContentDocumentInserts ?? 0) + 1
     const [id, owner_type, owner_id, created_at, updated_at] = params
     db.contentDocuments.push({ id, owner_type, owner_id, draft_revision_id: null, published_revision_id: null, created_at, updated_at })
     return { meta: { changes: 1 } }
@@ -100,6 +111,20 @@ async function execute(db: Store, query: string, params: unknown[] = []) {
     return { meta: { changes: document ? 1 : 0 } }
   }
 
+  if (query.startsWith('INSERT INTO blog_posts')) {
+    const [id] = params
+    db.blogPosts.push({ id, status: 'draft' })
+    return { meta: { changes: 1 } }
+  }
+
+  if (query.startsWith('UPDATE blog_posts SET scheduled_revision_id')) {
+    const [owner_type, owner_id, id] = params
+    const document = db.contentDocuments.find(row => row.owner_type === owner_type && row.owner_id === owner_id)
+    const post = db.blogPosts.find(row => row.id === id)
+    if (post) Object.assign(post, { scheduled_revision_id: document?.draft_revision_id ?? null })
+    return { meta: { changes: post ? 1 : 0 } }
+  }
+
   if (query.includes('UPDATE blog_posts')) {
     const [body, published_at, updated_at, id] = params
     const post = db.blogPosts.find(row => row.id === id)
@@ -117,12 +142,42 @@ async function execute(db: Store, query: string, params: unknown[] = []) {
   throw new Error(`Unexpected execute query: ${query}`)
 }
 
+// Real D1 batches are all-or-nothing. This mock originally ran statements in
+// a plain sequential loop with no rollback, so a mid-batch throw left
+// whatever had already been pushed to the store — a real D1 batch would have
+// left nothing. Snapshot every table before the loop and restore on failure
+// so atomicity tests against this mock actually prove something.
 async function executeBatch(db: Store, queries: Array<{ query: string; params: unknown[] }>) {
   const beforeBatch = db.beforeBatch
   db.beforeBatch = null
   beforeBatch?.()
+  db.batchCallCount = (db.batchCallCount ?? 0) + 1
+  const snapshot = {
+    contentDocuments: structuredClone(db.contentDocuments),
+    contentBlocks: structuredClone(db.contentBlocks),
+    contentRevisions: structuredClone(db.contentRevisions),
+    blogPosts: structuredClone(db.blogPosts),
+    platformDocs: structuredClone(db.platformDocs),
+  }
   const results: Array<{ meta: { changes: number } }> = []
-  for (const item of queries) results.push(await execute(db, item.query, item.params))
+  insideExecuteBatch = true
+  try {
+    for (const item of queries) {
+      if (db.failQueryMatching && item.query.includes(db.failQueryMatching)) {
+        throw new Error(`Forced failure for test: query matched "${db.failQueryMatching}"`)
+      }
+      results.push(await execute(db, item.query, item.params))
+    }
+  } catch (error) {
+    db.contentDocuments = snapshot.contentDocuments
+    db.contentBlocks = snapshot.contentBlocks
+    db.contentRevisions = snapshot.contentRevisions
+    db.blogPosts = snapshot.blogPosts
+    db.platformDocs = snapshot.platformDocs
+    throw error
+  } finally {
+    insideExecuteBatch = false
+  }
   return results
 }
 
@@ -168,6 +223,7 @@ mock.module('../../server/db/index.ts', {
 
 const {
   appendContentBlock,
+  createContentDocumentWithBlocks,
   getContentOutline,
   mergeLegacyBlogComponents,
   publishContentDocumentRevision,
@@ -202,6 +258,63 @@ test('syncContentDocumentFromMarkdown creates blocks and a published revision', 
   assert.equal(result.document.updated_at, 'committed-document-token')
   assert.equal(result.document.draft_revision_id, result.revision_id)
   assert.equal(result.document.published_revision_id, result.revision_id)
+})
+
+test('createContentDocumentWithBlocks creates the document, owner row, blocks, and revision in exactly one batch call', async () => {
+  const db = createStore()
+  const d1 = db as unknown as D1Database
+  const blogPostInsert = {
+    query: 'INSERT INTO blog_posts (id, title) VALUES (?, ?)',
+    params: ['post-atomic-1', 'Atomic create test'],
+  }
+
+  const result = await createContentDocumentWithBlocks(d1, 'platform_blog', 'post-atomic-1', [
+    { type: 'heading', level: 2, data: { text: 'Intro', markdown: '## Intro' } },
+    { type: 'markdown', data: { markdown: 'Body copy.', editor_mode: 'source' } },
+  ], {
+    bodyMarkdown: '## Intro\n\nBody copy.',
+    createdBy: 'user-1',
+    publish: true,
+    additionalQueriesBefore: [blogPostInsert],
+  })
+
+  assert.equal(db.batchCallCount, 1, 'expected exactly one executeBatch call')
+  assert.equal(db.standaloneContentDocumentInserts ?? 0, 0, 'content_documents must be inserted inside the batch, not via a standalone execute() call')
+  assert.equal(db.blogPosts.length, 1)
+  assert.equal(db.blogPosts[0]?.id, 'post-atomic-1')
+  assert.equal(db.contentDocuments.length, 1)
+  assert.equal(db.contentDocuments[0]?.id, result.document.id)
+  assert.equal(db.contentBlocks.length, 2)
+  assert.equal(db.contentRevisions.length, 1)
+  assert.equal(result.document.draft_revision_id, result.revision_id)
+  assert.equal(result.document.published_revision_id, result.revision_id)
+})
+
+test('createContentDocumentWithBlocks leaves no trace of the document, owner row, blocks, or revision when the batch fails partway through', async () => {
+  const db = createStore()
+  const d1 = db as unknown as D1Database
+  const blogPostInsert = {
+    query: 'INSERT INTO blog_posts (id, title) VALUES (?, ?)',
+    params: ['post-atomic-2', 'Should not persist'],
+  }
+  // Force the failure on the content_revisions insert — after the document
+  // and blog_posts rows have already been added to the mock's tables inside
+  // the same batch loop, proving the snapshot/restore actually reverts
+  // earlier statements in the batch, not just the failing one.
+  db.failQueryMatching = 'INSERT INTO content_revisions'
+
+  await assert.rejects(() => createContentDocumentWithBlocks(d1, 'platform_blog', 'post-atomic-2', [
+    { type: 'markdown', data: { markdown: 'Body copy.', editor_mode: 'source' } },
+  ], {
+    bodyMarkdown: 'Body copy.',
+    additionalQueriesBefore: [blogPostInsert],
+  }))
+
+  assert.equal(db.batchCallCount, 1)
+  assert.equal(db.blogPosts.length, 0, 'blog_posts insert must be rolled back')
+  assert.equal(db.contentDocuments.length, 0, 'content_documents insert must be rolled back')
+  assert.equal(db.contentBlocks.length, 0, 'content_blocks inserts must be rolled back')
+  assert.equal(db.contentRevisions.length, 0)
 })
 
 test('divider blocks serialize as thematic breaks without disturbing structured blocks', async () => {
