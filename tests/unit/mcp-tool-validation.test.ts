@@ -116,6 +116,23 @@ test('validateNoUnknownTopLevelArguments accepts a valid tenant update_blog_post
   }))
 })
 
+test('create_platform_blog_post/update_platform_blog_post descriptions describe content_blocks, not the retired body/components/embed-tag authoring model', () => {
+  // Regression: SHARED_TOOL_DESCRIPTION_LINES told the model to send a flat
+  // `body` string plus a separate `components[]` array with {{component
+  // type="..."}} placeholder tags — an interface that predates content_blocks
+  // and no longer exists in either tool's inputSchema. That mismatch is the
+  // likely reason ChatGPT sessions kept sending `body`/`components` and
+  // getting silently ignored (update) or rejected (create) instead of using
+  // content_blocks, as documented in the 2026-07-22 incident.
+  for (const name of ['create_platform_blog_post', 'update_platform_blog_post']) {
+    const definition = tool(PLATFORM_MCP_TOOLS, name) as ToolContract & { description: string }
+    assert.ok(definition.description.includes('content_blocks'), `${name} description should mention content_blocks`)
+    assert.ok(!/\bcomponents\[\]/.test(definition.description), `${name} description should not reference the retired components[] shape`)
+    assert.ok(!definition.description.includes('embed tag'), `${name} description should not reference the retired embed-tag mechanism`)
+    assert.ok(!definition.description.includes('{{component'), `${name} description should not reference the retired {{component ...}} placeholder syntax`)
+  }
+})
+
 test('validateNoUnknownTopLevelArguments rejects prototype property names as unknown args, not treats them as allowed', () => {
   // A naive `key in properties` check would incorrectly treat `constructor`/`toString`
   // as allowed (they're inherited from Object.prototype), even though the schema
