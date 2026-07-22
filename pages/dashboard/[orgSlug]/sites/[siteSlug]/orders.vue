@@ -167,5 +167,5 @@ async function saveLocation(location: LocationRow & { form: OrderForm }) {
 }
 
 onMounted(loadOrder)
-useSeoMeta({ title: 'Order | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Orders | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

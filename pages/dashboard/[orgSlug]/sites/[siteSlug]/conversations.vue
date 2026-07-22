@@ -27,7 +27,10 @@
             :ui="{ label: 'truncate text-left' }"
             @click="loadChowBotChat(conv)"
           />
-          <p v-if="!siteConversations.length" class="px-1 py-2 text-xs text-muted">
+          <p v-if="loadError" class="px-1 py-2 text-xs text-error">
+            Failed to load conversations
+          </p>
+          <p v-else-if="!siteConversations.length" class="px-1 py-2 text-xs text-muted">
             No conversations yet
           </p>
         </div>
@@ -66,8 +69,14 @@ const activeConversationId = computed(() => chowBot.conversationId.value)
 const newChowBotChat = () => chowBot.startNewConversation()
 const loadChowBotChat = (conv: ChowBotConv) => chowBot.loadConversation(conv)
 
+const loadError = ref(false)
+
 watch(activeSiteId, (siteId) => {
   if (!import.meta.client || !siteId) return
-  chowBotHistory.load(siteId).catch(console.error)
+  loadError.value = false
+  chowBotHistory.load(siteId).catch((error) => {
+    console.error(error)
+    loadError.value = true
+  })
 }, { immediate: true })
 </script>

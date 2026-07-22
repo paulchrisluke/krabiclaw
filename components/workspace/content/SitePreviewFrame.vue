@@ -38,6 +38,7 @@
           :class="{ 'opacity-40': iframeLoading }"
           style="min-height: 40rem"
           @load="iframeLoading = false"
+          @error="iframeLoading = false"
         />
         <Transition
           enter-active-class="transition-opacity duration-200"

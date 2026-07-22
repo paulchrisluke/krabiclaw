@@ -315,15 +315,13 @@ const hasFacebookAccess = computed(() => {
   const plan = dashboard.site.value?.plan
   return plan === 'growth' || plan === 'managed' || plan === 'seo_accelerator'
 })
-const organizationsState = authClient.useListOrganizations()
-const organization = computed(() => unref(organizationsState)?.data?.[0] || null)
-const organizationRole = computed(() => {
-  const metadata = organization.value?.metadata
-  if (metadata && typeof metadata === 'object' && 'role' in metadata && typeof metadata.role === 'string' && metadata.role.trim()) {
-    return metadata.role.trim()
-  }
-  return 'Member'
-})
+// authClient.useListOrganizations()[0] picked whichever org the user's list
+// happened to return first — wrong whenever this org-scoped settings page
+// (/dashboard/[orgSlug]/settings/general) isn't that org. dashboard.organization
+// is already resolved from the route's orgSlug (see useDashboardSite.ts) and
+// carries role directly, with no metadata indirection needed.
+const organization = dashboard.organization
+const organizationRole = computed(() => organization.value?.role || 'Member')
 
 const loadingCurrency = ref(true)
 const savingCurrency = ref(false)

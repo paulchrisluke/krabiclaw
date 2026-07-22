@@ -465,43 +465,51 @@ async function sendInvite() {
   inviteError.value = null
   inviteSuccess.value = false
 
-  const { error } = await authClient.organization.inviteMember({
-    email: inviteForm.email,
-    role: inviteForm.role as 'member' | 'admin',
-    organizationId: activeOrgId.value,
-  })
+  try {
+    const { error } = await authClient.organization.inviteMember({
+      email: inviteForm.email,
+      role: inviteForm.role as 'member' | 'admin',
+      organizationId: activeOrgId.value,
+    })
 
-  inviting.value = false
+    if (error) {
+      inviteError.value = error.message ?? 'Failed to send invite.'
+      return
+    }
 
-  if (error) {
-    inviteError.value = error.message ?? 'Failed to send invite.'
-    return
+    inviteForm.email = ''
+    inviteForm.role = 'member'
+    inviteSuccess.value = true
+    if (inviteSuccessTimeout.value !== null) {
+      clearTimeout(inviteSuccessTimeout.value)
+    }
+    inviteSuccessTimeout.value = setTimeout(() => { inviteSuccess.value = false }, 4000)
+    await refresh()
+  } catch (err) {
+    inviteError.value = err instanceof Error ? err.message : 'Failed to send invite.'
+  } finally {
+    inviting.value = false
   }
-
-  inviteForm.email = ''
-  inviteForm.role = 'member'
-  inviteSuccess.value = true
-  if (inviteSuccessTimeout.value !== null) {
-    clearTimeout(inviteSuccessTimeout.value)
-  }
-  inviteSuccessTimeout.value = setTimeout(() => { inviteSuccess.value = false }, 4000)
-  await refresh()
 }
 
 async function cancelInvitation(invitationId: string) {
   cancellingInviteId.value = invitationId
   pendingInvitationError.value = null
 
-  const { error } = await authClient.organization.cancelInvitation({ invitationId })
+  try {
+    const { error } = await authClient.organization.cancelInvitation({ invitationId })
 
-  cancellingInviteId.value = null
+    if (error) {
+      pendingInvitationError.value = error.message ?? 'Failed to cancel invitation.'
+      return
+    }
 
-  if (error) {
-    pendingInvitationError.value = error.message ?? 'Failed to cancel invitation.'
-    return
+    await refresh()
+  } catch (err) {
+    pendingInvitationError.value = err instanceof Error ? err.message : 'Failed to cancel invitation.'
+  } finally {
+    cancellingInviteId.value = null
   }
-
-  await refresh()
 }
 
 // Routes through a dedicated server endpoint rather than calling
