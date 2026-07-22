@@ -337,9 +337,10 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Warm up preview Worker and verify asset propagation
         run: |
-          curl -sf -o /dev/null "https://preview.krabiclaw.com/" || true
-          curl -sf -o /dev/null "https://preview.krabiclaw.com/blog" || true
-          curl -sf -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" -o /dev/null "https://preview.krabiclaw.com/api/dev/login" || true
+          CURL_TIMEOUT=(--connect-timeout 5 --max-time 15)
+          curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://preview.krabiclaw.com/" || true
+          curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://preview.krabiclaw.com/blog" || true
+          curl -sf "${CURL_TIMEOUT[@]}" -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" -o /dev/null "https://preview.krabiclaw.com/api/dev/login" || true
 
           # Cloudflare propagates a new Worker+Assets deploy to edge PoPs over a few
           # seconds, not instantly. A request landing on a not-yet-updated PoP right
@@ -348,11 +349,11 @@ jobs:
           # versa) — producing a 404 with the wrong MIME type mid-test. A blind sleep
           # doesn't confirm propagation actually finished, so poll the specific asset
           # this build's own homepage HTML references instead.
-          asset_path=$(curl -sf "https://preview.krabiclaw.com/" | grep -oE '/_nuxt/entry\.[A-Za-z0-9_-]+\.css' | head -1)
+          asset_path=$(curl -sf "${CURL_TIMEOUT[@]}" "https://preview.krabiclaw.com/" | grep -oE '/_nuxt/entry\.[A-Za-z0-9_-]+\.css' | head -1)
           if [ -n "$asset_path" ]; then
             propagated=false
             for i in $(seq 1 15); do
-              status=$(curl -s -o /dev/null -w "%{http_code}" "https://preview.krabiclaw.com${asset_path}")
+              status=$(curl -s "${CURL_TIMEOUT[@]}" -o /dev/null -w "%{http_code}" "https://preview.krabiclaw.com${asset_path}")
               if [ "$status" = "200" ]; then
                 echo "Asset $asset_path is live (attempt $i)"
                 propagated=true
@@ -495,19 +496,20 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Warm up staging Worker and verify asset propagation
         run: |
-          curl -sf -o /dev/null "https://staging.krabiclaw.com/" || true
-          curl -sf -o /dev/null "https://staging.krabiclaw.com/blog" || true
-          curl -sf -o /dev/null "https://staging.krabiclaw.com/api/billing/plans" || true
-          curl -sf -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" -o /dev/null "https://staging.krabiclaw.com/api/dev/login" || true
+          CURL_TIMEOUT=(--connect-timeout 5 --max-time 15)
+          curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://staging.krabiclaw.com/" || true
+          curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://staging.krabiclaw.com/blog" || true
+          curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://staging.krabiclaw.com/api/billing/plans" || true
+          curl -sf "${CURL_TIMEOUT[@]}" -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" -o /dev/null "https://staging.krabiclaw.com/api/dev/login" || true
 
           # See the matching comment in the "Warm up preview Worker" step (e2e-smoke
           # job) — same Cloudflare edge-propagation race, poll for the real asset
           # instead of guessing a fixed sleep duration.
-          asset_path=$(curl -sf "https://staging.krabiclaw.com/" | grep -oE '/_nuxt/entry\.[A-Za-z0-9_-]+\.css' | head -1)
+          asset_path=$(curl -sf "${CURL_TIMEOUT[@]}" "https://staging.krabiclaw.com/" | grep -oE '/_nuxt/entry\.[A-Za-z0-9_-]+\.css' | head -1)
           if [ -n "$asset_path" ]; then
             propagated=false
             for i in $(seq 1 20); do
-              status=$(curl -s -o /dev/null -w "%{http_code}" "https://staging.krabiclaw.com${asset_path}")
+              status=$(curl -s "${CURL_TIMEOUT[@]}" -o /dev/null -w "%{http_code}" "https://staging.krabiclaw.com${asset_path}")
               if [ "$status" = "200" ]; then
                 echo "Asset $asset_path is live (attempt $i)"
                 propagated=true
