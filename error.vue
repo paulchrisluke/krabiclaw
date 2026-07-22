@@ -52,6 +52,7 @@ useHead(() => ({
   link: buildTenantHeadLinks({
     isPlatform,
     tenantLogoUrl: site?.logo_url || null,
+    tenantLogoMimeType: site?.logo_mime_type || null,
     tenantBrandName: site?.brand_name || '',
     tenantFaviconUrl: site?.favicon_url || null,
     isDraftPreview: route.path.startsWith('/preview/draft/'),

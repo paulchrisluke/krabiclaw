@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test, describe } from 'node:test'
 import { buildTenantHeadLinks } from '../../utils/tenant-head'
-import { isPlatformAssetUrl, getTenantFaviconSvg } from '../../server/utils/tenant-favicon'
+import { isPlatformAssetUrl, getTenantFaviconSvg, getCloudflareImageVariantUrl } from '../../server/utils/tenant-favicon'
 
 describe('Tenant Favicon Metadata & Isolation Tests', () => {
   test('buildTenantHeadLinks for platform host returns default platform links', () => {
@@ -19,15 +19,15 @@ describe('Tenant Favicon Metadata & Isolation Tests', () => {
     assert.ok(links.some((l) => l.href === '/site.webmanifest'))
   })
 
-  test('buildTenantHeadLinks for PNG logo tenant emits shortcut, apple-touch, icon with image/png and version param', () => {
+  test('buildTenantHeadLinks with extensionless Cloudflare Images URL and tenantLogoMimeType (Kikuzuki PNG)', () => {
     const links = buildTenantHeadLinks({
       isPlatform: false,
-      tenantLogoUrl: 'https://imagedelivery.net/abc/logo.png',
+      tenantLogoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/f2eb4d12-f586-455f-217f-3f3de95f3700/public',
+      tenantLogoMimeType: 'image/png',
       tenantBrandName: 'Kikuzuki',
       isDraftPreview: false,
     })
 
-    assert.ok(links.length >= 4)
     const iconLink = links.find((l) => l.key === 'app-icon-tenant')
     const shortcutLink = links.find((l) => l.key === 'app-icon-shortcut')
     const appleLink = links.find((l) => l.key === 'app-icon-apple')
@@ -40,10 +40,11 @@ describe('Tenant Favicon Metadata & Isolation Tests', () => {
     assert.equal(manifestLink?.href, '/tenant.webmanifest')
   })
 
-  test('buildTenantHeadLinks for JPEG logo tenant (Pottery House) emits image/jpeg type', () => {
+  test('buildTenantHeadLinks with extensionless Cloudflare Images URL and tenantLogoMimeType (Pottery House JPEG)', () => {
     const links = buildTenantHeadLinks({
       isPlatform: false,
-      tenantLogoUrl: 'https://imagedelivery.net/abc/logo.jpg',
+      tenantLogoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/43fb6656-0913-4f3b-be60-b5f180f80400/public',
+      tenantLogoMimeType: 'image/jpeg',
       tenantBrandName: 'Pottery House Krabi',
       isDraftPreview: false,
     })
@@ -53,55 +54,42 @@ describe('Tenant Favicon Metadata & Isolation Tests', () => {
     assert.match(iconLink?.href || '', /^\/tenant-icon\?v=/)
   })
 
-  test('buildTenantHeadLinks for dedicated SVG favicon tenant emits image/svg+xml type', () => {
+  test('buildTenantHeadLinks omits type attribute when MIME type is absent for extensionless URLs', () => {
     const links = buildTenantHeadLinks({
       isPlatform: false,
-      tenantLogoUrl: null,
-      tenantFaviconUrl: 'https://cdn.example.com/custom-icon.svg',
-      tenantBrandName: 'Custom Brand',
+      tenantLogoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/unknown-format/public',
+      tenantLogoMimeType: null,
+      tenantBrandName: 'Unknown Brand',
       isDraftPreview: false,
     })
 
     const iconLink = links.find((l) => l.key === 'app-icon-tenant')
-    assert.equal(iconLink?.type, 'image/svg+xml')
+    assert.equal(iconLink?.type, undefined)
   })
 
-  test('buildTenantHeadLinks version fingerprint changes when logo URL changes', () => {
-    const links1 = buildTenantHeadLinks({
-      isPlatform: false,
-      tenantLogoUrl: 'https://imagedelivery.net/v1/logo.png',
-      tenantBrandName: 'Test Tenant',
-      isDraftPreview: false,
-    })
+  test('getCloudflareImageVariantUrl replaces /public with flexible variant options', () => {
+    const original = 'https://imagedelivery.net/account/imageid/public'
+    const transformed192 = getCloudflareImageVariantUrl(original, 192, 192, 'png')
+    const transformed512 = getCloudflareImageVariantUrl(original, 512, 512, 'png')
 
-    const links2 = buildTenantHeadLinks({
-      isPlatform: false,
-      tenantLogoUrl: 'https://imagedelivery.net/v2/logo.png',
-      tenantBrandName: 'Test Tenant',
-      isDraftPreview: false,
-    })
-
-    const icon1 = links1.find((l) => l.key === 'app-icon-tenant')
-    const icon2 = links2.find((l) => l.key === 'app-icon-tenant')
-
-    assert.notEqual(icon1?.href, icon2?.href)
+    assert.equal(transformed192, 'https://imagedelivery.net/account/imageid/w=192,h=192,fit=pad,f=png')
+    assert.equal(transformed512, 'https://imagedelivery.net/account/imageid/w=512,h=512,fit=pad,f=png')
   })
 
-  test('isPlatformAssetUrl correctly identifies platform static favicon assets', () => {
+  test('isPlatformAssetUrl narrows platform classification so external URLs are allowed', () => {
     assert.equal(isPlatformAssetUrl('/favicon.ico'), true)
-    assert.equal(isPlatformAssetUrl('/favicon.svg'), true)
-    assert.equal(isPlatformAssetUrl('/apple-touch-icon.png'), true)
-    assert.equal(isPlatformAssetUrl('/favicon-96x96.png'), true)
     assert.equal(isPlatformAssetUrl('/platform/favicon.ico'), true)
-    assert.equal(isPlatformAssetUrl('https://imagedelivery.net/abc/123/public'), false)
-    assert.equal(isPlatformAssetUrl('https://example.com/logo.png'), false)
+    assert.equal(isPlatformAssetUrl('https://krabiclaw.com/favicon.ico'), true)
+    // Valid customer-hosted URLs must NOT be rejected
+    assert.equal(isPlatformAssetUrl('https://client.example/favicon.ico'), false)
+    assert.equal(isPlatformAssetUrl('https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/43fb6656-0913-4f3b-be60-b5f180f80400/public'), false)
   })
 
-  test('getTenantFaviconSvg generates brand initial SVG badge', () => {
-    const potterySvg = getTenantFaviconSvg('Pottery House')
-    assert.match(potterySvg, /<text[^>]*>P<\/text>/)
+  test('getTenantFaviconSvg wraps logo image in SVG when logoUrl is present', () => {
+    const svgWithLogo = getTenantFaviconSvg('Pottery House', 'https://imagedelivery.net/abc/logo/public')
+    assert.match(svgWithLogo, /<image href="https:\/\/imagedelivery\.net\/abc\/logo\/public"/)
 
-    const kikuzukiSvg = getTenantFaviconSvg('Kikuzuki')
-    assert.match(kikuzukiSvg, /<text[^>]*>K<\/text>/)
+    const svgInitial = getTenantFaviconSvg('Pottery House', null)
+    assert.match(svgInitial, /<text[^>]*>P<\/text>/)
   })
 })

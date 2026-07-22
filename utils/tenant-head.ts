@@ -9,6 +9,7 @@ type HeadLink = {
 export interface TenantHeadLinkOptions {
   isPlatform: boolean
   tenantLogoUrl: string | null
+  tenantLogoMimeType?: string | null
   tenantBrandName: string
   isDraftPreview: boolean
   tenantFaviconUrl?: string | null
@@ -43,7 +44,9 @@ export function buildTenantHeadLinks(options: TenantHeadLinkOptions): HeadLink[]
   const targetUrl = options.tenantFaviconUrl || options.tenantLogoUrl
   let iconType: string | undefined
 
-  if (targetUrl) {
+  if (options.tenantLogoMimeType) {
+    iconType = options.tenantLogoMimeType
+  } else if (targetUrl) {
     const lower = targetUrl.toLowerCase()
     if (lower.endsWith('.svg')) iconType = 'image/svg+xml'
     else if (lower.endsWith('.png')) iconType = 'image/png'
@@ -51,7 +54,7 @@ export function buildTenantHeadLinks(options: TenantHeadLinkOptions): HeadLink[]
   }
 
   const links: HeadLink[] = [
-    { key: 'app-icon-tenant', rel: 'icon', type: iconType, href: `/tenant-icon?v=${v}` },
+    { key: 'app-icon-tenant', rel: 'icon', ...(iconType ? { type: iconType } : {}), href: `/tenant-icon?v=${v}` },
     { key: 'app-icon-shortcut', rel: 'shortcut icon', href: `/favicon.ico?v=${v}` },
     { key: 'app-icon-apple', rel: 'apple-touch-icon', sizes: '180x180', href: `/apple-touch-icon.png?v=${v}` },
   ]
