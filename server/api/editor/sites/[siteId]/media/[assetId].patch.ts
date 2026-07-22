@@ -1,10 +1,11 @@
 // PATCH /api/editor/sites/[siteId]/media/[assetId]
 // Update mutable metadata: alt_text only. URLs are managed by Cloudflare.
-import { queryFirst, type DbClient } from '~/server/db'
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { updateMediaAssetMetadata, type MediaAsset } from '~/server/utils/media-asset-manager'
 import { assertResourceAccess } from '~/server/utils/member-access'
+import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 interface MediaAssetSiteRow {
   id: string
@@ -13,24 +14,7 @@ interface MediaAssetSiteRow {
   location_id: string | null
 }
 
-interface SiteMemberRow {
-  id: string
-  member_id: string
-  member_role: string
-}
-
 const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other'])
-
-async function loadSiteMember(db: DbClient, userId: string, siteId: string): Promise<SiteMemberRow | null> {
-  return await queryFirst<SiteMemberRow>(db, `
-    SELECT s.id, m.id AS member_id, m.role AS member_role
-    FROM sites s
-    JOIN organization o ON s.organization_id = o.id
-    JOIN member m ON o.id = m.organizationId
-    WHERE s.id = ? AND m.userId = ?
-    LIMIT 1
-  `, [siteId, userId])
-}
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -44,8 +28,8 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadSiteMember(db, session.user.id, siteId)
-  if (!site) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
+  const site = await loadMemberSiteRow(db, siteId, session.user.id)
+  if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   try {
     const asset = await queryFirst<MediaAssetSiteRow>(
@@ -56,7 +40,7 @@ export default defineEventHandler(async (event) => {
     if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
     if (asset.site_id !== siteId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
-    const principal = { memberId: site.member_id, role: site.member_role, organizationId: asset.organization_id, siteId }
+    const principal = { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
     await assertResourceAccess(db, { ...principal, resourceLocationId: asset.location_id })
 
     const body = await readBody(event)

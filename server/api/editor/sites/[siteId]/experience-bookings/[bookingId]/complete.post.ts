@@ -3,6 +3,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { queryFirst } from '~/server/db'
 import { markBookingCompleted } from '~/server/utils/review-requests'
 import { assertResourceAccess } from '~/server/utils/member-access'
+import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -16,20 +17,20 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const booking = await queryFirst<{ id: string; location_id: string; organization_id: string; member_id: string; member_role: string }>(db, `
-    SELECT eb.id, eb.location_id, s.organization_id, m.id AS member_id, m.role AS member_role
-    FROM experience_bookings eb
-    JOIN sites s ON s.id = eb.site_id
-    JOIN member m ON m.organizationId = s.organization_id
-    WHERE eb.id = ? AND eb.site_id = ? AND m.userId = ?
+  const site = await loadMemberSiteRow(db, siteId, session.user.id)
+  if (!site) return jsonResponse({ error: 'Booking not found or access denied' }, { status: 404 })
+
+  const booking = await queryFirst<{ id: string; location_id: string }>(db, `
+    SELECT id, location_id FROM experience_bookings
+    WHERE id = ? AND site_id = ?
     LIMIT 1
-  `, [bookingId, siteId, session.user.id])
+  `, [bookingId, siteId])
   if (!booking) return jsonResponse({ error: 'Booking not found or access denied' }, { status: 404 })
 
   await assertResourceAccess(db, {
-    memberId: booking.member_id,
-    role: booking.member_role,
-    organizationId: booking.organization_id,
+    memberId: site.member_id,
+    role: site.member_role,
+    organizationId: site.organization_id,
     siteId,
     resourceLocationId: booking.location_id,
   })

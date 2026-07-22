@@ -1,30 +1,13 @@
 // POST /api/editor/sites/[siteId]/media/[assetId]/confirm
 // Called after client has uploaded directly to Cloudflare Images.
 // Marks the asset active and resolves the public URL.
-import { execute, queryFirst, type DbClient } from '~/server/db'
+import { execute, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { buildImageUrl, hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
 import { activateMediaAsset, getMediaAsset } from '~/server/utils/media-asset-manager'
 import { assertResourceAccess } from '~/server/utils/member-access'
-
-interface SiteMemberRow {
-  id: string
-  organization_id: string
-  member_id: string
-  member_role: string
-}
-
-async function loadSiteMember(db: DbClient, userId: string, siteId: string): Promise<SiteMemberRow | null> {
-  return await queryFirst<SiteMemberRow>(db, `
-    SELECT s.id, s.organization_id, m.id AS member_id, m.role AS member_role
-    FROM sites s
-    JOIN organization o ON s.organization_id = o.id
-    JOIN member m ON o.id = m.organizationId
-    WHERE s.id = ? AND m.userId = ?
-    LIMIT 1
-  `, [siteId, userId])
-}
+import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -38,8 +21,8 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadSiteMember(db, session.user.id, siteId)
-  if (!site) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
+  const site = await loadMemberSiteRow(db, siteId, session.user.id)
+  if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const asset = await getMediaAsset(db, assetId, siteId)
   if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })

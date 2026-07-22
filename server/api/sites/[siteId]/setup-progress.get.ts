@@ -3,6 +3,7 @@
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
+import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { queryFirst } from '~/server/db'
 
 export interface SetupStep {
@@ -44,7 +45,18 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    // Verify membership and fetch site basics
+    const siteAccess = await loadMemberSiteRow(db, siteId, session.user.id)
+    if (!siteAccess) {
+      return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+    }
+
+    await assertSiteWideAccess(db, {
+      memberId: siteAccess.member_id,
+      role: siteAccess.member_role,
+      organizationId: siteAccess.organization_id,
+      siteId,
+    })
+
     const site = await queryFirst<{
       id: string
       organization_id: string
@@ -56,23 +68,18 @@ export default defineEventHandler(async (event) => {
       public_url: string | null
       status: string
       last_published_at: string | null
-      member_id: string
-      member_role: string
     }>(db, `
       SELECT s.id, s.organization_id, s.brand_name, s.brand_description,
              s.logo_url, s.contact_email, s.subdomain, s.public_url,
-             s.status, s.last_published_at, om.id AS member_id, om.role AS member_role
+             s.status, s.last_published_at
       FROM sites s
-      JOIN member om ON s.organization_id = om.organizationId
-      WHERE s.id = ? AND om.userId = ?
+      WHERE s.id = ? AND s.organization_id = ?
       LIMIT 1
-    `, [siteId, session.user.id])
+    `, [siteId, siteAccess.organization_id])
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
-
-    await assertSiteWideAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
 
     const orgId = site.organization_id
 

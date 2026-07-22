@@ -1,9 +1,9 @@
 // GET single menu with items
-import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getMenuWithItems } from '~/server/utils/menu-management'
 import { assertResourceAccess } from '~/server/utils/member-access'
+import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -27,14 +27,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const site = await queryFirst<{ id: string; organization_id: string; member_id: string; member_role: string }>(db, `
-      SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role
-      FROM sites s
-      JOIN organization o ON s.organization_id = o.id
-      JOIN member om ON o.id = om.organizationId
-      WHERE s.id = ? AND om.userId = ?
-      LIMIT 1
-    `, [siteId, session.user.id])
+    const site = await loadMemberSiteRow(db, siteId, session.user.id)
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })

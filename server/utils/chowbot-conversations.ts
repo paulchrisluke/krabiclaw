@@ -119,18 +119,26 @@ export async function listSitesForMember(
     WHERE m.userId = ? AND s.status = 'active'
     ORDER BY s.updated_at DESC
   `, [userId])
+  const scopedRows = (results ?? []).filter(row => !isOrganizationWideRole(row.role))
+  const scopedMemberIds = [...new Set(scopedRows.map(row => row.member_id))]
+  const siteWideScopes = scopedMemberIds.length
+    ? await queryAll<{ member_id: string; site_id: string }>(db, `
+        SELECT member_id, site_id
+        FROM member_access_scope
+        WHERE location_id IS NULL
+          AND member_id IN (${scopedMemberIds.map(() => '?').join(', ')})
+      `, scopedMemberIds)
+    : []
+  const siteWideScopeKeys = new Set(siteWideScopes.map(scope => `${scope.member_id}:${scope.site_id}`))
+
   const accessible: ChowBotSiteAccess[] = []
   for (const row of results ?? []) {
     if (isOrganizationWideRole(row.role)) {
       accessible.push(row)
       continue
     }
-    try {
-      await assertSiteWideAccess(db, { memberId: row.member_id, role: row.role, organizationId: row.organization_id, siteId: row.id })
+    if (row.role === 'editor' && siteWideScopeKeys.has(`${row.member_id}:${row.id}`)) {
       accessible.push(row)
-    } catch {
-      // Not site-wide-scoped for this site — omit rather than list a site
-      // this editor can't actually use ChowBot on.
     }
   }
   return accessible

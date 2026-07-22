@@ -2,7 +2,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { PostValidationError, getPost, updatePost } from '~/server/utils/post-management'
 import { assertResourceAccess } from '~/server/utils/member-access'
-import { queryFirst } from '~/server/db'
+import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -18,12 +18,7 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody(event)
 
-  const site = await queryFirst<{ id: string; organization_id: string; member_id: string; member_role: string }>(db, `
-    SELECT s.id, s.organization_id, m.id AS member_id, m.role AS member_role FROM sites s
-    JOIN organization o ON s.organization_id = o.id
-    JOIN member m ON o.id = m.organizationId
-    WHERE s.id = ? AND m.userId = ? LIMIT 1
-  `, [siteId, session.user.id])
+  const site = await loadMemberSiteRow(db, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const existingPost = await getPost(db, site.organization_id, siteId, postId, env)

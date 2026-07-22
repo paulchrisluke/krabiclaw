@@ -28,6 +28,8 @@ test('0060 preserves editor access and converts scoped members and invitations',
       ON member_access_scope (member_id, site_id) WHERE location_id IS NULL;
     CREATE TABLE invitation (
       id TEXT PRIMARY KEY,
+      organizationId TEXT NOT NULL,
+      status TEXT NOT NULL,
       role TEXT NOT NULL
     );
     CREATE TABLE invitation_access_scope (
@@ -37,6 +39,10 @@ test('0060 preserves editor access and converts scoped members and invitations',
       site_id TEXT NOT NULL,
       location_id TEXT
     );
+    CREATE UNIQUE INDEX idx_invitation_access_scope_unique
+      ON invitation_access_scope (invitation_id, site_id, location_id);
+    CREATE UNIQUE INDEX idx_invitation_access_scope_site_unique
+      ON invitation_access_scope (invitation_id, site_id) WHERE location_id IS NULL;
 
     INSERT INTO sites VALUES ('site-1', 'org-1'), ('site-2', 'org-1');
     INSERT INTO member VALUES
@@ -46,8 +52,9 @@ test('0060 preserves editor access and converts scoped members and invitations',
       ('editor-location-scope', 'existing-editor', 'org-1', 'site-1', 'loc-1'),
       ('manager-location-scope', 'location-manager', 'org-1', 'site-1', 'loc-1');
     INSERT INTO invitation VALUES
-      ('legacy-invitation', 'location_manager'),
-      ('editor-invitation', 'editor');
+      ('legacy-invitation', 'org-1', 'pending', 'location_manager'),
+      ('editor-invitation', 'org-1', 'pending', 'editor'),
+      ('unscoped-editor-invitation', 'org-1', 'pending', 'editor');
     INSERT INTO invitation_access_scope VALUES
       ('legacy-scope', 'legacy-invitation', 'org-1', 'site-1', 'loc-1'),
       ('editor-scope', 'editor-invitation', 'org-1', 'site-1', NULL);
@@ -88,13 +95,17 @@ test('0060 preserves editor access and converts scoped members and invitations',
     [
       { id: 'editor-invitation', role: 'editor' },
       { id: 'legacy-invitation', role: 'editor' },
+      { id: 'unscoped-editor-invitation', role: 'editor' },
     ],
   )
   assert.deepEqual(
-    db.prepare('SELECT invitation_id, grant_source FROM invitation_access_scope ORDER BY invitation_id').all().map(row => ({ ...row })),
+    db.prepare('SELECT invitation_id, site_id, grant_source FROM invitation_access_scope ORDER BY invitation_id, site_id').all().map(row => ({ ...row })),
     [
-      { invitation_id: 'editor-invitation', grant_source: 'manual' },
-      { invitation_id: 'legacy-invitation', grant_source: 'whatsapp_config' },
+      { invitation_id: 'editor-invitation', site_id: 'site-1', grant_source: 'manual' },
+      { invitation_id: 'editor-invitation', site_id: 'site-2', grant_source: 'migration_backfill' },
+      { invitation_id: 'legacy-invitation', site_id: 'site-1', grant_source: 'whatsapp_config' },
+      { invitation_id: 'unscoped-editor-invitation', site_id: 'site-1', grant_source: 'migration_backfill' },
+      { invitation_id: 'unscoped-editor-invitation', site_id: 'site-2', grant_source: 'migration_backfill' },
     ],
   )
   db.close()

@@ -1,12 +1,15 @@
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { queryFirst } from '~/server/db'
+import { queryFirst, type DbClient } from '~/server/db'
 import { assertLocationAccess, assertSiteContextAccess, assertSiteWideAccess } from '~/server/utils/member-access'
 import type { H3Event } from 'h3'
 
-interface SiteAccessRow {
+export interface SiteAccessRow {
   id: string
   organization_id: string
+  subdomain: string | null
+  status: string
+  onboarding_status: string | null
   member_id: string
   member_role: string
 }
@@ -15,7 +18,7 @@ interface LocationAccessRow {
   id: string
 }
 
-async function loadMemberSiteRow(db: D1Database, siteId: string, userId: string): Promise<SiteAccessRow | null> {
+export async function loadMemberSiteRow(db: DbClient, siteId: string, userId: string): Promise<SiteAccessRow | null> {
   // No role-name filter here on purpose: access is decided by the caller's
   // requested access class (site-wide / location / context) via
   // member-access.ts, not by which role names are allowed to reach this
@@ -23,7 +26,8 @@ async function loadMemberSiteRow(db: D1Database, siteId: string, userId: string)
   // the scope check inside assertSiteWideAccess/assertLocationAccess/
   // assertSiteContextAccess (isScopedRole/isOrganizationWideRole both false).
   return await queryFirst<SiteAccessRow>(db, `
-    SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role
+    SELECT s.id, s.organization_id, s.subdomain, s.status, s.onboarding_status,
+           om.id AS member_id, om.role AS member_role
     FROM sites s
     JOIN member om ON s.organization_id = om.organizationId
     WHERE s.id = ? AND om.userId = ?
@@ -77,9 +81,10 @@ export async function requireLocationAccess(event: H3Event, siteId: string, loca
  * for this site — a location-scoped-only editor is rejected here, matching
  * the requirement that they must not reach site-wide managers/settings.
  *
- * Pass `accessClass: 'context'` only for genuine discovery/navigation reads
- * (site metadata needed to resolve into the caller's own location) — never
- * for anything that returns site configuration or other locations' data.
+ * Pass `accessClass: 'context'` for discovery/navigation reads, or to load the
+ * authenticated site/member principal before a synchronous
+ * `assertOrganizationAccess(site.member_role)` check. It must not directly
+ * authorize site configuration, other locations' data, or a mutation.
  */
 export async function requireSiteAccess(
   event: H3Event,

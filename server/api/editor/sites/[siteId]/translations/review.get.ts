@@ -5,7 +5,7 @@ import type { TranslationInventoryStatus } from '~/server/utils/translation-inve
 import { listTranslationReviewItems } from '~/server/utils/translation-review'
 import { parseScope } from '~/server/utils/translation-helpers'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
-import { queryFirst } from '~/server/db'
+import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 function parseStatus(value: unknown): TranslationInventoryStatus | 'all' {
   return value === 'missing' || value === 'draft' || value === 'published' || value === 'stale' || value === 'all'
@@ -28,12 +28,7 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await queryFirst<{ id: string; organization_id: string; member_id: string; member_role: string }>(db, `
-    SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role FROM sites s
-    JOIN member om ON s.organization_id = om.organizationId
-    WHERE s.id = ? AND om.userId = ?
-    LIMIT 1
-  `, [siteId, session.user.id])
+  const site = await loadMemberSiteRow(db, siteId, session.user.id)
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 

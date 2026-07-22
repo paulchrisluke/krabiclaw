@@ -107,7 +107,7 @@ aggregate across locations), never from the URL shape alone.
 **sites/[siteId] family + proof-sweep stragglers: complete.**
 
 **Repository-wide proof sweep (run after every family, final pass clean):**
-```
+```text
 location_manager        → 0 live-code hits (comments/migration file only)
 LOCATION_MANAGER_ROLE    → 0 hits
 role IN ('owner', 'admin', 'editor')  → 0 hits
@@ -129,6 +129,22 @@ changing a notification phone cannot revoke independently granted editor access.
 `location_manager`; migration `0060` converts existing members and pending
 invitations to `editor`; the WhatsApp backfill script and all new invitation
 paths create `editor` roles with explicit scope provenance.
+
+**Review hardening:** the site/member principal query now lives in
+`server/utils/location-access.ts` and is reused by the reviewed media, menu,
+post, content, booking, translation, analytics, settings, and setup routes.
+Missing membership responses are consistently non-enumerating 404s, and media
+authorization derives the organization from the verified site rather than the
+asset row. Pending pre-migration `editor` invitations are backfilled across
+their organization's current sites, including invitations that had no scope
+row. The dashboard invite form invalidates in-flight site/location requests
+when the route organization changes, and surfaces the scope API's error body.
+
+**Final local verification:** all 60 migrations applied to a clean D1 state;
+the unit suite passed 478/478; typecheck, lint, Drizzle, migration safety,
+migration lint, seed lint, and tool-parity checks passed; the scoped invitation
+Playwright flow passed 2/2; and the mandatory Pottery House fixture passed
+52/52 against `http://localhost:3000`.
 
 **Status: complete.** Every endpoint family listed above is converted. The
 repository-wide proof sweep, migration contract test, full unit suite,

@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/ap
 import { getAuthSession } from '~/server/utils/auth'
 import { getConfig } from '~/server/utils/site-config'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
+import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -33,32 +34,33 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    // Verify user belongs to organization that owns the site
+    const siteAccess = await loadMemberSiteRow(db, siteId, session.user.id)
+    if (!siteAccess) {
+      return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+    }
+
+    await assertSiteWideAccess(db, {
+      memberId: siteAccess.member_id,
+      role: siteAccess.member_role,
+      organizationId: siteAccess.organization_id,
+      siteId,
+    })
+
     const site = await queryFirst<ApiRecord>(db, `
       SELECT s.id, s.organization_id, s.subdomain, s.theme, s.status,
              s.primary_location_id, s.public_url, s.custom_domain_status, s.default_currency,
              s.brand_name, s.brand_description, s.logo_url, s.logo_asset_id, s.contact_email,
-             s.settings, s.last_published_at, s.created_at, s.updated_at,
-             o.name as organization_name, om.id as member_id, om.role as member_role
+             s.settings, s.last_published_at, s.created_at, s.updated_at
       FROM sites s
-      JOIN organization o ON s.organization_id = o.id
-      JOIN member om ON o.id = om.organizationId
-      WHERE s.id = ? AND om.userId = ?
+      WHERE s.id = ? AND s.organization_id = ?
       LIMIT 1
-    `, [siteId, session.user.id])
+    `, [siteId, siteAccess.organization_id])
 
     if (!site) {
       return jsonResponse({
         error: 'Site not found or access denied'
       }, { status: 404 })
     }
-
-    await assertSiteWideAccess(db, {
-      memberId: site.member_id as string,
-      role: site.member_role as string,
-      organizationId: site.organization_id as string,
-      siteId,
-    })
 
     const siteSettings = (() => {
       if (!site.settings) return {}

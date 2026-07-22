@@ -2,7 +2,8 @@
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '../../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
-import { queryAll, queryFirst } from '~/server/db'
+import { loadMemberSiteRow } from '~/server/utils/location-access'
+import { queryAll } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -32,14 +33,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    // Verify user has access to the site
-    const site = await queryFirst<{ id: string; organization_id: string; member_id: string; member_role: string }>(db, `
-      SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role FROM sites s
-      JOIN organization o ON s.organization_id = o.id
-      JOIN member om ON o.id = om.organizationId
-      WHERE s.id = ? AND om.userId = ?
-      LIMIT 1
-    `, [siteId, session.user.id])
+    const site = await loadMemberSiteRow(db, siteId, session.user.id)
 
     if (!site) {
       return jsonResponse({

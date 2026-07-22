@@ -5,6 +5,7 @@ import { defineEventHandler, getRouterParam, getQuery } from 'h3'
 import { queryAll, queryFirst } from '~/server/db'
 import { aggregateAnalyticsForDate, aggregateAnalyticsForRange } from '~/server/utils/analytics'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
+import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 interface AnalyticsSummary {
   pageViews: number
@@ -79,14 +80,6 @@ interface DailyAnalyticsRow {
 interface PeriodTotalsRow {
   page_views: number | null
   unique_sessions: number | null
-}
-
-interface SiteAccessRow {
-  id: string
-  organization_id: string
-  subdomain: string | null
-  member_id: string
-  member_role: string
 }
 
 interface TopPageJson {
@@ -170,14 +163,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    // Verify user belongs to organization that owns the site
-    const site = await queryFirst<SiteAccessRow>(db, `
-      SELECT s.id, s.organization_id, s.subdomain, m.id AS member_id, m.role AS member_role
-      FROM sites s
-      JOIN member m ON s.organization_id = m.organizationId
-      WHERE s.id = ? AND m.userId = ?
-      LIMIT 1
-    `, [siteId, session.user.id])
+    const site = await loadMemberSiteRow(db, siteId, session.user.id)
 
     if (!site) {
       return jsonResponse(

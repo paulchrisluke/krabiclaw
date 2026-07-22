@@ -403,6 +403,7 @@ interface OrgLocationSummary { id: string; title: string }
 
 const sitesPending = ref(false)
 const orgSites = ref<OrgSiteSummary[]>([])
+let sitesRequestId = 0
 const siteOptions = computed(() => orgSites.value.map(site => ({
   label: site.brand_name || site.subdomain || site.id,
   value: site.id,
@@ -410,6 +411,7 @@ const siteOptions = computed(() => orgSites.value.map(site => ({
 
 const locationsPending = ref(false)
 const orgLocations = ref<OrgLocationSummary[]>([])
+let locationsRequestId = 0
 const locationOptions = computed(() => orgLocations.value.map(location => ({
   label: location.title,
   value: location.id,
@@ -417,15 +419,18 @@ const locationOptions = computed(() => orgLocations.value.map(location => ({
 
 async function loadOrgSites() {
   if (orgSites.value.length || sitesPending.value) return
+  const requestId = ++sitesRequestId
   sitesPending.value = true
   try {
     const response = await $fetch<{ sites: OrgSiteSummary[] }>('/api/dashboard/context')
+    if (requestId !== sitesRequestId) return
     orgSites.value = response.sites ?? []
   } catch (err) {
+    if (requestId !== sitesRequestId) return
     orgSites.value = []
     inviteError.value = err instanceof Error ? err.message : 'Failed to load sites for this organization.'
   } finally {
-    sitesPending.value = false
+    if (requestId === sitesRequestId) sitesPending.value = false
   }
 }
 
@@ -434,19 +439,34 @@ watch(() => inviteForm.role, (role) => {
 })
 
 watch(() => inviteForm.siteId, async (siteId) => {
+  const requestId = ++locationsRequestId
   inviteForm.locationId = ''
   orgLocations.value = []
   if (!siteId) return
   locationsPending.value = true
   try {
     const response = await $fetch<{ success: boolean; locations: OrgLocationSummary[] }>(`/api/sites/${siteId}/locations`)
+    if (requestId !== locationsRequestId || inviteForm.siteId !== siteId) return
     orgLocations.value = response.locations ?? []
   } catch (err) {
+    if (requestId !== locationsRequestId || inviteForm.siteId !== siteId) return
     orgLocations.value = []
     inviteError.value = err instanceof Error ? err.message : 'Failed to load locations for this site.'
   } finally {
-    locationsPending.value = false
+    if (requestId === locationsRequestId) locationsPending.value = false
   }
+})
+
+watch(() => route.params.orgSlug, () => {
+  sitesRequestId += 1
+  locationsRequestId += 1
+  inviteForm.siteId = ''
+  inviteForm.locationId = ''
+  orgSites.value = []
+  orgLocations.value = []
+  sitesPending.value = false
+  locationsPending.value = false
+  if (inviteForm.role === 'editor') loadOrgSites()
 })
 
 const removingMemberId = ref<string | null>(null)
@@ -580,7 +600,8 @@ async function sendInvite() {
         })
       } catch (scopeErr) {
         const { error: cancelError } = await authClient.organization.cancelInvitation({ invitationId: data.id })
-        const scopeMessage = scopeErr instanceof Error ? scopeErr.message : 'The site/location scope could not be attached.'
+        const scopeErrData = scopeErr && typeof scopeErr === 'object' && 'data' in scopeErr ? (scopeErr as Record<string, { error?: string }>).data : null
+        const scopeMessage = scopeErrData?.error ?? (scopeErr instanceof Error ? scopeErr.message : 'The site/location scope could not be attached.')
         inviteError.value = cancelError
           ? `${scopeMessage} The unscoped invitation also could not be cancelled; cancel it from Pending invitations before retrying.`
           : `${scopeMessage} The invitation was cancelled; please retry.`
