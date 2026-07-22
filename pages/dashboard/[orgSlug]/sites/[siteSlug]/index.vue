@@ -1,6 +1,14 @@
 <template>
-  <UPage class="h-full">
-    <UPageBody>
+  <UDashboardPanel id="site-overview">
+    <template #header>
+      <UDashboardNavbar :title="siteName">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
       <div v-if="pending" class="space-y-6">
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <USkeleton v-for="i in 4" :key="i" class="h-20 rounded-xl" />
@@ -31,7 +39,7 @@
         </UChatPrompt>
 
         <!-- Getting started task list -->
-        <UCard v-if="!checklistDismissed && !checklistAllDone && checklistItems.length" class="border-primary/20">
+        <UCard v-if="!checklistDismissed && !checklistAllDone && checklistItems.length" variant="soft" class="border-primary/20">
           <div class="space-y-4">
             <div class="flex items-start justify-between gap-4">
               <div>
@@ -96,7 +104,7 @@
               <UButton to="/docs/integrations/mcp-setup" size="sm">
                 Open setup docs
               </UButton>
-              <UButton :to="`/dashboard/${route.params.orgSlug}/~/settings/chatgpt`" variant="outline" color="neutral" size="sm">
+              <UButton :to="`/dashboard/${route.params.orgSlug}/settings/chatgpt`" variant="outline" color="neutral" size="sm">
                 Open ChatGPT settings
               </UButton>
               <UButton variant="ghost" color="neutral" size="sm" @click="dismissChecklist">
@@ -105,30 +113,6 @@
             </div>
           </div>
         </UCard>
-
-        <!-- Usage strip -->
-        <div v-if="credits" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <UCard>
-            <p class="text-xs text-muted">AI Credits</p>
-            <p class="mt-1 text-2xl font-semibold text-highlighted tabular-nums">{{ credits.balance.toLocaleString() }}</p>
-            <UProgress :model-value="credits.balance" :max="credits.balance + credits.lifetime_used"
-              :color="credits.balance < 100 ? 'error' : credits.balance < 500 ? 'warning' : 'primary'" size="xs" class="mt-2" />
-          </UCard>
-          <UCard>
-            <p class="text-xs text-muted">Locations</p>
-            <p class="mt-1 text-2xl font-semibold text-highlighted">{{ locations.length }}</p>
-          </UCard>
-          <UCard>
-            <p class="text-xs text-muted">Reviews</p>
-            <p class="mt-1 text-2xl font-semibold text-highlighted">
-              {{ locations.reduce((s, l) => s + (l.review_count ?? 0), 0).toLocaleString() }}
-            </p>
-          </UCard>
-          <UCard>
-            <p class="text-xs text-muted">Avg Rating</p>
-            <p class="mt-1 text-2xl font-semibold text-highlighted">{{ avgRating ?? '—' }}</p>
-          </UCard>
-        </div>
 
         <div v-if="isProfessionalService" class="flex flex-wrap items-center justify-between gap-3 border-y border-default py-4">
           <div>
@@ -142,81 +126,60 @@
           </div>
         </div>
 
-        <!-- Site-wide content -->
-        <div class="flex flex-wrap items-center justify-between gap-3 border-y border-default py-4">
-          <div>
-            <h2 class="text-sm font-semibold text-highlighted">Site-wide content</h2>
-            <p class="mt-1 text-xs text-muted">Manage blog posts for your site.</p>
+        <!-- Locations preview -->
+        <div v-if="locations.length > 0">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-semibold text-highlighted">Locations</h2>
+            <UButton
+              v-if="locations.length > 3"
+              :to="locationsBase ?? `${siteDashboardPath}/locations`"
+              size="sm"
+              color="neutral"
+              variant="ghost"
+            >
+              See all
+            </UButton>
           </div>
-          <div class="flex flex-wrap gap-2">
-            <UButton icon="i-lucide-file-text" color="neutral" variant="soft" :to="`${siteDashboardPath}/blog`">Blog</UButton>
-          </div>
-        </div>
-
-        <!-- Locations header + new button -->
-        <div class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold text-highlighted">Locations</h2>
-          <UButton
-            icon="i-lucide-plus"
-            label="Add location"
-            size="sm"
-            color="primary"
-            variant="soft"
-            :to="`/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/new`"
-          />
-        </div>
-
-        <div v-if="locations.length === 0" class="py-16 text-center">
-          <UIcon name="i-lucide-map-pin" class="size-8 text-muted mx-auto mb-3" />
-          <p class="text-sm text-muted">No locations yet.</p>
-          <UButton
-            label="Add your first location"
-            size="sm"
-            color="primary"
-            class="mt-4"
-            :to="`/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/new`"
-          />
-        </div>
-
-        <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <NuxtLink
-            v-for="location in locations"
-            :key="location.id"
-            :to="`/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/${location.slug}`"
-            class="group block"
-          >
-            <UCard class="h-full transition-shadow group-hover:shadow-md cursor-pointer" :ui="{ body: 'p-0 sm:p-0' }">
-              <div class="aspect-video w-full overflow-hidden rounded-t-xl bg-muted">
-                <img
-                  v-if="location.hero_url"
-                  :src="cfImageVariant(location.hero_url, { width: 640 }) ?? undefined"
-                  :alt="location.title"
-                  class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  loading="lazy"
-                />
-                <div v-else class="flex h-full items-center justify-center">
-                  <UIcon name="i-lucide-map-pin" class="size-8 text-muted" />
-                </div>
-              </div>
-              <div class="p-4 space-y-2">
-                <div class="flex items-start justify-between gap-2">
-                  <div class="min-w-0">
-                    <p class="text-sm font-semibold text-highlighted truncate">{{ location.title }}</p>
-                    <p v-if="location.city" class="text-xs text-muted">{{ location.city }}</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <NuxtLink
+              v-for="location in previewLocations"
+              :key="location.id"
+              :to="`${locationsBase}/${location.slug}`"
+              class="group block"
+            >
+              <UCard variant="soft" class="h-full cursor-pointer">
+                <div class="aspect-video w-full overflow-hidden rounded-t-xl bg-muted">
+                  <img
+                    v-if="location.hero_url"
+                    :src="cfImageVariant(location.hero_url, { width: 640 }) ?? undefined"
+                    :alt="location.title"
+                    class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    loading="lazy"
+                  />
+                  <div v-else class="flex h-full items-center justify-center">
+                    <UIcon name="i-lucide-map-pin" class="size-8 text-muted" />
                   </div>
-                  <UBadge v-if="location.is_primary" color="primary" variant="soft" size="xs">Primary</UBadge>
                 </div>
-                <div v-if="location.rating || location.review_count" class="flex items-center gap-3 text-xs text-muted">
-                  <span v-if="location.rating" class="flex items-center gap-1">
-                    <UIcon name="i-lucide-star" class="size-3 text-warning-400 fill-warning-400" />
-                    {{ location.rating.toFixed(1) }}
-                  </span>
-                  <span v-if="location.review_count">{{ location.review_count.toLocaleString() }} reviews</span>
+                <div class="p-4 space-y-2">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                      <p class="text-sm font-semibold text-highlighted truncate">{{ location.title }}</p>
+                      <p v-if="location.city" class="text-xs text-muted">{{ location.city }}</p>
+                    </div>
+                    <UBadge v-if="location.is_primary" color="primary" variant="soft" size="xs">Primary</UBadge>
+                  </div>
+                  <div v-if="location.rating || location.review_count" class="flex items-center gap-3 text-xs text-muted">
+                    <span v-if="location.rating" class="flex items-center gap-1">
+                      <UIcon name="i-lucide-star" class="size-3 text-warning-400 fill-warning-400" />
+                      {{ location.rating.toFixed(1) }}
+                    </span>
+                    <span v-if="location.review_count">{{ location.review_count.toLocaleString() }} reviews</span>
+                  </div>
+                  <p class="text-xs text-muted">Updated {{ timeAgo(location.updated_at) }}</p>
                 </div>
-                <p class="text-xs text-muted">Updated {{ timeAgo(location.updated_at) }}</p>
-              </div>
-            </UCard>
-          </NuxtLink>
+              </UCard>
+            </NuxtLink>
+          </div>
         </div>
 
         <UCard v-if="events.length > 0" title="Recent Activity">
@@ -234,8 +197,8 @@
           </ul>
         </UCard>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
@@ -317,9 +280,11 @@ const { data, pending } = await useAsyncData(
 )
 
 const locations = computed(() => data.value?.locations ?? [])
+const previewLocations = computed(() => locations.value.slice(0, 3))
+const siteName = computed(() => dashboardState.site.value?.brand_name ?? 'Overview')
 const isProfessionalService = computed(() => ['service', 'professional_service'].includes(dashboardState.site.value?.vertical ?? ''))
 const siteDashboardPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}`)
-const credits = computed(() => data.value?.credits ?? null)
+const locationsBase = computed(() => `${siteDashboardPath.value}/locations`)
 const events = computed(() => data.value?.events ?? [])
 
 // Getting-started task list — data source for both the checklist card and its
@@ -354,12 +319,6 @@ async function submitHomeInput() {
   chowBot.open()
   await chowBot.sendMessage(text)
 }
-
-const avgRating = computed(() => {
-  const rated = locations.value.filter(l => l.rating != null)
-  if (!rated.length) return null
-  return (rated.reduce((s, l) => s + (l.rating ?? 0), 0) / rated.length).toFixed(1)
-})
 
 const { eventLabel, timeAgo } = useSiteEventLabels()
 </script>

@@ -84,7 +84,7 @@
           :class="[
             'inline-flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-2 text-[12.5px] font-semibold transition-colors',
             reply.primary
-              ? 'border-primary bg-primary text-white hover:bg-primary/90'
+              ? 'border-primary bg-primary text-on-primary hover:bg-primary/90'
               : reply.ghost
                 ? 'border-transparent bg-transparent text-muted hover:border-default hover:text-highlighted'
                 : 'border-default bg-elevated text-highlighted hover:border-primary hover:text-primary',

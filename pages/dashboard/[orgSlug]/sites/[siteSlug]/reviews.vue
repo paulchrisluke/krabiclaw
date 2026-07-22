@@ -1,13 +1,18 @@
 <template>
-  <UPage>
-    <UPageBody>
-      <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 class="text-lg font-semibold text-highlighted">Site Reviews</h1>
-          <p class="mt-1 text-sm text-muted">Owner-entered feedback requires provenance and publication authorization.</p>
-        </div>
-        <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="pending" aria-label="Refresh reviews" @click="refresh()" />
-      </div>
+  <UDashboardPanel id="site-reviews">
+    <template #header>
+      <UDashboardNavbar title="Site Reviews">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+        <template #trailing>
+          <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="pending" aria-label="Refresh reviews" @click="refresh()" />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
+      <p class="mb-5 text-sm text-muted">Owner-entered feedback requires provenance and publication authorization.</p>
 
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
         <section class="space-y-4">
@@ -39,12 +44,12 @@
           </template>
         </section>
 
-        <UCard>
+        <UCard variant="soft">
           <template #header><h2 class="font-semibold text-highlighted">{{ editingId ? 'Edit review' : 'Add review' }}</h2></template>
           <div class="space-y-4">
             <div class="grid grid-cols-2 gap-3">
               <UFormField label="Reviewer"><UInput v-model="form.author_name" /></UFormField>
-              <UFormField label="Rating"><UInput v-model.number="form.rating" type="number" min="1" max="5" step="1" /></UFormField>
+              <UFormField label="Rating"><UInputNumber v-model="form.rating" :min="1" :max="5" :step="1" class="w-full" /></UFormField>
             </div>
             <UFormField label="Title"><UInput v-model="form.title" /></UFormField>
             <UFormField label="Review"><UTextarea v-model="form.content" :rows="5" /></UFormField>
@@ -62,8 +67,8 @@
           </div>
         </UCard>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

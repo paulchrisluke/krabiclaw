@@ -3,10 +3,10 @@ export interface PhoneOtpProviderResult {
 }
 
 export interface PhoneOtpControllerDependencies {
-  normalize: (value: string) => string | null
-  send: (body: { phoneNumber: string }) => Promise<PhoneOtpProviderResult>
-  verify: (body: { phoneNumber: string; code: string }) => Promise<PhoneOtpProviderResult>
-  onStateChange?: (state: { loading: boolean; error: string | null }) => void
+  normalize: (_value: string) => string | null
+  send: (_body: { phoneNumber: string }) => Promise<PhoneOtpProviderResult>
+  verify: (_body: { phoneNumber: string; code: string }) => Promise<PhoneOtpProviderResult>
+  onStateChange?: (_state: { loading: boolean; error: string | null }) => void
 }
 
 export type PhoneOtpResult = { ok: true; phone: string } | { ok: false }
@@ -23,7 +23,7 @@ export function createPhoneOtpController(dependencies: PhoneOtpControllerDepende
 
   async function run(
     phoneInput: string,
-    operation: (phone: string) => Promise<PhoneOtpProviderResult>,
+    operation: (_phone: string) => Promise<PhoneOtpProviderResult>,
     fallback: string,
   ): Promise<PhoneOtpResult> {
     if (loading) return { ok: false }

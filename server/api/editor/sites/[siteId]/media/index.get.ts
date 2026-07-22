@@ -35,6 +35,7 @@ export default defineEventHandler(async (event) => {
   const id = typeof query.id === 'string' ? query.id : undefined
   const kind = typeof query.kind === 'string' ? query.kind : undefined
   const locationId = typeof query.locationId === 'string' ? query.locationId : undefined
+  const search = typeof query.search === 'string' ? query.search : undefined
   const parsedLimit = typeof query.limit === 'string' ? Number.parseInt(query.limit, 10) : Number.NaN
   const parsedOffset = typeof query.offset === 'string' ? Number.parseInt(query.offset, 10) : Number.NaN
   const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 100) : 50
@@ -45,6 +46,6 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ media: asset ? [asset] : [] })
   }
 
-  const assets = await listMediaAssets(db, siteId, { kind, locationId, limit, offset })
+  const assets = await listMediaAssets(db, siteId, { kind, locationId, search, limit, offset })
   return jsonResponse({ media: assets })
 })

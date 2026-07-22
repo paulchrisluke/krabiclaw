@@ -12,15 +12,6 @@ export interface DashboardActionLink {
   onClick?: () => void
 }
 
-function appendQuery(path: string, query: Record<string, string | null | undefined>): string {
-  const params = new URLSearchParams()
-  for (const [key, value] of Object.entries(query)) {
-    if (typeof value === 'string' && value.length > 0) params.set(key, value)
-  }
-  const queryString = params.toString()
-  return queryString ? `${path}?${queryString}` : path
-}
-
 export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: MaybeRef<string | null | undefined>, orgSlug?: MaybeRef<string | null | undefined>) {
   void siteId
   const dashboard = useDashboardSite()
@@ -34,33 +25,40 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
     const locationSlug = dashboardLocation.currentLocationSlug.value
     const orgBase = slug ? `${base}/${slug}` : base
     const siteBase = slug && siteSlug ? `${orgBase}/sites/${siteSlug}` : orgBase
-    const projectBase = siteSlug && locationSlug ? `${siteBase}/${locationSlug}` : siteBase
-    const settingsBase = `${orgBase}/~/settings`
+    // paths.value.locations points at the site root (there is no dedicated
+    // locations list page — the site overview page doubles as one), distinct
+    // from the /locations/:location prefix used below for a specific location's
+    // own routes (see pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/).
+    const locationsBase = siteBase
+    const locationBase = siteSlug && locationSlug ? `${siteBase}/locations/${locationSlug}` : siteBase
+    const settingsBase = `${orgBase}/settings`
     return {
       base,
       org: orgBase,
       site: siteBase,
-      project: projectBase,
+      project: locationBase,
       conversations: `${siteBase}/conversations`,
       content: `${siteBase}/content`,
-      menu: `${projectBase}/menu`,
-      posts: `${projectBase}/posts`,
-      reviews: `${projectBase}/reviews`,
-      photos: `${projectBase}/photos`,
-      qa: `${projectBase}/qa`,
-      inbox: `${projectBase}/inbox`,
-      reservations: `${projectBase}/reservations`,
-      order: `${projectBase}/order`,
-      media: `${projectBase}/media`,
-      locations: siteBase,
+      menu: `${locationBase}/menu`,
+      posts: `${locationBase}/posts`,
+      reviews: `${locationBase}/reviews`,
+      photos: `${locationBase}/photos`,
+      qa: `${locationBase}/qa`,
+      inbox: `${locationBase}/inbox`,
+      reservations: `${locationBase}/reservations`,
+      // Orders is site-scoped (pages/dashboard/[orgSlug]/sites/[siteSlug]/orders.vue),
+      // not per-location — do not point this at locationBase.
+      order: `${siteBase}/orders`,
+      media: `${locationBase}/media`,
+      locations: locationsBase,
       translations: `${siteBase}/translations`,
       settings: settingsBase,
       settingsGeneral: `${settingsBase}/general`,
       settingsBilling: `${settingsBase}/billing`,
       // Account-level (no slug)
-      account: `${base}/account/settings`,
-      accountAuthentication: `${base}/account/settings/authentication`,
-      accountBillingItems: `${base}/account/settings/billing-items`,
+      account: `${base}/account/profile`,
+      accountAuthentication: `${base}/account/authentication`,
+      accountBillingItems: `${base}/account/billing-items`,
     }
   })
 
@@ -114,17 +112,20 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
 
   const locationPath = (locationId: string) => {
     const location = dashboard.locations.value.find(candidate => candidate.id === locationId || candidate.slug === locationId)
-    return `${paths.value.site}/${location?.slug ?? locationId}`
+    return `${paths.value.site}/locations/${location?.slug ?? locationId}`
   }
   const locationMenuPath = (locationId: string) => `${locationPath(locationId)}/menu`
-  const locationContentPath = (locationId: string) => appendQuery(`${paths.value.content}`, { page: 'location', location: locationId })
+  // Points at the location-scoped content editor's "location" page (a distinct
+  // route from paths.value.content, which is site-scoped only) — see
+  // pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/content/[pageId].vue.
+  const locationContentPath = (locationId: string) => `${locationPath(locationId)}/content/location`
 
   const menuPath = (locationId?: string | null) => {
     if (locationId) {
       const location = dashboard.locations.value.find(candidate => candidate.id === locationId || candidate.slug === locationId)
       const locationSlug = location?.slug ?? locationId
       return {
-        path: `${paths.value.site}/${locationSlug}/menu`,
+        path: `${paths.value.site}/locations/${locationSlug}/menu`,
         query: {}
       }
     }
@@ -134,10 +135,7 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
     }
   }
 
-  const contentPath = (page?: string) => ({
-    path: paths.value.content,
-    query: page ? { page } : {}
-  })
+  const contentPath = (page?: string) => (page ? `${paths.value.content}/${page}` : paths.value.content)
 
   const editorBackPath = computed(() => paths.value.project)
 

@@ -190,7 +190,7 @@ async function openMockedTransferOnboarding(
     })
   })
 
-  await page.goto(`${baseURL}/dashboard/${orgSlug}/~/onboarding`, { waitUntil: 'load' })
+  await page.goto(`${baseURL}/dashboard/${orgSlug}/onboarding`, { waitUntil: 'load' })
 
   return { siteId, orgSlug: orgSlug! }
 }

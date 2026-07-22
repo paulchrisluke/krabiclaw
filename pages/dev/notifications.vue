@@ -52,7 +52,7 @@
         <div class="mt-3 flex items-center gap-3 flex-wrap">
           <UButton color="primary" :loading="loading" @click="load">Refresh</UButton>
           <UButton color="neutral" variant="soft" @click="applyDemoPreset">Use demo preset</UButton>
-          <UInput v-model.number="filters.limit" type="number" min="1" max="500" class="w-28" />
+          <UInputNumber v-model="filters.limit" :min="1" :max="500" class="w-28" />
           <p class="text-xs text-muted">Limit 1-500</p>
         </div>
         </div>

@@ -1,16 +1,19 @@
 <template>
-  <UPage>
-    <UPageBody>
-      <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 class="text-lg font-semibold text-highlighted">Site Q&A</h1>
-          <p class="mt-1 text-sm text-muted">Manage general questions or questions tailored to a public page.</p>
-        </div>
-        <div class="flex items-center gap-2">
+  <UDashboardPanel id="site-qa">
+    <template #header>
+      <UDashboardNavbar title="Site Q&A">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+        <template #trailing>
           <USelect v-model="selectedPagePath" :items="pageScopes" class="w-48" aria-label="Q&A page scope" />
           <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="pending" aria-label="Refresh Q&A" @click="refresh()" />
-        </div>
-      </div>
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
+      <p class="mb-5 text-sm text-muted">Manage general questions or questions tailored to a public page.</p>
 
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <section class="space-y-3">
@@ -54,8 +57,8 @@
           </div>
         </UCard>
       </div>
-    </UPageBody>
-  </UPage>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

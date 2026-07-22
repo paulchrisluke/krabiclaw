@@ -8,10 +8,10 @@
 // and can be added once a tool actually needs one.
 
 export const DASHBOARD_DESTINATIONS = {
-  'settings.general': '~/settings/general',
-  'settings.domains': '~/settings/domains',
-  'settings.billing': '~/settings/billing',
-  'settings.members': '~/settings/members',
+  'settings.general': 'settings/general',
+  'settings.domains': 'settings/domains',
+  'settings.billing': 'settings/billing',
+  'settings.members': 'settings/members',
   support: 'support',
 } as const
 

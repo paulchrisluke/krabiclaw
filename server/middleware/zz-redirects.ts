@@ -11,7 +11,27 @@ const redirects: Record<string, string> = {
   '/docs/mcp-setup': '/docs/integrations/mcp-setup',
   '/privacy-policy': '/privacy',
   '/terms-and-conditions': '/terms',
+  // These three don't and never did exist as real doc slugs (confirmed
+  // against production platform_docs) — found via real "Documentation not
+  // found" 404s from a live tenant domain. Nothing in this codebase emits
+  // these URLs, so the most likely source is an LLM (e.g. ChatGPT, asked
+  // "how do I connect KrabiClaw to ChatGPT") guessing a plausible-looking
+  // docs path and telling a real business owner to visit it — same class of
+  // hallucination as the open_media_upload MCP tool-name issue. Redirecting
+  // to the closest real doc turns a dead link real users are hitting into a
+  // working one, without us controlling what the LLM says elsewhere.
+  '/docs/getting-started/getting-started-with-krabiclaw-in-chatgpt': '/docs/getting-started/getting-started',
+  '/docs/getting-started/getting-started-with-krabiclaw': '/docs/getting-started/getting-started',
+  '/docs/getting-started/connect-krabiclaw-to-chatgpt': '/docs/integrations/mcp-setup',
 }
+
+// Platform-domain-only (krabiclaw.com bare host) paths Google Search Console
+// keeps recrawling with no current or planned replacement (see issue #317).
+// A plain 404 lets Google keep retrying indefinitely; 410 Gone is a stronger,
+// faster de-index signal. Scoped to TENANT_TYPES.PLATFORM only — some of
+// these (e.g. /posts) are real, valid routes on tenant sites and must keep
+// working there.
+const PLATFORM_GONE_PATHS = new Set(['/changelog', '/posts'])
 
 function safeDecodePathSegment(value: string) {
   try { return decodeURIComponent(value) } catch { return null }
@@ -32,6 +52,10 @@ export default defineEventHandler(async (event) => {
     (getRequestHeader(event, 'accept') ?? '').includes('text/html')
   ) {
     return sendRedirect(event, '/docs/integrations/mcp-setup', 302)
+  }
+
+  if (event.context.tenantType === TENANT_TYPES.PLATFORM && PLATFORM_GONE_PATHS.has(normalizedPathname)) {
+    throw createError({ statusCode: 410, statusMessage: 'Gone' })
   }
 
   const target = redirects[normalizedPathname]

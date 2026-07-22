@@ -1,3 +1,31 @@
+export const formatDate = (dateString: string | null | undefined) => {
+  if (!dateString) return '—'
+  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(dateString)
+  const d = new Date(dateString)
+  if (Number.isNaN(d.getTime())) return '—'
+
+  if (isDateOnly) {
+    const [year, month, day] = dateString.split('-').map(Number)
+    const parsedYear = d.getUTCFullYear()
+    const parsedMonth = d.getUTCMonth() + 1
+    const parsedDay = d.getUTCDate()
+    if (year !== parsedYear || month !== parsedMonth || day !== parsedDay) {
+      return '—'
+    }
+  }
+
+  // Always format in UTC, not the runtime's local timezone — this must render
+  // identically during SSR (server runs in UTC) and client-side hydration
+  // (the visitor's browser may be in any timezone), or Vue's hydration
+  // mismatch check flags every date on the page.
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC'
+  })
+}
+
 export const formatGoogleTime = (time: { hours?: number; minutes?: number } | null | undefined) => {
   if (!time || time.hours === undefined || time.minutes === undefined) return ''
   const h = time.hours % 12 || 12

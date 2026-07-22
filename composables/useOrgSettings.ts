@@ -6,7 +6,7 @@ export function useOrgSettings() {
     return slug ? `/dashboard/${slug}` : '/dashboard'
   })
 
-  const settingsBase = computed(() => `${orgBase.value}/~/settings`)
+  const settingsBase = computed(() => `${orgBase.value}/settings`)
 
   return {
     orgBase,
@@ -18,6 +18,6 @@ export function useOrgSettings() {
     // Top-level org pages (not under /settings)
     translations: computed(() => `${orgBase.value}/translations`),
     // Account-level pages (no org slug)
-    billingItems: computed(() => '/dashboard/account/settings/billing-items'),
+    billingItems: computed(() => '/dashboard/account/billing-items'),
   }
 }

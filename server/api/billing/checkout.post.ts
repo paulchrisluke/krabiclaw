@@ -117,8 +117,8 @@ export default defineEventHandler(async (event) => {
       customer: customerId,
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: successUrl || `${getRequestURL(event).origin}/dashboard/${targetSlug}/~/settings/billing?success=true`,
-      cancel_url: cancelUrl || `${getRequestURL(event).origin}/dashboard/${targetSlug}/~/settings/billing?canceled=true`,
+      success_url: successUrl || `${getRequestURL(event).origin}/dashboard/${targetSlug}/settings/billing?success=true`,
+      cancel_url: cancelUrl || `${getRequestURL(event).origin}/dashboard/${targetSlug}/settings/billing?canceled=true`,
       metadata: {
         organization_id: orgId,
         site_id: resolvedSiteId,

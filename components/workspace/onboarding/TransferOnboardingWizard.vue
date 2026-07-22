@@ -146,7 +146,7 @@
                   </div>
                   <p class="text-[12px] text-muted leading-relaxed">Point <code class="font-mono">www.yourdomain.com</code> to us with a CNAME, then add the SSL verification TXT records. Full instructions are in Settings → Domains.</p>
                   <div class="flex gap-2 pt-1">
-                    <UButton size="sm" color="primary" variant="outline" :to="`/dashboard/${orgSlug}/~/settings/domains`">
+                    <UButton size="sm" color="primary" variant="outline" :to="`/dashboard/${orgSlug}/settings/domains`">
                       Go to Domains settings
                     </UButton>
                     <UButton size="sm" color="neutral" variant="ghost" @click="advance('done')">
@@ -259,7 +259,7 @@ const notifForm = reactive({
   locations: props.locations.map(l => ({ id: l.id, title: l.title, notificationPhone: l.notification_phone ?? '' })),
 })
 
-const inviteForm = reactive({ email: '', role: 'member' })
+const inviteForm = reactive<{ email: string; role: 'member' | 'admin' }>({ email: '', role: 'member' })
 const savingNotifs = ref(false)
 const inviting = ref(false)
 const inviteSuccess = ref(false)

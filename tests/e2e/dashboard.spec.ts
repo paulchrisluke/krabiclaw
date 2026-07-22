@@ -50,8 +50,8 @@ test.describe('dashboard functional smoke', () => {
     expect(orgSlug).toBeTruthy()
 
     const pages = [
-      `/dashboard/${orgSlug}/~/settings/general`,
-      `/dashboard/${orgSlug}/~/settings/billing`,
+      `/dashboard/${orgSlug}/settings/general`,
+      `/dashboard/${orgSlug}/settings/billing`,
       `/dashboard/${orgSlug}/support`,
     ]
 

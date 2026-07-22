@@ -1,6 +1,6 @@
 <template>
   <UApp>
-    <div class="min-h-screen bg-muted">
+    <div class="h-dvh overflow-hidden flex flex-col bg-muted">
       <slot />
       <!-- Feature-flagged off — see composables/useUpgradeModal.ts for why and
            how to bring it back. -->

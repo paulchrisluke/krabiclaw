@@ -1,5 +1,6 @@
 import Stripe from 'stripe'
 import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
+import { betterAuthTimestampToIso, type BetterAuthTimestamp } from '~/server/utils/better-auth-timestamps'
 
 type EntitlementValue = string | number | boolean
 type EntitlementsMap = Record<string, EntitlementValue>
@@ -316,6 +317,77 @@ export async function verifyStripeWebhook(
 export async function updateSubscriptionQuantity(
   _env: BillingEnv, _db: D1Database, _organizationId: string,
 ): Promise<void> {}
+
+// ── User billing items ────────────────────────────────────────────────────────
+
+export interface UserBillingItem {
+  organization: {
+    id: string
+    name: string
+    logo: string | null
+    createdAt: string
+    role: string
+  }
+  billing: {
+    plan: string | null
+    subscriptionStatus?: string | null
+    organizationId: string
+  }
+  userRole: string
+}
+
+export async function getUserBillingItems(
+  env: BillingEnv,
+  db: D1Database,
+  userId: string,
+): Promise<UserBillingItem[]> {
+  const orgRows = await queryAll<{ id: string, name: string, logo: string | null, createdAt: BetterAuthTimestamp, role: string }>(db, `
+    SELECT o.id, o.name, o.logo, o.createdAt, m.role
+    FROM organization o
+    JOIN member m ON o.id = m.organizationId
+    WHERE m.userId = ?
+    ORDER BY o.createdAt ASC
+  `, [userId])
+
+  const organizations = orgRows.map(org => ({
+    ...org,
+    createdAt: betterAuthTimestampToIso(org.createdAt, 'organization.createdAt')
+  }))
+
+  if (!organizations || organizations.length === 0) {
+    return []
+  }
+
+  // Promise.allSettled, not Promise.all with a per-org try/catch: a genuine
+  // query failure for one org used to be masked as a fabricated
+  // { plan: null, subscriptionStatus: 'error' } row — that reads like a real
+  // Stripe subscription status to any caller, and billing-items.vue has no
+  // handling for it, so it silently rendered as if it were real data. Letting
+  // the failure propagate (and simply omitting that org's row) surfaces the
+  // problem instead of hiding it, without one org's DB hiccup taking down
+  // every other org's billing row on the same page.
+  const results = await Promise.allSettled(
+    organizations.map(async (org) => {
+      const billingStatus = await getOrganizationBillingStatus(env, db, org.id)
+      return {
+        organization: org,
+        billing: { ...billingStatus, organizationId: org.id },
+        userRole: org.role
+      }
+    })
+  )
+
+  const billingItems: UserBillingItem[] = []
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      billingItems.push(result.value)
+    } else {
+      console.error(`Failed to get billing status for org ${organizations[index]!.id}:`, result.reason)
+    }
+  })
+
+  return billingItems
+}
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 

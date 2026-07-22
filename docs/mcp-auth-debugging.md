@@ -44,9 +44,12 @@ Use the commands in [observability-debugging.md](./observability-debugging.md) t
 - whether failures are isolated to tenant MCP or platform MCP
 - whether the reconnect issue aligns to a specific demo window
 
-### 3. Cloudflare dashboard Logs UI
+### 3. Telemetry query API (or dashboard Logs UI)
 
-Use dashboard Logs for raw `[MCP_AUTH]` lines from `server/utils/mcp-auth.ts`.
+Use the `workers/observability/telemetry/query` API — see
+[observability-debugging.md](./observability-debugging.md#what-works-workers-observability--logs-telemetry-api)
+for the working request shape — or the dashboard Logs UI, for raw
+`[MCP_AUTH]` lines from `server/utils/mcp-auth.ts`.
 
 These lines include the richer rejection reasons that are not visible from HTTP
 status codes alone, such as:

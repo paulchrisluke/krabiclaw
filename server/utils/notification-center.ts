@@ -241,7 +241,7 @@ export async function notifyNewUserSignup(
     actorUserId: user.id,
     title: 'New user signup',
     message: 'A new KrabiClaw account was created.',
-    deepLink: '/admin?tab=users',
+    deepLink: '/admin/users',
     payload: { source: 'better_auth' },
   }
   const id = await createCanonicalNotification(db, input)

@@ -1,0 +1,135 @@
+<template>
+  <UDashboardPanel id="account-billing-items">
+    <template #header>
+      <UDashboardNavbar title="Billing Items">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
+      <div class="max-w-4xl space-y-10">
+        
+        <!-- Personal Section -->
+        <section class="space-y-4">
+          <h3 class="text-xl font-semibold text-highlighted">Personal</h3>
+
+          <UCard variant="soft">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <UIcon name="i-lucide-user" class="size-6 text-muted" />
+                <span class="font-medium text-highlighted">{{ sessionData?.user?.name }} Account</span>
+                <UBadge color="neutral" variant="soft" size="sm" class="rounded-full px-2">Free</UBadge>
+              </div>
+            </div>
+            <template #footer>
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <p class="text-sm text-muted">To manage your personal plan, visit your account's Billing and Usage settings page.</p>
+                <UButton color="neutral" variant="soft" size="sm" :to="orgSettings.billing.value">
+                  View All Plans
+                </UButton>
+              </div>
+            </template>
+          </UCard>
+        </section>
+
+        <!-- Sites Section -->
+        <section class="space-y-4">
+          <h3 class="text-xl font-semibold text-highlighted">Sites</h3>
+
+          <div v-if="status === 'pending'" class="space-y-4">
+            <USkeleton v-for="i in 2" :key="i" class="h-32 w-full rounded-lg" />
+          </div>
+
+          <div v-else-if="error" class="space-y-3 text-sm">
+            <p class="text-muted">Failed to load your sites. Please try again.</p>
+            <UButton color="neutral" variant="soft" size="sm" @click="refresh()">
+              Retry
+            </UButton>
+          </div>
+
+          <div v-else-if="!billingItems || billingItems.length === 0" class="text-sm text-muted">
+            You are not a member of any sites.
+          </div>
+
+          <div v-else class="space-y-6">
+            <UCard v-for="item in billingItems" :key="item.organization.id" variant="soft">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <UAvatar :src="item.organization.logo || undefined" :alt="item.organization.name" :ui="{ root: 'rounded-md' }" size="sm" />
+                  <span class="font-medium text-highlighted">{{ item.organization.name }}</span>
+                  <UBadge color="primary" variant="soft" size="sm" class="rounded-full px-2 capitalize">
+                    {{ item.billing.plan }}
+                  </UBadge>
+                  <UBadge :color="item.billing.subscriptionStatus === 'active' ? 'success' : 'neutral'" variant="soft" size="sm" class="rounded-full px-2 capitalize">
+                    {{ item.billing.subscriptionStatus || 'active' }}
+                  </UBadge>
+                </div>
+              </div>
+              <template #footer>
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <p class="text-sm text-muted">Visit {{ item.organization.name }}'s billing settings for details.</p>
+                  <UButton color="neutral" variant="soft" size="sm" @click="goToWorkspaceBilling(item.organization.id)">
+                    View Billing Settings
+                  </UButton>
+                </div>
+              </template>
+            </UCard>
+          </div>
+        </section>
+
+      </div>
+    </template>
+  </UDashboardPanel>
+</template>
+
+<script setup lang="ts">
+// -nocheck
+import { useAuth } from '~/composables/useAuth'
+
+definePageMeta({ layout: 'dashboard' })
+useSeoMeta({ title: 'Billing Items | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+
+const orgSettings = useOrgSettings()
+const { data: sessionData } = useAuth()
+const router = useRouter()
+
+interface BillingItem {
+  organization: {
+    id: string
+    name: string
+    logo?: string | null
+  }
+  billing: {
+    plan: string
+    subscriptionStatus?: string | null
+  }
+}
+
+const { data: billingItems, status, error, refresh } = await useAsyncData(
+  'user-billing-items',
+  async () => {
+    if (import.meta.server) {
+      const requestEvent = useRequestEvent()
+      if (!requestEvent) return []
+      const [{ cloudflareEnv }, { getUserBillingItems }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/billing'),
+      ])
+      const env = cloudflareEnv(requestEvent)
+      const db = env.db
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+      const session = await import('~/server/utils/auth').then(m => m.getAuthSession(requestEvent, env))
+      if (!session?.user?.id) return []
+      return await getUserBillingItems(env, db.$client, session.user.id)
+    }
+    const response = await $fetch<{ items: BillingItem[] }>('/api/user/billing-items')
+    return response.items
+  }
+)
+
+const goToWorkspaceBilling = async (orgId: string) => {
+  await router.push({ path: orgSettings.billing.value, query: { organizationId: orgId } })
+}
+</script>

@@ -33,8 +33,8 @@ test.describe('pottery house dashboard', () => {
       for (const route of [
         `/dashboard/${orgSlug}`,
         `/dashboard/${orgSlug}/support`,
-        `/dashboard/${orgSlug}/~/settings/general`,
-        `/dashboard/${orgSlug}/~/settings/billing`,
+        `/dashboard/${orgSlug}/settings/general`,
+        `/dashboard/${orgSlug}/settings/billing`,
       ]) {
         const res = await page.goto(`${baseURL}${route}`, { waitUntil: 'load' })
         expect(res?.status()).toBeLessThan(400)

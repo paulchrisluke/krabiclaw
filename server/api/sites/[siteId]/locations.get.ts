@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
 
     // Get business locations
     const locations = await queryAll<ApiValue>(db, `
-      SELECT bl.id, bl.slug, bl.title, bl.address, bl.city, bl.phone,
+      SELECT bl.id, bl.slug, bl.title, bl.address, bl.city, bl.phone, bl.notification_phone,
              bl.website_url, bl.maps_url, bl.latitude, bl.longitude,
              bl.opening_hours, bl.description, bl.short_description, bl.email, bl.price_level,
              bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id,
