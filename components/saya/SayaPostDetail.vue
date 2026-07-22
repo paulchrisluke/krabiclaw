@@ -16,6 +16,9 @@
         :alt="coverMedia.alt || post.title || t('saya.posts.image_alt')"
         class="h-full w-full object-cover"
       >
+      <div v-else class="flex h-full w-full items-center justify-center text-sm italic text-white/40">
+        {{ t('saya.posts.no_preview') }}
+      </div>
 
       <div class="absolute inset-x-0 top-0 z-10 px-4 pt-4 sm:px-6">
         <NuxtLink
@@ -79,14 +82,23 @@
           </div>
         </div>
 
-        <button
-          type="button"
-          class="flex size-10 shrink-0 items-center justify-center rounded-full border border-inverted/15 text-inverted transition hover:border-inverted/50"
-          :title="t('saya.posts.share')"
-          @click="share"
-        >
-          <svg viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4" /></svg>
-        </button>
+        <div class="relative shrink-0">
+          <button
+            type="button"
+            class="flex size-10 items-center justify-center rounded-full border border-inverted/15 text-inverted transition hover:border-inverted/50"
+            :title="t('saya.posts.share')"
+            @click="share"
+          >
+            <svg viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4" /></svg>
+          </button>
+          <span
+            v-if="shareStatus"
+            role="status"
+            class="absolute top-full right-0 mt-1.5 whitespace-nowrap rounded bg-inverted/10 px-2 py-1 text-xs text-inverted/80"
+          >
+            {{ shareStatus }}
+          </span>
+        </div>
       </div>
     </div>
 
@@ -158,7 +170,13 @@ const galleryMedia = computed(() => {
 })
 
 function formatCta(value: string | null | undefined) {
-  return (value || 'Learn more').replaceAll('_', ' ').toLowerCase().replace(/^\w/, char => char.toUpperCase())
+  // cta_type is freeform text (business owners and Google Business Profile
+  // sync can both set it to anything, see server/utils/mcp-tools/posts.ts —
+  // no fixed enum to map to per-locale translation keys), so a provided
+  // value is only reformatted, not translated. The no-value fallback is a
+  // fixed string this component controls, so it does go through t().
+  if (!value) return t('saya.posts.cta_default')
+  return value.replaceAll('_', ' ').toLowerCase().replace(/^\w/, char => char.toUpperCase())
 }
 
 // line-clamp-3 always applies visually up to ~3 lines regardless of actual
@@ -170,20 +188,36 @@ const DESCRIPTION_TRUNCATE_THRESHOLD = 180
 const descriptionExpanded = ref(false)
 const descriptionTruncatable = computed(() => (props.post.summary || props.post.body || '').length > DESCRIPTION_TRUNCATE_THRESHOLD)
 
+const shareStatus = ref('')
+let shareStatusTimeout: ReturnType<typeof setTimeout> | undefined
+
+function flashShareStatus(message: string) {
+  shareStatus.value = message
+  clearTimeout(shareStatusTimeout)
+  shareStatusTimeout = setTimeout(() => { shareStatus.value = '' }, 2000)
+}
+
 async function share() {
   if (!import.meta.client) return
   const url = window.location.href
   try {
     if (navigator.share) {
       await navigator.share({ title: props.post.title || undefined, url })
-    } else if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(url)
+      return
     }
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url)
+      flashShareStatus(t('saya.posts.link_copied'))
+      return
+    }
+    flashShareStatus(t('saya.posts.share_unavailable'))
   } catch (error) {
+    // User-cancelled share sheets throw AbortError — not a real failure.
     if ((error as Error).name !== 'AbortError') {
-      // Share/clipboard failed (permission denial, unsupported API, etc.) —
-      // non-fatal, nothing else to do client-side.
+      flashShareStatus(t('saya.posts.share_failed'))
     }
   }
 }
+
+onUnmounted(() => clearTimeout(shareStatusTimeout))
 </script>

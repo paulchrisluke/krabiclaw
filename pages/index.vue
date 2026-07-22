@@ -624,12 +624,15 @@ const featuredReviews = computed(() =>
 )
 
 // Recent posts — shown in the "Lately" section, each tile links to the real
-// post page (pages/posts/[slug].vue, rendered by SayaPostDetail.vue).
+// post page (pages/posts/[slug].vue, rendered by SayaPostDetail.vue). A post
+// with no resolvable path can't link anywhere meaningful, so it's excluded
+// rather than falling back to the generic /posts index.
 const recentPosts = computed(() => {
-  const posts = (googlePosts.value || []).filter(p => p.media?.[0]?.url)
+  const posts = (googlePosts.value || [])
+    .filter(p => p.media?.[0]?.url && (p.publicPath || p.public_path || p.slug))
   return posts.slice(0, 4).map((post, i) => ({
     id: post.slug || String(i),
-    path: post.publicPath || post.public_path || (post.slug ? `/posts/${post.slug}` : '/posts'),
+    path: post.publicPath || post.public_path || `/posts/${post.slug}`,
     image: post.media?.[0]?.url || null,
     imageKind: post.media?.[0]?.kind || 'image',
     text: post.summary || '',

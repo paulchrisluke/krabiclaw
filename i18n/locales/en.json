@@ -58,6 +58,10 @@
       "show_more": "Show more",
       "show_less": "Show less",
       "share": "Share",
+      "link_copied": "Link copied",
+      "share_unavailable": "Sharing isn't supported on this browser",
+      "share_failed": "Couldn't share this post",
+      "cta_default": "Learn more",
       "remaining": "remaining",
       "empty_title": "Nothing posted yet.",
       "empty_desc": "Check back soon for updates, events, and announcements."
