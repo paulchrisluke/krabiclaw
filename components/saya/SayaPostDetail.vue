@@ -56,13 +56,19 @@
           </div>
 
           <div class="mt-6 flex flex-wrap gap-3">
-            <NuxtLink
-              v-if="post.callToAction?.url"
-              :to="post.callToAction.url"
-              class="inline-flex items-center justify-center rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black no-underline transition hover:bg-zinc-200"
-            >
-              {{ formatCta(post.callToAction.actionType) }}
-            </NuxtLink>
+            <!-- Configurable post CTA — one button, like Facebook/Instagram post CTAs:
+                 the post author chooses the button text (actionType) and destination
+                 (url). Slot lets a caller fully replace it; default renders the
+                 standard button from post.callToAction. -->
+            <slot name="cta" :cta="post.callToAction" :label="post.callToAction ? formatCta(post.callToAction.actionType) : null">
+              <NuxtLink
+                v-if="post.callToAction?.url"
+                :to="post.callToAction.url"
+                class="inline-flex items-center justify-center rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black no-underline transition hover:bg-zinc-200"
+              >
+                {{ formatCta(post.callToAction.actionType) }}
+              </NuxtLink>
+            </slot>
             <NuxtLink
               v-if="post.location?.slug"
               :to="`/locations/${post.location.slug}`"
@@ -131,6 +137,10 @@ interface SayaPostDetailPost {
 }
 
 const props = defineProps<{ post: SayaPostDetailPost }>()
+
+defineSlots<{
+  cta(_slotProps: { cta: SayaPostDetailPost['callToAction']; label: string | null }): unknown
+}>()
 
 const { t } = useI18n()
 const { formatDate } = useLocaleDate()
