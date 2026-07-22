@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import { validateNoUnknownTopLevelArguments } from '../../server/utils/mcp-tool-validation.ts'
 import { PLATFORM_MCP_TOOLS } from '../../server/utils/platform-mcp-tools.ts'
+import { BLOG_TOOLS } from '../../server/utils/mcp-tools/blog.ts'
 
 type ToolContract = {
   name: string
@@ -70,6 +71,36 @@ test('validateNoUnknownTopLevelArguments sorts multiple unknown keys determinist
     ),
     (error: unknown) => error instanceof Error && error.message === 'Unknown arguments: alpha, zeta',
   )
+})
+
+test('the tenant update_blog_post/create_blog_post schemas are strict (regression: siteTool() defaulted to additionalProperties: true, making tenant validation a no-op)', () => {
+  const updateBlogPost = tool(BLOG_TOOLS, 'update_blog_post')
+  assert.equal(updateBlogPost.inputSchema.additionalProperties, false)
+  const createBlogPost = tool(BLOG_TOOLS, 'create_blog_post')
+  assert.equal(createBlogPost.inputSchema.additionalProperties, false)
+})
+
+test('validateNoUnknownTopLevelArguments rejects the tenant incident shape: update_blog_post called with body instead of content_blocks', () => {
+  const updateBlogPost = tool(BLOG_TOOLS, 'update_blog_post')
+  assert.throws(
+    () => validateNoUnknownTopLevelArguments(updateBlogPost.inputSchema, {
+      site_id: 'site-1',
+      post_id: 'post-1',
+      expected_document_updated_at: '2026-07-22T00:00:00.000Z',
+      body: 'This should never be persisted.',
+    }),
+    (error: unknown) => error instanceof Error && error.message.includes('body'),
+  )
+})
+
+test('validateNoUnknownTopLevelArguments accepts a valid tenant update_blog_post call', () => {
+  const updateBlogPost = tool(BLOG_TOOLS, 'update_blog_post')
+  assert.doesNotThrow(() => validateNoUnknownTopLevelArguments(updateBlogPost.inputSchema, {
+    site_id: 'site-1',
+    post_id: 'post-1',
+    expected_document_updated_at: '2026-07-22T00:00:00.000Z',
+    content_blocks: [{ type: 'markdown', data: { markdown: 'Hello' } }],
+  }))
 })
 
 test('validateNoUnknownTopLevelArguments rejects prototype property names as unknown args, not treats them as allowed', () => {

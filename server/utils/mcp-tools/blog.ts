@@ -64,6 +64,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         publish: { type: 'boolean', description: 'Publish immediately. Defaults to false (draft).' },
       },
       required: ['title', 'content_blocks'],
+      strict: true,
       outputSchema: blogPostMutationResultObject,
     }),
   siteTool({
@@ -92,6 +93,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         unpublish: { type: 'boolean' },
       },
       required: ['post_id'],
+      strict: true,
       outputSchema: blogPostMutationResultObject,
     }),
   siteTool({
