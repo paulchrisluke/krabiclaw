@@ -16,9 +16,9 @@
           </template>
 
           <div class="flex items-center gap-4">
-            <AppAvatar
+            <UAvatar
               :src="sessionData?.user?.image ?? undefined"
-              :name="sessionData?.user?.name || sessionData?.user?.email"
+              :text="getInitials(sessionData?.user?.name || sessionData?.user?.email)"
               alt="User avatar"
               size="lg"
             />

@@ -61,24 +61,33 @@
           <UFormField label="Category"><UInput v-model="form.category" /></UFormField>
           <UFormField label="Tags"><UInput v-model="tagsText" placeholder="Comma separated" /></UFormField>
           <UFormField label="Excerpt"><UTextarea v-model="form.excerpt" :placeholder="resolvedExcerpt" /><p class="mt-1 text-xs text-dimmed">{{ form.excerpt ? 'Custom' : `Auto: ${resolvedExcerpt}` }}</p></UFormField>
-          <SettingsSection title="Publishing">
+          <UCard>
+            <template #header><h3 class="font-semibold text-highlighted">Publishing</h3></template>
+            <div class="space-y-4">
             <UFormField label="Status"><p class="text-sm text-muted">{{ statusLabel }}</p></UFormField>
             <UFormField label="Publish timing"><USelect v-model="publishTiming" :items="['Now', 'Scheduled']" /></UFormField>
             <UFormField v-if="publishTiming === 'Scheduled'" label="Scheduled for"><UInput v-model="form.scheduled_for" type="datetime-local" /></UFormField>
             <UFormField label="Visibility"><USelect v-model="form.visibility" :items="['public', 'unlisted']" /></UFormField>
-          </SettingsSection>
-          <SettingsSection title="Search & sharing">
+            </div>
+          </UCard>
+          <UCard>
+            <template #header><h3 class="font-semibold text-highlighted">Search & sharing</h3></template>
+            <div class="space-y-4">
             <div class="rounded-lg border border-default bg-muted p-3"><p class="truncate text-sm text-primary">{{ resolvedSeo.title }}</p><p class="truncate text-xs text-success">{{ resolvedSeo.canonicalUrl }}</p><p class="mt-1 line-clamp-2 text-xs text-muted">{{ resolvedSeo.description }}</p></div>
             <UFormField label="SEO title"><UInput v-model="form.seo_title" :placeholder="form.title" /></UFormField>
             <UFormField label="Meta description"><UTextarea v-model="form.seo_description" :placeholder="resolvedExcerpt" /></UFormField>
             <UFormField label="Social image"><img v-if="resolvedSocialImageUrl" :src="resolvedSocialImageUrl" alt="Resolved social preview" class="mb-2 aspect-video w-full rounded-lg object-cover"><component :is="mediaPickerComponent || PlatformMediaPicker" :site-id="siteId" v-model="form.social_image_asset_id" accept="image" /></UFormField>
-          </SettingsSection>
-          <SettingsSection title="Advanced">
+            </div>
+          </UCard>
+          <UCard>
+            <template #header><h3 class="font-semibold text-highlighted">Advanced</h3></template>
+            <div class="space-y-4">
             <UFormField label="URL slug"><UInput v-model="form.slug" :disabled="slugResetRequested" /><div class="mt-1 flex items-center justify-between gap-3"><p class="text-xs text-dimmed">{{ slugResetRequested ? generatedSlug : form.slug || generatedSlug }}</p><button v-if="post?.slug_manually_overridden" type="button" class="text-xs text-primary hover:underline" @click="resetSlugOverride">Use automatic slug</button></div></UFormField>
             <UCheckbox v-if="post?.first_published_at && form.slug !== post.slug" v-model="form.redirect_old_slug" label="Redirect old URL" />
             <UFormField label="Canonical URL"><UInput v-model="form.canonical_url" :placeholder="resolvedSeo.canonicalUrl" /></UFormField>
             <UFormField label="Robots"><UInput v-model="form.robots" placeholder="index, follow" /></UFormField>
-          </SettingsSection>
+            </div>
+          </UCard>
           <UButton v-if="post" color="error" variant="ghost" block @click="remove">Delete post</UButton>
         </div>
       </template>
@@ -90,7 +99,6 @@
 import type { Component } from 'vue'
 import BlogArticleView from '~/components/blog/BlogArticleView.vue'
 import PlatformMediaPicker from '~/components/workspace/media/PlatformMediaPicker.vue'
-import SettingsSection from './SettingsSection.vue'
 import type { BlogPostRepository, BlogPost, BlogEditorBlock, PlatformBlogUpdateInput } from './types'
 import { generatedExcerpt, initialBlogEditorBlocks, normalizeBlogSlug, resolveBlogPublicPath, resolveBlogSeo, SerializedSnapshotQueue } from '~/utils/blog-editor'
 import { getErrorMessage } from '~/utils/errors'

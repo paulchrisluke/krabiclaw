@@ -29,9 +29,9 @@
               :class="{ 'opacity-50 pointer-events-none': uploadLoading }"
               @click="openUploadPicker"
             >
-              <AppAvatar
+              <UAvatar
                 :src="sessionData?.user?.image ?? undefined"
-                :name="sessionData?.user?.name || sessionData?.user?.email"
+                :text="getInitials(sessionData?.user?.name || sessionData?.user?.email)"
                 alt="User avatar"
                 size="3xl"
                 class="ring-1 ring-border group-hover:ring-primary transition-all"
