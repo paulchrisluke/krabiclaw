@@ -53,6 +53,7 @@ useHead(() => ({
     isPlatform,
     tenantLogoUrl: site?.logo_url || null,
     tenantBrandName: site?.brand_name || '',
+    tenantFaviconUrl: site?.favicon_url || null,
     isDraftPreview: route.path.startsWith('/preview/draft/'),
   })
 }))

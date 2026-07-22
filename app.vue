@@ -41,6 +41,7 @@ useHead(() => {
       isPlatform,
       tenantLogoUrl: tenantLogoUrl.value,
       tenantBrandName: tenantBrandName.value,
+      tenantFaviconUrl: site?.favicon_url || null,
       isDraftPreview: route.path.startsWith('/preview/draft/'),
     })
   }
