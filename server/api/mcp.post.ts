@@ -360,9 +360,13 @@ Common workflows: update menus and items, create and publish site posts, triage 
 
     if (request.method === "tools/list") {
       const user = await requireMcpUser(event, tenantAuthOptions);
+      const hasSiteIdParam = Object.prototype.hasOwnProperty.call(
+        request.params ?? {},
+        "site_id",
+      );
       const siteId =
         typeof request.params?.site_id === "string"
-          ? request.params.site_id
+          ? request.params.site_id.trim()
           : null;
       const siteCtx = siteId
         ? await getVisibleSiteContext(event, siteId)
@@ -394,7 +398,8 @@ Common workflows: update menus and items, create and publish site posts, triage 
         // Without a site_id, return all tools so AI clients (e.g. ChatGPT) can discover
         // the full capability set on first connection. A supplied but inaccessible
         // site must fail closed instead of receiving the unscoped catalog.
-        if (!siteId) return true;
+        if (!hasSiteIdParam) return true;
+        if (!siteId) return false;
         if (!siteCtx) return false;
         if (!roleSatisfies(siteCtx.role, tool.minimumRole)) return false;
         if (

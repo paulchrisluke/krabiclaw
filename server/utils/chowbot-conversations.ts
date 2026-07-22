@@ -119,15 +119,17 @@ export async function listSitesForMember(
     WHERE m.userId = ? AND s.status = 'active'
     ORDER BY s.updated_at DESC
   `, [userId])
-  const scopedRows = (results ?? []).filter(row => !isOrganizationWideRole(row.role))
-  const scopedMemberIds = [...new Set(scopedRows.map(row => row.member_id))]
-  const siteWideScopes = scopedMemberIds.length
+  const hasScopedMembership = (results ?? []).some(row => !isOrganizationWideRole(row.role))
+  const siteWideScopes = hasScopedMembership
     ? await queryAll<{ member_id: string; site_id: string }>(db, `
-        SELECT member_id, site_id
-        FROM member_access_scope
-        WHERE location_id IS NULL
-          AND member_id IN (${scopedMemberIds.map(() => '?').join(', ')})
-      `, scopedMemberIds)
+        SELECT mas.member_id, mas.site_id
+        FROM member_access_scope mas
+        JOIN member m
+          ON m.id = mas.member_id
+          AND m.organizationId = mas.organization_id
+        WHERE mas.location_id IS NULL
+          AND m.userId = ?
+      `, [userId])
     : []
   const siteWideScopeKeys = new Set(siteWideScopes.map(scope => `${scope.member_id}:${scope.site_id}`))
 

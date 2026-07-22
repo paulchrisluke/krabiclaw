@@ -139,6 +139,12 @@ asset row. Pending pre-migration `editor` invitations are backfilled across
 their organization's current sites, including invitations that had no scope
 row. The dashboard invite form invalidates in-flight site/location requests
 when the route organization changes, and surfaces the scope API's error body.
+MCP tool discovery distinguishes an omitted `site_id` from a blank or
+inaccessible supplied value and fails closed for the latter two. ChowBot's
+site-wide scope lookup joins through the current user instead of constructing
+an unbounded `IN` list, keeping it below D1's bind limit. Dev E2E member,
+membership, and editor-scope provisioning now run as one atomic D1 batch in a
+shared utility.
 
 **Final local verification:** all 60 migrations applied to a clean D1 state;
 the unit suite passed 478/478; typecheck, lint, Drizzle, migration safety,
@@ -146,7 +152,7 @@ migration lint, seed lint, and tool-parity checks passed; the scoped invitation
 Playwright flow passed 2/2; and the mandatory Pottery House fixture passed
 52/52 against `http://localhost:3000`. The two MCP role-visibility regressions
 from the first CI run also pass locally, including fail-closed tool discovery
-for an inaccessible site.
+for inaccessible and blank site identifiers.
 
 **Status: complete.** Every endpoint family listed above is converted. The
 repository-wide proof sweep, migration contract test, full unit suite,

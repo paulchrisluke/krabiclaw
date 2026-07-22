@@ -1182,6 +1182,14 @@ test.describe('stateless MCP server', () => {
     const wrongSiteToolsBody = await wrongSiteTools.json() as { result: { tools: Array<{ name: string }> } }
     expect(wrongSiteToolsBody.result.tools).toEqual([])
 
+    const blankSiteTools = await mcpRequest(request, baseURL!, {
+      method: 'tools/list',
+      params: { site_id: '   ' },
+    })
+    expect(blankSiteTools.status()).toBe(200)
+    const blankSiteToolsBody = await blankSiteTools.json() as { result: { tools: Array<{ name: string }> } }
+    expect(blankSiteToolsBody.result.tools).toEqual([])
+
     const wrongSite = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'get_site',
