@@ -134,7 +134,12 @@ const secondaryTab = computed(() => {
   const template = resolvePublicTemplate({ vertical: props.vertical })
   const match = getEditablePages(props.vertical, template.slug).find(page => page.id === 'menu' || page.id === 'experiences')
   if (!match) return null
-  return { id: match.id, label: match.label, enabled: !!props.iframeSrc, locationScoped: match.scope === 'location' }
+  const locationScoped = match.scope === 'location'
+  // A location-scoped tab has no page to preview until a location exists —
+  // resolvePreviewPath has no path to substitute the location slug into
+  // otherwise, so disable rather than show a broken :location placeholder URL.
+  const enabled = !!props.iframeSrc && (!locationScoped || props.siteLocations.length > 0)
+  return { id: match.id, label: match.label, enabled, locationScoped }
 })
 
 const tabs = computed(() => {

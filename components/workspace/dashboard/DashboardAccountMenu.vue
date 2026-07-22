@@ -117,7 +117,7 @@ async function handleSignOut() {
 
 const items = computed<DropdownMenuItem[][]>(() => [
   [{ label: 'Account settings', icon: 'i-lucide-settings', to: '/dashboard/account/profile' }],
-  [{ slot: 'theme' }],
+  [{ slot: 'theme', onSelect: (e: Event) => e.preventDefault() }],
   [
     { label: 'Help', icon: 'i-lucide-circle-help', to: config.public.helpUrl as string, target: '_blank' },
     { label: 'Docs', icon: 'i-lucide-book-open', to: '/docs' },
