@@ -1,8 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { execute, queryFirst } from '~/server/db'
-
-type MemberRole = 'owner' | 'admin' | 'editor' | 'member'
+import { queryFirst } from '~/server/db'
+import { createDevTestMember, type DevTestMemberRole } from '~/server/utils/dev-test-members'
 
 export default defineEventHandler(async (event) => {
   const devMode = import.meta.dev
@@ -33,7 +32,7 @@ export default defineEventHandler(async (event) => {
     name?: string
   }
 
-  const role = body.role as MemberRole
+  const role = body.role as DevTestMemberRole
   if (!role || !['owner', 'admin', 'editor', 'member'].includes(role)) {
     return jsonResponse({ error: 'Invalid role' }, { status: 400 })
   }
@@ -54,18 +53,19 @@ export default defineEventHandler(async (event) => {
   const now = Math.floor(Date.now() / 1000)
   const idSuffix = crypto.randomUUID()
   const userId = `e2e-user-${idSuffix}`
+  const memberId = `member-${idSuffix}`
   const email = body.email?.trim().toLowerCase() || `e2e-${role}-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.test`
   const name = body.name?.trim() || `E2E ${role}`
 
-  await execute(db, `
-    INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
-    VALUES (?, ?, ?, 1, 'user', ?, ?)
-  `, [userId, name, email, now, now])
-
-  await execute(db, `
-    INSERT INTO member (id, organizationId, userId, role, createdAt)
-    VALUES (?, ?, ?, ?, ?)
-  `, [`member-${idSuffix}`, ownerMembership.organizationId, userId, role, now])
+  await createDevTestMember(db, {
+    userId,
+    memberId,
+    organizationId: ownerMembership.organizationId,
+    role,
+    name,
+    email,
+    now,
+  })
 
   return jsonResponse({
     success: true,
@@ -78,4 +78,3 @@ export default defineEventHandler(async (event) => {
     },
   })
 })
-

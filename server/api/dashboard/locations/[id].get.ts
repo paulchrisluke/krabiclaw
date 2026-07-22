@@ -4,6 +4,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { parseLocationPayload } from './location-helpers'
 import { queryFirst } from '~/server/db'
+import { assertLocationAccess } from '~/server/utils/member-access'
 
 export default defineEventHandler(async (event) => {
   const locationId = getRouterParam(event, 'id')
@@ -28,13 +29,20 @@ export default defineEventHandler(async (event) => {
   }
   const organizationId = organization.id as string
 
-  const location = await queryFirst(db, `
+  const location = await queryFirst<Record<string, unknown> & { site_id: string }>(db, `
     SELECT * FROM business_locations
     WHERE id = ? AND organization_id = ?
     LIMIT 1
   `, [locationId, organizationId])
 
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
+  await assertLocationAccess(db, {
+    memberId: organization.memberId,
+    role: organization.role,
+    organizationId,
+    siteId: location.site_id,
+    locationId,
+  })
 
   return jsonResponse({ success: true, location: parseLocationPayload(location) })
 })

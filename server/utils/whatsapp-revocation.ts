@@ -2,23 +2,25 @@
 // Sections G and H).
 //
 // G — clearing/replacing a location's `notification_phone` or a site's
-// `site_config['whatsapp_phone']` must remove only the recipient's scope for
-// that exact site/location, and a `location_manager` left with zero scopes
-// anywhere in the org must have their organization membership removed.
+// `site_config['whatsapp_phone']` must remove only the recipient's
+// WhatsApp-derived scope for that exact site/location. Manual and migration-
+// backfilled grants are preserved. An editor left with zero scopes anywhere
+// in the org has their organization membership removed (their only reason to
+// be a member was that scope — see #341 Workstream A: editor is always
+// constrained through member_access_scope).
 //
-// H — removing a `location_manager` directly must first surface (and let the
+// H — removing a scoped editor directly must first surface (and let the
 // caller clear) any notification assignments still pointing at their verified
 // phone, so removal can't leave a stale config pointer that would silently
 // re-invite them the next time that config is saved (see
 // `ensureWhatsAppRecipientAccess`'s "reuse existing member" branch, which is
 // keyed on `user.phoneNumber` + `user.phoneNumberVerified`, not membership).
 //
-// Owner/admin/editor memberships are never touched by anything in this file —
-// every removal path here is gated on `role === LOCATION_MANAGER_ROLE`
-// specifically (not just "not organization-wide", since `editor` is
-// operational-but-not-org-wide and must also be excluded).
+// Owner/admin memberships are never touched by anything in this file — every
+// removal path here is gated on `isScopedRole(role)` (i.e. `editor`)
+// specifically, never an org-wide role.
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { LOCATION_MANAGER_ROLE, listMemberAccessScopes } from '~/server/utils/member-access'
+import { isScopedRole, listMemberAccessScopes } from '~/server/utils/member-access'
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/site-events'
 import type { createAuth } from '~/server/utils/auth'
 
@@ -37,10 +39,10 @@ export interface RemoveMembershipResult {
 }
 
 /**
- * If `memberId` is a `location_manager` with zero remaining
- * `member_access_scope` rows anywhere in the org, removes their organization
- * membership. No-op (and returns `{ removed: false }`) for any other role,
- * for a member with remaining scopes, or for an unknown member id.
+ * If `memberId` is a scoped editor with zero remaining `member_access_scope`
+ * rows anywhere in the org, removes their organization membership. No-op
+ * (and returns `{ removed: false }`) for any other role, for a member with
+ * remaining scopes, or for an unknown member id.
  *
  * Prefers Better Auth's own `/organization/remove-member` API (via
  * `actorHeaders` — the acting owner/admin's real request headers) so the
@@ -68,9 +70,10 @@ export async function removeOrgMembershipIfNoScopesRemain(
   `, [memberId])
   if (!member) return { removed: false }
 
-  // Guard explicitly by role equality — owner/admin (org-wide) and editor
-  // (operational-but-not-org-wide) must never be auto-removed or downgraded.
-  if (member.role !== LOCATION_MANAGER_ROLE) return { removed: false }
+  // Guard explicitly by role — owner/admin (org-wide) must never be
+  // auto-removed or downgraded; only a scoped editor with zero scope rows
+  // left has no remaining reason to be a member at all.
+  if (!isScopedRole(member.role)) return { removed: false }
 
   const scopes = await listMemberAccessScopes(db, memberId)
   if (scopes.length > 0) return { removed: false }
@@ -91,9 +94,9 @@ export async function removeOrgMembershipIfNoScopesRemain(
         error: error instanceof Error ? error.message : String(error),
       })
     }
-    // Fall through to the direct-removal path below so a scope-less
-    // location_manager is never left dangling just because the API call
-    // hiccuped (e.g. the acting session expired mid-request).
+    // Fall through to the direct-removal path below so a scope-less editor
+    // is never left dangling just because the API call hiccuped (e.g. the
+    // acting session expired mid-request).
   }
 
   await execute(db, `DELETE FROM member WHERE id = ?`, [memberId])
@@ -132,8 +135,8 @@ export interface PhoneChangeResult {
 /**
  * Call on every write to `business_locations.notification_phone` or
  * `site_config['whatsapp_phone']` where the phone value actually changed.
- * Removes only the recipient's `member_access_scope` row for this exact
- * site/location — other scope rows for the same member (other sites/
+ * Removes only a WhatsApp-derived `member_access_scope` row for this exact
+ * site/location — manual/backfilled grants and other scope rows (other sites/
  * locations, even ones that still list the same phone number) are untouched
  * by construction, since the DELETE below is always scoped to the single
  * `(site_id, location_id)` pair this config write is for. That's the whole
@@ -165,18 +168,20 @@ export async function recalculateScopesForPhoneChange(
   `, [organizationId, previousPhone])
   if (!holder) return { scopeRemoved: false, memberRemoved: false }
 
-  // Owner/admin/editor never lose access from a config change — only a
-  // location_manager's scope is config-derived in the first place.
-  if (holder.role !== LOCATION_MANAGER_ROLE) return { scopeRemoved: false, memberRemoved: false }
+  // Owner/admin never lose access from a config change. For a scoped editor,
+  // the DELETE below is further restricted to WhatsApp-derived grants.
+  if (!isScopedRole(holder.role)) return { scopeRemoved: false, memberRemoved: false }
 
   const deleteResult = scopeType === 'location'
     ? await execute(db, `
         DELETE FROM member_access_scope
         WHERE member_id = ? AND organization_id = ? AND site_id = ? AND location_id = ?
+          AND grant_source = 'whatsapp_config'
       `, [holder.memberId, organizationId, siteId, locationId])
     : await execute(db, `
         DELETE FROM member_access_scope
         WHERE member_id = ? AND organization_id = ? AND site_id = ? AND location_id IS NULL
+          AND grant_source = 'whatsapp_config'
       `, [holder.memberId, organizationId, siteId])
 
   const scopeRemoved = (deleteResult.meta?.changes ?? 0) > 0

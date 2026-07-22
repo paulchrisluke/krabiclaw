@@ -1,8 +1,10 @@
 // PATCH rename menu section
 import { queryFirst } from '~/server/db'
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { MenuNotFoundError, MenuSectionConflictError, MenuSectionNotFoundError, renameMenuSection } from '~/server/utils/menu-management'
+import { assertResourceAccess } from '~/server/utils/member-access'
+import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 interface RenameSectionBody {
   old_section?: string
@@ -40,20 +42,14 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'New section must be different' }, { status: 400 })
     }
 
-    const site = await queryFirst<{ id: string; organization_id: string }>(db, `
-      SELECT s.id, s.organization_id
-      FROM sites s
-      JOIN member om ON s.organization_id = om.organizationId
-      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
-      LIMIT 1
-    `, [siteId, session.user.id])
+    const site = await loadMemberSiteRow(db, siteId, session.user.id)
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
 
-    const menu = await queryFirst(db, `
-      SELECT id FROM menus
+    const menu = await queryFirst<{ id: string; location_id: string | null }>(db, `
+      SELECT id, location_id FROM menus
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1
     `, [menuId, site.organization_id, siteId])
@@ -61,6 +57,14 @@ export default defineEventHandler(async (event) => {
     if (!menu) {
       return jsonResponse({ error: 'Menu not found' }, { status: 404 })
     }
+
+    await assertResourceAccess(db, {
+      memberId: site.member_id,
+      role: site.member_role,
+      organizationId: site.organization_id,
+      siteId,
+      resourceLocationId: menu.location_id,
+    })
 
     const updated = await renameMenuSection(db, site.organization_id, siteId, menuId, oldSection, newSection, session.user.id)
 
@@ -72,6 +76,7 @@ export default defineEventHandler(async (event) => {
       updated,
     })
   } catch (error) {
+    rethrowHttpError(error)
     if (error instanceof SyntaxError || error instanceof TypeError) {
       return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
     }

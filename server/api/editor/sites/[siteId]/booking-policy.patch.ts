@@ -9,6 +9,7 @@ import {
   type BookingPolicyScopeType,
   type BookingPolicyType,
 } from '~/server/utils/booking-policies'
+import { assertResourceAccess } from '~/server/utils/member-access'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -21,13 +22,13 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await queryFirst<{ id: string; organization_id: string }>(
+  const site = await queryFirst<{ id: string; organization_id: string; member_id: string; member_role: string }>(
     db,
-    `SELECT s.id, s.organization_id
+    `SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role
      FROM sites s
      JOIN organization o ON s.organization_id = o.id
      JOIN member om ON o.id = om.organizationId
-     WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
+     WHERE s.id = ? AND om.userId = ?
      LIMIT 1`,
     [siteId, session.user.id],
   )
@@ -40,6 +41,7 @@ export default defineEventHandler(async (event) => {
   const experienceId = typeof body.experience_id === 'string' ? body.experience_id : null
   const locale = typeof body.locale === 'string' ? body.locale : 'en'
 
+  let experienceLocationId: string | null = null
   if (locationId) {
     const location = await queryFirst<{ id: string }>(
       db,
@@ -49,13 +51,22 @@ export default defineEventHandler(async (event) => {
     if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
   }
   if (experienceId) {
-    const experience = await queryFirst<{ id: string }>(
+    const experience = await queryFirst<{ id: string; location_id: string }>(
       db,
-      `SELECT id FROM experiences WHERE id = ? AND site_id = ? LIMIT 1`,
+      `SELECT id, location_id FROM experiences WHERE id = ? AND site_id = ? LIMIT 1`,
       [experienceId, siteId],
     )
     if (!experience) return jsonResponse({ error: 'experience_id must reference an experience on this site' }, { status: 400 })
+    experienceLocationId = experience.location_id
   }
+
+  await assertResourceAccess(db, {
+    memberId: site.member_id,
+    role: site.member_role,
+    organizationId: site.organization_id,
+    siteId,
+    resourceLocationId: locationId ?? experienceLocationId,
+  })
 
   try {
     const patch = await validateBookingPolicyPatch(body, policyType as BookingPolicyType)

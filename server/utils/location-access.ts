@@ -1,11 +1,16 @@
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { queryFirst } from '~/server/db'
+import { queryFirst, type DbClient } from '~/server/db'
+import { assertLocationAccess, assertSiteContextAccess, assertSiteWideAccess } from '~/server/utils/member-access'
 import type { H3Event } from 'h3'
 
-interface SiteAccessRow {
+export interface SiteAccessRow {
   id: string
   organization_id: string
+  brand_name: string | null
+  subdomain: string | null
+  status: string
+  onboarding_status: string | null
   member_id: string
   member_role: string
 }
@@ -14,39 +19,47 @@ interface LocationAccessRow {
   id: string
 }
 
-export async function requireLocationAccess(
-  event: H3Event,
-  siteId: string,
-  locationId: string,
-  roles = ['owner', 'admin', 'editor']
-) {
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) {
-    throw createError({ statusCode: 500, message: 'Database not available' })
-  }
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) {
-    throw createError({ statusCode: 401, message: 'Authentication required' })
-  }
-
-  if (roles.length === 0) {
-    throw createError({ statusCode: 403, message: 'Access denied' })
-  }
-
-  const placeholders = roles.map(() => '?').join(', ')
-  const site = await queryFirst<SiteAccessRow>(db, `
-    SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role
+export async function loadMemberSiteRow(db: DbClient, siteId: string, userId: string): Promise<SiteAccessRow | null> {
+  // No role-name filter here on purpose: access is decided by the caller's
+  // requested access class (site-wide / location / context) via
+  // member-access.ts, not by which role names are allowed to reach this
+  // route. An unrelated org member who isn't owner/admin/editor still fails
+  // the scope check inside assertSiteWideAccess/assertLocationAccess/
+  // assertSiteContextAccess (isScopedRole/isOrganizationWideRole both false).
+  return await queryFirst<SiteAccessRow>(db, `
+    SELECT s.id, s.organization_id, s.brand_name, s.subdomain, s.status, s.onboarding_status,
+           om.id AS member_id, om.role AS member_role
     FROM sites s
     JOIN member om ON s.organization_id = om.organizationId
-    WHERE s.id = ? AND om.userId = ? AND om.role IN (${placeholders})
+    WHERE s.id = ? AND om.userId = ?
     LIMIT 1
-  `, [siteId, session.user.id, ...roles])
+  `, [siteId, userId])
+}
 
-  if (!site) {
-    throw createError({ statusCode: 404, message: 'Site not found or access denied' })
-  }
+/**
+ * Location management access: org-wide roles, a site-wide-scoped editor, or
+ * an editor scoped to this exact location. Use for any resource genuinely
+ * owned by one location (menus/media/reviews rows with a location_id set,
+ * experiences, bookings, location QA/settings).
+ */
+export async function requireLocationAccess(event: H3Event, siteId: string, locationId: string) {
+  const env = cloudflareEnv(event)
+  const db = env.DB
+  if (!db) throw createError({ statusCode: 500, message: 'Database not available' })
+
+  const session = await getAuthSession(event, env)
+  if (!session?.user?.id) throw createError({ statusCode: 401, message: 'Authentication required' })
+
+  const site = await loadMemberSiteRow(db, siteId, session.user.id)
+  if (!site) throw createError({ statusCode: 404, message: 'Site not found or access denied' })
+
+  await assertLocationAccess(db, {
+    memberId: site.member_id,
+    role: site.member_role,
+    organizationId: site.organization_id,
+    siteId,
+    locationId,
+  })
 
   const location = await queryFirst<LocationAccessRow>(db, `
     SELECT id
@@ -62,37 +75,38 @@ export async function requireLocationAccess(
   return { env, db, session, site, location }
 }
 
+/**
+ * Site-wide management access (default): site settings, blog, translations,
+ * professional-services, analytics, domains, the contact-submissions inbox.
+ * Requires org-wide roles or an editor with a location_id IS NULL scope row
+ * for this site — a location-scoped-only editor is rejected here, matching
+ * the requirement that they must not reach site-wide managers/settings.
+ *
+ * Pass `accessClass: 'context'` for discovery/navigation reads, or to load the
+ * authenticated site/member principal before a synchronous
+ * `assertOrganizationAccess(site.member_role)` check. It must not directly
+ * authorize site configuration, other locations' data, or a mutation.
+ */
 export async function requireSiteAccess(
   event: H3Event,
   siteId: string,
-  roles = ['owner', 'admin', 'editor']
+  accessClass: 'site-wide' | 'context' = 'site-wide',
 ) {
   const env = cloudflareEnv(event)
   const db = env.DB
-  if (!db) {
-    throw createError({ statusCode: 500, message: 'Database not available' })
-  }
+  if (!db) throw createError({ statusCode: 500, message: 'Database not available' })
 
   const session = await getAuthSession(event, env)
-  if (!session?.user?.id) {
-    throw createError({ statusCode: 401, message: 'Authentication required' })
-  }
+  if (!session?.user?.id) throw createError({ statusCode: 401, message: 'Authentication required' })
 
-  if (roles.length === 0) {
-    throw createError({ statusCode: 403, message: 'Access denied' })
-  }
+  const site = await loadMemberSiteRow(db, siteId, session.user.id)
+  if (!site) throw createError({ statusCode: 404, message: 'Site not found or access denied' })
 
-  const placeholders = roles.map(() => '?').join(', ')
-  const site = await queryFirst<SiteAccessRow>(db, `
-    SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role
-    FROM sites s
-    JOIN member om ON s.organization_id = om.organizationId
-    WHERE s.id = ? AND om.userId = ? AND om.role IN (${placeholders})
-    LIMIT 1
-  `, [siteId, session.user.id, ...roles])
-
-  if (!site) {
-    throw createError({ statusCode: 404, message: 'Site not found or access denied' })
+  const principal = { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
+  if (accessClass === 'context') {
+    await assertSiteContextAccess(db, principal)
+  } else {
+    await assertSiteWideAccess(db, principal)
   }
 
   return { env, db, session, site }

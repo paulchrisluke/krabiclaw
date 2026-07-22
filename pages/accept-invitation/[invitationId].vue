@@ -156,9 +156,8 @@ const invitedPhone = computed(() => {
   const match = invitation.value?.email.match(/^phone-(\d+)@phone\.krabiclaw\.local$/i)
   return match ? `+${match[1]}` : ''
 })
-// Better Auth roles like `location_manager` are snake_case identifiers, not
-// display copy — render them as normal words instead of leaking the raw
-// underscore ("Location_manager") into invitation copy.
+// Better Auth roles are identifiers, not display copy — render them as normal
+// words instead of leaking raw underscores into invitation copy.
 const roleLabel = computed(() => (invitation.value?.role ?? 'member').replace(/_/g, ' '))
 const inviterDisplay = computed(() => invitation.value?.inviter.name || invitation.value?.inviter.email || '')
 const destinationLabel = computed(() => invitation.value?.site?.brandName || invitation.value?.site?.subdomain || '')

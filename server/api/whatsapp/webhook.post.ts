@@ -300,7 +300,7 @@ async function resolveQuotedNotification(
 
 // Tier 3 candidate list: recent (24h) guest-related operational notifications scoped to
 // sites/locations the manager is authorized for (org-wide roles see everything in their
-// org; location_manager/editor need a matching member_access_scope row). Grouped by
+// org; editor always needs a matching member_access_scope row). Grouped by
 // guest thread so a guest with multiple notification events in the window (e.g. created
 // + a reply) only appears once, most recent first.
 async function listRecentGuestNotificationCandidates(db: D1Database, userId: string): Promise<DisambiguationCandidate[]> {
@@ -323,7 +323,7 @@ async function listRecentGuestNotificationCandidates(db: D1Database, userId: str
     WHERE n.channel = 'whatsapp'
       AND n.related_submission_type IS NOT NULL AND n.related_submission_id IS NOT NULL
       AND n.created_at > ?
-      AND (m.role IN ('owner', 'admin') OR (m.role IN ('editor', 'location_manager') AND mas.id IS NOT NULL))
+      AND (m.role IN ('owner', 'admin') OR (m.role = 'editor' AND mas.id IS NOT NULL))
     GROUP BY gt.id
     ORDER BY createdAt DESC
     LIMIT 5

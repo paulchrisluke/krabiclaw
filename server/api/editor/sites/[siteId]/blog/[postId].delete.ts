@@ -3,6 +3,7 @@ import { getAuthSession } from "~/server/utils/auth";
 import { queryFirst } from "~/server/db";
 import { deletePlatformBlogPost } from "~/server/utils/platform-content";
 import { httpErrorDetails } from "~/server/utils/http-error";
+import { assertSiteWideAccess } from "~/server/utils/member-access";
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, "siteId");
@@ -45,14 +46,16 @@ export default defineEventHandler(async (event) => {
     const site = await queryFirst<{
       id: string;
       organization_id: string;
+      member_id: string;
+      member_role: string;
     }>(
       db,
       `
-      SELECT s.id, s.organization_id
+      SELECT s.id, s.organization_id, m.id AS member_id, m.role AS member_role
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member m ON o.id = m.organizationId
-      WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin','editor')
+      WHERE s.id = ? AND m.userId = ?
       LIMIT 1
     `,
       [siteId, session.user.id],
@@ -64,6 +67,13 @@ export default defineEventHandler(async (event) => {
         { status: 404 },
       );
     }
+
+    await assertSiteWideAccess(db, {
+      memberId: site.member_id,
+      role: site.member_role,
+      organizationId: site.organization_id,
+      siteId,
+    });
 
     await deletePlatformBlogPost(db, postId, siteId);
 

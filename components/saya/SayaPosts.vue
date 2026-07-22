@@ -83,7 +83,7 @@
     </div>
 
     <div v-if="showViewMore && limit && posts.length > 0" class="mt-12 text-center">
-      <NuxtLink to="/posts" class="inline-flex items-center justify-center rounded ring-1 ring-inset ring-(--brand-color) px-6 py-3 text-base font-medium text-(--brand-color) no-underline transition hover:bg-(--brand-color)/10">
+      <NuxtLink :to="viewMoreTo" class="inline-flex items-center justify-center rounded ring-1 ring-inset ring-(--brand-color) px-6 py-3 text-base font-medium text-(--brand-color) no-underline transition hover:bg-(--brand-color)/10">
         {{ t('saya.posts.view_all') }}
       </NuxtLink>
     </div>
@@ -102,7 +102,8 @@ const props = defineProps({
   showTitle: { type: Boolean, default: true },
   description: { type: String, default: undefined },
   showViewMore: { type: Boolean, default: false },
-  showEmptyState: { type: Boolean, default: true }
+  showEmptyState: { type: Boolean, default: true },
+  viewMoreTo: { type: String, default: '/posts' }
 })
 
 function openPost(post) {

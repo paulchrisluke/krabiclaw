@@ -264,7 +264,10 @@ const { data, pending } = await useAsyncData(
 
       const db = cloudflareEnv(requestEvent).db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      return await getDashboardHomeData(db, context.organization.id, context.site.id)
+      return await getDashboardHomeData(db, context.organization.id, context.site.id, {
+        memberId: context.organization.memberId,
+        role: context.organization.role,
+      })
     }
 
     await dashboardState.refresh()

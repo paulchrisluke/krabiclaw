@@ -96,6 +96,15 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: `This invitation was sent to ${invitation.email}. Please sign in with that account.` }, { status: 403 })
   }
 
+  const pendingScopes = await queryAll<{ organization_id: string; site_id: string; location_id: string | null; grant_source: string }>(db, `
+    SELECT organization_id, site_id, location_id, grant_source
+    FROM invitation_access_scope
+    WHERE invitation_id = ?
+  `, [invitationId])
+  if (invitation.role === 'editor' && pendingScopes.length === 0) {
+    return jsonResponse({ error: 'This editor invitation has no assigned site or location. Ask an organization owner to replace it.' }, { status: 409 })
+  }
+
   const auth = createAuth(env)
   const acceptApi = auth.api as unknown as AcceptInvitationApi
 
@@ -134,17 +143,23 @@ export default defineEventHandler(async (event) => {
   if (!acceptedMember) {
     return jsonResponse({ error: 'Invitation was accepted but membership activation failed' }, { status: 500 })
   }
-  const pendingScopes = await queryAll<{ organization_id: string; site_id: string; location_id: string | null }>(db, `
-    SELECT organization_id, site_id, location_id
-    FROM invitation_access_scope
-    WHERE invitation_id = ?
-  `, [invitationId])
   if (pendingScopes.length > 0) {
     await executeBatch(db, [
       ...pendingScopes.map(scope => ({
-        query: `INSERT OR IGNORE INTO member_access_scope (id, member_id, organization_id, site_id, location_id, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-        params: [crypto.randomUUID(), acceptedMember.id, scope.organization_id, scope.site_id, scope.location_id, new Date().toISOString()],
+        query: `INSERT OR IGNORE INTO member_access_scope (id, member_id, organization_id, site_id, location_id, grant_source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        params: [crypto.randomUUID(), acceptedMember.id, scope.organization_id, scope.site_id, scope.location_id, scope.grant_source, new Date().toISOString()],
       })),
+      ...pendingScopes
+        .filter(scope => scope.grant_source === 'manual')
+        .map(scope => scope.location_id
+          ? {
+              query: `UPDATE member_access_scope SET grant_source = 'manual' WHERE member_id = ? AND organization_id = ? AND site_id = ? AND location_id = ?`,
+              params: [acceptedMember.id, scope.organization_id, scope.site_id, scope.location_id],
+            }
+          : {
+              query: `UPDATE member_access_scope SET grant_source = 'manual' WHERE member_id = ? AND organization_id = ? AND site_id = ? AND location_id IS NULL`,
+              params: [acceptedMember.id, scope.organization_id, scope.site_id],
+            }),
       { query: `DELETE FROM invitation_access_scope WHERE invitation_id = ?`, params: [invitationId] },
     ])
   }

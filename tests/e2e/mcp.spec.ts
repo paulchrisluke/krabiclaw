@@ -1174,6 +1174,22 @@ test.describe('stateless MCP server', () => {
     expect(toolNames).not.toContain('update_notification_settings')
     expect(toolNames).not.toContain('get_google_business_auth_url')
 
+    const wrongSiteTools = await mcpRequest(request, baseURL!, {
+      method: 'tools/list',
+      siteId: `site-missing-${Date.now()}`,
+    })
+    expect(wrongSiteTools.status()).toBe(200)
+    const wrongSiteToolsBody = await wrongSiteTools.json() as { result: { tools: Array<{ name: string }> } }
+    expect(wrongSiteToolsBody.result.tools).toEqual([])
+
+    const blankSiteTools = await mcpRequest(request, baseURL!, {
+      method: 'tools/list',
+      params: { site_id: '   ' },
+    })
+    expect(blankSiteTools.status()).toBe(200)
+    const blankSiteToolsBody = await blankSiteTools.json() as { result: { tools: Array<{ name: string }> } }
+    expect(blankSiteToolsBody.result.tools).toEqual([])
+
     const wrongSite = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'get_site',

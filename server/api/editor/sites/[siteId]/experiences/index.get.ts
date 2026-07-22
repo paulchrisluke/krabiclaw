@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { listExperiences } from '~/server/utils/experiences'
+import { listAccessibleLocationIds } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -14,16 +15,26 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await queryFirst<{ id: string }>(
+  const site = await queryFirst<{ id: string; organization_id: string; member_id: string; member_role: string }>(
     db,
-    `SELECT s.id FROM sites s
+    `SELECT s.id, s.organization_id, m.id AS member_id, m.role AS member_role FROM sites s
        JOIN member m ON m.organizationId = s.organization_id
-       WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin','editor') LIMIT 1`,
+       WHERE s.id = ? AND m.userId = ? LIMIT 1`,
     [siteId, session.user.id],
   )
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const experiences = await listExperiences(db, siteId)
+  // A location-scoped editor sees only experiences at their own location(s),
+  // rather than every experience across the whole site — null means
+  // unrestricted (org-wide role, or a site-wide-scoped editor).
+  const accessibleLocationIds = await listAccessibleLocationIds(db, {
+    memberId: site.member_id,
+    role: site.member_role,
+    organizationId: site.organization_id,
+    siteId,
+  })
+  const experiences = (await listExperiences(db, siteId))
+    .filter(experience => accessibleLocationIds === null || accessibleLocationIds.includes(experience.location_id))
   return jsonResponse({ experiences })
 })

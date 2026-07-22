@@ -2,6 +2,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryFirst } from '~/server/db'
 import { getDirectBookingPolicy, renderBookingPolicySummary, resolveBookingPolicy, type BookingPolicyScopeType, type BookingPolicyType } from '~/server/utils/booking-policies'
+import { assertResourceAccess } from '~/server/utils/member-access'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -14,13 +15,13 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await queryFirst<{ id: string; organization_id: string }>(
+  const site = await queryFirst<{ id: string; organization_id: string; member_id: string; member_role: string }>(
     db,
-    `SELECT s.id, s.organization_id
+    `SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role
      FROM sites s
      JOIN organization o ON s.organization_id = o.id
      JOIN member om ON o.id = om.organizationId
-     WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
+     WHERE s.id = ? AND om.userId = ?
      LIMIT 1`,
     [siteId, session.user.id],
   )
@@ -32,6 +33,19 @@ export default defineEventHandler(async (event) => {
   const locationId = typeof query.location_id === 'string' ? query.location_id : null
   const experienceId = typeof query.experience_id === 'string' ? query.experience_id : null
   const locale = typeof query.locale === 'string' ? query.locale : 'en'
+
+  const principal = { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
+  if (locationId) {
+    const location = await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`, [locationId, siteId])
+    if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
+  }
+  let resourceLocationId = locationId ?? null
+  if (experienceId) {
+    const experience = await queryFirst<{ location_id: string }>(db, `SELECT location_id FROM experiences WHERE id = ? AND site_id = ? LIMIT 1`, [experienceId, siteId])
+    if (!experience) return jsonResponse({ error: 'experience_id must reference an experience on this site' }, { status: 400 })
+    if (!locationId) resourceLocationId = experience.location_id
+  }
+  await assertResourceAccess(db, { ...principal, resourceLocationId })
 
   try {
     const direct = await getDirectBookingPolicy(db, { siteId, policyType, scopeType, locationId, experienceId })

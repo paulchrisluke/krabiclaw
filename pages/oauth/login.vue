@@ -10,7 +10,7 @@
         </div>
         <SayaIcon name="arrow-right-left" class="w-4 h-4 text-dimmed" />
         <div class="w-9 h-9 rounded-xl overflow-hidden bg-elevated border border-default flex items-center justify-center shrink-0">
-          <img src="/favicon-96x96.png" alt="KrabiClaw" class="w-full h-full object-cover" />
+          <img src="/platform/favicon-96x96.png" alt="KrabiClaw" class="w-full h-full object-cover" />
         </div>
       </div>
 

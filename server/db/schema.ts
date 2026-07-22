@@ -491,6 +491,7 @@ export const invitation_access_scope = sqliteTable("invitation_access_scope", {
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
 	location_id: text().references(() => business_locations.id, { onDelete: "cascade" }),
+	grant_source: text().default("manual").notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	uniqueIndex("idx_invitation_access_scope_unique").on(table.invitation_id, table.site_id, table.location_id),
@@ -626,6 +627,7 @@ export const member_access_scope = sqliteTable("member_access_scope", {
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
 	location_id: text().references(() => business_locations.id, { onDelete: "cascade" }),
+	grant_source: text().default("manual").notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	uniqueIndex("idx_member_access_scope_unique").on(table.member_id, table.site_id, table.location_id),

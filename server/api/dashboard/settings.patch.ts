@@ -6,6 +6,7 @@ import { isDemoOrg } from '~/server/utils/demo'
 import { updateSiteSettingsFields } from '~/server/utils/site-settings'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 import { createError, getHeader, readBody } from 'h3'
+import { assertSiteWideAccess } from '~/server/utils/member-access'
 
 function timingSafeEqualText(a: string, b: string): boolean {
   const left = new TextEncoder().encode(a)
@@ -37,6 +38,12 @@ export default defineEventHandler(async (event) => {
   if (!site) {
     return jsonResponse({ error: 'Site not found' }, { status: 404 })
   }
+  await assertSiteWideAccess(db, {
+    memberId: organization.memberId,
+    role: organization.role,
+    organizationId: organization.id,
+    siteId: site.id,
+  })
 
   if (forceSubdomainRegistrationFailure) {
     const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'

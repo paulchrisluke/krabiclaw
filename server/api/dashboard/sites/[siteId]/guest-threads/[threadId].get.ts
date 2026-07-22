@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
   const threadId = getRouterParam(event, 'threadId')
   if (!siteId || !threadId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
-  const { db, site } = await requireSiteAccess(event, siteId, ['owner', 'admin', 'editor', 'location_manager'])
+  const { db, site } = await requireSiteAccess(event, siteId, 'context')
   const detail = await getGuestThreadDetail(db, threadId, siteId)
   if (!detail) return jsonResponse({ error: 'Thread not found' }, { status: 404 })
   await assertMemberScope(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, locationId: detail.thread.location_id })

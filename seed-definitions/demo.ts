@@ -1638,20 +1638,11 @@ ${channelJobRows};
 
 export function renderCompiledDemoBlogBlock(): string {
   const publishedAt = '2026-07-08T00:00:00.000Z'
-
-  return `-- BEGIN GENERATED: demo_blog
--- Tenant blog post for local demo verification.
-INSERT OR IGNORE INTO blog_posts
-  (id, organization_id, site_id, title, slug, body, excerpt, category, status,
-   author_id, featured_image_asset_id, published_at, created_at, updated_at,
-   seo_description, seo_keywords, canonical_url, robots, hide_from_nav)
-VALUES (
-  ${sqlValue('blog-demo-wood-fired-guide')},
-  ${sqlValue('org-demo')},
-  ${sqlValue('site-demo')},
-  ${sqlValue('How We Build a Wood-Fired Pizza Night')},
-  ${sqlValue('how-we-build-a-wood-fired-pizza-night')},
-  ${sqlValue(`# How We Build a Wood-Fired Pizza Night
+  const postId = 'blog-demo-wood-fired-guide'
+  const documentId = 'content-document-demo-wood-fired-guide'
+  const revisionId = 'content-revision-demo-wood-fired-guide'
+  const blockId = 'content-block-demo-wood-fired-guide'
+  const body = `# How We Build a Wood-Fired Pizza Night
 
 At Ember & Slice, a great pizza night starts long before the oven is lit.
 
@@ -1665,7 +1656,23 @@ The menu, music, and pacing of service all revolve around the heat and rhythm of
 
 ## Finish with neighborhood hospitality
 
-We want the room to feel energetic but never rushed, whether you come in for one pie or settle in for the evening.`)},
+We want the room to feel energetic but never rushed, whether you come in for one pie or settle in for the evening.`
+  const blockData = { markdown: body, editor_mode: 'source' }
+  const snapshot = { blocks: [{ id: blockId, parent_block_id: null, type: 'markdown', position: 0, level: null, data: blockData, updated_at: publishedAt }] }
+
+  return `-- BEGIN GENERATED: demo_blog
+-- Tenant blog post for local demo verification.
+INSERT OR IGNORE INTO blog_posts
+  (id, organization_id, site_id, title, slug, body, excerpt, category, status,
+   author_id, featured_image_asset_id, published_at, created_at, updated_at,
+   seo_description, seo_keywords, canonical_url, robots, hide_from_nav)
+VALUES (
+  ${sqlValue(postId)},
+  ${sqlValue('org-demo')},
+  ${sqlValue('site-demo')},
+  ${sqlValue('How We Build a Wood-Fired Pizza Night')},
+  ${sqlValue('how-we-build-a-wood-fired-pizza-night')},
+  ${sqlValue(body)},
   ${sqlValue('A quick behind-the-scenes look at how Ember & Slice builds its signature wood-fired dinner service.')},
   ${sqlValue('Behind the scenes')},
   'published',
@@ -1680,6 +1687,18 @@ We want the room to feel energetic but never rushed, whether you come in for one
   ${sqlValue('index,follow')},
   0
 );
+
+INSERT OR REPLACE INTO content_documents
+  (id, owner_type, owner_id, draft_revision_id, published_revision_id, created_at, updated_at)
+VALUES (${sqlValue(documentId)}, 'tenant_blog', ${sqlValue(postId)}, ${sqlValue(revisionId)}, ${sqlValue(revisionId)}, ${sqlValue(publishedAt)}, ${sqlValue(publishedAt)});
+
+INSERT OR REPLACE INTO content_revisions
+  (id, document_id, snapshot_json, body_markdown, created_by, label, created_at)
+VALUES (${sqlValue(revisionId)}, ${sqlValue(documentId)}, ${sqlJson(snapshot)}, ${sqlValue(body)}, 'user-demo', 'Seed import', ${sqlValue(publishedAt)});
+
+INSERT OR REPLACE INTO content_blocks
+  (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
+VALUES (${sqlValue(blockId)}, ${sqlValue(documentId)}, NULL, 'markdown', 0, NULL, ${sqlJson(blockData)}, ${sqlValue(publishedAt)}, ${sqlValue(publishedAt)});
 -- END GENERATED: demo_blog`
 }
 

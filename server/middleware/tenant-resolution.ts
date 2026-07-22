@@ -29,6 +29,7 @@ interface TenantSiteRow {
   canonical_domain: string | null;
   brand_name: string | null;
   logo_url: string | null;
+  logo_mime_type: string | null;
   favicon_url: string | null;
   vertical: string | null;
   redirect_to_path: string | null;
@@ -83,6 +84,7 @@ export default defineEventHandler(async (event) => {
           SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
                  canonical.domain AS canonical_domain,
                  s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url,
+                 ma.mime_type AS logo_mime_type,
                  json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical,
                  redirect_rule.to_path AS redirect_to_path,
                  redirect_rule.status_code AS redirect_status_code,
@@ -117,6 +119,7 @@ export default defineEventHandler(async (event) => {
           event.context.site = {
             brand_name: site.brand_name || null,
             logo_url: site.logo_url || null,
+            logo_mime_type: site.logo_mime_type || null,
             favicon_url: site.favicon_url || null,
             vertical: site.vertical || "restaurant",
           };
@@ -145,6 +148,7 @@ export default defineEventHandler(async (event) => {
           | "onboarding_status"
           | "brand_name"
           | "logo_url"
+          | "logo_mime_type"
           | "favicon_url"
           | "vertical"
         >
@@ -153,6 +157,7 @@ export default defineEventHandler(async (event) => {
         `
         SELECT s.id, s.organization_id, s.theme_id, s.onboarding_status, s.brand_name,
                COALESCE(ma.public_url, s.logo_url) AS logo_url,
+               ma.mime_type AS logo_mime_type,
                json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical
         FROM sites s
         LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
@@ -170,6 +175,7 @@ export default defineEventHandler(async (event) => {
         event.context.site = {
           brand_name: previewSite.brand_name || null,
           logo_url: previewSite.logo_url || null,
+          logo_mime_type: previewSite.logo_mime_type || null,
           favicon_url: previewSite.favicon_url || null,
           vertical: previewSite.vertical || "restaurant",
         };
@@ -261,6 +267,7 @@ export default defineEventHandler(async (event) => {
     event.context.site = {
       brand_name: site.brand_name || null,
       logo_url: site.logo_url || null,
+      logo_mime_type: site.logo_mime_type || null,
       favicon_url: site.favicon_url || null,
       vertical: site.vertical || "restaurant",
     };
@@ -293,6 +300,7 @@ async function resolveTenantSite(
       SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
              s.subdomain || '.localhost' AS canonical_domain,
              s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url,
+             ma.mime_type AS logo_mime_type,
              json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical,
              redirect_rule.to_path AS redirect_to_path,
              redirect_rule.status_code AS redirect_status_code,
@@ -315,6 +323,7 @@ async function resolveTenantSite(
     SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain,
            COALESCE(canonical.domain, sd.domain) AS canonical_domain,
            s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url,
+           ma.mime_type AS logo_mime_type,
            json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical,
            redirect_rule.to_path AS redirect_to_path,
            redirect_rule.status_code AS redirect_status_code,
@@ -352,6 +361,7 @@ async function resolveTenantSite(
       SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain,
              COALESCE(canonical.domain, sd.domain) AS canonical_domain,
              s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url,
+             ma.mime_type AS logo_mime_type,
              json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical,
              redirect_rule.to_path AS redirect_to_path,
              redirect_rule.status_code AS redirect_status_code,
@@ -380,6 +390,7 @@ async function resolveTenantSite(
       SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
              ? AS canonical_domain,
              s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url,
+             ma.mime_type AS logo_mime_type,
              json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical,
              redirect_rule.to_path AS redirect_to_path,
              redirect_rule.status_code AS redirect_status_code,

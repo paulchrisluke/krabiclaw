@@ -166,6 +166,7 @@ test.describe('OAuth discovery endpoints', () => {
 
   test('ChatGPT-shaped CIMD uses private_key_jwt and rejects assertion replay', async ({ request, baseURL }) => {
     test.skip(isDeployedWorkerTarget(baseURL!), 'same-zone CIMD/JWKS self-fetch requires the public local tunnel')
+    test.skip(new URL(baseURL!).protocol !== 'https:', 'CIMD requires an HTTPS client metadata and JWKS URI')
     const devHeaders = devLoginHeaders()
     test.skip(!devHeaders, 'E2E_DEV_ROUTE_SECRET required for dev login')
 

@@ -1,6 +1,6 @@
 <template>
   <main v-if="post" class="min-h-screen bg-default text-default">
-    <SayaPostDetail :post="post" />
+    <SayaPostDetail :post="post" :brand="postBrand" />
   </main>
 </template>
 
@@ -11,8 +11,13 @@ interface PublicPostMedia {
   id?: string
   mediaAssetId?: string
   url: string
+  thumbnailUrl?: string | null
   kind: 'image' | 'video'
+  role?: 'cover' | 'gallery'
+  caption?: string | null
   alt?: string | null
+  width?: number | null
+  height?: number | null
 }
 
 interface PublicPost {
@@ -42,7 +47,11 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
+const siteName = computed(() => site?.brand_name || 'KrabiClaw')
+const postBrand = computed(() => ({
+  name: siteName.value,
+  logoUrl: site?.logo_url || null,
+}))
 
 const { data, error } = await useAsyncData(
   () => `public-post-${siteId}-${slug.value}`,
@@ -104,7 +113,11 @@ useSchemaOrg([
     image: coverMedia.value?.url,
     url: canonicalUrl.value,
     author: { '@type': 'Organization', name: siteName.value },
-    publisher: { '@type': 'Organization', name: siteName.value },
+    publisher: {
+      '@type': 'Organization',
+      name: siteName.value,
+      logo: site?.logo_url ? { '@type': 'ImageObject', url: site.logo_url } : undefined,
+    },
   })),
 ])
 </script>

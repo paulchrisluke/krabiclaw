@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'siteId and toolName are required' }, { status: 400 })
   }
 
-  const site = await getSiteForMember(db, body.siteId, session.user.id, ['owner', 'admin', 'editor'])
+  const site = await getSiteForMember(db, body.siteId, session.user.id)
   if (!site) {
     return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
   }

@@ -10,6 +10,7 @@ import { createLocation, syncLocationWhatsAppAccess } from '~/server/utils/locat
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { parsePhone } from '~/utils/phone'
+import { assertSiteWideAccess } from '~/server/utils/member-access'
 
 type SetupEnv = Parameters<typeof createLocation>[0]
 
@@ -80,6 +81,12 @@ export default defineEventHandler(async (event) => {
   const { site, organization } = dashboard
   const siteId = site.id as string
   const organizationId = organization?.id as string
+  await assertSiteWideAccess(db, {
+    memberId: organization.memberId,
+    role: organization.role,
+    organizationId,
+    siteId,
+  })
 
   const body = await readBody(event) as {
     mapsUrl?: unknown

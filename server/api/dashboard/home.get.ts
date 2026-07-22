@@ -9,7 +9,10 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ organization, site: null, locations: [], credits: null, events: [] })
   }
 
-  const home = await getDashboardHomeData(db, organization.id, site.id)
+  const home = await getDashboardHomeData(db, organization.id, site.id, {
+    memberId: organization.memberId,
+    role: organization.role,
+  })
 
   return jsonResponse({ organization, site, ...home })
 })

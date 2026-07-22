@@ -28,6 +28,22 @@ export const textResponse = (
 export const cleanString = (value: ApiValue, maxLength: number) =>
   typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
 
+// A generic `catch (error) { return 500 }` block silently swallows a
+// createError() thrown earlier in the same try (e.g. an authorization check
+// from server/utils/member-access.ts) into a wrong, generic 500. Call this
+// first in every such catch block so an intentional statusCode (401/403/404/...)
+// propagates instead of being masked.
+export function rethrowHttpError(error: unknown): void {
+  if (
+    error
+    && typeof error === 'object'
+    && 'statusCode' in error
+    && typeof (error as { statusCode?: unknown }).statusCode === 'number'
+  ) {
+    throw error
+  }
+}
+
 // A nested internal self-fetch (event.$fetch/useRequestFetch inside SSR) is a
 // synthetic event that Nitro dispatches locally without re-attaching
 // event.context.cloudflare — that's the direct, reliable signal to detect it,

@@ -3,6 +3,7 @@ import { createLocalJWKSet, jwtVerify } from 'jose'
 import { getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { queryAll, queryFirst } from '~/server/db'
+import { assertSiteWideAccess, isOrganizationWideRole } from '~/server/utils/member-access'
 
 export type McpToolRole = 'owner' | 'admin' | 'editor'
 
@@ -477,12 +478,12 @@ export async function requireMcpSite(
     }
   }
 
-  type MemberSiteRow = { id: string; organization_id: string; role: string; organization_slug: string | null; subdomain: string | null; custom_domain: string | null; public_url: string | null }
+  type MemberSiteRow = { id: string; organization_id: string; role: string; member_id: string; organization_slug: string | null; subdomain: string | null; custom_domain: string | null; public_url: string | null }
   const memberSiteByColumn = async (column: 'id' | 'subdomain' | 'custom_domain') =>
     queryFirst<MemberSiteRow>(
       user.db,
       `
-      SELECT s.id, s.organization_id, m.role, o.slug as organization_slug, s.subdomain, s.custom_domain, s.public_url
+      SELECT s.id, s.organization_id, m.role, m.id AS member_id, o.slug as organization_slug, s.subdomain, s.custom_domain, s.public_url
       FROM sites s
       JOIN member m ON s.organization_id = m.organizationId
       LEFT JOIN organization o ON s.organization_id = o.id
@@ -505,6 +506,26 @@ export async function requireMcpSite(
   const role = normalizeRole(site.role)
   if (!role || ROLE_RANK[role] < ROLE_RANK[minimumRole]) {
     throw createError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
+  }
+
+  // #341 Workstream A: `editor` is always constrained through member_access_scope.
+  // MCP tools operate on a whole site (none currently take a location-scoped
+  // permission model at this auth layer), so an editor needs a SITE-WIDE
+  // (location_id IS NULL) scope row to use any MCP tool at all — a
+  // location-only-scoped editor is rejected here rather than silently getting
+  // whole-site access. This is strictly a tightening versus the prior
+  // role-name-only check: it was already impossible for a location-scoped
+  // role to satisfy `minimumRole: 'editor'` before this change (that role
+  // name didn't normalize to a valid McpToolRole), so no existing MCP user
+  // loses access — only the never-actually-reachable case is now enforced
+  // explicitly instead of accidentally.
+  if (!isOrganizationWideRole(role)) {
+    await assertSiteWideAccess(user.db, {
+      memberId: site.member_id,
+      role,
+      organizationId: site.organization_id,
+      siteId: site.id,
+    })
   }
 
   return {
