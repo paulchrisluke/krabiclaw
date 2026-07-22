@@ -14,6 +14,7 @@ import test from 'node:test'
 // already-chosen page.
 const editorPath = new URL('../../components/workspace/content/CmsContentEditor.vue', import.meta.url)
 const editorSource = readFileSync(editorPath, 'utf8')
+const nuxtConfigSource = readFileSync(new URL('../../nuxt.config.ts', import.meta.url), 'utf8')
 const pageIndexSource = readFileSync(new URL('../../components/workspace/content/ContentPageIndex.vue', import.meta.url), 'utf8')
 const linksSource = readFileSync(new URL('../../composables/useDashboardSiteLinks.ts', import.meta.url), 'utf8')
 const layoutSource = readFileSync(new URL('../../layouts/dashboard.vue', import.meta.url), 'utf8')
@@ -59,12 +60,15 @@ test('CMS status never fabricates a Live state from local dirty state', () => {
   assert.match(editorSource, /siteStatusLabel/)
 })
 
-test('CMS editor host pages disable SSR; editor uses $fetch for client-side fetching and avoids useFetch/useRequestFetch', () => {
-  // The editor host page explicitly opts out of SSR, so the nested self-fetch
-  // / cloudflareEnv pattern is not needed — verifying ssr: false is present is
-  // the equivalent contract for this surface.
-  assert.match(siteContentEditorHostSource, /ssr:\s*false/)
-  assert.match(locationContentEditorHostSource, /ssr:\s*false/)
+test('CMS editor host routes disable SSR via routeRules; editor uses $fetch for client-side fetching and avoids useFetch/useRequestFetch', () => {
+  // ssr:false must come from routeRules (read by Nitro before any Vue
+  // rendering starts), not definePageMeta — a page-level ssr:false depends on
+  // Nuxt's page-render path resolving first, which isn't a guarantee at the
+  // same level as a routeRules match. Both editor host routes need an entry.
+  assert.match(nuxtConfigSource, /'\/dashboard\/\*\/sites\/\*\/content\/\*':\s*{\s*ssr:\s*false\s*}/)
+  assert.match(nuxtConfigSource, /'\/dashboard\/\*\/sites\/\*\/locations\/\*\/content\/\*':\s*{\s*ssr:\s*false\s*}/)
+  assert.doesNotMatch(siteContentEditorHostSource, /ssr:\s*false/)
+  assert.doesNotMatch(locationContentEditorHostSource, /ssr:\s*false/)
 
   // The editor component must never introduce useFetch or useRequestFetch —
   // those bypass cloudflare bindings in SSR (see AGENTS.md) and are

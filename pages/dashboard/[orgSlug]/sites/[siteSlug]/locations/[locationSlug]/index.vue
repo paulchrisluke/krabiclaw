@@ -680,6 +680,9 @@ const connectGoogleBusiness = async () => {
         toast.add({ description: 'Invalid OAuth redirect URL returned by server', color: 'error' })
         connectingGoogle.value = false
       }
+    } else {
+      toast.add({ description: 'Failed to start Google Business connection', color: 'error' })
+      connectingGoogle.value = false
     }
   } catch (err) {
     toast.add({ description: getErrorMessage(err, 'Failed to start Google Business connection'), color: 'error' })

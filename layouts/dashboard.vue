@@ -521,9 +521,11 @@ const contentGroup = computed(() => {
   if (managerItems.length > 0) {
     items.push({ label: 'Content', type: 'label' })
     items.push(...managerItems)
-  } else {
-    if (scope.value === 'site' && siteBase.value) items.push({ label: 'Content', icon: 'i-lucide-copy', to: `${siteBase.value}/content` })
-    if (scope.value === 'location' && locationBase.value) items.push({ label: 'Content', icon: 'i-lucide-copy', to: `${locationBase.value}/content` })
+  } else if (scope.value === 'site' && siteBase.value) {
+    // Location scope doesn't need this fallback — locationOverviewGroup
+    // already has its own Content entry; siteOverviewGroup has none, so
+    // site scope still needs it here.
+    items.push({ label: 'Content', icon: 'i-lucide-copy', to: `${siteBase.value}/content` })
   }
   return items
 })

@@ -358,25 +358,33 @@ export async function getUserBillingItems(
     return []
   }
 
-  const billingItems = await Promise.all(
+  // Promise.allSettled, not Promise.all with a per-org try/catch: a genuine
+  // query failure for one org used to be masked as a fabricated
+  // { plan: null, subscriptionStatus: 'error' } row — that reads like a real
+  // Stripe subscription status to any caller, and billing-items.vue has no
+  // handling for it, so it silently rendered as if it were real data. Letting
+  // the failure propagate (and simply omitting that org's row) surfaces the
+  // problem instead of hiding it, without one org's DB hiccup taking down
+  // every other org's billing row on the same page.
+  const results = await Promise.allSettled(
     organizations.map(async (org) => {
-      try {
-        const billingStatus = await getOrganizationBillingStatus(env, db, org.id)
-        return {
-          organization: org,
-          billing: { ...billingStatus, organizationId: org.id },
-          userRole: org.role
-        }
-      } catch (error) {
-        console.error(`Failed to get billing status for org ${org.id}:`, error)
-        return {
-          organization: org,
-          billing: { plan: null, subscriptionStatus: 'error', organizationId: org.id },
-          userRole: org.role
-        }
+      const billingStatus = await getOrganizationBillingStatus(env, db, org.id)
+      return {
+        organization: org,
+        billing: { ...billingStatus, organizationId: org.id },
+        userRole: org.role
       }
     })
   )
+
+  const billingItems: UserBillingItem[] = []
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      billingItems.push(result.value)
+    } else {
+      console.error(`Failed to get billing status for org ${organizations[index]!.id}:`, result.reason)
+    }
+  })
 
   return billingItems
 }

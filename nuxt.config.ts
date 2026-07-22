@@ -408,6 +408,17 @@ export default defineNuxtConfig({
       },
     },
 
+    // Content editor host routes (content/[pageId].vue, site- and
+    // location-scoped) — client-only. `*` matches exactly one segment, so
+    // this covers .../content/{pageId} without also matching the bare
+    // .../content index route, which stays normally SSR'd like any other
+    // dashboard page. definePageMeta({ ssr: false }) alone is not a reliable
+    // guarantee here (page-level ssr:false depends on Nuxt's own page-render
+    // path resolving before it takes effect); routeRules are read by Nitro
+    // before any Vue rendering starts.
+    '/dashboard/*/sites/*/content/*':                    { ssr: false },
+    '/dashboard/*/sites/*/locations/*/content/*':        { ssr: false },
+
     // Auth/API/dashboard — never cache
     '/api/**':       { headers: { 'cache-control': 'no-store' } },
     '/dashboard/**': { headers: { 'cache-control': 'no-store' } },

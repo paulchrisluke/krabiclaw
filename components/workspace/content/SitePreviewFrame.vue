@@ -33,6 +33,7 @@
           id="site-preview-frame"
           ref="previewFrame"
           :src="iframeSrc"
+          title="Site preview"
           class="h-full w-full border-0 bg-default transition-opacity duration-300"
           :class="{ 'opacity-40': iframeLoading }"
           style="min-height: 40rem"

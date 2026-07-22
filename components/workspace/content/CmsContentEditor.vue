@@ -1,5 +1,5 @@
 <template>
-  <div class="flex h-screen flex-col overflow-hidden bg-muted text-highlighted  ">
+  <div class="flex h-full min-h-0 flex-col overflow-hidden bg-muted text-highlighted  ">
     <header class="flex h-14 shrink-0 items-center justify-between border-b border-default bg-default px-3  ">
       <div class="flex min-w-0 items-center gap-2">
         <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="sm" aria-label="Go back" @click="handleBack" />
@@ -296,7 +296,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 
 import { contentRegistry, getEditablePages, getFieldDef, resolvePreviewPath } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
@@ -666,8 +666,29 @@ const loadPageContent = async () => {
 onMounted(async () => {
   await loadEditorContext()
   if (cmsLoadError.value) return
-  await loadPageContent()
+  // loadPageContent() rethrows after its own toast — uncaught here, the
+  // initial mount would sit in a broken/unresponsive state (no content, no
+  // blocked message) instead of showing the same "Content unavailable" alert
+  // a failed loadEditorContext() already gets.
+  try {
+    await loadPageContent()
+  } catch (error) {
+    cmsLoadError.value = getErrorMessage(error, 'Failed to load page content')
+  }
 })
+
+// onBeforeRouteLeave only guards in-app Vue Router navigation — it does
+// nothing for a hard refresh, tab close, or typing a new URL. beforeunload
+// covers those, reusing the same unsaved-changes condition.
+if (import.meta.client) {
+  const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+    if (!localHasChanges.value) return
+    event.preventDefault()
+    event.returnValue = ''
+  }
+  onMounted(() => window.addEventListener('beforeunload', handleBeforeUnload))
+  onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnload))
+}
 
 // ─── Actions ──────────────────────────────────────────────────────────
 const handleSaveContent = async () => {

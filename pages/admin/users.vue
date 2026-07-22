@@ -76,18 +76,25 @@ async function loadUsers() {
   }
 }
 
+// useAuth()/useDashboardSiteLinks() must be resolved during setup or inside
+// nuxtApp.runWithContext — calling a composable after an await (as this
+// handler used to for both) loses Nuxt's instance context and is unreliable.
+const { refreshSession } = useAuth()
+const nuxtApp = useNuxtApp()
+
 async function impersonateUser(userId: string) {
   impersonatingUserId.value = userId
   try {
     await $fetch('/api/admin/impersonation/start', { method: 'POST', body: { userId } })
-    const { refreshSession } = useAuth()
     await refreshSession()
     try {
       const { sites } = await $fetch<{ sites: { id: string }[] }>('/api/sites')
       const firstSite = sites?.[0]
       if (firstSite) {
-        const { paths } = useDashboardSiteLinks(firstSite.id)
-        await navigateTo(paths.value.base)
+        await nuxtApp.runWithContext(async () => {
+          const { paths } = useDashboardSiteLinks(firstSite.id)
+          await navigateTo(paths.value.base)
+        })
       } else {
         await navigateTo('/dashboard')
       }

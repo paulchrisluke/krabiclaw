@@ -350,8 +350,18 @@ const selectedInboxStatus = ref<InboxStatus>('open')
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
+// Filter/search changes and the location-switch watcher below all call this
+// without awaiting each other, so a slower earlier request can resolve after
+// a newer one — the token makes a stale response a no-op instead of
+// overwriting threads.value with results for a filter state that's no longer
+// selected. Errors are handled here (not by callers) since most call sites
+// fire-and-forget (`void loadThreads()`), which would otherwise produce an
+// unhandled promise rejection instead of a visible toast.
+let threadsRequestToken = 0
+
 async function loadThreads() {
   if (!selectedLocationId.value) return
+  const requestToken = ++threadsRequestToken
   loadingThreads.value = true
   try {
     const res = await $fetch<{ threads: ThreadSummary[] }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
@@ -363,10 +373,14 @@ async function loadThreads() {
         unread: unreadOnly.value ? '1' : undefined,
       },
     })
+    if (requestToken !== threadsRequestToken) return
     threads.value = res.threads ?? []
     await applyRouteSelection()
+  } catch (error) {
+    if (requestToken !== threadsRequestToken) return
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to load inbox threads', color: 'error' })
   } finally {
-    loadingThreads.value = false
+    if (requestToken === threadsRequestToken) loadingThreads.value = false
   }
 }
 
@@ -617,11 +631,7 @@ watch(() => route.query.thread, async () => {
 })
 
 onMounted(async () => {
-  try {
-    await loadThreads()
-  } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to load inbox', color: 'error' })
-  }
+  await loadThreads()
 })
 
 useSeoMeta({ title: 'Inbox | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

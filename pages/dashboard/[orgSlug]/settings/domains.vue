@@ -241,9 +241,13 @@ async function deleteDomain(domain: Domain) {
   }
 }
 
-function copy(value: string) {
-  navigator.clipboard.writeText(value)
-  toast.add({ description: 'Copied', color: 'success' })
+async function copy(value: string) {
+  try {
+    await navigator.clipboard.writeText(value)
+    toast.add({ description: 'Copied', color: 'success' })
+  } catch {
+    toast.add({ description: 'Failed to copy', color: 'error' })
+  }
 }
 
 function statusLabel(status: string) {

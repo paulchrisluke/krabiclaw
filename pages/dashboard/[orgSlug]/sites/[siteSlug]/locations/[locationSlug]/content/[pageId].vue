@@ -3,7 +3,10 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'editor', ssr: false })
+// SSR is disabled for this route via nuxt.config.ts routeRules (Nitro reads
+// it before any Vue rendering starts), not from page meta here — see the
+// comment on that entry for why.
+definePageMeta({ layout: 'editor' })
 
 const route = useRoute()
 const siteId = await useDashboardSiteId()
