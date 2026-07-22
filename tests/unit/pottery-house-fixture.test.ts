@@ -13,6 +13,7 @@ import {
   renderCompiledPotteryHouseContentBlock,
   renderCompiledPotteryHouseTranslationsBlock,
   renderCompiledPotteryHouseBillingBlock,
+  renderCompiledPotteryHouseBlogBlock,
 } from "../../seed-definitions/pottery-house.ts";
 
 test("pottery house fixture experience slugs are unique", () => {
@@ -158,6 +159,17 @@ test("pottery house billing block includes ai credits and site billing state", (
   assert.match(sql, /managed/);
   assert.match(sql, /managed_service/);
   assert.match(sql, /google_business/);
+});
+
+test("pottery house blog block includes the canonical published content snapshot", () => {
+  const sql = renderCompiledPotteryHouseBlogBlock();
+
+  assert.match(sql, /INSERT OR REPLACE INTO content_documents/);
+  assert.match(sql, /INSERT OR REPLACE INTO content_revisions/);
+  assert.match(sql, /INSERT OR REPLACE INTO content_blocks/);
+  assert.match(sql, /tenant_blog/);
+  assert.match(sql, /blog-pottery-group-bookings/);
+  assert.match(sql, /content-revision-pottery-group-bookings/);
 });
 
 test("pottery house compiled media assets carry Cloudflare provider metadata for uploaded assets", () => {
