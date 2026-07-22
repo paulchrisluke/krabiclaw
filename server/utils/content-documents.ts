@@ -430,6 +430,64 @@ export async function syncContentDocumentFromBlocks(
   return { document: currentDocument, ...revision }
 }
 
+// Unlike syncContentDocumentFromBlocks, this never calls ensureContentDocument
+// (which INSERTs standalone, outside any batch). It folds the content_documents
+// INSERT into the same additionalQueriesBefore array as the caller's own
+// owner-row INSERT (e.g. blog_posts), so writeRevisionFromBlocks's single
+// executeBatch call becomes the entire create operation: document, owner row,
+// blocks, and revision all commit or all fail together. Use this whenever a
+// content document needs to be created atomically alongside the row it belongs
+// to — not for adding a document to an already-existing owner row (use
+// ensureContentDocument/syncContentDocumentFromBlocks for that).
+export async function createContentDocumentWithBlocks(
+  db: D1Database,
+  ownerType: ContentDocumentOwnerType,
+  ownerId: string,
+  blocks: ContentBlockInput[],
+  opts: {
+    bodyMarkdown?: string
+    createdBy?: string | null
+    label?: string | null
+    publish?: boolean
+    additionalQueriesBefore?: BatchQuery[]
+    additionalQueriesAfter?: BatchQuery[]
+  } = {},
+) {
+  const now = new Date().toISOString()
+  const documentId = crypto.randomUUID()
+  const document: ContentDocumentRow = {
+    id: documentId,
+    owner_type: ownerType,
+    owner_id: ownerId,
+    draft_revision_id: null,
+    published_revision_id: null,
+    created_at: now,
+    updated_at: now,
+  }
+  const documentInsert: BatchQuery = {
+    query: 'INSERT INTO content_documents (id, owner_type, owner_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+    params: [documentId, ownerType, ownerId, now, now],
+  }
+  const revision = await writeRevisionFromBlocks(db, document, blocks.map((block, index) => ({
+    id: block.id,
+    parent_block_id: block.parent_block_id ?? null,
+    type: block.type,
+    position: index,
+    level: block.level ?? null,
+    data: block.data,
+  })), {
+    bodyMarkdown: opts.bodyMarkdown,
+    createdBy: opts.createdBy,
+    label: opts.label,
+    publish: opts.publish,
+    additionalQueriesBefore: [documentInsert, ...(opts.additionalQueriesBefore ?? [])],
+    additionalQueriesAfter: opts.additionalQueriesAfter,
+  })
+  const currentDocument = await getContentDocumentById(db, documentId)
+  if (!currentDocument) throw createError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
+  return { document: currentDocument, ...revision }
+}
+
 export async function publishCurrentContentRevision(db: D1Database, ownerType: ContentDocumentOwnerType, ownerId: string) {
   const document = await getContentDocumentByOwner(db, ownerType, ownerId)
   if (!document?.draft_revision_id) return null

@@ -547,7 +547,7 @@ VALUES (
 
 ## 1. Open Members
 
-Go to **Settings → Members** (`/dashboard/{your-org}/~/settings/members`). You will see everyone who already has access, with their role.
+Go to **Settings → Members** (`/dashboard/{your-org}/settings/members`). You will see everyone who already has access, with their role.
 
 ![Inviting a team member from organization settings](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/1f356c74-89de-4946-62dd-98406faf8800/public)
 
@@ -597,9 +597,9 @@ VALUES (
   'set-up-notifications',
   'KrabiClaw alerts you about new bookings, messages, and reviews. By default that goes to your account email — no setup required. Add WhatsApp if you want alerts there too, and override the number for a specific location if it needs its own.
 
-## 1. Open Settings → General
+## 1. Open Site Settings
 
-Go to `/dashboard/{your-org}/~/settings/general` and find the Notifications card.
+Go to `/dashboard/{your-org}/sites/{your-site}/settings` and find the Notifications card.
 
 ![Notification channel and site-wide WhatsApp number](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/8a9b504e-efce-4b5d-ba84-f4a79a2e4700/public)
 
@@ -613,7 +613,7 @@ This number is used for every location''s alerts unless that location sets its o
 
 ## 4. Override the number for one location (optional)
 
-If a specific location needs its own alert number — a different manager, a different country — set it from that location''s page at `/dashboard/{your-org}/sites/{your-site}/{your-location}`, under **Notifications**. It falls back to the site-wide number above if left blank.
+If a specific location needs its own alert number — a different manager, a different country — set it from that location''s settings page at `/dashboard/{your-org}/sites/{your-site}/locations/{your-location}/settings`, under **Notifications**. It falls back to the site-wide number above if left blank.
 
 ## Common problems
 
@@ -623,7 +623,7 @@ Check that WhatsApp is actually selected as an alert channel — adding a number
 
 ### I want different alert numbers for different locations
 
-Set a site-wide default in Settings → General, then override it per location from that location''s own page. The location-level number always wins for that location.
+Set a site-wide default in Site Settings, then override it in Location Settings. The location-level number always wins for that location.
 
 ### I never set anything — am I getting alerts at all?
 

@@ -44,12 +44,12 @@ interface DashboardLocation {
 
 interface DashboardContextResponse {
   success: boolean
-  organization: DashboardOrganization
+  organization: DashboardOrganization | null
   site: DashboardSite | null
   sites: DashboardSiteSummary[]
   locations: DashboardLocation[]
-  selectedLocation: DashboardLocation | null
   managedServiceEnabled: boolean
+  siteAccess: 'organization' | 'site' | 'location' | null
 }
 
 // dashboard-site-header.client.ts attaches x-dashboard-org-slug/site-slug on every
@@ -78,28 +78,20 @@ export function useDashboardSite() {
   // Only initialize state on client to avoid hydration mismatches
   const state = useState<DashboardContextResponse | null>('dashboard:site-context', () => null)
   const pending = useState<boolean>('dashboard:site-context:pending', () => false)
+  const refreshGeneration = useState<number>('dashboard:site-context:generation', () => 0)
 
   async function refresh() {
     const headers = buildDashboardRequestHeaders()
+    const generation = ++refreshGeneration.value
 
     pending.value = true
     try {
-      state.value = await $fetch<DashboardContextResponse>('/api/dashboard/context', { headers })
+      const response = await $fetch<DashboardContextResponse>('/api/dashboard/context', { headers })
+      if (generation === refreshGeneration.value) state.value = response
+      return response
     } finally {
-      pending.value = false
+      if (generation === refreshGeneration.value) pending.value = false
     }
-    return state.value
-  }
-
-  async function selectLocation(locationId: string) {
-    const headers = buildDashboardRequestHeaders()
-
-    await $fetch('/api/dashboard/location-preference', {
-      method: 'PATCH',
-      headers,
-      body: { locationId }
-    })
-    await refresh()
   }
 
   const organization = computed(() => state.value?.organization ?? null)
@@ -107,8 +99,8 @@ export function useDashboardSite() {
   const siteId = computed(() => site.value?.id ?? null)
   const sites = computed(() => state.value?.sites ?? [])
   const locations = computed(() => state.value?.locations ?? [])
-  const selectedLocation = computed(() => state.value?.selectedLocation ?? null)
   const managedServiceEnabled = computed(() => state.value?.managedServiceEnabled ?? false)
+  const siteAccess = computed(() => state.value?.siteAccess ?? null)
 
   return {
     state,
@@ -118,10 +110,9 @@ export function useDashboardSite() {
     siteId,
     sites,
     locations,
-    selectedLocation,
     managedServiceEnabled,
-    refresh,
-    selectLocation
+    siteAccess,
+    refresh
   }
 }
 

@@ -981,6 +981,10 @@ export function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 
   inputSchema?: Record<string, unknown>
   required?: string[]
   outputSchema?: Record<string, unknown>
+  // Opt-in: rejects unknown top-level arguments (see validateNoUnknownTopLevelArguments).
+  // Defaults to false (additionalProperties: true) to preserve existing behavior for
+  // tools that haven't been reviewed for this yet — enable per-tool as they're audited.
+  strict?: boolean
 }): McpToolDefinition {
   const { oneOf, anyOf, allOf, ...propertyDefs } = definition.inputSchema ?? {}
   const properties = {
@@ -1003,7 +1007,7 @@ export function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 
       type: 'object',
       properties,
       required,
-      additionalProperties: true,
+      additionalProperties: definition.strict ? false : true,
       ...combinators,
     },
     outputSchema: definition.outputSchema ?? { type: 'object' },

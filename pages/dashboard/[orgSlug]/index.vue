@@ -3,10 +3,10 @@
     <template #header>
       <UDashboardNavbar title="Dashboard">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
         <template #right>
-          <UButton icon="i-lucide-plus" label="Add site" size="sm" color="primary" variant="soft" :to="`/dashboard/${orgSlug}/sites/new`" />
+          <UButton v-if="canManageOrganization" icon="i-lucide-plus" label="Add site" size="sm" color="primary" variant="soft" :to="`/dashboard/${orgSlug}/sites/new`" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -20,7 +20,7 @@
         <div v-if="sitesWithSubdomain.length === 0" class="py-16 text-center">
           <UIcon name="i-lucide-globe" class="size-8 text-muted mx-auto mb-3" />
           <p class="text-sm text-muted">No sites available.</p>
-          <UButton label="Add your first site" size="sm" color="primary" class="mt-4" :to="`/dashboard/${orgSlug}/sites/new`" />
+          <UButton v-if="canManageOrganization" label="Add your first site" size="sm" color="primary" class="mt-4" :to="`/dashboard/${orgSlug}/sites/new`" />
         </div>
 
         <div v-else>
@@ -70,6 +70,7 @@ const dashboard = useDashboardSite()
 const pending = ref(true)
 
 const sites = computed(() => dashboard.sites.value)
+const canManageOrganization = computed(() => ['owner', 'admin'].includes(dashboard.organization.value?.role ?? ''))
 const sitesWithSubdomain = computed(() => sites.value.filter((site): site is (typeof sites.value)[number] & { subdomain: string } => Boolean(site.subdomain)))
 const previewSites = computed(() => sitesWithSubdomain.value.slice(0, 3))
 

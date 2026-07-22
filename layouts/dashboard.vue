@@ -18,6 +18,7 @@
 
     <UDashboardGroup unit="rem" :min-size="14" :default-size="18" :max-size="24">
       <UDashboardSidebar
+        v-model:collapsed="sidebarCollapsed"
         resizable
         collapsible
         :menu="{ close: false }"
@@ -53,7 +54,7 @@
 
       <slot />
 
-      <ChowBot v-if="!isConversationsRoute" />
+      <ChowBot v-if="showChowBot" />
     </UDashboardGroup>
     <BillingCreditPurchaseModal />
     <BillingServiceUpsellModal />
@@ -108,6 +109,7 @@ interface AuthOrganization {
 }
 
 const route = useRoute()
+const sidebarCollapsed = useState<boolean>('dashboard-sidebar-collapsed', () => false)
 const { data: sessionData, refreshSession } = useAuth()
 const { trackDashboardVisited } = useAnalytics()
 const toast = useToast()
@@ -121,10 +123,10 @@ const dashboardContextError = ref<unknown>(null)
 const organization = dashboard.organization
 const site = dashboard.site
 const sites = dashboard.sites
-const locations = dashboard.locations
 const activeSiteId = dashboard.siteId
+const canManageSite = computed(() => dashboard.siteAccess.value === 'organization' || dashboard.siteAccess.value === 'site')
+const canManageOrganization = computed(() => ['owner', 'admin'].includes(organization.value?.role ?? ''))
 const dashboardLocation = useDashboardLocation()
-const currentLocation = dashboardLocation.routeLocation
 
 const organizations = computed<readonly AuthOrganization[]>(() => unref(organizationsState)?.data ?? [])
 const impersonatedBy = computed(() => {
@@ -145,17 +147,18 @@ const siteSlugFromRoute = computed(() => {
 // once that state has been populated from an earlier page in the same session.
 const activeSiteSlug = computed(() => siteSlugFromRoute.value)
 const siteBase = computed(() => orgBase.value && activeSiteSlug.value ? `${orgBase.value}/sites/${activeSiteSlug.value}` : null)
-// locationsBase is the prefix for a specific location's own routes
-// (.../sites/:site/locations/:location/...) — distinct from siteBase, which
-// is what "New Location" and the site-scope switcher link to (the site
-// overview page doubles as the locations list; there's no dedicated one).
+// locationsBase is the dedicated site locations index and the prefix for a
+// specific location's own routes.
 const locationsBase = computed(() => siteBase.value ? `${siteBase.value}/locations` : null)
 const currentLocationSlug = dashboardLocation.routeLocationSlug
 const locationBase = computed(() => locationsBase.value && currentLocationSlug.value ? `${locationsBase.value}/${currentLocationSlug.value}` : null)
 const settingsBase = computed(() => orgBase.value ? `${orgBase.value}/settings` : null)
 
-const isAdminRoute = computed(() => route.path.startsWith('/admin'))
-const isConversationsRoute = computed(() => Boolean(siteBase.value) && route.path.startsWith(`${siteBase.value}/conversations`))
+const routeName = computed(() => typeof route.name === 'string' ? route.name : '')
+const isAdminRoute = computed(() => routeName.value.startsWith('admin'))
+const isConversationsRoute = computed(() => routeName.value.includes('conversations'))
+const showChowBot = computed(() => !isConversationsRoute.value
+  && (dashboard.siteAccess.value !== 'location' || scope.value === 'location'))
 
 const vertical = computed(() => (site.value?.vertical ?? null) as SiteVertical | null)
 const templateSlug = computed(() => vertical.value ? resolvePublicTemplate({ vertical: vertical.value }).slug : null)
@@ -171,8 +174,6 @@ const capabilities = computed(() => {
 const organizationLabel = computed(() => organization.value?.name ?? 'Organization')
 
 const siteLabel = computed(() => site.value?.brand_name ?? site.value?.subdomain ?? 'No site')
-const locationLabel = computed(() => currentLocation.value?.title ?? 'No locations')
-
 // Progressive drill-in: exactly one scope is active per route, and the sidebar's
 // single ContextSwitcher (this dropdown) and NavigationGroups both key off it —
 // there is no separate sidebar shell per scope, only scope-driven content inside
@@ -187,33 +188,22 @@ const scope = computed<'organization' | 'site' | 'location'>(() => {
 // the parent row is a visible, always-present part of this single component at
 // every scope — never a menu item, never a separate per-scope implementation.
 const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
-  if (scope.value === 'location') {
-    return {
-      scope: 'location',
-      current: { label: locationLabel.value, icon: 'i-lucide-map-pin' },
-      parent: siteBase.value ? { label: siteLabel.value, to: siteBase.value } : null,
-      peers: locations.value.map((location) => ({
-        label: location.title,
-        icon: 'i-lucide-map-pin',
-        active: location.id === currentLocation.value?.id,
-        to: locationsBase.value ? `${locationsBase.value}/${location.slug}` : undefined
-      })),
-      createAction: siteBase.value ? { label: 'New Location', to: `${siteBase.value}/new` } : undefined
-    }
-  }
-
-  if (scope.value === 'site') {
+  if (scope.value === 'site' || scope.value === 'location') {
     return {
       scope: 'site',
       current: { label: siteLabel.value, icon: 'i-lucide-globe' },
-      parent: orgBase.value ? { label: organizationLabel.value, to: orgBase.value } : null,
+      parent: scope.value === 'location' && siteBase.value
+        ? { label: siteLabel.value, to: siteBase.value }
+        : orgBase.value ? { label: organizationLabel.value, to: orgBase.value } : null,
       peers: sites.value.map((s) => ({
         label: s.brand_name ?? s.subdomain ?? 'Site',
         icon: 'i-lucide-globe',
         active: s.subdomain === activeSiteSlug.value,
         to: orgBase.value && s.subdomain ? `${orgBase.value}/sites/${s.subdomain}` : undefined
       })),
-      createAction: orgBase.value ? { label: 'New Site', to: `${orgBase.value}/sites/new` } : undefined
+      createAction: orgBase.value && canManageOrganization.value
+        ? { label: 'New Site', to: `${orgBase.value}/sites/new` }
+        : undefined
     }
   }
 
@@ -236,7 +226,7 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
   }
 })
 
-type NavGroupId = 'Content' | 'Operate' | 'Reputation' | 'Publishing' | 'Settings'
+type NavGroupId = 'Content' | 'Operate' | 'Reputation' | 'Publishing'
 
 // A NEW VERTICAL never requires touching this layout: add its combination to
 // cmsCapabilityRegistry (config/cms-registry.ts) and nav updates automatically
@@ -254,7 +244,6 @@ const MANAGER_GROUP: Partial<Record<CmsManagerId, NavGroupId>> = {
   reviews: 'Reputation',
   qa: 'Reputation',
   blog: 'Publishing',
-  settings: 'Settings',
 }
 
 const MANAGER_ICON: Partial<Record<CmsManagerId, string>> = {
@@ -268,11 +257,13 @@ const MANAGER_ICON: Partial<Record<CmsManagerId, string>> = {
   reviews: 'i-lucide-star',
   qa: 'i-lucide-message-circle-question',
   blog: 'i-lucide-pencil',
-  settings: 'i-lucide-settings',
 }
 
 function managerHref(manager: CmsManagerCapability): string | null {
-  if (manager.id === 'settings') return settingsBase.value
+  if (manager.id === 'settings') {
+    if (manager.scope === 'location') return locationBase.value ? `${locationBase.value}/settings` : null
+    return siteBase.value ? `${siteBase.value}/settings` : null
+  }
   if (manager.scope === 'location') {
     if (!locationBase.value) return null
     const rel = manager.route.replace(/^:location\/?/, '')
@@ -294,6 +285,7 @@ function managerNavItems(group: NavGroupId) {
   const seen = new Set<string>()
   const items: { label: string; icon?: string; to: string }[] = []
   for (const manager of managers) {
+    if (scope.value === 'site' && !canManageSite.value) continue
     if (MANAGER_GROUP[manager.id] !== group) continue
     if (manager.scope !== scope.value) continue
     const href = managerHref(manager)
@@ -309,12 +301,14 @@ const overviewGroup = computed(() => {
   return [
     { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: orgBase.value },
     { label: 'Sites', icon: 'i-lucide-globe', to: `${orgBase.value}/sites` },
-    { label: 'Activity', icon: 'i-lucide-activity', to: `${orgBase.value}/activity` },
+    ...(canManageOrganization.value ? [
+      { label: 'Activity', icon: 'i-lucide-activity', to: `${orgBase.value}/activity` },
     // Org settings (general/domains/members/billing) are organization-level,
     // not site-level, so they belong here regardless of the CMS registry's
     // per-site 'settings' manager (a distinct, site-scoped branding/SEO
     // concern handled by managerNavItems('Settings') at site scope instead).
-    { label: 'Settings', icon: 'i-lucide-settings', to: settingsBase.value ?? `${orgBase.value}/settings` },
+      { label: 'Settings', icon: 'i-lucide-settings', to: settingsBase.value ?? `${orgBase.value}/settings` },
+    ] : []),
   ]
 })
 
@@ -328,11 +322,16 @@ function parentNavItem() {
 
 const siteOverviewGroup = computed(() => {
   if (scope.value !== 'site' || !siteBase.value) return []
-  return [
+  const items = [
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: siteBase.value },
     { label: 'Locations', icon: 'i-lucide-map-pin', to: locationsBase.value ?? `${siteBase.value}/locations` },
+  ]
+  if (!canManageSite.value) return items
+  return [
+    ...items,
     { label: 'Orders', icon: 'i-lucide-shopping-bag', to: `${siteBase.value}/orders` },
     { label: 'Assistant', icon: 'i-lucide-bot', to: `${siteBase.value}/conversations` },
+    { label: 'Settings', icon: 'i-lucide-settings', to: `${siteBase.value}/settings` },
     // { label: 'Translations', icon: 'i-lucide-languages', to: `${siteBase.value}/translations` },
   ]
 })
@@ -341,12 +340,13 @@ const locationOverviewGroup = computed(() => {
   if (scope.value !== 'location' || !locationBase.value) return []
   return [
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: locationBase.value },
-    { label: 'Analytics', icon: 'i-lucide-chart-bar', to: `${locationBase.value}/analytics` },
+    ...(canManageSite.value ? [{ label: 'Analytics', icon: 'i-lucide-chart-bar', to: `${locationBase.value}/analytics` }] : []),
     { label: 'Content', icon: 'i-lucide-file-text', to: `${locationBase.value}/content` },
     { label: 'Posts', icon: 'i-lucide-megaphone', to: `${locationBase.value}/posts` },
     { label: 'Photos', icon: 'i-lucide-image', to: `${locationBase.value}/photos` },
     { label: 'Q&A', icon: 'i-lucide-message-circle-question', to: `${locationBase.value}/qa` },
     { label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox` },
+    { label: 'Settings', icon: 'i-lucide-settings', to: `${locationBase.value}/settings` },
   ]
 })
 
@@ -358,7 +358,7 @@ const contentGroup = computed(() => {
   if (managerItems.length > 0) {
     items.push({ label: 'Content', type: 'label' })
     items.push(...managerItems)
-  } else if (scope.value === 'site' && siteBase.value) {
+  } else if (scope.value === 'site' && siteBase.value && canManageSite.value) {
     // Location scope doesn't need this fallback — locationOverviewGroup
     // already has its own Content entry; siteOverviewGroup has none, so
     // site scope still needs it here.
@@ -384,7 +384,7 @@ const publishingGroup = computed(() => {
 })
 
 const settingsGroup = computed(() => {
-  if (route.path.startsWith('/dashboard/account')) {
+  if (routeName.value.startsWith('dashboard-account')) {
     return [
       { label: 'Account', type: 'label' },
       { label: 'Profile', icon: 'i-lucide-user', to: '/dashboard/account/profile' },
@@ -392,9 +392,7 @@ const settingsGroup = computed(() => {
       { label: 'Billing Items', icon: 'i-lucide-receipt', to: '/dashboard/account/billing-items' },
     ]
   }
-  const items = managerNavItems('Settings')
-  if (items.length === 0) return items
-  return [{ label: 'Settings', type: 'label' }, ...items]
+  return []
 })
 
 const adminGroup = computed(() => [
@@ -435,7 +433,7 @@ async function switchOrganization(organizationId: string) {
 }
 
 // Load dashboard context during SSR so nav links render stable org-scoped routes.
-if (route.path.startsWith('/dashboard') && !dashboard.state.value) {
+if ((routeName.value.startsWith('dashboard') || isAdminRoute.value) && !dashboard.state.value) {
   try {
     await dashboard.refresh()
   } catch (error) {
@@ -444,14 +442,13 @@ if (route.path.startsWith('/dashboard') && !dashboard.state.value) {
 }
 
 onMounted(async () => {
-  if (route.path.startsWith('/dashboard') && !dashboard.state.value && !dashboardContextError.value) {
+  if ((routeName.value.startsWith('dashboard') || isAdminRoute.value) && !dashboard.state.value && !dashboardContextError.value) {
     await dashboard.refresh()
   }
 
   // Track dashboard visit
-  const segment = route.path.split('/').filter(Boolean).at(2)
-  if (segment && activeSiteId.value) {
-    trackDashboardVisited(segment, activeSiteId.value)
+  if (activeSiteId.value) {
+    trackDashboardVisited(scope.value, activeSiteId.value)
   }
 })
 

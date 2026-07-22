@@ -78,7 +78,7 @@ const props = defineProps({
   },
   bg: {
     type: String,
-    default: 'neutral'
+    default: 'white'
   },
   padding: {
     type: String,

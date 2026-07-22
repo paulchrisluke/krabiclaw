@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Assistant">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
         <template #right>
           <UTooltip text="New conversation">

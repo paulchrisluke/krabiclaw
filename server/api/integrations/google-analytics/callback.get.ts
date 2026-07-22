@@ -1,7 +1,7 @@
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { exchangeGoogleAnalyticsCode, storeGoogleAnalyticsConnection } from '~/server/utils/google-analytics'
 import { verifyOAuthState } from '~/server/utils/encryption'
-import { queryFirst } from '~/server/db'
+import { getDashboardSiteRouteContext } from '~/server/utils/dashboard-redirects'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -37,17 +37,17 @@ export default defineEventHandler(async (event) => {
     const db = env.DB
     if (!db) return `/dashboard?ga=${status}`
 
-    let organization: { slug: string | null } | null = null
     try {
-      organization = (await queryFirst<{ slug: string | null }>(db, `SELECT slug FROM organization WHERE id = ? LIMIT 1`, [organizationId])) ?? null
+      const context = await getDashboardSiteRouteContext(db, organizationId, siteId)
+      if (!context) return `/dashboard?ga=${status}`
+      const encodedOrgSlug = encodeURIComponent(context.organizationSlug)
+      const params = new URLSearchParams({ ga: status, site: context.siteSlug })
+      return `/dashboard/${encodedOrgSlug}/settings/analytics?${params.toString()}`
     } catch (e) {
       console.error('Google Analytics redirect organization query failed:', e)
       return `/dashboard?ga=${status}`
     }
 
-    if (!organization?.slug) return `/dashboard?ga=${status}`
-    const encodedOrgSlug = encodeURIComponent(organization.slug)
-    return `/dashboard/${encodedOrgSlug}/settings/analytics?ga=${status}`
   }
 
   try {

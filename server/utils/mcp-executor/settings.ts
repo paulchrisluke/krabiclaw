@@ -16,7 +16,10 @@ export async function handleSettingsTools(ctx: McpExecutorContext): Promise<unkn
           `Unknown destination "${destination}". Valid destinations: ${Object.keys(DASHBOARD_DESTINATIONS).join(", ")}`,
         );
       }
-      return { url: buildDashboardUrl(site, destination) };
+      const locationSlug = destination.startsWith('location.')
+        ? requiredString(args, "location_slug")
+        : typeof args.location_slug === 'string' ? args.location_slug.trim() || null : null;
+      return { url: buildDashboardUrl({ ...site, locationSlug }, destination) };
     }
     case "get_site_domains": {
       const domains = await getSiteDomains(site.db, site.siteId);

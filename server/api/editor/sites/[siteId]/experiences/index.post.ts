@@ -1,8 +1,9 @@
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { jsonResponse } from '~/server/utils/api-response'
 import { createExperience } from '~/server/utils/experiences'
 import { InvalidFieldError, stringArrayOrNull } from '~/server/utils/validation-helpers'
 import { queryFirst } from '~/server/db'
+import { requireSiteAccess } from '~/server/utils/location-access'
+import { assertResourceAccess } from '~/server/utils/member-access'
 
 const optionalInteger = (value: unknown) => {
   if (value === null || value === undefined || value === '') return null
@@ -14,22 +15,13 @@ export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
 
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
-  const site = await queryFirst<{ id: string; organization_id: string; primary_location_id: string | null }>(
+  const { db, session, site } = await requireSiteAccess(event, siteId, 'context')
+  const siteRecord = await queryFirst<{ primary_location_id: string | null }>(
     db,
-    `SELECT s.id, s.organization_id, s.primary_location_id FROM sites s
-       JOIN member m ON m.organizationId = s.organization_id
-       WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin') LIMIT 1`,
-    [siteId, session.user.id],
+    'SELECT primary_location_id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1',
+    [siteId, site.organization_id],
   )
-
-  if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+  if (!siteRecord) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   let body: Record<string, ApiValue>
   try { body = await readBody(event) } catch { return jsonResponse({ error: 'Invalid request body' }, { status: 400 }) }
@@ -39,12 +31,19 @@ export default defineEventHandler(async (event) => {
 
   const locationId = ('location_id' in body && body.location_id !== undefined && body.location_id !== null)
     ? String(body.location_id)
-    : site.primary_location_id
+    : siteRecord.primary_location_id
   if (!locationId) {
     return jsonResponse({ error: 'location_id is required' }, { status: 400 })
   }
   const location = await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`, [locationId, siteId])
   if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
+  await assertResourceAccess(db, {
+    memberId: site.member_id,
+    role: site.member_role,
+    organizationId: site.organization_id,
+    siteId,
+    resourceLocationId: locationId,
+  })
 
   // Validate featured and featured_sort_order when explicitly provided
   if ('featured' in body && typeof body.featured !== 'boolean') {

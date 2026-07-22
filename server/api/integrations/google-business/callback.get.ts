@@ -2,6 +2,8 @@ import { cloudflareEnv } from '../../../utils/api-response'
 import { exchangeGoogleBusinessCode, storeGoogleBusinessConnection } from '../../../utils/google-business'
 import { verifyOAuthState } from '../../../utils/encryption'
 import { queryFirst } from '~/server/db'
+import { loadMemberSiteRow } from '~/server/utils/location-access'
+import { assertLocationAccess } from '~/server/utils/member-access'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -68,7 +70,7 @@ export default defineEventHandler(async (event) => {
         LIMIT 1
       `, [locationId, organizationId, siteId])
       return location?.slug
-        ? `${siteBase}/locations/${encodeURIComponent(location.slug)}?gb=${status}`
+        ? `${siteBase}/locations/${encodeURIComponent(location.slug)}/settings?gb=${status}`
         : `${siteBase}?gb=${status}`
     } catch (e) {
       console.error('Google Business redirect location query failed:', e)
@@ -77,6 +79,18 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    const db = env.DB
+    if (!db || !locationId) throw new Error('Location context is required')
+    const siteAccess = await loadMemberSiteRow(db, siteId, userId)
+    if (!siteAccess || siteAccess.organization_id !== organizationId) throw new Error('Access denied')
+    await assertLocationAccess(db, {
+      memberId: siteAccess.member_id,
+      role: siteAccess.member_role,
+      organizationId,
+      siteId,
+      locationId,
+    })
+
     const tokenData = await exchangeGoogleBusinessCode(env, code)
 
     const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {

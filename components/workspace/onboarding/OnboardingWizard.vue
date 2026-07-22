@@ -667,10 +667,9 @@ async function handleReply(reply: QuickReply) {
   }
 
   if (reply.action === 'dashboard') {
-    const slug = importedOrgSlug.value ?? props.existingOrgSlug
-    if (slug) {
+    if (workspaceEntryPath.value) {
       await markOnboardingComplete()
-      await router.push(`/dashboard/${slug}`)
+      await router.push(workspaceEntryPath.value)
     }
     return
   }
@@ -679,7 +678,7 @@ async function handleReply(reply: QuickReply) {
     const slug = importedOrgSlug.value ?? props.existingOrgSlug
     const siteSlugForLocation = importedSiteSlug.value ?? props.existingSiteSlug
     await markOnboardingComplete()
-    await router.push(slug && siteSlugForLocation ? `/dashboard/${slug}/sites/${siteSlugForLocation}/new` : '/dashboard')
+    await router.push(slug && siteSlugForLocation ? `/dashboard/${slug}/sites/${siteSlugForLocation}/locations/new` : '/dashboard')
     return
   }
 

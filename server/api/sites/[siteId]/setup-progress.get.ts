@@ -60,6 +60,7 @@ export default defineEventHandler(async (event) => {
     const site = await queryFirst<{
       id: string
       organization_id: string
+      organization_slug: string | null
       brand_name: string | null
       brand_description: string | null
       logo_url: string | null
@@ -69,10 +70,11 @@ export default defineEventHandler(async (event) => {
       status: string
       last_published_at: string | null
     }>(db, `
-      SELECT s.id, s.organization_id, s.brand_name, s.brand_description,
+      SELECT s.id, s.organization_id, o.slug AS organization_slug, s.brand_name, s.brand_description,
              s.logo_url, s.contact_email, s.subdomain, s.public_url,
              s.status, s.last_published_at
       FROM sites s
+      JOIN organization o ON o.id = s.organization_id
       WHERE s.id = ? AND s.organization_id = ?
       LIMIT 1
     `, [siteId, siteAccess.organization_id])
@@ -137,6 +139,14 @@ export default defineEventHandler(async (event) => {
     const hasPhotos = photoCount >= 3
     const hasAboutPage = !!aboutContent
     const hasContactEmail = !!site.contact_email
+    if (!site.organization_slug || !site.subdomain || (primaryLocation && !primaryLocation.slug)) {
+      return jsonResponse({ error: 'Site routing context is incomplete' }, { status: 500 })
+    }
+    const orgSlug = site.organization_slug
+    const siteSlug = site.subdomain
+    const siteBase = `/dashboard/${orgSlug}/sites/${siteSlug}`
+    const locationsBase = `${siteBase}/locations`
+    const locationBase = primaryLocation ? `${locationsBase}/${primaryLocation.slug}` : null
 
     const steps: SetupStep[] = [
       {
@@ -152,7 +162,7 @@ export default defineEventHandler(async (event) => {
         description: 'Add your restaurant\'s physical location so guests can find you.',
         done: hasPrimaryLocation,
         required: true,
-        action_url: `/dashboard/locations`
+        action_url: `${locationsBase}/new`
       },
       {
         id: 'location_address',
@@ -160,7 +170,7 @@ export default defineEventHandler(async (event) => {
         description: 'A full address enables the map on your contact page.',
         done: hasAddress,
         required: true,
-        action_url: hasPrimaryLocation ? `/dashboard/locations` : undefined
+        action_url: locationBase ? `${locationBase}/settings` : `${locationsBase}/new`
       },
       {
         id: 'opening_hours',
@@ -168,7 +178,7 @@ export default defineEventHandler(async (event) => {
         description: 'Guests need to know when you\'re open.',
         done: hasHours,
         required: true,
-        action_url: hasPrimaryLocation ? `/dashboard/locations` : undefined
+        action_url: locationBase ? `${locationBase}/settings` : `${locationsBase}/new`
       },
       {
         id: 'menu_items',
@@ -176,9 +186,9 @@ export default defineEventHandler(async (event) => {
         description: 'Add menu items so guests know what to expect.',
         done: hasFiveMenuItems,
         required: true,
-        action_url: primaryLocation
-          ? `/dashboard/menu?locationId=${primaryLocation.id}`
-          : `/dashboard/menu`
+        action_url: locationBase
+          ? `${locationBase}/menu`
+          : `${locationsBase}/new`
       },
       {
         id: 'logo',
@@ -186,7 +196,7 @@ export default defineEventHandler(async (event) => {
         description: 'Upload your logo for a polished look across your site.',
         done: hasLogo,
         required: false,
-        action_url: `/dashboard/account/profile`
+        action_url: `${siteBase}/settings`
       },
       {
         id: 'brand_description',
@@ -194,7 +204,7 @@ export default defineEventHandler(async (event) => {
         description: 'A short tagline used in SEO and your homepage.',
         done: hasBrandDescription,
         required: false,
-        action_url: `/dashboard/account/profile`
+        action_url: `${siteBase}/settings`
       },
       {
         id: 'photos',
@@ -202,7 +212,7 @@ export default defineEventHandler(async (event) => {
         description: 'Photos bring your restaurant to life.',
         done: hasPhotos,
         required: false,
-        action_url: `/dashboard/media`
+        action_url: locationBase ? `${locationBase}/photos` : `${locationsBase}/new`
       },
       {
         id: 'about_page',
@@ -210,7 +220,7 @@ export default defineEventHandler(async (event) => {
         description: 'Tell your story — where you came from, what makes you special.',
         done: hasAboutPage,
         required: false,
-        action_url: `/dashboard/content`
+        action_url: `${siteBase}/content/about`
       },
       {
         id: 'contact_email',
@@ -218,7 +228,7 @@ export default defineEventHandler(async (event) => {
         description: 'Let guests reach you directly from your website.',
         done: hasContactEmail,
         required: false,
-        action_url: `/dashboard/account/profile`
+        action_url: `${siteBase}/settings`
       }
     ]
 

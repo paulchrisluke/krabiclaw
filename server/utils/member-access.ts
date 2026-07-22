@@ -51,6 +51,8 @@ export interface MemberAccessPrincipal {
   siteId: string
 }
 
+export type DashboardSiteAccess = 'organization' | 'site' | 'location'
+
 export function isOrganizationWideRole(role: string): boolean {
   return role === 'owner' || role === 'admin'
 }
@@ -87,8 +89,7 @@ const SCOPED_ROLE_DASHBOARD_ROUTES = [
   /^\/api\/dashboard\/context$/,
   /^\/api\/dashboard\/home$/,
   /^\/api\/dashboard\/settings$/,
-  /^\/api\/dashboard\/location-preference$/,
-  /^\/api\/dashboard\/locations(?:\/add|\/[^/]+)?$/,
+  /^\/api\/dashboard\/locations(?:\/add|\/[^/]+(?:\/integrations\/google-business(?:\/auth)?)?)?$/,
   /^\/api\/dashboard\/onboarding\/checklist$/,
   /^\/api\/dashboard\/notifications(?:\/unread-count|\/read-all|\/[^/]+\/read)?$/,
   /^\/api\/dashboard\/editor(?:\/.*)?$/,
@@ -112,6 +113,17 @@ export async function listMemberAccessScopes(db: DbClient, memberId: string): Pr
     FROM member_access_scope
     WHERE member_id = ?
   `, [memberId])
+}
+
+export async function resolveDashboardSiteAccess(db: DbClient, input: MemberAccessPrincipal): Promise<DashboardSiteAccess> {
+  if (isOrganizationWideRole(input.role)) return 'organization'
+  if (!isScopedRole(input.role)) throw createError({ statusCode: 403, message: 'Access denied' })
+  const scope = await queryFirst<{ site_wide: number }>(db, `
+    SELECT MAX(CASE WHEN location_id IS NULL THEN 1 ELSE 0 END) AS site_wide
+    FROM member_access_scope
+    WHERE member_id = ? AND organization_id = ? AND site_id = ?
+  `, [input.memberId, input.organizationId, input.siteId])
+  return scope?.site_wide ? 'site' : 'location'
 }
 
 /** Site-wide management access: site settings, blog, translations, professional-services, analytics, domains, contact-submissions inbox, and any menu/media/review/QA row whose own location_id is null. */

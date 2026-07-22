@@ -1,6 +1,7 @@
 import type { H3Event } from 'h3'
 import { isIP } from 'node:net'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
+import { validateNoUnknownTopLevelArguments } from '~/server/utils/mcp-tool-validation'
 import { requireMcpUser } from '~/server/utils/mcp-auth'
 import { queryFirst } from '~/server/db'
 import { aggregatePlatformAnalyticsForDate, getPlatformAnalyticsSummary } from '~/server/utils/analytics'
@@ -114,6 +115,48 @@ function optionalContentBlockType(args: Record<string, unknown>, key: string) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be one of: ${CONTENT_BLOCK_TYPES.join(', ')}.`)
   }
   return value as ContentBlockType
+}
+
+// The MCP-facing blog contract: content_blocks is the only structured-content
+// representation, and document_updated_at is the only concurrency token —
+// no body, no components, no internal document/revision ids. The underlying
+// getPlatformBlogPost/updatePlatformBlogPost utils return a much larger
+// internal object (including the legacy body/components fields and the raw
+// content_document wrapper); this maps that down to the MCP-facing shape at
+// the tool-output boundary rather than changing what those shared utils
+// return, since they may have other internal callers this hasn't audited.
+function toPlatformBlogPostProjection(post: Record<string, unknown>) {
+  const contentDocument = post.content_document as { document?: { updated_at?: string }; blocks?: unknown } | undefined
+  return {
+    id: post.id,
+    title: post.title,
+    slug: post.slug,
+    status: post.status,
+    visibility: post.visibility,
+    excerpt: post.excerpt,
+    category: post.category,
+    nav_section: post.nav_section,
+    nav_title: post.nav_title,
+    nav_order: post.nav_order,
+    nav_section_order: post.nav_section_order,
+    hide_from_nav: post.hide_from_nav,
+    featured_order: post.featured_order,
+    published_at: post.published_at,
+    created_at: post.created_at,
+    updated_at: post.updated_at,
+    seo_title: post.seo_title,
+    seo_description: post.seo_description,
+    seo_keywords: post.seo_keywords,
+    canonical_url: post.canonical_url,
+    robots: post.robots,
+    featured_image: post.featured_image,
+    admin_edit_url: post.admin_edit_url,
+    public_path: post.public_path,
+    public_url: post.public_url,
+    preview_url: post.preview_url,
+    content_blocks: contentDocument?.blocks ?? [],
+    document_updated_at: contentDocument?.document?.updated_at ?? null,
+  }
 }
 
 function optionalContentDocumentOwnerType(args: Record<string, unknown>, key: string) {
@@ -477,6 +520,8 @@ export async function executePlatformMcpToolCall(
     requirePlatformAdmin: true,
   })
 
+  validateNoUnknownTopLevelArguments(tool.inputSchema, rawArguments)
+
   switch (toolName) {
     case 'get_platform_context': {
       const currentUser = await queryFirst<{ role: string | null }>(
@@ -668,7 +713,7 @@ export async function executePlatformMcpToolCall(
     case 'list_platform_blog_posts':
       return { posts: await listPlatformBlogPosts(user.db, optionalString(rawArguments, 'status'), optionalString(rawArguments, 'site_id')) }
     case 'get_platform_blog_post':
-      return { post: await getPlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), optionalString(rawArguments, 'site_id')) }
+      return { post: toPlatformBlogPostProjection(await getPlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), optionalString(rawArguments, 'site_id'))) }
     case 'create_platform_blog_post': {
       const siteId = optionalString(rawArguments, 'site_id')
       let blogScope = undefined
@@ -681,7 +726,7 @@ export async function executePlatformMcpToolCall(
         if (!site) throw mcpProtocolError(MCP_ERROR.invalidParams, 'Site not found.')
         blogScope = { site_id: siteId, organization_id: site.organization_id }
       }
-      return await createPlatformBlogPost(user.db, user.userId, {
+      const result = await createPlatformBlogPost(user.db, user.userId, {
         title: requiredString(rawArguments, 'title'),
         content_blocks: contentBlocks(rawArguments),
         excerpt: optionalString(rawArguments, 'excerpt') ?? null,
@@ -695,30 +740,49 @@ export async function executePlatformMcpToolCall(
         featured_image_asset_id: optionalString(rawArguments, 'featured_image_asset_id') ?? null,
         publish: optionalBoolean(rawArguments, 'publish') ?? false,
       }, blogScope)
+      return { post: toPlatformBlogPostProjection(result.post) }
     }
-    case 'update_platform_blog_post': {
+    case 'update_platform_blog_metadata': {
       const siteId = optionalString(rawArguments, 'site_id')
-      return await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), {
+      const metadataFields = ['title', 'excerpt', 'category', 'nav_section', 'nav_title', 'nav_order', 'nav_section_order', 'hide_from_nav', 'featured_order', 'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots', 'featured_image_asset_id', 'visibility', 'slug', 'redirect_old_slug', 'reset_slug_override']
+      if (!metadataFields.some(field => rawArguments[field] !== undefined)) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, 'At least one metadata field is required.')
+      }
+      const result = await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), {
+        expected_updated_at: requiredString(rawArguments, 'expected_updated_at'),
         title: optionalString(rawArguments, 'title'),
-        content_blocks: rawArguments.content_blocks === undefined ? undefined : contentBlocks(rawArguments),
-        expected_document_updated_at: optionalString(rawArguments, 'expected_document_updated_at'),
         excerpt: optionalString(rawArguments, 'excerpt'),
         category: optionalString(rawArguments, 'category'),
         ...navMetadataInput(rawArguments),
-        seo_title: optionalString(rawArguments, 'seo_title'),
-        seo_description: optionalString(rawArguments, 'seo_description'),
-        seo_keywords: optionalString(rawArguments, 'seo_keywords'),
-        canonical_url: optionalString(rawArguments, 'canonical_url'),
-        robots: optionalString(rawArguments, 'robots'),
-        featured_image_asset_id: optionalString(rawArguments, 'featured_image_asset_id'),
-        publish: optionalBoolean(rawArguments, 'publish'),
-        unpublish: optionalBoolean(rawArguments, 'unpublish'),
+        seo_title: optionalNullableString(rawArguments, 'seo_title'),
+        seo_description: optionalNullableString(rawArguments, 'seo_description'),
+        seo_keywords: optionalNullableString(rawArguments, 'seo_keywords'),
+        canonical_url: optionalNullableString(rawArguments, 'canonical_url'),
+        robots: optionalNullableString(rawArguments, 'robots'),
+        featured_image_asset_id: optionalNullableString(rawArguments, 'featured_image_asset_id'),
+        visibility: optionalString(rawArguments, 'visibility') as 'public' | 'unlisted' | undefined,
+        slug: optionalNullableString(rawArguments, 'slug'),
+        redirect_old_slug: optionalBoolean(rawArguments, 'redirect_old_slug'),
+        reset_slug_override: optionalBoolean(rawArguments, 'reset_slug_override'),
       }, siteId)
+      return { post: toPlatformBlogPostProjection(result.post) }
     }
-    case 'publish_platform_blog_post':
-      return await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), { publish: true }, optionalString(rawArguments, 'site_id'))
-    case 'unpublish_platform_blog_post':
-      return await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), { unpublish: true }, optionalString(rawArguments, 'site_id'))
+    case 'replace_platform_blog_content': {
+      const siteId = optionalString(rawArguments, 'site_id')
+      const result = await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), {
+        content_blocks: contentBlocks(rawArguments),
+        expected_document_updated_at: requiredString(rawArguments, 'expected_document_updated_at'),
+      }, siteId)
+      return { post: toPlatformBlogPostProjection(result.post) }
+    }
+    case 'publish_platform_blog_post': {
+      const result = await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), { publish: true }, optionalString(rawArguments, 'site_id'))
+      return { post: toPlatformBlogPostProjection(result.post) }
+    }
+    case 'unpublish_platform_blog_post': {
+      const result = await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), { unpublish: true }, optionalString(rawArguments, 'site_id'))
+      return { post: toPlatformBlogPostProjection(result.post) }
+    }
     case 'reorder_platform_blog_posts':
       return await reorderPlatformBlogPosts(user.db, reorderItems(rawArguments, 'post_id') as Array<{ post_id: string; nav_section?: string | null; nav_title?: string | null; nav_order: number; nav_section_order?: number | null; hide_from_nav?: boolean | null }>, optionalString(rawArguments, 'site_id'))
     case 'delete_platform_blog_post':

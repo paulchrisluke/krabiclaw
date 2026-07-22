@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Add-ons">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
         <template #trailing>
           <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-refresh-cw" aria-label="Refresh queue" :loading="queueLoading" @click="loadQueue" />

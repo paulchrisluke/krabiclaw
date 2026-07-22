@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Clients">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
         <template #trailing>
           <UButton color="neutral" variant="ghost" size="xs" :loading="clientsLoading" @click="loadClients">

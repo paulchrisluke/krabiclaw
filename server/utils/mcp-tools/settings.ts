@@ -15,6 +15,10 @@ export const SETTINGS_TOOLS: McpToolDefinition[] = [
           enum: Object.keys(DASHBOARD_DESTINATIONS),
           description: 'Which dashboard page to link to.',
         },
+        location_slug: {
+          type: 'string',
+          description: 'Required for location.overview and location.settings destinations.',
+        },
       },
       required: ['destination'],
       outputSchema: {

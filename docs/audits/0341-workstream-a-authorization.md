@@ -82,9 +82,10 @@ proxying is not available to scoped editors.
 | `dashboard/context.get.ts` | | | | ✓ (site/location lists) | ✓ | `assertSiteContextAccess` in `getDashboardContext`; `listOrganizationSites` and `listDashboardLocations` filter by the member's scope rows |
 | `dashboard/home.get.ts` and SSR `getDashboardHomeData` caller | | | | ✓ | | locations and events use `EXISTS member_access_scope`; null-location aggregate events require a site-wide row; organization credit totals are omitted for scoped roles |
 | `dashboard/settings.get.ts`, `settings.patch.ts` | | ✓ | | | | `assertSiteWideAccess` after context resolution |
-| `dashboard/location-preference.patch.ts` | | | ✓ | | | requested location is loaded from the selected site, then `assertLocationAccess` |
+| `dashboard/editor/notifications` proxy → `editor/sites/[siteId]/notifications.get.ts`, `.patch.ts` | | ✓ | | | | `requireSiteAccess` + `assertSiteWideAccess` |
 | `dashboard/locations/index.get.ts` | | | ✓ (filtered list) | | | `EXISTS member_access_scope`; site-wide rows include all locations, location rows include only exact locations |
 | `dashboard/locations/[id].get.ts`, `[id].patch.ts` | | | ✓ | | | target location supplies `site_id`; `assertLocationAccess`/`assertMemberScope` before return or mutation |
+| `dashboard/[...path].ts` → `locations/[id]/integrations/google-business`, `/auth` | | | ✓ | | | deny-by-default boundary permits only these exact descendants; destination `requireLocationAccess` checks the requested location before status read or OAuth start |
 | `dashboard/locations/add.post.ts` | | ✓ | | | | `assertSiteWideAccess` before preview, credit charge, or creation |
 | `dashboard/editor/menus.get.ts` | | | | ✓ (`locationId`; no location means site-wide) | | `assertResourceAccess` before `getMenus` |
 | `dashboard/[...path].ts` → `editor/**` | | | | ✓ (destination resource) | ✓ (destination context route only) | proxy context check plus the per-endpoint `/api/editor/sites/[siteId]/**` guards enumerated in this audit |
@@ -115,6 +116,8 @@ owner/admin callers and keep their existing organization-level checks.
 | `editor/sites/[siteId]/posts.post.ts` | | | | ✓ (`body.location_id`) | | inline SQL + `assertResourceAccess` |
 | `editor/sites/[siteId]/posts/[postId].get.ts` | | | | ✓ (post's own `location_id`) | | inline SQL + `assertResourceAccess` |
 | `editor/sites/[siteId]/posts/[postId].patch.ts` | | | | ✓ (current + target `location_id`) | | inline SQL + `assertResourceAccess` |
+| `editor/sites/[siteId]/posts/[postId].delete.ts` | | | | ✓ (post row's own `location_id`) | | `loadMemberSiteRow` + `assertResourceAccess` |
+| `editor/sites/[siteId]/posts/[postId]/publish.post.ts` | | | | ✓ (post row's own `location_id`) | | `loadMemberSiteRow` + `assertResourceAccess` before site/social publication |
 | `editor/sites/[siteId]/translations/{inventory.get,jobs.get,jobs/[jobId].get,review.get,review.patch}.ts` | | ✓ | | | | inline SQL + `assertSiteWideAccess` (translations have no location concept) |
 | `editor/sites/[siteId]/translations/{jobs.post,publish.post,jobs/[jobId]/run.post}.ts` | ✓ (already owner/admin-only) | | | | | unchanged — not editor-affected |
 | `editor/sites/[siteId]/content/[page].get.ts`, `content/save.post.ts`, `content/delete-field.post.ts` | | | | ✓ (query/body `locationId`) | | inline SQL + `assertResourceAccess` |
@@ -126,6 +129,9 @@ owner/admin callers and keep their existing organization-level checks.
 | `editor/sites/[siteId]/professional-services.get.ts`, `.patch.ts` | | ✓ | | | | inline SQL + `assertSiteWideAccess` |
 | `editor/sites/[siteId]/booking-policy.get.ts`, `.patch.ts`, `booking-policy/preview.post.ts` | | | | ✓ (`location_id` or resolved via `experience_id`'s own location) | | inline SQL + `assertResourceAccess` |
 | `editor/sites/[siteId]/experiences/index.get.ts` | | | ✓ (filtered to accessible locations, not just gated) | | | inline SQL + `listAccessibleLocationIds` post-filter |
+| `editor/sites/[siteId]/experiences/index.post.ts` | | | | ✓ (requested or primary `location_id`) | | `requireSiteAccess('context')` + `assertResourceAccess` before creation |
+| `editor/sites/[siteId]/experiences/[experienceId]/{index.patch,index.delete,availability.get}.ts` | | | | ✓ (experience's own `location_id`; patch also guards the target location before a move) | | `requireSiteAccess('context')` + `assertResourceAccess` |
+| `editor/sites/[siteId]/experiences/[experienceId]/slot-overrides{.get,.post,/[overrideId].delete}.ts` | | | | ✓ (parent experience's own `location_id`) | | `requireSiteAccess('context')` + `assertResourceAccess`; override deletion never trusts caller scope |
 | `editor/sites/[siteId]/experiences/[experienceId]/bookings.get.ts`, `.patch.ts` | | | | ✓ (experience's own `location_id`) | | inline SQL + `assertResourceAccess` |
 | `editor/sites/[siteId]/experience-bookings.get.ts` | | | | ✓ (query `location_id`, no filter = site-wide) | | inline SQL + `assertResourceAccess` |
 | `editor/sites/[siteId]/experience-bookings/[bookingId].patch.ts`, `.../complete.post.ts`, `.../review-request.post.ts` | | | | ✓ (booking's own `location_id`) | | inline SQL + `assertResourceAccess` |
@@ -140,13 +146,20 @@ owner/admin callers and keep their existing organization-level checks.
 
 **contact-submissions/AI routes family: complete.** Typecheck + lint clean.
 
-| `sites/[siteId]/settings.get.ts`, `domains.get.ts`, `analytics.get.ts`, `setup-progress.get.ts` | | ✓ | | | | inline SQL + `assertSiteWideAccess` |
+| `sites/[siteId]/settings.get.ts`, `settings.patch.ts`, `analytics.get.ts`, `setup-progress.get.ts` | | ✓ | | | | `loadMemberSiteRow`/`requireSiteAccess` + `assertSiteWideAccess` |
+| `sites/[siteId]/domains.get.ts`, `.post.ts`, `[domainId].patch.ts`, `[domainId].delete.ts`, `[domainId]/sync.post.ts` | | ✓ | | | | `loadMemberSiteRow`/`requireSiteAccess` + `assertSiteWideAccess` |
+| `sites/[siteId]/integrations/google-analytics/{auth,disconnect,properties,select}` | | ✓ | | | | `requireSiteAccess` + `assertSiteWideAccess` |
+| `integrations/google-places/sync.post.ts` | | | ✓ | | | `requireRequestedLocationAccess` before sync or credit charge |
+| `integrations/facebook-pages/auth.post.ts`, `connection.get.ts`, OAuth callback | | ✓ | ✓ (connection status with explicit location) | | | site settings use `requireRequestedSiteWideAccess`; location posts pass their exact location through `requireRequestedLocationAccess`; callback revalidates site-wide access before storing credentials |
 | `sites/[siteId]/locations/[locationId].get.ts` | | | ✓ | | | inline SQL + `assertLocationAccess` |
+| `sites/[siteId]/locations.post.ts` | | ✓ | | | | `requireSiteAccess` + `assertSiteWideAccess` |
+| `sites/[siteId]/locations/[locationId].patch.ts` | | | ✓ | | | `requireLocationAccess` |
+| `sites/[siteId]/locations/[locationId]/integrations/google-business/index.get.ts`, `auth.post.ts` | | | ✓ | | | `requireLocationAccess`; OAuth callback revalidates the state principal's exact location access before storing credentials |
 | `editor/sites/[siteId]/context.get.ts` | | | | | ✓ | inline SQL + `assertSiteContextAccess`; response now filters `locations`/`scopes` to `listAccessibleLocationIds`, and drops the "Brand-wide" scope option for location-only editors — this endpoint was previously **not caught by the initial 58-file grep** (found only in the final proof sweep) and was returning the full site directory to any editor regardless of scope |
 | `editor/sites/[siteId]/locations/[locationId]/qa/[qaId].patch.ts`, `qa/reorder.post.ts` | | | ✓ | | | inline SQL + `assertLocationAccess` — also missed by the initial grep pass, found in the proof sweep |
 | `whatsapp/webhook.post.ts` (`listRecentGuestNotificationCandidates`) | | | | | | dropped `location_manager` from the role OR; unchanged logic otherwise |
 
-**sites/[siteId] family + proof-sweep stragglers: complete.**
+**sites/[siteId] family + proof-sweep stragglers: complete.** Domain and Google Analytics mutation routes use the same site-wide guard as their reads; they do not retain an owner/admin-only role-name query that would contradict the site-manager scope contract.
 
 **Repository-wide proof sweep (run after every family, final pass clean):**
 ```text
@@ -189,14 +202,15 @@ membership, and editor-scope provisioning now run as one atomic D1 batch in a
 shared utility.
 
 **Final local verification:** all 60 migrations applied to a clean D1 state;
-the unit suite passed 478/478; typecheck, lint, Drizzle, migration safety,
+the unit suite passed 487/487; typecheck, lint, Drizzle, migration safety,
 migration lint, seed lint, and tool-parity checks passed; the scoped invitation
 Playwright flow passed 2/2; and the mandatory Pottery House fixture passed
 52/52 against `http://localhost:3000`. The two MCP role-visibility regressions
 from the first CI run also pass locally, including fail-closed tool discovery
 for inaccessible and blank site identifiers. The scoped dashboard regression
 now proves context, home, and location lists filter sibling locations; exact
-location reads/preferences/mutations reject siblings; site settings,
+location reads and mutations reject siblings; the removed location-preference
+endpoint returns 404; site settings,
 add-location, onboarding aggregates, and AI credits reject a location-only
 editor; and location-scoped menu reads accept only the authorized location.
 

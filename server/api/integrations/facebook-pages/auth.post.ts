@@ -1,32 +1,12 @@
-import { cloudflareEnv, jsonResponse } from '../../../utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { jsonResponse } from '../../../utils/api-response'
 import { getFacebookAuthUrl } from '../../../utils/facebook-pages'
 import { signOAuthState } from '../../../utils/encryption'
-import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { hasSiteEntitlement } from '~/server/utils/billing'
-import { queryFirst } from '~/server/db'
+import { requireRequestedSiteWideAccess } from '~/server/utils/location-access'
 
 export default defineEventHandler(async (event) => {
-  const env = cloudflareEnv(event)
-  const db = env.DB
-
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
   const body = await readBody(event).catch(() => ({})) as { siteId?: string }
-  const dashboard = body?.siteId ? null : await getDashboardContext(event, { requireSite: false })
-  const site = body?.siteId
-    ? await queryFirst<{ id: string; organization_id: string }>(db, `
-        SELECT s.id, s.organization_id FROM sites s
-        JOIN member om ON s.organization_id = om.organizationId
-        WHERE s.id = ? AND om.userId = ? AND om.role = 'owner'
-        LIMIT 1
-      `, [body.siteId, session.user.id])
-    : dashboard?.site
-
-  if (!site) return jsonResponse({ error: 'Create a site before connecting Facebook.' }, { status: 400 })
+  const { env, db, session, site } = await requireRequestedSiteWideAccess(event, body.siteId)
 
   const allowed = await hasSiteEntitlement(db, site.id, 'managed_service')
   if (!allowed) {

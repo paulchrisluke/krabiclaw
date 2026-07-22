@@ -7,11 +7,12 @@ import {
   mcpSuccess,
   MCP_ERROR,
   MCP_PROTOCOL_VERSION,
+  parseMcpToolCallArguments,
   readMcpRequest,
 } from '~/server/utils/mcp-protocol'
 import { requireMcpUser } from '~/server/utils/mcp-auth'
 import { executePlatformMcpToolCall } from '~/server/utils/platform-mcp-executor'
-import { PLATFORM_MCP_TOOLS } from '~/server/utils/platform-mcp-tools'
+import { PLATFORM_MCP_TOOLS, PLATFORM_PUBLIC_MCP_TOOLS } from '~/server/utils/platform-mcp-tools'
 import { PLATFORM_MCP_RESOURCES, readPlatformMcpResource } from '~/server/utils/platform-mcp-resources'
 import { PLATFORM_MCP_PROMPTS, renderPlatformMcpPrompt } from '~/server/utils/platform-mcp-prompts'
 import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-search-rebuild'
@@ -33,7 +34,8 @@ const PLATFORM_AUTH_REQUIRED_TEXT = 'Authentication required: connect the KrabiC
 const PLATFORM_MCP_TOOL_DOMAIN = 'platform_admin'
 const PLATFORM_KNOWLEDGE_MUTATION_TOOLS = new Set([
   'create_platform_blog_post',
-  'update_platform_blog_post',
+  'update_platform_blog_metadata',
+  'replace_platform_blog_content',
   'publish_platform_blog_post',
   'unpublish_platform_blog_post',
   'delete_platform_blog_post',
@@ -42,6 +44,10 @@ const PLATFORM_KNOWLEDGE_MUTATION_TOOLS = new Set([
   'publish_platform_doc',
   'unpublish_platform_doc',
   'delete_platform_doc',
+  'append_content_block',
+  'replace_content_block',
+  'delete_content_block',
+  'publish_content_revision',
 ])
 
 function shouldUseLeanToolCatalog(event: H3Event) {
@@ -227,7 +233,7 @@ export default defineEventHandler(async (event) => {
       await requireMcpUser(event, platformAdminAuthOptions)
       const leanToolCatalog = shouldUseLeanToolCatalog(event)
       return mcpSuccess(request.id, {
-        tools: PLATFORM_MCP_TOOLS.map(tool => ({
+        tools: PLATFORM_PUBLIC_MCP_TOOLS.map(tool => ({
           name: tool.name,
           description: tool.description,
           inputSchema: tool.inputSchema,
@@ -250,15 +256,34 @@ export default defineEventHandler(async (event) => {
     if (request.method === 'tools/call') {
       const toolName = typeof request.params?.name === 'string' ? request.params.name : ''
       const toolStart = Date.now()
-      const rawArgs =
-        request.params?.arguments &&
-        typeof request.params.arguments === 'object' &&
-        !Array.isArray(request.params.arguments)
-          ? request.params.arguments as Record<string, unknown>
-          : Object.fromEntries(Object.entries(request.params ?? {}).filter(([key]) => key !== 'name'))
+      const rawArgs = parseMcpToolCallArguments(request.params)
       requestToolArgs = rawArgs
 
-      const result = await executePlatformMcpToolCall(event, toolName, rawArgs)
+      let result: unknown
+      try {
+        result = await executePlatformMcpToolCall(event, toolName, rawArgs)
+      } catch (toolError) {
+        const mcpErr = asMcpError(toolError)
+        if (mcpErr.code === MCP_ERROR.invalidParams) {
+          logPlatformMcpEventDetached(event, env.DB, {
+            requestId: request.id,
+            method: request.method,
+            toolName,
+            toolDomain: PLATFORM_MCP_TOOL_DOMAIN,
+            isMutating: isMcpMutatingTool(PLATFORM_MCP_TOOLS.find(t => t.name === toolName)),
+            arguments: summarizePayloadShape(rawArgs),
+            status: 'error',
+            errorCode: mcpErr.code,
+            errorMessage: mcpErr.message,
+            durationMs: Date.now() - toolStart,
+          })
+          return mcpSuccess(request.id, {
+            isError: true,
+            content: [{ type: 'text', text: mcpErr.message }],
+          })
+        }
+        throw toolError
+      }
 
       // After any mutating tool call, purge KV HTML cache for every platform
       // hostname before returning. Platform blog/docs edits are tiny admin

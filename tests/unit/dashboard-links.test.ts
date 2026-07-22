@@ -7,17 +7,25 @@ const orgContext = {
   env: { NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.com' },
   organizationId: 'org_123',
   organizationSlug: 'pottery-house',
+  subdomain: 'pottery-house-site',
+  locationSlug: 'ao-nang',
 }
 
-// Each destination's expected URL, verified against its real page route file
-// under pages/dashboard/[orgSlug]/settings/... (issue #316 removed the old
-// pages/dashboard/[orgSlug]/~/settings/... route family entirely — no `~`
-// segment exists anywhere in this app's routing anymore).
+// Each destination's expected URL is verified against its real page route.
+// No synthetic scope segment exists in the canonical dashboard hierarchy.
 const EXPECTED_URLS: Record<DashboardDestination, string> = {
   'settings.general': 'https://krabiclaw.com/dashboard/pottery-house/settings/general',
   'settings.domains': 'https://krabiclaw.com/dashboard/pottery-house/settings/domains',
+  'settings.analytics': 'https://krabiclaw.com/dashboard/pottery-house/settings/analytics',
   'settings.billing': 'https://krabiclaw.com/dashboard/pottery-house/settings/billing',
   'settings.members': 'https://krabiclaw.com/dashboard/pottery-house/settings/members',
+  'settings.chatgpt': 'https://krabiclaw.com/dashboard/pottery-house/settings/chatgpt',
+  'site.overview': 'https://krabiclaw.com/dashboard/pottery-house/sites/pottery-house-site',
+  'site.locations': 'https://krabiclaw.com/dashboard/pottery-house/sites/pottery-house-site/locations',
+  'site.locations.new': 'https://krabiclaw.com/dashboard/pottery-house/sites/pottery-house-site/locations/new',
+  'site.settings': 'https://krabiclaw.com/dashboard/pottery-house/sites/pottery-house-site/settings',
+  'location.overview': 'https://krabiclaw.com/dashboard/pottery-house/sites/pottery-house-site/locations/ao-nang',
+  'location.settings': 'https://krabiclaw.com/dashboard/pottery-house/sites/pottery-house-site/locations/ao-nang/settings',
   support: 'https://krabiclaw.com/dashboard/pottery-house/support',
 }
 
@@ -57,4 +65,11 @@ test('buildDashboardUrl falls back to organizationId when organizationSlug is mi
 test('buildDashboardUrl falls back to the default platform domain when env is unset', () => {
   const url = buildDashboardUrl({ env: {}, organizationId: 'org_123' }, 'settings.domains')
   assert.equal(url, 'https://krabiclaw.com/dashboard/org_123/settings/domains')
+})
+
+test('location destinations reject missing location context', () => {
+  assert.throws(
+    () => buildDashboardUrl({ ...orgContext, locationSlug: null }, 'location.settings'),
+    /requires explicit site\/location context/,
+  )
 })

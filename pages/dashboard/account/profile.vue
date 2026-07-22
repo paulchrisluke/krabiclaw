@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Profile">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
       </UDashboardNavbar>
     </template>
@@ -72,35 +72,6 @@
                 :disabled="!nameDirty"
                 :loading="nameSaving"
                 @click="saveName"
-              >
-                Save
-              </UButton>
-            </div>
-          </template>
-        </UCard>
-
-        <!-- Organization / Default Team -->
-        <UCard :ui="{ body: 'p-6' }" v-if="organization">
-          <div class="space-y-4">
-            <UFormField label="Organization Name" name="organizationName" help="This is your primary workspace name.">
-              <UInput
-                v-model="orgNameInput"
-                class="max-w-md"
-                @input="orgNameTouched = true"
-                @keydown.enter="saveOrgName"
-              />
-            </UFormField>
-          </div>
-          <template #footer>
-            <div class="flex items-center justify-between text-sm text-muted">
-              <span>Used as the default team workspace.</span>
-              <UButton 
-                size="sm" 
-                color="neutral" 
-                variant="solid" 
-                :disabled="!orgNameDirty"
-                :loading="orgNameSaving"
-                @click="saveOrgName"
               >
                 Save
               </UButton>
@@ -304,9 +275,6 @@ const { data: sessionData } = useAuth()
 const refreshSession = async () => {
   await authClient.getSession()
 }
-const organizationsState = authClient.useListOrganizations()
-const organization = computed(() => unref(organizationsState)?.data?.[0] || null)
-
 // Avatar Upload
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploadLoading = ref(false)
@@ -377,33 +345,6 @@ async function saveName() {
 const nameTouched = ref(false)
 watch(() => sessionData.value?.user?.name, (newVal) => {
   if (newVal !== undefined && !nameTouched.value) nameInput.value = newVal || ''
-}, { immediate: true })
-
-// Organization Name
-const orgNameInput = ref(organization.value?.name || '')
-const orgNameDirty = computed(() => orgNameInput.value.trim() !== (organization.value?.name || ''))
-const orgNameSaving = ref(false)
-
-async function saveOrgName() {
-  if (!orgNameDirty.value || !organization.value) return
-  orgNameSaving.value = true
-  try {
-    await authClient.organization.update({ 
-      organizationId: organization.value.id, 
-      data: { name: orgNameInput.value.trim() } 
-    })
-    toast.add({ title: 'Organization updated', icon: 'i-lucide-circle-check', color: 'success' })
-  } catch (_err) {
-    const msg = _err instanceof Error ? _err.message : String(_err)
-    toast.add({ title: 'Update failed', description: msg, color: 'error' })
-  } finally {
-    orgNameSaving.value = false
-  }
-}
-
-const orgNameTouched = ref(false)
-watch(() => organization.value?.name, (newVal) => {
-  if (newVal !== undefined && !orgNameTouched.value) orgNameInput.value = newVal || ''
 }, { immediate: true })
 
 // Phone Number

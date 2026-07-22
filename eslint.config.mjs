@@ -9,6 +9,7 @@ export default withNuxt(
       '**/.agents/skills/**',
       '.data/**',
       '.tmp/**',
+      '.worktrees/**',
       '.nuxt/**',
       '.output/**',
       '.wrangler/**',

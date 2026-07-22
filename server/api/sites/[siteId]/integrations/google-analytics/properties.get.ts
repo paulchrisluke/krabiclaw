@@ -1,12 +1,11 @@
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { jsonResponse } from '~/server/utils/api-response'
 import {
   getGoogleAnalyticsAccessToken,
   getGoogleAnalyticsConnection,
   listGa4Properties,
   listSearchConsoleSites
 } from '~/server/utils/google-analytics'
-import { queryFirst } from '~/server/db'
+import { requireSiteAccess } from '~/server/utils/location-access'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -14,28 +13,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
   }
 
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) {
-    return jsonResponse({ error: 'Database not available' }, { status: 500 })
-  }
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) {
-    return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  }
-
-  const site = await queryFirst<{ id: string; organization_id: string }>(db, `
-    SELECT s.id, s.organization_id FROM sites s
-    JOIN organization o ON s.organization_id = o.id
-    JOIN member m ON o.id = m.organizationId
-    WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin')
-    LIMIT 1
-  `, [siteId, session.user.id])
-
-  if (!site) {
-    return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
-  }
+  const { env, site } = await requireSiteAccess(event, siteId)
 
   const connection = await getGoogleAnalyticsConnection(env, site.organization_id, site.id)
   if (!connection) {

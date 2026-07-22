@@ -62,6 +62,8 @@ export async function executeMcpToolCall(
     );
   }
 
+  validateNoUnknownTopLevelArguments(tool.inputSchema, rawArguments);
+
   const normalizedArguments = await normalizeWorkspaceArguments(
     event,
     toolName,

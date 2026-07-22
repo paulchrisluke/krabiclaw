@@ -15,11 +15,7 @@ export function useDashboardLocation() {
     return dashboard.locations.value.find(location => location.slug === routeLocationSlug.value) ?? null
   })
 
-  const preferredLocation = computed(() => dashboard.selectedLocation.value)
-
-  const currentLocation = computed(() =>
-    inLocationWorkspace.value ? routeLocation.value : preferredLocation.value
-  )
+  const currentLocation = computed(() => routeLocation.value)
 
   const currentLocationId = computed(() => currentLocation.value?.id ?? null)
   const currentLocationSlug = computed(() => currentLocation.value?.slug ?? routeLocationSlug.value ?? null)
@@ -32,54 +28,34 @@ export function useDashboardLocation() {
     const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
     const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
 
-    const parts = route.path.split('/').filter(Boolean)
-    const sitesIndex = parts.findIndex((part, i) =>
-      part === 'sites' &&
-      (orgSlug ? parts[i - 1] === orgSlug : true) &&
-      (siteSlug ? parts[i + 1] === siteSlug : true)
-    )
-
-    // Location pages live under .../sites/:siteSlug/locations/:locationSlug/...
-    // — locationSlug is 3 segments after 'sites' (siteSlug, then the literal
-    // 'locations' segment, then the slug itself), not 2.
-    if (sitesIndex !== -1 && parts.length > sitesIndex + 3 && parts[sitesIndex + 2] === 'locations') {
-      parts[sitesIndex + 3] = targetSlug
-      return `/${parts.join('/')}`
+    if (inLocationWorkspace.value && typeof route.name === 'string') {
+      const { locationId: _legacyLocationId, ...query } = route.query
+      return router.resolve({
+        name: route.name,
+        params: { ...route.params, locationSlug: targetSlug },
+        query,
+      }).fullPath
     }
 
     if (orgSlug && siteSlug) return `/dashboard/${orgSlug}/sites/${siteSlug}/locations/${targetSlug}`
-    return route.path
+    return '/dashboard'
   }
 
-  async function selectLocation(locationIdOrSlug: string, options: { replace?: boolean; persistPreference?: boolean } = {}) {
+  async function selectLocation(locationIdOrSlug: string, options: { replace?: boolean } = {}) {
     const target = dashboard.locations.value.find((location) =>
       location.id === locationIdOrSlug || location.slug === locationIdOrSlug
     )
     if (!target) return
 
-    if (inLocationWorkspace.value) {
-      const query = { ...route.query }
-      delete query.locationId
-      const to = { path: buildLocationWorkspacePath(target.slug), query }
-      if (options.replace) await router.replace(to)
-      else await router.push(to)
-
-      if (options.persistPreference !== false && dashboard.selectedLocation.value?.id !== target.id) {
-        await dashboard.selectLocation(target.id)
-      }
-      return
-    }
-
-    if (options.persistPreference !== false && dashboard.selectedLocation.value?.id !== target.id) {
-      await dashboard.selectLocation(target.id)
-    }
+    const to = buildLocationWorkspacePath(target.slug)
+    if (options.replace) await router.replace(to)
+    else await router.push(to)
   }
 
   return {
     routeLocationSlug,
     inLocationWorkspace,
     routeLocation,
-    preferredLocation,
     currentLocation,
     currentLocationId,
     currentLocationSlug,

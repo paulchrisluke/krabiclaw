@@ -144,7 +144,7 @@ const loadContext = async () => {
       success: boolean
       site?: ApiRecord | null
       locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>
-    }>('/api/dashboard/context')
+    }>('/api/dashboard/context', { headers: buildDashboardRequestHeaders() })
 
     if (response.site) {
       siteData.value = response.site
