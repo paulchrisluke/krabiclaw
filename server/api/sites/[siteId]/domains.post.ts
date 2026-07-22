@@ -1,6 +1,5 @@
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
-import { queryFirst } from '~/server/db'
+import { jsonResponse } from '~/server/utils/api-response'
+import { requireSiteAccess } from '~/server/utils/location-access'
 import {
   createCustomDomainPair,
   domainInstructions,
@@ -24,31 +23,8 @@ export default defineEventHandler(async (event) => {
   const includeWww = body.include_www !== false
   if (!requestedDomain) return jsonResponse({ error: 'Domain is required' }, { status: 400 })
 
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
-
-  // Fetch site and member role for actor attribution
-  const siteResult = await queryFirst<{ id: string; organization_id: string; member_role: 'owner' | 'admin' }>(db, `
-    SELECT s.id, s.organization_id, m.role as member_role
-    FROM sites s
-    JOIN organization o ON s.organization_id = o.id
-    JOIN member m ON o.id = m.organizationId
-    WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin')
-    LIMIT 1
-  `, [siteId, session.user.id])
-  if (!siteResult) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
-
-  // For backward compatibility with existing code
-  const site = {
-    id: siteResult.id,
-    organization_id: siteResult.organization_id
-  }
-  const actorType = siteResult.member_role
+  const { env, db, session, site } = await requireSiteAccess(event, siteId)
+  const actorType = site.member_role as 'owner' | 'admin' | 'editor'
 
 
   if (!(await hasCustomDomainsEntitlement(db, siteId))) {
@@ -69,7 +45,7 @@ export default defineEventHandler(async (event) => {
       actorType
     })
 
-    const dashboardUrl = `${env.NUXT_PUBLIC_PLATFORM_DOMAIN}/dashboard/settings`
+    const dashboardUrl = `${env.NUXT_PUBLIC_PLATFORM_DOMAIN}/dashboard/${encodeURIComponent(site.organization_slug ?? site.organization_id)}/settings/domains?site=${encodeURIComponent(site.subdomain ?? site.id)}`
     for (const domain of domains) {
       await notifyDomainLifecycle(env, db, {
         organizationId: site.organization_id,

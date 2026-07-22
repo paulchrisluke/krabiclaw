@@ -44,12 +44,12 @@ interface DashboardLocation {
 
 interface DashboardContextResponse {
   success: boolean
-  organization: DashboardOrganization
+  organization: DashboardOrganization | null
   site: DashboardSite | null
   sites: DashboardSiteSummary[]
   locations: DashboardLocation[]
-  selectedLocation: DashboardLocation | null
   managedServiceEnabled: boolean
+  siteAccess: 'organization' | 'site' | 'location' | null
 }
 
 // dashboard-site-header.client.ts attaches x-dashboard-org-slug/site-slug on every
@@ -91,24 +91,13 @@ export function useDashboardSite() {
     return state.value
   }
 
-  async function selectLocation(locationId: string) {
-    const headers = buildDashboardRequestHeaders()
-
-    await $fetch('/api/dashboard/location-preference', {
-      method: 'PATCH',
-      headers,
-      body: { locationId }
-    })
-    await refresh()
-  }
-
   const organization = computed(() => state.value?.organization ?? null)
   const site = computed(() => state.value?.site ?? null)
   const siteId = computed(() => site.value?.id ?? null)
   const sites = computed(() => state.value?.sites ?? [])
   const locations = computed(() => state.value?.locations ?? [])
-  const selectedLocation = computed(() => state.value?.selectedLocation ?? null)
   const managedServiceEnabled = computed(() => state.value?.managedServiceEnabled ?? false)
+  const siteAccess = computed(() => state.value?.siteAccess ?? null)
 
   return {
     state,
@@ -118,10 +107,9 @@ export function useDashboardSite() {
     siteId,
     sites,
     locations,
-    selectedLocation,
     managedServiceEnabled,
-    refresh,
-    selectLocation
+    siteAccess,
+    refresh
   }
 }
 

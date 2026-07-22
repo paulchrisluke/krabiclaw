@@ -74,10 +74,6 @@ export interface DashboardLocationRow {
   hero_url: string | null
 }
 
-interface DashboardPreferenceRow {
-  selected_location_id: string | null
-}
-
 interface DashboardContextOptions {
   requireSite?: boolean
   // Opt-in only — see resolveRecentlyTransferredSite. Defaults to off so generic
@@ -160,17 +156,6 @@ export async function resolveRequestedOrganization(
     WHERE m.userId = ? AND o.id = ?
     LIMIT 1
   `, [userId, activeOrganizationId])
-}
-
-async function resolveSingleOrgSite(db: DbClient, organizationId: string): Promise<DashboardSiteRow | null> {
-  const sites = await queryAll<DashboardSiteRow>(db, `
-    SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
-           status, onboarding_status, plan, primary_location_id, default_currency, source_locale
-    FROM sites
-    WHERE organization_id = ?
-    LIMIT 2
-  `, [organizationId])
-  return sites.length === 1 ? sites[0]! : null
 }
 
 // Not a guess: the org-scoped /onboarding route has no siteSlug to attach a header
@@ -281,10 +266,6 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     throw createError({ statusCode: 400, message: 'Site slug is required. Use /dashboard/{orgSlug}/sites/{siteSlug} routes.' })
   }
 
-  // With no slug, auto-select only when the org has exactly one site — the same
-  // single-site auto-redirect the `/dashboard/{orgSlug}` org-root route documents.
-  // With 2+ sites we still return null rather than guess, since guessing is the
-  // exact silent-wrong-site risk 3d7827b removed this fallback to prevent.
   const site = siteSlug
     ? await queryFirst<DashboardSiteRow>(db, `
         SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
@@ -293,8 +274,9 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         WHERE organization_id = ? AND subdomain = ?
         LIMIT 1
       `, [organization.id, siteSlug])
-    : await resolveSingleOrgSite(db, organization.id)
-      ?? (options.allowTransferFallback ? await resolveRecentlyTransferredSite(db, organization.id, session.user.id) : null)
+    : options.allowTransferFallback
+      ? await resolveRecentlyTransferredSite(db, organization.id, session.user.id)
+      : null
 
   if (!site && options.requireSite !== false) {
     throw createError({ statusCode: 404, message: 'Site not found' })
@@ -380,30 +362,4 @@ export async function listDashboardLocations(db: DbClient, organizationId: strin
     is_primary: Boolean(location.is_primary),
     address: parseLocationAddress(location.address)
   }))
-}
-
-export async function resolveSelectedDashboardLocation(
-  db: DbClient,
-  userId: string,
-  organizationId: string,
-  siteId: string,
-  principal?: { memberId: string; role: string }
-) {
-  const locations = await listDashboardLocations(db, organizationId, siteId, principal)
-  const preference = await queryFirst<DashboardPreferenceRow>(db, `
-    SELECT selected_location_id
-    FROM dashboard_preferences
-    WHERE user_id = ? AND organization_id = ?
-    LIMIT 1
-  `, [userId, organizationId])
-
-  const selectedLocation = locations.find((location) => location.id === preference?.selected_location_id)
-    ?? locations.find((location) => location.is_primary)
-    ?? locations[0]
-    ?? null
-
-  return {
-    locations,
-    selectedLocation
-  }
 }

@@ -382,7 +382,7 @@ async function logDomainEvent(
     siteId: string
     domainId?: string | null
     eventType: string
-    actorType?: 'owner' | 'admin' | 'system' | 'cloudflare'
+    actorType?: DomainActorType
     actorId?: string | null
     message?: string
     beforeState?: ApiValue
@@ -424,7 +424,7 @@ async function persistCloudflareState(
   db: D1Database,
   domainId: string,
   hostname: CloudflareCustomHostname,
-  options: { incrementRetry?: boolean; actorType?: 'owner' | 'admin' | 'system' | 'cloudflare'; actorId?: string | null; skipPromotion?: boolean } = {}
+  options: { incrementRetry?: boolean; actorType?: DomainActorType; actorId?: string | null; skipPromotion?: boolean } = {}
 ): Promise<DomainRecord> {
   const before = await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ?`, [domainId])
   if (!before) throw new Error('Domain not found')
@@ -545,6 +545,8 @@ async function persistCloudflareState(
   return after
 }
 
+export type DomainActorType = 'owner' | 'admin' | 'editor' | 'system' | 'cloudflare'
+
 export async function createCustomDomainPair(
   env: DomainEnv,
   db: D1Database,
@@ -554,7 +556,7 @@ export async function createCustomDomainPair(
     domain: string
     includeWww?: boolean
     actorId?: string | null
-    actorType?: 'owner' | 'admin'
+    actorType?: DomainActorType
   }
 ): Promise<DomainRecord[]> {
   const domains = domainPair(opts.domain, opts.includeWww !== false)
@@ -685,7 +687,7 @@ export async function syncDomainWithCloudflare(
   env: DomainEnv,
   db: D1Database,
   domainId: string,
-  actorType: 'owner' | 'admin' | 'system' = 'system',
+  actorType: DomainActorType = 'system',
   actorId?: string | null,
   signal?: AbortSignal
 ): Promise<DomainRecord> {
@@ -719,7 +721,7 @@ export async function deleteCustomDomain(
   env: DomainEnv,
   db: D1Database,
   domainId: string,
-  actorType: 'owner' | 'admin' | 'system',
+  actorType: DomainActorType,
   actorId?: string | null
 ): Promise<void> {
   const domain = await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ? AND type = 'custom'`, [domainId])
@@ -821,7 +823,7 @@ export async function setCanonicalDomain(
   db: D1Database,
   siteId: string,
   domainId: string,
-  actorType: 'owner' | 'admin' | 'system',
+  actorType: DomainActorType,
   actorId?: string | null
 ): Promise<DomainRecord> {
   const domain = await queryFirst<DomainRecord>(db, `

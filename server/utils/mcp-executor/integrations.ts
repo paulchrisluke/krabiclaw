@@ -17,7 +17,7 @@ export async function handleIntegrationsTools(ctx: McpExecutorContext): Promise<
       if (!connection) {
         return {
           connected: false,
-          connectUrl: buildDashboardUrl(site, "settings.general"),
+          connectUrl: buildDashboardUrl(site, "site.settings"),
         };
       }
       return {

@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Posts">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
       </UDashboardNavbar>
     </template>
@@ -218,10 +218,12 @@ const loadPosts = async () => {
 
 async function loadFacebookConnection() {
   try {
-    const res = await $fetch<{ connected: boolean }>('/api/integrations/facebook-pages/connection')
+    const res = await $fetch<{ connected: boolean }>('/api/integrations/facebook-pages/connection', {
+      query: { locationId: currentLocationId.value },
+    })
     facebookConnected.value = res.connected
   } catch {
-    facebookConnected.value = false
+    toast.add({ description: 'Failed to load Facebook connection status', color: 'error' })
   }
 }
 

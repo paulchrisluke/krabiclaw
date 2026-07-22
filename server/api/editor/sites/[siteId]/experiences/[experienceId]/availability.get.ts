@@ -1,7 +1,7 @@
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { jsonResponse } from '~/server/utils/api-response'
 import { DASHBOARD_MANAGEMENT_WINDOW_DAYS, getExperienceById, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
-import { queryFirst } from '~/server/db'
+import { requireSiteAccess } from '~/server/utils/location-access'
+import { assertResourceAccess } from '~/server/utils/member-access'
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const MAX_DAYS = DASHBOARD_MANAGEMENT_WINDOW_DAYS
@@ -18,24 +18,16 @@ export default defineEventHandler(async (event) => {
   }
   const days = Math.min(Math.max(Number(query.days) || 1, 1), MAX_DAYS)
 
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
-  const site = await queryFirst<{ id: string; organization_id: string }>(
-    db,
-    `SELECT s.id, s.organization_id FROM sites s
-       JOIN member m ON m.organizationId = s.organization_id
-       WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin') LIMIT 1`,
-    [siteId, session.user.id],
-  )
-  if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
-
+  const { db, site } = await requireSiteAccess(event, siteId, 'context')
   const experience = await getExperienceById(db, siteId, experienceId)
   if (!experience) return jsonResponse({ error: 'Experience not found' }, { status: 404 })
+  await assertResourceAccess(db, {
+    memberId: site.member_id,
+    role: site.member_role,
+    organizationId: site.organization_id,
+    siteId,
+    resourceLocationId: experience.location_id,
+  })
 
   const timezone = await resolveExperienceTimezone(db, site.organization_id, siteId, experience)
 

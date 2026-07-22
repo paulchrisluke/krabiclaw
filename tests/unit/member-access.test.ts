@@ -19,6 +19,11 @@ const scopeRows: ScopeRow[] = [
 ]
 
 async function queryFirst<T>(_db: unknown, query: string, params: unknown[] = []): Promise<T | undefined> {
+  if (query.includes('MAX(CASE WHEN location_id IS NULL')) {
+    const [memberId, organizationId, siteId] = params
+    const rows = scopeRows.filter(r => r.member_id === memberId && r.organization_id === organizationId && r.site_id === siteId)
+    return (rows.length ? { site_wide: rows.some(r => r.location_id === null) ? 1 : 0 } : undefined) as T | undefined
+  }
   // Most specific first: assertLocationAccess's query contains BOTH
   // "location_id IS NULL" and "location_id = ?" as substrings (it's an OR of
   // the two), so it must be checked before the plain site-wide-only branch.
@@ -69,6 +74,7 @@ const {
   assertResourceAccess,
   assertSiteContextAccess,
   listAccessibleLocationIds,
+  resolveDashboardSiteAccess,
   canScopedRoleUseDashboardPath,
 } = await import('../../server/utils/member-access.ts')
 
@@ -113,6 +119,18 @@ test('listAccessibleLocationIds returns null for site-wide scope, an array of id
     (await listAccessibleLocationIds({} as never, { memberId: 'member-multi', role: 'editor', organizationId: 'org-1', siteId: 'site-1' }))?.sort(),
     ['loc-1', 'loc-2'],
   )
+})
+
+test('dashboard site access distinguishes organization, site-wide, and location-only principals', async () => {
+  assert.equal(await resolveDashboardSiteAccess({} as never, {
+    memberId: 'owner', role: 'owner', organizationId: 'org-1', siteId: 'site-1',
+  }), 'organization')
+  assert.equal(await resolveDashboardSiteAccess({} as never, {
+    memberId: 'member-site', role: 'editor', organizationId: 'org-1', siteId: 'site-2',
+  }), 'site')
+  assert.equal(await resolveDashboardSiteAccess({} as never, {
+    memberId: 'member-loc', role: 'editor', organizationId: 'org-1', siteId: 'site-1',
+  }), 'location')
 })
 
 test('the audited /api/dashboard/** boundary is deny-by-default for scoped roles', () => {

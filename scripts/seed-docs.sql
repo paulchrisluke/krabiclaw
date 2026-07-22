@@ -547,7 +547,7 @@ VALUES (
 
 ## 1. Open Members
 
-Go to **Settings → Members** (`/dashboard/{your-org}/~/settings/members`). You will see everyone who already has access, with their role.
+Go to **Settings → Members** (`/dashboard/{your-org}/settings/members`). You will see everyone who already has access, with their role.
 
 ![Inviting a team member from organization settings](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/1f356c74-89de-4946-62dd-98406faf8800/public)
 
@@ -599,7 +599,7 @@ VALUES (
 
 ## 1. Open Settings → General
 
-Go to `/dashboard/{your-org}/~/settings/general` and find the Notifications card.
+Go to `/dashboard/{your-org}/sites/{your-site}/settings` and find the Notifications card.
 
 ![Notification channel and site-wide WhatsApp number](https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/8a9b504e-efce-4b5d-ba84-f4a79a2e4700/public)
 
@@ -613,7 +613,7 @@ This number is used for every location''s alerts unless that location sets its o
 
 ## 4. Override the number for one location (optional)
 
-If a specific location needs its own alert number — a different manager, a different country — set it from that location''s page at `/dashboard/{your-org}/sites/{your-site}/{your-location}`, under **Notifications**. It falls back to the site-wide number above if left blank.
+If a specific location needs its own alert number — a different manager, a different country — set it from that location''s settings page at `/dashboard/{your-org}/sites/{your-site}/locations/{your-location}/settings`, under **Notifications**. It falls back to the site-wide number above if left blank.
 
 ## Common problems
 

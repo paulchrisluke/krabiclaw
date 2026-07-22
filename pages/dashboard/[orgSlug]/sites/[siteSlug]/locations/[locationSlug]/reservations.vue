@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Reservations">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
       </UDashboardNavbar>
     </template>

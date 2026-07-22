@@ -37,17 +37,24 @@ export default defineEventHandler(async (event) => {
     const db = env.DB
     if (!db) return `/dashboard?ga=${status}`
 
-    let organization: { slug: string | null } | null = null
+    let context: { organization_slug: string | null; site_slug: string | null } | null = null
     try {
-      organization = (await queryFirst<{ slug: string | null }>(db, `SELECT slug FROM organization WHERE id = ? LIMIT 1`, [organizationId])) ?? null
+      context = (await queryFirst<{ organization_slug: string | null; site_slug: string | null }>(db, `
+        SELECT o.slug AS organization_slug, s.subdomain AS site_slug
+        FROM organization o
+        JOIN sites s ON s.organization_id = o.id
+        WHERE o.id = ? AND s.id = ?
+        LIMIT 1
+      `, [organizationId, siteId])) ?? null
     } catch (e) {
       console.error('Google Analytics redirect organization query failed:', e)
       return `/dashboard?ga=${status}`
     }
 
-    if (!organization?.slug) return `/dashboard?ga=${status}`
-    const encodedOrgSlug = encodeURIComponent(organization.slug)
-    return `/dashboard/${encodedOrgSlug}/settings/analytics?ga=${status}`
+    if (!context?.organization_slug || !context.site_slug) return `/dashboard?ga=${status}`
+    const encodedOrgSlug = encodeURIComponent(context.organization_slug)
+    const params = new URLSearchParams({ ga: status, site: context.site_slug })
+    return `/dashboard/${encodedOrgSlug}/settings/analytics?${params.toString()}`
   }
 
   try {

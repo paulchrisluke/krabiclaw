@@ -4,6 +4,11 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
 export default defineEventHandler(async (event): Promise<Response> => {
   const rawPath = getRouterParam(event, 'path')
   const path = Array.isArray(rawPath) ? rawPath.join('/') : String(rawPath || '')
+
+  if (path === 'location-preference') {
+    return jsonResponse({ error: 'Not found' }, { status: 404 })
+  }
+
   const { site } = await getDashboardContext(event, { requireSite: false })
 
   if (!site) {

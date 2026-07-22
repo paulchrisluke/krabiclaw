@@ -1,11 +1,10 @@
 // PATCH update site settings
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { jsonResponse } from '~/server/utils/api-response'
 import { isDemoOrg } from '~/server/utils/demo'
 import { updateSiteSettingsFields } from '~/server/utils/site-settings'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 import { createError, getHeader, getRouterParam, readBody } from 'h3'
-import { queryFirst } from '~/server/db'
+import { requireSiteAccess } from '~/server/utils/location-access'
 
 function timingSafeEqualText(a: string, b: string): boolean {
   const left = new TextEncoder().encode(a)
@@ -37,23 +36,7 @@ export default defineEventHandler(async (event) => {
     }, { status: 400 })
   }
 
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  
-  if (!db) {
-    return jsonResponse({ 
-      error: 'Database not available' 
-    }, { status: 500 })
-  }
-
-  // Get authenticated user
-  const session = await getAuthSession(event, env)
-  
-  if (!session?.user?.id) {
-    return jsonResponse({ 
-      error: 'Authentication required' 
-    }, { status: 401 })
-  }
+  const { env, db, session, site } = await requireSiteAccess(event, siteId)
 
   if (forceSubdomainRegistrationFailure) {
     const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
@@ -65,21 +48,6 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    // Verify user has admin/owner permissions for settings
-    const site = await queryFirst<{ id: string; organization_id: string }>(db, `
-      SELECT s.id, s.organization_id FROM sites s
-      JOIN organization o ON s.organization_id = o.id
-      JOIN member om ON o.id = om.organizationId
-      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin')
-      LIMIT 1
-    `, [siteId, session.user.id])
-    
-    if (!site) {
-      return jsonResponse({
-        error: 'Site not found or access denied'
-      }, { status: 404 })
-    }
-
     // Demo org is read-only for everyone except platform admins
     const isPlatformAdmin = (session.user as { role?: string }).role === 'admin'
     if (isDemoOrg(site.organization_id) && !isPlatformAdmin) {

@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar :title="`Edit ${page}`">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
         <template #trailing>
           <UButton to="/admin/content" color="neutral" variant="soft" icon="i-lucide-arrow-left" size="sm">Content</UButton>

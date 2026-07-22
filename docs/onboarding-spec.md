@@ -80,7 +80,7 @@ Recommended mechanism (still just a proposal, not implemented): add a single nul
 | 6 | Story — about, founder story, FAQ seeds | Optional but prompted | Wizard or checklist |
 | 7 | Channels — Facebook/Instagram, ChatGPT app install, ChowBot intro | Optional | Wizard handoff cards |
 | 8 | Team — invite admins/editors | Optional, explicitly skippable | Wizard or checklist |
-| 9 | Launch readiness — domain, final review, publish | Required to go live, not required to keep working in draft | Checklist + `/dashboard/[orgSlug]/~/settings/domains` |
+| 9 | Launch readiness — domain, final review, publish | Required to go live, not required to keep working in draft | Checklist + `/dashboard/[orgSlug]/settings/domains` |
 
 ### Location-level (once per location, including the first)
 

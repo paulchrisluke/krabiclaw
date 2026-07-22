@@ -3,16 +3,17 @@
     <template #header>
       <UDashboardNavbar title="Locations">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
         <template #trailing>
           <UButton
+            v-if="canManageSite"
             icon="i-lucide-plus"
             label="Add location"
             size="sm"
             color="primary"
             variant="soft"
-            :to="`/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/new`"
+            :to="`/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/locations/new`"
           />
         </template>
       </UDashboardNavbar>
@@ -23,11 +24,12 @@
         <UIcon name="i-lucide-map-pin" class="size-8 text-muted mx-auto mb-3" />
         <p class="text-sm text-muted">No locations yet.</p>
         <UButton
+          v-if="canManageSite"
           label="Add your first location"
           size="sm"
           color="primary"
           class="mt-4"
-          :to="`/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/new`"
+          :to="`/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/locations/new`"
         />
       </div>
 
@@ -83,6 +85,7 @@ const siteId = await useDashboardSiteId()
 const { locationPath } = useDashboardSiteLinks(siteId)
 
 const locations = computed(() => dashboard.locations.value)
+const canManageSite = computed(() => dashboard.siteAccess.value === 'organization' || dashboard.siteAccess.value === 'site')
 
 function addressText(address: { addressLines?: string[] } | null) {
   return address?.addressLines?.filter(Boolean).join(', ') ?? ''

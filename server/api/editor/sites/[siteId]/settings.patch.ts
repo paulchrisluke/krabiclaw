@@ -1,11 +1,10 @@
 // PATCH /api/editor/sites/[siteId]/settings
 // Update site settings including brand color theme
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { jsonResponse } from '~/server/utils/api-response'
 import { setConfig, type SiteConfig } from '~/server/utils/site-config'
 import { resolveColor } from '~/utils/color-utils'
 import { defineEventHandler, readBody } from 'h3'
-import { queryFirst } from '~/server/db'
+import { requireSiteAccess } from '~/server/utils/location-access'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -14,25 +13,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody<Record<string, unknown>>(event)
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
-  // Resolve organization_id from site and verify user permissions
-  const site = await queryFirst<{ organization_id: string }>(
-    db,
-    `SELECT s.organization_id FROM sites s
-     JOIN member m ON m.organizationId = s.organization_id
-     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin') AND s.status = 'active' LIMIT 1`,
-    [siteId, session.user.id],
-  )
-
-  if (!site) {
-    return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
-  }
+  const { db, site } = await requireSiteAccess(event, siteId)
 
   const organizationId = site.organization_id
 

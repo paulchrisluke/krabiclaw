@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { devLoginHeaders, devLoginUrl } from './test-env'
+import { dashboardOrgHeaders, devLoginHeaders, devLoginUrl } from './test-env'
 
 async function loginFreshUser(page: Page, baseURL: string, userId: string) {
   const res = await page.request.get(devLoginUrl(baseURL, userId), {
@@ -16,7 +16,7 @@ async function loginFreshUser(page: Page, baseURL: string, userId: string) {
 // skips it — see OnboardingWizard.vue's `skipVertical` computed, derived from
 // `mode="add-location"`) — the vertical step never renders there, so waiting
 // on it would hang.
-// The add-location flow (pages/dashboard/[orgSlug]/sites/[siteSlug]/new.vue) stays on /new and
+// The add-location flow (pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/new.vue) stays on /locations/new and
 // shows a live preview of the new location instead of navigating away, so
 // every call site waits on the wizard's own "Done" message.
 async function completeManualWizard(
@@ -137,7 +137,7 @@ async function openMockedTransferOnboarding(
     })
   })
 
-  await page.route('**/api/dashboard/locations', async route => {
+  await page.route(`**/api/sites/${siteId}/locations`, async route => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -192,7 +192,7 @@ async function openMockedTransferOnboarding(
 
   await page.goto(`${baseURL}/dashboard/${orgSlug}/onboarding`, { waitUntil: 'load' })
 
-  return { siteId, orgSlug: orgSlug! }
+  return { siteId, orgSlug: orgSlug!, siteSlug }
 }
 
 async function saveNotificationSettings(page: Page, siteId: string) {
@@ -242,10 +242,13 @@ test.describe('onboarding wizard UI', () => {
     const orgSlug = pathSegments[2]
     const siteSlug = pathSegments[4]
     // page.request bypasses the browser's JS entirely, so the dashboard-site-header
-    // plugin never runs — the site must be named explicitly via the header it would
-    // otherwise attach, since /api/dashboard/locations requires an explicit site.
+    // plugin never runs — both URL-backed organization and site context must be
+    // attached explicitly for this direct dashboard API request.
     const locationsRes = await page.request.get(`${baseURL}/api/dashboard/locations`, {
-      headers: { 'x-dashboard-site-slug': siteSlug! },
+      headers: {
+        ...dashboardOrgHeaders(orgSlug!),
+        'x-dashboard-site-slug': siteSlug!,
+      },
     })
     expect(locationsRes.status()).toBe(200)
     const { locations } = await locationsRes.json() as { locations: Array<{ title: string }> }
@@ -273,8 +276,18 @@ test.describe('onboarding wizard UI', () => {
     await page.setViewportSize({ width: 1280, height: 800 })
     await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
     await completeManualWizard(page, `e2e- Onboard Test Firm ${suffix}`, { vertical: 'professional_service' })
+    await page.getByRole('button', { name: 'Open my dashboard' }).click()
+    await expect(page).toHaveURL(/\/dashboard\/[^/]+\/sites\/[^/]+$/)
 
-    const contextRes = await page.request.get(`${baseURL}/api/dashboard/context`)
+    const pathSegments = new URL(page.url()).pathname.split('/')
+    const orgSlug = pathSegments[2]
+    const siteSlug = pathSegments[4]
+    const contextRes = await page.request.get(`${baseURL}/api/dashboard/context`, {
+      headers: {
+        ...dashboardOrgHeaders(orgSlug!),
+        'x-dashboard-site-slug': siteSlug!,
+      },
+    })
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json() as { site?: { id?: string; vertical?: string } }
     expect(context.site?.vertical).toBe('service')
@@ -287,7 +300,7 @@ test.describe('onboarding wizard UI', () => {
   })
 
   test('transfer handoff wizard saves free-plan notifications and skips paid-only steps', async ({ page, baseURL }) => {
-    const { siteId, orgSlug } = await openMockedTransferOnboarding(page, baseURL!, { plan: 'free' })
+    const { siteId, orgSlug, siteSlug } = await openMockedTransferOnboarding(page, baseURL!, { plan: 'free' })
 
     await reachNotificationStep(page)
     const saveResponse = await saveNotificationSettings(page, siteId)
@@ -300,11 +313,11 @@ test.describe('onboarding wizard UI', () => {
     await expect(page.getByText('Custom domain setup')).not.toBeVisible()
     await expect(page.getByRole('button', { name: 'Go to my dashboard' })).toBeVisible()
     await page.getByRole('button', { name: 'Go to my dashboard' }).click()
-    await expect(page).toHaveURL(new RegExp(`/dashboard/${orgSlug}$`))
+    await expect(page).toHaveURL(new RegExp(`/dashboard/${orgSlug}/sites/${siteSlug}$`))
   })
 
   test('transfer handoff wizard shows paid-plan social and domain steps', async ({ page, baseURL }) => {
-    const { siteId, orgSlug } = await openMockedTransferOnboarding(page, baseURL!, { plan: 'growth' })
+    const { siteId, orgSlug, siteSlug } = await openMockedTransferOnboarding(page, baseURL!, { plan: 'growth' })
 
     await reachNotificationStep(page)
     const saveResponse = await saveNotificationSettings(page, siteId)
@@ -321,7 +334,7 @@ test.describe('onboarding wizard UI', () => {
 
     await expect(page.getByRole('button', { name: 'Go to my dashboard' })).toBeVisible()
     await page.getByRole('button', { name: 'Go to my dashboard' }).click()
-    await expect(page).toHaveURL(new RegExp(`/dashboard/${orgSlug}$`))
+    await expect(page).toHaveURL(new RegExp(`/dashboard/${orgSlug}/sites/${siteSlug}$`))
   })
 
   test('transfer handoff wizard keeps notification save failures visible', async ({ page, baseURL }) => {

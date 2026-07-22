@@ -1,5 +1,5 @@
 <template>
-  <GeneralSettingsPage />
+  <OrganizationSettingsPage />
 </template>
 
 <script setup lang="ts">

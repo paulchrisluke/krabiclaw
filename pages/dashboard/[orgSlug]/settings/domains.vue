@@ -3,16 +3,35 @@
     <template #header>
       <UDashboardNavbar title="Domains">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
       <div class="grid gap-4">
+        <UCard>
+          <UFormField label="Site" description="Choose which site's domains to manage.">
+            <USelectMenu
+              v-model="selectedSiteSlug"
+              :items="siteOptions"
+              value-key="value"
+              placeholder="Select a site"
+              class="w-full sm:max-w-sm"
+            />
+          </UFormField>
+        </UCard>
+
+        <UCard v-if="!siteId">
+          <div class="py-6 text-center">
+            <UIcon name="i-lucide-globe" class="mx-auto size-8 text-muted" />
+            <p class="mt-3 font-medium text-highlighted">Select a site</p>
+            <p class="mt-1 text-sm text-muted">Domain settings are managed separately for each site.</p>
+          </div>
+        </UCard>
 
         <!-- Current domains -->
-        <UCard>
+        <UCard v-else>
           <template #header>
             <h2 class="font-semibold text-highlighted">Your domains</h2>
           </template>
@@ -113,7 +132,7 @@
         </UCard>
 
         <!-- Add custom domain -->
-        <UCard>
+        <UCard v-if="siteId">
           <template #header>
             <div>
               <h2 class="font-semibold text-highlighted">Add custom domain</h2>
@@ -167,10 +186,10 @@ interface Domain {
 }
 
 const toast = useToast()
-const dashboard = useDashboardSite()
+const { dashboard, siteOptions, selectedSiteSlug, selectedSiteId: siteId } = useOrganizationSettingsSite()
 const { trackDomainConnected } = useAnalytics()
 
-const loading = ref(true)
+const loading = ref(false)
 const domains = ref<Domain[]>([])
 const newDomain = ref('')
 const adding = ref(false)
@@ -178,10 +197,12 @@ const addError = ref('')
 const syncingId = ref<string | null>(null)
 const deletingId = ref<string | null>(null)
 
-const siteId = computed(() => dashboard.siteId.value)
-
 async function loadDomains({ background = false }: { background?: boolean } = {}) {
-  if (!siteId.value) return
+  if (!siteId.value) {
+    domains.value = []
+    loading.value = false
+    return
+  }
   if (!background) loading.value = true
   try {
     const res = await $fetch<{ domains: Domain[] }>(`/api/sites/${siteId.value}/domains`)
@@ -266,13 +287,18 @@ let pollInterval: ReturnType<typeof setInterval> | null = null
 
 onMounted(async () => {
   if (!dashboard.state.value) await dashboard.refresh()
-  await loadDomains()
   // Poll every 15s while any custom domain is pending
   pollInterval = setInterval(() => {
     const hasPending = domains.value.some(d => d.type === 'custom' && d.status !== 'active')
     if (hasPending) loadDomains({ background: true })
   }, 15000)
 })
+
+watch(siteId, () => {
+  newDomain.value = ''
+  addError.value = ''
+  void loadDomains()
+}, { immediate: true })
 
 onUnmounted(() => {
   if (pollInterval) clearInterval(pollInterval)

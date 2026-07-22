@@ -1,29 +1,12 @@
-import { cloudflareEnv, jsonResponse } from '../../../utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { jsonResponse } from '../../../utils/api-response'
 import { getFacebookPagesConnection } from '../../../utils/facebook-pages'
-import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { queryFirst } from '~/server/db'
+import { requireRequestedLocationAccess, requireRequestedSiteWideAccess } from '~/server/utils/location-access'
 
 export default defineEventHandler(async (event) => {
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
-  const query = getQuery(event) as { siteId?: string }
-  const dashboard = query.siteId ? null : await getDashboardContext(event, { requireSite: false })
-  const site = query.siteId
-    ? await queryFirst<{ id: string; organization_id: string }>(db, `
-        SELECT s.id, s.organization_id FROM sites s
-        JOIN member om ON s.organization_id = om.organizationId
-        WHERE s.id = ? AND om.userId = ?
-        LIMIT 1
-      `, [query.siteId, session.user.id])
-    : dashboard?.site
-
-  if (!site) return jsonResponse({ connected: false })
+  const query = getQuery(event) as { siteId?: string; locationId?: string }
+  const { env, site } = query.locationId
+    ? await requireRequestedLocationAccess(event, query.locationId, query.siteId)
+    : await requireRequestedSiteWideAccess(event, query.siteId)
 
   const connection = await getFacebookPagesConnection(env, site.organization_id, site.id)
 

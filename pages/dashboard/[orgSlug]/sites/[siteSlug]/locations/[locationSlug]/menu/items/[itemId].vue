@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar :title="itemName || 'Menu Item'">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
       </UDashboardNavbar>
     </template>

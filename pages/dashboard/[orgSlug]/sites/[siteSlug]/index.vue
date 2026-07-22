@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar :title="siteName">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
       </UDashboardNavbar>
     </template>
@@ -21,6 +21,7 @@
       <div v-else class="space-y-6">
         <!-- Ask ChowBot anything -->
         <UChatPrompt
+          v-if="canManageSite"
           v-model="homeInput"
           placeholder="Ask ChowBot anything..."
           :disabled="chowBot.isLoading.value"
@@ -39,7 +40,7 @@
         </UChatPrompt>
 
         <!-- Getting started task list -->
-        <UCard v-if="!checklistDismissed && !checklistAllDone && checklistItems.length" variant="soft" class="border-primary/20">
+        <UCard v-if="canManageSite && !checklistDismissed && !checklistAllDone && checklistItems.length" variant="soft" class="border-primary/20">
           <div class="space-y-4">
             <div class="flex items-start justify-between gap-4">
               <div>
@@ -114,7 +115,7 @@
           </div>
         </UCard>
 
-        <div v-if="isProfessionalService" class="flex flex-wrap items-center justify-between gap-3 border-y border-default py-4">
+        <div v-if="canManageSite && isProfessionalService" class="flex flex-wrap items-center justify-between gap-3 border-y border-default py-4">
           <div>
             <h2 class="text-sm font-semibold text-highlighted">Firm-wide content</h2>
             <p class="mt-1 text-xs text-muted">Manage Q&A and reviews that apply to the whole site.</p>
@@ -285,6 +286,7 @@ const { data, pending } = await useAsyncData(
 const locations = computed(() => data.value?.locations ?? [])
 const previewLocations = computed(() => locations.value.slice(0, 3))
 const siteName = computed(() => dashboardState.site.value?.brand_name ?? 'Overview')
+const canManageSite = computed(() => dashboardState.siteAccess.value === 'organization' || dashboardState.siteAccess.value === 'site')
 const isProfessionalService = computed(() => ['service', 'professional_service'].includes(dashboardState.site.value?.vertical ?? ''))
 const siteDashboardPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}`)
 const locationsBase = computed(() => `${siteDashboardPath.value}/locations`)
@@ -292,10 +294,14 @@ const events = computed(() => data.value?.events ?? [])
 
 // Getting-started task list — data source for both the checklist card and its
 // per-item ChowBotPromptTrigger auto-send prompts.
-const { data: onboardingData } = await useFetch<OnboardingChecklistResponse>('/api/dashboard/onboarding/checklist', {
+const { data: onboardingData, execute: loadOnboardingChecklist } = await useFetch<OnboardingChecklistResponse>('/api/dashboard/onboarding/checklist', {
   server: false,
   lazy: true,
+  immediate: false,
 })
+watch(canManageSite, (allowed) => {
+  if (allowed) void loadOnboardingChecklist()
+}, { immediate: true })
 
 const checklistItems = computed(() => buildOnboardingChecklistItems(onboardingData.value))
 const checklistStarterPrompt = computed(() => buildOnboardingStarterPrompt(onboardingData.value, checklistItems.value))

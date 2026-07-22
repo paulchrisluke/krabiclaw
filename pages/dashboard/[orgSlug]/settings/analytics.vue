@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Analytics">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <DashboardSidebarCollapseButton />
         </template>
       </UDashboardNavbar>
     </template>
@@ -11,6 +11,26 @@
     <template #body>
       <div class="grid gap-4">
         <UCard>
+          <UFormField label="Site" description="Choose which site's analytics integrations to manage.">
+            <USelectMenu
+              v-model="selectedSiteSlug"
+              :items="siteOptions"
+              value-key="value"
+              placeholder="Select a site"
+              class="w-full sm:max-w-sm"
+            />
+          </UFormField>
+        </UCard>
+
+        <UCard v-if="!siteId">
+          <div class="py-6 text-center">
+            <UIcon name="i-lucide-chart-bar" class="mx-auto size-8 text-muted" />
+            <p class="mt-3 font-medium text-highlighted">Select a site</p>
+            <p class="mt-1 text-sm text-muted">Analytics connections are configured separately for each site.</p>
+          </div>
+        </UCard>
+
+        <UCard v-else>
           <template #header>
             <h2 class="font-semibold text-highlighted">Google Analytics & Search Console</h2>
           </template>
@@ -100,13 +120,11 @@ interface SearchConsoleSite {
 }
 
 const toast = useToast()
-const dashboard = useDashboardSite()
+const { dashboard, siteOptions, selectedSiteSlug, selectedSiteId: siteId } = useOrganizationSettingsSite()
 const route = useRoute()
 const router = useRouter()
 
-const siteId = computed(() => dashboard.siteId.value)
-
-const loading = ref(true)
+const loading = ref(false)
 const connecting = ref(false)
 const disconnecting = ref(false)
 const saving = ref(false)
@@ -129,6 +147,9 @@ const searchConsoleOptions = computed(() =>
 
 async function loadConnection() {
   if (!siteId.value) {
+    connection.value = null
+    ga4Properties.value = []
+    searchConsoleSites.value = []
     loading.value = false
     return
   }
@@ -222,7 +243,6 @@ async function saveSelection() {
 
 onMounted(async () => {
   if (!dashboard.state.value) await dashboard.refresh()
-  await loadConnection()
 
   const status = route.query.ga
   if (status === 'connected') {
@@ -233,4 +253,8 @@ onMounted(async () => {
     router.replace({ query: { ...route.query, ga: undefined } })
   }
 })
+
+watch(siteId, () => {
+  void loadConnection()
+}, { immediate: true })
 </script>

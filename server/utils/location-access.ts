@@ -3,10 +3,12 @@ import { getAuthSession } from '~/server/utils/auth'
 import { queryFirst, type DbClient } from '~/server/db'
 import { assertLocationAccess, assertSiteContextAccess, assertSiteWideAccess } from '~/server/utils/member-access'
 import type { H3Event } from 'h3'
+import { getDashboardContext } from '~/server/utils/dashboard-context'
 
 export interface SiteAccessRow {
   id: string
   organization_id: string
+  organization_slug: string | null
   brand_name: string | null
   subdomain: string | null
   status: string
@@ -27,9 +29,10 @@ export async function loadMemberSiteRow(db: DbClient, siteId: string, userId: st
   // the scope check inside assertSiteWideAccess/assertLocationAccess/
   // assertSiteContextAccess (isScopedRole/isOrganizationWideRole both false).
   return await queryFirst<SiteAccessRow>(db, `
-    SELECT s.id, s.organization_id, s.brand_name, s.subdomain, s.status, s.onboarding_status,
+    SELECT s.id, s.organization_id, o.slug AS organization_slug, s.brand_name, s.subdomain, s.status, s.onboarding_status,
            om.id AS member_id, om.role AS member_role
     FROM sites s
+    JOIN organization o ON o.id = s.organization_id
     JOIN member om ON s.organization_id = om.organizationId
     WHERE s.id = ? AND om.userId = ?
     LIMIT 1
@@ -110,4 +113,65 @@ export async function requireSiteAccess(
   }
 
   return { env, db, session, site }
+}
+
+export async function requireRequestedSiteWideAccess(event: H3Event, explicitSiteId?: string | null) {
+  if (explicitSiteId) return requireSiteAccess(event, explicitSiteId)
+
+  const context = await getDashboardContext(event, { requireSite: true })
+  if (!context.organization || !context.site) {
+    throw createError({ statusCode: 404, message: 'Site not found or access denied' })
+  }
+  await assertSiteWideAccess(context.db, {
+    memberId: context.organization.memberId,
+    role: context.organization.role,
+    organizationId: context.organization.id,
+    siteId: context.site.id,
+  })
+  return {
+    env: context.env,
+    db: context.db,
+    session: context.session,
+    site: {
+      ...context.site,
+      organization_slug: context.organization.slug,
+      member_id: context.organization.memberId,
+      member_role: context.organization.role,
+    } satisfies SiteAccessRow,
+  }
+}
+
+export async function requireRequestedLocationAccess(event: H3Event, locationId: string, explicitSiteId?: string | null) {
+  if (explicitSiteId) return requireLocationAccess(event, explicitSiteId, locationId)
+
+  const context = await getDashboardContext(event, { requireSite: true })
+  if (!context.organization || !context.site) {
+    throw createError({ statusCode: 404, message: 'Site not found or access denied' })
+  }
+  await assertLocationAccess(context.db, {
+    memberId: context.organization.memberId,
+    role: context.organization.role,
+    organizationId: context.organization.id,
+    siteId: context.site.id,
+    locationId,
+  })
+  const location = await queryFirst<LocationAccessRow>(context.db, `
+    SELECT id FROM business_locations
+    WHERE id = ? AND organization_id = ? AND site_id = ?
+    LIMIT 1
+  `, [locationId, context.organization.id, context.site.id])
+  if (!location) throw createError({ statusCode: 404, message: 'Location not found' })
+
+  return {
+    env: context.env,
+    db: context.db,
+    session: context.session,
+    site: {
+      ...context.site,
+      organization_slug: context.organization.slug,
+      member_id: context.organization.memberId,
+      member_role: context.organization.role,
+    } satisfies SiteAccessRow,
+    location,
+  }
 }
