@@ -1,5 +1,6 @@
 import type { ChowBotToolCall, JsonSerializable } from '~/server/utils/chowbot-agent'
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { assertSiteWideAccess, isOrganizationWideRole } from '~/server/utils/member-access'
 
 export type ChowBotChannel = 'dashboard' | 'whatsapp'
 export type ChowBotRole = 'user' | 'assistant' | 'system' | 'tool'
@@ -79,37 +80,70 @@ function titleFromText(text: string): string {
   return title || 'New ChowBot chat'
 }
 
+// ChowBot operates conversationally across a whole site (no location-scoped
+// permission model at this layer), so — like MCP's requireMcpSite — an editor
+// needs a SITE-WIDE (location_id IS NULL) member_access_scope row to use
+// ChowBot for a site at all. A location-only-scoped editor is rejected rather
+// than silently getting whole-site chat access.
 export async function getSiteForMember(
   db: DbClient,
   siteId: string,
   userId: string,
-  roles: string[] = ['owner', 'admin', 'editor']
 ): Promise<ChowBotSiteAccess | null> {
-  const placeholders = roles.map(() => '?').join(', ')
-  const result = await queryFirst<ChowBotSiteAccess>(db, `
-    SELECT s.id, s.organization_id, s.brand_name, s.default_currency, m.role
+  const result = await queryFirst<ChowBotSiteAccess & { member_id: string }>(db, `
+    SELECT s.id, s.organization_id, s.brand_name, s.default_currency, m.role, m.id AS member_id
     FROM sites s
     JOIN member m ON s.organization_id = m.organizationId
-    WHERE s.id = ? AND m.userId = ? AND m.role IN (${placeholders}) AND s.status = 'active'
+    WHERE s.id = ? AND m.userId = ? AND s.status = 'active'
     LIMIT 1
-  `, [siteId, userId, ...roles])
-  return result ?? null
+  `, [siteId, userId])
+  if (!result) return null
+  if (!isOrganizationWideRole(result.role)) {
+    try {
+      await assertSiteWideAccess(db, { memberId: result.member_id, role: result.role, organizationId: result.organization_id, siteId })
+    } catch {
+      return null
+    }
+  }
+  return result
 }
 
 export async function listSitesForMember(
   db: DbClient,
   userId: string,
-  roles: string[] = ['owner', 'admin', 'editor']
 ): Promise<ChowBotSiteAccess[]> {
-  const placeholders = roles.map(() => '?').join(', ')
-  const results = await queryAll<ChowBotSiteAccess>(db, `
-    SELECT s.id, s.organization_id, s.brand_name, s.default_currency, m.role
+  const results = await queryAll<ChowBotSiteAccess & { member_id: string }>(db, `
+    SELECT s.id, s.organization_id, s.brand_name, s.default_currency, m.role, m.id AS member_id
     FROM sites s
     JOIN member m ON s.organization_id = m.organizationId
-    WHERE m.userId = ? AND m.role IN (${placeholders}) AND s.status = 'active'
+    WHERE m.userId = ? AND s.status = 'active'
     ORDER BY s.updated_at DESC
-  `, [userId, ...roles])
-  return results ?? []
+  `, [userId])
+  const hasScopedMembership = (results ?? []).some(row => !isOrganizationWideRole(row.role))
+  const siteWideScopes = hasScopedMembership
+    ? await queryAll<{ member_id: string; site_id: string }>(db, `
+        SELECT mas.member_id, mas.site_id
+        FROM member_access_scope mas
+        JOIN member m
+          ON m.id = mas.member_id
+          AND m.organizationId = mas.organization_id
+        WHERE mas.location_id IS NULL
+          AND m.userId = ?
+      `, [userId])
+    : []
+  const siteWideScopeKeys = new Set(siteWideScopes.map(scope => `${scope.member_id}:${scope.site_id}`))
+
+  const accessible: ChowBotSiteAccess[] = []
+  for (const row of results ?? []) {
+    if (isOrganizationWideRole(row.role)) {
+      accessible.push(row)
+      continue
+    }
+    if (row.role === 'editor' && siteWideScopeKeys.has(`${row.member_id}:${row.id}`)) {
+      accessible.push(row)
+    }
+  }
+  return accessible
 }
 
 export async function listConversations(

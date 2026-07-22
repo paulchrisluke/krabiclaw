@@ -2,9 +2,10 @@
 // Video/file upload via multipart form. File is streamed to R2 via the MEDIA_BUCKET binding.
 // Max: 50 MB. Client receives an active media_asset immediately.
 import { queryFirst } from '~/server/db'
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
+import { assertResourceAccess } from '~/server/utils/member-access'
 import { sniffMediaMimeType, VIDEO_MIME_TYPES, POSTER_IMAGE_MIME_TYPES, MAX_VIDEO_BYTES, MAX_POSTER_BYTES } from '~/server/utils/media-mime'
 
 const R2_IMAGE_MIME_TYPES = new Set(['image/avif'])
@@ -47,12 +48,11 @@ export default defineEventHandler(async (event) => {
     )
     if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
-    const membership = await queryFirst(db, `
-      SELECT m.userId
+    const membership = await queryFirst<{ userId: string; member_id: string; member_role: string }>(db, `
+      SELECT m.userId, m.id AS member_id, m.role AS member_role
       FROM member m
       WHERE m.organizationId = ?
         AND m.userId = ?
-        AND m.role IN ('owner', 'admin', 'editor')
       LIMIT 1
     `, [site.organization_id, session.user.id])
     if (!membership) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
@@ -108,6 +108,14 @@ export default defineEventHandler(async (event) => {
         locationId = candidate
       }
     }
+
+    await assertResourceAccess(db, {
+      memberId: membership.member_id,
+      role: membership.member_role,
+      organizationId: site.organization_id,
+      siteId,
+      resourceLocationId: locationId,
+    })
 
     const categoryPart = formData.find(p => p.name === 'category')
     let category: MediaCategory | null = null
@@ -174,6 +182,7 @@ export default defineEventHandler(async (event) => {
       posterWarning: uploaded.posterWarning,
     })
   } catch (error) {
+    rethrowHttpError(error)
     const normalizedError = error instanceof Error ? error : new Error('Unknown media upload error')
     console.error('media_upload_failed', { error: normalizedError.message, stack: normalizedError.stack })
     return jsonResponse({

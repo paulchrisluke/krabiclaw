@@ -255,6 +255,37 @@
             />
           </UForm>
 
+          <div v-if="inviteForm.role === 'editor'" class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end">
+            <UFormField label="Site" description="Which site can this editor access?" class="flex-1">
+              <USelect
+                v-model="inviteForm.siteId"
+                :items="siteOptions"
+                :loading="sitesPending"
+                placeholder="Select a site"
+                class="w-full"
+              />
+            </UFormField>
+            <UFormField label="Location" description="Leave unset for the whole site (site manager)." class="flex-1">
+              <USelect
+                v-model="inviteForm.locationId"
+                :items="locationOptions"
+                :loading="locationsPending"
+                :disabled="!inviteForm.siteId"
+                placeholder="Whole site"
+                class="w-full"
+              />
+            </UFormField>
+          </div>
+
+          <UAlert
+            v-if="inviteForm.role === 'editor' && !inviteForm.siteId"
+            class="mt-4"
+            color="warning"
+            variant="soft"
+            icon="i-lucide-triangle-alert"
+            description="Editors are always scoped to a site — pick one above before sending."
+          />
+
           <UAlert
             v-if="inviteError"
             class="mt-4"
@@ -354,13 +385,89 @@ const invitations = computed(() => data.value?.invitations ?? [])
 const roleOptions = [
   { label: 'Member', value: 'member' },
   { label: 'Admin', value: 'admin' },
+  { label: 'Editor', value: 'editor' },
 ]
 
-const inviteForm = reactive({ email: '', role: 'member' })
+const inviteForm = reactive({ email: '', role: 'member', siteId: '', locationId: '' })
 const inviting = ref(false)
 const inviteError = ref<string | null>(null)
 const inviteSuccess = ref(false)
 const inviteSuccessTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
+
+// Editor invites are always scoped to a site (and optionally a single
+// location) — #341 Workstream A: editor is always constrained through
+// member_access_scope, so the invite form must collect that scope up front
+// rather than leaving a new editor with no access to anything.
+interface OrgSiteSummary { id: string; brand_name: string | null; subdomain: string | null }
+interface OrgLocationSummary { id: string; title: string }
+
+const sitesPending = ref(false)
+const orgSites = ref<OrgSiteSummary[]>([])
+let sitesRequestId = 0
+const siteOptions = computed(() => orgSites.value.map(site => ({
+  label: site.brand_name || site.subdomain || site.id,
+  value: site.id,
+})))
+
+const locationsPending = ref(false)
+const orgLocations = ref<OrgLocationSummary[]>([])
+let locationsRequestId = 0
+const locationOptions = computed(() => orgLocations.value.map(location => ({
+  label: location.title,
+  value: location.id,
+})))
+
+async function loadOrgSites() {
+  if (orgSites.value.length || sitesPending.value) return
+  const requestId = ++sitesRequestId
+  sitesPending.value = true
+  try {
+    const response = await $fetch<{ sites: OrgSiteSummary[] }>('/api/dashboard/context')
+    if (requestId !== sitesRequestId) return
+    orgSites.value = response.sites ?? []
+  } catch (err) {
+    if (requestId !== sitesRequestId) return
+    orgSites.value = []
+    inviteError.value = err instanceof Error ? err.message : 'Failed to load sites for this organization.'
+  } finally {
+    if (requestId === sitesRequestId) sitesPending.value = false
+  }
+}
+
+watch(() => inviteForm.role, (role) => {
+  if (role === 'editor') loadOrgSites()
+})
+
+watch(() => inviteForm.siteId, async (siteId) => {
+  const requestId = ++locationsRequestId
+  inviteForm.locationId = ''
+  orgLocations.value = []
+  if (!siteId) return
+  locationsPending.value = true
+  try {
+    const response = await $fetch<{ success: boolean; locations: OrgLocationSummary[] }>(`/api/sites/${siteId}/locations`)
+    if (requestId !== locationsRequestId || inviteForm.siteId !== siteId) return
+    orgLocations.value = response.locations ?? []
+  } catch (err) {
+    if (requestId !== locationsRequestId || inviteForm.siteId !== siteId) return
+    orgLocations.value = []
+    inviteError.value = err instanceof Error ? err.message : 'Failed to load locations for this site.'
+  } finally {
+    if (requestId === locationsRequestId) locationsPending.value = false
+  }
+})
+
+watch(() => route.params.orgSlug, () => {
+  sitesRequestId += 1
+  locationsRequestId += 1
+  inviteForm.siteId = ''
+  inviteForm.locationId = ''
+  orgSites.value = []
+  orgLocations.value = []
+  sitesPending.value = false
+  locationsPending.value = false
+  if (inviteForm.role === 'editor') loadOrgSites()
+})
 
 const removingMemberId = ref<string | null>(null)
 const cancellingInviteId = ref<string | null>(null)
@@ -461,14 +568,18 @@ async function sendInvite() {
     inviteError.value = 'No active organization selected. Reload the page and try again.'
     return
   }
+  if (inviteForm.role === 'editor' && !inviteForm.siteId) {
+    inviteError.value = 'Pick a site for this editor before sending.'
+    return
+  }
   inviting.value = true
   inviteError.value = null
   inviteSuccess.value = false
 
   try {
-    const { error } = await authClient.organization.inviteMember({
+    const { data, error } = await authClient.organization.inviteMember({
       email: inviteForm.email,
-      role: inviteForm.role as 'member' | 'admin',
+      role: inviteForm.role as 'member' | 'admin' | 'editor',
       organizationId: activeOrgId.value,
     })
 
@@ -477,8 +588,31 @@ async function sendInvite() {
       return
     }
 
+    if (inviteForm.role === 'editor') {
+      if (!data?.id) {
+        inviteError.value = 'The invitation was created without an id, so its access scope could not be attached.'
+        return
+      }
+      try {
+        await $fetch(`/api/dashboard/invitations/${data.id}/scope`, {
+          method: 'POST',
+          body: { siteId: inviteForm.siteId, locationId: inviteForm.locationId || null },
+        })
+      } catch (scopeErr) {
+        const { error: cancelError } = await authClient.organization.cancelInvitation({ invitationId: data.id })
+        const scopeErrData = scopeErr && typeof scopeErr === 'object' && 'data' in scopeErr ? (scopeErr as Record<string, { error?: string }>).data : null
+        const scopeMessage = scopeErrData?.error ?? (scopeErr instanceof Error ? scopeErr.message : 'The site/location scope could not be attached.')
+        inviteError.value = cancelError
+          ? `${scopeMessage} The unscoped invitation also could not be cancelled; cancel it from Pending invitations before retrying.`
+          : `${scopeMessage} The invitation was cancelled; please retry.`
+        return
+      }
+    }
+
     inviteForm.email = ''
     inviteForm.role = 'member'
+    inviteForm.siteId = ''
+    inviteForm.locationId = ''
     inviteSuccess.value = true
     if (inviteSuccessTimeout.value !== null) {
       clearTimeout(inviteSuccessTimeout.value)

@@ -17,7 +17,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createAuth } from '~/server/utils/auth'
 import { queryFirst } from '~/server/db'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { isOrganizationWideRole, LOCATION_MANAGER_ROLE } from '~/server/utils/member-access'
+import { isOrganizationWideRole, isScopedRole } from '~/server/utils/member-access'
 import { clearOrReassignAssignments, findAssignmentsForMemberPhone, type PhoneAssignment } from '~/server/utils/whatsapp-revocation'
 
 interface RemoveMemberApi {
@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const { db, organization } = await getDashboardContext(event, { requireSite: false })
 
-  // Never allow a location_manager (or any non-org-wide role) to remove
+  // Never allow a scoped editor (or any non-org-wide role) to remove
   // members — matches the existing WhatsApp-invitation management routes.
   if (!isOrganizationWideRole(organization.role)) {
     return jsonResponse({ error: 'Only owners and admins can remove members' }, { status: 403 })
@@ -50,7 +50,7 @@ export default defineEventHandler(async (event) => {
   const confirmedClear = body?.action === 'clear' && body?.confirmed === true
 
   let clearedAssignments: PhoneAssignment[] = []
-  if (member.role === LOCATION_MANAGER_ROLE) {
+  if (isScopedRole(member.role)) {
     const assignments = await findAssignmentsForMemberPhone(db, memberId)
     if (assignments.length > 0 && !confirmedClear) {
       // Block raw removal with actionable guidance rather than silently

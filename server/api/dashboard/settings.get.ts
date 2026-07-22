@@ -5,6 +5,7 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getConfig } from '~/server/utils/site-config'
 import { queryFirst } from '~/server/db'
 import { createError } from 'h3'
+import { assertSiteWideAccess } from '~/server/utils/member-access'
 
 export default defineEventHandler(async (event) => {
   const { db, organization, site: dashboardSite } = await getDashboardContext(event, { requireSite: false })
@@ -15,6 +16,12 @@ export default defineEventHandler(async (event) => {
   if (!dashboardSite) {
     return jsonResponse({ success: true, settings: null })
   }
+  await assertSiteWideAccess(db, {
+    memberId: organization.memberId,
+    role: organization.role,
+    organizationId: organization.id,
+    siteId: dashboardSite.id,
+  })
 
   const site = await queryFirst<Record<string, unknown>>(db, `
     SELECT s.id, s.organization_id, s.subdomain, s.theme, s.status,

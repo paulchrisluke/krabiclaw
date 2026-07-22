@@ -1,8 +1,8 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { getAuthSession } from '~/server/utils/auth'
 import { queryFirst } from '~/server/db'
 import { normalizeVertical } from '~/utils/vertical-copy'
+import { requireSiteAccess } from '~/server/utils/location-access'
 
 const EMPTY_CHECKLIST = {
   success: true,
@@ -31,19 +31,7 @@ export default defineEventHandler(async (event) => {
 
   if (querySiteId) {
     // Verify the user has access to this site before using it
-    const session = await getAuthSession(event, env)
-    if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
-    const site = await queryFirst<{ id: string; brand_name: string | null }>(db, `
-      SELECT s.id, s.brand_name
-      FROM sites s
-      JOIN organization o ON s.organization_id = o.id
-      JOIN member m ON o.id = m.organizationId
-      WHERE s.id = ? AND m.userId = ?
-      LIMIT 1
-    `, [querySiteId, session.user.id])
-
-    if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+    const { site } = await requireSiteAccess(event, querySiteId, 'site-wide')
     siteId = site.id
     brandName = site.brand_name
   } else {

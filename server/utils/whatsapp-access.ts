@@ -1,5 +1,5 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { isOperationalRole, isOrganizationWideRole, LOCATION_MANAGER_ROLE } from '~/server/utils/member-access'
+import { isOperationalRole, isOrganizationWideRole } from '~/server/utils/member-access'
 import { sendWhatsAppNotification } from '~/server/utils/whatsapp'
 import { isPhoneInvitationEmail, phoneDigitsFromInvitationEmail, phoneTemporaryEmail } from '~/server/utils/phone-invitations'
 import { parsePhoneOrThrow } from '~/utils/phone'
@@ -60,8 +60,9 @@ export async function ensureWhatsAppRecipientAccess(db: DbClient, target: WhatsA
     }
     if (!isOrganizationWideRole(existing.role)) {
       await execute(db, `
-        INSERT OR IGNORE INTO member_access_scope (id, member_id, organization_id, site_id, location_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT OR IGNORE INTO member_access_scope
+          (id, member_id, organization_id, site_id, location_id, grant_source, created_at)
+        VALUES (?, ?, ?, ?, ?, 'whatsapp_config', ?)
       `, [crypto.randomUUID(), existing.memberId, target.organizationId, target.siteId, target.locationId, new Date().toISOString()])
     }
     return { status: 'active', normalizedPhone, memberId: existing.memberId }
@@ -82,7 +83,7 @@ export async function ensureWhatsAppRecipientAccess(db: DbClient, target: WhatsA
     WHERE organizationId = ? AND lower(email) = lower(?) AND status = 'pending'
     ORDER BY createdAt DESC LIMIT 1
   `, [target.organizationId, email])
-  if (invitation && invitation.role !== LOCATION_MANAGER_ROLE) {
+  if (invitation && invitation.role !== 'editor') {
     throw new Error(`Pending invitation role ${invitation.role || 'unset'} is not compatible with operational access`)
   }
   let shouldDeliverInvitation = false
@@ -92,14 +93,14 @@ export async function ensureWhatsAppRecipientAccess(db: DbClient, target: WhatsA
     await execute(db, `
       INSERT OR IGNORE INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt)
       VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)
-    `, [invitationId, target.organizationId, email, LOCATION_MANAGER_ROLE, expiresAt, inviter.id, Math.floor(Date.now() / 1000)])
+    `, [invitationId, target.organizationId, email, 'editor', expiresAt, inviter.id, Math.floor(Date.now() / 1000)])
     invitation = await queryFirst<{ id: string; expiresAt: number; role: string | null }>(db, `
       SELECT id, expiresAt, role FROM invitation
       WHERE organizationId = ? AND lower(email) = lower(?) AND status = 'pending'
       ORDER BY createdAt DESC LIMIT 1
     `, [target.organizationId, email])
     if (!invitation) throw new Error('Failed to create or reuse WhatsApp access invitation')
-    if (invitation.role !== LOCATION_MANAGER_ROLE) {
+    if (invitation.role !== 'editor') {
       throw new Error(`Pending invitation role ${invitation.role || 'unset'} is not compatible with operational access`)
     }
     shouldDeliverInvitation = invitation.id === invitationId
@@ -109,8 +110,9 @@ export async function ensureWhatsAppRecipientAccess(db: DbClient, target: WhatsA
     shouldDeliverInvitation = true
   }
   await execute(db, `
-    INSERT OR IGNORE INTO invitation_access_scope (id, invitation_id, organization_id, site_id, location_id, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO invitation_access_scope
+      (id, invitation_id, organization_id, site_id, location_id, grant_source, created_at)
+    VALUES (?, ?, ?, ?, ?, 'whatsapp_config', ?)
   `, [crypto.randomUUID(), invitation.id, target.organizationId, target.siteId, target.locationId, new Date().toISOString()])
 
   return { status: 'invitation_pending', normalizedPhone, invitationId: invitation.id, shouldDeliverInvitation }
@@ -131,7 +133,7 @@ export interface PendingPhoneInvitation {
  * Loads a pending WhatsApp/phone-activated manager invitation scoped to an
  * organization, for the retry/replace/clear dashboard actions (issue #293
  * Section A.4). Returns null if the invitation doesn't exist, doesn't belong
- * to this org, isn't pending, isn't a `location_manager` role, or isn't a
+ * to this org, isn't pending, isn't an `editor` role, or isn't a
  * phone-shaped invite — callers should treat any of those as "not found" for
  * these WhatsApp-specific actions rather than distinguishing further.
  */
@@ -151,7 +153,7 @@ export async function loadPendingPhoneInvitation(db: DbClient, organizationId: s
   `, [invitationId, organizationId])
   if (!invitation) return null
   if (invitation.status !== 'pending') return null
-  if (invitation.role !== LOCATION_MANAGER_ROLE) return null
+  if (invitation.role !== 'editor') return null
   if (!isPhoneInvitationEmail(invitation.email)) return null
 
   const digits = phoneDigitsFromInvitationEmail(invitation.email)

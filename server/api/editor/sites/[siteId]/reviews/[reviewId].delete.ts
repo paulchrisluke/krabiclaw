@@ -1,12 +1,14 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
+import { assertOrganizationAccess } from '~/server/utils/member-access'
 import { deleteOwnerEnteredSiteReview } from '~/server/utils/site-reviews'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const reviewId = getRouterParam(event, 'reviewId')
   if (!siteId || !reviewId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
-  const { db, site } = await requireSiteAccess(event, siteId, ['owner', 'admin'])
+  const { db, site } = await requireSiteAccess(event, siteId, 'context')
+  assertOrganizationAccess(site.member_role)
   try {
     return jsonResponse(await deleteOwnerEnteredSiteReview(db, {
       organizationId: site.organization_id,

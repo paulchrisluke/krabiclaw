@@ -5,6 +5,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
 import { callAiGateway } from '~/server/utils/ai-gateway'
+import { assertSiteWideAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
 
 const ENHANCE_MODEL = 'claude-haiku-4-5-20251001'
@@ -29,12 +30,14 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await queryFirst<{ organization_id: string }>(db, `
-    SELECT s.organization_id FROM sites s
+  const site = await queryFirst<{ organization_id: string; member_id: string; member_role: string }>(db, `
+    SELECT s.organization_id, m.id AS member_id, m.role AS member_role FROM sites s
     JOIN member m ON s.organization_id = m.organizationId
-    WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin','editor') LIMIT 1
+    WHERE s.id = ? AND m.userId = ? LIMIT 1
   `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+
+  await assertSiteWideAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
 
   const isDev = import.meta.dev
 

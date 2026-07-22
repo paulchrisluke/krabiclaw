@@ -364,7 +364,14 @@ if (bootstrapData) {
     issues.push('No image URLs in bootstrap response')
   } else {
     for (const url of uniqueImageUrls.slice(0, 3)) {
-      const r = await get(url, { method: 'HEAD' })
+      let r = await get(url, { method: 'HEAD' })
+      // A status of 0 is a transport failure (for example an intermittent
+      // IPv6/Cloudflare connection timeout), not evidence that the asset is
+      // missing. Retry transport failures while preserving immediate failure
+      // for a real HTTP 4xx/5xx response.
+      for (let attempt = 1; !r.ok && r.status === 0 && attempt < 3; attempt++) {
+        r = await get(url, { method: 'HEAD' })
+      }
       assert(`Image resolves: ${url.slice(0, 60)}`, r.ok, true)
     }
   }

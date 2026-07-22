@@ -1210,20 +1210,11 @@ ${channelJobRows};
 
 export function renderCompiledPotteryHouseBlogBlock(): string {
   const publishedAt = '2026-07-08T00:00:00.000Z'
-
-  return `-- BEGIN GENERATED: pottery_blog
--- Tenant blog coverage for Pottery House Krabi parity checks.
-INSERT OR IGNORE INTO blog_posts
-  (id, organization_id, site_id, title, slug, body, excerpt, category, status,
-   author_id, featured_image_asset_id, published_at, created_at, updated_at,
-   seo_description, seo_keywords, canonical_url, robots, hide_from_nav)
-VALUES (
-  ${sqlValue('blog-pottery-group-bookings')},
-  ${sqlValue('org-pottery-house')},
-  ${sqlValue('site-pottery-house')},
-  ${sqlValue('Group Bookings Create a Unique Pottery Experience in Krabi')},
-  ${sqlValue('group-bookings-create-a-unique-pottery-experience-in-krabi')},
-  ${sqlValue(`# Group Bookings Create a Unique Pottery Experience in Krabi
+  const postId = 'blog-pottery-group-bookings'
+  const documentId = 'content-document-pottery-group-bookings'
+  const revisionId = 'content-revision-pottery-group-bookings'
+  const blockId = 'content-block-pottery-group-bookings'
+  const body = `# Group Bookings Create a Unique Pottery Experience in Krabi
 
 Private pottery sessions work especially well for retreat organisers, schools, family celebrations, and company offsites looking for something genuinely local.
 
@@ -1233,7 +1224,23 @@ We can shape sessions around wheel throwing, handbuilding, glazing, or a slower 
 
 ## Ideal for teams and retreat hosts
 
-Our team can help organise group timing, capacity, and the right workshop format for your guests.`)},
+Our team can help organise group timing, capacity, and the right workshop format for your guests.`
+  const blockData = { markdown: body, editor_mode: 'source' }
+  const snapshot = { blocks: [{ id: blockId, parent_block_id: null, type: 'markdown', position: 0, level: null, data: blockData, updated_at: publishedAt }] }
+
+  return `-- BEGIN GENERATED: pottery_blog
+-- Tenant blog coverage for Pottery House Krabi parity checks.
+INSERT OR IGNORE INTO blog_posts
+  (id, organization_id, site_id, title, slug, body, excerpt, category, status,
+   author_id, featured_image_asset_id, published_at, created_at, updated_at,
+   seo_description, seo_keywords, canonical_url, robots, hide_from_nav)
+VALUES (
+  ${sqlValue(postId)},
+  ${sqlValue('org-pottery-house')},
+  ${sqlValue('site-pottery-house')},
+  ${sqlValue('Group Bookings Create a Unique Pottery Experience in Krabi')},
+  ${sqlValue('group-bookings-create-a-unique-pottery-experience-in-krabi')},
+  ${sqlValue(body)},
   ${sqlValue('A practical guide to private pottery sessions in Krabi for retreats, schools, and team events.')},
   ${sqlValue('Group bookings')},
   'published',
@@ -1248,6 +1255,18 @@ Our team can help organise group timing, capacity, and the right workshop format
   ${sqlValue('index,follow')},
   0
 );
+
+INSERT OR REPLACE INTO content_documents
+  (id, owner_type, owner_id, draft_revision_id, published_revision_id, created_at, updated_at)
+VALUES (${sqlValue(documentId)}, 'tenant_blog', ${sqlValue(postId)}, ${sqlValue(revisionId)}, ${sqlValue(revisionId)}, ${sqlValue(publishedAt)}, ${sqlValue(publishedAt)});
+
+INSERT OR REPLACE INTO content_revisions
+  (id, document_id, snapshot_json, body_markdown, created_by, label, created_at)
+VALUES (${sqlValue(revisionId)}, ${sqlValue(documentId)}, ${sqlJson(snapshot)}, ${sqlValue(body)}, 'user-pottery-house', 'Seed import', ${sqlValue(publishedAt)});
+
+INSERT OR REPLACE INTO content_blocks
+  (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
+VALUES (${sqlValue(blockId)}, ${sqlValue(documentId)}, NULL, 'markdown', 0, NULL, ${sqlJson(blockData)}, ${sqlValue(publishedAt)}, ${sqlValue(publishedAt)});
 -- END GENERATED: pottery_blog`
 }
 

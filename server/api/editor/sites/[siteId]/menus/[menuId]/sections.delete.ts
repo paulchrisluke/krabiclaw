@@ -1,15 +1,19 @@
 import { queryFirst } from '~/server/db'
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { deleteMenuSection, MenuNotFoundError } from '~/server/utils/menu-management'
+import { assertResourceAccess } from '~/server/utils/member-access'
 
 interface SiteRow {
   id: string
   organization_id: string
+  member_id: string
+  member_role: string
 }
 
 interface MenuRow {
   id: string
+  location_id: string | null
 }
 
 export default defineEventHandler(async (event) => {
@@ -40,10 +44,10 @@ export default defineEventHandler(async (event) => {
 
   try {
     const site = await queryFirst<SiteRow>(db, `
-      SELECT s.id, s.organization_id
+      SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role
       FROM sites s
       JOIN member om ON s.organization_id = om.organizationId
-      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
+      WHERE s.id = ? AND om.userId = ?
       LIMIT 1
     `, [siteId, session.user.id])
 
@@ -52,7 +56,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const menu = await queryFirst<MenuRow>(db, `
-      SELECT id
+      SELECT id, location_id
       FROM menus
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1
@@ -61,6 +65,14 @@ export default defineEventHandler(async (event) => {
     if (!menu) {
       return jsonResponse({ error: 'Menu not found' }, { status: 404 })
     }
+
+    await assertResourceAccess(db, {
+      memberId: site.member_id,
+      role: site.member_role,
+      organizationId: site.organization_id,
+      siteId,
+      resourceLocationId: menu.location_id,
+    })
 
     const deleted = await deleteMenuSection(db, site.organization_id, siteId, menuId, section)
 
@@ -74,6 +86,7 @@ export default defineEventHandler(async (event) => {
       deleted
     })
   } catch (error) {
+    rethrowHttpError(error)
     if (error instanceof MenuNotFoundError) {
       return jsonResponse({ error: 'Menu not found' }, { status: 404 })
     }

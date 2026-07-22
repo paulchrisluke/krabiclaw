@@ -2,7 +2,8 @@
 import { cloudflareEnv, jsonResponse } from "../../../../../utils/api-response";
 import { getAuthSession } from "~/server/utils/auth";
 import { updatePageContent } from "~/server/utils/mcp-workflows";
-import { queryFirst } from "~/server/db";
+import { assertResourceAccess } from "~/server/utils/member-access";
+import { loadMemberSiteRow } from "~/server/utils/location-access";
 
 interface SaveRequest {
   page: string;
@@ -75,23 +76,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const site = await queryFirst<{
-      id: string;
-      organization_id: string;
-      status: string;
-      onboarding_status: string | null;
-    }>(
-      db,
-      `
-      SELECT s.id, s.organization_id, s.status, s.onboarding_status
-      FROM sites s
-      JOIN organization o ON s.organization_id = o.id
-      JOIN member om ON o.id = om.organizationId
-      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
-      LIMIT 1
-    `,
-      [siteId, session.user.id],
-    );
+    const site = await loadMemberSiteRow(db, siteId, session.user.id);
 
     if (!site) {
       return jsonResponse(
@@ -103,6 +88,14 @@ export default defineEventHandler(async (event) => {
     }
 
     const locationId = (getQuery(event).locationId as string) || undefined;
+
+    await assertResourceAccess(db, {
+      memberId: site.member_id,
+      role: site.member_role,
+      organizationId: site.organization_id,
+      siteId,
+      resourceLocationId: locationId ?? null,
+    });
 
     const result = await updatePageContent(db, site.organization_id, siteId, {
       page,

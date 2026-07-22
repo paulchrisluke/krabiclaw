@@ -1,8 +1,10 @@
 // POST create menu item
 import { queryFirst } from '~/server/db'
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { createMenuItem } from '~/server/utils/menu-management'
+import { assertResourceAccess } from '~/server/utils/member-access'
+import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { normalizePriceAmount } from '~/shared/money'
 import type { CreateMenuItemRequest } from '~/server/types/menu'
 
@@ -38,15 +40,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    // Verify user belongs to organization that owns the site
-    const site = await queryFirst<{ id: string; organization_id: string }>(db, `
-      SELECT s.id, s.organization_id, s.status, s.onboarding_status
-      FROM sites s
-      JOIN organization o ON s.organization_id = o.id
-      JOIN member om ON o.id = om.organizationId
-      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
-      LIMIT 1
-    `, [siteId, session.user.id])
+    const site = await loadMemberSiteRow(db, siteId, session.user.id)
 
     if (!site) {
       return jsonResponse({
@@ -55,8 +49,8 @@ export default defineEventHandler(async (event) => {
     }
 
     // Check if menu exists and belongs to this site
-    const existingMenu = await queryFirst(db, `
-      SELECT id FROM menus
+    const existingMenu = await queryFirst<{ id: string; location_id: string | null }>(db, `
+      SELECT id, location_id FROM menus
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1
     `, [menuId, site.organization_id, siteId])
@@ -66,6 +60,14 @@ export default defineEventHandler(async (event) => {
         error: 'Menu not found'
       }, { status: 404 })
     }
+
+    await assertResourceAccess(db, {
+      memberId: site.member_id,
+      role: site.member_role,
+      organizationId: site.organization_id,
+      siteId,
+      resourceLocationId: existingMenu.location_id,
+    })
 
     if (body.image_asset_id !== undefined && body.image_asset_id !== null && body.image_asset_id !== '') {
       const asset = await queryFirst(db, `
@@ -98,9 +100,10 @@ export default defineEventHandler(async (event) => {
     }, { status: 201 })
     
   } catch (error) {
+    rethrowHttpError(error)
     console.error('Failed to create menu item:', error)
-    return jsonResponse({ 
-      error: 'Failed to create menu item' 
+    return jsonResponse({
+      error: 'Failed to create menu item'
     }, { status: 500 })
   }
 })

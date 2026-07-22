@@ -1,7 +1,9 @@
 // GET /api/sites/[siteId]/setup-progress
 // Returns the ordered 10-step setup journey for the site overview card.
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { assertSiteWideAccess } from '~/server/utils/member-access'
+import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { queryFirst } from '~/server/db'
 
 export interface SetupStep {
@@ -43,7 +45,18 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    // Verify membership and fetch site basics
+    const siteAccess = await loadMemberSiteRow(db, siteId, session.user.id)
+    if (!siteAccess) {
+      return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+    }
+
+    await assertSiteWideAccess(db, {
+      memberId: siteAccess.member_id,
+      role: siteAccess.member_role,
+      organizationId: siteAccess.organization_id,
+      siteId,
+    })
+
     const site = await queryFirst<{
       id: string
       organization_id: string
@@ -60,10 +73,9 @@ export default defineEventHandler(async (event) => {
              s.logo_url, s.contact_email, s.subdomain, s.public_url,
              s.status, s.last_published_at
       FROM sites s
-      JOIN member om ON s.organization_id = om.organizationId
-      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
+      WHERE s.id = ? AND s.organization_id = ?
       LIMIT 1
-    `, [siteId, session.user.id])
+    `, [siteId, siteAccess.organization_id])
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
@@ -225,6 +237,7 @@ export default defineEventHandler(async (event) => {
 
     return jsonResponse({ success: true, progress })
   } catch (error) {
+    rethrowHttpError(error)
     console.error('Failed to get setup progress:', error)
     return jsonResponse({ error: 'Failed to get setup progress' }, { status: 500 })
   }

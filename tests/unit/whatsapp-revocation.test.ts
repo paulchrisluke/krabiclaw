@@ -84,13 +84,13 @@ async function execute(db: Store, query: string, params: unknown[] = []) {
   if (query.includes('DELETE FROM member_access_scope') && query.includes('location_id IS NULL')) {
     const [memberId, organizationId, siteId] = params
     const before = db.scopes.length
-    db.scopes = db.scopes.filter((s) => !(s.member_id === memberId && s.organization_id === organizationId && s.site_id === siteId && s.location_id == null))
+    db.scopes = db.scopes.filter((s) => !(s.member_id === memberId && s.organization_id === organizationId && s.site_id === siteId && s.location_id == null && s.grant_source === 'whatsapp_config'))
     return { meta: { changes: before - db.scopes.length } }
   }
   if (query.includes('DELETE FROM member_access_scope')) {
     const [memberId, organizationId, siteId, locationId] = params
     const before = db.scopes.length
-    db.scopes = db.scopes.filter((s) => !(s.member_id === memberId && s.organization_id === organizationId && s.site_id === siteId && s.location_id === locationId))
+    db.scopes = db.scopes.filter((s) => !(s.member_id === memberId && s.organization_id === organizationId && s.site_id === siteId && s.location_id === locationId && s.grant_source === 'whatsapp_config'))
     return { meta: { changes: before - db.scopes.length } }
   }
   if (query.includes('DELETE FROM member WHERE id')) {
@@ -146,13 +146,13 @@ const {
   removeOrgMembershipIfNoScopesRemain,
 } = await import('../../server/utils/whatsapp-revocation.ts')
 
-const LOCATION_MANAGER_ROLE = 'location_manager'
+const SCOPED_EDITOR_ROLE = 'editor'
 
 function seedManager(db: Store, overrides: { memberId?: string; userId?: string; phone?: string; role?: string } = {}) {
   const memberId = overrides.memberId ?? 'member-1'
   const userId = overrides.userId ?? 'user-1'
   const phone = overrides.phone ?? '+66812345678'
-  db.members.push({ id: memberId, organizationId: 'org-1', userId, role: overrides.role ?? LOCATION_MANAGER_ROLE })
+  db.members.push({ id: memberId, organizationId: 'org-1', userId, role: overrides.role ?? SCOPED_EDITOR_ROLE })
   db.users.push({ id: userId, phoneNumber: phone, phoneNumberVerified: 1 })
   return { memberId, userId, phone }
 }
@@ -161,7 +161,7 @@ test('recalculateScopesForPhoneChange removes only the scope row for the exact s
   const db = createStore()
   const { memberId, phone } = seedManager(db)
   db.scopes.push(
-    { id: 'scope-a', member_id: memberId, organization_id: 'org-1', site_id: 'site-1', location_id: 'loc-1' },
+    { id: 'scope-a', member_id: memberId, organization_id: 'org-1', site_id: 'site-1', location_id: 'loc-1', grant_source: 'whatsapp_config' },
     { id: 'scope-b', member_id: memberId, organization_id: 'org-1', site_id: 'site-2', location_id: null },
   )
 
@@ -200,7 +200,7 @@ test('recalculateScopesForPhoneChange is idempotent when the phone did not chang
   assert.equal(db.scopes.length, 1)
 })
 
-test('recalculateScopesForPhoneChange never touches owner/admin/editor scopes', async () => {
+test('recalculateScopesForPhoneChange never touches organization-wide roles', async () => {
   const db = createStore()
   const { phone } = seedManager(db, { role: 'admin' })
   db.scopes.push({ id: 'scope-a', member_id: 'member-1', organization_id: 'org-1', site_id: 'site-1', location_id: 'loc-1' })
@@ -213,7 +213,28 @@ test('recalculateScopesForPhoneChange never touches owner/admin/editor scopes', 
   assert.equal(db.scopes.length, 1)
 })
 
-test('removeOrgMembershipIfNoScopesRemain removes a scope-less location_manager directly when no actor headers are available', async () => {
+test('recalculateScopesForPhoneChange preserves a manually granted editor scope', async () => {
+  const db = createStore()
+  const { memberId, phone } = seedManager(db)
+  db.scopes.push({
+    id: 'scope-manual',
+    member_id: memberId,
+    organization_id: 'org-1',
+    site_id: 'site-1',
+    location_id: 'loc-1',
+    grant_source: 'manual',
+  })
+
+  const result = await recalculateScopesForPhoneChange(db as never, null, {
+    organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-1', scopeType: 'location', previousPhone: phone, newPhone: null,
+  })
+
+  assert.deepEqual(result, { scopeRemoved: false, memberRemoved: false })
+  assert.deepEqual(db.scopes.map(scope => scope.id), ['scope-manual'])
+  assert.equal(db.members.length, 1)
+})
+
+test('removeOrgMembershipIfNoScopesRemain removes a scope-less editor directly when no actor headers are available', async () => {
   const db = createStore()
   const { memberId } = seedManager(db)
 
@@ -234,14 +255,21 @@ test('removeOrgMembershipIfNoScopesRemain leaves a member with remaining scopes 
   assert.equal(db.members.length, 1)
 })
 
-test('removeOrgMembershipIfNoScopesRemain never removes owner/admin/editor', async () => {
+test('removeOrgMembershipIfNoScopesRemain never removes owner/admin, but does remove a scope-less editor', async () => {
   const db = createStore()
-  for (const role of ['owner', 'admin', 'editor']) {
+  for (const role of ['owner', 'admin']) {
     const { memberId } = seedManager(db, { memberId: `member-${role}`, userId: `user-${role}`, phone: `+6681000000${role.length}`, role })
     const result = await removeOrgMembershipIfNoScopesRemain(db as never, null, memberId)
     assert.equal(result.removed, false, `${role} must not be auto-removed`)
   }
-  assert.equal(db.members.length, 3)
+  // An editor is always constrained through member_access_scope — one with
+  // zero remaining scope rows anywhere has no access to anything and is the
+  // correct case to remove, same as the retired location_manager role was.
+  const { memberId: editorMemberId } = seedManager(db, { memberId: 'member-editor', userId: 'user-editor', phone: '+66810000006', role: 'editor' })
+  const editorResult = await removeOrgMembershipIfNoScopesRemain(db as never, null, editorMemberId)
+  assert.equal(editorResult.removed, true, 'a scope-less editor should be removed')
+
+  assert.equal(db.members.length, 2)
 })
 
 test('removeOrgMembershipIfNoScopesRemain prefers the Better Auth API when actor headers are available', async () => {

@@ -8,6 +8,7 @@ import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
 import { deleteImage, uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { createMediaAsset } from '~/server/utils/media-asset-manager'
 import { generateImageViaGateway, IMAGE_MODEL } from '~/server/utils/ai-gateway'
+import { assertResourceAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -21,10 +22,10 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await queryFirst<{ organization_id: string }>(db, `
-    SELECT s.organization_id FROM sites s
+  const site = await queryFirst<{ organization_id: string; member_id: string; member_role: string }>(db, `
+    SELECT s.organization_id, m.id AS member_id, m.role AS member_role FROM sites s
     JOIN member m ON s.organization_id = m.organizationId
-    WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin','editor') LIMIT 1
+    WHERE s.id = ? AND m.userId = ? LIMIT 1
   `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
@@ -51,6 +52,14 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Invalid location ID' }, { status: 400 })
     }
   }
+
+  await assertResourceAccess(db, {
+    memberId: site.member_id,
+    role: site.member_role,
+    organizationId: site.organization_id,
+    siteId,
+    resourceLocationId: locationId,
+  })
 
   if (!env.CLOUDFLARE_IMAGES_API_TOKEN) {
     return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })

@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { hasSiteEntitlement } from '~/server/utils/billing'
+import { assertSiteWideAccess } from '~/server/utils/member-access'
 import { queryAll, queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -14,14 +15,16 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await queryFirst<{ id: string; organization_id: string }>(db, `
-    SELECT s.id, s.organization_id FROM sites s
+  const site = await queryFirst<{ id: string; organization_id: string; member_id: string; member_role: string }>(db, `
+    SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role FROM sites s
     JOIN member om ON s.organization_id = om.organizationId
-    WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
+    WHERE s.id = ? AND om.userId = ?
     LIMIT 1
   `, [siteId, session.user.id])
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+
+  await assertSiteWideAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
 
   if (!(await hasSiteEntitlement(db, siteId, 'translation'))) {
     return jsonResponse({ error: 'Translation requires a Growth plan or above.' }, { status: 403 })

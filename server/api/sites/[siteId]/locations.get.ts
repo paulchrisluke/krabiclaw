@@ -1,7 +1,9 @@
 // Get business locations for a site
-import { cloudflareEnv, jsonResponse } from '../../../utils/api-response'
+import { cloudflareEnv, jsonResponse, rethrowHttpError } from '../../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { queryAll, queryFirst } from '~/server/db'
+import { assertSiteWideAccess } from '~/server/utils/member-access'
+import { loadMemberSiteRow } from '~/server/utils/location-access'
+import { queryAll } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -31,20 +33,15 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    // Verify user has access to the site
-    const site = await queryFirst<{ id: string; organization_id: string }>(db, `
-      SELECT s.id, s.organization_id FROM sites s
-      JOIN organization o ON s.organization_id = o.id
-      JOIN member om ON o.id = om.organizationId
-      WHERE s.id = ? AND om.userId = ?
-      LIMIT 1
-    `, [siteId, session.user.id])
+    const site = await loadMemberSiteRow(db, siteId, session.user.id)
 
     if (!site) {
       return jsonResponse({
         error: 'Site not found or access denied'
       }, { status: 404 })
     }
+
+    await assertSiteWideAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
 
     // Get business locations
     const locations = await queryAll<ApiValue>(db, `
@@ -76,6 +73,7 @@ export default defineEventHandler(async (event) => {
     })
     
   } catch (error) {
+    rethrowHttpError(error)
     console.error('Failed to get business locations:', error)
     return jsonResponse({ 
       error: 'Failed to get business locations' 

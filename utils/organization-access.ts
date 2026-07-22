@@ -12,11 +12,4 @@ export const organizationRoles = {
   admin: organizationAccessControl.newRole({ ...adminAc.statements, operations: ['read', 'reply', 'update'] }),
   member: organizationAccessControl.newRole({ ...memberAc.statements, operations: [] }),
   editor: organizationAccessControl.newRole({ ...memberAc.statements, operations: [] }),
-  location_manager: organizationAccessControl.newRole({
-    organization: [],
-    member: [],
-    invitation: [],
-    team: [],
-    operations: ['read', 'reply', 'update'],
-  }),
 }

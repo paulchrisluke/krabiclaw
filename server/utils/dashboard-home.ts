@@ -1,4 +1,5 @@
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
+import { isOrganizationWideRole } from '~/server/utils/member-access'
 
 export interface DashboardHomeLocation {
   id: string
@@ -49,7 +50,29 @@ function safeJsonParse(value: string): unknown {
 // Shared by server/api/dashboard/home.get.ts and the dashboard home page's SSR
 // branch — see the "Nested SSR self-fetch loses Cloudflare bindings" rule in
 // CLAUDE.md for why the page can't just $fetch its own API route during SSR.
-export async function getDashboardHomeData(db: DbClient, organizationId: string, siteId: string): Promise<DashboardHomeData> {
+export async function getDashboardHomeData(
+  db: DbClient,
+  organizationId: string,
+  siteId: string,
+  principal?: { memberId: string; role: string },
+): Promise<DashboardHomeData> {
+  const scoped = principal && !isOrganizationWideRole(principal.role)
+  const locationScopeClause = scoped
+    ? `AND EXISTS (
+        SELECT 1 FROM member_access_scope mas
+        WHERE mas.member_id = ? AND mas.organization_id = bl.organization_id
+          AND mas.site_id = bl.site_id
+          AND (mas.location_id IS NULL OR mas.location_id = bl.id)
+      )`
+    : ''
+  const eventScopeClause = scoped
+    ? `AND EXISTS (
+        SELECT 1 FROM member_access_scope mas
+        WHERE mas.member_id = ? AND mas.organization_id = e.organization_id
+          AND mas.site_id = e.site_id
+          AND (mas.location_id IS NULL OR mas.location_id = e.location_id)
+      )`
+    : ''
   const [locations, credits, events] = await Promise.all([
     queryAll<{
       id: string; slug: string; title: string; city: string | null
@@ -63,10 +86,11 @@ export async function getDashboardHomeData(db: DbClient, organizationId: string,
       FROM business_locations bl
       LEFT JOIN media_assets ma_hero ON ma_hero.id = bl.hero_image_asset_id
       WHERE bl.organization_id = ? AND bl.site_id = ?
+      ${locationScopeClause}
       ORDER BY bl.is_primary DESC, bl.title ASC
-    `, [organizationId, siteId]),
+    `, scoped ? [organizationId, siteId, principal.memberId] : [organizationId, siteId]),
 
-    queryFirst<{
+    scoped ? Promise.resolve(null) : queryFirst<{
       balance: number; lifetime_used: number; last_topped_up_at: string | null
     }>(db, `
       SELECT balance, lifetime_used, last_topped_up_at
@@ -88,9 +112,10 @@ export async function getDashboardHomeData(db: DbClient, organizationId: string,
       LEFT JOIN user u ON u.id = e.actor_id
       LEFT JOIN business_locations l ON l.id = e.location_id
       WHERE e.organization_id = ? AND e.site_id = ?
+      ${eventScopeClause}
       ORDER BY e.created_at DESC
       LIMIT 15
-    `, [organizationId, siteId]),
+    `, scoped ? [organizationId, siteId, principal.memberId] : [organizationId, siteId]),
   ])
 
   return {
