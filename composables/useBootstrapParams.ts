@@ -5,7 +5,7 @@
 // Page type → SSR call mapping:
 //   /locations/[slug]/reviews  → type A  (reviews data included)
 //   /locations                 → type B
-//   /locations/[slug]          → type C  (menu preview + reviews preview)
+//   /locations/[slug]          → type C  (menu, reviews, and posts previews included)
 //   regular pages (/, /about…) → type D
 //   /locations/[slug]/photos   → type E  (photos data included)
 //   /locations/[slug]/qa       → type F  (qa data included)
@@ -15,7 +15,7 @@ export interface BootstrapParams {
   location: string | null;
   experience: string | null;
   menu: boolean;
-  data: string | null; // 'reviews' | 'photos' | 'qa' | 'blog' | 'blogPost' — triggers full dataset in bootstrap
+  data: string | null; // 'reviews' | 'photos' | 'qa' | 'posts' | 'blog' | 'blogPost' — triggers full dataset in bootstrap
   blogSlug: string | null; // set when data === 'blogPost'
   locale: string | null;
   token: string | null; // signed preview token — non-null only on /preview/site/... routes
@@ -39,9 +39,11 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
     const sub = segments.length > 3 ? segments[3] : undefined;
     const page = sub || "location";
     const fullData =
-      page === "reviews" || page === "photos" || page === "qa" || page === "posts"
-        ? page
-        : null;
+      page === "location"
+        ? "posts"
+        : page === "reviews" || page === "photos" || page === "qa" || page === "posts"
+          ? page
+          : null;
     return {
       page,
       location: slug ?? null,
