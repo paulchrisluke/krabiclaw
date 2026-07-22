@@ -35,8 +35,6 @@
         <span class="text-sm">Loading workspace…</span>
       </div>
     </div>
-
-    <AppToast />
   </div>
 </template>
 

@@ -376,6 +376,10 @@ export default defineNuxtConfig({
       pathPrefix: false,
     },
     {
+      path: '~/components/workspace/settings',
+      pathPrefix: false,
+    },
+    {
       path: '~/components/docs',
       pathPrefix: false,
     },

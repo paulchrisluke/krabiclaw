@@ -57,6 +57,17 @@ test('buildInvitationRedirectUrl lands on the single active site when none is pr
   )
 })
 
+test('buildInvitationRedirectUrl sends the single fallback site through onboarding when not yet active', () => {
+  assert.equal(
+    buildInvitationRedirectUrl({
+      orgSlug: 'pottery-house',
+      preferredSite: null,
+      fallbackSites: [{ id: 's1', subdomain: 'pottery-house', onboarding_status: 'pending' }],
+    }),
+    '/dashboard/pottery-house/onboarding',
+  )
+})
+
 test('buildInvitationRedirectUrl falls back to the org root for multi-site orgs with no preference', () => {
   assert.equal(
     buildInvitationRedirectUrl({

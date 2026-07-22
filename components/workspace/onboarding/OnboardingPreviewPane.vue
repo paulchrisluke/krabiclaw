@@ -98,7 +98,7 @@
 </template>
 
 <script setup lang="ts">
-import { getEditablePages } from '~/config/content-registry'
+import { buildDisplayUrl, getEditablePages, resolvePreviewPath } from '~/config/content-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
@@ -134,7 +134,12 @@ const secondaryTab = computed(() => {
   const template = resolvePublicTemplate({ vertical: props.vertical })
   const match = getEditablePages(props.vertical, template.slug).find(page => page.id === 'menu' || page.id === 'experiences')
   if (!match) return null
-  return { id: match.id, label: match.label, enabled: !!props.iframeSrc, locationScoped: match.scope === 'location' }
+  const locationScoped = match.scope === 'location'
+  // A location-scoped tab has no page to preview until a location exists —
+  // resolvePreviewPath has no path to substitute the location slug into
+  // otherwise, so disable rather than show a broken :location placeholder URL.
+  const enabled = !!props.iframeSrc && (!locationScoped || props.siteLocations.length > 0)
+  return { id: match.id, label: match.label, enabled, locationScoped }
 })
 
 const tabs = computed(() => {
@@ -150,15 +155,18 @@ const currentTabIsLocationScoped = computed(() => tabs.value.find(tab => tab.id 
 // The URL a real visitor would see — distinct from iframeSrc, which points at
 // the internal /preview/site/:id route that actually serves draft content.
 const displayUrl = computed(() => {
-  if (!props.siteDomain) return ''
   const template = resolvePublicTemplate({ vertical: props.vertical })
   // professional_service's "Services" tab id is the offerings route itself
   // (see secondaryTab above), not a content-registry page id — resolve it
   // the same way before falling back to the registry lookup for other pages.
-  const path = props.vertical === 'professional_service' && props.selectedPage === secondaryTab.value?.id
-    ? template.serviceRoutes.offeringsIndex ?? '/'
-    : getEditablePages(props.vertical, template.slug).find(page => page.id === props.selectedPage)?.path ?? '/'
-  return props.siteDomain + (path === '/' ? '' : path)
+  if (props.vertical === 'professional_service' && props.selectedPage === secondaryTab.value?.id) {
+    return buildDisplayUrl(props.siteDomain ?? '', template.serviceRoutes.offeringsIndex ?? '/')
+  }
+  const page = getEditablePages(props.vertical, template.slug).find(p => p.id === props.selectedPage)
+  const path = page?.scope === 'location' && selectedLocation.value
+    ? resolvePreviewPath(props.selectedPage, { locationSlug: selectedLocation.value.slug })
+    : page?.path ?? '/'
+  return buildDisplayUrl(props.siteDomain ?? '', path)
 })
 
 const selectedLocation = computed(() =>

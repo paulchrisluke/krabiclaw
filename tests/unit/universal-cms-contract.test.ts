@@ -106,5 +106,5 @@ test('page selection lives in ContentPageIndex, not in the full-screen editor', 
   assert.match(locationContentIndexHostSource, /layout:\s*'dashboard'/)
   assert.match(siteContentIndexHostSource, /<ContentPageIndex/)
   assert.match(locationContentIndexHostSource, /<ContentPageIndex/)
-  assert.match(pageIndexSource, /getEditablePages/)
+  assert.match(pageIndexSource, /const pages = computed\(\(\) =>\s*getScopedEditablePages\(/)
 })

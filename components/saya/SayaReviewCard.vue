@@ -25,7 +25,7 @@
 
   <article v-else class="rounded-3xl border border-default bg-default p-8 sm:p-9">
     <div class="mb-5 flex items-start gap-4">
-      <AppAvatar :src="review.avatarUrl" :name="review.author" size="md" />
+      <UAvatar :src="review.avatarUrl ?? undefined" :text="getInitials(review.author)" size="md" />
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">
           <span class="font-medium text-default">{{ review.author }}</span>
@@ -70,8 +70,6 @@
 </template>
 
 <script setup lang="ts">
-import AppAvatar from '~/components/ui/AppAvatar.vue'
-
 defineProps<{
   review: {
     id?: string | number
