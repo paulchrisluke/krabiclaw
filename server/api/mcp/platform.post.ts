@@ -7,6 +7,7 @@ import {
   mcpSuccess,
   MCP_ERROR,
   MCP_PROTOCOL_VERSION,
+  parseMcpToolCallArguments,
   readMcpRequest,
 } from '~/server/utils/mcp-protocol'
 import { requireMcpUser } from '~/server/utils/mcp-auth'
@@ -250,24 +251,7 @@ export default defineEventHandler(async (event) => {
     if (request.method === 'tools/call') {
       const toolName = typeof request.params?.name === 'string' ? request.params.name : ''
       const toolStart = Date.now()
-      const callParams = request.params ?? {}
-      let rawArgs: Record<string, unknown>
-      if ('arguments' in callParams) {
-        const argsValue = callParams.arguments
-        if (!argsValue || typeof argsValue !== 'object' || Array.isArray(argsValue)) {
-          throw mcpProtocolError(MCP_ERROR.invalidParams, 'arguments must be an object.')
-        }
-        rawArgs = argsValue as Record<string, unknown>
-      } else {
-        // Legacy flattened-arguments support: some older clients send tool
-        // arguments as top-level params fields instead of nesting them
-        // under `arguments`. Exclude protocol-level fields (name, _meta,
-        // task) so they aren't misclassified as unknown tool arguments by
-        // the strict-schema validator below.
-        rawArgs = Object.fromEntries(
-          Object.entries(callParams).filter(([key]) => key !== 'name' && key !== '_meta' && key !== 'task'),
-        )
-      }
+      const rawArgs = parseMcpToolCallArguments(request.params)
       requestToolArgs = rawArgs
 
       let result: unknown

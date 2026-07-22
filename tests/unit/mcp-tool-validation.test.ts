@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { validateNoUnknownTopLevelArguments } from '../../server/utils/mcp-tool-validation.ts'
+import { MCP_ERROR } from '../../server/utils/mcp-protocol.ts'
 import { PLATFORM_MCP_TOOLS } from '../../server/utils/platform-mcp-tools.ts'
 import { BLOG_TOOLS } from '../../server/utils/mcp-tools/blog.ts'
 
@@ -14,6 +15,18 @@ function tool(tools: readonly unknown[], name: string): ToolContract {
   const definition = (tools as readonly ToolContract[]).find(candidate => candidate.name === name)
   assert.ok(definition, `missing ${name}`)
   return definition
+}
+
+// Asserts both the message content and the MCP error code, so these tests
+// keep failing correctly if validateNoUnknownTopLevelArguments ever stops
+// throwing MCP_ERROR.invalidParams specifically (e.g. a refactor that starts
+// throwing a generic Error with a similar message would slip past a
+// message-only check).
+function isInvalidParamsErrorContaining(text: string) {
+  return (error: unknown) =>
+    error instanceof Error
+    && error.message.includes(text)
+    && (error as Error & { mcp?: { code?: number } }).mcp?.code === MCP_ERROR.invalidParams
 }
 
 test('validateNoUnknownTopLevelArguments rejects the exact 2026-07-22 incident payload', () => {
@@ -29,7 +42,7 @@ test('validateNoUnknownTopLevelArguments rejects the exact 2026-07-22 incident p
       seo_keywords: 'seo',
       robots: 'index,follow',
     }),
-    (error: unknown) => error instanceof Error && error.message.includes('body'),
+    isInvalidParamsErrorContaining('body'),
   )
 })
 
@@ -69,7 +82,7 @@ test('validateNoUnknownTopLevelArguments sorts multiple unknown keys determinist
       { type: 'object', additionalProperties: false, properties: { post_id: { type: 'string' } } },
       { post_id: 'post-1', zeta: 1, alpha: 2 },
     ),
-    (error: unknown) => error instanceof Error && error.message === 'Unknown arguments: alpha, zeta',
+    (error: unknown) => error instanceof Error && error.message === 'Unknown arguments: alpha, zeta' && (error as Error & { mcp?: { code?: number } }).mcp?.code === MCP_ERROR.invalidParams,
   )
 })
 
@@ -89,7 +102,7 @@ test('validateNoUnknownTopLevelArguments rejects the tenant incident shape: upda
       expected_document_updated_at: '2026-07-22T00:00:00.000Z',
       body: 'This should never be persisted.',
     }),
-    (error: unknown) => error instanceof Error && error.message.includes('body'),
+    isInvalidParamsErrorContaining('body'),
   )
 })
 
@@ -112,6 +125,6 @@ test('validateNoUnknownTopLevelArguments rejects prototype property names as unk
       { type: 'object', additionalProperties: false, properties: { post_id: { type: 'string' } } },
       { post_id: 'post-1', constructor: 'unexpected' },
     ),
-    (error: unknown) => error instanceof Error && error.message.includes('constructor'),
+    isInvalidParamsErrorContaining('constructor'),
   )
 })
