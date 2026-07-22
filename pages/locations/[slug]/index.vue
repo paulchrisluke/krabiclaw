@@ -166,6 +166,16 @@
         }"
       />
 
+      <!-- Location posts preview -->
+      <LazySayaPosts
+        v-if="postsList.length"
+        :posts="postsList"
+        :limit="3"
+        :show-view-more="true"
+        :show-empty-state="false"
+        :view-more-to="`/locations/${slug}/posts`"
+      />
+
       <!-- Reviews preview -->
       <section v-if="reviewsPreview.length" class="bg-elevated">
         <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
@@ -307,7 +317,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
-// Bootstrap: location + all locations + page content + menu + reviews — 1 SSR call
+// Bootstrap: location + all locations + page content + menu + reviews + posts — 1 SSR call
 const {
   location,
   locations,
@@ -320,6 +330,7 @@ const {
   hasExperiences,
   experiencesList,
   contentBlocks,
+  postsList,
 } = useBootstrap()
 
 const hasMenu = computed(() => {
