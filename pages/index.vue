@@ -210,11 +210,13 @@
               v-for="post in recentPosts"
               :key="post.id"
             >
-              <!-- Trigger tile -->
-              <article
-                class="group cursor-pointer overflow-hidden bg-default text-default transition hover:opacity-90"
+              <!-- Trigger tile — navigates to the real post page (SayaPostDetail.vue is
+                   the single source of truth for post detail UI; this used to open a
+                   separate, hand-rolled modal here that duplicated and diverged from it). -->
+              <NuxtLink
+                :to="post.path"
+                class="group block overflow-hidden bg-default text-default no-underline transition hover:opacity-90"
                 :class="post.wide ? 'sm:col-span-2' : ''"
-                @click="selectedPostId = post.id"
               >
                 <div v-if="post.image" class="overflow-hidden bg-muted" :class="post.wide ? 'aspect-video' : 'aspect-square'">
                   <video
@@ -238,49 +240,11 @@
                   <p class="text-sm leading-relaxed text-default line-clamp-3">{{ post.text }}</p>
                   <p class="mt-3 saya-eyebrow text-muted opacity-60">{{ homeCopy.readMoreCta }}</p>
                 </div>
-              </article>
+              </NuxtLink>
             </template>
           </div>
         </div>
       </section>
-
-      <!-- Modal: full post (Teleported) -->
-      <Teleport to="body">
-        <div v-if="selectedPost" class="fixed inset-0 z-[100] flex flex-col bg-black" role="dialog" aria-modal="true" aria-label="Post details">
-          <button aria-label="Close" @click="selectedPostId = null" class="absolute top-4 right-4 z-[110] p-2 text-white bg-black/50 rounded-full hover:bg-black/70 transition">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-              <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
-            </svg>
-          </button>
-          
-          <div class="relative flex-1 h-full w-full overflow-hidden">
-            <!-- Media - full bleed -->
-            <div v-if="selectedPost.image" class="h-full w-full">
-              <video
-                v-if="selectedPost.imageKind === 'video'"
-                :src="selectedPost.image"
-                autoplay
-                muted
-                loop
-                playsinline
-                class="h-full w-full object-cover"
-              />
-              <img
-                v-else
-                :src="selectedPost.image"
-                :alt="selectedPost.alt"
-                class="h-full w-full object-cover"
-              >
-            </div>
-
-            <!-- Content overlay at bottom -->
-            <div class="absolute bottom-0 left-0 right-0 z-20 bg-linear-to-t from-black/90 via-black/60 to-transparent p-6 pt-32 sm:p-6 sm:pt-32">
-              <p class="saya-eyebrow mb-3 text-white/60 text-[10px] font-bold uppercase tracking-widest">{{ homeCopy.postsEyebrow }}</p>
-              <p class="text-white/90 text-sm leading-relaxed whitespace-pre-line">{{ selectedPost.text }}</p>
-            </div>
-          </div>
-        </div>
-      </Teleport>
 
       <!-- ── Brand story ─────────────────────────────────────── -->
       <LazySayaBrandStory
@@ -440,7 +404,6 @@
 import { useAuth } from '~/composables/useAuth'
 import { formatMoneyAmount, isSaleActive, resolveOverridePriceDisplay } from '~/shared/money'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
-import { useScrollLock } from '~/composables/useScrollLock'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 
 definePageMeta({ layout: false })
@@ -660,11 +623,16 @@ const featuredReviews = computed(() =>
   }))
 )
 
-// Recent posts — shown in the "Lately" section (posts only, each links to /posts)
+// Recent posts — shown in the "Lately" section, each tile links to the real
+// post page (pages/posts/[slug].vue, rendered by SayaPostDetail.vue). A post
+// with no resolvable path can't link anywhere meaningful, so it's excluded
+// rather than falling back to the generic /posts index.
 const recentPosts = computed(() => {
-  const posts = (googlePosts.value || []).filter(p => p.media?.[0]?.url)
+  const posts = (googlePosts.value || [])
+    .filter(p => p.media?.[0]?.url && (p.publicPath || p.public_path || p.slug))
   return posts.slice(0, 4).map((post, i) => ({
     id: post.slug || String(i),
+    path: post.publicPath || post.public_path || `/posts/${post.slug}`,
     image: post.media?.[0]?.url || null,
     imageKind: post.media?.[0]?.kind || 'image',
     text: post.summary || '',
@@ -686,31 +654,6 @@ const recentBlogPosts = computed(() =>
       image: resolveMedia(post.featured_image).url,
     }))
 )
-
-const selectedPostId = ref(null)
-const selectedPost = computed(() => selectedPostId.value ? recentPosts.value.find(p => p.id === selectedPostId.value) : null)
-
-const { acquire: acquireScrollLock, release: releaseScrollLock } = useScrollLock()
-
-watch(selectedPostId, (id) => {
-  if (id) acquireScrollLock()
-  else releaseScrollLock()
-})
-
-function onKeydown(e) {
-  if (e.key === 'Escape' && selectedPostId.value) {
-    selectedPostId.value = null
-  }
-}
-
-onMounted(() => {
-  if (import.meta.client) document.addEventListener('keydown', onKeydown)
-})
-
-onUnmounted(() => {
-  if (import.meta.client) document.removeEventListener('keydown', onKeydown)
-  releaseScrollLock()
-})
 
 // Featured content — dishes or experiences, shown right below the hero
 const featuredContent = computed(() => {

@@ -37,12 +37,6 @@
           <div v-else class="w-full h-full flex items-center justify-center text-muted italic text-xs">
             {{ t('saya.posts.no_preview') }}
           </div>
-
-          <div class="absolute top-4 left-4 flex gap-2">
-            <span v-if="post.event" class="inline-flex items-center rounded bg-black/80 px-2 py-0.5 text-[10px] font-medium text-white shadow-sm backdrop-blur">{{ t('saya.posts.badge.event') }}</span>
-            <span v-else-if="post.offer" class="inline-flex items-center rounded bg-black/80 px-2 py-0.5 text-[10px] font-medium text-white shadow-sm backdrop-blur">{{ t('saya.posts.badge.offer') }}</span>
-            <span v-else class="inline-flex items-center rounded bg-black/80 px-2 py-0.5 text-[10px] font-medium text-white shadow-sm backdrop-blur">{{ t('saya.posts.badge.update') }}</span>
-          </div>
         </div>
 
         <div class="p-8 flex flex-col grow">
