@@ -39,7 +39,7 @@
             <!-- eslint-disable vue/no-v-html -->
             <div
               v-if="block.kind === 'html'"
-              class="prose prose-lg max-w-none text-default prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-h4:text-base dark:prose-invert"
+              class="prose prose-lg max-w-none text-default prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-h4:text-base"
               v-html="block.html"
             />
             <!-- eslint-enable vue/no-v-html -->

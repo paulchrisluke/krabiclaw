@@ -25,8 +25,7 @@
                  prose-headings:text-default prose-headings:font-bold
                  prose-p:leading-relaxed prose-p:text-muted
                  prose-a:text-primary prose-a:no-underline hover:prose-a:underline
-                 prose-strong:text-default prose-li:text-muted
-                 dark:prose-invert"
+                 prose-strong:text-default prose-li:text-muted"
           v-html="block.html"
         />
         <!-- eslint-enable vue/no-v-html -->

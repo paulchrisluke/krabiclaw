@@ -32,7 +32,7 @@
               <span v-else-if="step.url" class="text-sm text-muted">{{ step.url }}</span>
             </div>
             <!-- eslint-disable-next-line vue/no-v-html -->
-            <div class="prose max-w-none text-muted dark:prose-invert" v-html="step.textHtml" />
+            <div class="prose max-w-none text-muted" v-html="step.textHtml" />
             <img
               v-if="step.image_public_url"
               :src="step.image_public_url"
