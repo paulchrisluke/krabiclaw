@@ -178,14 +178,14 @@ function upsertGa4Tool(
   const existing = input.existing
   const template = existing?.defaultFields ? existing : ga4ToolTemplate(config)
   config.tools[key] = {
+    ...template,
     ...existing,
     component: 'google-analytics_v4',
     name: existing?.name || input.name,
     enabled: true,
-    settings: { ...(existing?.settings ?? {}), tid: input.measurementId },
-    defaultFields: existing?.defaultFields ?? template?.defaultFields,
+    settings: { ...(template?.settings ?? {}), ...(existing?.settings ?? {}), tid: input.measurementId },
     defaultPurpose: consentPurposeId(),
-    actions: scopeActionsToTrigger(existing?.actions, input.triggerKey),
+    actions: scopeActionsToTrigger(existing?.actions ?? template?.actions, input.triggerKey),
   }
 }
 
