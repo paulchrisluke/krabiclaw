@@ -233,7 +233,8 @@ SELECT created_at, mcp_surface, method, tool_name, http_status,
        jsonrpc_error_code, jsonrpc_error_message
   FROM mcp_tool_call_events
  WHERE jsonrpc_error_code IS NOT NULL
-   AND http_status != 200;
+   AND http_status != 200
+   AND status != 'auth_required';
 
 SELECT created_at, mcp_surface, method, tool_name, session_id_hash, cf_ray_id
   FROM mcp_tool_call_events

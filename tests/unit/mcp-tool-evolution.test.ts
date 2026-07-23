@@ -31,6 +31,7 @@ test('routine JSON-RPC errors map to HTTP 200, not transport errors', () => {
   assert.equal(mcpHttpStatusForError({ code: MCP_ERROR.invalidParams, message: 'Unknown tool', kind: 'protocol' }), 200)
   assert.equal(mcpHttpStatusForError({ code: MCP_ERROR.invalidParams, message: 'Bad argument', kind: 'tool_execution' }), 200)
   assert.equal(mcpHttpStatusForError({ code: MCP_ERROR.internal, message: 'Auth', kind: 'auth' }), 401)
+  assert.equal(mcpHttpStatusForError({ code: MCP_ERROR.internal, message: 'Forbidden', kind: 'forbidden' }), 403)
 })
 
 test('catalog fingerprints ignore tool order and description text', () => {

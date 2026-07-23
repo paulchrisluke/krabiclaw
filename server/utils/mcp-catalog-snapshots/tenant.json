@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:e151ef16d8d5aa9f272ecd452587940f791555c3e1e6576a3d2d5d4e7378a488",
+  "fingerprint": "sha256:16f4fb5b0c324bf3b6c481d8b0b35e336d9c0c800aec65079e33732b90bda113",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -6035,6 +6035,10 @@
                   "description": "Brand name or subdomain slug.",
                   "type": "string"
                 },
+                "orgSlug": {
+                  "description": "Organization slug — combine with this site's subdomain and locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/locations/{locationSlug}",
+                  "type": "string"
+                },
                 "organizationId": {
                   "type": "string"
                 },
@@ -6043,10 +6047,6 @@
                     "string",
                     "null"
                   ]
-                },
-                "orgSlug": {
-                  "description": "Organization slug — combine with this site's subdomain and locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/locations/{locationSlug}",
-                  "type": "string"
                 },
                 "publicUrl": {
                   "type": [
@@ -8012,6 +8012,10 @@
                   "description": "Brand name or subdomain slug.",
                   "type": "string"
                 },
+                "orgSlug": {
+                  "description": "Organization slug — combine with this site's subdomain and locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/locations/{locationSlug}",
+                  "type": "string"
+                },
                 "organizationId": {
                   "type": "string"
                 },
@@ -8020,10 +8024,6 @@
                     "string",
                     "null"
                   ]
-                },
-                "orgSlug": {
-                  "description": "Organization slug — combine with this site's subdomain and locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/locations/{locationSlug}",
-                  "type": "string"
                 },
                 "publicUrl": {
                   "type": [
@@ -11673,6 +11673,10 @@
                   "description": "Brand name or subdomain slug.",
                   "type": "string"
                 },
+                "orgSlug": {
+                  "description": "Organization slug — combine with this site's subdomain and locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/locations/{locationSlug}",
+                  "type": "string"
+                },
                 "organizationId": {
                   "type": "string"
                 },
@@ -11681,10 +11685,6 @@
                     "string",
                     "null"
                   ]
-                },
-                "orgSlug": {
-                  "description": "Organization slug — combine with this site's subdomain and locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/locations/{locationSlug}",
-                  "type": "string"
                 },
                 "publicUrl": {
                   "type": [
@@ -16282,10 +16282,10 @@
       },
       "outputSchema": {
         "properties": {
-          "asset_id": {
+          "assetId": {
             "type": "string"
           },
-          "assetId": {
+          "asset_id": {
             "type": "string"
           },
           "kind": {
@@ -16305,10 +16305,10 @@
               "null"
             ]
           },
-          "public_url": {
+          "publicUrl": {
             "type": "string"
           },
-          "publicUrl": {
+          "public_url": {
             "type": "string"
           },
           "status": {

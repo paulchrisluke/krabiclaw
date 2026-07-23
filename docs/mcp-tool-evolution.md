@@ -33,7 +33,7 @@ Use `mcp_tool_call_events` for stale-catalog review:
 - unknown tools: group by `mcp_surface`, `unknown_tool_name`, `oauth_client_id_hash`, `catalog_fingerprint`, and `deployment_version`
 - compatibility usage: filter `compatibility_alias_used = 1`
 - repeated failures: group by `session_id_hash`, `method`, `tool_name`, `jsonrpc_error_code`
-- transport regressions: find `jsonrpc_error_code IS NOT NULL AND http_status != 200`
+- transport regressions: find `jsonrpc_error_code IS NOT NULL AND http_status != 200 AND status != 'auth_required'`
 - session termination signals: find MCP route events with `http_status = 404`
 
 Telemetry stores hashed session/client identifiers only. Do not log raw `Mcp-Session-Id`, OAuth client ids, bearer tokens, authorization headers, full arguments, article bodies, or upload URLs.

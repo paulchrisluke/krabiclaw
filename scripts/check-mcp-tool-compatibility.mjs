@@ -63,6 +63,9 @@ for (const config of surfaces) {
     if (entry.status === 'current' && !publicNames.has(entry.name)) {
       failures.push(`${config.surface}: current released tool ${entry.name} is absent from public discovery`)
     }
+    if (entry.status === 'current' && !dispatchNames.has(entry.name)) {
+      failures.push(`${config.surface}: current released tool ${entry.name} is absent from internal dispatch`)
+    }
     if (entry.status === 'deprecated') {
       if (!dispatchNames.has(entry.name)) failures.push(`${config.surface}: deprecated released tool ${entry.name} is absent from internal dispatch`)
       if (publicNames.has(entry.name)) failures.push(`${config.surface}: deprecated released tool ${entry.name} must stay hidden from tools/list`)
@@ -97,6 +100,11 @@ for (const config of surfaces) {
 
 if (write) {
   console.log(`Wrote MCP catalog snapshots to ${path.relative(root, snapshotsDir)}`)
+  if (failures.length) {
+    console.error('MCP tool compatibility check failed:')
+    for (const failure of failures) console.error(`- ${failure}`)
+    process.exit(1)
+  }
   process.exit(0)
 }
 

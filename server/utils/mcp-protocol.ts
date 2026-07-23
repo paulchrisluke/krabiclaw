@@ -24,6 +24,7 @@ export type McpFailureKind =
   | 'protocol'
   | 'tool_execution'
   | 'auth'
+  | 'forbidden'
   | 'transport'
 
 export const MCP_ERROR = {
@@ -162,7 +163,7 @@ export function asMcpError(error: unknown): McpErrorShape {
 
   if (error instanceof Error) {
     const statusCode = (error as { statusCode?: unknown }).statusCode
-    const kind: McpFailureKind = statusCode === 401 || statusCode === 403 ? 'auth' : 'transport'
+    const kind: McpFailureKind = statusCode === 401 ? 'auth' : statusCode === 403 ? 'forbidden' : 'transport'
     return { code: MCP_ERROR.internal, message: error.message, kind }
   }
 

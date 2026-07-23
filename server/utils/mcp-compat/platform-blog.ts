@@ -187,7 +187,6 @@ export async function updatePlatformBlogPostCompatibility(
     surface: 'platform',
     compatibility_tool_name: 'update_platform_blog_post',
     replacement_tool_names: ['update_platform_blog_metadata', 'replace_platform_blog_content'],
-    user_id: userId,
   }))
   const result = await updatePlatformBlogPost(db, postId, input, siteId)
   return {

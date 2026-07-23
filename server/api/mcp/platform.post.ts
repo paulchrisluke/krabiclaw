@@ -12,7 +12,7 @@ import {
   readMcpRequest,
 } from '~/server/utils/mcp-protocol'
 import { catalogFingerprint, catalogMeta } from '~/server/utils/mcp-catalog'
-import { sendMcpErrorResponse, setMcpNotificationAccepted } from '~/server/utils/mcp-http-response'
+import { mcpHttpStatusForError, sendMcpErrorResponse, setMcpNotificationAccepted } from '~/server/utils/mcp-http-response'
 import { requireMcpUser } from '~/server/utils/mcp-auth'
 import { executePlatformMcpToolCall } from '~/server/utils/platform-mcp-executor'
 import { PLATFORM_MCP_TOOLS, PLATFORM_PUBLIC_MCP_TOOLS } from '~/server/utils/platform-mcp-tools'
@@ -462,6 +462,8 @@ export default defineEventHandler(async (event) => {
 
     throw mcpProtocolError(MCP_ERROR.methodNotFound, `Unsupported MCP method: ${request.method}`, undefined, 'protocol')
   } catch (error) {
+    const mcpError = asMcpError(error)
+    const mappedStatus = mcpHttpStatusForError(mcpError)
     if (requestMethod === 'tools/call') {
       logPlatformMcpEventDetached(event, env.DB, {
         requestId: requestId ?? null,
@@ -471,17 +473,16 @@ export default defineEventHandler(async (event) => {
         isMutating: isMcpMutatingTool(PLATFORM_MCP_TOOLS.find((t) => t.name === requestToolName)),
         arguments: requestToolArgs ? summarizePayloadShape(requestToolArgs) : undefined,
         status: error instanceof Error && /Authentication required/i.test(error.message) ? 'auth_required' : 'error',
-        errorCode: asMcpError(error).code,
+        errorCode: mcpError.code,
         errorMessage: error instanceof Error && /Authentication required/i.test(error.message)
           ? describeMcpAuthTelemetryError(error)
           : error instanceof Error ? error.message : String(error),
-        httpStatus: asMcpError(error).kind === 'auth' ? 401 : 200,
-        jsonrpcErrorCode: asMcpError(error).code,
-        jsonrpcErrorMessage: asMcpError(error).message,
-        unknownToolName: asMcpError(error).kind === 'protocol' && requestToolName ? requestToolName : null,
+        httpStatus: mappedStatus,
+        jsonrpcErrorCode: mcpError.code,
+        jsonrpcErrorMessage: mcpError.message,
+        unknownToolName: mcpError.kind === 'protocol' && requestToolName ? requestToolName : null,
       })
     }
-    const mcpError = asMcpError(error)
     if (mcpError.kind === 'auth') {
       const authChallengeForFailure = buildMcpAuthChallengeForError(error, {
         resourceMetadataUrl: resourceMetadataUrl(baseUrl),
@@ -494,7 +495,7 @@ export default defineEventHandler(async (event) => {
     }
     console.error(
       '[PLATFORM_MCP]',
-      200,
+      mappedStatus,
       mcpError.code,
       mcpError.message,
       'method:',

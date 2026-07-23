@@ -11,7 +11,7 @@ import {
   readMcpRequest,
 } from "~/server/utils/mcp-protocol";
 import { catalogFingerprint, catalogMeta } from "~/server/utils/mcp-catalog";
-import { sendMcpErrorResponse, setMcpNotificationAccepted } from "~/server/utils/mcp-http-response";
+import { mcpHttpStatusForError, sendMcpErrorResponse, setMcpNotificationAccepted } from "~/server/utils/mcp-http-response";
 import { executeMcpToolCall } from "~/server/utils/mcp-executor";
 import { isMcpRenderResponse } from "~/server/utils/mcp-render";
 import {
@@ -755,7 +755,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
     throw mcpProtocolError(MCP_ERROR.methodNotFound, `Unsupported MCP method: ${request.method}`, undefined, "protocol");
   } catch (error) {
     const mcpError = asMcpError(error);
-    const mappedStatus = mcpError.kind === "auth" ? 401 : mcpError.kind === "transport" ? 500 : 200;
+    const mappedStatus = mcpHttpStatusForError(mcpError);
     console.error("[MCP_ERROR]", JSON.stringify({
       status: mappedStatus,
       code: mcpError.code,
