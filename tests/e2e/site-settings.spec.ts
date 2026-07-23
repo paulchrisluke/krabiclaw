@@ -22,13 +22,10 @@ async function ensureSite(request: APIRequestContext, baseURL: string, siteId: s
     },
   })
   expect(createRes.status()).toBe(200)
-
-  const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
-  expect(contextRes.status()).toBe(200)
-  const context = await contextRes.json() as {
-    site?: { id?: string | null }
+  const createBody = await createRes.json() as {
+    siteId?: string | null
   }
-  const createdSiteId = context.site?.id ?? null
+  const createdSiteId = createBody.siteId ?? null
   expect(createdSiteId).toEqual(expect.any(String))
   return createdSiteId
 }

@@ -17,35 +17,22 @@
             <div class="space-y-1 flex-1">
               <h3 class="text-base font-medium text-highlighted">Avatar</h3>
               <p class="text-sm text-muted">
-                This is your avatar.<br>
-                Click on the avatar to upload a custom one from your files.
+                Your avatar comes from your active sign-in provider.
               </p>
             </div>
-            <button
-              type="button"
-              class="relative group cursor-pointer shrink-0"
-              aria-label="Upload a new avatar"
-              :disabled="uploadLoading"
-              :class="{ 'opacity-50 pointer-events-none': uploadLoading }"
-              @click="openUploadPicker"
-            >
+            <div class="shrink-0">
               <UAvatar
                 :src="sessionData?.user?.image ?? undefined"
                 :text="getInitials(sessionData?.user?.name || sessionData?.user?.email)"
                 alt="User avatar"
                 size="3xl"
-                class="ring-1 ring-border group-hover:ring-primary transition-all"
+                class="ring-1 ring-border"
               />
-              <div class="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity text-white">
-                <UIcon name="i-lucide-camera" class="size-6" v-if="!uploadLoading" />
-                <UIcon name="i-lucide-refresh-cw" class="size-6 animate-spin" v-else />
-              </div>
-              <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onFileSelect" />
-            </button>
+            </div>
           </div>
           <template #footer>
             <div class="flex items-center justify-between text-sm text-muted">
-              <span>An avatar is optional but strongly recommended.</span>
+              <span>Use your profile name below when a provider does not supply an image.</span>
             </div>
           </template>
         </UCard>
@@ -275,46 +262,6 @@ const { data: sessionData } = useAuth()
 const refreshSession = async () => {
   await authClient.getSession()
 }
-// Avatar Upload
-const fileInput = ref<HTMLInputElement | null>(null)
-const uploadLoading = ref(false)
-const siteApiBase = `/api/dashboard/editor`
-
-function openUploadPicker() {
-  fileInput.value?.click()
-}
-
-async function onFileSelect(event: Event) {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file) return
-  
-  uploadLoading.value = true
-  try {
-    const { assetId, uploadUrl } = await $fetch<{ assetId: string; uploadUrl: string }>(
-      `${siteApiBase}/media/request-upload`,
-      { method: 'POST', body: { filename: file.name, category: 'team' } }
-    )
-    
-    const form = new FormData()
-    form.append('file', file)
-    const res = await fetch(uploadUrl, { method: 'POST', body: form })
-    if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
-
-    const { asset } = await $fetch<{ asset: { public_url: string } }>(`${siteApiBase}/media/${assetId}/confirm`, { method: 'POST' })
-    
-    await authClient.updateUser({ image: asset.public_url })
-    await refreshSession()
-    toast.add({ title: 'Avatar updated', icon: 'i-lucide-circle-check', color: 'success' })
-  } catch (_err) {
-    const msg = _err instanceof Error ? _err.message : String(_err)
-    toast.add({ title: 'Upload failed', description: msg, color: 'error', icon: 'i-lucide-triangle-alert' })
-  } finally {
-    uploadLoading.value = false
-    target.value = ''
-  }
-}
-
 // Display Name
 const nameInput = ref(sessionData.value?.user?.name || '')
 const nameDirty = computed(() => nameInput.value.trim() !== (sessionData.value?.user?.name || ''))

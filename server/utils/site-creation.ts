@@ -1,5 +1,4 @@
-// Core site creation logic shared by POST /api/sites and the legacy
-// dashboard/site proxy. Handles org creation/lookup, idempotency,
+// Core site creation logic shared by site creation entry points. Handles org creation/lookup, idempotency,
 // subdomain uniqueness, seeding, and Cloudflare subdomain registration.
 import { seedNewSite } from '~/server/utils/site-template'
 import { createSystemSubdomain } from '~/server/utils/domains'

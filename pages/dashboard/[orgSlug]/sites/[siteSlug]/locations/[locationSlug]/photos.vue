@@ -129,6 +129,8 @@ interface MediaAsset {
 const _siteId = await useDashboardSiteId()
 const dashboardLocation = useDashboardLocation()
 const toast = useToast()
+const siteId = await useDashboardSiteId()
+const siteApiBase = `/api/editor/sites/${siteId}`
 const locationId = computed(() => dashboardLocation.currentLocationId.value)
 const assets = ref<MediaAsset[]>([])
 const attachableAssets = ref<MediaAsset[]>([])
@@ -139,7 +141,7 @@ const categoryFilter = ref('all')
 const fileInput = ref<HTMLInputElement | null>(null)
 const posterPromptOpen = ref(false)
 const pendingVideoFile = ref<File | null>(null)
-const { uploading, error: uploadError, pendingRetryFile, upload } = useMediaUpload()
+const { uploading, error: uploadError, pendingRetryFile, upload } = useMediaUpload(siteApiBase)
 
 const categoryItems = [
   { id: 'all', label: 'All categories' },
@@ -169,7 +171,7 @@ async function loadPhotos() {
   loading.value = true
   try {
     const params = new URLSearchParams({ locationId: locationId.value, limit: '100' })
-    const res = await $fetch<{ media: MediaAsset[] }>(`/api/dashboard/editor/media?${params}`)
+    const res = await $fetch<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
     assets.value = res.media ?? []
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load photos', color: 'error' })
@@ -251,7 +253,7 @@ async function loadAttachableMedia() {
   attachLoading.value = true
   try {
     const params = new URLSearchParams({ limit: '100' })
-    const res = await $fetch<{ media: MediaAsset[] }>(`/api/dashboard/editor/media?${params}`)
+    const res = await $fetch<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
     attachableAssets.value = (res.media ?? []).filter(asset => asset.location_id !== locationId.value)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load media library', color: 'error' })
@@ -267,7 +269,7 @@ async function openAttachModal() {
 
 async function patchAsset(asset: MediaAsset, body: ApiRecord, successMessage: string) {
   try {
-    await $fetch(`/api/dashboard/editor/media/${asset.id}`, { method: 'PATCH', body })
+    await $fetch(`${siteApiBase}/media/${asset.id}`, { method: 'PATCH', body })
     toast.add({ description: successMessage, color: 'success' })
     await loadPhotos()
     return true

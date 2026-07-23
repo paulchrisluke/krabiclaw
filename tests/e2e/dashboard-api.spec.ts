@@ -31,21 +31,7 @@ test.describe('dashboard API smoke', () => {
 
     const uniqueTitle = `Dashboard E2E ${Date.now()}`
 
-    if (!hasSite) {
-      const saveRes = await request.post(`${baseURL}/api/dashboard/editor/content/save`, {
-        headers: orgHeaders,
-        data: {
-          page: 'home',
-          changes: {
-            'hero.title': uniqueTitle,
-          },
-        },
-      })
-      expect(saveRes.status()).toBe(400)
-      const saveBody = await saveRes.json()
-      expect(String(saveBody.error || '')).toContain('Site workspace has not been created yet')
-      return
-    }
+    if (!hasSite) return
 
     const saveRes = await request.post(`${baseURL}/api/editor/sites/${siteId}/content/save`, {
       data: {
@@ -77,5 +63,14 @@ test.describe('dashboard API smoke', () => {
         && entry.metadata?.page === 'home'
       ),
     ).toBe(true)
+
+    const removedAlias = await request.post(`${baseURL}/api/dashboard/editor/content/save`, {
+      headers: orgHeaders,
+      data: {
+        page: 'home',
+        changes: { 'hero.title': uniqueTitle },
+      },
+    })
+    expect(removedAlias.status()).toBe(404)
   })
 })
