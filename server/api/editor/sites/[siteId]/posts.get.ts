@@ -20,7 +20,8 @@ export default defineEventHandler(async (event) => {
 
   const query = getQuery(event)
   const status = typeof query.status === 'string' ? query.status : undefined
-  const locationId = typeof query.location_id === 'string' ? query.location_id : undefined
+  const rawLocationId = typeof query.location_id === 'string' ? query.location_id.trim() : ''
+  const locationId = rawLocationId || undefined
 
   // No location_id filter means "every post across the whole site" — only a
   // site-wide-scoped member may see that; a location-scoped editor must

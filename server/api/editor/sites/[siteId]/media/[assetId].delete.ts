@@ -58,6 +58,6 @@ export default defineEventHandler(async (event) => {
       hashedUserId,
       error: normalizedError.message
     })
-    return jsonResponse({ error: 'Failed to delete asset' }, { status: 500 })
+    throw error
   }
 })
