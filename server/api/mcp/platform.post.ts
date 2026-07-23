@@ -1,15 +1,18 @@
-import { createError, getHeader } from 'h3'
+import { getHeader, setResponseStatus } from 'h3'
 import type { H3Event } from 'h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import {
   asMcpError,
   mcpFailure,
+  mcpProtocolError,
   mcpSuccess,
   MCP_ERROR,
   MCP_PROTOCOL_VERSION,
   parseMcpToolCallArguments,
   readMcpRequest,
 } from '~/server/utils/mcp-protocol'
+import { catalogFingerprint, catalogMeta } from '~/server/utils/mcp-catalog'
+import { sendMcpErrorResponse, setMcpNotificationAccepted } from '~/server/utils/mcp-http-response'
 import { requireMcpUser } from '~/server/utils/mcp-auth'
 import { executePlatformMcpToolCall } from '~/server/utils/platform-mcp-executor'
 import { PLATFORM_MCP_TOOLS, PLATFORM_PUBLIC_MCP_TOOLS } from '~/server/utils/platform-mcp-tools'
@@ -34,6 +37,7 @@ const PLATFORM_AUTH_REQUIRED_TEXT = 'Authentication required: connect the KrabiC
 const PLATFORM_MCP_TOOL_DOMAIN = 'platform_admin'
 const PLATFORM_KNOWLEDGE_MUTATION_TOOLS = new Set([
   'create_platform_blog_post',
+  'update_platform_blog_post',
   'update_platform_blog_metadata',
   'replace_platform_blog_content',
   'publish_platform_blog_post',
@@ -49,6 +53,7 @@ const PLATFORM_KNOWLEDGE_MUTATION_TOOLS = new Set([
   'delete_content_block',
   'publish_content_revision',
 ])
+const PLATFORM_CATALOG_FINGERPRINT = catalogFingerprint(PLATFORM_PUBLIC_MCP_TOOLS)
 
 function shouldUseLeanToolCatalog(event: H3Event) {
   const userAgent = (getHeader(event, 'user-agent') || '').toLowerCase()
@@ -80,9 +85,17 @@ function logPlatformMcpEventDetached(
   input: Parameters<typeof logMcpToolCallEvent>[1],
 ) {
   if (!db) return
+  const env = cloudflareEnv(event)
   const logPromise = logMcpToolCallEvent(db, {
+    env,
     ...input,
     mcpSurface: 'platform',
+    userAgent: input.userAgent ?? getHeader(event, 'user-agent') ?? null,
+    cfRayId: input.cfRayId ?? getHeader(event, 'cf-ray') ?? null,
+    sessionId: input.sessionId ?? getHeader(event, 'mcp-session-id') ?? null,
+    deploymentVersion: input.deploymentVersion
+      ?? String(env.DEPLOYMENT_VERSION ?? env.CF_PAGES_COMMIT_SHA ?? env.GITHUB_SHA ?? 'unknown'),
+    catalogFingerprint: input.catalogFingerprint ?? PLATFORM_CATALOG_FINGERPRINT,
   })
   const waitUntil = getCloudflareWaitUntil(event)
   if (waitUntil) waitUntil(logPromise)
@@ -148,11 +161,21 @@ export default defineEventHandler(async (event) => {
     requestToolName = request.method === 'tools/call' && typeof request.params?.name === 'string' ? request.params.name : undefined
 
     if (request.method === 'initialize') {
-      await requireMcpUser(event, platformAdminAuthOptions)
+      const user = await requireMcpUser(event, platformAdminAuthOptions)
+      logPlatformMcpEventDetached(event, env.DB, {
+        userId: user.userId,
+        requestId: request.id,
+        method: request.method,
+        status: 'success',
+        httpStatus: 200,
+        protocolVersion: typeof request.params?.protocolVersion === 'string' ? request.params.protocolVersion : MCP_PROTOCOL_VERSION,
+        oauthClientId: user.oauthClientId ?? null,
+      })
       return mcpSuccess(request.id, {
         protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: { tools: {}, resources: {}, prompts: {} },
         serverInfo: { name: 'krabiclaw-platform-mcp', version: 'v1' },
+        _meta: catalogMeta(PLATFORM_PUBLIC_MCP_TOOLS),
         instructions: [
           'KrabiClaw platform admin MCP. This app does not expose tenant site tools — it is for internal platform content operations and read-only release data.',
           'You are acting as a growth/SEO copilot for a human content writer, not an autonomous publisher. Your job is to help them prioritize, research, draft, edit, and publish platform blog posts and docs in service of growing krabiclaw.com traffic and sign-ups.',
@@ -168,40 +191,89 @@ export default defineEventHandler(async (event) => {
     }
 
     if (request.method === 'notifications/initialized') {
-      setResponseStatus(event, 202)
-      return ''
+      logPlatformMcpEventDetached(event, env.DB, {
+        requestId: request.id ?? null,
+        method: request.method,
+        status: 'success',
+        httpStatus: 202,
+        protocolVersion: MCP_PROTOCOL_VERSION,
+      })
+      return setMcpNotificationAccepted(event)
     }
 
     if (request.method === 'ping') {
       // Intentionally unauthenticated: MCP clients use ping as a liveness check before
       // the OAuth handshake completes, and it returns no information beyond {}.
+      logPlatformMcpEventDetached(event, env.DB, {
+        requestId: request.id,
+        method: request.method,
+        status: 'success',
+        httpStatus: 200,
+        protocolVersion: MCP_PROTOCOL_VERSION,
+      })
       return mcpSuccess(request.id, {})
     }
 
     if (request.method === 'resources/list') {
-      await requireMcpUser(event, platformAdminAuthOptions)
+      const user = await requireMcpUser(event, platformAdminAuthOptions)
+      logPlatformMcpEventDetached(event, env.DB, {
+        userId: user.userId,
+        requestId: request.id,
+        method: request.method,
+        result: { count: PLATFORM_MCP_RESOURCES.length },
+        status: 'success',
+        httpStatus: 200,
+        oauthClientId: user.oauthClientId ?? null,
+      })
       return mcpSuccess(request.id, { resources: PLATFORM_MCP_RESOURCES })
     }
 
     if (request.method === 'resources/read') {
-      await requireMcpUser(event, platformAdminAuthOptions)
+      const user = await requireMcpUser(event, platformAdminAuthOptions)
       const uri = typeof request.params?.uri === 'string' ? request.params.uri : ''
       const content = await readPlatformMcpResource(uri)
+      logPlatformMcpEventDetached(event, env.DB, {
+        userId: user.userId,
+        requestId: request.id,
+        method: request.method,
+        result: { uri },
+        status: 'success',
+        httpStatus: 200,
+        oauthClientId: user.oauthClientId ?? null,
+      })
       return mcpSuccess(request.id, { contents: [content] })
     }
 
     if (request.method === 'resources/templates/list') {
-      await requireMcpUser(event, platformAdminAuthOptions)
+      const user = await requireMcpUser(event, platformAdminAuthOptions)
+      logPlatformMcpEventDetached(event, env.DB, {
+        userId: user.userId,
+        requestId: request.id,
+        method: request.method,
+        result: { count: 0 },
+        status: 'success',
+        httpStatus: 200,
+        oauthClientId: user.oauthClientId ?? null,
+      })
       return mcpSuccess(request.id, { resourceTemplates: [] })
     }
 
     if (request.method === 'prompts/list') {
-      await requireMcpUser(event, platformAdminAuthOptions)
+      const user = await requireMcpUser(event, platformAdminAuthOptions)
+      logPlatformMcpEventDetached(event, env.DB, {
+        userId: user.userId,
+        requestId: request.id,
+        method: request.method,
+        result: { count: PLATFORM_MCP_PROMPTS.length },
+        status: 'success',
+        httpStatus: 200,
+        oauthClientId: user.oauthClientId ?? null,
+      })
       return mcpSuccess(request.id, { prompts: PLATFORM_MCP_PROMPTS })
     }
 
     if (request.method === 'prompts/get') {
-      await requireMcpUser(event, platformAdminAuthOptions)
+      const user = await requireMcpUser(event, platformAdminAuthOptions)
       const name = typeof request.params?.name === 'string' ? request.params.name : ''
       const rawPromptArgs = request.params?.arguments
       const promptArgs: Record<string, string> = {}
@@ -211,6 +283,16 @@ export default defineEventHandler(async (event) => {
         }
       }
       const rendered = renderPlatformMcpPrompt(name, promptArgs)
+      logPlatformMcpEventDetached(event, env.DB, {
+        userId: user.userId,
+        requestId: request.id,
+        method: request.method,
+        toolName: name || null,
+        result: { name },
+        status: 'success',
+        httpStatus: 200,
+        oauthClientId: user.oauthClientId ?? null,
+      })
       return mcpSuccess(request.id, {
         description: rendered.description,
         messages: [
@@ -220,7 +302,15 @@ export default defineEventHandler(async (event) => {
     }
 
     if (request.method === 'server/discover') {
-      await requireMcpUser(event, platformAdminAuthOptions)
+      const user = await requireMcpUser(event, platformAdminAuthOptions)
+      logPlatformMcpEventDetached(event, env.DB, {
+        userId: user.userId,
+        requestId: request.id,
+        method: request.method,
+        status: 'success',
+        httpStatus: 200,
+        oauthClientId: user.oauthClientId ?? null,
+      })
       return mcpSuccess(request.id, {
         supportedVersions: ['2026-07-28', '2025-11-25', '2025-03-26', '2024-11-05'],
         capabilities: { tools: {} },
@@ -230,10 +320,9 @@ export default defineEventHandler(async (event) => {
     }
 
     if (request.method === 'tools/list') {
-      await requireMcpUser(event, platformAdminAuthOptions)
+      const user = await requireMcpUser(event, platformAdminAuthOptions)
       const leanToolCatalog = shouldUseLeanToolCatalog(event)
-      return mcpSuccess(request.id, {
-        tools: PLATFORM_PUBLIC_MCP_TOOLS.map(tool => ({
+      const tools = PLATFORM_PUBLIC_MCP_TOOLS.map(tool => ({
           name: tool.name,
           description: tool.description,
           inputSchema: tool.inputSchema,
@@ -249,7 +338,19 @@ export default defineEventHandler(async (event) => {
             'krabiclaw/toolSurface': 'platform_admin',
             ...(tool.fileParams?.length ? { 'openai/fileParams': tool.fileParams } : {}),
           },
-        })),
+        }))
+      logPlatformMcpEventDetached(event, env.DB, {
+        userId: user.userId,
+        requestId: request.id,
+        method: request.method,
+        result: { count: tools.length },
+        status: 'success',
+        httpStatus: 200,
+        oauthClientId: user.oauthClientId ?? null,
+      })
+      return mcpSuccess(request.id, {
+        tools,
+        _meta: catalogMeta(PLATFORM_PUBLIC_MCP_TOOLS),
       })
     }
 
@@ -258,14 +359,37 @@ export default defineEventHandler(async (event) => {
       const toolStart = Date.now()
       const rawArgs = parseMcpToolCallArguments(request.params)
       requestToolArgs = rawArgs
+      const callUser = await requireMcpUser(event, platformAdminAuthOptions)
 
       let result: unknown
       try {
         result = await executePlatformMcpToolCall(event, toolName, rawArgs)
       } catch (toolError) {
         const mcpErr = asMcpError(toolError)
+        if (mcpErr.kind === 'protocol') {
+          logPlatformMcpEventDetached(event, env.DB, {
+            userId: callUser.userId,
+            requestId: request.id,
+            method: request.method,
+            toolName,
+            toolDomain: PLATFORM_MCP_TOOL_DOMAIN,
+            isMutating: false,
+            arguments: summarizePayloadShape(rawArgs),
+            status: 'error',
+            errorCode: mcpErr.code,
+            errorMessage: mcpErr.message,
+            httpStatus: 200,
+            jsonrpcErrorCode: mcpErr.code,
+            jsonrpcErrorMessage: mcpErr.message,
+            unknownToolName: toolName || null,
+            oauthClientId: callUser.oauthClientId ?? null,
+            durationMs: Date.now() - toolStart,
+          })
+          return sendMcpErrorResponse(event, { id: request.id, error: mcpErr })
+        }
         if (mcpErr.code === MCP_ERROR.invalidParams) {
           logPlatformMcpEventDetached(event, env.DB, {
+            userId: callUser.userId,
             requestId: request.id,
             method: request.method,
             toolName,
@@ -275,6 +399,8 @@ export default defineEventHandler(async (event) => {
             status: 'error',
             errorCode: mcpErr.code,
             errorMessage: mcpErr.message,
+            httpStatus: 200,
+            oauthClientId: callUser.oauthClientId ?? null,
             durationMs: Date.now() - toolStart,
           })
           return mcpSuccess(request.id, {
@@ -306,6 +432,7 @@ export default defineEventHandler(async (event) => {
       }
 
       logPlatformMcpEventDetached(event, env.DB, {
+        userId: callUser.userId,
         requestId: request.id,
         method: request.method,
         toolName,
@@ -314,6 +441,13 @@ export default defineEventHandler(async (event) => {
         arguments: summarizePayloadShape(rawArgs),
         result: summarizePayloadShape(result),
         status: 'success',
+        httpStatus: 200,
+        oauthClientId: callUser.oauthClientId ?? null,
+        compatibilityAliasUsed: toolName === 'update_platform_blog_post',
+        compatibilityToolName: toolName === 'update_platform_blog_post' ? toolName : null,
+        replacementToolNames: toolName === 'update_platform_blog_post'
+          ? ['update_platform_blog_metadata', 'replace_platform_blog_content']
+          : null,
         durationMs: Date.now() - toolStart,
       })
 
@@ -326,10 +460,7 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    throw createError({
-      statusCode: 404,
-      statusMessage: `Unsupported MCP method: ${request.method}`,
-    })
+    throw mcpProtocolError(MCP_ERROR.methodNotFound, `Unsupported MCP method: ${request.method}`, undefined, 'protocol')
   } catch (error) {
     if (requestMethod === 'tools/call') {
       logPlatformMcpEventDetached(event, env.DB, {
@@ -344,21 +475,14 @@ export default defineEventHandler(async (event) => {
         errorMessage: error instanceof Error && /Authentication required/i.test(error.message)
           ? describeMcpAuthTelemetryError(error)
           : error instanceof Error ? error.message : String(error),
+        httpStatus: asMcpError(error).kind === 'auth' ? 401 : 200,
+        jsonrpcErrorCode: asMcpError(error).code,
+        jsonrpcErrorMessage: asMcpError(error).message,
+        unknownToolName: asMcpError(error).kind === 'protocol' && requestToolName ? requestToolName : null,
       })
     }
     const mcpError = asMcpError(error)
-    const errorStatus =
-      typeof (error as { statusCode?: unknown })?.statusCode === 'number'
-        ? Number((error as { statusCode: number }).statusCode)
-        : null
-    const status =
-      errorStatus ??
-      (mcpError.code === MCP_ERROR.methodNotFound
-        ? 404
-        : mcpError.code === MCP_ERROR.invalidRequest || mcpError.code === MCP_ERROR.invalidParams || mcpError.code === MCP_ERROR.parse
-          ? 400
-          : 500)
-    if (status === 401) {
+    if (mcpError.kind === 'auth') {
       const authChallengeForFailure = buildMcpAuthChallengeForError(error, {
         resourceMetadataUrl: resourceMetadataUrl(baseUrl),
         defaultDescription: PLATFORM_AUTH_DESCRIPTION,
@@ -366,14 +490,11 @@ export default defineEventHandler(async (event) => {
       if (requestMethod === 'tools/call') {
         return mcpSuccess(requestId, mcpAuthRequiredResult({ challenge: authChallengeForFailure, message: PLATFORM_AUTH_REQUIRED_TEXT }))
       }
-      setResponseStatus(event, 401)
-      setMcpAuthChallenge(event, authChallengeForFailure)
-      return mcpFailure(requestId, mcpError)
+      return sendMcpErrorResponse(event, { id: requestId, error: mcpError, authChallenge: authChallengeForFailure })
     }
-    setResponseStatus(event, status)
     console.error(
       '[PLATFORM_MCP]',
-      status,
+      200,
       mcpError.code,
       mcpError.message,
       'method:',
@@ -383,6 +504,6 @@ export default defineEventHandler(async (event) => {
       'request_id:',
       requestId ?? null,
     )
-    return mcpFailure(requestId, mcpError)
+    return sendMcpErrorResponse(event, { id: requestId, error: mcpError })
   }
 })

@@ -80,7 +80,12 @@ async function authHeaders() {
     headers['x-dev-route-secret'] = process.env.E2E_DEV_ROUTE_SECRET
   }
 
-  const login = await fetch(`${BASE_URL}/api/dev/login`, {
+  const loginUrl = new URL('/api/dev/login', BASE_URL)
+  if (process.env.MCP_DEV_LOGIN_USER_ID) {
+    loginUrl.searchParams.set('userId', process.env.MCP_DEV_LOGIN_USER_ID)
+  }
+
+  const login = await fetch(loginUrl, {
     headers,
     redirect: 'manual',
   })

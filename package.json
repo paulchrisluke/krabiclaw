@@ -21,6 +21,8 @@
     "lint": "eslint . --ignore-pattern '.agents/**' --ignore-pattern '.tmp/**' --ignore-pattern '**/.tmp/**'",
     "lint:fix": "eslint . --fix --ignore-pattern '.agents/**' --ignore-pattern '.tmp/**' --ignore-pattern '**/.tmp/**'",
     "quality": "yarn typecheck && yarn lint",
+    "mcp:compat": "node --experimental-strip-types scripts/check-mcp-tool-compatibility.mjs",
+    "mcp:compat:write": "node --experimental-strip-types scripts/check-mcp-tool-compatibility.mjs --write",
     "test": "yarn test:unit && yarn test:e2e",
     "test:unit": "node --experimental-strip-types --experimental-test-module-mocks --import ./tests/unit/support/register-aliases.mjs --test tests/unit/**/*.test.ts",
     "test:e2e": "playwright test",

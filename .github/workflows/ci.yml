@@ -35,6 +35,7 @@ jobs:
       - run: yarn install --frozen-lockfile
       - run: yarn typecheck
       - run: yarn test:unit
+      - run: yarn mcp:compat
 
   changes:
     name: Detect changed paths

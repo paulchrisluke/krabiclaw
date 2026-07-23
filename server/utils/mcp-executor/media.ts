@@ -100,7 +100,8 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         context: await mutationContextPayload(site),
       };
     }
-    case "open_video_upload": {
+    case "open_video_upload":
+    case "open_media_upload": {
       const category = optionalString(args, "category") ?? null;
       return renderStructuredResponse(
         {
@@ -108,7 +109,9 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
           resourceUri: VIDEO_UPLOAD_WIDGET_RESOURCE_URI,
           context: { site_id: site.siteId, category },
         },
-        "Video upload widget launched.",
+        toolName === "open_media_upload"
+          ? "Media upload compatibility widget launched. For images, upload_user_media remains the canonical path."
+          : "Video upload widget launched.",
       );
     }
     case "update_media_asset": {

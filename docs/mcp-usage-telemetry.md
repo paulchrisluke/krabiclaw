@@ -1,28 +1,25 @@
 # ChatGPT MCP Usage Telemetry
 
-Durable logging of every ChatGPT MCP `tools/list` and `tools/call` request,
-for understanding tool discovery/adoption and diagnosing fuzzy-intent flows
+Durable logging of ChatGPT MCP protocol requests,
+for understanding tool discovery/adoption, stale catalogs, and fuzzy-intent flows
 ("change the big photo", "help me get more bookings").
 
 ## What is captured
 
-Every `tools/list` and `tools/call` request against `server/api/mcp.post.ts`
-(the client MCP surface) writes one row to `mcp_tool_call_events`
+MCP requests against `server/api/mcp.post.ts` (tenant surface) and
+`server/api/mcp/platform.post.ts` (platform surface) write rows to `mcp_tool_call_events`
 (`server/db/schema.ts`) via `logMcpToolCallEvent()` in
 `server/utils/mcp-telemetry.ts`. Writes are fire-and-forget — wrapped in
 Cloudflare's `waitUntil` when available, or a detached promise otherwise —
 so telemetry can never add latency to, or fail, an MCP response. A DB write
 failure is swallowed and `console.warn`'d, never thrown.
 
-Captured per row: organization/site/location/user id (best-effort — see
-limitation below), method, tool name + domain, whether the tool mutates,
-a redacted summary of arguments and result, status
-(`success` / `error` / `auth_required` / `blocked`), error code/message,
-and duration in ms.
-
-`server/api/mcp/platform.post.ts` (the platform MCP surface, if/when used)
-is **not** instrumented by this — only the client surface
-(`server/api/mcp.post.ts`) is.
+Captured per row: surface, organization/site/location/user id (best-effort),
+request id, method, tool name + domain, HTTP status, JSON-RPC error code/message,
+protocol version, hashed session id, hashed OAuth client id, user agent,
+Cloudflare ray id, deployment version, catalog fingerprint, redacted summaries
+of arguments and result, compatibility/unknown-tool fields, status
+(`success` / `error` / `auth_required` / `blocked`), and duration in ms.
 
 ## Redaction
 
@@ -104,3 +101,5 @@ Nothing to wire up manually — every tool routed through
 automatically, using its existing `domain` and `annotations.readOnlyHint`
 from `server/utils/mcp-tools.ts`. There is no separate telemetry
 registration step.
+For tool catalog changes, stale-client adapters, and OpenAI app refresh steps,
+see `docs/mcp-tool-evolution.md`.

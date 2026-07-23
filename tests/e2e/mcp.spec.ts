@@ -559,9 +559,10 @@ test.describe('stateless MCP server', () => {
     expect(allToolNames.length).toBeGreaterThan(50)
 
     const invalid = await mcpRequest(request, baseURL!, { method: 'bad/method', id: 'bad-method' })
-    expect(invalid.status()).toBe(404)
-    const invalidBody = await invalid.json() as { id: string; error: { message: string } }
+    expect(invalid.status()).toBe(200)
+    const invalidBody = await invalid.json() as { id: string; error: { code: number; message: string } }
     expect(invalidBody.id).toBe('bad-method')
+    expect(invalidBody.error.code).toBe(-32601)
     expect(invalidBody.error.message).toContain('Unsupported MCP method')
   })
 
@@ -1262,7 +1263,8 @@ test.describe('stateless MCP server', () => {
       toolName: 'get_site',
       args: { site_id: `site-missing-${Date.now()}` },
     })
-    expect(wrongSite.status()).toBe(404)
+    expect(wrongSite.status()).toBe(200)
+    expect((await wrongSite.json()).result?.isError).toBe(true)
   })
 
   test('translation, google business, and work request tools are hidden from the conversational surface by default', async ({ request, baseURL }) => {
@@ -1293,14 +1295,16 @@ test.describe('stateless MCP server', () => {
       toolName: 'get_translation_inventory',
       args: { site_id: siteId, locale: 'th' },
     })
-    expect(inventoryCall.status()).toBe(404)
+    expect(inventoryCall.status()).toBe(200)
+    expect((await inventoryCall.json()).error?.code).toBe(-32601)
 
     const startJobCall = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'start_translation_job',
       args: { site_id: siteId, locale: 'th' },
     })
-    expect(startJobCall.status()).toBe(404)
+    expect(startJobCall.status()).toBe(200)
+    expect((await startJobCall.json()).error?.code).toBe(-32601)
 
     const locationId = await ensureLocation(request, baseURL!, siteId)
     const gbConnectionCall = await mcpRequest(request, baseURL!, {
@@ -1308,7 +1312,8 @@ test.describe('stateless MCP server', () => {
       toolName: 'get_google_business_connection',
       args: { site_id: siteId, location_id: locationId },
     })
-    expect(gbConnectionCall.status()).toBe(404)
+    expect(gbConnectionCall.status()).toBe(200)
+    expect((await gbConnectionCall.json()).error?.code).toBe(-32601)
   })
 
   test('cross-tenant isolation — owner of site B cannot read or mutate site A through MCP', async ({ request, baseURL }) => {
@@ -1323,14 +1328,16 @@ test.describe('stateless MCP server', () => {
       toolName: 'get_site',
       args: { site_id: siteA },
     })
-    expect(crossRead.status()).toBe(404)
+    expect(crossRead.status()).toBe(200)
+    expect((await crossRead.json()).result?.isError).toBe(true)
 
     const crossMutate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'update_site_settings',
       args: { site_id: siteA, brand_description: 'cross-tenant injection attempt' },
     })
-    expect(crossMutate.status()).toBe(404)
+    expect(crossMutate.status()).toBe(200)
+    expect((await crossMutate.json()).result?.isError).toBe(true)
   })
 
   // Positive control for the isolation test above — proves the 404s there come
@@ -1358,7 +1365,8 @@ test.describe('stateless MCP server', () => {
       toolName: 'reply_to_review',
       args: { site_id: siteId, review_id: 'missing-review-id', reply: `MCP owner reply ${Date.now()}` },
     })
-    expect(ownerReply.status()).toBe(404)
+    expect(ownerReply.status()).toBe(200)
+    expect((await ownerReply.json()).result?.isError).toBe(true)
 
     const editorCreate = await request.post(`${baseURL}/api/dev/test-member`, {
       headers: devLoginHeaders(),
@@ -1381,6 +1389,7 @@ test.describe('stateless MCP server', () => {
       toolName: 'reply_to_review',
       args: { site_id: siteId, review_id: 'missing-review-id', reply: 'editor should fail' },
     })
-    expect(editorReply.status()).toBe(403)
+    expect(editorReply.status()).toBe(200)
+    expect((await editorReply.json()).result?.isError).toBe(true)
   })
 })

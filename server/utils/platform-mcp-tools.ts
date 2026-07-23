@@ -584,6 +584,8 @@ const PLATFORM_DOC_TOOL_DESCRIPTION = [
   SHARED_TOOL_DESCRIPTION_LINES[2],
 ].join(' ')
 
+export const PLATFORM_LEGACY_UPDATE_BLOG_POST_TOOL_NAME = 'update_platform_blog_post'
+
 const PLATFORM_SECURITY_SCHEMES: Array<{ type: 'oauth2'; scopes: string[] }> = [
   { type: 'oauth2', scopes: ['platform_admin'] },
 ]
@@ -1209,6 +1211,47 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
 ]
 
+export const PLATFORM_LEGACY_UPDATE_BLOG_POST_COMPAT_TOOL = writeTool({
+  name: PLATFORM_LEGACY_UPDATE_BLOG_POST_TOOL_NAME,
+  description: PLATFORM_BLOG_TOOL_DESCRIPTION,
+  openWorld: true,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      post_id: { type: 'string', description: 'Post id or slug.' },
+      title: { type: 'string' },
+      body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
+      content_blocks: { type: 'array', items: { type: 'object', properties: CONTENT_BLOCK_INPUT_PROPERTIES, required: ['type', 'data'], additionalProperties: false }, minItems: 1 },
+      expected_document_updated_at: { type: 'string' },
+      expected_updated_at: { type: 'string' },
+      excerpt: { type: 'string' },
+      category: { type: 'string', description: 'Platform posts use the documented platform categories; tenant categories are free text when site_id is provided.' },
+      ...NAV_FIELDS_SCHEMA,
+      seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
+      ...SEO_FIELDS_SCHEMA,
+      components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
+      publish: { type: 'boolean' },
+      unpublish: { type: 'boolean' },
+      site_id: { type: 'string', description: 'Optional site id to update tenant blog posts instead of platform posts.' },
+    },
+    required: ['post_id'],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      success: { type: 'boolean' },
+      admin_edit_url: { type: 'string' },
+      public_path: NULLABLE_STRING,
+      public_url: NULLABLE_STRING,
+      preview_url: NULLABLE_STRING,
+      post: { type: 'object' },
+    },
+    required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'post'],
+    additionalProperties: false,
+  },
+})
+
 // Not returned by tools/list — these are a debug/support escape hatch for
 // editing a content document block-by-block, not the normal blog-authoring
 // path. Still fully dispatchable by name (see getPlatformMcpTool below,
@@ -1216,6 +1259,7 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
 // session or direct support access still works — only *discovery* of new
 // sessions is affected.
 export const PLATFORM_INTERNAL_MCP_TOOLS: PlatformMcpToolDefinition[] = [
+  PLATFORM_LEGACY_UPDATE_BLOG_POST_COMPAT_TOOL,
   readTool({
     name: 'get_content_document_outline',
     description: 'Get the block outline for a platform blog, platform doc, or tenant blog content document. Provide either document_id, or owner_type plus owner_id.',

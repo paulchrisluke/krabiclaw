@@ -11,7 +11,7 @@ import { INTEGRATIONS_TOOLS } from './integrations'
 import { LOCALES_TOOLS } from './locales'
 import { LOCATIONS_TOOLS } from './locations'
 import { MANAGED_SERVICE_TOOLS } from './managed-service'
-import { MEDIA_TOOLS } from './media'
+import { MEDIA_COMPAT_TOOLS, MEDIA_TOOLS } from './media'
 import { MENUS_TOOLS } from './menus'
 import { NOTIFICATIONS_TOOLS } from './notifications'
 import { ONBOARDING_TOOLS } from './onboarding'
@@ -23,7 +23,7 @@ import { SITES_TOOLS } from './sites'
 import { SUBMISSIONS_TOOLS } from './submissions'
 import { TRANSLATIONS_TOOLS } from './translations'
 
-export const MCP_TOOLS: McpToolDefinition[] = [
+export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
   ...ACCOUNT_TOOLS,
   ...ANALYTICS_TOOLS,
   ...BLOG_TOOLS,
@@ -46,6 +46,15 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   ...SITES_TOOLS,
   ...SUBMISSIONS_TOOLS,
   ...TRANSLATIONS_TOOLS,
+].sort((a, b) => a.name.localeCompare(b.name))
+
+export const MCP_INTERNAL_TOOLS: McpToolDefinition[] = [
+  ...MEDIA_COMPAT_TOOLS,
+].sort((a, b) => a.name.localeCompare(b.name))
+
+export const MCP_TOOLS: McpToolDefinition[] = [
+  ...MCP_PUBLIC_TOOLS,
+  ...MCP_INTERNAL_TOOLS,
 ].sort((a, b) => a.name.localeCompare(b.name))
 
 
