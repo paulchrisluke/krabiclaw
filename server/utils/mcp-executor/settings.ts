@@ -1,7 +1,8 @@
 import type { McpExecutorContext } from './shared'
 import { DASHBOARD_DESTINATIONS, buildDashboardUrl, type DashboardDestination } from '~/server/utils/dashboard-links'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
-import { createCustomDomainPair, deleteCustomDomain, domainInstructions, getSiteDomains, hasCustomDomainsEntitlement, setCanonicalDomain, syncDomainWithCloudflare, validateCustomDomain } from '~/server/utils/domains'
+import { createCustomDomainPair, deleteCustomDomain, hasCustomDomainsEntitlement, setCanonicalDomain, syncDomainWithCloudflare, validateCustomDomain } from '~/server/utils/domains'
+import { domainInstructions, getSiteDomains } from '~/server/utils/domain-read-model'
 import { createError } from 'h3'
 import { NOT_HANDLED, mutationContextPayload, requiredString } from './shared'
 

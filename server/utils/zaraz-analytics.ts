@@ -1,5 +1,6 @@
 import { execute } from '~/server/db'
-import { getSiteDomains, platformAnalyticsHostnames, type DomainEnv } from '~/server/utils/domains'
+import { platformAnalyticsHostnames, type DomainEnv } from '~/server/utils/domains'
+import { getSiteDomains } from '~/server/utils/domain-read-model'
 import { ZARAZ_ANALYTICS_PURPOSE, ZARAZ_ANALYTICS_PURPOSE_ID } from '~/utils/zaraz-consent'
 
 export interface ZarazEnv extends DomainEnv {

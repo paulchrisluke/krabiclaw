@@ -2,6 +2,7 @@
 
 import { execute, queryAll, queryFirst } from '~/server/db'
 import { hasSiteEntitlement } from '~/server/utils/billing'
+import { canonicalDomainForPair, domainPair, normalizeDomain, rootDomainForPair } from '~/server/utils/domain-shared'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 
 export interface DomainEnv {
@@ -10,13 +11,14 @@ export interface DomainEnv {
   CF_CUSTOM_HOSTNAMES_API_TOKEN?: string
   CF_ZARAZ_API_TOKEN?: string
   CF_SAAS_CNAME_TARGET?: string
+  CF_DCV_DELEGATION_TARGET?: string
   CF_ACCOUNT_ID?: string
   CF_PAGES_PROJECT_NAME?: string
   NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
 }
 
-export type DomainStatus = 'pending' | 'verifying' | 'active' | 'blocked' | 'failed' | 'disabled' | 'deleted'
+export type DomainStatus = 'pending' | 'verifying' | 'active' | 'blocked' | 'failed' | 'stuck' | 'disabled' | 'deleted'
 export type DomainRole = 'canonical' | 'secondary'
 
 export interface DomainRecord {
@@ -36,8 +38,16 @@ export interface DomainRecord {
   ssl_validation_name?: string | null
   ssl_validation_type?: string | null
   ssl_validation_value?: string | null
+  ssl_validation_name_2?: string | null
+  ssl_validation_type_2?: string | null
+  ssl_validation_value_2?: string | null
+  dcv_delegation_name?: string | null
+  dcv_delegation_type?: string | null
+  dcv_delegation_value?: string | null
   dns_target?: string | null
   dns_status?: 'pending' | 'valid' | 'invalid' | 'unknown'
+  dns_last_resolved_at?: string | null
+  dns_resolved_target?: string | null
   last_synced_at?: string | null
   next_check_at?: string | null
   retry_count?: number
@@ -67,6 +77,8 @@ interface CloudflareCustomHostname {
     validation_records?: Array<{
       txt_name?: string
       txt_value?: string
+      http_url?: string
+      http_body?: string
       name?: string
       type?: string
       value?: string
@@ -84,6 +96,8 @@ interface CloudflareCustomHostname {
 
 const CF_API_BASE = 'https://api.cloudflare.com/client/v4'
 const MAX_RETRY_COUNT = 12
+const STUCK_AFTER_MS = 48 * 60 * 60 * 1000
+const DNS_QUERY_TIMEOUT_MS = 5_000
 
 async function syncZarazForActiveConnection(
   env: DomainEnv,
@@ -151,34 +165,6 @@ export function platformHostnameFallback(env: DomainEnv): string {
   return platformDomainCandidates(env)[0]!
 }
 
-export function normalizeDomain(domain: string): string {
-  if (!domain) return ''
-
-  return domain
-    .replace(/^https?:\/\//i, '')
-    .split('/')[0]
-    ?.split('?')[0]
-    ?.split('#')[0]
-    ?.trim()
-    ?.toLowerCase()
-    ?.replace(/\.$/, '') || ''
-}
-
-export function rootDomainForPair(domain: string): string {
-  const normalized = normalizeDomain(domain)
-  return normalized.startsWith('www.') ? normalized.slice(4) : normalized
-}
-
-export function domainPair(domain: string, includeWww = true): string[] {
-  const root = rootDomainForPair(domain)
-  return includeWww ? [root, `www.${root}`] : [normalizeDomain(domain)]
-}
-
-export function canonicalDomainForPair(domain: string, includeWww = true): string {
-  const root = rootDomainForPair(domain)
-  return includeWww ? `www.${root}` : normalizeDomain(domain)
-}
-
 export function validateCustomDomain(env: DomainEnv, domain: string): { valid: boolean; reason?: string } {
   const normalized = normalizeDomain(domain)
 
@@ -210,17 +196,6 @@ export function validateCustomDomain(env: DomainEnv, domain: string): { valid: b
 
 export async function hasCustomDomainsEntitlement(db: D1Database, siteId: string): Promise<boolean> {
   return hasSiteEntitlement(db, siteId, 'custom_domains')
-}
-
-export async function getSiteDomains(db: D1Database, siteId: string): Promise<DomainRecord[]> {
-  const domains = await queryAll<DomainRecord>(db, `
-    SELECT *
-    FROM site_domains
-    WHERE site_id = ? AND status != 'deleted'
-    ORDER BY type ASC, role ASC, created_at ASC
-  `, [siteId])
-
-  return domains || []
 }
 
 export async function ensureDomainAvailable(db: D1Database, domains: string[], excludeSiteId?: string): Promise<void> {
@@ -340,6 +315,14 @@ async function cloudflareRequest<T>(
   return body.result as T
 }
 
+function cloudflareSslSettings() {
+  return {
+    method: 'txt',
+    type: 'dv',
+    bundle_method: 'ubiquitous'
+  }
+}
+
 async function createCloudflareHostname(
   env: DomainEnv,
   hostname: string,
@@ -349,17 +332,20 @@ async function createCloudflareHostname(
     method: 'POST',
     body: JSON.stringify({
       hostname,
-      ssl: {
-        method: 'txt',
-        type: 'dv',
-        bundle_method: 'ubiquitous'
-      }
+      ssl: cloudflareSslSettings()
     })
   }, signal)
 }
 
 async function getCloudflareHostname(env: DomainEnv, id: string, signal?: AbortSignal): Promise<CloudflareCustomHostname> {
   return cloudflareRequest<CloudflareCustomHostname>(env, `/zones/${env.CF_ZONE_ID}/custom_hostnames/${id}`, {}, signal)
+}
+
+async function patchCloudflareHostname(env: DomainEnv, id: string, signal?: AbortSignal): Promise<CloudflareCustomHostname> {
+  return cloudflareRequest<CloudflareCustomHostname>(env, `/zones/${env.CF_ZONE_ID}/custom_hostnames/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ ssl: cloudflareSslSettings() })
+  }, signal)
 }
 
 async function deleteCloudflareHostname(env: DomainEnv, id: string): Promise<void> {
@@ -370,17 +356,28 @@ function firstSslValidation(hostname: CloudflareCustomHostname) {
   return hostname.ssl?.validation_records?.[0] || null
 }
 
+function secondSslValidation(hostname: CloudflareCustomHostname) {
+  return hostname.ssl?.validation_records?.[1] || null
+}
+
 export function mapCloudflareStatus(hostnameStatus?: string, sslStatus?: string, dnsStatus: string = 'pending'): DomainStatus {
   if (hostnameStatus === 'active' && sslStatus === 'active' && dnsStatus === 'valid') return 'active'
   if (hostnameStatus === 'blocked') return 'blocked'
-  if (hostnameStatus === 'moved' || hostnameStatus === 'deleted') return 'failed'
+  if (hostnameStatus === 'moved') return 'stuck'
+  if (hostnameStatus === 'deleted') return 'failed'
   if (hostnameStatus === 'pending' || hostnameStatus === 'pending_validation' || sslStatus === 'pending_validation') return 'verifying'
   if (hostnameStatus === 'active' || sslStatus === 'active') return 'verifying'
   return 'pending'
 }
 
-function nextCheckAt(retryCount: number): string {
-  const delayMinutes = Math.min(1440, Math.max(5, 5 * 2 ** Math.min(retryCount, 7)))
+function nextCheckAt(retryCount: number, options: { recentDnsChange?: boolean } = {}): string {
+  const delayMinutes = options.recentDnsChange
+    ? retryCount < 5
+      ? 2
+      : retryCount < 17
+        ? 5
+        : 60
+    : Math.min(240, Math.max(5, 5 * 2 ** Math.min(retryCount, 6)))
   return new Date(Date.now() + delayMinutes * 60_000).toISOString()
 }
 
@@ -428,22 +425,116 @@ async function queueReconciliation(db: D1Database, domainId: string, runAfter?: 
   `, [`domain-job-${domainId}`, domainId, runAfter ?? now, now, now])
 }
 
+function normalizeDnsValue(value: string | null | undefined): string {
+  return String(value || '').trim().toLowerCase().replace(/\.$/, '')
+}
+
+function delegatedDcvRecord(env: DomainEnv, domain: string): { name: string; type: string; value: string } | null {
+  const target = normalizeDnsValue(env.CF_DCV_DELEGATION_TARGET)
+  if (!target) return null
+  return {
+    name: `_acme-challenge.${rootDomainForPair(domain)}`,
+    type: 'CNAME',
+    value: target,
+  }
+}
+
+async function queryDnsJson(hostname: string, type: 'CNAME' | 'A' | 'AAAA', signal?: AbortSignal): Promise<string[]> {
+  const url = new URL('https://cloudflare-dns.com/dns-query')
+  url.searchParams.set('name', hostname)
+  url.searchParams.set('type', type)
+
+  const timeoutController = new AbortController()
+  const timeout = setTimeout(() => timeoutController.abort(), DNS_QUERY_TIMEOUT_MS)
+  const abort = () => timeoutController.abort()
+  if (signal?.aborted) abort()
+  signal?.addEventListener('abort', abort, { once: true })
+
+  try {
+    const response = await fetch(url, {
+      headers: { accept: 'application/dns-json' },
+      signal: timeoutController.signal,
+    })
+    if (!response.ok) return []
+    const body = await response.json().catch(() => null) as { Answer?: Array<{ data?: string }> } | null
+    return (body?.Answer ?? [])
+      .map((answer) => normalizeDnsValue(answer.data))
+      .filter(Boolean)
+  } finally {
+    clearTimeout(timeout)
+    signal?.removeEventListener('abort', abort)
+  }
+}
+
+export interface DomainResolutionInspection {
+  hostname: string
+  checked_at: string
+  records: Array<{ type: 'CNAME' | 'A' | 'AAAA'; value: string }>
+  points_to_saas: boolean
+  resolves_elsewhere: boolean
+}
+
+export async function inspectDomainResolution(env: DomainEnv, hostname: string, signal?: AbortSignal): Promise<DomainResolutionInspection> {
+  const normalizedHostname = normalizeDomain(hostname)
+  const cnameTarget = normalizeDnsValue(env.CF_SAAS_CNAME_TARGET)
+  const [cnameRecords, aRecords, aaaaRecords] = await Promise.all([
+    queryDnsJson(normalizedHostname, 'CNAME', signal),
+    queryDnsJson(normalizedHostname, 'A', signal),
+    queryDnsJson(normalizedHostname, 'AAAA', signal),
+  ])
+  const records = [
+    ...cnameRecords.map((value) => ({ type: 'CNAME' as const, value })),
+    ...aRecords.map((value) => ({ type: 'A' as const, value })),
+    ...aaaaRecords.map((value) => ({ type: 'AAAA' as const, value })),
+  ]
+  const pointsToSaas = Boolean(cnameTarget && cnameRecords.some((value) => value === cnameTarget || value.endsWith(`.${cnameTarget}`)))
+  return {
+    hostname: normalizedHostname,
+    checked_at: new Date().toISOString(),
+    records,
+    points_to_saas: pointsToSaas,
+    resolves_elsewhere: records.length > 0 && !pointsToSaas,
+  }
+}
+
+function isPendingTooLong(domain: DomainRecord, status: DomainStatus, nowMs: number): boolean {
+  if (status !== 'pending' && status !== 'verifying') return false
+  const createdAtMs = Date.parse(domain.created_at)
+  return Number.isFinite(createdAtMs) && nowMs - createdAtMs >= STUCK_AFTER_MS
+}
+
 async function persistCloudflareState(
   env: DomainEnv,
   db: D1Database,
   domainId: string,
   hostname: CloudflareCustomHostname,
-  options: { incrementRetry?: boolean; actorType?: DomainActorType; actorId?: string | null; skipPromotion?: boolean } = {}
+  options: {
+    incrementRetry?: boolean
+    actorType?: DomainActorType
+    actorId?: string | null
+    skipPromotion?: boolean
+    dnsInspection?: DomainResolutionInspection | null
+    triggeredRevalidation?: boolean
+  } = {}
 ): Promise<DomainRecord> {
   const before = await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ?`, [domainId])
   if (!before) throw new Error('Domain not found')
 
   const sslValidation = firstSslValidation(hostname)
+  const sslValidation2 = secondSslValidation(hostname)
+  const dcvDelegation = delegatedDcvRecord(env, before.domain)
   const dnsTarget = env.CF_SAAS_CNAME_TARGET || null
   const retryCount = options.incrementRetry ? Math.min(MAX_RETRY_COUNT, Number(before.retry_count || 0) + 1) : Number(before.retry_count || 0)
-  const dnsStatus = hostname.status === 'active' ? 'valid' : (before.dns_status || 'pending')
-  const status = mapCloudflareStatus(hostname.status, hostname.ssl?.status, dnsStatus)
+  const dnsStatus = options.dnsInspection?.points_to_saas
+    ? 'valid'
+    : options.dnsInspection?.resolves_elsewhere
+      ? 'invalid'
+      : hostname.status === 'active'
+        ? 'valid'
+        : (before.dns_status || 'pending')
+  const mappedStatus = mapCloudflareStatus(hostname.status, hostname.ssl?.status, dnsStatus)
   const now = new Date().toISOString()
+  const status = isPendingTooLong(before, mappedStatus, Date.parse(now)) ? 'stuck' : mappedStatus
   const activatedAt = status === 'active' ? (before.activated_at || now) : before.activated_at
   const errors = hostname.verification_errors?.join('; ') || null
 
@@ -473,8 +564,16 @@ async function persistCloudflareState(
         ssl_validation_name = ?,
         ssl_validation_type = ?,
         ssl_validation_value = ?,
+        ssl_validation_name_2 = ?,
+        ssl_validation_type_2 = ?,
+        ssl_validation_value_2 = ?,
+        dcv_delegation_name = ?,
+        dcv_delegation_type = ?,
+        dcv_delegation_value = ?,
         dns_target = ?,
         dns_status = ?,
+        dns_last_resolved_at = ?,
+        dns_resolved_target = ?,
         status = ?,
         last_synced_at = ?,
         next_check_at = ?,
@@ -494,17 +593,27 @@ async function persistCloudflareState(
     sslValidation?.txt_name ?? sslValidation?.name ?? null,
     sslValidation?.type ?? 'TXT',
     sslValidation?.txt_value ?? sslValidation?.value ?? null,
+    sslValidation2?.txt_name ?? sslValidation2?.name ?? null,
+    sslValidation2?.type ?? 'TXT',
+    sslValidation2?.txt_value ?? sslValidation2?.value ?? null,
+    dcvDelegation?.name ?? before.dcv_delegation_name ?? null,
+    dcvDelegation?.type ?? before.dcv_delegation_type ?? null,
+    dcvDelegation?.value ?? before.dcv_delegation_value ?? null,
     dnsTarget,
     dnsStatus,
+    options.dnsInspection?.checked_at ?? before.dns_last_resolved_at ?? null,
+    options.dnsInspection?.records.map((record) => `${record.type}:${record.value}`).join(', ') || before.dns_resolved_target || null,
     status,
     now,
-    status === 'active' || status === 'disabled' || status === 'deleted' ? null : nextCheckAt(retryCount),
+    status === 'active' || status === 'disabled' || status === 'deleted'
+      ? null
+      : nextCheckAt(retryCount, { recentDnsChange: options.triggeredRevalidation || dnsStatus === 'valid' }),
     retryCount,
     activatedAt,
     errors,
     JSON.stringify({
       cloudflare_created_at: hostname.created_at ?? null,
-      ssl_validation_value2: hostname.ssl?.validation_records?.[1]?.value ?? hostname.ssl?.validation_records?.[1]?.txt_value ?? null,
+      ssl_validation_value2: null,
     }),
     now,
     domainId
@@ -698,7 +807,8 @@ export async function syncDomainWithCloudflare(
   domainId: string,
   actorType: DomainActorType = 'system',
   actorId?: string | null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options: { forceRevalidation?: boolean } = {}
 ): Promise<DomainRecord> {
   try {
     signal?.throwIfAborted()
@@ -712,9 +822,27 @@ export async function syncDomainWithCloudflare(
       return persistCloudflareState(env, db, domainId, hostname, { incrementRetry: true, actorType, actorId })
     }
 
-    const hostname = await getCloudflareHostname(env, domain.cloudflare_hostname_id, signal)
+    const dnsInspection = await inspectDomainResolution(env, domain.domain, signal).catch(() => null)
     signal?.throwIfAborted()
-    return persistCloudflareState(env, db, domainId, hostname, { incrementRetry: true, actorType, actorId })
+    let hostname = await getCloudflareHostname(env, domain.cloudflare_hostname_id, signal)
+    signal?.throwIfAborted()
+    const shouldPatch = options.forceRevalidation
+      || hostname.status === 'moved'
+      || domain.status === 'stuck'
+      || (Boolean(dnsInspection?.points_to_saas) && hostname.status !== 'active')
+    let triggeredRevalidation = false
+    if (shouldPatch) {
+      hostname = await patchCloudflareHostname(env, domain.cloudflare_hostname_id, signal)
+      triggeredRevalidation = true
+      signal?.throwIfAborted()
+    }
+    return persistCloudflareState(env, db, domainId, hostname, {
+      incrementRetry: true,
+      actorType,
+      actorId,
+      dnsInspection,
+      triggeredRevalidation,
+    })
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Unknown error')
     if (normalizedError.name === 'AbortError') {
@@ -941,7 +1069,7 @@ export async function reconcileDueDomains(env: DomainEnv, db: D1Database, limit 
     FROM site_domains sd
     LEFT JOIN domain_reconciliation_jobs j ON j.domain_id = sd.id
     WHERE sd.type = 'custom'
-      AND sd.status IN ('pending', 'verifying', 'failed', 'blocked')
+      AND sd.status IN ('pending', 'verifying', 'stuck', 'failed', 'blocked')
       AND (sd.next_check_at IS NULL OR sd.next_check_at <= ? OR j.run_after <= ?)
     ORDER BY COALESCE(j.run_after, sd.next_check_at, sd.created_at) ASC
     LIMIT ?
@@ -988,58 +1116,4 @@ export async function reconcileDueDomains(env: DomainEnv, db: D1Database, limit 
   }
 
   return { checked, failed }
-}
-
-export function domainInstructions(domain: DomainRecord) {
-  if (domain.type === 'subdomain') {
-    return {
-      dns: null,
-      ssl: null,
-      ownership: null,
-      registrar_guides: {}
-    }
-  }
-
-  const root = rootDomainForPair(domain.domain)
-  const isApex = domain.domain === root
-  const target = domain.dns_target || ''
-  const meta = domain.metadata ? (() => { try { return JSON.parse(domain.metadata as string) } catch { return {} } })() : {}
-  // ssl_records holds both TXT values Cloudflare requires for DV validation
-  const sslRecords: Array<{ type: string; name: string; value: string }> = []
-  if (domain.ssl_validation_name && domain.ssl_validation_value) {
-    sslRecords.push({ type: 'TXT', name: domain.ssl_validation_name, value: domain.ssl_validation_value })
-  }
-  if (meta?.ssl_validation_value2 && domain.ssl_validation_name) {
-    sslRecords.push({ type: 'TXT', name: domain.ssl_validation_name, value: meta.ssl_validation_value2 })
-  }
-
-  return {
-    dns: isApex
-      ? { type: 'CNAME flattening or ALIAS', name: '@', value: target }
-      : { type: 'CNAME', name: domain.domain.replace(`.${root}`, '') || 'www', value: target },
-    ssl: sslRecords.length ? sslRecords[0] : null,
-    ssl_records: sslRecords,
-    apex_note: isApex ? `For the bare domain (no www), use your registrar's HTTP forwarding/redirect to https://www.${root} — do not add a CNAME at the apex.` : null,
-    ownership: domain.ownership_validation_name && domain.ownership_validation_value
-      ? { type: domain.ownership_validation_type || 'TXT', name: domain.ownership_validation_name, value: domain.ownership_validation_value }
-      : null,
-    registrar_guides: {
-      cloudflare: 'Add a proxied CNAME for www pointing to customers.krabiclaw.com. For apex, use Page Rules to forward to www.',
-      godaddy: 'Edit the www CNAME to point to customers.krabiclaw.com. For apex, use Forwarding under domain settings.',
-      namecheap: 'Create a CNAME for www pointing to customers.krabiclaw.com. For apex, use URL Redirect Record.',
-      generic: 'Point www CNAME at customers.krabiclaw.com. For apex, use your registrar\'s URL forwarding to redirect to www. (Or point the hostname at the KrabiClaw SaaS target, then return here and sync.)'
-    }
-  }
-}
-
-export async function getDomainEvents(db: D1Database, domainId: string) {
-  const events = await queryAll(db, `
-    SELECT *
-    FROM site_domain_events
-    WHERE domain_id = ?
-    ORDER BY created_at DESC
-    LIMIT 100
-  `, [domainId])
-
-  return events || []
 }

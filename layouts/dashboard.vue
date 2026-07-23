@@ -303,7 +303,7 @@ const overviewGroup = computed(() => {
     { label: 'Sites', icon: 'i-lucide-globe', to: `${orgBase.value}/sites` },
     ...(canManageOrganization.value ? [
       { label: 'Activity', icon: 'i-lucide-activity', to: `${orgBase.value}/activity` },
-    // Org settings (general/domains/members/billing) are organization-level,
+    // Org settings (general/members/billing) are organization-level,
     // not site-level, so they belong here regardless of the CMS registry's
     // per-site 'settings' manager (a distinct, site-scoped branding/SEO
     // concern handled by managerNavItems('Settings') at site scope instead).
@@ -331,6 +331,7 @@ const siteOverviewGroup = computed(() => {
     ...items,
     { label: 'Orders', icon: 'i-lucide-shopping-bag', to: `${siteBase.value}/orders` },
     { label: 'Assistant', icon: 'i-lucide-bot', to: `${siteBase.value}/conversations` },
+    { label: 'Domains', icon: 'i-lucide-globe', to: `${siteBase.value}/domains` },
     { label: 'Settings', icon: 'i-lucide-settings', to: `${siteBase.value}/settings` },
     // { label: 'Translations', icon: 'i-lucide-languages', to: `${siteBase.value}/translations` },
   ]
