@@ -95,6 +95,7 @@ interface CloudflareCustomHostname {
 const CF_API_BASE = 'https://api.cloudflare.com/client/v4'
 const MAX_RETRY_COUNT = 12
 const STUCK_AFTER_MS = 48 * 60 * 60 * 1000
+const DNS_QUERY_TIMEOUT_MS = 5_000
 
 async function syncZarazForActiveConnection(
   env: DomainEnv,
@@ -472,15 +473,26 @@ async function queryDnsJson(hostname: string, type: 'CNAME' | 'A' | 'AAAA', sign
   url.searchParams.set('name', hostname)
   url.searchParams.set('type', type)
 
-  const response = await fetch(url, {
-    headers: { accept: 'application/dns-json' },
-    signal,
-  })
-  if (!response.ok) return []
-  const body = await response.json().catch(() => null) as { Answer?: Array<{ data?: string }> } | null
-  return (body?.Answer ?? [])
-    .map((answer) => normalizeDnsValue(answer.data))
-    .filter(Boolean)
+  const timeoutController = new AbortController()
+  const timeout = setTimeout(() => timeoutController.abort(), DNS_QUERY_TIMEOUT_MS)
+  const abort = () => timeoutController.abort()
+  if (signal?.aborted) abort()
+  signal?.addEventListener('abort', abort, { once: true })
+
+  try {
+    const response = await fetch(url, {
+      headers: { accept: 'application/dns-json' },
+      signal: timeoutController.signal,
+    })
+    if (!response.ok) return []
+    const body = await response.json().catch(() => null) as { Answer?: Array<{ data?: string }> } | null
+    return (body?.Answer ?? [])
+      .map((answer) => normalizeDnsValue(answer.data))
+      .filter(Boolean)
+  } finally {
+    clearTimeout(timeout)
+    signal?.removeEventListener('abort', abort)
+  }
 }
 
 export interface DomainResolutionInspection {

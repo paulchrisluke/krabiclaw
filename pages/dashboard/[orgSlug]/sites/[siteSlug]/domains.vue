@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Domains">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <UDashboardSidebarCollapse />
         </template>
         <template #right>
           <UButton icon="i-lucide-plus" size="sm" @click="openAddModal">Add domain</UButton>
@@ -240,7 +240,9 @@ async function loadDomains({ background = false }: { background?: boolean } = {}
   if (!siteId.value) return
   if (!background) loading.value = true
   try {
-    const response = await $fetch<DomainsResponse>(`/api/sites/${siteId.value}/domains`)
+    const response = import.meta.server
+      ? await loadDomainsForServer(siteId.value)
+      : await $fetch<DomainsResponse>(`/api/sites/${siteId.value}/domains`)
     domainGroups.value = response.domain_groups ?? []
   } catch {
     if (!background) toast.add({ description: 'Failed to load domains', color: 'error' })
@@ -249,16 +251,41 @@ async function loadDomains({ background = false }: { background?: boolean } = {}
   }
 }
 
+async function loadDomainsForServer(siteId: string): Promise<DomainsResponse> {
+  const requestEvent = useRequestEvent()
+  if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request event not available' })
+  const [{ cloudflareEnv }, { domainInstructions, getDomainEvents, getSiteDomains, groupCustomDomains }] = await Promise.all([
+    import('~/server/utils/api-response'),
+    import('~/server/utils/domains'),
+  ])
+  const env = cloudflareEnv(requestEvent)
+  if (!env.db || !env.DB) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+  const domains = await getSiteDomains(env.DB, siteId)
+  const enriched = []
+  for (const domain of domains) {
+    enriched.push({
+      ...domain,
+      instructions: domainInstructions(domain),
+      events: domain.type === 'custom' ? await getDomainEvents(env.DB, domain.id) : [],
+    })
+  }
+  return { domains: enriched, domain_groups: groupCustomDomains(domains) }
+}
+
 function openAddModal() {
   addModalOpen.value = true
 }
 
-function closeAddModal() {
-  addModalOpen.value = false
+function resetAddModal() {
   addError.value = ''
   liveCutoverWarning.value = null
   addForm.domain = ''
   addForm.acknowledge_live_cutover = false
+}
+
+function closeAddModal() {
+  addModalOpen.value = false
+  resetAddModal()
 }
 
 async function addDomain() {
@@ -286,6 +313,7 @@ async function addDomain() {
       liveCutoverWarning.value = data.live_cutover_warning
       addError.value = ''
     } else {
+      liveCutoverWarning.value = null
       addError.value = data?.error ?? 'Failed to add domain'
     }
   } finally {
@@ -393,6 +421,7 @@ async function makePrimary(group: DomainGroup) {
 
 async function deleteGroup(group: DomainGroup) {
   if (!siteId.value || !group.primary_domain_id || deletingGroupId.value) return
+  if (!confirm(`Remove ${group.domain} from this site?`)) return
   deletingGroupId.value = group.id
   try {
     for (const domain of group.domains.filter((domain) => domain.type === 'custom')) {
@@ -401,6 +430,7 @@ async function deleteGroup(group: DomainGroup) {
     domainGroups.value = domainGroups.value.filter((candidate) => candidate.id !== group.id)
     toast.add({ description: 'Domain removed', color: 'success' })
   } catch {
+    await loadDomains({ background: true })
     toast.add({ description: 'Failed to remove domain', color: 'error' })
   } finally {
     deletingGroupId.value = null
@@ -427,6 +457,10 @@ function formatDateTime(value: string) {
 watch(() => route.params.siteSlug, () => {
   expandedGroups.value = {}
   void loadDomains()
+})
+
+watch(addModalOpen, (open) => {
+  if (!open) resetAddModal()
 })
 
 await loadDomains()
