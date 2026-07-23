@@ -68,6 +68,8 @@ npx playwright test tests/e2e/example.spec.ts --project=chromium --workers=1
 
 If an authenticated dashboard E2E reaches the right page but API calls return 500, check the response body before changing UI selectors. Missing local env such as `PREVIEW_SECRET` is a setup issue, not an app contract failure.
 
+If Nuxt or Playwright cannot bind a local loopback port in the sandbox, verify no process is listening on that port, then rerun the exact same command with approval/outside the sandbox before declaring the E2E blocked. A sandbox socket failure is not evidence of a product regression.
+
 ## Review Hygiene
 
 - Do not call issues, bugs, or nearby failures "pre-existing" until you have opened the relevant files and know whether the fix is small.
