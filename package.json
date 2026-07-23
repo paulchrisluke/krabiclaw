@@ -78,7 +78,7 @@
     "seed:kikuzuki:remote": "node scripts/seed-remote-guard.mjs scripts/generate-kikuzuki-seed.ts",
     "seed:ncls:blawby": "node scripts/generate-ncls-blawby-seed.mjs",
     "zaraz:ga:backfill": "node scripts/zaraz-ga-backfill.mjs",
-    "platform-admin:promote": "node scripts/promote-platform-admin.mjs",
+    "platform-admin:break-glass-promote": "node scripts/break-glass-promote-platform-admin.mjs",
     "site:invite-member": "node scripts/invite-site-member.mjs",
     "site:backfill-whatsapp-members": "node --experimental-strip-types scripts/backfill-whatsapp-members.mjs",
     "client:replay": "node scripts/client-replay.mjs",

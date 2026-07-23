@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { queryAll, queryFirst } from '~/server/db'
+import { adminHeadersForEvent, authAdminApi, countPlatformUsers } from '~/server/utils/platform-admin-users'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -18,7 +19,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const [totalUsers, totalOrganizations, totalSites, totalPosts, totalMenus, totalLocations] = await Promise.all([
-      queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM user`),
+      countPlatformUsers(authAdminApi(env), adminHeadersForEvent(event)),
       queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM organization`),
       queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM sites`),
       queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM posts`),
@@ -33,7 +34,7 @@ export default defineEventHandler(async (event) => {
 
     return jsonResponse({
       metrics: {
-        users: totalUsers?.count ?? 0,
+        users: totalUsers,
         organizations: totalOrganizations?.count ?? 0,
         sites: totalSites?.count ?? 0,
         posts: totalPosts?.count ?? 0,

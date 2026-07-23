@@ -58,6 +58,8 @@ Platform routes and platform MCP tools must authorize against those declared Adm
 
 Direct SQL reads or mutations of Better Auth-owned user/session/account tables are prohibited in normal product workflows. User listing, user lookup, role changes, bans, session listing, session revocation, deletion, and impersonation must use documented Admin plugin client or server APIs. A direct-SQL emergency recovery procedure may exist only as an explicitly named break-glass document or script, outside normal runtime and CI paths.
 
+`yarn platform-admin:break-glass-promote --email user@example.com --remote` is the retained emergency recovery path for restoring platform access when no working admin session exists. It mutates Better Auth's `user.role` column directly, so it must not be used for routine team management, tests, onboarding, or support workflows; normal platform team administration uses the Better Auth Admin plugin APIs through the dashboard.
+
 ## Organization Permissions
 
 Tenant authorization uses the Better Auth Organization plugin and its access-control statements as the source of truth. The product roles are:

@@ -1,64 +1,26 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
-import { queryAll } from '~/server/db'
-import { betterAuthTimestampToIso, type BetterAuthTimestamp } from '~/server/utils/better-auth-timestamps'
-import { escapeLikePattern } from '~/server/utils/public-search'
-
-type UserQueryParam = string | number
-
-interface UserRow {
-  id: string
-  name: string | null
-  email: string
-  role: string
-  banned: boolean | number | null
-  createdAt: BetterAuthTimestamp
-}
+import { adminHeadersForEvent, authAdminApi, listPlatformUsers } from '~/server/utils/platform-admin-users'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
-
   const query = getQuery(event)
   const search = String(query.q || '').trim().toLowerCase()
   const limit = Math.max(1, Math.min(100, Number(query.limit) || 50))
   const offset = Math.max(0, Number(query.offset) || 0)
 
-  const where: string[] = []
-  const params: UserQueryParam[] = []
-  if (search) {
-    where.push("lower(email) LIKE ? ESCAPE '\\'")
-    params.push(`%${escapeLikePattern(search)}%`)
-  }
-
-  let users: UserRow[]
   try {
-    users = await queryAll<UserRow>(db, `
-      SELECT id, name, email, role, banned, createdAt
-      FROM user
-      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-      ORDER BY createdAt DESC
-      LIMIT ? OFFSET ?
-    `, [...params, limit, offset])
-  } catch (error) {
-    const normalizedError = error instanceof Error ? error : new Error('Unknown database error')
-    console.error('admin_users_fetch_failed', {
-      error: normalizedError.message
+    const result = await listPlatformUsers(authAdminApi(env), adminHeadersForEvent(event), {
+      search,
+      limit,
+      offset,
     })
-    return jsonResponse({ error: 'Failed to fetch users' }, { status: 500 })
+    return jsonResponse({ users: result.users, total: result.total })
+  } catch (error) {
+    const statusCode = typeof (error as { statusCode?: unknown })?.statusCode === 'number' ? (error as { statusCode: number }).statusCode : 500
+    const message = typeof (error as { statusMessage?: unknown })?.statusMessage === 'string' ? (error as { statusMessage: string }).statusMessage : 'Failed to fetch users'
+    return jsonResponse({ error: message }, { status: statusCode })
   }
-
-  const normalized = users.map((user) => ({
-    ...user,
-    banned: Boolean(user.banned),
-    createdAt: betterAuthTimestampToIso(user.createdAt, 'user.createdAt')
-  }))
-
-  return jsonResponse({ users: normalized })
 })
