@@ -118,13 +118,42 @@
         <div v-if="canManageSite && isProfessionalService" class="flex flex-wrap items-center justify-between gap-3 border-y border-default py-4">
           <div>
             <h2 class="text-sm font-semibold text-highlighted">Firm-wide content</h2>
-            <p class="mt-1 text-xs text-muted">Manage Q&A and reviews that apply to the whole site.</p>
+            <p class="mt-1 text-xs text-muted">Manage Q&A and testimonials that apply to the whole site.</p>
           </div>
           <div class="flex flex-wrap gap-2">
-            <UButton icon="i-lucide-building-2" color="neutral" variant="soft" :to="`${siteDashboardPath}/professional-services`">Organization & SEO</UButton>
+            <UButton v-if="hasSiteServicesManager" icon="i-lucide-building-2" color="neutral" variant="soft" :to="`${siteDashboardPath}/professional-services`">Professional services</UButton>
             <UButton icon="i-lucide-circle-help" color="neutral" variant="soft" :to="`${siteDashboardPath}/qa`">Q&A</UButton>
-            <UButton icon="i-lucide-star" color="neutral" variant="soft" :to="`${siteDashboardPath}/reviews`">Reviews</UButton>
+            <UButton icon="i-lucide-star" color="neutral" variant="soft" :to="`${siteDashboardPath}/testimonials`">Testimonials</UButton>
           </div>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <UCard>
+            <p class="text-sm text-muted">Publication</p>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <UBadge :color="dashboardState.site.value?.status === 'active' ? 'success' : 'neutral'" variant="soft" class="capitalize">
+                {{ dashboardState.site.value?.status || 'Unknown' }}
+              </UBadge>
+              <UBadge v-if="dashboardState.site.value?.onboarding_status" color="neutral" variant="soft" class="capitalize">
+                {{ dashboardState.site.value.onboarding_status.replace(/_/g, ' ') }}
+              </UBadge>
+            </div>
+          </UCard>
+          <UCard>
+            <p class="text-sm text-muted">{{ locationsNavLabel }}</p>
+            <p class="mt-2 text-2xl font-semibold text-highlighted">{{ locations.length }}</p>
+            <UButton class="mt-3" size="xs" color="neutral" variant="ghost" :to="locationsBase">Open index</UButton>
+          </UCard>
+          <UCard>
+            <p class="text-sm text-muted">Unread inbox</p>
+            <p class="mt-2 text-2xl font-semibold text-highlighted">{{ operations.unreadThreads }}</p>
+            <UButton class="mt-3" size="xs" color="neutral" variant="ghost" :to="`${siteDashboardPath}/inbox`">Open inbox</UButton>
+          </UCard>
+          <UCard>
+            <p class="text-sm text-muted">Open guest work</p>
+            <p class="mt-2 text-2xl font-semibold text-highlighted">{{ operations.openThreads }}</p>
+            <p class="mt-2 text-xs text-muted">{{ operationBreakdown }}</p>
+          </UCard>
         </div>
 
         <!-- Locations preview -->
@@ -205,6 +234,9 @@
 <script setup lang="ts">
 import { buildOnboardingChecklistItems, buildOnboardingStarterPrompt, type OnboardingChecklistResponse } from '~/composables/useOnboardingPrompts'
 import ChowBotPromptTrigger from '~/components/chowbot/ChowBotPromptTrigger.vue'
+import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
+import { resolvePublicTemplate } from '~/utils/template-registry'
+import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Dashboard | KrabiClaw', robots: 'noindex, nofollow' })
@@ -223,6 +255,12 @@ interface SiteEvent {
   id: string; event_type: string; location_id: string | null
   metadata: Record<string, unknown> | null; created_at: string
   actor_name: string | null; actor_image: string | null; location_title: string | null
+}
+interface OperationsSummary {
+  openThreads: number
+  unreadThreads: number
+  reservations: number
+  experienceBookings: number
 }
 
 const requestEvent = useRequestEvent()
@@ -261,7 +299,14 @@ const { data, pending } = await useAsyncData(
       // legitimate state (mirrors home.get.ts's own `!site` branch, e.g. onboarding
       // in progress) and returns empty data rather than erroring.
       const context = await getDashboardContext(requestEvent, { requireSite: false })
-      if (!context.site) return { locations: [], credits: null, events: [] }
+      if (!context.site) {
+        return {
+          locations: [],
+          credits: null,
+          events: [],
+          operations: { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 },
+        }
+      }
 
       const db = cloudflareEnv(requestEvent).db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
@@ -272,7 +317,7 @@ const { data, pending } = await useAsyncData(
     }
 
     await dashboardState.refresh()
-    return $fetch<{ locations: Location[]; credits: Credits | null; events: SiteEvent[] }>('/api/dashboard/home')
+    return $fetch<{ locations: Location[]; credits: Credits | null; events: SiteEvent[]; operations: OperationsSummary }>('/api/dashboard/home')
   },
   // Reuse the SSR payload on first hydration (avoids a redundant duplicate fetch
   // on initial load), but force a fresh fetch on every subsequent client-side
@@ -288,9 +333,38 @@ const previewLocations = computed(() => locations.value.slice(0, 3))
 const siteName = computed(() => dashboardState.site.value?.brand_name ?? 'Overview')
 const canManageSite = computed(() => dashboardState.siteAccess.value === 'organization' || dashboardState.siteAccess.value === 'site')
 const isProfessionalService = computed(() => ['service', 'professional_service'].includes(dashboardState.site.value?.vertical ?? ''))
+const siteCapabilities = computed(() => {
+  const vertical = dashboardState.site.value?.vertical
+  if (!vertical) return null
+  try {
+    const normalizedVertical = normalizeVertical(vertical) as SiteVertical
+    const template = resolvePublicTemplate({ vertical }).slug
+    return resolveCmsCapabilities(normalizedVertical, template, {
+      site: parseCmsFeatureOverrideDelta(dashboardState.site.value?.feature_overrides),
+    })
+  } catch {
+    return null
+  }
+})
+const hasSiteServicesManager = computed(() => Boolean(siteCapabilities.value?.managers.some(manager => manager.key === 'site.services')))
 const siteDashboardPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}`)
 const locationsBase = computed(() => `${siteDashboardPath.value}/locations`)
 const events = computed(() => data.value?.events ?? [])
+const operations = computed<OperationsSummary>(() => data.value?.operations ?? {
+  openThreads: 0,
+  unreadThreads: 0,
+  reservations: 0,
+  experienceBookings: 0,
+})
+const hasReservations = computed(() => Boolean(siteCapabilities.value?.managers.some(manager => manager.id === 'reservations')))
+const hasExperiences = computed(() => Boolean(siteCapabilities.value?.managers.some(manager => manager.id === 'experiences')))
+const locationsNavLabel = computed(() => siteCapabilities.value?.locationVocabulary === 'office/service area' ? 'Offices / Service Areas' : 'Locations')
+const operationBreakdown = computed(() => {
+  const parts: string[] = []
+  if (hasReservations.value) parts.push(`${operations.value.reservations} reservations`)
+  if (hasExperiences.value) parts.push(`${operations.value.experienceBookings} bookings`)
+  return parts.length ? parts.join(' · ') : 'Contact messages'
+})
 
 // Getting-started task list — data source for both the checklist card and its
 // per-item ChowBotPromptTrigger auto-send prompts.

@@ -11,11 +11,11 @@ export function getPlatformDomain(env: DashboardNotificationLinkEnv): string {
 export interface SiteLocationSlugs {
   orgSlug: string
   siteSlug: string
-  locationSlug: string
+  locationSlug: string | null
 }
 
-// Every dashboard deep link requires a location slug, even for site-wide
-// records, so null locations fall back to the site's primary location.
+// Thread deep links are scope-sensitive: site-wide records go to the site inbox,
+// while location-assigned records go to that location's inbox.
 export async function resolveSiteLocationSlugs(
   db: DbClient,
   opts: { organizationId: string; siteId: string; locationId?: string | null },
@@ -36,14 +36,8 @@ export async function resolveSiteLocationSlugs(
         SELECT slug FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1
       `, [opts.locationId, opts.siteId])
       locationSlug = location?.slug ?? null
+      if (!locationSlug) return null
     }
-    if (!locationSlug) {
-      const fallback = await queryFirst<{ slug: string }>(db, `
-        SELECT slug FROM business_locations WHERE site_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1
-      `, [opts.siteId])
-      locationSlug = fallback?.slug ?? null
-    }
-    if (!locationSlug) return null
 
     return { orgSlug: site.org_slug, siteSlug: site.site_slug, locationSlug }
   } catch {
@@ -57,7 +51,9 @@ export function composeOwnerThreadInboxUrl(
   threadId: string,
 ): string {
   const query = new URLSearchParams({ thread: threadId })
-  return `https://${getPlatformDomain(env)}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}/locations/${slugs.locationSlug}/inbox?${query.toString()}`
+  const base = `https://${getPlatformDomain(env)}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}`
+  const inboxPath = slugs.locationSlug ? `/locations/${slugs.locationSlug}/inbox` : '/inbox'
+  return `${base}${inboxPath}?${query.toString()}`
 }
 
 export async function buildOwnerThreadInboxUrl(

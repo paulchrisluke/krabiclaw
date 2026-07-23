@@ -3,6 +3,7 @@ import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-res
 import { notifyContactSubmitted } from '~/server/utils/notifications'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
+import { resolveContactSubmissionAssignment } from '~/server/utils/guest-threads'
 
 const VALID_SUBJECTS = ['general', 'press', 'partnerships', 'catering', 'careers']
 
@@ -24,6 +25,7 @@ export default defineEventHandler(async (event) => {
   const message = cleanString(body.message, 2000)
   const subject = cleanString(body.subject, 30)
   const experienceIdInput = cleanString(body.experienceId, 100)
+  const locationIdInput = cleanString(body.location_id, 100) || cleanString(body.locationId, 100)
 
   if (!name) return jsonResponse({ error: 'Please enter your name.' }, { status: 400 })
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -45,15 +47,13 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Please acknowledge the contact and privacy notice.' }, { status: 400 })
   }
 
-  // Best-effort link — an invalid/foreign experienceId just means no "Regarding" context, not a failed submission.
-  let experience: { id: string; title: string } | null = null
-  if (experienceIdInput) {
-    experience = await queryFirst<{ id: string; title: string }>(
-      db,
-      'SELECT id, title FROM experiences WHERE id = ? AND site_id = ? LIMIT 1',
-      [experienceIdInput, siteId],
-    )
-  }
+  const assignment = await resolveContactSubmissionAssignment(db, {
+    siteId,
+    locationId: locationIdInput || null,
+    experienceId: experienceIdInput || null,
+  })
+  if (assignment.error) return jsonResponse({ error: assignment.error }, { status: 400 })
+  const { assignedLocationId, experience } = assignment
 
   const id = crypto.randomUUID()
   const clientIp = getClientIp(event)
@@ -75,9 +75,9 @@ export default defineEventHandler(async (event) => {
 
   const consentAt = consentAcknowledged ? new Date().toISOString() : null
   await execute(db, `
-    INSERT INTO contact_submissions (id, organization_id, site_id, name, email, subject, message, consent_at, ip_hash, experience_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [id, site.organization_id, siteId, name, email, subject || null, message, consentAt, ipHash, experience?.id ?? null])
+    INSERT INTO contact_submissions (id, organization_id, site_id, location_id, name, email, subject, message, consent_at, ip_hash, experience_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, site.organization_id, siteId, assignedLocationId, name, email, subject || null, message, consentAt, ipHash, experience?.id ?? null])
 
   await fireSiteEventSafe({
     db,
@@ -86,8 +86,10 @@ export default defineEventHandler(async (event) => {
     eventType: 'contact.created',
     entityType: 'contact_submission',
     entityId: id,
+    locationId: assignedLocationId,
     metadata: {
       subject: subject || null,
+      location_id: assignedLocationId,
     },
   })
 
@@ -95,6 +97,7 @@ export default defineEventHandler(async (event) => {
     await notifyContactSubmitted(env, db, {
       organizationId: site.organization_id,
       siteId,
+      locationId: assignedLocationId,
       siteName: site.brand_name,
       contactId: id,
       guestName: name,

@@ -80,6 +80,12 @@ function titleFromText(text: string): string {
   return title || 'New ChowBot chat'
 }
 
+function isExpectedSiteWideAccessDenial(error: unknown): boolean {
+  if (!error || typeof error !== 'object' || !('statusCode' in error)) return false
+  const statusCode = (error as { statusCode?: unknown }).statusCode
+  return statusCode === 403 || statusCode === 404
+}
+
 // ChowBot operates conversationally across a whole site (no location-scoped
 // permission model at this layer), so — like MCP's requireMcpSite — an editor
 // needs a SITE-WIDE (location_id IS NULL) member_access_scope row to use
@@ -101,7 +107,8 @@ export async function getSiteForMember(
   if (!isOrganizationWideRole(result.role)) {
     try {
       await assertSiteWideAccess(db, { memberId: result.member_id, role: result.role, organizationId: result.organization_id, siteId })
-    } catch {
+    } catch (error) {
+      if (!isExpectedSiteWideAccessDenial(error)) throw error
       return null
     }
   }

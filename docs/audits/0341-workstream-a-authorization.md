@@ -50,7 +50,7 @@ aggregate across locations), never from the URL shape alone.
 | `editor/sites/[siteId]/menus/[menuId]/sections.patch.ts` | | | | ✓ (parent menu's `location_id`) | | inline SQL + `assertResourceAccess` |
 | `editor/sites/[siteId]/menus/[menuId]/sections.delete.ts` | | | | ✓ (parent menu's `location_id`) | | inline SQL + `assertResourceAccess` |
 
-**menus/* family: complete (9/9).**
+**menus/* family: complete (10/10).**
 
 | `editor/sites/[siteId]/media/index.get.ts` | | | | ✓ (query `locationId`, or asset's own for `?id=`) | | inline SQL + `assertResourceAccess` (no filter = site-wide only) |
 | `editor/sites/[siteId]/media/[assetId].patch.ts` | | | | ✓ (asset's current `location_id`, and target if changing) | | inline SQL + `assertResourceAccess` |

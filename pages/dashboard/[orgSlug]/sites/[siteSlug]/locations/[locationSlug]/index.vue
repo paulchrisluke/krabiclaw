@@ -24,9 +24,11 @@
               <UBadge v-if="location.is_primary" color="primary" variant="soft">Primary</UBadge>
             </div>
           </UCard>
-          <UCard><p class="text-sm text-muted">Phone</p><p class="mt-2 truncate font-semibold text-highlighted">{{ location.phone || 'Not set' }}</p></UCard>
-          <UCard><p class="text-sm text-muted">Rating</p><p class="mt-2 font-semibold text-highlighted">{{ location.rating ? `${location.rating} / 5` : 'Not synced' }}</p></UCard>
-          <UCard><p class="text-sm text-muted">Menus</p><p class="mt-2 font-semibold text-highlighted">{{ menus.length }}</p></UCard>
+          <UCard><p class="text-sm text-muted">Open now</p><p class="mt-2 truncate font-semibold text-highlighted">{{ currentOpeningState }}</p></UCard>
+          <UCard v-if="hasReviews"><p class="text-sm text-muted">Rating</p><p class="mt-2 font-semibold text-highlighted">{{ location.rating ? `${location.rating} / 5` : 'Not synced' }}</p></UCard>
+          <UCard v-if="hasMenu"><p class="text-sm text-muted">Menus</p><p class="mt-2 font-semibold text-highlighted">{{ menus.length }}</p></UCard>
+          <UCard><p class="text-sm text-muted">Unread inbox</p><p class="mt-2 font-semibold text-highlighted">{{ inboxSummary.unreadThreads }}</p></UCard>
+          <UCard><p class="text-sm text-muted">Open guest work</p><p class="mt-2 font-semibold text-highlighted">{{ inboxSummary.openThreads }}</p></UCard>
         </div>
 
         <div class="grid gap-6 xl:grid-cols-2">
@@ -69,6 +71,11 @@
 </template>
 
 <script setup lang="ts">
+import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
+import { resolvePublicTemplate } from '~/utils/template-registry'
+import { getTodayGoogleHours } from '~/utils/formatters'
+import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
+
 definePageMeta({ layout: 'dashboard' })
 
 interface LocationOverview {
@@ -84,41 +91,90 @@ interface LocationOverview {
   google_place_id: string | null
   timezone?: string | null
   notification_phone?: string | null
+  opening_hours?: Parameters<typeof getTodayGoogleHours>[0]
 }
 
 interface GoogleConnection { provider_account_email: string }
+interface InboxSummary { openThreads: number; unreadThreads: number }
 
 const route = useRoute()
 const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
 if (!dashboard.state.value) await dashboard.refresh()
+const siteId = await useDashboardSiteId()
 const locationId = computed(() => dashboardLocation.currentLocationId.value ?? '')
 const locationBase = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
 const location = ref<LocationOverview | null>(null)
 const menus = ref<ApiRecord[]>([])
+const inboxSummary = ref<InboxSummary>({ openThreads: 0, unreadThreads: 0 })
 const googleConnection = ref<GoogleConnection | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 const addressLabel = computed(() => location.value?.address?.addressLines?.join(', ') || location.value?.city || 'Not set')
+const capabilities = computed(() => {
+  const vertical = dashboard.site.value?.vertical
+  if (!vertical) return null
+  try {
+    const normalizedVertical = normalizeVertical(vertical) as SiteVertical
+    const template = resolvePublicTemplate({ vertical }).slug
+    const locationRow = dashboard.locations.value.find(candidate => candidate.id === locationId.value) ?? null
+    return resolveCmsCapabilities(normalizedVertical, template, {
+      site: parseCmsFeatureOverrideDelta(dashboard.site.value?.feature_overrides),
+      location: parseCmsFeatureOverrideDelta(locationRow?.feature_overrides),
+    })
+  } catch {
+    return null
+  }
+})
+const featureSet = computed(() => new Set<ProductFeature>([
+  ...(capabilities.value?.pages.map(page => page.feature) ?? []),
+  ...(capabilities.value?.managers.map(manager => manager.id) ?? []),
+]))
+const hasMenu = computed(() => featureSet.value.has('menu'))
+const hasReviews = computed(() => featureSet.value.has('reviews'))
+const hasReservations = computed(() => featureSet.value.has('reservations'))
+const hasExperiences = computed(() => featureSet.value.has('experiences'))
+const currentOpeningState = computed(() => {
+  const hours = location.value?.opening_hours
+  if (!hours) return 'Not set'
+  const timezone = location.value?.timezone || null
+  let today = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][new Date().getDay()]
+  if (timezone) {
+    try {
+      today = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: timezone }).format(new Date()).toUpperCase()
+    } catch { /* use local day */ }
+  }
+  return getTodayGoogleHours(hours, today) || 'Hours synced'
+})
 const workspaceLinks = computed(() => [
-  { label: 'Content', icon: 'i-lucide-file-text', to: `${locationBase.value}/content` },
-  { label: 'Menu', icon: 'i-lucide-utensils', to: `${locationBase.value}/menu` },
-  { label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox` },
-  { label: 'Photos', icon: 'i-lucide-image', to: `${locationBase.value}/photos` },
-])
+  { label: 'Content', icon: 'i-lucide-file-text', to: `${locationBase.value}/content`, visible: true },
+  { label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox`, visible: true },
+  { label: 'Menu', icon: 'i-lucide-utensils', to: `${locationBase.value}/menu`, visible: hasMenu.value },
+  { label: 'Reservations', icon: 'i-lucide-calendar-check', to: `${locationBase.value}/reservations`, visible: hasReservations.value },
+  { label: 'Experiences', icon: 'i-lucide-ticket', to: `${locationBase.value}/experiences`, visible: hasExperiences.value },
+  { label: 'Photos', icon: 'i-lucide-image', to: `${locationBase.value}/photos`, visible: featureSet.value.has('photos') },
+  { label: 'Q&A', icon: 'i-lucide-message-circle-question', to: `${locationBase.value}/qa`, visible: featureSet.value.has('qa') },
+  { label: 'Settings', icon: 'i-lucide-settings', to: `${locationBase.value}/settings`, visible: true },
+].filter(item => item.visible))
 
 async function load() {
   loading.value = true
   error.value = null
   try {
-    const [locationResponse, menuResponse, connectionResponse] = await Promise.all([
+    const [locationResponse, menuResponse, connectionResponse, threadsResponse] = await Promise.all([
       $fetch<{ success: boolean; location: LocationOverview }>(`/api/dashboard/locations/${locationId.value}`),
-      $fetch<{ success: boolean; menus: ApiRecord[] }>(`/api/dashboard/editor/menus?locationId=${locationId.value}`),
+      hasMenu.value
+        ? $fetch<{ success: boolean; menus: ApiRecord[] }>(`/api/dashboard/editor/menus?locationId=${locationId.value}`)
+        : Promise.resolve({ success: true, menus: [] }),
       $fetch<{ connection: GoogleConnection | null }>(`/api/dashboard/locations/${locationId.value}/integrations/google-business`),
+      $fetch<{ summary: InboxSummary }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
+        query: { location_id: locationId.value },
+      }),
     ])
     location.value = locationResponse.location
     menus.value = menuResponse.menus
     googleConnection.value = connectionResponse.connection
+    inboxSummary.value = threadsResponse.summary ?? { openThreads: 0, unreadThreads: 0 }
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Failed to load location overview'
   } finally {

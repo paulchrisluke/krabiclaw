@@ -255,6 +255,7 @@ const MANAGER_GROUP: Partial<Record<ProductFeature, NavGroupId>> = {
   reservations: 'Operate',
   experiences: 'Operate',
   services: 'Operate',
+  testimonials: 'Reputation',
   reviews: 'Reputation',
   qa: 'Reputation',
   blog: 'Publishing',
@@ -269,6 +270,7 @@ const MANAGER_ICON: Partial<Record<ProductFeature, string>> = {
   reservations: 'i-lucide-calendar-check',
   experiences: 'i-lucide-ticket',
   services: 'i-lucide-briefcase',
+  testimonials: 'i-lucide-star',
   reviews: 'i-lucide-star',
   qa: 'i-lucide-message-circle-question',
   blog: 'i-lucide-pencil',
@@ -345,6 +347,7 @@ const siteOverviewGroup = computed(() => {
   if (scope.value !== 'site' || !siteBase.value) return []
   const items = [
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: siteBase.value },
+    { label: 'Inbox', icon: 'i-lucide-inbox', to: `${siteBase.value}/inbox` },
     { label: locationsNavLabel.value, icon: 'i-lucide-map-pin', to: locationsBase.value ?? `${siteBase.value}/locations` },
   ]
   if (!canManageSite.value) return items

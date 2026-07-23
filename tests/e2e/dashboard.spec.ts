@@ -165,5 +165,20 @@ test.describe('dashboard functional smoke', () => {
 
     const locationMenu = await page.request.get(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/menu`)
     expect(locationMenu.status(), 'location.menu is restaurant-only and off by default for the experience vertical').toBe(404)
+
+    const testimonials = await page.request.get(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/testimonials`)
+    expect(testimonials.status(), 'owner-entered testimonials are the site reputation manager').toBe(200)
+
+    const oldSiteReviews = await page.request.get(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/reviews`)
+    expect(oldSiteReviews.status(), 'site-level reviews route was renamed to testimonials and must not redirect').toBe(404)
+
+    const siteMedia = await page.request.get(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/media`)
+    expect(siteMedia.status(), 'media library is site-managed').toBe(200)
+
+    const locationMedia = await page.request.get(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/media`)
+    expect(locationMedia.status(), 'location media was removed because it exposed the site library').toBe(404)
+
+    const locationPhotos = await page.request.get(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/photos`)
+    expect(locationPhotos.status(), 'location photos remain the location-specific gallery manager').toBe(200)
   })
 })

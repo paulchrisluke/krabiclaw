@@ -17,7 +17,7 @@
           class="aspect-[704/478] w-full object-cover"
         >
       </div>
-      <span class="mt-6 inline-block rounded bg-[var(--blawby-primary)] px-2 text-sm font-semibold uppercase text-white">
+      <span class="mt-6 inline-block rounded bg-[var(--blawby-primary-dark)] px-2 text-sm font-semibold uppercase text-white">
         {{ offering.label || offering.name }}
       </span>
       <h3 class="mt-2 blawby-display text-xl font-bold text-[var(--blawby-primary)]">

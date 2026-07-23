@@ -21,7 +21,13 @@
               <PlatformIcon name="x" class="size-5" />
             </button>
             <div class="flex min-w-0 items-center gap-3">
-              <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white" style="background: linear-gradient(135deg, var(--kc-navy) 0%, var(--kc-navy-700) 100%);">
+              <img
+                v-if="template.logoUrl"
+                :src="template.logoUrl"
+                :alt="`${template.displayName} logo`"
+                class="h-8 w-8 shrink-0 rounded-lg object-contain"
+              />
+              <div v-else class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white" style="background: linear-gradient(135deg, var(--kc-navy) 0%, var(--kc-navy-700) 100%);">
                 {{ template.displayName.charAt(0) }}
               </div>
               <div class="min-w-0">
@@ -88,7 +94,13 @@
         <div class="border-t border-default px-6 py-4" style="background: var(--ui-bg-elevated);">
           <div class="flex flex-wrap items-center justify-between gap-4">
             <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold" style="background: linear-gradient(135deg, var(--kc-navy) 0%, var(--kc-navy-700) 100%);">
+              <img
+                v-if="template.logoUrl"
+                :src="template.logoUrl"
+                :alt="`${template.displayName} logo`"
+                class="h-8 w-8 rounded-lg object-contain"
+              />
+              <div v-else class="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold" style="background: linear-gradient(135deg, var(--kc-navy) 0%, var(--kc-navy-700) 100%);">
                 {{ template.displayName.charAt(0) }}
               </div>
               <div>
@@ -184,16 +196,17 @@
           <div class="rounded-2xl border border-default overflow-hidden" style="background: var(--ui-bg-elevated); box-shadow: 0 8px 40px rgba(31,37,71,0.08);">
             <div class="h-1" style="background: linear-gradient(90deg, var(--kc-coral) 0%, var(--kc-teal) 100%);"></div>
             <div class="p-6">
-              <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white text-xl font-bold mb-4" style="background: linear-gradient(135deg, var(--kc-navy) 0%, var(--kc-navy-700) 100%); box-shadow: 0 4px 12px rgba(31,37,71,0.2);">
+              <img
+                v-if="template.logoUrl"
+                :src="template.logoUrl"
+                :alt="`${template.displayName} logo`"
+                class="w-12 h-12 rounded-xl object-contain mb-4"
+              />
+              <div v-else class="w-12 h-12 rounded-xl flex items-center justify-center text-white text-xl font-bold mb-4" style="background: linear-gradient(135deg, var(--kc-navy) 0%, var(--kc-navy-700) 100%); box-shadow: 0 4px 12px rgba(31,37,71,0.2);">
                 {{ template.displayName.charAt(0) }}
               </div>
               <h3 class="text-xl font-bold text-default">{{ template.displayName }}</h3>
               <p class="mt-1 text-sm text-muted">{{ template.tagline }}</p>
-
-              <div class="mt-4 rounded-lg bg-primary/10 border border-primary/20 px-4 py-3">
-                <p class="text-sm font-semibold text-primary">{{ template.priceLabel }}</p>
-                <p class="mt-0.5 text-xs text-muted">{{ template.priceNote }}</p>
-              </div>
 
               <div class="mt-6 space-y-3">
                 <NuxtLink

@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="site-professional-services">
     <template #header>
-      <UDashboardNavbar title="Organization and search data">
+      <UDashboardNavbar title="Professional services">
         <template #leading>
           <DashboardSidebarCollapseButton />
         </template>
@@ -9,7 +9,7 @@
     </template>
 
     <template #body>
-      <p class="mb-6 text-sm text-muted">Manage the canonical organization details used by KrabiClaw pages, ChowBot, MCP, and structured data.</p>
+      <p class="mb-6 text-sm text-muted">Manage the canonical professional-service details used by KrabiClaw pages, ChowBot, MCP, and structured data.</p>
 
       <UCard>
         <div v-if="pending" class="space-y-4">
@@ -51,7 +51,7 @@
 
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.services' })
-useSeoMeta({ title: 'Organization and search data | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Professional services | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 interface ComplianceRecord extends Record<string, unknown> {
   entity_name?: string | null

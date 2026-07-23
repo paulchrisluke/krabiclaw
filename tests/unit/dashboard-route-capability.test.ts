@@ -103,12 +103,32 @@ test('a missing location under a real site fails closed', async () => {
 })
 
 test('content manager keys are always allowed, even under a site delta that tries to disable them', async () => {
-  fixtures.site = { ...restaurantSite, feature_overrides: JSON.stringify({ disabled: ['qa', 'blog', 'reviews'] }) }
+  fixtures.site = { ...restaurantSite, feature_overrides: JSON.stringify({ disabled: ['qa', 'blog', 'testimonials'] }) }
   fixtures.location = null
   const qaAllowed = await isDashboardRouteCapabilityAllowed(db, 'user-1', {
     organizationSlug: 'acme', siteSlug: 'acme-restaurant', capabilityKey: 'site.qa',
   })
   assert.equal(qaAllowed, true)
+
+  const testimonialsAllowed = await isDashboardRouteCapabilityAllowed(db, 'user-1', {
+    organizationSlug: 'acme', siteSlug: 'acme-restaurant', capabilityKey: 'site.testimonials',
+  })
+  assert.equal(testimonialsAllowed, true)
+})
+
+test('removed location media manager is denied while site media is allowed', async () => {
+  fixtures.site = restaurantSite
+  fixtures.location = { feature_overrides: null }
+  const removedLocationMedia = await isDashboardRouteCapabilityAllowed(db, 'user-1', {
+    organizationSlug: 'acme', siteSlug: 'acme-restaurant', locationSlug: 'downtown', capabilityKey: 'location.media',
+  })
+  assert.equal(removedLocationMedia, false)
+
+  fixtures.location = null
+  const siteMedia = await isDashboardRouteCapabilityAllowed(db, 'user-1', {
+    organizationSlug: 'acme', siteSlug: 'acme-restaurant', capabilityKey: 'site.media',
+  })
+  assert.equal(siteMedia, true)
 })
 
 test('professional_service default manager key is allowed, restaurant-only key is denied', async () => {

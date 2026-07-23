@@ -53,6 +53,17 @@ export interface MemberAccessPrincipal {
 
 export type DashboardSiteAccess = 'organization' | 'site' | 'location'
 
+export async function findLocationInSite(
+  db: DbClient,
+  input: { organizationId: string; siteId: string; locationId: string },
+): Promise<{ id: string } | null> {
+  return await queryFirst<{ id: string }>(db, `
+    SELECT id FROM business_locations
+    WHERE id = ? AND site_id = ? AND organization_id = ?
+    LIMIT 1
+  `, [input.locationId, input.siteId, input.organizationId])
+}
+
 export function isOrganizationWideRole(role: string): boolean {
   return role === 'owner' || role === 'admin'
 }
@@ -90,6 +101,7 @@ const SCOPED_ROLE_DASHBOARD_ROUTES = [
   /^\/api\/dashboard\/home$/,
   /^\/api\/dashboard\/settings$/,
   /^\/api\/dashboard\/locations(?:\/add|\/[^/]+(?:\/integrations\/google-business(?:\/auth)?)?)?$/,
+  /^\/api\/dashboard\/sites\/[^/]+\/guest-threads(?:\/[^/]+(?:\/reply)?)?$/,
   /^\/api\/dashboard\/onboarding\/checklist$/,
   /^\/api\/dashboard\/notifications(?:\/unread-count|\/read-all|\/[^/]+\/read)?$/,
   /^\/api\/dashboard\/editor(?:\/.*)?$/,

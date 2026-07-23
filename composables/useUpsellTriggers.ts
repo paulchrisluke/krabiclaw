@@ -1,11 +1,11 @@
 import type { UpsellType } from './useServiceUpsell'
+import type { Plan } from '~/server/api/billing/plans.get'
 
 const SESSION_KEY = 'kc-upsell-shown'
 
 export const useUpsellTriggers = () => {
   const { site } = useDashboardSite()
   const { open } = useServiceUpsell()
-  const { managedPlan, seoAcceleratorPlan } = usePlans()
 
   const currentPlan = computed(() => site.value?.plan ?? 'free')
 
@@ -13,20 +13,21 @@ export const useUpsellTriggers = () => {
     currentPlan.value === 'free' || currentPlan.value === null
   )
 
-  // Never suggest a tier that's currently hidden (MANAGED_SERVICE_ENABLED
-  // off) — usePlans() only returns it when it's actually purchasable.
-  const shouldSuggestManaged = computed(() =>
-    currentPlan.value === 'growth' && Boolean(managedPlan.value)
-  )
+  async function loadPlanIds(): Promise<Set<string>> {
+    try {
+      const plans = await $fetch<Plan[]>('/api/billing/plans')
+      return new Set(plans.map(plan => plan.id))
+    } catch {
+      return new Set()
+    }
+  }
 
-  const shouldSuggestSeo = computed(() =>
-    currentPlan.value === 'managed' && Boolean(seoAcceleratorPlan.value)
-  )
-
-  function pickBestUpsell(): UpsellType | null {
+  async function pickBestUpsell(): Promise<UpsellType | null> {
     if (shouldSuggestGrowth.value) return 'growth'
-    if (shouldSuggestManaged.value) return 'managed'
-    if (shouldSuggestSeo.value) return 'seo_accelerator'
+
+    const planIds = await loadPlanIds()
+    if (currentPlan.value === 'growth' && planIds.has('managed')) return 'managed'
+    if (currentPlan.value === 'managed' && planIds.has('seo_accelerator')) return 'seo_accelerator'
     return null
   }
 
@@ -34,17 +35,16 @@ export const useUpsellTriggers = () => {
   function evaluateAndSuggest() {
     if (typeof sessionStorage === 'undefined') return
     if (sessionStorage.getItem(SESSION_KEY)) return
-    const upsell = pickBestUpsell()
-    if (!upsell) return
-    sessionStorage.setItem(SESSION_KEY, '1')
-    setTimeout(() => open(upsell, 'auto-trigger'), 2000)
+    void pickBestUpsell().then((upsell) => {
+      if (!upsell || sessionStorage.getItem(SESSION_KEY)) return
+      sessionStorage.setItem(SESSION_KEY, '1')
+      setTimeout(() => open(upsell, 'auto-trigger'), 2000)
+    })
   }
 
   return {
     currentPlan,
     shouldSuggestGrowth,
-    shouldSuggestManaged,
-    shouldSuggestSeo,
     evaluateAndSuggest,
   }
 }

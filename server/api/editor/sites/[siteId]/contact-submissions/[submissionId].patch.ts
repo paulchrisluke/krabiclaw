@@ -2,7 +2,8 @@
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { updateContactSubmissionStatus } from '~/server/utils/mcp-workflows'
-import { assertSiteWideAccess } from '~/server/utils/member-access'
+import { assertResourceAccess } from '~/server/utils/member-access'
+import { getGuestThreadSource } from '~/server/utils/guest-threads'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 export default defineEventHandler(async (event) => {
@@ -20,7 +21,17 @@ export default defineEventHandler(async (event) => {
   const site = await loadMemberSiteRow(db, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  await assertSiteWideAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
+  const source = await getGuestThreadSource(db, 'contact', submissionId)
+  if (!source || source.site_id !== siteId || source.organization_id !== site.organization_id) {
+    return jsonResponse({ error: 'Submission not found' }, { status: 404 })
+  }
+  await assertResourceAccess(db, {
+    memberId: site.member_id,
+    role: site.member_role,
+    organizationId: site.organization_id,
+    siteId,
+    resourceLocationId: source.location_id,
+  })
 
   const body = await readBody(event) as { status?: unknown }
   const status = cleanString(body.status, 20)

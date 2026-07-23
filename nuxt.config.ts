@@ -508,7 +508,7 @@ export default defineNuxtConfig({
     // module. Nitro's Rollup pass cannot parse the binary, and Workers cannot compile raw
     // R2 bytes at runtime.
     rollupConfig: {
-      external: [/(?:index_bg|yoga)\.wasm$/]
+      external: [/(?:index_bg|yoga|webp_dec|squoosh_png_bg)\.wasm$/]
     },
     serverAssets: [{
       baseName: 'docs',

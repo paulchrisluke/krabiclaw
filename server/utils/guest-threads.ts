@@ -1,4 +1,5 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { listAccessibleLocationIds, type MemberAccessPrincipal } from '~/server/utils/member-access'
 import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
 
 export type GuestThreadSubmissionType = 'contact' | 'reservation' | 'experience_booking'
@@ -40,6 +41,7 @@ interface ContactThreadSource extends GuestThreadSourceBase {
   submission_type: 'contact'
   subject: string | null
   message: string
+  location_title: string | null
   experience_title: string | null
 }
 
@@ -64,6 +66,20 @@ interface ExperienceThreadSource extends GuestThreadSourceBase {
 
 export type GuestThreadSource = ContactThreadSource | ReservationThreadSource | ExperienceThreadSource
 
+export interface ContactSubmissionAssignment {
+  selectedLocation: { id: string; title: string } | null
+  experience: { id: string; title: string; location_id: string } | null
+  assignedLocationId: string | null
+  error: string | null
+}
+
+export interface GuestThreadOperationSummary {
+  openThreads: number
+  unreadThreads: number
+  reservations: number
+  experienceBookings: number
+}
+
 export interface GuestThreadMessageRow {
   id: string
   thread_id: string | null
@@ -79,6 +95,48 @@ export interface GuestThreadMessageRow {
   status: string
   error: string | null
   created_at: string
+}
+
+export async function resolveContactSubmissionAssignment(
+  db: DbClient,
+  opts: {
+    siteId: string
+    locationId?: string | null
+    experienceId?: string | null
+  },
+): Promise<ContactSubmissionAssignment> {
+  let selectedLocation: ContactSubmissionAssignment['selectedLocation'] = null
+  if (opts.locationId) {
+    selectedLocation = await queryFirst<{ id: string; title: string }>(
+      db,
+      'SELECT id, title FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1',
+      [opts.locationId, opts.siteId],
+    )
+    if (!selectedLocation) {
+      return {
+        selectedLocation: null,
+        experience: null,
+        assignedLocationId: null,
+        error: 'location_id must reference a location on this site',
+      }
+    }
+  }
+
+  let experience: ContactSubmissionAssignment['experience'] = null
+  if (opts.experienceId) {
+    experience = await queryFirst<{ id: string; title: string; location_id: string }>(
+      db,
+      'SELECT id, title, location_id FROM experiences WHERE id = ? AND site_id = ? LIMIT 1',
+      [opts.experienceId, opts.siteId],
+    )
+  }
+
+  return {
+    selectedLocation,
+    experience,
+    assignedLocationId: experience?.location_id ?? selectedLocation?.id ?? null,
+    error: null,
+  }
 }
 
 export interface GuestThreadSummary extends GuestThreadRow {
@@ -118,7 +176,7 @@ export async function getGuestThreadSource(
       SELECT
         ct.organization_id,
         ct.site_id,
-        NULL AS location_id,
+        COALESCE(ct.location_id, e.location_id) AS location_id,
         ct.name AS guest_name,
         ct.email AS guest_email,
         NULL AS guest_phone,
@@ -126,10 +184,12 @@ export async function getGuestThreadSource(
         ct.status AS operational_status,
         ct.subject,
         ct.message,
+        bl.title AS location_title,
         e.title AS experience_title,
         'contact' AS submission_type
       FROM contact_submissions ct
       LEFT JOIN experiences e ON e.id = ct.experience_id
+      LEFT JOIN business_locations bl ON bl.id = COALESCE(ct.location_id, e.location_id)
       WHERE ct.id = ?
       LIMIT 1
     `, [submissionId])
@@ -159,7 +219,8 @@ export async function getGuestThreadSource(
     `, [submissionId])
   }
 
-  return await queryFirst<ExperienceThreadSource>(db, `
+  if (submissionType === 'experience_booking') {
+    return await queryFirst<ExperienceThreadSource>(db, `
     SELECT
       eb.organization_id,
       eb.site_id,
@@ -181,7 +242,10 @@ export async function getGuestThreadSource(
     LEFT JOIN experiences e ON e.id = eb.experience_id
     WHERE eb.id = ?
     LIMIT 1
-  `, [submissionId])
+    `, [submissionId])
+  }
+
+  return null
 }
 
 export async function getGuestThreadBySubmission(
@@ -215,10 +279,20 @@ export async function ensureGuestThread(
   submissionId: string,
 ): Promise<GuestThreadRow> {
   const existing = await getGuestThreadBySubmission(db, submissionType, submissionId)
-  if (existing) return existing
-
   const source = await getGuestThreadSource(db, submissionType, submissionId)
   if (!source) throw new Error('Submission not found')
+  if (existing) {
+    if ((existing.location_id ?? null) !== (source.location_id ?? null)) {
+      const now = new Date().toISOString()
+      await execute(db, `
+        UPDATE guest_threads
+        SET location_id = ?, updated_at = ?
+        WHERE id = ?
+      `, [source.location_id, now, existing.id])
+      return { ...existing, location_id: source.location_id, updated_at: now }
+    }
+    return existing
+  }
 
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
@@ -321,6 +395,7 @@ export async function listGuestThreads(
   siteId: string,
   opts: {
     locationId?: string | null
+    principal?: MemberAccessPrincipal | null
     search?: string | null
     type?: GuestThreadSubmissionType | null
     inboxStatus?: GuestThreadInboxStatus | null
@@ -331,8 +406,15 @@ export async function listGuestThreads(
   const params: Array<string | number> = [siteId]
   let where = 'gt.site_id = ?'
   if (opts.locationId) {
-    where += ' AND (gt.location_id = ? OR gt.location_id IS NULL)'
+    where += ' AND gt.location_id = ?'
     params.push(opts.locationId)
+  } else if (opts.principal) {
+    const accessibleLocationIds = await listAccessibleLocationIds(db, opts.principal)
+    if (accessibleLocationIds !== null) {
+      if (accessibleLocationIds.length === 0) return []
+      where += ` AND gt.location_id IN (${accessibleLocationIds.map(() => '?').join(', ')})`
+      params.push(...accessibleLocationIds)
+    }
   }
   if (opts.type) {
     where += ' AND gt.submission_type = ?'
@@ -372,6 +454,48 @@ export async function listGuestThreads(
   `, [...params, limit])
 
   return rows ?? []
+}
+
+export async function getGuestThreadOperationSummary(
+  db: DbClient,
+  siteId: string,
+  opts: {
+    locationId?: string | null
+    principal?: MemberAccessPrincipal | null
+  } = {},
+): Promise<GuestThreadOperationSummary> {
+  const params: Array<string | number> = [siteId]
+  let where = 'gt.site_id = ?'
+  if (opts.locationId) {
+    where += ' AND gt.location_id = ?'
+    params.push(opts.locationId)
+  } else if (opts.principal) {
+    const accessibleLocationIds = await listAccessibleLocationIds(db, opts.principal)
+    if (accessibleLocationIds !== null) {
+      if (accessibleLocationIds.length === 0) {
+        return { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
+      }
+      where += ` AND gt.location_id IN (${accessibleLocationIds.map(() => '?').join(', ')})`
+      params.push(...accessibleLocationIds)
+    }
+  }
+
+  const counts = await queryFirst<GuestThreadOperationSummary>(db, `
+    SELECT
+      SUM(CASE WHEN gt.inbox_status != 'closed' THEN 1 ELSE 0 END) AS openThreads,
+      SUM(CASE WHEN gt.unread_count > 0 THEN 1 ELSE 0 END) AS unreadThreads,
+      SUM(CASE WHEN gt.inbox_status != 'closed' AND gt.submission_type = 'reservation' THEN 1 ELSE 0 END) AS reservations,
+      SUM(CASE WHEN gt.inbox_status != 'closed' AND gt.submission_type = 'experience_booking' THEN 1 ELSE 0 END) AS experienceBookings
+    FROM guest_threads gt
+    WHERE ${where}
+  `, params)
+
+  return {
+    openThreads: counts?.openThreads ?? 0,
+    unreadThreads: counts?.unreadThreads ?? 0,
+    reservations: counts?.reservations ?? 0,
+    experienceBookings: counts?.experienceBookings ?? 0,
+  }
 }
 
 export async function listGuestThreadMessages(
