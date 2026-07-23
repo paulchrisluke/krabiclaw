@@ -1,0 +1,56 @@
+name: Zaraz GA4 Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Cloudflare/D1 environment to sync
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - staging
+          - preview
+      dry_run:
+        description: Inspect planned Zaraz GA4 changes without writing
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Sync Zaraz GA4
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Sync Zaraz GA4 configuration
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ZARAZ_API_TOKEN: ${{ secrets.CF_ZARAZ_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+        run: |
+          case "${{ inputs.target }}" in
+            production) target_flag="--remote" ;;
+            staging) target_flag="--staging" ;;
+            preview) target_flag="--preview" ;;
+            *) echo "Unsupported target: ${{ inputs.target }}" >&2; exit 1 ;;
+          esac
+
+          dry_run_flag=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            dry_run_flag="--dry-run"
+          fi
+
+          yarn zaraz:ga:backfill "$target_flag" $dry_run_flag

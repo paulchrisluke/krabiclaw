@@ -1,7 +1,8 @@
 // PATCH /api/editor/sites/[siteId]/settings
 // Update site settings including brand color theme
 import { jsonResponse } from '~/server/utils/api-response'
-import { setConfig, type SiteConfig } from '~/server/utils/site-config'
+import { deleteConfig, setConfig, type SiteConfig } from '~/server/utils/site-config'
+import { removeTenantZarazAnalytics, syncTenantZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { resolveColor } from '~/utils/color-utils'
 import { defineEventHandler, readBody } from 'h3'
 import { requireSiteAccess } from '~/server/utils/location-access'
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody<Record<string, unknown>>(event)
-  const { db, site } = await requireSiteAccess(event, siteId)
+  const { env, db, site } = await requireSiteAccess(event, siteId)
 
   const organizationId = site.organization_id
 
@@ -57,6 +58,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const updates: Array<Promise<void>> = []
+  let analyticsMeasurementId: string | null | undefined
 
   for (const key of configKeys) {
     const value = body[key]
@@ -65,11 +67,29 @@ export default defineEventHandler(async (event) => {
       const finalValue = key === 'brand_color' ? brandColor : value
       if (finalValue !== null && finalValue !== undefined) {
         updates.push(setConfig(db, organizationId, siteId, key, finalValue))
+        if (key === 'google_analytics_measurement_id') {
+          analyticsMeasurementId = finalValue.trim()
+        }
       }
+    } else if (key === 'google_analytics_measurement_id' && value === null) {
+      updates.push(deleteConfig(db, organizationId, siteId, key))
+      analyticsMeasurementId = null
     }
   }
 
   await Promise.all(updates)
+
+  if (analyticsMeasurementId !== undefined) {
+    try {
+      if (analyticsMeasurementId) {
+        await syncTenantZarazAnalytics(env, db, { siteId, organizationId, measurementId: analyticsMeasurementId })
+      } else {
+        await removeTenantZarazAnalytics(env, db, siteId)
+      }
+    } catch (error) {
+      console.error('zaraz_sync_failed', { siteId, error })
+    }
+  }
 
   return jsonResponse({
     success: true,
