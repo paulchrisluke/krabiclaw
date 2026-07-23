@@ -108,7 +108,7 @@ if (platformMeasurementId && platformHostnames.length) {
   const triggerKey = 'ga-platform'
   config.triggers[triggerKey] = {
     name: 'Platform hosts',
-    loadRules: [{ match: '{{ client.pageLocation }}', op: 'MATCH_REGEX', value: pageLocationRegex(platformHostnames) }],
+    loadRules: [{ match: '{{ system.page.url }}', op: 'MATCH_REGEX', value: pageLocationRegex(platformHostnames) }],
   }
   const existingEntry = Object.entries(config.tools).find(([, tool]) =>
     tool?.component === 'google-analytics_v4' && tool.settings?.tid === platformMeasurementId
@@ -134,7 +134,7 @@ for (const row of rows) {
   const hostnames = String(row.hostnames).split('|').map(value => value.toLowerCase()).sort()
   config.triggers[key] = {
     name: `Tenant hosts (${row.site_id})`,
-    loadRules: [{ match: '{{ client.pageLocation }}', op: 'MATCH_REGEX', value: pageLocationRegex(hostnames) }],
+    loadRules: [{ match: '{{ system.page.url }}', op: 'MATCH_REGEX', value: pageLocationRegex(hostnames) }],
   }
   upsertGaTool(key, {
     name: `Tenant GA4 (${row.site_id})`,

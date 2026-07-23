@@ -130,7 +130,7 @@ function makePageLocationTrigger(name: string, hostnames: string[]): ZarazTrigge
   return {
     name,
     loadRules: [{
-      match: '{{ client.pageLocation }}',
+      match: '{{ system.page.url }}',
       op: 'MATCH_REGEX',
       value: tenantPageLocationRegex(hostnames),
     }],
