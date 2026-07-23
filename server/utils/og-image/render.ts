@@ -5,6 +5,7 @@ import { OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, type OgImageRenderPayload } from '~/ut
 import { getOgImageFonts } from './fonts.ts'
 import { resolveOgImageRenderer } from './renderers/index.ts'
 import { fetchImageAsDataUri } from './fetch-image.ts'
+import { convertWebpDataUriToPng } from './webp-to-png.ts'
 import platformLogoBase64 from '~/server/assets/platform-logo'
 
 // A same-zone self-fetch (this Worker requesting its own krabiclaw.com/krabi-claw-logo.png)
@@ -43,6 +44,37 @@ async function loadBundledYogaWasm(): Promise<WebAssembly.Module> {
   return wasmModule
 }
 
+async function loadBundledWebpDecoderWasm(): Promise<WebAssembly.Module> {
+  const { default: wasmModule } = await import('@jsquash/webp/codec/dec/webp_dec.wasm')
+  return wasmModule
+}
+
+async function loadBundledPngEncoderWasm(): Promise<WebAssembly.Module> {
+  // squoosh_png_bg.wasm ships its own wasm-bindgen .d.ts declaring named function exports,
+  // which TypeScript prefers over this repo's ambient `declare module '*.wasm'` default-export
+  // fallback (types/wasm.d.ts) — the real runtime import (matching resvg/yoga/webp_dec, all
+  // bundled by Wrangler as a precompiled Module) does resolve to { default: WebAssembly.Module }.
+  const mod = await import('@jsquash/png/codec/pkg/squoosh_png_bg.wasm') as unknown as { default: WebAssembly.Module }
+  return mod.default
+}
+
+// Satori 0.26's image decoder throws for WebP data URIs — see the acceptedContentTypes
+// comment below. Tenant media (background photos, logos, favicons) is sometimes imported
+// as WebP unchanged from its original source file, so any of the three image slots below
+// can hit this. Re-encode to PNG rather than reject outright, so imported WebP photos
+// still render instead of silently falling back to the flat template gradient.
+async function resolveWebpSafeDataUri(
+  dataUri: string | null,
+  deps: Pick<RenderOgImageDeps, 'webpDecoderWasmModule' | 'pngEncoderWasmModule'>,
+): Promise<string | null> {
+  if (!dataUri || !dataUri.startsWith('data:image/webp')) return dataUri
+  const [webpDecoderWasmModule, pngEncoderWasmModule] = await Promise.all([
+    deps.webpDecoderWasmModule ? Promise.resolve(deps.webpDecoderWasmModule) : loadBundledWebpDecoderWasm(),
+    deps.pngEncoderWasmModule ? Promise.resolve(deps.pngEncoderWasmModule) : loadBundledPngEncoderWasm(),
+  ])
+  return convertWebpDataUriToPng(dataUri, { webpDecoderWasmModule, pngEncoderWasmModule })
+}
+
 async function ensureResvgInitialized(wasmModule?: InitInput): Promise<void> {
   if (!resvgInit) {
     resvgInit = Promise.resolve(wasmModule ?? loadBundledResvgWasm())
@@ -74,6 +106,13 @@ export interface RenderOgImageDeps {
    */
   wasmModule?: InitInput
   yogaModule?: InitInput
+  /**
+   * jsquash's emscripten/wasm-bindgen glue instantiates from a real WebAssembly.Module
+   * (not raw bytes) — tests must pass an already-compiled Module. Deployed Workers omit
+   * these so Wrangler supplies the statically imported files as precompiled Modules.
+   */
+  webpDecoderWasmModule?: WebAssembly.Module
+  pngEncoderWasmModule?: WebAssembly.Module
 }
 
 /** Renders one OG image payload to real, decodable 1200×630 PNG bytes. */
@@ -86,16 +125,21 @@ export async function renderOgImagePng(
     ensureSatoriInitialized(deps.yogaModule),
   ])
 
-  const [backgroundImageDataUri, logoDataUri, faviconDataUri] = await Promise.all([
-    // Satori 0.26's image decoder throws for WebP data URIs. A background is optional,
-    // so keep the page-specific title/branding on the template gradient instead of
-    // failing the whole card into the generic static fallback.
+  const [rawBackgroundImageDataUri, rawLogoDataUri, rawFaviconDataUri] = await Promise.all([
+    // WebP is accepted here (unlike before) and converted to PNG below via
+    // resolveWebpSafeDataUri — Satori itself still can't decode WebP directly.
     fetchImageAsDataUri(payload.backgroundImageUrl, {
       timeoutMs: 4000,
-      acceptedContentTypes: ['image/png', 'image/jpeg'],
+      acceptedContentTypes: ['image/png', 'image/jpeg', 'image/webp'],
     }),
     resolveLogoDataUri(payload.logoUrl),
     fetchImageAsDataUri(payload.faviconUrl, { timeoutMs: 4000 }),
+  ])
+
+  const [backgroundImageDataUri, logoDataUri, faviconDataUri] = await Promise.all([
+    resolveWebpSafeDataUri(rawBackgroundImageDataUri, deps),
+    resolveWebpSafeDataUri(rawLogoDataUri, deps),
+    resolveWebpSafeDataUri(rawFaviconDataUri, deps),
   ])
 
   const renderer = resolveOgImageRenderer(payload.template)
