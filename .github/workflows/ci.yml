@@ -377,8 +377,7 @@ jobs:
                 -H "cache-control: no-store" \
                 "https://preview.krabiclaw.com${route}?e2e=asset-probe-$i" || true)
               route_assets=$(printf '%s' "$tenant_html" | grep -oE '/_nuxt/[^"'"'"') >]+[.](css|js)' || true)
-              asset_paths="${asset_paths}
-${route_assets}"
+              asset_paths="${asset_paths}"$'\n'"${route_assets}"
             done
 
             asset_failures=""
@@ -390,8 +389,7 @@ ${route_assets}"
                 "https://preview.krabiclaw.com${asset_path}" || true)
               case "$asset_path:$asset_result" in
                 *.css:200\ text/css*|*.js:200\ *javascript*) ;;
-                *) asset_failures="${asset_failures}
-${asset_path} -> ${asset_result:-no response}" ;;
+                *) asset_failures="${asset_failures}"$'\n'"${asset_path} -> ${asset_result:-no response}" ;;
               esac
             done < <(printf '%s\n' "$asset_paths" | sort -u)
 
