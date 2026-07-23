@@ -17,6 +17,20 @@ async function queryAll<T>(_db: unknown, query: string, params: unknown[] = []):
 
 async function queryFirst<T>(_db: unknown, query: string, params: unknown[] = []): Promise<T | null> {
   capturedFirstQueries.push({ query, params })
+  if (query.includes('FROM guest_threads')) {
+    return {
+      openThreads: 3,
+      unreadThreads: 2,
+      reservations: 1,
+      experienceBookings: 1,
+    } as T
+  }
+  if (query.includes('FROM business_locations')) {
+    return { id: params[0], title: 'Selected Location' } as T
+  }
+  if (query.includes('FROM experiences')) {
+    return { id: params[0], title: 'Class', location_id: 'loc-1' } as T
+  }
   if (query.includes('FROM contact_submissions')) {
     return {
       organization_id: 'org-1',
@@ -45,7 +59,12 @@ mock.module('../../server/db/index.ts', {
   },
 })
 
-const { getGuestThreadSource, listGuestThreads } = await import('../../server/utils/guest-threads.ts')
+const {
+  getGuestThreadOperationSummary,
+  getGuestThreadSource,
+  listGuestThreads,
+  resolveContactSubmissionAssignment,
+} = await import('../../server/utils/guest-threads.ts')
 
 test('location inbox filters to the exact assigned location without duplicating site-wide threads', async () => {
   capturedQueries.length = 0
@@ -86,4 +105,31 @@ test('contact thread source derives an assigned location from contact or experie
   assert.match(capturedFirstQueries[0]!.query, /COALESCE\(ct\.location_id, e\.location_id\) AS location_id/)
   assert.match(capturedFirstQueries[0]!.query, /LEFT JOIN business_locations bl ON bl\.id = COALESCE\(ct\.location_id, e\.location_id\)/)
   assert.deepEqual(capturedFirstQueries[0]!.params, ['contact-1'])
+})
+
+test('guest thread operation summary counts only non-closed reservation and booking work', async () => {
+  capturedFirstQueries.length = 0
+
+  const summary = await getGuestThreadOperationSummary({} as never, 'site-1', { locationId: 'loc-1' })
+
+  assert.deepEqual(summary, { openThreads: 3, unreadThreads: 2, reservations: 1, experienceBookings: 1 })
+  assert.match(capturedFirstQueries[0]!.query, /gt\.location_id = \?/)
+  assert.match(capturedFirstQueries[0]!.query, /gt\.inbox_status != 'closed' AND gt\.submission_type = 'reservation'/)
+  assert.match(capturedFirstQueries[0]!.query, /gt\.inbox_status != 'closed' AND gt\.submission_type = 'experience_booking'/)
+  assert.deepEqual(capturedFirstQueries[0]!.params, ['site-1', 'loc-1'])
+})
+
+test('contact assignment utility gives experience location precedence over selected location', async () => {
+  capturedFirstQueries.length = 0
+
+  const assignment = await resolveContactSubmissionAssignment({} as never, {
+    siteId: 'site-1',
+    locationId: 'loc-selected',
+    experienceId: 'contact-1',
+  })
+
+  assert.equal(assignment.error, null)
+  assert.equal(assignment.assignedLocationId, 'loc-1')
+  assert.equal(assignment.selectedLocation?.id, 'loc-selected')
+  assert.equal(assignment.experience?.id, 'contact-1')
 })

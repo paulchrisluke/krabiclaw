@@ -95,7 +95,7 @@ interface LocationOverview {
 }
 
 interface GoogleConnection { provider_account_email: string }
-interface ThreadSummary { inbox_status: string; unread_count: number; submission_type: string }
+interface InboxSummary { openThreads: number; unreadThreads: number }
 
 const route = useRoute()
 const dashboard = useDashboardSite()
@@ -106,7 +106,7 @@ const locationId = computed(() => dashboardLocation.currentLocationId.value ?? '
 const locationBase = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
 const location = ref<LocationOverview | null>(null)
 const menus = ref<ApiRecord[]>([])
-const threads = ref<ThreadSummary[]>([])
+const inboxSummary = ref<InboxSummary>({ openThreads: 0, unreadThreads: 0 })
 const googleConnection = ref<GoogleConnection | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -134,10 +134,6 @@ const hasMenu = computed(() => featureSet.value.has('menu'))
 const hasReviews = computed(() => featureSet.value.has('reviews'))
 const hasReservations = computed(() => featureSet.value.has('reservations'))
 const hasExperiences = computed(() => featureSet.value.has('experiences'))
-const inboxSummary = computed(() => ({
-  unreadThreads: threads.value.filter(thread => thread.unread_count > 0).length,
-  openThreads: threads.value.filter(thread => thread.inbox_status !== 'closed').length,
-}))
 const currentOpeningState = computed(() => {
   const hours = location.value?.opening_hours
   if (!hours) return 'Not set'
@@ -171,14 +167,14 @@ async function load() {
         ? $fetch<{ success: boolean; menus: ApiRecord[] }>(`/api/dashboard/editor/menus?locationId=${locationId.value}`)
         : Promise.resolve({ success: true, menus: [] }),
       $fetch<{ connection: GoogleConnection | null }>(`/api/dashboard/locations/${locationId.value}/integrations/google-business`),
-      $fetch<{ threads: ThreadSummary[] }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
+      $fetch<{ summary: InboxSummary }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
         query: { location_id: locationId.value },
       }),
     ])
     location.value = locationResponse.location
     menus.value = menuResponse.menus
     googleConnection.value = connectionResponse.connection
-    threads.value = threadsResponse.threads ?? []
+    inboxSummary.value = threadsResponse.summary ?? { openThreads: 0, unreadThreads: 0 }
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Failed to load location overview'
   } finally {

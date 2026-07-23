@@ -410,6 +410,7 @@ let searchTimer: ReturnType<typeof setTimeout> | null = null
 // fire-and-forget (`void loadThreads()`), which would otherwise produce an
 // unhandled promise rejection instead of a visible toast.
 let threadsRequestToken = 0
+let detailRequestToken = 0
 
 async function loadThreads() {
   if (isLocationScope.value && !selectedLocationId.value) return
@@ -437,21 +438,24 @@ async function loadThreads() {
 }
 
 async function loadThreadDetail(threadId: string) {
+  const requestToken = ++detailRequestToken
   loadingDetail.value = true
   selectedThreadId.value = null
   selectedDetail.value = null
   try {
     const res = await $fetch<ThreadDetailResponse>(`/api/dashboard/sites/${siteId}/guest-threads/${threadId}`)
+    if (requestToken !== detailRequestToken) return false
     selectedThreadId.value = threadId
     selectedDetail.value = res
     selectedInboxStatus.value = res.thread.inbox_status
     replyDraft.value = ''
     return true
   } catch (error) {
+    if (requestToken !== detailRequestToken) return false
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load thread', color: 'error' })
     return false
   } finally {
-    loadingDetail.value = false
+    if (requestToken === detailRequestToken) loadingDetail.value = false
   }
 }
 

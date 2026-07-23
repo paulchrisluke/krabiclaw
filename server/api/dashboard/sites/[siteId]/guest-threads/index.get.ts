@@ -1,6 +1,6 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
-import { listGuestThreads, type GuestThreadInboxStatus, type GuestThreadSubmissionType } from '~/server/utils/guest-threads'
+import { getGuestThreadOperationSummary, listGuestThreads, type GuestThreadInboxStatus, type GuestThreadSubmissionType } from '~/server/utils/guest-threads'
 import { assertMemberScope } from '~/server/utils/member-access'
 
 export default defineEventHandler(async (event) => {
@@ -22,14 +22,18 @@ export default defineEventHandler(async (event) => {
     : null
   const unreadOnly = query.unread === '1' || query.unread === 'true'
 
-  const threads = await listGuestThreads(db, siteId, {
-    locationId,
-    principal: { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId },
-    search,
-    type,
-    inboxStatus,
-    unreadOnly,
-  })
+  const principal = { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
+  const [threads, summary] = await Promise.all([
+    listGuestThreads(db, siteId, {
+      locationId,
+      principal,
+      search,
+      type,
+      inboxStatus,
+      unreadOnly,
+    }),
+    getGuestThreadOperationSummary(db, siteId, { locationId, principal }),
+  ])
 
-  return jsonResponse({ threads })
+  return jsonResponse({ threads, summary })
 })

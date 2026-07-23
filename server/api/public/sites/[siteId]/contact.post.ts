@@ -3,6 +3,7 @@ import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-res
 import { notifyContactSubmitted } from '~/server/utils/notifications'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
+import { resolveContactSubmissionAssignment } from '~/server/utils/guest-threads'
 
 const VALID_SUBJECTS = ['general', 'press', 'partnerships', 'catering', 'careers']
 
@@ -46,28 +47,13 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Please acknowledge the contact and privacy notice.' }, { status: 400 })
   }
 
-  // Best-effort link — an invalid/foreign experienceId just means no "Regarding" context, not a failed submission.
-  let selectedLocation: { id: string; title: string } | null = null
-  if (locationIdInput) {
-    selectedLocation = await queryFirst<{ id: string; title: string }>(
-      db,
-      'SELECT id, title FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1',
-      [locationIdInput, siteId],
-    )
-    if (!selectedLocation) {
-      return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
-    }
-  }
-
-  let experience: { id: string; title: string; location_id: string } | null = null
-  if (experienceIdInput) {
-    experience = await queryFirst<{ id: string; title: string; location_id: string }>(
-      db,
-      'SELECT id, title, location_id FROM experiences WHERE id = ? AND site_id = ? LIMIT 1',
-      [experienceIdInput, siteId],
-    )
-  }
-  const assignedLocationId = experience?.location_id ?? selectedLocation?.id ?? null
+  const assignment = await resolveContactSubmissionAssignment(db, {
+    siteId,
+    locationId: locationIdInput || null,
+    experienceId: experienceIdInput || null,
+  })
+  if (assignment.error) return jsonResponse({ error: assignment.error }, { status: 400 })
+  const { assignedLocationId, experience } = assignment
 
   const id = crypto.randomUUID()
   const clientIp = getClientIp(event)
