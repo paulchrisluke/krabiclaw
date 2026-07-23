@@ -110,7 +110,12 @@ const locationExperienceCtaPath = computed(() => {
 // real business collecting real visitor data, so it's excluded from search
 // (see siteRobots below) and skips the cookie-consent banner entirely rather
 // than asking demo visitors to accept/reject tracking that isn't happening.
-const isDemoHost = requestHostname.startsWith('demo.')
+// Matches these exact hosts (see seed-definitions/demo.ts siteDomains) rather
+// than a "demo." prefix — a real tenant's own custom domain (e.g.
+// demo.example.com) can legitimately start with "demo." and must not be
+// treated as our internal showcase site.
+const DEMO_HOSTS = new Set(['demo.krabiclaw.com', 'demo.localhost'])
+const isDemoHost = DEMO_HOSTS.has(requestHostname)
 
 // Site-wide default only — individual pages set their own robots directive
 // when they have one; this is the fallback for pages that don't.
