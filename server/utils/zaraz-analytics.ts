@@ -1,5 +1,6 @@
 import { execute } from '~/server/db'
-import { getSiteDomains, type DomainEnv } from '~/server/utils/domains'
+import { getSiteDomains, platformAnalyticsHostnames, type DomainEnv } from '~/server/utils/domains'
+import { ZARAZ_ANALYTICS_PURPOSE, ZARAZ_ANALYTICS_PURPOSE_ID } from '~/utils/zaraz-consent'
 
 export interface ZarazEnv extends DomainEnv {
   CF_ZARAZ_API_TOKEN?: string
@@ -17,15 +18,26 @@ interface ZarazTool {
   enabled: boolean
   settings: Record<string, unknown>
   actions: Record<string, ZarazAction>
+  defaultPurpose?: string
+  [key: string]: unknown
 }
 
 interface ZarazTrigger {
+  name?: string
   loadRules: Array<{ match: string; op: string; value: string }>
+  [key: string]: unknown
 }
 
 export interface ZarazConfig {
   tools: Record<string, ZarazTool>
   triggers: Record<string, ZarazTrigger | Record<string, unknown>>
+  consent?: {
+    enabled?: boolean
+    hideModal?: boolean
+    purposes?: Record<string, { name: string; description: string }>
+    [key: string]: unknown
+  }
+  historyChange?: boolean
   variables?: Record<string, unknown>
   [key: string]: unknown
 }
@@ -96,12 +108,128 @@ function tenantKey(siteId: string): string {
   return `ga-tenant-${siteId}`
 }
 
+const PLATFORM_KEY = 'ga-platform'
+
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 export function tenantPageLocationRegex(hostnames: string[]): string {
   return `^https://(${hostnames.map(escapeRegex).join('|')})/`
+}
+
+export function platformPageLocationRegex(hostnames: string[]): string {
+  return tenantPageLocationRegex(hostnames)
+}
+
+function consentPurposeId() {
+  return ZARAZ_ANALYTICS_PURPOSE_ID
+}
+
+function ensureAnalyticsConsentPurpose(config: ZarazConfig) {
+  config.consent ||= {}
+  config.consent.enabled = true
+  config.consent.hideModal = true
+  config.consent.purposes ||= {}
+  config.consent.purposes[consentPurposeId()] ||= ZARAZ_ANALYTICS_PURPOSE
+}
+
+function makePageLocationTrigger(name: string, hostnames: string[]): ZarazTrigger {
+  return {
+    name,
+    loadRules: [{
+      match: '{{ client.pageLocation }}',
+      op: 'MATCH_REGEX',
+      value: tenantPageLocationRegex(hostnames),
+    }],
+  }
+}
+
+function scopeActionsToTrigger(actions: Record<string, ZarazAction> | undefined, triggerKey: string) {
+  const source = actions && Object.keys(actions).length
+    ? actions
+    : { AllPageviews: { actionType: 'pageview', firingTriggers: [], enabled: true } }
+  return Object.fromEntries(Object.entries(source).map(([key, action]) => [
+    key,
+    {
+      ...action,
+      firingTriggers: [triggerKey],
+      enabled: action.enabled !== false,
+    },
+  ]))
+}
+
+function isGa4Tool(tool: ZarazTool | undefined): tool is ZarazTool {
+  return tool?.component === 'google-analytics_v4'
+}
+
+function upsertGa4Tool(
+  config: ZarazConfig,
+  key: string,
+  input: { name: string; measurementId: string; triggerKey: string; existing?: ZarazTool },
+) {
+  const existing = input.existing
+  config.tools[key] = {
+    ...existing,
+    component: 'google-analytics_v4',
+    name: existing?.name || input.name,
+    enabled: true,
+    settings: { ...(existing?.settings ?? {}), tid: input.measurementId },
+    defaultPurpose: consentPurposeId(),
+    actions: scopeActionsToTrigger(existing?.actions, input.triggerKey),
+  }
+}
+
+export function upsertPlatformZarazAnalytics(
+  config: ZarazConfig,
+  input: { measurementId: string | null | undefined; hostnames: string[] },
+) {
+  if (!input.measurementId || !input.hostnames.length) return
+  config.triggers ||= {}
+  config.tools ||= {}
+  ensureAnalyticsConsentPurpose(config)
+  config.historyChange = true
+  config.triggers[PLATFORM_KEY] = makePageLocationTrigger('Platform hosts', input.hostnames)
+
+  const existingEntry = Object.entries(config.tools).find(([, tool]) =>
+    isGa4Tool(tool) && tool.settings?.tid === input.measurementId
+  )
+  const key = existingEntry?.[0] ?? PLATFORM_KEY
+  upsertGa4Tool(config, key, {
+    name: 'Platform GA4',
+    measurementId: input.measurementId,
+    triggerKey: PLATFORM_KEY,
+    existing: existingEntry?.[1],
+  })
+}
+
+export function upsertTenantZarazAnalytics(
+  config: ZarazConfig,
+  input: { siteId: string; measurementId: string | null | undefined; hostnames: string[] },
+) {
+  if (!input.measurementId || !input.hostnames.length) return
+  config.triggers ||= {}
+  config.tools ||= {}
+  ensureAnalyticsConsentPurpose(config)
+  config.historyChange = true
+  const key = tenantKey(input.siteId)
+  config.triggers[key] = makePageLocationTrigger(`Tenant hosts (${input.siteId})`, input.hostnames)
+  upsertGa4Tool(config, key, {
+    name: `Tenant GA4 (${input.siteId})`,
+    measurementId: input.measurementId,
+    triggerKey: key,
+    existing: config.tools[key],
+  })
+}
+
+export function removeStaleTenantZarazAnalytics(config: ZarazConfig, activeSiteIds: string[]) {
+  const activeKeys = new Set(activeSiteIds.map(tenantKey))
+  for (const key of Object.keys(config.tools ?? {})) {
+    if (key.startsWith('ga-tenant-') && !activeKeys.has(key)) Reflect.deleteProperty(config.tools, key)
+  }
+  for (const key of Object.keys(config.triggers ?? {})) {
+    if (key.startsWith('ga-tenant-') && !activeKeys.has(key)) Reflect.deleteProperty(config.triggers, key)
+  }
 }
 
 export async function syncTenantZarazAnalytics(
@@ -125,25 +253,13 @@ export async function syncTenantZarazAnalytics(
   const lockedAt = await acquireLock(db)
   try {
     const config = await getZarazConfig(env)
-    const key = tenantKey(input.siteId)
     config.triggers ||= {}
     config.tools ||= {}
-    config.triggers[key] = {
-      loadRules: [{
-        match: '{{ client.pageLocation }}',
-        op: 'MATCH_REGEX',
-        value: tenantPageLocationRegex(hostnames),
-      }],
-    }
-    config.tools[key] = {
-      component: 'google-analytics_v4',
-      name: `Tenant GA4 (${input.siteId})`,
-      enabled: true,
-      settings: { tid: input.measurementId },
-      actions: {
-        AllPageviews: { actionType: 'pageview', firingTriggers: [key], enabled: true },
-      },
-    }
+    upsertPlatformZarazAnalytics(config, {
+      measurementId: env.GA4_MEASUREMENT_ID,
+      hostnames: platformAnalyticsHostnames(env),
+    })
+    upsertTenantZarazAnalytics(config, { ...input, measurementId: input.measurementId, hostnames })
     await putZarazConfig(env, config)
   } finally {
     await releaseLock(db, lockedAt)
