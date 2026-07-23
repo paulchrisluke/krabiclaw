@@ -138,7 +138,7 @@ async function loadReservations() {
   try {
     const [locationsResult, notificationsResult] = await Promise.allSettled([
       $fetch<{ locations: Array<{ id: string; slug: string; notification_phone: string | null }> }>(`/api/dashboard/locations`),
-      $fetch<{ notifications: { whatsapp_phone: string | null; channels: string[] } }>(`/api/dashboard/editor/notifications`),
+      $fetch<{ notifications: { whatsapp_phone: string | null; channels: string[] } }>(`/api/editor/sites/${siteId}/notifications`),
     ])
     if (locationsResult.status !== 'fulfilled') throw locationsResult.reason
     const current = locationsResult.value.locations.find(loc => loc.id === locationId) ?? null

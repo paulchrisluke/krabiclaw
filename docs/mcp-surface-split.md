@@ -33,10 +33,11 @@ KrabiClaw now ships two separate MCP surfaces. They must stay separate in auth, 
 
 ## Auth Model
 
-- Better Auth `admin` is the canonical platform-admin role.
-- Org member roles (`owner`, `admin`, `member`) remain tenant-scoped only and do not grant platform access.
-- Runtime platform access checks go through `server/utils/platform-auth.ts`.
-- Grant platform access by setting `user.role = 'admin'`, for example with `yarn platform-admin:promote --email user@example.com --remote`.
+- ADR 0021 is the canonical target for Better Auth authorization: `docs/adr/0021-better-auth-authorization-target.md`.
+- Platform MCP requires documented Better Auth Admin plugin platform permissions.
+- Tenant MCP requires Better Auth Organization permissions and, for scoped editors, the matching Better Auth Team membership.
+- Org member roles (`owner`, `admin`, `editor`, optional read-only `member`) remain tenant-scoped only and do not grant platform access.
+- Platform admins do not receive tenant MCP access from global role status alone. Tenant access requires real organization/team membership or a Better Auth impersonation session for a tenant member.
 
 ## User-Facing URLs
 

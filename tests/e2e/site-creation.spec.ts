@@ -2,14 +2,14 @@ import { expect, test } from '@playwright/test'
 import { devLoginHeaders, devLoginUrl } from './test-env'
 
 test.describe('site creation contracts', () => {
-  test('dashboard site creation requires an explicit vertical', async ({ request, baseURL }) => {
+  test('site creation requires an explicit vertical', async ({ request, baseURL }) => {
     const suffix = Date.now()
     const ownerLogin = await request.get(devLoginUrl(baseURL!, `e2e-site-creation-vertical-${suffix}`), {
       headers: devLoginHeaders(),
       maxRedirects: 0,
     })
     expect(ownerLogin.status()).toBe(302)
-    const missingVerticalRes = await request.post(`${baseURL}/api/dashboard/site`, {
+    const missingVerticalRes = await request.post(`${baseURL}/api/sites`, {
       data: {
         name: `Missing Vertical ${suffix}`,
         subdomain: `missing-vertical-${suffix}`,
@@ -20,7 +20,7 @@ test.describe('site creation contracts', () => {
       error: 'vertical is required and must be one of: restaurant, experience, professional_service',
     })
 
-    const invalidVerticalRes = await request.post(`${baseURL}/api/dashboard/site`, {
+    const invalidVerticalRes = await request.post(`${baseURL}/api/sites`, {
       data: {
         name: `Invalid Vertical ${suffix}`,
         subdomain: `invalid-vertical-${suffix}`,

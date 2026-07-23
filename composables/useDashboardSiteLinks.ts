@@ -37,7 +37,6 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
       content: `${siteBase}/content`,
       menu: `${locationBase}/menu`,
       posts: `${locationBase}/posts`,
-      reviews: `${locationBase}/reviews`,
       photos: `${locationBase}/photos`,
       qa: `${locationBase}/qa`,
       inbox: `${siteBase}/inbox`,
@@ -47,7 +46,7 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
       // Orders is site-scoped (pages/dashboard/[orgSlug]/sites/[siteSlug]/orders.vue),
       // not per-location — do not point this at locationBase.
       order: `${siteBase}/orders`,
-      media: `${locationBase}/media`,
+      media: `${siteBase}/media`,
       locations: locationsBase,
       translations: `${siteBase}/translations`,
       domains: `${siteBase}/domains`,

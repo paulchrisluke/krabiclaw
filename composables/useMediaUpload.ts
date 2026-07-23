@@ -60,7 +60,7 @@ function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-export function useMediaUpload(siteApiBase = '/api/dashboard/editor') {
+export function useMediaUpload(siteApiBase: string) {
   const uploading = ref(false)
   const error = ref<string | null>(null)
   const pendingRetryFile = ref<PendingMediaUpload | null>(null)

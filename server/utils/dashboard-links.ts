@@ -29,16 +29,37 @@ export interface DashboardLinkOrgContext {
   locationSlug?: string | null
 }
 
+function requiredDashboardSegment(
+  value: string | null | undefined,
+  label: 'organizationSlug' | 'siteSlug' | 'locationSlug',
+  destination: DashboardDestination,
+): string {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  if (!trimmed) {
+    throw new Error(`Dashboard destination ${destination} requires explicit ${label} context`)
+  }
+  return encodeURIComponent(trimmed)
+}
+
 export function buildDashboardUrl(site: DashboardLinkOrgContext, destination: DashboardDestination): string {
   const platformDomain = site.env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'https://krabiclaw.com'
-  const orgSlug = site.organizationSlug || site.organizationId
+  const orgSlug = requiredDashboardSegment(site.organizationSlug, 'organizationSlug', destination)
   const siteSlug = site.siteSlug ?? site.subdomain ?? null
+  const locationSlug = site.locationSlug ?? null
   const path = DASHBOARD_DESTINATIONS[destination]
     .replace(/^\/+/, '')
-    .replaceAll(':siteSlug', siteSlug || '')
-    .replaceAll(':locationSlug', site.locationSlug || '')
+    .replaceAll(':siteSlug', pathRequiresSiteSlug(destination) ? requiredDashboardSegment(siteSlug, 'siteSlug', destination) : '')
+    .replaceAll(':locationSlug', pathRequiresLocationSlug(destination) ? requiredDashboardSegment(locationSlug, 'locationSlug', destination) : '')
   if (path.includes('//') || path.endsWith('/')) {
     throw new Error(`Dashboard destination ${destination} requires explicit site/location context`)
   }
   return `${platformDomain}/dashboard/${orgSlug}/${path}`
+}
+
+function pathRequiresSiteSlug(destination: DashboardDestination): boolean {
+  return DASHBOARD_DESTINATIONS[destination].includes(':siteSlug')
+}
+
+function pathRequiresLocationSlug(destination: DashboardDestination): boolean {
+  return DASHBOARD_DESTINATIONS[destination].includes(':locationSlug')
 }

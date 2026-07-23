@@ -1,7 +1,8 @@
 // GET menus for site with optional location filter
 import { queryFirst } from '~/server/db'
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { assertResourceAccess } from '~/server/utils/member-access'
 import { getMenus } from '~/server/utils/menu-management'
 
 export default defineEventHandler(async (event) => {
@@ -34,8 +35,8 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Verify user belongs to organization that owns the site
-    const site = await queryFirst<{ id: string; organization_id: string; name: string; status: string; onboarding_status: string | null }>(db, `
-      SELECT s.id, s.organization_id, s.status, s.onboarding_status
+    const site = await queryFirst<{ id: string; organization_id: string; member_id: string; member_role: string; status: string; onboarding_status: string | null }>(db, `
+      SELECT s.id, s.organization_id, s.status, s.onboarding_status, om.id AS member_id, om.role AS member_role
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member om ON o.id = om.organizationId
@@ -51,6 +52,14 @@ export default defineEventHandler(async (event) => {
       }, { status: 404 })
     }
 
+    await assertResourceAccess(db, {
+      memberId: site.member_id,
+      role: site.member_role,
+      organizationId: site.organization_id,
+      siteId,
+      resourceLocationId: locationId ?? null,
+    })
+
     const menus = await getMenus(db, site.organization_id, siteId, locationId)
     
     return jsonResponse({
@@ -61,6 +70,7 @@ export default defineEventHandler(async (event) => {
     })
     
   } catch (error) {
+    rethrowHttpError(error)
     console.error('Failed to get menus:', error)
     return jsonResponse({ 
       error: 'Failed to get menus' 

@@ -58,6 +58,19 @@ Dashboard CMS pages remain supported. When changing editing behavior, prefer sha
 
 ---
 
+## Better Auth Boundary Rules
+
+Better Auth owns identity, sessions, OAuth provider state, organizations, members, roles, permissions, impersonation, and Teams. New auth work must use documented Better Auth Admin, Organization, Teams, impersonation, access-control, and OAuth resource-server APIs.
+
+- Do not add direct SQL against Better Auth-owned auth tables in normal runtime code.
+- Do not add custom role parsers, platform-admin tenant bypasses, custom impersonation proxies, manual OAuth token verification, shadow membership/scope tables, merged tenant/platform MCP security resources, or undocumented support-mode principals/cookies.
+- Tenant dashboard, ChowBot, WhatsApp, and tenant MCP access must flow through shared domain utilities backed by Better Auth organization permissions and Teams.
+- Platform admin access is a platform control-plane permission. It is not tenant owner access unless the user is an actual tenant member or is in a Better Auth impersonation session for a tenant member.
+
+See `docs/adr/0021-better-auth-authorization-target.md`.
+
+---
+
 ## Database Schema Workflow
 
 `server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical, hand-authored, **already applied to every real environment (staging, production) and immutable** — never rename, edit, renumber, or re-squash them. From `0008` onward, migrations are _generated_ from `schema.ts` via `drizzle-kit generate` and applied via wrangler D1 migrations.
@@ -403,7 +416,7 @@ POST /api/sites/[siteId]/domains
 Dashboard route:
 
 ```text
-/dashboard/[orgSlug]/settings/domains
+/dashboard/[orgSlug]/sites/[siteSlug]/domains
 ```
 
 Rules:
@@ -447,3 +460,7 @@ Use `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `won
 ### Domain docs
 
 This is a single-context repository using root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+
+### Development workflow
+
+Parallel agent work, PR cadence, CodeRabbit follow-up timing, dependency installs, and focused test commands are documented in `docs/agents/development-workflow.md`.

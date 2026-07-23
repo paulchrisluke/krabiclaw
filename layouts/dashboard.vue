@@ -480,7 +480,8 @@ onMounted(async () => {
 async function stopImpersonating() {
   stoppingImpersonation.value = true
   try {
-    await $fetch('/api/admin/impersonation/stop', { method: 'POST' })
+    const result = await authClient.admin.stopImpersonating()
+    if (result.error) throw new Error(result.error.message)
     await refreshSession()
     await navigateTo('/admin/users')
   } catch (error) {

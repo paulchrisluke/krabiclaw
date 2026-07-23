@@ -318,7 +318,7 @@ async function runExtraction() {
       warning?: string | null
       credits: { charged: number; remaining: number }
       error?: string
-    }>(`/api/dashboard/ai/menu/extract`, { method: 'POST', body: fd, signal: controller.signal })
+    }>(`/api/ai/${props.siteId}/menu/extract`, { method: 'POST', body: fd, signal: controller.signal })
 
     resultMenuId.value = res.menuId
     creditsCharged.value = res.credits?.charged ?? null

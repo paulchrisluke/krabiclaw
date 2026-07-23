@@ -3,6 +3,7 @@ import { queryFirst } from '~/server/db'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { deleteCustomDomain } from '~/server/utils/domains'
 import { notifyDomainLifecycle } from '~/server/utils/domain-notifications'
+import { buildDashboardUrl } from '~/server/utils/dashboard-links'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -28,7 +29,12 @@ export default defineEventHandler(async (event) => {
       status: 'deleted',
       title: `Domain deleted: ${domain.domain}`,
       message: `${domain.domain} has been removed from KrabiClaw.`,
-      dashboardUrl: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN}/dashboard/${encodeURIComponent(site.organization_slug ?? site.organization_id)}/sites/${encodeURIComponent(site.subdomain ?? site.id)}/domains`
+      dashboardUrl: buildDashboardUrl({
+        env,
+        organizationId: site.organization_id,
+        organizationSlug: site.organization_slug ?? undefined,
+        subdomain: site.subdomain,
+      }, 'site.domains')
     })
     return jsonResponse({ success: true })
   } catch (error) {

@@ -376,6 +376,7 @@ const toast = useToast()
 const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
 if (!dashboard.state.value) await dashboard.refresh()
+const siteId = await useDashboardSiteId()
 const locationId = computed(() => dashboardLocation.currentLocationId.value ?? '')
 
 const loading = ref(true)
@@ -698,7 +699,7 @@ const connectGoogleBusiness = async () => {
   connectingGoogle.value = true
   try {
     const res = await $fetch<{ success: boolean; authUrl: string }>(
-      `/api/dashboard/locations/${requestedLocationId}/integrations/google-business/auth`,
+      `/api/sites/${siteId}/locations/${requestedLocationId}/integrations/google-business/auth`,
       { method: 'POST' }
     )
     if (locationId.value !== requestedLocationId) {
@@ -763,7 +764,7 @@ const loadLocationWorkspace = async () => {
   try {
     const [locationResponse, connectionResponse] = await Promise.all([
       $fetch<{ success: boolean; location: BusinessLocation } & LocationCapabilitySummary>(`/api/dashboard/locations/${requestedLocationId}`),
-      $fetch<{ success: boolean; connection: GbConnection | null }>(`/api/dashboard/locations/${requestedLocationId}/integrations/google-business`),
+      $fetch<{ success: boolean; connection: GbConnection | null }>(`/api/sites/${siteId}/locations/${requestedLocationId}/integrations/google-business`),
     ])
     if (currentToken !== locationLoadToken || locationId.value !== requestedLocationId) return false
     if (!locationResponse.success) throw new Error('Failed to load location')
