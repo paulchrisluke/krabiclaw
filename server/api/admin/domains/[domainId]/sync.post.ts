@@ -1,7 +1,8 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { anonymizeId, isPlatformAdmin } from '~/server/utils/platform-auth'
-import { domainInstructions, syncDomainWithCloudflare } from '~/server/utils/domains'
+import { syncDomainWithCloudflare } from '~/server/utils/domains'
+import { domainInstructions } from '~/server/utils/domain-read-model'
 
 const SYNC_TIMEOUT_MS = 20_000
 // Best-effort in-memory guard only; this does not coordinate across Worker isolates.

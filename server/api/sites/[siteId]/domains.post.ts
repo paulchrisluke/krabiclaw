@@ -2,14 +2,12 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import {
   createCustomDomainPair,
-  canonicalDomainForPair,
-  domainInstructions,
-  domainPair,
-  groupCustomDomains,
   hasCustomDomainsEntitlement,
   inspectDomainResolution,
   validateCustomDomain
 } from '~/server/utils/domains'
+import { canonicalDomainForPair, domainPair } from '~/server/utils/domain-shared'
+import { domainInstructions, groupCustomDomains } from '~/server/utils/domain-read-model'
 import { notifyDomainLifecycle } from '~/server/utils/domain-notifications'
 
 interface CreateDomainBody {

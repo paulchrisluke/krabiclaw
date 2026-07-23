@@ -1,5 +1,6 @@
 import { execute } from '~/server/db'
-import { getSiteDomains, type DomainEnv } from '~/server/utils/domains'
+import type { DomainEnv } from '~/server/utils/domains'
+import { getSiteDomains } from '~/server/utils/domain-read-model'
 
 export interface ZarazEnv extends DomainEnv {
   CF_ZARAZ_API_TOKEN?: string

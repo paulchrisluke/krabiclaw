@@ -4,7 +4,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { executeBatch, queryFirst, type BatchQuery } from '~/server/db'
 import { hashEmail, isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { normalizeHost } from '~/server/utils/tenant-hosts'
-import { rootDomainForPair } from '~/server/utils/domains'
+import { rootDomainForPair } from '~/server/utils/domain-shared'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import {
   buildTransferDomainSnapshot,

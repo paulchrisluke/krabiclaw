@@ -1,6 +1,7 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { queryFirst } from '~/server/db'
-import { domainInstructions, syncDomainWithCloudflare } from '~/server/utils/domains'
+import { syncDomainWithCloudflare } from '~/server/utils/domains'
+import { domainInstructions } from '~/server/utils/domain-read-model'
 import { notifyDomainLifecycle } from '~/server/utils/domain-notifications'
 import { requireSiteAccess } from '~/server/utils/location-access'
 

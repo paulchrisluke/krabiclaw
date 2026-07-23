@@ -1,7 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryFirst } from '~/server/db'
-import { domainInstructions, getDomainEvents, getSiteDomains, groupCustomDomains } from '~/server/utils/domains'
+import { getSiteDomainsDashboardPayload } from '~/server/utils/domain-read-model'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
 
 export default defineEventHandler(async (event) => {
@@ -27,15 +27,7 @@ export default defineEventHandler(async (event) => {
 
   await assertSiteWideAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
 
-  const domains = await getSiteDomains(db, siteId)
-  const enriched = []
-  for (const domain of domains) {
-    enriched.push({
-      ...domain,
-      instructions: domainInstructions(domain),
-      events: domain.type === 'custom' ? await getDomainEvents(db, domain.id) : []
-    })
-  }
+  const payload = await getSiteDomainsDashboardPayload(db, siteId)
 
-  return jsonResponse({ success: true, domains: enriched, domain_groups: groupCustomDomains(domains), siteId })
+  return jsonResponse({ success: true, ...payload, siteId })
 })

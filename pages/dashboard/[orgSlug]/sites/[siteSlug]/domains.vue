@@ -254,22 +254,13 @@ async function loadDomains({ background = false }: { background?: boolean } = {}
 async function loadDomainsForServer(siteId: string): Promise<DomainsResponse> {
   const requestEvent = useRequestEvent()
   if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request event not available' })
-  const [{ cloudflareEnv }, { domainInstructions, getDomainEvents, getSiteDomains, groupCustomDomains }] = await Promise.all([
+  const [{ cloudflareEnv }, { getSiteDomainsDashboardPayload }] = await Promise.all([
     import('~/server/utils/api-response'),
-    import('~/server/utils/domains'),
+    import('~/server/utils/domain-read-model'),
   ])
   const env = cloudflareEnv(requestEvent)
   if (!env.db || !env.DB) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-  const domains = await getSiteDomains(env.DB, siteId)
-  const enriched = []
-  for (const domain of domains) {
-    enriched.push({
-      ...domain,
-      instructions: domainInstructions(domain),
-      events: domain.type === 'custom' ? await getDomainEvents(env.DB, domain.id) : [],
-    })
-  }
-  return { domains: enriched, domain_groups: groupCustomDomains(domains) }
+  return getSiteDomainsDashboardPayload(env.DB, siteId)
 }
 
 function openAddModal() {

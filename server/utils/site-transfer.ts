@@ -2,8 +2,8 @@ import {
   createCustomDomainPair,
   deleteCustomDomain,
   type DomainEnv,
-  rootDomainForPair,
 } from '~/server/utils/domains'
+import { rootDomainForPair } from '~/server/utils/domain-shared'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery } from '~/server/db'
 import { notifySiteTransferReminder } from '~/server/utils/site-transfer-notifications'
 import { normalizeHost } from '~/server/utils/tenant-hosts'

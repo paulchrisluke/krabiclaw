@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { domainInstructions, groupCustomDomains, mapCloudflareStatus, type DomainRecord } from '../../server/utils/domains.ts'
+import { mapCloudflareStatus, type DomainRecord } from '../../server/utils/domains.ts'
+import { domainInstructions, groupCustomDomains } from '../../server/utils/domain-read-model.ts'
 
 function domain(overrides: Partial<DomainRecord>): DomainRecord {
   return {
