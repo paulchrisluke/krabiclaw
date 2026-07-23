@@ -1,7 +1,7 @@
 {
   "approved": false,
   "invalidated": true,
-  "invalidated_reason": "Compliance data model extended for #253 (service_area_type, address_visibility, founder_name, founding_date, same_as, contact_points) and nonprofit_status normalized to https://schema.org/Nonprofit501c3; requires fresh human hash-bound approval before re-apply.",
+  "invalidated_reason": "Canonical dry-run artifacts were regenerated and require fresh human review.",
   "source_commit": "f9470f44e15f98978b7f866da54782a6da95818d",
   "slug": "north-carolina-legal-services",
   "vertical": "service",
