@@ -297,7 +297,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 
 import { buildDisplayUrl, contentRegistry, getFieldDef, getScopedEditablePages, resolvePreviewPath } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
-import { resolveCmsCapabilities } from '~/config/cms-registry'
+import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
 import type { PublicTemplateSlug } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
@@ -321,7 +321,7 @@ const { handleBack } = useEditorNavigation(props.siteId)
 
 // ─── Site Context ───────────────────────────────────────────────────────
 const siteData = ref<ApiRecord | null>(null)
-const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])
+const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean; feature_overrides?: string | null }>>([])
 const siteEntitlements = ref<ApiRecord>({})
 const previewToken = ref('')
 const cmsLoadError = ref<string | null>(null)
@@ -329,7 +329,13 @@ const siteName = computed(() => siteData.value?.brand_name || 'Loading...')
 const siteStatusLabel = computed(() => String(siteData.value?.status || 'unknown').replaceAll('_', ' '))
 const cmsCapabilities = computed(() => {
   if (!siteData.value) return null
-  return resolveCmsCapabilities(siteData.value.vertical as SiteVertical, siteData.value.template as PublicTemplateSlug)
+  return resolveCmsCapabilities(siteData.value.vertical as SiteVertical, siteData.value.template as PublicTemplateSlug, {
+    site: parseCmsFeatureOverrideDelta(siteData.value.feature_overrides as string | null | undefined),
+    // Without this, a module a location has explicitly disabled would stay listed/editable for
+    // that location here even though its dashboard route already 404s — selectedLocation is
+    // declared below but computed()s resolve lazily, so this is safe despite the textual order.
+    location: selectedLocation.value ? parseCmsFeatureOverrideDelta(selectedLocation.value.feature_overrides) : undefined,
+  })
 })
 const sitePreviewBaseUrl = computed(() => {
   if (!siteData.value?.id) return ''

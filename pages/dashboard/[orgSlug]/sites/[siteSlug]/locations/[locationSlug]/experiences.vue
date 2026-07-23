@@ -334,7 +334,7 @@ import BookingPolicyForm from '~/components/dashboard/BookingPolicyForm.vue'
 
 const weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const satisfies WeekdayName[]
 
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.experiences' })
 
 type ApiRecord = Experience
 

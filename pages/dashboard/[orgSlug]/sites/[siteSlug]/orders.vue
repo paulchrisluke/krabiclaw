@@ -69,7 +69,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.ordering' })
 
 interface LocationRow {
   id: string

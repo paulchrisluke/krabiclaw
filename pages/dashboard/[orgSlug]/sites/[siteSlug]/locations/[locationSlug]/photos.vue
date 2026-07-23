@@ -111,7 +111,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.photos' })
 
 import VideoPosterPrompt from '~/components/workspace/media/VideoPosterPrompt.vue'
 

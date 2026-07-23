@@ -1,5 +1,5 @@
 import type { SiteVertical } from '~/utils/vertical-copy'
-import { cmsCapabilityRegistry, resolveCmsCapabilities, type CmsCapabilityDefinition } from '~/config/cms-registry'
+import { cmsCapabilityRegistry, resolveCmsCapabilities, type CmsCapabilityDefinition, type CmsCapabilityOverrides } from '~/config/cms-registry'
 
 export type FieldSource = 'manual' | 'google' | 'static' | 'computed'
 
@@ -88,8 +88,8 @@ export interface EditablePage {
 
 /** Resolves the visible page inventory for a tenant's vertical — the one source of truth for
  *  the CMS page selector (content.vue) and the page inventory list (pages.vue). */
-export function getEditablePages(vertical: SiteVertical, template: PublicTemplateSlug): EditablePage[] {
-  const capability = resolveCmsCapabilities(vertical, template)
+export function getEditablePages(vertical: SiteVertical, template: PublicTemplateSlug, overrides?: CmsCapabilityOverrides): EditablePage[] {
+  const capability = resolveCmsCapabilities(vertical, template, overrides)
   return capability.pages.map(page => ({
       id: page.id,
       label: page.label,
@@ -102,8 +102,10 @@ export function getEditablePages(vertical: SiteVertical, template: PublicTemplat
 }
 
 /** Resolves the editable pages a CMS host (editor sidebar, index grid) should list for one
- *  scope — the one place that intersects a template's editable-page inventory with the
- *  capabilities the tenant's vertical/template combination actually exposes. blawby has no
+ *  scope. Maps directly off the already-resolved `capabilities.pages` (not a fresh
+ *  getEditablePages(vertical, template) call) so a hybrid site/location override — a page the
+ *  vertical doesn't default to but the site explicitly enabled — is still enumerated; deriving
+ *  from the unresolved default template list would silently drop it. blawby has no
  *  field-editable pages yet (professional_services editor gap, issue #323), so it always
  *  returns an empty list rather than pages that would 400 against assertSiteContentPage. */
 export function getScopedEditablePages(
@@ -112,9 +114,17 @@ export function getScopedEditablePages(
   scope: 'site' | 'location',
 ): EditablePage[] {
   if (!vertical || !capabilities || capabilities.template === 'blawby') return []
-  const allowedPageIds = new Set(capabilities.pages.map(page => page.id))
-  return getEditablePages(vertical, capabilities.template)
-    .filter(page => allowedPageIds.has(page.id) && page.scope === scope)
+  return capabilities.pages
+    .filter(page => page.scope === scope)
+    .map(page => ({
+      id: page.id,
+      label: page.label,
+      path: page.route,
+      scope: page.scope,
+      scopeLabelKey: page.scope === 'site'
+        ? 'site'
+        : capabilities.locationVocabulary === 'office/service area' ? 'office' : 'location',
+    }))
 }
 
 /** Builds the URL a real visitor would see for a resolved page path — the one place that

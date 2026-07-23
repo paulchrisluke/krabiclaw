@@ -3,6 +3,9 @@ import { fireSiteEventSafe } from "~/server/utils/site-events";
 import { execute, executeBatch, queryFirst, type DbClient } from "~/server/db";
 import { isValidTimezone, normalizeTimezone } from "~/utils/timezone";
 import { parsePhone } from "~/utils/phone";
+import type { CmsCapabilityOverrideDelta, ProductFeature } from "~/config/cms-registry";
+import { resolveSiteCmsCapabilities } from "~/server/utils/cms-capabilities";
+import { checkModuleHasLiveData } from "~/server/utils/module-content-guard";
 
 // Require format-valid E.164 at the shared location write boundary (issue
 // #293 Section D/I) — this is the one place createLocation/updateLocation
@@ -163,6 +166,10 @@ export interface CreateLocationInput {
   canonical_url?: string | null;
   robots?: string | null;
   og_image_asset_id?: string | null;
+  // Additive/subtractive delta layered on top of the parent site's effective feature set
+  // (config/cms-registry.ts) — null clears the override back to pure inheritance. `enabled`
+  // entries must be a subset of the site's effective feature set; validated below.
+  feature_overrides?: CmsCapabilityOverrideDelta | null;
 }
 
 export interface UpdateLocationInput extends Partial<CreateLocationInput> {
@@ -207,6 +214,7 @@ export interface LocationRecord {
   canonical_url?: string | null;
   robots?: string | null;
   og_image_asset_id?: string | null;
+  feature_overrides?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -390,6 +398,122 @@ export async function validateMediaAsset(
   }
 }
 
+interface LocationFeaturesValidationError {
+  ok: false;
+  status: number;
+  data: { error: string };
+}
+
+// Shared by createLocation and updateLocation: looks up the parent site, resolves its effective
+// feature set, and validates a submitted feature_overrides delta against it. Preserves the
+// undefined/null distinction on the way out — undefined means "field not touched" (matters for
+// updateLocation's partial-update SET-clause gating), null means "explicit clear back to
+// inheriting the site's effective features", both `createLocation` and `updateLocation` map the
+// result onto their own return shape. `locationId` is only passed by updateLocation (a location
+// being created has no existing content to guard) — when present, a `disabled` module with live
+// content at this location is rejected rather than silently hidden.
+async function resolveValidatedLocationFeatures(
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  featureOverrides: CmsCapabilityOverrideDelta | null | undefined,
+  locationId?: string,
+): Promise<{ ok: true; normalized: string | null | undefined } | LocationFeaturesValidationError> {
+  if (featureOverrides === undefined) {
+    return { ok: true, normalized: undefined };
+  }
+  if (featureOverrides === null) {
+    return { ok: true, normalized: null };
+  }
+  const { enabled = [], disabled = [] } = featureOverrides;
+  if (!Array.isArray(enabled) || !enabled.every((value) => typeof value === "string") || !Array.isArray(disabled) || !disabled.every((value) => typeof value === "string")) {
+    return { ok: false, status: 400, data: { error: "feature_overrides.enabled/disabled must be arrays of feature ids or null." } };
+  }
+  const parentSite = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
+    SELECT vertical, theme_id, feature_overrides FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
+  `, [siteId, organizationId]);
+  if (!parentSite) {
+    return { ok: false, status: 404, data: { error: "Site not found." } };
+  }
+  let siteEffectiveFeatures: readonly ProductFeature[] = [];
+  let toggleableAtLocation: readonly ProductFeature[] = [];
+  try {
+    const { template, capabilities } = resolveSiteCmsCapabilities(parentSite.vertical, parentSite.theme_id, { siteEnabledFeatures: parentSite.feature_overrides });
+    siteEffectiveFeatures = [...new Set([...capabilities.pages.map((p) => p.feature), ...capabilities.managers.map((m) => m.id)])];
+    const { toggleableModulesForScope } = await import("~/config/cms-registry");
+    toggleableAtLocation = toggleableModulesForScope(template, "location");
+  } catch {
+    return { ok: false, status: 422, data: { error: "Unsupported site vertical/template — cannot resolve feature catalog." } };
+  }
+  const submitted = [...enabled, ...disabled];
+  const notConfigurable = submitted.filter((feature) => !toggleableAtLocation.includes(feature as ProductFeature));
+  if (notConfigurable.length > 0) {
+    return { ok: false, status: 400, data: { error: `Module(s) not location-configurable: ${notConfigurable.join(", ")}` } };
+  }
+  const unsupported = enabled.filter((feature) => !siteEffectiveFeatures.includes(feature as ProductFeature));
+  if (unsupported.length > 0) {
+    return { ok: false, status: 400, data: { error: `Location features require parent site support: ${unsupported.join(", ")}` } };
+  }
+  if (locationId) {
+    for (const feature of disabled) {
+      const guard = await checkModuleHasLiveData(db, { siteId, locationId }, feature as ProductFeature);
+      if (guard.blocked) {
+        return { ok: false, status: 409, data: { error: guard.reason ?? "Module has live content." } };
+      }
+    }
+  }
+  return { ok: true, normalized: JSON.stringify({ enabled, disabled }) };
+}
+
+export interface LocationCapabilitySummary {
+  site_effective_features: ProductFeature[];
+  location_effective_features: ProductFeature[];
+  location_feature_overrides: CmsCapabilityOverrideDelta | null;
+}
+
+/** Everything the location settings page needs to diff a checkbox change against the correct
+ *  baseline — the parent SITE's effective feature set, never the location's own current state
+ *  (a location re-enabling something back to the site default must collapse to a null override,
+ *  not an equivalent-but-redundant explicit delta). Shared by the location GET and PATCH routes
+ *  so both return the same shape. */
+export async function resolveLocationCapabilitySummary(
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  locationFeatureOverridesRaw: string | null,
+): Promise<LocationCapabilitySummary | null> {
+  const site = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
+    SELECT vertical, theme_id, feature_overrides FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
+  `, [siteId, organizationId]);
+  if (!site) return null;
+  const { parseCmsFeatureOverrideDelta } = await import("~/config/cms-registry");
+  try {
+    const { capabilities: siteCapabilities } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
+      siteEnabledFeatures: site.feature_overrides,
+    });
+    const siteEffectiveFeatures = [...new Set([...siteCapabilities.pages.map((p) => p.feature), ...siteCapabilities.managers.map((m) => m.id)])];
+
+    const { capabilities: locationCapabilities } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
+      siteEnabledFeatures: site.feature_overrides,
+      locationEnabledFeatures: locationFeatureOverridesRaw,
+    });
+    const locationEffectiveFeatures = [...new Set([...locationCapabilities.pages.map((p) => p.feature), ...locationCapabilities.managers.map((m) => m.id)])];
+
+    return {
+      site_effective_features: siteEffectiveFeatures,
+      location_effective_features: locationEffectiveFeatures,
+      location_feature_overrides: parseCmsFeatureOverrideDelta(locationFeatureOverridesRaw),
+    };
+  } catch (error) {
+    // Fix the source of truth (mismatched vertical/theme, corrupt override JSON) rather than
+    // reporting a fake "everything disabled" summary — that would look like real product state
+    // instead of an unresolved config problem. Callers already handle a null summary safely
+    // (spreading null into a response object is a no-op).
+    console.error("resolveLocationCapabilitySummary: failed to resolve capabilities", { siteId, error });
+    return null;
+  }
+}
+
 async function loadLocation(
   db: D1Database,
   organizationId: string,
@@ -401,7 +525,7 @@ async function loadLocation(
            address, opening_hours, special_hours, hero_image_asset_id, hero_video_asset_id, price_level,
            facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
            notification_phone, timezone, max_capacity, seo_title, seo_description, canonical_url, robots, og_image_asset_id,
-           created_at, updated_at`;
+           feature_overrides, created_at, updated_at`;
   // Check id first so a slug that happens to collide with another row's id can
   // never shadow the row actually addressed by that id.
   const byId = await queryFirst<LocationRecord>(
@@ -463,6 +587,16 @@ export async function createLocation(
       },
     };
   }
+
+  // Same validation/semantics as updateLocation's feature_overrides handling: undefined/omitted
+  // means "inherit the parent site's effective features" (stored as NULL); no locationId is
+  // passed since a location being created has no existing content for the live-data guard to check.
+  const featuresResult = await resolveValidatedLocationFeatures(db, organizationId, siteId, input.feature_overrides);
+  if (!featuresResult.ok) {
+    return { status: featuresResult.status, data: featuresResult.data };
+  }
+  const normalizedEnabledFeatures = featuresResult.normalized ?? null;
+
   const normalizedTimezone = input.timezone === undefined
     ? undefined
     : normalizeTimezone(input.timezone);
@@ -564,9 +698,9 @@ export async function createLocation(
             google_review_url, google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
             price_level, facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
             hero_image_asset_id, hero_video_asset_id, notification_phone, timezone, max_capacity, is_primary, status,
-            seo_title, seo_description, canonical_url, robots, og_image_asset_id, created_at, updated_at
+            seo_title, seo_description, canonical_url, robots, og_image_asset_id, feature_overrides, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         params: [
           id,
@@ -607,6 +741,7 @@ export async function createLocation(
           input.canonical_url ?? null,
           input.robots ?? null,
           input.og_image_asset_id ?? null,
+          normalizedEnabledFeatures,
           now,
           now,
         ],
@@ -689,6 +824,11 @@ export async function updateLocation(
   if (input.title !== undefined && !input.title.trim()) {
     return { status: 400, data: { error: "title cannot be empty." } };
   }
+  const updateFeaturesResult = await resolveValidatedLocationFeatures(db, organizationId, siteId, input.feature_overrides, locationId);
+  if (!updateFeaturesResult.ok) {
+    return { status: updateFeaturesResult.status, data: updateFeaturesResult.data };
+  }
+  const normalizedEnabledFeatures = updateFeaturesResult.normalized;
   if (
     input.rating !== undefined &&
     input.rating !== null &&
@@ -922,6 +1062,10 @@ export async function updateLocation(
   if (input.is_primary !== undefined) {
     sets.push("is_primary = ?");
     params.push(input.is_primary ? 1 : 0);
+  }
+  if (input.feature_overrides !== undefined) {
+    sets.push("feature_overrides = ?");
+    params.push(normalizedEnabledFeatures ?? null);
   }
 
   const runUpdate = async (boundParams: Array<string | number | null>) => {
