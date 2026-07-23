@@ -417,6 +417,10 @@ const locationOptions = computed(() => orgLocations.value.map(location => ({
   value: location.id,
 })))
 
+function isCurrentLocationsRequest(requestId: number, siteId: string) {
+  return requestId === locationsRequestId && inviteForm.siteId === siteId
+}
+
 async function loadOrgSites() {
   if (orgSites.value.length || sitesPending.value) return
   const requestId = ++sitesRequestId
@@ -442,18 +446,21 @@ watch(() => inviteForm.siteId, async (siteId) => {
   const requestId = ++locationsRequestId
   inviteForm.locationId = ''
   orgLocations.value = []
-  if (!siteId) return
+  if (!siteId) {
+    locationsPending.value = false
+    return
+  }
   locationsPending.value = true
   try {
     const response = await $fetch<{ success: boolean; locations: OrgLocationSummary[] }>(`/api/sites/${siteId}/locations`)
-    if (requestId !== locationsRequestId || inviteForm.siteId !== siteId) return
+    if (!isCurrentLocationsRequest(requestId, siteId)) return
     orgLocations.value = response.locations ?? []
   } catch (err) {
-    if (requestId !== locationsRequestId || inviteForm.siteId !== siteId) return
+    if (!isCurrentLocationsRequest(requestId, siteId)) return
     orgLocations.value = []
     inviteError.value = err instanceof Error ? err.message : 'Failed to load locations for this site.'
   } finally {
-    if (requestId === locationsRequestId) locationsPending.value = false
+    if (isCurrentLocationsRequest(requestId, siteId)) locationsPending.value = false
   }
 })
 
