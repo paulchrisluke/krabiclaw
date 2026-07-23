@@ -51,15 +51,15 @@ test('content managers are present for every vertical regardless of business mod
   for (const vertical of ['restaurant', 'experience', 'professional_service'] as const) {
     const template = vertical === 'professional_service' ? 'blawby' : 'saya'
     const resolved = resolveCmsCapabilities(vertical, template)
-    for (const feature of ['blog', 'qa', 'testimonials', 'posts', 'photos', 'media']) {
+    for (const feature of ['blog', 'qa', 'testimonials', 'posts', 'photos', 'media', 'links']) {
       assert.ok(resolved.managers.some(manager => manager.id === feature), `${vertical} is missing content manager: ${feature}`)
     }
   }
 })
 
 test('content managers are never removable via an explicit disabled delta', () => {
-  const resolved = resolveCmsCapabilities('restaurant', 'saya', { site: { disabled: ['qa', 'blog', 'testimonials', 'posts', 'photos', 'media'] } })
-  for (const feature of ['blog', 'qa', 'testimonials', 'posts', 'photos', 'media']) {
+  const resolved = resolveCmsCapabilities('restaurant', 'saya', { site: { disabled: ['qa', 'blog', 'testimonials', 'posts', 'photos', 'media', 'links'] } })
+  for (const feature of ['blog', 'qa', 'testimonials', 'posts', 'photos', 'media', 'links']) {
     assert.ok(resolved.managers.some(manager => manager.id === feature), `${feature} should survive an explicit disable`)
   }
 })
@@ -70,7 +70,7 @@ test('toggleableModulesForScope only lists real business modules, never content 
   const blawbySite = toggleableModulesForScope('blawby', 'site')
   const blawbyLocation = toggleableModulesForScope('blawby', 'location')
 
-  for (const contentFeature of ['blog', 'qa', 'testimonials', 'reviews', 'posts', 'photos', 'media', 'contact', 'locations', 'settings']) {
+  for (const contentFeature of ['blog', 'qa', 'testimonials', 'reviews', 'posts', 'photos', 'media', 'links', 'contact', 'locations', 'settings']) {
     assert.ok(!sayaSite.includes(contentFeature as never))
     assert.ok(!sayaLocation.includes(contentFeature as never))
   }
@@ -79,6 +79,18 @@ test('toggleableModulesForScope only lists real business modules, never content 
   assert.deepEqual(blawbySite, ['services'])
   // 'services' is only configurableAt: ['site'] — a location can never toggle it.
   assert.deepEqual(blawbyLocation, [])
+})
+
+test('links page manager is site-scoped and uses the canonical dashboard route', () => {
+  for (const vertical of ['restaurant', 'experience', 'professional_service'] as const) {
+    const template = vertical === 'professional_service' ? 'blawby' : 'saya'
+    const resolved = resolveCmsCapabilities(vertical, template)
+    const manager = resolved.managers.find(item => item.key === 'site.links')
+    assert.ok(manager)
+    assert.equal(manager.id, 'links')
+    assert.equal(manager.scope, 'site')
+    assert.equal(manager.route, 'links')
+  }
 })
 
 test('site.qa and location.qa are distinct, independently keyed managers', () => {

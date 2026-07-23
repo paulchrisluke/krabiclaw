@@ -1606,6 +1606,50 @@ export const tenant_pages = sqliteTable("tenant_pages", {
 	check("tenant_pages_status_check", sql`status IN ('draft', 'published', 'archived')`),
 ]);
 
+export const site_link_pages = sqliteTable("site_link_pages", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ).unique(),
+	path: text().default("/links").notNull(),
+	title: text().notNull(),
+	bio: text(),
+	profile_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
+	status: text().default("draft").notNull(),
+	robots: text().default("noindex,follow").notNull(),
+	seo_title: text(),
+	seo_description: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_by: text(),
+}, (table) => [
+	unique("site_link_pages_organization_id_site_id_path_unique").on(table.organization_id, table.site_id, table.path),
+	index("site_link_pages_site_status_idx").on(table.site_id, table.status),
+	check("site_link_pages_path_check", sql`path LIKE '/%' AND path NOT LIKE '//%'`),
+	check("site_link_pages_status_check", sql`status IN ('draft', 'published', 'archived')`),
+	check("site_link_pages_robots_check", sql`robots IN ('index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow')`),
+]);
+
+export const site_link_items = sqliteTable("site_link_items", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	link_page_id: text().notNull().references(() => site_link_pages.id, { onDelete: "cascade" } ),
+	label: text().notNull(),
+	destination: text().notNull(),
+	description: text(),
+	icon: text(),
+	image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
+	sort_order: integer().default(0).notNull(),
+	status: text().default("active").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_by: text(),
+}, (table) => [
+	index("site_link_items_page_status_sort_idx").on(table.link_page_id, table.status, table.sort_order),
+	index("site_link_items_site_idx").on(table.site_id),
+	check("site_link_items_status_check", sql`status IN ('active', 'hidden')`),
+]);
+
 export const tenant_compliance = sqliteTable("tenant_compliance", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
