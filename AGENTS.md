@@ -424,7 +424,7 @@ POST /api/sites/[siteId]/domains
 Dashboard route:
 
 ```text
-/dashboard/[orgSlug]/settings/domains
+/dashboard/[orgSlug]/sites/[siteSlug]/domains
 ```
 
 Rules:
@@ -468,3 +468,7 @@ Use `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `won
 ### Domain docs
 
 This is a single-context repository using root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+
+### Development workflow
+
+Parallel agent work, PR cadence, CodeRabbit follow-up timing, dependency installs, and focused test commands are documented in `docs/agents/development-workflow.md`.
