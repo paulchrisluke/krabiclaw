@@ -70,7 +70,7 @@ import type { DashboardScopeHeaderModel } from '~/components/workspace/dashboard
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
 import { useAnalytics } from '~/composables/useAnalytics'
-import { resolveCmsCapabilities, type CmsManagerCapability, type CmsManagerId } from '~/config/cms-registry'
+import { parseCmsFeatureOverride, resolveCmsCapabilities, type CmsManagerCapability, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
@@ -162,10 +162,17 @@ const showChowBot = computed(() => !isConversationsRoute.value
 
 const vertical = computed(() => (site.value?.vertical ?? null) as SiteVertical | null)
 const templateSlug = computed(() => vertical.value ? resolvePublicTemplate({ vertical: vertical.value }).slug : null)
+const currentLocationRow = computed(() => dashboard.locations.value.find(l => l.slug === currentLocationSlug.value) ?? null)
+// The resolved definition always reflects BOTH the site's own override and, once drilled into a
+// location, that location's override too — a single resolveCmsCapabilities call feeds nav at
+// every scope rather than each scope re-deriving its own partial capability view.
 const capabilities = computed(() => {
   if (!vertical.value || !templateSlug.value) return null
   try {
-    return resolveCmsCapabilities(vertical.value, templateSlug.value)
+    return resolveCmsCapabilities(vertical.value, templateSlug.value, {
+      site: parseCmsFeatureOverride(site.value?.enabled_features),
+      location: currentLocationSlug.value ? parseCmsFeatureOverride(currentLocationRow.value?.enabled_features) : undefined,
+    })
   } catch {
     return null
   }
@@ -229,31 +236,36 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
 type NavGroupId = 'Content' | 'Operate' | 'Reputation' | 'Publishing'
 
 // A NEW VERTICAL never requires touching this layout: add its combination to
-// cmsCapabilityRegistry (config/cms-registry.ts) and nav updates automatically
-// via resolveCmsCapabilities. The one exception is a genuinely NEW manager id
+// verticalDefaultFeatures (config/cms-registry.ts) and nav updates automatically
+// via resolveCmsCapabilities. The one exception is a genuinely NEW feature id
 // (not just a new vertical using existing ids like menu/reviews/blog) — that
 // needs an entry in both maps below, or it silently renders with no group/icon.
-const MANAGER_GROUP: Partial<Record<CmsManagerId, NavGroupId>> = {
+// 'locations' and 'settings' are deliberately absent — they're always-on infra
+// features rendered directly by overviewGroup/siteOverviewGroup/locationOverviewGroup
+// below, not through the toggleable manager nav.
+const MANAGER_GROUP: Partial<Record<ProductFeature, NavGroupId>> = {
   media: 'Content',
-  tenant_pages: 'Content',
-  compliance: 'Content',
+  posts: 'Content',
+  photos: 'Content',
   menu: 'Operate',
+  ordering: 'Operate',
   reservations: 'Operate',
   experiences: 'Operate',
-  offerings: 'Operate',
+  services: 'Operate',
   reviews: 'Reputation',
   qa: 'Reputation',
   blog: 'Publishing',
 }
 
-const MANAGER_ICON: Partial<Record<CmsManagerId, string>> = {
+const MANAGER_ICON: Partial<Record<ProductFeature, string>> = {
   media: 'i-lucide-image',
-  tenant_pages: 'i-lucide-file-text',
-  compliance: 'i-lucide-shield-check',
+  posts: 'i-lucide-megaphone',
+  photos: 'i-lucide-image',
   menu: 'i-lucide-utensils',
+  ordering: 'i-lucide-shopping-bag',
   reservations: 'i-lucide-calendar-check',
   experiences: 'i-lucide-ticket',
-  offerings: 'i-lucide-briefcase',
+  services: 'i-lucide-briefcase',
   reviews: 'i-lucide-star',
   qa: 'i-lucide-message-circle-question',
   blog: 'i-lucide-pencil',
@@ -320,31 +332,37 @@ function parentNavItem() {
   return parent ? [{ label: parent.label, icon: 'i-lucide-chevron-left', to: parent.to }] : []
 }
 
+// 'locations' and 'settings' are always-on infra features (see MANAGER_GROUP's comment) so they
+// render here directly rather than through managerNavItems — the label still comes from the
+// resolved capabilities (locationVocabulary), not a hardcoded string, so a professional_service
+// site correctly reads "Offices / Service Areas" instead of "Locations".
+const locationsNavLabel = computed(() => capabilities.value?.locationVocabulary === 'office/service area' ? 'Offices / Service Areas' : 'Locations')
+
 const siteOverviewGroup = computed(() => {
   if (scope.value !== 'site' || !siteBase.value) return []
   const items = [
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: siteBase.value },
-    { label: 'Locations', icon: 'i-lucide-map-pin', to: locationsBase.value ?? `${siteBase.value}/locations` },
+    { label: locationsNavLabel.value, icon: 'i-lucide-map-pin', to: locationsBase.value ?? `${siteBase.value}/locations` },
   ]
   if (!canManageSite.value) return items
   return [
     ...items,
-    { label: 'Orders', icon: 'i-lucide-shopping-bag', to: `${siteBase.value}/orders` },
     { label: 'Assistant', icon: 'i-lucide-bot', to: `${siteBase.value}/conversations` },
     { label: 'Settings', icon: 'i-lucide-settings', to: `${siteBase.value}/settings` },
     // { label: 'Translations', icon: 'i-lucide-languages', to: `${siteBase.value}/translations` },
   ]
 })
 
+// Posts/Photos/Q&A used to be hardcoded here regardless of capability — moved to
+// managerNavItems('Content'/'Reputation') (location.posts/location.photos/location.qa in
+// config/cms-registry.ts) so a location override can actually turn them off. Overview/Content/
+// Inbox/Settings stay here: universal chrome with no ProductFeature toggle.
 const locationOverviewGroup = computed(() => {
   if (scope.value !== 'location' || !locationBase.value) return []
   return [
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: locationBase.value },
     ...(canManageSite.value ? [{ label: 'Analytics', icon: 'i-lucide-chart-bar', to: `${locationBase.value}/analytics` }] : []),
     { label: 'Content', icon: 'i-lucide-file-text', to: `${locationBase.value}/content` },
-    { label: 'Posts', icon: 'i-lucide-megaphone', to: `${locationBase.value}/posts` },
-    { label: 'Photos', icon: 'i-lucide-image', to: `${locationBase.value}/photos` },
-    { label: 'Q&A', icon: 'i-lucide-message-circle-question', to: `${locationBase.value}/qa` },
     { label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox` },
     { label: 'Settings', icon: 'i-lucide-settings', to: `${locationBase.value}/settings` },
   ]

@@ -118,13 +118,15 @@ async function assertSiteContentPage(
   siteId: string,
   page: string,
 ) {
-  const site = await queryFirst<{ vertical: string; theme_id: string }>(db, `
-    SELECT vertical, theme_id FROM sites
+  const site = await queryFirst<{ vertical: string; theme_id: string; enabled_features: string | null }>(db, `
+    SELECT vertical, theme_id, enabled_features FROM sites
     WHERE id = ? AND organization_id = ?
     LIMIT 1
   `, [siteId, organizationId]);
   if (!site) throw createError({ statusCode: 404, statusMessage: `Site "${siteId}" was not found.` });
-  const { vertical, template, capabilities: capability } = resolveSiteCmsCapabilities(site.vertical, site.theme_id);
+  const { vertical, template, capabilities: capability } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
+    siteEnabledFeatures: site.enabled_features,
+  });
   const pageCapability = capability.pages.find(candidate => candidate.id === page);
   if (!pageCapability) {
     throw createError({ statusCode: 400, statusMessage: `Page "${page}" is not available for ${vertical}/${template}.` });

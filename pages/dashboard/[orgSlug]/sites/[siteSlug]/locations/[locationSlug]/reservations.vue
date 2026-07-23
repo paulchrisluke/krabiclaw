@@ -80,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.reservations' })
 
 interface ReservationSubmission {
   id: string

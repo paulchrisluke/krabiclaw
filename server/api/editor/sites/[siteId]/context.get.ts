@@ -16,6 +16,7 @@ interface SiteRow {
   organization_name: string
   vertical: string
   theme_id: string
+  enabled_features: string | null
   member_id: string
   member_role: string
 }
@@ -73,7 +74,7 @@ export default defineEventHandler(async (event) => {
   try {
     // Verify user belongs to organization that owns the site
     const site = await queryFirst<SiteRow>(db, `
-      SELECT s.id, s.brand_name, s.subdomain, s.organization_id, s.status, s.onboarding_status, s.vertical, s.theme_id,
+      SELECT s.id, s.brand_name, s.subdomain, s.organization_id, s.status, s.onboarding_status, s.vertical, s.theme_id, s.enabled_features,
              o.name as organization_name, om.id AS member_id, om.role AS member_role
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
@@ -133,8 +134,11 @@ export default defineEventHandler(async (event) => {
 
     // Get content registry for this site/theme
     const { getEditablePages } = await import('../../../../../config/content-registry')
-    const { vertical, template } = resolveSiteCmsCapabilities(site.vertical, site.theme_id)
-    const editablePages = getEditablePages(vertical, template)
+    const { parseCmsFeatureOverride } = await import('../../../../../config/cms-registry')
+    const { vertical, template } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
+      siteEnabledFeatures: site.enabled_features,
+    })
+    const editablePages = getEditablePages(vertical, template, { site: parseCmsFeatureOverride(site.enabled_features) })
 
     // Build scopes array — "Brand-wide" is a site-wide editing scope, so a
     // location-scoped-only editor doesn't get it as an option.
@@ -158,6 +162,7 @@ export default defineEventHandler(async (event) => {
           onboarding_status: site.onboarding_status,
           vertical,
           template,
+          enabled_features: site.enabled_features,
           entitlements
         },
         organization: {

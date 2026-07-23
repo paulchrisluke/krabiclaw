@@ -142,4 +142,24 @@ test.describe('dashboard functional smoke', () => {
     const organizationSettings = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/settings`, { waitUntil: 'load' })
     expect(organizationSettings?.status()).toBe(404)
   })
+
+  test('capability-gated manager routes 404 when the vertical does not expose them, and resolve when it does', async ({ page, baseURL }) => {
+    test.setTimeout(60_000)
+    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
+    await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
+
+    // Pottery House is an experience/saya site, not a restaurant (config/cms-registry.ts
+    // verticalDefaultFeatures — verified against the live seed via `yarn seed:pottery-local`,
+    // not assumed from the fixture name). Its default feature set has 'experiences'
+    // ('location.experiences') but not 'menu' — that's restaurant-only — and 'site.services' has
+    // no catalog entry in the saya template at all regardless of vertical.
+    const experiences = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/experiences`, { waitUntil: 'load' })
+    expect(experiences?.status(), 'location.experiences should resolve for an experience-vertical site').toBeLessThan(400)
+
+    const services = await page.request.get(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/professional-services`)
+    expect(services.status(), 'site.services has no catalog entry for saya and must 404, never redirect or render').toBe(404)
+
+    const locationMenu = await page.request.get(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/menu`)
+    expect(locationMenu.status(), 'location.menu is restaurant-only and off by default for the experience vertical').toBe(404)
+  })
 })

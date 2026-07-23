@@ -15,6 +15,7 @@ export function parseLocationPayload<T>(value: T | null | undefined) {
     ...location,
     address: parseJson('address'),
     opening_hours: parseJson('opening_hours'),
+    enabled_features: parseJson('enabled_features'),
     is_primary: Boolean(location.is_primary),
   }
 }

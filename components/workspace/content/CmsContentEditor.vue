@@ -297,7 +297,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 
 import { buildDisplayUrl, contentRegistry, getFieldDef, getScopedEditablePages, resolvePreviewPath } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
-import { resolveCmsCapabilities } from '~/config/cms-registry'
+import { parseCmsFeatureOverride, resolveCmsCapabilities } from '~/config/cms-registry'
 import type { PublicTemplateSlug } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
@@ -329,7 +329,9 @@ const siteName = computed(() => siteData.value?.brand_name || 'Loading...')
 const siteStatusLabel = computed(() => String(siteData.value?.status || 'unknown').replaceAll('_', ' '))
 const cmsCapabilities = computed(() => {
   if (!siteData.value) return null
-  return resolveCmsCapabilities(siteData.value.vertical as SiteVertical, siteData.value.template as PublicTemplateSlug)
+  return resolveCmsCapabilities(siteData.value.vertical as SiteVertical, siteData.value.template as PublicTemplateSlug, {
+    site: parseCmsFeatureOverride(siteData.value.enabled_features as string | null | undefined),
+  })
 })
 const sitePreviewBaseUrl = computed(() => {
   if (!siteData.value?.id) return ''

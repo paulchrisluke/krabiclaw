@@ -81,6 +81,20 @@ export default defineEventHandler(async (event) => {
     ? undefined
     : (() => { const n = Number(body.review_count); return Number.isFinite(n) ? n : undefined })()
 
+  // Unlike the other optional fields above, a malformed enabled_features (wrong type, not
+  // array/null) must not silently collapse to `undefined` — that would look like "field not
+  // touched" to updateLocation and quietly no-op a request the caller expected to apply.
+  let enabledFeatures: string[] | null | undefined
+  if (body.enabled_features === undefined) {
+    enabledFeatures = undefined
+  } else if (body.enabled_features === null) {
+    enabledFeatures = null
+  } else if (Array.isArray(body.enabled_features) && body.enabled_features.every((value) => typeof value === 'string')) {
+    enabledFeatures = body.enabled_features as string[]
+  } else {
+    return jsonResponse({ error: 'enabled_features must be an array of feature ids or null' }, { status: 400 })
+  }
+
   const result = await updateLocation(
     db,
     organizationId,
@@ -130,6 +144,7 @@ export default defineEventHandler(async (event) => {
       status: body.status === 'active' || body.status === 'inactive' || body.status === 'sync_error'
         ? body.status
         : undefined,
+      enabled_features: enabledFeatures,
     },
     session.user.id,
   )

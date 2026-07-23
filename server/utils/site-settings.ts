@@ -2,7 +2,9 @@ import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
 import { createSystemSubdomain } from '~/server/utils/domains'
 import { isCurrencyCode } from '~/shared/currencies'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
-import { execute, queryFirst } from '~/server/db'
+import { execute, queryAll, queryFirst } from '~/server/db'
+import { parseCmsFeatureOverride, toggleableFeaturesForTemplate, type ProductFeature } from '~/config/cms-registry'
+import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 
 type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
 
@@ -21,6 +23,8 @@ interface SiteSettingsRow {
   subdomain: string | null
   brand_name: string | null
   settings: string | null
+  vertical: string
+  theme_id: string
 }
 
 interface FullSiteRow extends SiteSettingsRow {
@@ -40,6 +44,7 @@ interface FullSiteRow extends SiteSettingsRow {
   canonical_url: string | null
   robots: string | null
   og_image_asset_id: string | null
+  enabled_features: string | null
   created_at: string
   updated_at: string
 }
@@ -66,12 +71,13 @@ export async function loadSettingsPayload(
   organizationId: string,
   siteId: string
 ) {
-  const updatedSite = await queryFirst<FullSiteRow>(db, `
+  const updatedSite = await queryFirst<FullSiteRow & { vertical: string; theme_id: string }>(db, `
     SELECT id, organization_id, subdomain, theme, status,
            primary_location_id, public_url, custom_domain_status, default_currency,
            brand_name, brand_description, logo_url, logo_asset_id, contact_email,
            seo_title, seo_description, canonical_url, robots, og_image_asset_id,
-           settings, last_published_at, created_at, updated_at
+           enabled_features, settings, last_published_at, created_at, updated_at,
+           vertical, theme_id
     FROM sites
     WHERE id = ? AND organization_id = ?
     LIMIT 1
@@ -91,6 +97,19 @@ export async function loadSettingsPayload(
   }
 
   const siteConfig = await getConfig(db, organizationId, siteId)
+
+  let toggleableFeatures: readonly ProductFeature[] = []
+  let effectiveFeatures: readonly ProductFeature[] = []
+  try {
+    const { template, capabilities } = resolveSiteCmsCapabilities(updatedSite.vertical, updatedSite.theme_id, {
+      siteEnabledFeatures: updatedSite.enabled_features,
+    })
+    toggleableFeatures = toggleableFeaturesForTemplate(template)
+    effectiveFeatures = [...new Set([...capabilities.pages.map(p => p.feature), ...capabilities.managers.map(m => m.id)])]
+  } catch {
+    // Unsupported vertical/template combination — leave the feature toggle list empty rather
+    // than 500ing the whole settings payload over an unrelated field.
+  }
 
   return {
     id: updatedSite.id,
@@ -112,6 +131,9 @@ export async function loadSettingsPayload(
     canonical_url: updatedSite.canonical_url,
     robots: updatedSite.robots,
     og_image_asset_id: updatedSite.og_image_asset_id,
+    enabled_features: parseCmsFeatureOverride(updatedSite.enabled_features),
+    toggleable_features: toggleableFeatures,
+    effective_features: effectiveFeatures,
     brand_color: siteConfig.brand_color || '',
     default_currency: updatedSite.default_currency || 'THB',
     url_structure: siteSettings.url_structure || 'location_subdirectories',
@@ -324,6 +346,56 @@ async function attemptSiteUpdate(
     setParts.push('robots = ?')
     params.push(updates.robots ?? null)
   }
+  if (updates.enabled_features !== undefined) {
+    let newSiteOverride: string[] | null = null
+    if (updates.enabled_features !== null) {
+      if (!Array.isArray(updates.enabled_features) || !updates.enabled_features.every(value => typeof value === 'string')) {
+        return { status: 400, data: { error: 'enabled_features must be an array of feature ids or null' } }
+      }
+      newSiteOverride = updates.enabled_features
+    }
+
+    let allowedFeatures: readonly ProductFeature[] = []
+    let newEffectiveFeatures: readonly ProductFeature[] = []
+    try {
+      const { template, capabilities } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
+        siteEnabledFeatures: newSiteOverride ? JSON.stringify(newSiteOverride) : null,
+      })
+      allowedFeatures = toggleableFeaturesForTemplate(template)
+      newEffectiveFeatures = [...new Set([...capabilities.pages.map(p => p.feature), ...capabilities.managers.map(m => m.id)])]
+    } catch {
+      return { status: 422, data: { error: 'Unsupported site vertical/template — cannot resolve feature catalog' } }
+    }
+
+    if (newSiteOverride) {
+      const invalid = newSiteOverride.filter(feature => !allowedFeatures.includes(feature as ProductFeature))
+      if (invalid.length > 0) {
+        return { status: 400, data: { error: `Unsupported feature(s) for this site's template: ${invalid.join(', ')}` } }
+      }
+    }
+
+    // A location's enabled_features override must stay a subset of the site's EFFECTIVE set
+    // (config/cms-registry.ts) — check every location with an explicit override before writing,
+    // whether this update adds/removes a feature or clears the override back to vertical
+    // defaults, so we never leave a location whose override resolveCmsCapabilities would reject.
+    const overriddenLocations = await queryAll<{ title: string; enabled_features: string }>(db, `
+      SELECT title, enabled_features FROM business_locations
+      WHERE site_id = ? AND organization_id = ? AND enabled_features IS NOT NULL
+    `, [siteId, organizationId])
+    const newEffectiveSet = new Set(newEffectiveFeatures)
+    const brokenLocations = overriddenLocations
+      .filter(loc => (parseCmsFeatureOverride(loc.enabled_features) ?? []).some(feature => !newEffectiveSet.has(feature)))
+      .map(loc => loc.title)
+    if (brokenLocations.length > 0) {
+      return {
+        status: 409,
+        data: { error: `Cannot update site features: location(s) ${brokenLocations.join(', ')} have overrides that require a feature this update would remove. Update those locations first.` },
+      }
+    }
+
+    setParts.push('enabled_features = ?')
+    params.push(newSiteOverride ? JSON.stringify(newSiteOverride) : null)
+  }
   if (updates.og_image_asset_id !== undefined) {
     if (updates.og_image_asset_id !== null && updates.og_image_asset_id !== '') {
       const asset = await queryFirst(db, `
@@ -435,7 +507,7 @@ export async function updateSiteSettingsFields(
   }
 
   const site = await queryFirst<SiteSettingsRow>(db, `
-    SELECT id, organization_id, subdomain, brand_name, settings
+    SELECT id, organization_id, subdomain, brand_name, settings, vertical, theme_id
     FROM sites
     WHERE id = ? AND organization_id = ?
     LIMIT 1

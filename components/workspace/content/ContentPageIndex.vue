@@ -30,7 +30,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import { getScopedEditablePages } from '~/config/content-registry'
-import { resolveCmsCapabilities } from '~/config/cms-registry'
+import { parseCmsFeatureOverride, resolveCmsCapabilities } from '~/config/cms-registry'
 import type { PublicTemplateSlug } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
@@ -50,7 +50,9 @@ const loadError = ref<string | null>(null)
 
 const cmsCapabilities = computed(() => {
   if (!siteData.value) return null
-  return resolveCmsCapabilities(siteData.value.vertical as SiteVertical, siteData.value.template as PublicTemplateSlug)
+  return resolveCmsCapabilities(siteData.value.vertical as SiteVertical, siteData.value.template as PublicTemplateSlug, {
+    site: parseCmsFeatureOverride(siteData.value.enabled_features as string | null | undefined),
+  })
 })
 
 // blawby has no field-editable pages yet (professional_services editor gap,

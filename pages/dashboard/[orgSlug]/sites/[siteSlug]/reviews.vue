@@ -72,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.reviews' })
 useSeoMeta({ title: 'Site Reviews | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 type CollectionMethod = 'in_person' | 'email' | 'phone' | 'migration' | 'other'

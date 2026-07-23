@@ -56,6 +56,9 @@ export interface UpdateSiteSettingsRequest {
   canonical_url?: string | null
   robots?: string | null
   og_image_asset_id?: string | null
+  // Full replacement of the vertical's default feature set (config/cms-registry.ts
+  // ProductFeature ids), not a delta — null clears the override back to defaults.
+  enabled_features?: string[] | null
 }
 
 export interface LaunchReadiness {

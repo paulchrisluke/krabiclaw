@@ -106,6 +106,29 @@
 
         <UCard>
           <template #header>
+            <div>
+              <h2 class="font-semibold text-highlighted">Features</h2>
+              <p class="mt-1 text-sm text-muted">Turn product features on or off for this location. Only features the site itself has enabled can be turned on here.</p>
+            </div>
+          </template>
+          <div v-if="locationToggleableFeatures.length" class="grid gap-3 sm:grid-cols-2">
+            <UCheckbox
+              v-for="feature in locationToggleableFeatures"
+              :key="feature"
+              v-model="locationEnabledFeatureSet[feature]"
+              :label="LOCATION_FEATURE_LABELS[feature] ?? feature"
+            />
+          </div>
+          <p v-else class="text-sm text-muted">No toggleable features available — enable them on the site first.</p>
+          <template #footer>
+            <div class="flex justify-end">
+              <UButton color="neutral" variant="outline" :loading="savingLocationFeatures" @click="saveLocationFeatures">Save features</UButton>
+            </div>
+          </template>
+        </UCard>
+
+        <UCard>
+          <template #header>
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 class="font-semibold text-highlighted">Location Details</h2>
@@ -283,12 +306,26 @@
 
 <script setup lang="ts">
 import { TIMEZONE_OPTIONS } from '~/utils/timezone'
+import { parseCmsFeatureOverride, resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
+import { resolvePublicTemplate } from '~/utils/template-registry'
+import type { SiteVertical } from '~/utils/vertical-copy'
 definePageMeta({ layout: 'dashboard' })
+
+const LOCATION_FEATURE_LABELS: Partial<Record<ProductFeature, string>> = {
+  menu: 'Menu',
+  reservations: 'Reservations',
+  experiences: 'Experiences',
+  qa: 'Q&A',
+  media: 'Media library',
+  posts: 'Posts',
+  photos: 'Photos',
+}
 
 interface BusinessLocation {
   id: string
   slug: string
   title: string
+  enabled_features?: ProductFeature[] | null
   address: { addressLines?: string[] } | null
   city: string | null
   neighborhood: string | null
@@ -345,6 +382,53 @@ const gbConnection = ref<GbConnection | null>(null)
 let locationLoadToken = 0
 const connectingGoogle = ref(false)
 const syncingPlace = ref(false)
+const savingLocationFeatures = ref(false)
+const locationEnabledFeatureSet = reactive<Partial<Record<ProductFeature, boolean>>>({})
+
+// A location can only turn on what the SITE itself has effectively enabled (config/cms-registry.ts
+// resolveCmsCapabilities enforces this server-side too) — resolve the site's own capabilities the
+// same way layouts/dashboard.vue does, then offer only its toggleable (non-always-on) features.
+const locationToggleableFeatures = computed<ProductFeature[]>(() => {
+  const site = dashboard.site.value
+  if (!site?.vertical) return []
+  try {
+    const template = resolvePublicTemplate({ vertical: site.vertical as SiteVertical }).slug
+    const capabilities = resolveCmsCapabilities(site.vertical as SiteVertical, template, {
+      site: parseCmsFeatureOverride(site.enabled_features),
+    })
+    const siteFeatures = new Set([...capabilities.pages.map(p => p.feature), ...capabilities.managers.map(m => m.id)])
+    return [...siteFeatures].filter(feature => feature in LOCATION_FEATURE_LABELS)
+  } catch {
+    return []
+  }
+})
+
+function fillLocationFeatures(loaded: BusinessLocation) {
+  const enabled = new Set(loaded.enabled_features ?? locationToggleableFeatures.value)
+  // Only ever read through locationToggleableFeatures (see the template's v-for and
+  // saveLocationFeatures' filter), so a stale key from a previous load is harmless.
+  for (const feature of locationToggleableFeatures.value) locationEnabledFeatureSet[feature] = enabled.has(feature)
+}
+
+async function saveLocationFeatures() {
+  const requestedLocationId = locationId.value
+  savingLocationFeatures.value = true
+  try {
+    const enabled = locationToggleableFeatures.value.filter(feature => locationEnabledFeatureSet[feature])
+    const response = await $fetch<{ success: boolean; location: BusinessLocation }>(`/api/dashboard/locations/${requestedLocationId}`, {
+      method: 'PATCH',
+      body: { enabled_features: enabled },
+    })
+    if (locationId.value !== requestedLocationId) return
+    location.value = response.location
+    fillLocationFeatures(response.location)
+    toast.add({ description: 'Features saved', color: 'success' })
+  } catch (error) {
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to save features', color: 'error' })
+  } finally {
+    savingLocationFeatures.value = false
+  }
+}
 const placeSyncResult = ref('')
 const detailsSaving = ref(false)
 const detailsSaved = ref(false)
@@ -668,6 +752,7 @@ const loadLocationWorkspace = async () => {
     if (!locationResponse.success) throw new Error('Failed to load location')
     location.value = locationResponse.location
     gbConnection.value = connectionResponse.connection
+    fillLocationFeatures(locationResponse.location)
     return true
   } catch (err) {
     if (currentToken !== locationLoadToken) return false

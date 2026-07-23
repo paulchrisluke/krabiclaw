@@ -16,7 +16,7 @@ import { tenantBlogRepository } from '~/components/workspace/blog/tenantBlogRepo
 import BlogPostEditor from '~/components/workspace/blog/BlogPostEditor.vue'
 import MediaPicker from '~/components/workspace/media/MediaPicker.vue'
 
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.blog' })
 
 const route = useRoute()
 const orgSlug = route.params.orgSlug as string

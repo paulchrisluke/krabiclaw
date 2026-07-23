@@ -50,7 +50,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.services' })
 useSeoMeta({ title: 'Organization and search data | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 interface ComplianceRecord extends Record<string, unknown> {

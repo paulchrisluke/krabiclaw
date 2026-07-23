@@ -72,6 +72,29 @@
         <UCard>
           <template #header>
             <div>
+              <h2 class="font-semibold text-highlighted">Features</h2>
+              <p class="mt-1 text-sm text-muted">Turn product features on or off for this site. Unchecked here won't appear in navigation or be reachable by URL.</p>
+            </div>
+          </template>
+          <div v-if="toggleableFeatures.length" class="grid gap-3 sm:grid-cols-2">
+            <UCheckbox
+              v-for="feature in toggleableFeatures"
+              :key="feature"
+              v-model="enabledFeatureSet[feature]"
+              :label="FEATURE_LABELS[feature] ?? feature"
+            />
+          </div>
+          <p v-else class="text-sm text-muted">No toggleable features for this site's template.</p>
+          <template #footer>
+            <div class="flex justify-end">
+              <UButton color="neutral" variant="outline" :loading="savingFeatures" @click="saveFeatures">Save features</UButton>
+            </div>
+          </template>
+        </UCard>
+
+        <UCard>
+          <template #header>
+            <div>
               <h2 class="font-semibold text-highlighted">Site Notifications</h2>
               <p class="mt-1 text-sm text-muted">Fallback delivery for every location. A location can override this in its own settings.</p>
             </div>
@@ -115,6 +138,21 @@
 
 <script setup lang="ts">
 import { CURRENCY_OPTIONS, DEFAULT_CURRENCY, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
+import type { ProductFeature } from '~/config/cms-registry'
+
+const FEATURE_LABELS: Partial<Record<ProductFeature, string>> = {
+  menu: 'Menu',
+  reservations: 'Reservations',
+  ordering: 'Online ordering',
+  experiences: 'Experiences',
+  services: 'Services',
+  blog: 'Blog',
+  qa: 'Q&A',
+  reviews: 'Reviews',
+  media: 'Media library',
+  posts: 'Posts',
+  photos: 'Photos',
+}
 
 interface SiteSettingsResponse {
   brand_name?: string | null
@@ -134,6 +172,8 @@ interface SiteSettingsResponse {
   robots?: string | null
   google_analytics_measurement_id?: string | null
   google_site_verification?: string | null
+  toggleable_features?: ProductFeature[]
+  effective_features?: ProductFeature[]
 }
 
 interface FacebookConnectionStatus {
@@ -149,7 +189,10 @@ const loading = ref(true)
 const saving = ref(false)
 const loadError = ref<string | null>(null)
 const savingNotifications = ref(false)
+const savingFeatures = ref(false)
 const connectingFacebook = ref(false)
+const toggleableFeatures = ref<ProductFeature[]>([])
+const enabledFeatureSet = reactive<Partial<Record<ProductFeature, boolean>>>({})
 const notificationChannels = ref<string[]>(['email'])
 const whatsappPhone = ref('')
 const facebookConnection = ref<FacebookConnectionStatus | null>(null)
@@ -197,6 +240,11 @@ function fillForm(settings: SiteSettingsResponse) {
   form.robots = settings.robots ?? ''
   form.google_analytics_measurement_id = settings.google_analytics_measurement_id ?? ''
   form.google_site_verification = settings.google_site_verification ?? ''
+  toggleableFeatures.value = settings.toggleable_features ?? []
+  const effective = new Set(settings.effective_features ?? [])
+  // Only ever read through toggleableFeatures (see the template's v-for and saveFeatures'
+  // filter), so a stale key from a previous load is harmless — no need to clear the object first.
+  for (const feature of toggleableFeatures.value) enabledFeatureSet[feature] = effective.has(feature)
 }
 
 async function load() {
@@ -241,6 +289,26 @@ async function saveSiteSettings() {
     toast.add({ description: errorMessage(error, 'Failed to save site settings'), color: 'error' })
   } finally {
     saving.value = false
+  }
+}
+
+async function saveFeatures() {
+  const requestedSiteSlug = route.params.siteSlug
+  savingFeatures.value = true
+  try {
+    const enabled = toggleableFeatures.value.filter(feature => enabledFeatureSet[feature])
+    const response = await $fetch<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', {
+      method: 'PATCH',
+      body: { enabled_features: enabled },
+    })
+    if (route.params.siteSlug !== requestedSiteSlug) return
+    fillForm(response.settings)
+    toast.add({ description: 'Features saved', color: 'success' })
+    await dashboard.refresh()
+  } catch (error) {
+    toast.add({ description: errorMessage(error, 'Failed to save features'), color: 'error' })
+  } finally {
+    savingFeatures.value = false
   }
 }
 
