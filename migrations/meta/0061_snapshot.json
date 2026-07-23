@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "82f0347e-ae24-49d1-9b2a-6994bfbd241e",
+  "id": "94256874-64a3-4623-8763-d5f70dd275af",
   "prevId": "966fa397-55bc-47bd-8637-26212818a4ea",
   "tables": {
     "account": {
@@ -1594,8 +1594,8 @@
           "notNull": false,
           "autoincrement": false
         },
-        "enabled_features": {
-          "name": "enabled_features",
+        "feature_overrides": {
+          "name": "feature_overrides",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -15652,8 +15652,8 @@
           "notNull": false,
           "autoincrement": false
         },
-        "enabled_features": {
-          "name": "enabled_features",
+        "feature_overrides": {
+          "name": "feature_overrides",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

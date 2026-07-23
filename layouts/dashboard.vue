@@ -70,7 +70,7 @@ import type { DashboardScopeHeaderModel } from '~/components/workspace/dashboard
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
 import { useAnalytics } from '~/composables/useAnalytics'
-import { parseCmsFeatureOverride, resolveCmsCapabilities, type CmsManagerCapability, type ProductFeature } from '~/config/cms-registry'
+import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type CmsManagerCapability, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
@@ -170,8 +170,8 @@ const capabilities = computed(() => {
   if (!vertical.value || !templateSlug.value) return null
   try {
     return resolveCmsCapabilities(vertical.value, templateSlug.value, {
-      site: parseCmsFeatureOverride(site.value?.enabled_features),
-      location: currentLocationSlug.value ? parseCmsFeatureOverride(currentLocationRow.value?.enabled_features) : undefined,
+      site: parseCmsFeatureOverrideDelta(site.value?.feature_overrides),
+      location: currentLocationSlug.value ? parseCmsFeatureOverrideDelta(currentLocationRow.value?.feature_overrides) : undefined,
     })
   } catch {
     return null
@@ -239,7 +239,10 @@ type NavGroupId = 'Content' | 'Operate' | 'Reputation' | 'Publishing'
 // verticalDefaultFeatures (config/cms-registry.ts) and nav updates automatically
 // via resolveCmsCapabilities. The one exception is a genuinely NEW feature id
 // (not just a new vertical using existing ids like menu/reviews/blog) — that
-// needs an entry in both maps below, or it silently renders with no group/icon.
+// needs an entry in both maps below. managerNavItems filters on
+// `MANAGER_GROUP[manager.id] !== group`, so a ProductFeature missing from this map
+// matches no group at all and is omitted from every group's nav — not rendered
+// with a missing icon, simply never rendered.
 // 'locations' and 'settings' are deliberately absent — they're always-on infra
 // features rendered directly by overviewGroup/siteOverviewGroup/locationOverviewGroup
 // below, not through the toggleable manager nav.

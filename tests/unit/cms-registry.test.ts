@@ -4,6 +4,7 @@ import {
   allGuardableManagerKeys,
   cmsCapabilityRegistry,
   resolveCmsCapabilities,
+  toggleableModulesForScope,
   validateCmsCapabilityDefinition,
   validateCmsCapabilityRegistry,
 } from '../../config/cms-registry.ts'
@@ -32,7 +33,7 @@ test('each supported CMS exposes the five universal sections', () => {
   }
 })
 
-test('vertical-specific managers never leak into another product (defaults)', () => {
+test('vertical-specific business modules never leak into another product (defaults)', () => {
   const restaurant = resolveCmsCapabilities('restaurant', 'saya')
   const experience = resolveCmsCapabilities('experience', 'saya')
   const professional = resolveCmsCapabilities('professional_service', 'blawby')
@@ -46,6 +47,40 @@ test('vertical-specific managers never leak into another product (defaults)', ()
   assert.equal(professional.locationVocabulary, 'office/service area')
 })
 
+test('content managers are present for every vertical regardless of business module defaults', () => {
+  for (const vertical of ['restaurant', 'experience', 'professional_service'] as const) {
+    const template = vertical === 'professional_service' ? 'blawby' : 'saya'
+    const resolved = resolveCmsCapabilities(vertical, template)
+    for (const feature of ['blog', 'qa', 'reviews', 'posts', 'photos', 'media']) {
+      assert.ok(resolved.managers.some(manager => manager.id === feature), `${vertical} is missing content manager: ${feature}`)
+    }
+  }
+})
+
+test('content managers are never removable via an explicit disabled delta', () => {
+  const resolved = resolveCmsCapabilities('restaurant', 'saya', { site: { disabled: ['qa', 'blog', 'reviews', 'posts', 'photos', 'media'] } })
+  for (const feature of ['blog', 'qa', 'reviews', 'posts', 'photos', 'media']) {
+    assert.ok(resolved.managers.some(manager => manager.id === feature), `${feature} should survive an explicit disable`)
+  }
+})
+
+test('toggleableModulesForScope only lists real business modules, never content managers', () => {
+  const sayaSite = toggleableModulesForScope('saya', 'site')
+  const sayaLocation = toggleableModulesForScope('saya', 'location')
+  const blawbySite = toggleableModulesForScope('blawby', 'site')
+  const blawbyLocation = toggleableModulesForScope('blawby', 'location')
+
+  for (const contentFeature of ['blog', 'qa', 'reviews', 'posts', 'photos', 'media', 'contact', 'locations', 'settings']) {
+    assert.ok(!sayaSite.includes(contentFeature as never))
+    assert.ok(!sayaLocation.includes(contentFeature as never))
+  }
+  assert.deepEqual([...sayaSite].sort(), ['experiences', 'menu', 'ordering', 'reservations'])
+  assert.deepEqual([...sayaLocation].sort(), ['experiences', 'menu', 'ordering', 'reservations'])
+  assert.deepEqual(blawbySite, ['services'])
+  // 'services' is only configurableAt: ['site'] — a location can never toggle it.
+  assert.deepEqual(blawbyLocation, [])
+})
+
 test('site.qa and location.qa are distinct, independently keyed managers', () => {
   const restaurant = resolveCmsCapabilities('restaurant', 'saya')
   const siteQa = restaurant.managers.find(manager => manager.key === 'site.qa')
@@ -56,40 +91,48 @@ test('site.qa and location.qa are distinct, independently keyed managers', () =>
   assert.equal(locationQa.scope, 'location')
 })
 
-test('always-on features survive even when a site override omits them', () => {
-  const resolved = resolveCmsCapabilities('restaurant', 'saya', { site: ['menu'] })
-  assert.ok(resolved.managers.some(manager => manager.key === 'site.settings'))
-  assert.ok(resolved.managers.some(manager => manager.key === 'site.locations'))
+test('a hybrid site delta unlocks a manager the vertical does not default to', () => {
+  const hybrid = resolveCmsCapabilities('restaurant', 'saya', { site: { enabled: ['experiences'] } })
+  assert.ok(hybrid.managers.some(manager => manager.key === 'location.menu'), 'restaurant default (menu) is preserved')
+  assert.ok(hybrid.managers.some(manager => manager.key === 'location.experiences'), 'explicit enable adds experiences on top')
 })
 
-test('hybrid site override: restaurant with experiences added on top of defaults', () => {
-  const hybrid = resolveCmsCapabilities('restaurant', 'saya', {
-    site: [...(cmsCapabilityRegistry.find(c => c.vertical === 'restaurant')?.managers.map(m => m.id) ?? []), 'experiences'],
-  })
-  assert.ok(hybrid.managers.some(manager => manager.key === 'location.menu'))
-  assert.ok(hybrid.managers.some(manager => manager.key === 'location.experiences'))
-})
-
-test('site feature disabled: an explicit site override can turn off a vertical default', () => {
-  const withoutOrdering = resolveCmsCapabilities('restaurant', 'saya', { site: ['menu', 'reservations'] })
+test('site feature disabled: an explicit disabled delta turns off a vertical default', () => {
+  const withoutOrdering = resolveCmsCapabilities('restaurant', 'saya', { site: { disabled: ['ordering'] } })
   assert.ok(!withoutOrdering.pages.some(page => page.feature === 'ordering'))
-  assert.ok(withoutOrdering.managers.some(manager => manager.key === 'location.menu'))
+  assert.ok(withoutOrdering.managers.some(manager => manager.key === 'location.menu'), 'other defaults are untouched')
 })
 
-test('location feature disabled: a location override narrows the inherited site set', () => {
+test('location feature disabled: a location delta narrows the inherited site set', () => {
   const withoutLocationMenu = resolveCmsCapabilities('restaurant', 'saya', {
-    location: ['reservations'],
+    location: { disabled: ['menu'] },
   })
   assert.ok(!withoutLocationMenu.managers.some(manager => manager.key === 'location.menu'))
-  // site-scoped managers are unaffected by a location override
+  // site-scoped managers are unaffected by a location delta
   assert.ok(withoutLocationMenu.managers.some(manager => manager.key === 'site.blog'))
+})
+
+test('a location can re-enable a module the site already supports (round trip)', () => {
+  const disabled = resolveCmsCapabilities('restaurant', 'saya', { location: { disabled: ['menu'] } })
+  assert.ok(!disabled.managers.some(manager => manager.key === 'location.menu'))
+  const reenabled = resolveCmsCapabilities('restaurant', 'saya', { location: { enabled: ['menu'], disabled: [] } })
+  assert.ok(reenabled.managers.some(manager => manager.key === 'location.menu'))
 })
 
 test('location overrides must be a subset of the effective site feature set', () => {
   assert.throws(
-    () => resolveCmsCapabilities('restaurant', 'saya', { site: ['menu'], location: ['experiences'] }),
+    () => resolveCmsCapabilities('restaurant', 'saya', {
+      site: { disabled: ['menu', 'ordering'] },
+      location: { enabled: ['experiences'] },
+    }),
     /Location capability override requires parent site support/,
   )
+})
+
+test('a location may always disable something it inherited, without validation', () => {
+  assert.doesNotThrow(() => resolveCmsCapabilities('restaurant', 'saya', {
+    location: { disabled: ['menu', 'ordering', 'reservations'] },
+  }))
 })
 
 test('validation catches a duplicate manager key', () => {

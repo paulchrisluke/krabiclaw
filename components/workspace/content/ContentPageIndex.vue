@@ -30,7 +30,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import { getScopedEditablePages } from '~/config/content-registry'
-import { parseCmsFeatureOverride, resolveCmsCapabilities } from '~/config/cms-registry'
+import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
 import type { PublicTemplateSlug } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
@@ -51,7 +51,7 @@ const loadError = ref<string | null>(null)
 const cmsCapabilities = computed(() => {
   if (!siteData.value) return null
   return resolveCmsCapabilities(siteData.value.vertical as SiteVertical, siteData.value.template as PublicTemplateSlug, {
-    site: parseCmsFeatureOverride(siteData.value.enabled_features as string | null | undefined),
+    site: parseCmsFeatureOverrideDelta(siteData.value.feature_overrides as string | null | undefined),
   })
 })
 

@@ -5,11 +5,11 @@ interface SiteFixture {
   id: string
   vertical: string
   theme_id: string
-  enabled_features: string | null
+  feature_overrides: string | null
 }
 
 interface LocationFixture {
-  enabled_features: string | null
+  feature_overrides: string | null
 }
 
 const fixtures = {
@@ -30,8 +30,8 @@ mock.module('../../server/db/index.ts', {
 const { isDashboardRouteCapabilityAllowed } = await import('../../server/utils/dashboard-route-capability.ts')
 
 const db = {} as D1Database
-const restaurantSite: SiteFixture = { id: 'site-1', vertical: 'restaurant', theme_id: 'saya-theme-v1', enabled_features: null }
-const professionalServiceSite: SiteFixture = { id: 'site-2', vertical: 'professional_service', theme_id: 'blawby-theme-v1', enabled_features: null }
+const restaurantSite: SiteFixture = { id: 'site-1', vertical: 'restaurant', theme_id: 'saya-theme-v1', feature_overrides: null }
+const professionalServiceSite: SiteFixture = { id: 'site-2', vertical: 'professional_service', theme_id: 'blawby-theme-v1', feature_overrides: null }
 
 test('a manager present in the site\'s default feature set is allowed', async () => {
   fixtures.site = restaurantSite
@@ -51,28 +51,28 @@ test('a manager absent from the vertical\'s default feature set is denied', asyn
   assert.equal(allowed, false)
 })
 
-test('a hybrid site override unlocks a manager the vertical does not default to', async () => {
+test('a hybrid site delta unlocks a manager the vertical does not default to', async () => {
   // 'location.experiences' is off by default for the restaurant vertical (config/cms-registry.ts
   // verticalDefaultFeatures) — assert it's denied under the site's plain defaults first, so the
   // second assertion actually proves the override changed the outcome rather than checking a key
-  // ('site.blog') that was already allowed by default either way.
+  // that was already allowed by default either way.
   fixtures.site = restaurantSite
-  fixtures.location = { enabled_features: null }
+  fixtures.location = { feature_overrides: null }
   const deniedByDefault = await isDashboardRouteCapabilityAllowed(db, 'user-1', {
     organizationSlug: 'acme', siteSlug: 'acme-restaurant', locationSlug: 'downtown', capabilityKey: 'location.experiences',
   })
   assert.equal(deniedByDefault, false)
 
-  fixtures.site = { ...restaurantSite, enabled_features: JSON.stringify(['menu', 'reservations', 'ordering', 'blog', 'qa', 'reviews', 'media', 'posts', 'photos', 'experiences']) }
+  fixtures.site = { ...restaurantSite, feature_overrides: JSON.stringify({ enabled: ['experiences'] }) }
   const allowedAfterOverride = await isDashboardRouteCapabilityAllowed(db, 'user-1', {
     organizationSlug: 'acme', siteSlug: 'acme-restaurant', locationSlug: 'downtown', capabilityKey: 'location.experiences',
   })
   assert.equal(allowedAfterOverride, true)
 })
 
-test('a location-scoped key checks the location override, not the site', async () => {
+test('a location-scoped key checks the location delta, not the site', async () => {
   fixtures.site = restaurantSite
-  fixtures.location = { enabled_features: JSON.stringify(['reservations']) }
+  fixtures.location = { feature_overrides: JSON.stringify({ disabled: ['menu'] }) }
   const denied = await isDashboardRouteCapabilityAllowed(db, 'user-1', {
     organizationSlug: 'acme', siteSlug: 'acme-restaurant', locationSlug: 'downtown', capabilityKey: 'location.menu',
   })
@@ -102,6 +102,15 @@ test('a missing location under a real site fails closed', async () => {
   assert.equal(allowed, false)
 })
 
+test('content manager keys are always allowed, even under a site delta that tries to disable them', async () => {
+  fixtures.site = { ...restaurantSite, feature_overrides: JSON.stringify({ disabled: ['qa', 'blog', 'reviews'] }) }
+  fixtures.location = null
+  const qaAllowed = await isDashboardRouteCapabilityAllowed(db, 'user-1', {
+    organizationSlug: 'acme', siteSlug: 'acme-restaurant', capabilityKey: 'site.qa',
+  })
+  assert.equal(qaAllowed, true)
+})
+
 test('professional_service default manager key is allowed, restaurant-only key is denied', async () => {
   fixtures.site = professionalServiceSite
   fixtures.location = null
@@ -110,8 +119,12 @@ test('professional_service default manager key is allowed, restaurant-only key i
   })
   assert.equal(servicesAllowed, true)
 
+  // A real location context (not omitted) so this proves 'location.menu' is denied because
+  // blawby's template catalog has no manager for it at all — not merely because no location
+  // was supplied and the location-lookup branch never ran.
+  fixtures.location = { feature_overrides: null }
   const menuDenied = await isDashboardRouteCapabilityAllowed(db, 'user-1', {
-    organizationSlug: 'firm', siteSlug: 'firm-site', capabilityKey: 'location.menu',
+    organizationSlug: 'firm', siteSlug: 'firm-site', locationSlug: 'downtown', capabilityKey: 'location.menu',
   })
   assert.equal(menuDenied, false)
 })

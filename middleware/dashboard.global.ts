@@ -77,20 +77,27 @@ export default defineNuxtRouteMiddleware(async (to) => {
     if (import.meta.server) {
       const event = useRequestEvent()
       if (event) {
-        const [{ cloudflareEnv }, { getAuthSession }, { isDashboardRouteCapabilityAllowed }] = await Promise.all([
-          import('~/server/utils/api-response'),
-          import('~/server/utils/auth'),
-          import('~/server/utils/dashboard-route-capability'),
-        ])
-        const env = cloudflareEnv(event)
-        const session = await getAuthSession(event, env)
-        if (session?.user?.id && env.DB) {
-          capabilityAllowed = await isDashboardRouteCapabilityAllowed(env.DB, session.user.id, {
-            organizationSlug,
-            siteSlug,
-            locationSlug,
-            capabilityKey,
-          })
+        try {
+          const [{ cloudflareEnv }, { getAuthSession }, { isDashboardRouteCapabilityAllowed }] = await Promise.all([
+            import('~/server/utils/api-response'),
+            import('~/server/utils/auth'),
+            import('~/server/utils/dashboard-route-capability'),
+          ])
+          const env = cloudflareEnv(event)
+          const session = await getAuthSession(event, env)
+          if (session?.user?.id && env.DB) {
+            capabilityAllowed = await isDashboardRouteCapabilityAllowed(env.DB, session.user.id, {
+              organizationSlug,
+              siteSlug,
+              locationSlug,
+              capabilityKey,
+            })
+          }
+        } catch {
+          // Fail closed on a DB/auth lookup failure (transient D1 error, etc.) — the same
+          // controlled 404 an unresolvable capability gets, not an unhandled 500 that crashes
+          // the navigation.
+          capabilityAllowed = false
         }
       }
     } else {

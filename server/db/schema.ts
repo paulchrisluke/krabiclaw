@@ -179,10 +179,11 @@ export const business_locations = sqliteTable("business_locations", {
 	canonical_url: text(),
 	robots: text(),
 	og_image_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
-	// JSON array of ProductFeature ids (config/cms-registry.ts). NULL means "inherit the parent
-	// site's effective feature set" — never the vertical defaults directly, since a location's
-	// enabled features must always be a subset of what the site itself resolves to.
-	enabled_features: text(),
+	// JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts).
+	// NULL means "inherit the parent site's effective feature set" — never the vertical defaults
+	// directly. `enabled` entries must always be a subset of what the site itself resolves to;
+	// `disabled` entries are always safe (a location can turn off anything it inherited).
+	feature_overrides: text(),
 }, (table) => [
 	unique("business_locations_organization_id_site_id_slug_unique").on(table.organization_id, table.site_id, table.slug),
 ]);
@@ -1986,10 +1987,12 @@ export const sites = sqliteTable("sites", {
 	seo_description: text(),
 	canonical_url: text(),
 	robots: text(),
-	// JSON array of ProductFeature ids (config/cms-registry.ts). NULL means "use vertical
-	// defaults"; a non-null value fully replaces the vertical defaults (not merged) so an owner
-	// can both add a feature the vertical doesn't default to and remove one it does.
-	enabled_features: text(),
+	// JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts)
+	// layered additively/subtractively on top of the vertical's own module defaults — NULL means
+	// "use vertical defaults as-is." Only real business modules (menu/ordering/reservations/
+	// experiences/services) are ever stored here; content managers (blog/qa/reviews/posts/photos/
+	// media) are always-on and never appear in this column.
+	feature_overrides: text(),
 }, (table) => [
 	check("sites_status_check", sql`${table.status} IN ('active', 'inactive', 'suspended')`),
 	check("sites_plan_check", sql`${table.plan} IN ('free', 'growth', 'managed', 'seo_accelerator')`),

@@ -71,9 +71,12 @@
 
         <UCard>
           <template #header>
-            <div>
-              <h2 class="font-semibold text-highlighted">Features</h2>
-              <p class="mt-1 text-sm text-muted">Turn product features on or off for this site. Unchecked here won't appear in navigation or be reachable by URL.</p>
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <h2 class="font-semibold text-highlighted">Business modules</h2>
+                <p class="mt-1 text-sm text-muted">Does this business support these? Content managers (Blog, Q&amp;A, Reviews, Posts, Photos, Media) are always available and aren't listed here — only real product modules are toggleable.</p>
+              </div>
+              <UBadge v-if="verticalLabel" color="neutral" variant="soft" :label="`Vertical: ${verticalLabel}`" />
             </div>
           </template>
           <div v-if="toggleableFeatures.length" class="grid gap-3 sm:grid-cols-2">
@@ -84,10 +87,10 @@
               :label="FEATURE_LABELS[feature] ?? feature"
             />
           </div>
-          <p v-else class="text-sm text-muted">No toggleable features for this site's template.</p>
+          <p v-else class="text-sm text-muted">No toggleable modules for this site's template.</p>
           <template #footer>
             <div class="flex justify-end">
-              <UButton color="neutral" variant="outline" :loading="savingFeatures" @click="saveFeatures">Save features</UButton>
+              <UButton color="neutral" variant="outline" :loading="savingFeatures" @click="saveFeatures">Save modules</UButton>
             </div>
           </template>
         </UCard>
@@ -146,12 +149,19 @@ const FEATURE_LABELS: Partial<Record<ProductFeature, string>> = {
   ordering: 'Online ordering',
   experiences: 'Experiences',
   services: 'Services',
-  blog: 'Blog',
-  qa: 'Q&A',
-  reviews: 'Reviews',
-  media: 'Media library',
-  posts: 'Posts',
-  photos: 'Photos',
+}
+
+// The vertical isn't editable here (or anywhere yet — see config/cms-registry.ts and
+// utils/vertical-copy.ts's SiteVertical; there's no update path for sites.vertical once a site
+// is created), but it silently decides which features default on and which labels apply, so it
+// needs to be visible next to the toggles that depend on it rather than left implicit.
+const VERTICAL_LABELS: Record<string, string> = {
+  restaurant: 'Restaurant',
+  experience: 'Experience',
+  professional_service: 'Professional Service',
+  // Raw DB storage alias for professional_service (see dashboard-context.ts's DashboardSiteRow
+  // comment / utils/vertical-copy.ts's normalizeVertical) — shown as a plain string otherwise.
+  service: 'Professional Service',
 }
 
 interface SiteSettingsResponse {
@@ -174,6 +184,7 @@ interface SiteSettingsResponse {
   google_site_verification?: string | null
   toggleable_features?: ProductFeature[]
   effective_features?: ProductFeature[]
+  default_features?: ProductFeature[]
 }
 
 interface FacebookConnectionStatus {
@@ -193,6 +204,7 @@ const savingFeatures = ref(false)
 const connectingFacebook = ref(false)
 const toggleableFeatures = ref<ProductFeature[]>([])
 const enabledFeatureSet = reactive<Partial<Record<ProductFeature, boolean>>>({})
+const defaultFeatures = ref<ProductFeature[]>([])
 const notificationChannels = ref<string[]>(['email'])
 const whatsappPhone = ref('')
 const facebookConnection = ref<FacebookConnectionStatus | null>(null)
@@ -213,6 +225,10 @@ const URL_STRUCTURE_OPTIONS = [
 ]
 const CHANNEL_OPTIONS = [{ label: 'Email', value: 'email' }, { label: 'WhatsApp', value: 'whatsapp' }]
 const hasFacebookAccess = computed(() => ['growth', 'managed', 'seo_accelerator'].includes(dashboard.site.value?.plan ?? ''))
+const verticalLabel = computed(() => {
+  const vertical = dashboard.site.value?.vertical
+  return vertical ? VERTICAL_LABELS[vertical] ?? vertical : null
+})
 
 function errorMessage(error: unknown, fallback: string) {
   if (error && typeof error === 'object' && 'data' in error) {
@@ -241,6 +257,7 @@ function fillForm(settings: SiteSettingsResponse) {
   form.google_analytics_measurement_id = settings.google_analytics_measurement_id ?? ''
   form.google_site_verification = settings.google_site_verification ?? ''
   toggleableFeatures.value = settings.toggleable_features ?? []
+  defaultFeatures.value = settings.default_features ?? []
   const effective = new Set(settings.effective_features ?? [])
   // Only ever read through toggleableFeatures (see the template's v-for and saveFeatures'
   // filter), so a stale key from a previous load is harmless — no need to clear the object first.
@@ -296,17 +313,24 @@ async function saveFeatures() {
   const requestedSiteSlug = route.params.siteSlug
   savingFeatures.value = true
   try {
-    const enabled = toggleableFeatures.value.filter(feature => enabledFeatureSet[feature])
+    // Delta against the vertical's own defaults, not the previously saved state — this is what
+    // lets a future default addition still reach this site (config/cms-registry.ts). Collapses to
+    // `null` (no override at all) when the checked set exactly matches the defaults, rather than
+    // persisting a redundant no-op delta.
+    const defaultSet = new Set(defaultFeatures.value)
+    const enabled = toggleableFeatures.value.filter(feature => enabledFeatureSet[feature] && !defaultSet.has(feature))
+    const disabled = defaultFeatures.value.filter(feature => !enabledFeatureSet[feature])
+    const featureOverrides = enabled.length === 0 && disabled.length === 0 ? null : { enabled, disabled }
     const response = await $fetch<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', {
       method: 'PATCH',
-      body: { enabled_features: enabled },
+      body: { feature_overrides: featureOverrides },
     })
     if (route.params.siteSlug !== requestedSiteSlug) return
     fillForm(response.settings)
-    toast.add({ description: 'Features saved', color: 'success' })
+    toast.add({ description: 'Business modules saved', color: 'success' })
     await dashboard.refresh()
   } catch (error) {
-    toast.add({ description: errorMessage(error, 'Failed to save features'), color: 'error' })
+    toast.add({ description: errorMessage(error, 'Failed to save business modules'), color: 'error' })
   } finally {
     savingFeatures.value = false
   }

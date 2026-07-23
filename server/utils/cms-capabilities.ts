@@ -1,5 +1,5 @@
 import { createError } from 'h3'
-import { parseCmsFeatureOverride, resolveCmsCapabilities, type CmsCapabilityOverrides } from '~/config/cms-registry'
+import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type CmsCapabilityOverrides } from '~/config/cms-registry'
 import { publicTemplateRegistry, type PublicTemplateSlug } from '~/utils/template-registry'
 import { ALL_VERTICALS, normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
@@ -23,8 +23,8 @@ export function resolveSiteCmsCapabilities(
   }
   const vertical = normalizedVertical as SiteVertical
   const overrides: CmsCapabilityOverrides = {
-    site: parseCmsFeatureOverride(overrideInput.siteEnabledFeatures),
-    location: parseCmsFeatureOverride(overrideInput.locationEnabledFeatures),
+    site: parseCmsFeatureOverrideDelta(overrideInput.siteEnabledFeatures),
+    location: parseCmsFeatureOverrideDelta(overrideInput.locationEnabledFeatures),
   }
   try {
     return { vertical, template: template as PublicTemplateSlug, capabilities: resolveCmsCapabilities(vertical, template, overrides) }

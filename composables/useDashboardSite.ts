@@ -20,7 +20,7 @@ interface DashboardSite {
   primary_location_id: string | null
   default_currency: string | null
   source_locale: string | null
-  enabled_features: string | null
+  feature_overrides: string | null
   heroImageUrl?: string | null
   locationHeroImageUrl?: string | null
 }
@@ -41,7 +41,7 @@ interface DashboardLocation {
   city: string | null
   address: { addressLines?: string[] } | null
   hero_url: string | null
-  enabled_features: string | null
+  feature_overrides: string | null
 }
 
 interface DashboardContextResponse {

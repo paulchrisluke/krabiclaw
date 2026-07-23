@@ -12,7 +12,7 @@ interface RouteCapabilitySiteRow {
   id: string
   vertical: string
   theme_id: string
-  enabled_features: string | null
+  feature_overrides: string | null
 }
 
 /** The route-guard half of resolveCmsCapabilities (config/cms-registry.ts) — judges ONLY
@@ -29,7 +29,7 @@ export async function isDashboardRouteCapabilityAllowed(
   params: RouteCapabilityParams,
 ): Promise<boolean> {
   const site = await queryFirst<RouteCapabilitySiteRow>(db, `
-    SELECT s.id, s.vertical, s.theme_id, s.enabled_features
+    SELECT s.id, s.vertical, s.theme_id, s.feature_overrides
     FROM sites s
     JOIN organization o ON o.id = s.organization_id
     JOIN member m ON m.organizationId = o.id
@@ -38,22 +38,22 @@ export async function isDashboardRouteCapabilityAllowed(
   `, [params.organizationSlug, params.siteSlug, userId])
   if (!site) return false
 
-  let locationEnabledFeatures: string | null = null
+  let locationFeatureOverrides: string | null = null
   if (params.locationSlug) {
-    const location = await queryFirst<{ enabled_features: string | null }>(db, `
-      SELECT enabled_features FROM business_locations
+    const location = await queryFirst<{ feature_overrides: string | null }>(db, `
+      SELECT feature_overrides FROM business_locations
       WHERE site_id = ? AND slug = ?
       LIMIT 1
     `, [site.id, params.locationSlug])
     if (!location) return false
-    locationEnabledFeatures = location.enabled_features
+    locationFeatureOverrides = location.feature_overrides
   }
 
   let capabilities: ReturnType<typeof resolveSiteCmsCapabilities>['capabilities']
   try {
     ({ capabilities } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
-      siteEnabledFeatures: site.enabled_features,
-      locationEnabledFeatures,
+      siteEnabledFeatures: site.feature_overrides,
+      locationEnabledFeatures: locationFeatureOverrides,
     }))
   } catch {
     return false

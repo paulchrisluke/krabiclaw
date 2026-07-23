@@ -5,10 +5,14 @@ export type CmsSectionId = 'pages' | 'collections' | 'locations' | 'media' | 'si
 
 // Explicit module identifiers a vertical/template/site/location can turn on. 'experience_bookings',
 // 'consultations' and 'appointments' are declared (not yet wired to any catalog entry below) because
-// no distinct backing page/route exists for them yet — today's 'reservations' feature already covers
-// booking-policy management for both restaurant and experience verticals, and blawby's practice
-// management lives entirely on the single 'services' page. Wire a real catalog entry the day a
-// distinct route/data model exists instead of aliasing a fake one now.
+// no distinct manager/route exists for them yet — today's single 'reservations' feature covers both
+// table-reservation and experience-booking policy management, and blawby's practice management lives
+// entirely on the single 'services' page. A `booking_policies` table (server/db/schema.ts) already
+// models a real reservation/experience policy_type split at site/location/experience scope, so the
+// backing data model exists — building the distinct location.reservation_policies/
+// location.booking_policies managers on top of it is manager-page UX (issue #342's own "Do not
+// implement manager page UX in this issue; that is issue 3/5" boundary), not a capability-model
+// change. Wire real catalog entries when that page work happens instead of aliasing fake ones now.
 export type ProductFeature =
   | 'contact' | 'locations' | 'settings'
   | 'menu' | 'reservations' | 'ordering'
@@ -44,13 +48,28 @@ export interface CmsCapabilityDefinition {
   managers: readonly CmsManagerCapability[]
 }
 
-/** Explicit site/location module overrides. When present, REPLACES the vertical's default feature
- *  set entirely for that scope (not merged) — this is what lets an owner both add a feature the
- *  vertical doesn't default to (hybrid restaurant+experiences) and remove one it does (turn off
- *  ordering) from the same mechanism. `null`/omitted means "use the vertical defaults as-is". */
+/** Explicit site/location module override, as an ADDITIVE/SUBTRACTIVE DELTA on top of the
+ *  underlying default set (never a full-replacement snapshot) — this is what lets a future
+ *  default addition still reach a site that already has an override, and lets an owner add a
+ *  module the vertical doesn't default to (hybrid restaurant+experiences) independently of
+ *  removing one it does (turn off ordering), without either action clobbering the other. */
+export interface CmsCapabilityOverrideDelta {
+  enabled?: readonly ProductFeature[]
+  disabled?: readonly ProductFeature[]
+}
+
+/**
+ * - `site`: applied on top of the vertical's own module defaults. `null`/omitted means "use the
+ *   vertical defaults as-is".
+ * - `location`: applied on top of the site's EFFECTIVE feature set (the site's own delta already
+ *   resolved, if any) — never the vertical defaults directly. `null`/omitted means "inherit the
+ *   site's effective set exactly". An `enabled` entry must name a feature already present in that
+ *   effective site set (enforced below) — `disabled` entries are always safe, since a location can
+ *   always turn off something it inherited.
+ */
 export interface CmsCapabilityOverrides {
-  site?: readonly ProductFeature[] | null
-  location?: readonly ProductFeature[] | null
+  site?: CmsCapabilityOverrideDelta | null
+  location?: CmsCapabilityOverrideDelta | null
 }
 
 interface CmsTemplateCatalog {
@@ -136,6 +155,38 @@ export const templateCapabilityCatalog: Record<PublicTemplateSlug, CmsTemplateCa
   blawby: blawbyTemplateCatalog,
 }
 
+/** Where a business module can be toggled. Deliberately explicit rather than inferred from
+ *  CmsManagerCapability.scope — issue #342 is explicit that "scope" there means WHERE a feature is
+ *  MANAGED, which doesn't necessarily match where it can be turned on/off (e.g. ordering's URLs
+ *  live on business_locations rows, but that doesn't by itself say whether ordering is a
+ *  site-only decision or can vary per location — that's a product decision, stated here). */
+export interface ProductModuleDefinition {
+  feature: ProductFeature
+  configurableAt: readonly ('site' | 'location')[]
+}
+
+const sayaModules: readonly ProductModuleDefinition[] = [
+  { feature: 'menu', configurableAt: ['site', 'location'] },
+  { feature: 'ordering', configurableAt: ['site', 'location'] },
+  { feature: 'reservations', configurableAt: ['site', 'location'] },
+  { feature: 'experiences', configurableAt: ['site', 'location'] },
+]
+const blawbyModules: readonly ProductModuleDefinition[] = [
+  { feature: 'services', configurableAt: ['site'] },
+]
+const templateModules: Record<PublicTemplateSlug, readonly ProductModuleDefinition[]> = {
+  saya: sayaModules,
+  blawby: blawbyModules,
+}
+
+/** The real, customer-facing business modules a template offers, filtered to where they can
+ *  actually be toggled from ('site' vs 'location') — what the site and location settings pages'
+ *  module cards each list. Distinct from toggleableFeaturesForTemplate, which answers "every
+ *  toggleable id regardless of scope" (used for registry-wide validation). */
+export function toggleableModulesForScope(template: PublicTemplateSlug, scope: 'site' | 'location'): readonly ProductFeature[] {
+  return templateModules[template].filter(module => module.configurableAt.includes(scope)).map(module => module.feature)
+}
+
 // Which (vertical, template) pairs are real products today. Not every catalog feature is
 // reachable from every vertical — this plus verticalDefaultFeatures is what keeps
 // resolveCmsCapabilities('restaurant', 'blawby') failing fast the way it always has.
@@ -145,16 +196,24 @@ const supportedCombinations: Record<SiteVertical, readonly PublicTemplateSlug[]>
   professional_service: ['blawby'],
 }
 
-// Always-on infra features ('contact', 'locations', 'settings') are included for every vertical
-// deliberately — they are not user-toggleable and every override list below still gets them
-// unioned in by resolveCmsCapabilities so a site/location override can never accidentally drop
-// core navigation.
-const ALWAYS_ON_FEATURES: readonly ProductFeature[] = ['contact', 'locations', 'settings']
+// Always-on features: 'contact'/'locations'/'settings' are infra; 'blog'/'qa'/'reviews'/'posts'/
+// 'photos'/'media' are content managers — never business modules. An empty content manager still
+// needs to be reachable so an owner can create the first item (turning it off because it's empty
+// creates a circular UX problem), and public-side empty-state behavior for these is governed
+// separately by config/saya-empty-states.ts, not by this override model. None of these are
+// user-toggleable, and every delta below still gets them unioned in by resolveCmsCapabilities —
+// including surviving an explicit `disabled` entry — so an override can never drop them.
+export const ALWAYS_ON_FEATURES: readonly ProductFeature[] = [
+  'contact', 'locations', 'settings',
+  'blog', 'qa', 'reviews', 'posts', 'photos', 'media',
+]
 
+// Real business-module defaults only — content managers are handled uniformly via
+// ALWAYS_ON_FEATURES above, not per-vertical here.
 const verticalDefaultFeatures: Record<SiteVertical, readonly ProductFeature[]> = {
-  restaurant: ['menu', 'reservations', 'ordering', 'blog', 'qa', 'reviews', 'media', 'posts', 'photos'],
-  experience: ['experiences', 'reservations', 'blog', 'qa', 'reviews', 'media', 'posts', 'photos'],
-  professional_service: ['services', 'blog', 'qa', 'reviews', 'media', 'posts', 'photos'],
+  restaurant: ['menu', 'reservations', 'ordering'],
+  experience: ['experiences', 'reservations'],
+  professional_service: ['services'],
 }
 
 // Vocabulary/label differences that are purely cosmetic (same underlying feature, different
@@ -163,14 +222,24 @@ const verticalLabelOverrides: Partial<Record<SiteVertical, Partial<Record<Produc
   experience: { reservations: 'Bookings' },
 }
 
+/** The vertical's own module defaults (real business modules only, before any site/location
+ *  delta is applied) — exposed so a settings-page client can diff its checked state against the
+ *  true baseline without duplicating verticalDefaultFeatures' table. */
+export function defaultModuleFeaturesForVertical(vertical: SiteVertical): readonly ProductFeature[] {
+  return verticalDefaultFeatures[vertical]
+}
+
 function effectiveLabel(vertical: SiteVertical, feature: ProductFeature, fallback: string): string {
   return verticalLabelOverrides[vertical]?.[feature] ?? fallback
 }
 
-function resolveFeatureSet(vertical: SiteVertical, override: readonly ProductFeature[] | null | undefined): Set<ProductFeature> {
-  const base = new Set(override ?? verticalDefaultFeatures[vertical])
-  for (const feature of ALWAYS_ON_FEATURES) base.add(feature)
-  return base
+function applyDelta(base: Iterable<ProductFeature>, delta: CmsCapabilityOverrideDelta | null | undefined): Set<ProductFeature> {
+  const result = new Set(base)
+  for (const feature of delta?.enabled ?? []) result.add(feature)
+  for (const feature of delta?.disabled ?? []) result.delete(feature)
+  // Always wins, even over an explicit disable — see ALWAYS_ON_FEATURES' comment.
+  for (const feature of ALWAYS_ON_FEATURES) result.add(feature)
+  return result
 }
 
 export function resolveCmsCapabilities(
@@ -183,14 +252,14 @@ export function resolveCmsCapabilities(
   }
   const catalog = templateCapabilityCatalog[template]
 
-  const siteFeatures = resolveFeatureSet(vertical, overrides?.site)
+  const siteFeatures = applyDelta(verticalDefaultFeatures[vertical], overrides?.site)
 
   let locationFeatures: Set<ProductFeature>
   if (overrides?.location) {
-    locationFeatures = resolveFeatureSet(vertical, overrides.location)
-    const unsupported = [...locationFeatures].filter(feature => !siteFeatures.has(feature))
-    if (unsupported.length > 0) {
-      throw new Error(`Location capability override requires parent site support (${vertical}/${template}): ${unsupported.join(', ')}`)
+    locationFeatures = applyDelta(siteFeatures, overrides.location)
+    const invalidEnables = (overrides.location.enabled ?? []).filter(feature => !siteFeatures.has(feature))
+    if (invalidEnables.length > 0) {
+      throw new Error(`Location capability override requires parent site support (${vertical}/${template}): ${invalidEnables.join(', ')}`)
     }
   } else {
     locationFeatures = siteFeatures
@@ -282,17 +351,27 @@ export function allGuardableManagerKeys(): readonly string[] {
   return [...keys]
 }
 
-/** Parses sites.enabled_features / business_locations.enabled_features — a JSON array of
- *  ProductFeature strings, or NULL. Universal (client + server safe) so both the dashboard's
- *  client-side resolveCmsCapabilities calls and the server's DB-backed resolver share one
- *  implementation instead of each hand-rolling their own JSON.parse. Malformed JSON is treated
- *  the same as absent (fall back to vertical defaults) rather than throwing. */
-export function parseCmsFeatureOverride(raw: string | null | undefined): readonly ProductFeature[] | null {
+function isProductFeatureArray(value: unknown): value is ProductFeature[] {
+  return Array.isArray(value) && value.every(item => typeof item === 'string')
+}
+
+/** Parses sites.feature_overrides / business_locations.feature_overrides — a JSON
+ *  { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta object, or NULL. Universal
+ *  (client + server safe) so both the dashboard's client-side resolveCmsCapabilities calls and
+ *  the server's DB-backed resolver share one implementation instead of each hand-rolling their
+ *  own JSON.parse. Malformed JSON, a non-object, or a malformed sub-array is treated the same as
+ *  absent (fall back to defaults) rather than throwing — a corrupt override column must never
+ *  500 the dashboard. */
+export function parseCmsFeatureOverrideDelta(raw: string | null | undefined): CmsCapabilityOverrideDelta | null {
   if (!raw) return null
   try {
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed) || !parsed.every(value => typeof value === 'string')) return null
-    return parsed as ProductFeature[]
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
+    const record = parsed as Record<string, unknown>
+    return {
+      enabled: isProductFeatureArray(record.enabled) ? record.enabled : [],
+      disabled: isProductFeatureArray(record.disabled) ? record.disabled : [],
+    }
   } catch {
     return null
   }

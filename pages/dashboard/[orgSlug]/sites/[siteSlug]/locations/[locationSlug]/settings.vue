@@ -107,8 +107,8 @@
         <UCard>
           <template #header>
             <div>
-              <h2 class="font-semibold text-highlighted">Features</h2>
-              <p class="mt-1 text-sm text-muted">Turn product features on or off for this location. Only features the site itself has enabled can be turned on here.</p>
+              <h2 class="font-semibold text-highlighted">Available at this location</h2>
+              <p class="mt-1 text-sm text-muted">Which of the site's business modules are live at this specific location. Only modules the site itself supports can be turned on here.</p>
             </div>
           </template>
           <div v-if="locationToggleableFeatures.length" class="grid gap-3 sm:grid-cols-2">
@@ -119,10 +119,10 @@
               :label="LOCATION_FEATURE_LABELS[feature] ?? feature"
             />
           </div>
-          <p v-else class="text-sm text-muted">No toggleable features available — enable them on the site first.</p>
+          <p v-else class="text-sm text-muted">No toggleable modules available — enable them on the site first.</p>
           <template #footer>
             <div class="flex justify-end">
-              <UButton color="neutral" variant="outline" :loading="savingLocationFeatures" @click="saveLocationFeatures">Save features</UButton>
+              <UButton color="neutral" variant="outline" :loading="savingLocationFeatures" @click="saveLocationFeatures">Save availability</UButton>
             </div>
           </template>
         </UCard>
@@ -306,7 +306,7 @@
 
 <script setup lang="ts">
 import { TIMEZONE_OPTIONS } from '~/utils/timezone'
-import { parseCmsFeatureOverride, resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
+import { toggleableModulesForScope, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 definePageMeta({ layout: 'dashboard' })
@@ -314,18 +314,14 @@ definePageMeta({ layout: 'dashboard' })
 const LOCATION_FEATURE_LABELS: Partial<Record<ProductFeature, string>> = {
   menu: 'Menu',
   reservations: 'Reservations',
+  ordering: 'Online ordering',
   experiences: 'Experiences',
-  qa: 'Q&A',
-  media: 'Media library',
-  posts: 'Posts',
-  photos: 'Photos',
 }
 
 interface BusinessLocation {
   id: string
   slug: string
   title: string
-  enabled_features?: ProductFeature[] | null
   address: { addressLines?: string[] } | null
   city: string | null
   neighborhood: string | null
@@ -384,27 +380,31 @@ const connectingGoogle = ref(false)
 const syncingPlace = ref(false)
 const savingLocationFeatures = ref(false)
 const locationEnabledFeatureSet = reactive<Partial<Record<ProductFeature, boolean>>>({})
+// The baseline for diffing a checkbox change is always the parent SITE's effective feature set
+// (never this location's own current state) — re-enabling a module back to what the site already
+// supports must collapse the stored override to null, not an equivalent-but-redundant explicit
+// delta. Both come straight from the location GET/PATCH response (server/utils/location-management.ts's
+// resolveLocationCapabilitySummary) rather than being recomputed client-side.
+const siteEffectiveFeatures = ref<ProductFeature[]>([])
+const locationEffectiveFeatures = ref<ProductFeature[]>([])
 
-// A location can only turn on what the SITE itself has effectively enabled (config/cms-registry.ts
-// resolveCmsCapabilities enforces this server-side too) — resolve the site's own capabilities the
-// same way layouts/dashboard.vue does, then offer only its toggleable (non-always-on) features.
 const locationToggleableFeatures = computed<ProductFeature[]>(() => {
   const site = dashboard.site.value
   if (!site?.vertical) return []
-  try {
-    const template = resolvePublicTemplate({ vertical: site.vertical as SiteVertical }).slug
-    const capabilities = resolveCmsCapabilities(site.vertical as SiteVertical, template, {
-      site: parseCmsFeatureOverride(site.enabled_features),
-    })
-    const siteFeatures = new Set([...capabilities.pages.map(p => p.feature), ...capabilities.managers.map(m => m.id)])
-    return [...siteFeatures].filter(feature => feature in LOCATION_FEATURE_LABELS)
-  } catch {
-    return []
-  }
+  const template = resolvePublicTemplate({ vertical: site.vertical as SiteVertical }).slug
+  const configurableHere = new Set(toggleableModulesForScope(template, 'location'))
+  return siteEffectiveFeatures.value.filter(feature => configurableHere.has(feature))
 })
 
-function fillLocationFeatures(loaded: BusinessLocation) {
-  const enabled = new Set(loaded.enabled_features ?? locationToggleableFeatures.value)
+interface LocationCapabilitySummary {
+  site_effective_features?: ProductFeature[]
+  location_effective_features?: ProductFeature[]
+}
+
+function fillLocationFeatures(summary: LocationCapabilitySummary) {
+  siteEffectiveFeatures.value = summary.site_effective_features ?? []
+  locationEffectiveFeatures.value = summary.location_effective_features ?? []
+  const enabled = new Set(locationEffectiveFeatures.value)
   // Only ever read through locationToggleableFeatures (see the template's v-for and
   // saveLocationFeatures' filter), so a stale key from a previous load is harmless.
   for (const feature of locationToggleableFeatures.value) locationEnabledFeatureSet[feature] = enabled.has(feature)
@@ -414,17 +414,23 @@ async function saveLocationFeatures() {
   const requestedLocationId = locationId.value
   savingLocationFeatures.value = true
   try {
-    const enabled = locationToggleableFeatures.value.filter(feature => locationEnabledFeatureSet[feature])
-    const response = await $fetch<{ success: boolean; location: BusinessLocation }>(`/api/dashboard/locations/${requestedLocationId}`, {
+    // Delta against the SITE's effective set, not this location's prior state (see
+    // siteEffectiveFeatures' doc comment) — collapses to `null` when the checked set exactly
+    // matches what the site already supports.
+    const siteSet = new Set(siteEffectiveFeatures.value)
+    const enabled = locationToggleableFeatures.value.filter(feature => locationEnabledFeatureSet[feature] && !siteSet.has(feature))
+    const disabled = locationToggleableFeatures.value.filter(feature => siteSet.has(feature) && !locationEnabledFeatureSet[feature])
+    const featureOverrides = enabled.length === 0 && disabled.length === 0 ? null : { enabled, disabled }
+    const response = await $fetch<{ success: boolean; location: BusinessLocation } & LocationCapabilitySummary>(`/api/dashboard/locations/${requestedLocationId}`, {
       method: 'PATCH',
-      body: { enabled_features: enabled },
+      body: { feature_overrides: featureOverrides },
     })
     if (locationId.value !== requestedLocationId) return
     location.value = response.location
-    fillLocationFeatures(response.location)
-    toast.add({ description: 'Features saved', color: 'success' })
+    fillLocationFeatures(response)
+    toast.add({ description: 'Availability saved', color: 'success' })
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to save features', color: 'error' })
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to save availability', color: 'error' })
   } finally {
     savingLocationFeatures.value = false
   }
@@ -745,14 +751,14 @@ const loadLocationWorkspace = async () => {
   error.value = null
   try {
     const [locationResponse, connectionResponse] = await Promise.all([
-      $fetch<{ success: boolean; location: BusinessLocation }>(`/api/dashboard/locations/${requestedLocationId}`),
+      $fetch<{ success: boolean; location: BusinessLocation } & LocationCapabilitySummary>(`/api/dashboard/locations/${requestedLocationId}`),
       $fetch<{ success: boolean; connection: GbConnection | null }>(`/api/dashboard/locations/${requestedLocationId}/integrations/google-business`),
     ])
     if (currentToken !== locationLoadToken || locationId.value !== requestedLocationId) return false
     if (!locationResponse.success) throw new Error('Failed to load location')
     location.value = locationResponse.location
     gbConnection.value = connectionResponse.connection
-    fillLocationFeatures(locationResponse.location)
+    fillLocationFeatures(locationResponse)
     return true
   } catch (err) {
     if (currentToken !== locationLoadToken) return false
