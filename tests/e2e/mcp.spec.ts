@@ -1208,7 +1208,7 @@ test.describe('stateless MCP server', () => {
     expect(deleteLocationRes.status()).toBe(200)
   })
 
-  test('site-scoped tool visibility follows current roles and wrong-site calls fail', async ({ request, baseURL }) => {
+  test('site-scoped tool visibility follows current roles', async ({ request, baseURL }) => {
     await loginAsFreshMcpUser(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)
     const organizationId = await getSiteOrg(request, baseURL!, siteId)
@@ -1232,6 +1232,10 @@ test.describe('stateless MCP server', () => {
     expect(toolNames).toContain('update_page_content')
     expect(toolNames).not.toContain('update_notification_settings')
     expect(toolNames).not.toContain('get_google_business_auth_url')
+  })
+
+  test('site-scoped tools/list fails closed for inaccessible site ids', async ({ request, baseURL }) => {
+    await loginAsFreshMcpUser(request, baseURL!)
 
     const wrongSiteTools = await mcpRequest(request, baseURL!, {
       method: 'tools/list',
@@ -1248,6 +1252,10 @@ test.describe('stateless MCP server', () => {
     expect(blankSiteTools.status()).toBe(200)
     const blankSiteToolsBody = await blankSiteTools.json() as { result: { tools: Array<{ name: string }> } }
     expect(blankSiteToolsBody.result.tools).toEqual([])
+  })
+
+  test('wrong-site MCP tool calls fail', async ({ request, baseURL }) => {
+    await loginAsFreshMcpUser(request, baseURL!)
 
     const wrongSite = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
