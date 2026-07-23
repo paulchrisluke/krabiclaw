@@ -1,5 +1,5 @@
 <template>
-  <div v-if="visible && (content || phone)" class="bg-[var(--blawby-primary)] py-2.5">
+  <div v-if="visible && (content || phone)" class="bg-[var(--blawby-primary-dark)] py-2.5">
     <div class="mx-auto flex max-w-7xl flex-col gap-y-1 px-4 sm:flex-row sm:items-center sm:justify-between sm:gap-x-8 sm:px-6 lg:px-8">
       <div class="min-w-0 flex-1">
         <BlawbyRichText v-if="content" :content="content" class="text-left text-sm font-medium leading-6 text-white [&_a]:text-white [&_a]:underline [&_p]:m-0 [&_p]:text-white" />

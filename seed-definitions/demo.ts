@@ -39,10 +39,11 @@ export const demoFixture: CuratedSiteDefinition = {
     vertical: 'restaurant',
     contentSource: 'generated',
     mediaSource: 'stock',
+    logoAssetId: 'media-demo-logo',
   },
   siteConfig: [
     { key: 'source_locale', value: 'en' },
-    { key: 'brand_color', value: '#1E40AF' }, // Test blue color to verify configurability
+    { key: 'brand_color', value: '#C2410C' }, // Ember orange, matching the wood-fired "Ember & Slice" brand
   ],
   siteLocales: [
     {
@@ -164,6 +165,19 @@ export const demoFixture: CuratedSiteDefinition = {
     },
   ],
   mediaAssets: [
+    {
+      id: 'media-demo-logo',
+      locationId: null,
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: '970e5c03-f00d-4e30-fa27-0278251cfd00',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/970e5c03-f00d-4e30-fa27-0278251cfd00/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/970e5c03-f00d-4e30-fa27-0278251cfd00/thumbnail',
+      mimeType: 'image/png',
+      fileName: 'saya-logo.png',
+      altText: 'Saya theme logo',
+      category: 'other',
+    },
     // Loc-demo: hero + video assets
     {
       id: 'media-demo-hero',
@@ -1482,7 +1496,7 @@ ${mediaRows};
 
 ${heroUpdates}
 
-UPDATE sites SET og_image_asset_id = 'media-demo-hero', primary_location_id = ${sqlValue(compiledDemoSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledDemoSeed.identity.siteId)};
+UPDATE sites SET og_image_asset_id = 'media-demo-hero', logo_asset_id = ${sqlValue(compiledDemoSeed.site.logoAssetId ?? null)}, primary_location_id = ${sqlValue(compiledDemoSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledDemoSeed.identity.siteId)};
 -- END GENERATED: demo_media`
 }
 

@@ -111,7 +111,7 @@ watch(activeCategory, () => { currentPage.value = 1 })
 const headingClass = computed(() => props.variant === 'blawby' ? 'blawby-display text-[var(--blawby-primary)]' : 'text-default')
 const descriptionClass = computed(() => props.variant === 'blawby' ? 'text-gray-600' : 'text-muted')
 const activeChipClass = computed(() => props.variant === 'blawby'
-  ? 'bg-[var(--blawby-primary)] text-white'
+  ? 'bg-[var(--blawby-primary-dark)] text-white'
   : 'bg-inverted text-inverted')
 const inactiveChipClass = computed(() => props.variant === 'blawby'
   ? 'bg-[var(--blawby-primary-100)] text-[var(--blawby-primary)] hover:bg-[var(--blawby-primary-200)]'
