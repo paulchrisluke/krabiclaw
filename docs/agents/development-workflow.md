@@ -38,6 +38,51 @@ Fresh worktrees usually do not have `node_modules`.
 
 3. If the install fails because the sandbox cannot reach the package registry, rerun the same command with network approval instead of continuing with broken local validation.
 
+## Fresh Worktree Browser Setup
+
+Do this before the first local browser/E2E run in a new worktree. Do not skip to selectors or app-code changes until this baseline is healthy.
+
+```bash
+yarn install --frozen-lockfile
+yarn schema:local
+yarn seed:local
+```
+
+What each step prevents:
+
+- `yarn install --frozen-lockfile`: avoids false failures such as `Cannot find package 'drizzle-orm'`.
+- `yarn schema:local`: creates current local D1 tables. Without it, Better Auth initialization can 500 on routes like `/api/dev/login` with `no such table: oauthResource`.
+- `yarn seed:local`: inserts required local fixtures such as `saya-theme-v1`. Without it, flows like MCP `create_site` can fail with foreign-key errors when inserting a site.
+
+If a browser test fails in a fresh worktree, check these setup symptoms first:
+
+- `Process from config.webServer was not able to start`: run the same `yarn dev` command visibly and read the startup error.
+- `/api/dev/login` returns 500 with `oauthResource`: local schema has not been applied.
+- MCP `create_site` returns `Failed to create site` and server logs show a foreign-key failure for `saya-theme-v1`: local seed has not been applied.
+- Nuxt says it cannot bind `localhost` even when no process is listening: rerun the same dev/browser command outside the sandbox with approval. A sandbox socket failure is not product evidence.
+
+For MCP-focused local browser validation after the setup above:
+
+```bash
+NUXT_PUBLIC_PLATFORM_DOMAIN=http://localhost:3000 \
+NUXT_PUBLIC_FREE_SITE_DOMAIN=http://localhost:3000 \
+NUXT_PUBLIC_APP_NAME=KrabiClaw \
+PREVIEW_SECRET=ci-preview-secret \
+E2E_DEV_ROUTE_SECRET=ci-dev-route-secret \
+EMAIL_DELIVERY_MODE=log_only \
+WHATSAPP_DELIVERY_MODE=log_only \
+PLAYWRIGHT_WORKERS=1 \
+npx playwright test tests/e2e/mcp.spec.ts --project=chromium --workers=1 --grep "exact test name"
+```
+
+For dashboard, billing, or auth flows that touch Stripe-backed routes, also require the Stripe test values before running:
+
+```bash
+: "${STRIPE_SECRET_KEY:?Set STRIPE_SECRET_KEY to a Stripe test secret before dashboard E2E}"
+: "${STRIPE_WEBHOOK_SECRET:?Set STRIPE_WEBHOOK_SECRET to a Stripe test webhook secret before dashboard E2E}"
+: "${NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:?Set NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY to a Stripe test publishable key before dashboard E2E}"
+```
+
 ## Focused Testing
 
 The repository's `yarn test:unit` script intentionally runs the whole `tests/unit/**/*.test.ts` suite. For focused validation in a worktree, use `yarn test:unit:file <path>` instead of expecting `yarn test:unit <file>` to narrow the suite.
@@ -72,7 +117,7 @@ Do not summarize a PR as validated, ready, or safe to merge when browser validat
 
 Fresh worktrees usually do not have a local `.env`. Nuxt validates required public runtime vars at startup, and editor preview endpoints require `PREVIEW_SECRET`. If Playwright times out waiting for `/api/dev/ready`, start the same dev command visibly before assuming the browser test is broken.
 
-For local Playwright runs that use dev login routes, editor previews, or dashboard pages, export the local-safe values and real Stripe test values in the same command so Playwright's `webServer` child receives them:
+For local Playwright runs that use dev login routes, editor previews, dashboard pages, or billing/auth flows, first run the Fresh Worktree Browser Setup above. Then export the local-safe values and real Stripe test values in the same command so Playwright's `webServer` child receives them:
 
 ```bash
 : "${STRIPE_SECRET_KEY:?Set STRIPE_SECRET_KEY to a Stripe test secret before dashboard E2E}"
