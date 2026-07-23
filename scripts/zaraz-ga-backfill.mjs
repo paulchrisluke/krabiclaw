@@ -79,6 +79,7 @@ config.consent.enabled = false
 config.historyChange = true
 
 const pageLocationRegex = hostnames => `^https://(${hostnames.map(value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})/`
+const pageviewRule = { match: '{{ client.__zarazTrack }}', op: 'EQUALS', value: 'Pageview' }
 const consentCookieRule = { match: '{{ system.cookies.kc_consent }}', op: 'EQUALS', value: 'accepted' }
 const scopeActions = (actions, triggerKey) => Object.fromEntries(Object.entries(
   actions && Object.keys(actions).length
@@ -111,6 +112,7 @@ if (platformMeasurementId && platformHostnames.length) {
     name: 'Platform hosts',
     loadRules: [
       { match: '{{ client.pageLocation }}', op: 'MATCH_REGEX', value: pageLocationRegex(platformHostnames) },
+      pageviewRule,
       consentCookieRule,
     ],
   }
@@ -140,6 +142,7 @@ for (const row of rows) {
     name: `Tenant hosts (${row.site_id})`,
     loadRules: [
       { match: '{{ client.pageLocation }}', op: 'MATCH_REGEX', value: pageLocationRegex(hostnames) },
+      pageviewRule,
       consentCookieRule,
     ],
   }

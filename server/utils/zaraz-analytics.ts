@@ -135,6 +135,7 @@ function makePageLocationTrigger(name: string, hostnames: string[]): ZarazTrigge
         op: 'MATCH_REGEX',
         value: tenantPageLocationRegex(hostnames),
       },
+      { match: '{{ client.__zarazTrack }}', op: 'EQUALS', value: 'Pageview' },
       { match: '{{ system.cookies.kc_consent }}', op: 'EQUALS', value: 'accepted' },
     ],
   }
