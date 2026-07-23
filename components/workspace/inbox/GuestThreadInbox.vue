@@ -37,17 +37,18 @@
             />
 
             <div class="grid grid-cols-2 gap-2">
-              <select v-model="typeFilter" aria-label="Filter by submission type" class="min-w-0 rounded-lg border border-default bg-default px-3 py-2 text-sm text-highlighted">
-                <option value="">All types</option>
-                <option v-for="option in typeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-              </select>
-              <select v-model="inboxStatusFilter" aria-label="Filter by inbox status" class="min-w-0 rounded-lg border border-default bg-default px-3 py-2 text-sm text-highlighted">
-                <option value="">All states</option>
-                <option value="open">Open</option>
-                <option value="waiting_on_owner">Waiting on owner</option>
-                <option value="waiting_on_guest">Waiting on guest</option>
-                <option value="closed">Closed</option>
-              </select>
+              <USelect
+                v-model="typeFilter"
+                :items="typeFilterItems"
+                aria-label="Filter by submission type"
+                class="min-w-0"
+              />
+              <USelect
+                v-model="inboxStatusFilter"
+                :items="inboxStatusFilterItems"
+                aria-label="Filter by inbox status"
+                class="min-w-0"
+              />
             </div>
 
             <label class="inline-flex items-center gap-2 rounded-full border border-default bg-default px-3 py-1.5 text-sm text-muted">
@@ -89,15 +90,16 @@
                 </div>
 
                 <div class="mt-2 flex flex-wrap items-center gap-1.5">
-                  <UBadge :color="threadTypeColor(thread.submission_type)" variant="soft" size="xs" class="rounded-full">
-                    <UIcon :name="threadTypeIcon(thread.submission_type)" class="size-3" />
-                    {{ threadTypeLabel(thread.submission_type) }}
-                  </UBadge>
-                  <UBadge :color="threadStateColor(thread.inbox_status)" variant="soft" size="xs" class="rounded-full">
-                    {{ threadStateLabel(thread.inbox_status) }}
-                  </UBadge>
-                  <UBadge color="neutral" variant="outline" size="xs" class="max-w-full rounded-full">
-                    <span class="truncate">{{ thread.location_title || 'Site-wide' }}</span>
+                  <UBadge
+                    v-for="badge in threadBadges(thread, thread.location_title)"
+                    :key="badge.key"
+                    :color="badge.color"
+                    :variant="badge.variant"
+                    size="xs"
+                    class="max-w-full rounded-full"
+                  >
+                    <UIcon v-if="badge.icon" :name="badge.icon" class="size-3" />
+                    <span class="truncate">{{ badge.label }}</span>
                   </UBadge>
                 </div>
 
@@ -136,27 +138,29 @@
                 <div class="min-w-0">
                   <h2 class="text-lg font-semibold text-highlighted">{{ selectedDetail.thread.guest_name }}</h2>
                   <div class="mt-2 flex flex-wrap items-center gap-1.5">
-                    <UBadge :color="threadTypeColor(selectedDetail.thread.submission_type)" variant="soft" size="xs" class="rounded-full">
-                      <UIcon :name="threadTypeIcon(selectedDetail.thread.submission_type)" class="size-3" />
-                      {{ threadTypeLabel(selectedDetail.thread.submission_type) }}
-                    </UBadge>
-                    <UBadge color="neutral" variant="outline" size="xs" class="max-w-full rounded-full">
-                      <span class="truncate">{{ selectedDetail.source.location_title || 'Site-wide' }}</span>
-                    </UBadge>
-                    <UBadge :color="threadStateColor(selectedDetail.thread.inbox_status)" variant="soft" size="xs" class="rounded-full">
-                      {{ threadStateLabel(selectedDetail.thread.inbox_status) }}
+                    <UBadge
+                      v-for="badge in threadBadges(selectedDetail.thread, selectedDetail.source.location_title)"
+                      :key="badge.key"
+                      :color="badge.color"
+                      :variant="badge.variant"
+                      size="xs"
+                      class="max-w-full rounded-full"
+                    >
+                      <UIcon v-if="badge.icon" :name="badge.icon" class="size-3" />
+                      <span class="truncate">{{ badge.label }}</span>
                     </UBadge>
                   </div>
                 </div>
               </div>
               <div class="flex min-w-0 flex-wrap items-center gap-2">
                 <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-check-check" @click="markSeen" :disabled="selectedDetail.thread.unread_count === 0">Mark seen</UButton>
-                <select v-model="selectedInboxStatus" aria-label="Change inbox status" class="min-w-0 rounded-lg border border-default bg-elevated px-3 py-2 text-sm text-highlighted" @change="updateInboxStatus">
-                  <option value="open">Open</option>
-                  <option value="waiting_on_owner">Waiting on owner</option>
-                  <option value="waiting_on_guest">Waiting on guest</option>
-                  <option value="closed">Closed</option>
-                </select>
+                <USelect
+                  v-model="selectedInboxStatus"
+                  :items="inboxStatusItems"
+                  aria-label="Change inbox status"
+                  class="min-w-0"
+                  @change="updateInboxStatus"
+                />
               </div>
             </div>
           </div>
@@ -246,76 +250,16 @@
                 </UBadge>
               </div>
               <div class="mt-3 divide-y divide-dashed divide-default text-sm">
-                <template v-if="selectedDetail.source.submission_type === 'contact'">
-                  <div v-if="selectedDetail.source.subject" class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
-                    <span class="text-dimmed">Subject</span>
-                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.subject }}</span>
-                  </div>
-                  <div v-if="selectedDetail.source.location_title" class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
-                    <span class="text-dimmed">Location</span>
-                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.location_title }}</span>
-                  </div>
-                  <div v-if="selectedDetail.source.experience_title" class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
-                    <span class="text-dimmed">Regarding</span>
-                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.experience_title }}</span>
-                  </div>
-                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
-                    <span class="text-dimmed">Submitted</span>
-                    <span class="min-w-0 break-words text-default sm:text-right">{{ formatDate(selectedDetail.source.created_at) }}</span>
-                  </div>
-                  <div class="grid gap-1 py-2">
-                    <span class="text-dimmed">Message</span>
-                    <p class="min-w-0 whitespace-pre-wrap break-words text-default">{{ selectedDetail.source.message }}</p>
-                  </div>
-                </template>
-                <template v-else-if="selectedDetail.source.submission_type === 'reservation'">
-                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
-                    <span class="text-dimmed">Location</span>
-                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.location_title }}</span>
-                  </div>
-                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
-                    <span class="text-dimmed">Date</span>
-                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.date }}</span>
-                  </div>
-                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
-                    <span class="text-dimmed">Time</span>
-                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.time }}</span>
-                  </div>
-                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
-                    <span class="text-dimmed">Guests</span>
-                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.guests }}</span>
-                  </div>
-                  <div class="grid gap-1 py-2">
-                    <span class="text-dimmed">Requests</span>
-                    <p class="min-w-0 whitespace-pre-wrap break-words text-default">{{ selectedDetail.source.requests || 'None' }}</p>
-                  </div>
-                </template>
-                <template v-else>
-                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
-                    <span class="text-dimmed">Location</span>
-                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.location_title }}</span>
-                  </div>
-                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
-                    <span class="text-dimmed">Experience</span>
-                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.experience_title }}</span>
-                  </div>
-                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
-                    <span class="text-dimmed">Date</span>
-                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.booking_date }}</span>
-                  </div>
-                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
-                    <span class="text-dimmed">Time</span>
-                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.time_slot }}</span>
-                  </div>
-                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
-                    <span class="text-dimmed">Party size</span>
-                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.party_size }}</span>
-                  </div>
-                  <div class="grid gap-1 py-2">
-                    <span class="text-dimmed">Notes</span>
-                    <p class="min-w-0 whitespace-pre-wrap break-words text-default">{{ selectedDetail.source.notes || 'None' }}</p>
-                  </div>
-                </template>
+                <div
+                  v-for="row in submissionDetailRows(selectedDetail.source)"
+                  :key="row.label"
+                  class="grid gap-1 py-2"
+                  :class="row.multiline ? '' : 'sm:grid-cols-[6rem_minmax(0,1fr)]'"
+                >
+                  <span class="text-dimmed">{{ row.label }}</span>
+                  <p v-if="row.multiline" class="min-w-0 whitespace-pre-wrap break-words text-default">{{ row.value }}</p>
+                  <span v-else class="min-w-0 break-words text-default sm:text-right">{{ row.value }}</span>
+                </div>
               </div>
             </UCard>
 
@@ -359,6 +303,7 @@ const props = defineProps<{
 type SubmissionType = 'contact' | 'reservation' | 'experience_booking' | 'consultation' | 'appointment'
 type InboxStatus = 'open' | 'waiting_on_owner' | 'waiting_on_guest' | 'closed'
 type UiColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+type BadgeVariant = 'soft' | 'outline'
 
 interface ThreadSummary {
   id: string
@@ -437,6 +382,45 @@ interface ThreadDetailResponse {
   timeline: TimelineItem[]
 }
 
+interface SelectOption {
+  value: string
+  label: string
+}
+
+interface ThreadBadge {
+  key: string
+  label: string
+  color: UiColor
+  variant: BadgeVariant
+  icon?: string
+}
+
+interface DetailRow {
+  label: string
+  value: string | number
+  multiline?: boolean
+}
+
+const inboxStatusItems: SelectOption[] = [
+  { value: 'open', label: 'Open' },
+  { value: 'waiting_on_owner', label: 'Waiting on owner' },
+  { value: 'waiting_on_guest', label: 'Waiting on guest' },
+  { value: 'closed', label: 'Closed' },
+]
+
+const inboxStatusFilterItems: SelectOption[] = [
+  { value: '', label: 'All states' },
+  ...inboxStatusItems,
+]
+
+const threadTypeMeta: Record<SubmissionType, { label: string; icon: string; color: UiColor; iconClass: string }> = {
+  contact: { label: 'Contact', icon: 'i-lucide-mail', color: 'info', iconClass: 'text-info' },
+  reservation: { label: 'Reservation', icon: 'i-lucide-calendar-days', color: 'success', iconClass: 'text-success' },
+  experience_booking: { label: 'Experience booking', icon: 'i-lucide-ticket', color: 'warning', iconClass: 'text-warning' },
+  consultation: { label: 'Consultation', icon: 'i-lucide-message-circle-question', color: 'neutral', iconClass: 'text-muted' },
+  appointment: { label: 'Appointment', icon: 'i-lucide-calendar-clock', color: 'neutral', iconClass: 'text-muted' },
+}
+
 const siteId = await useDashboardSiteId()
 const toast = useToast()
 const route = useRoute()
@@ -503,6 +487,11 @@ const typeOptions = computed(() => {
   if (effectiveFeatureSet.value.has('experiences')) options.push({ value: 'experience_booking', label: 'Experience bookings' })
   return options
 })
+
+const typeFilterItems = computed<SelectOption[]>(() => [
+  { value: '', label: 'All types' },
+  ...typeOptions.value,
+])
 
 const supportedThreadLabels = computed(() => typeOptions.value.map(option => option.label.toLowerCase()))
 
@@ -732,33 +721,19 @@ async function completeBooking() {
 }
 
 function threadTypeLabel(type: SubmissionType) {
-  if (type === 'contact') return 'Contact'
-  if (type === 'reservation') return 'Reservation'
-  if (type === 'experience_booking') return 'Experience booking'
-  if (type === 'consultation') return 'Consultation'
-  return 'Appointment'
+  return threadTypeMeta[type].label
 }
 
 function threadTypeIcon(type: SubmissionType) {
-  if (type === 'contact') return 'i-lucide-mail'
-  if (type === 'reservation') return 'i-lucide-calendar-days'
-  if (type === 'experience_booking') return 'i-lucide-ticket'
-  if (type === 'consultation') return 'i-lucide-message-circle-question'
-  return 'i-lucide-calendar-clock'
+  return threadTypeMeta[type].icon
 }
 
 function threadTypeColor(type: SubmissionType): UiColor {
-  if (type === 'contact') return 'info'
-  if (type === 'reservation') return 'success'
-  if (type === 'experience_booking') return 'warning'
-  return 'neutral'
+  return threadTypeMeta[type].color
 }
 
 function threadTypeIconClass(type: SubmissionType) {
-  if (type === 'contact') return 'text-info'
-  if (type === 'reservation') return 'text-success'
-  if (type === 'experience_booking') return 'text-warning'
-  return 'text-muted'
+  return threadTypeMeta[type].iconClass
 }
 
 function threadStateLabel(status: InboxStatus) {
@@ -774,6 +749,30 @@ function threadStateColor(status: InboxStatus): UiColor {
   return 'neutral'
 }
 
+function threadBadges(thread: Pick<ThreadSummary, 'submission_type' | 'inbox_status'>, locationTitle: string | null | undefined): ThreadBadge[] {
+  return [
+    {
+      key: 'type',
+      label: threadTypeLabel(thread.submission_type),
+      color: threadTypeColor(thread.submission_type),
+      icon: threadTypeIcon(thread.submission_type),
+      variant: 'soft',
+    },
+    {
+      key: 'state',
+      label: threadStateLabel(thread.inbox_status),
+      color: threadStateColor(thread.inbox_status),
+      variant: 'soft',
+    },
+    {
+      key: 'location',
+      label: locationTitle || 'Site-wide',
+      color: 'neutral',
+      variant: 'outline',
+    },
+  ]
+}
+
 function operationalStatusLabel(status: string) {
   return status
     .split(/[_\s-]+/)
@@ -786,6 +785,38 @@ function threadSecondaryLine(thread: ThreadSummary) {
   if (thread.submission_type === 'contact') return thread.experience_title || thread.subject || 'Website message'
   if (thread.submission_type === 'reservation') return thread.last_message_preview || 'Reservation thread'
   return thread.experience_title || 'Experience booking'
+}
+
+function submissionDetailRows(source: ThreadSource): DetailRow[] {
+  if (source.submission_type === 'contact') {
+    const rows: Array<DetailRow | null> = [
+      source.subject ? { label: 'Subject', value: source.subject } : null,
+      source.location_title ? { label: 'Location', value: source.location_title } : null,
+      source.experience_title ? { label: 'Regarding', value: source.experience_title } : null,
+      { label: 'Submitted', value: formatDate(source.created_at) },
+      { label: 'Message', value: source.message, multiline: true },
+    ]
+    return rows.filter((row): row is DetailRow => Boolean(row))
+  }
+
+  if (source.submission_type === 'reservation') {
+    return [
+      { label: 'Location', value: source.location_title || 'Site-wide' },
+      { label: 'Date', value: source.date },
+      { label: 'Time', value: source.time },
+      { label: 'Guests', value: source.guests },
+      { label: 'Requests', value: source.requests || 'None', multiline: true },
+    ]
+  }
+
+  return [
+    { label: 'Location', value: source.location_title || 'Site-wide' },
+    { label: 'Experience', value: source.experience_title || 'Experience booking' },
+    { label: 'Date', value: source.booking_date },
+    { label: 'Time', value: source.time_slot },
+    { label: 'Party size', value: source.party_size },
+    { label: 'Notes', value: source.notes || 'None', multiline: true },
+  ]
 }
 
 function formatDate(value: string) {
