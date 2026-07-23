@@ -111,9 +111,7 @@ const EXISTING_DEBT_ALLOWLIST = {
   ]),
 
   direct_platform_role_sql: new Set([
-    'scripts/capture-docs-screenshots.mjs',
-    'scripts/promote-platform-admin.mjs',
-    'server/api/admin/invite/team.post.ts',
+    'scripts/break-glass-promote-platform-admin.mjs',
   ]),
 
   direct_oauth_token_sql: new Set([
@@ -226,7 +224,11 @@ async function checkForbiddenPatterns() {
 
   for (const file of files) {
     if (isAlwaysAllowed(file)) continue
-    const info = await stat(join(ROOT, file))
+    const info = await stat(join(ROOT, file)).catch((error) => {
+      if (error && typeof error === 'object' && error.code === 'ENOENT') return null
+      throw error
+    })
+    if (!info) continue
     if (!info.isFile()) continue
     const content = await readFile(file, 'utf8')
 
@@ -283,12 +285,32 @@ async function checkMcpResourceBoundary() {
   return failures
 }
 
-const [forbiddenViolations, mcpBoundaryFailures] = await Promise.all([
+async function checkMigratedAdminUserSessionRoutes() {
+  const failures = []
+
+  for (const file of [
+    'server/api/admin/analytics.get.ts',
+    'server/api/admin/invite/team.post.ts',
+    'server/api/admin/members.get.ts',
+    'server/api/admin/users.get.ts',
+  ]) {
+    const content = await readFile(file, 'utf8')
+    const forbidden = /\b(?:FROM|JOIN|UPDATE|INSERT\s+INTO|DELETE\s+FROM)\s+(?:user|session)\b/i
+    if (forbidden.test(content)) {
+      failures.push(`${file}: migrated admin user/session route still queries Better Auth user/session tables directly`)
+    }
+  }
+
+  return failures
+}
+
+const [forbiddenViolations, mcpBoundaryFailures, migratedAdminFailures] = await Promise.all([
   checkForbiddenPatterns(),
   checkMcpResourceBoundary(),
+  checkMigratedAdminUserSessionRoutes(),
 ])
 
-if (forbiddenViolations.length || mcpBoundaryFailures.length) {
+if (forbiddenViolations.length || mcpBoundaryFailures.length || migratedAdminFailures.length) {
   console.error('Better Auth boundary check failed.')
 
   for (const violation of forbiddenViolations) {
@@ -296,6 +318,10 @@ if (forbiddenViolations.length || mcpBoundaryFailures.length) {
   }
 
   for (const failure of mcpBoundaryFailures) {
+    console.error(`  ${failure}`)
+  }
+
+  for (const failure of migratedAdminFailures) {
     console.error(`  ${failure}`)
   }
 

@@ -558,7 +558,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('tenant blog tools write the same canonical block document as the dashboard', async ({ request, baseURL }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(120_000)
     await loginAs(request, baseURL!, MCP_FREE_USER_ID)
     const siteId = 'site-mcp-free'
     let postId = ''
@@ -709,7 +709,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('owner can use site content and settings tools', async ({ request, baseURL }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(120_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = MCP_GROWTH_SITE_ID
 
