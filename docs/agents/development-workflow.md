@@ -48,7 +48,18 @@ Example:
 node --experimental-strip-types --experimental-test-module-mocks --import ./tests/unit/support/register-aliases.mjs --test tests/unit/example.test.ts
 ```
 
-Use full `yarn test:unit`, typecheck, lint, build, migration checks, and E2E suites when the PR scope or risk calls for them. If a local E2E fails because the dev server, loopback host, secure cookies, or provider secrets are unavailable, document the exact blocker and use the closest meaningful browser/API verification rather than claiming the E2E passed.
+Use full `yarn test:unit`, typecheck, lint, build, migration checks, and E2E suites when the PR scope or risk calls for them. In this repository, unit tests, lint, and typecheck are hygiene checks only. The large unit suite has repeatedly produced noise while missing the real product breakages; E2E and browser testing are the primary evidence that user-facing behavior works.
+
+Do not add unit tests by default just to make a PR look tested. Add or update unit tests only when they protect a narrow pure contract, parser, mapper, permission predicate, schema guard, or regression boundary that browser tests cannot target directly. For product workflows, spend the testing budget on Playwright, browser checks, API contract checks exercised through the real route, and CI E2E smoke.
+
+Any PR that changes a user-facing page, dashboard flow, CMS/editor behavior, auth navigation, MCP widget launch, or tenant public rendering needs real browser evidence before it is considered merge-ready. Prefer a relevant Playwright spec. If no spec exists, run the app and manually exercise the changed flow in a browser, then add the missing Playwright coverage when the workflow is important or likely to regress.
+
+Report browser validation separately from unit/static validation:
+
+- `Browser`: local Playwright pass, CI E2E smoke pass, manual browser check, or blocked with exact reason.
+- `Static`: unit tests, lint, typecheck, guardrails, build, migration checks.
+
+Do not summarize a PR as validated, ready, or safe to merge when browser validation is missing, pending, cancelled, or rate-limited. A local targeted Playwright pass is useful evidence; the PR-level `E2E smoke` check must still pass before merge confidence.
 
 ## Local E2E Environment
 
