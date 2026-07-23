@@ -75,16 +75,11 @@ config.triggers ||= {}
 
 const analyticsPurposeId = 'kc_analytics'
 config.consent ||= {}
-config.consent.enabled = true
-config.consent.hideModal = true
-config.consent.purposes ||= {}
-config.consent.purposes[analyticsPurposeId] ||= {
-  name: 'Analytics',
-  description: 'Measure page views and site usage.',
-}
+config.consent.enabled = false
 config.historyChange = true
 
 const pageLocationRegex = hostnames => `^https://(${hostnames.map(value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})/`
+const consentCookieRule = { match: '{{ system.cookies.kc_consent }}', op: 'EQUALS', value: 'accepted' }
 const scopeActions = (actions, triggerKey) => Object.fromEntries(Object.entries(
   actions && Object.keys(actions).length
     ? actions
@@ -105,7 +100,7 @@ const upsertGaTool = (key, { name, measurementId, triggerKey, existing }) => {
     name: existing?.name || name,
     enabled: true,
     settings: { ...(template?.settings || {}), ...(existing?.settings || {}), tid: measurementId },
-    defaultPurpose: analyticsPurposeId,
+    defaultPurpose: undefined,
     actions: scopeActions(existing?.actions || template?.actions, triggerKey),
   }
 }
@@ -114,7 +109,10 @@ if (platformMeasurementId && platformHostnames.length) {
   const triggerKey = 'ga-platform'
   config.triggers[triggerKey] = {
     name: 'Platform hosts',
-    loadRules: [{ match: '{{ client.pageLocation }}', op: 'MATCH_REGEX', value: pageLocationRegex(platformHostnames) }],
+    loadRules: [
+      { match: '{{ client.pageLocation }}', op: 'MATCH_REGEX', value: pageLocationRegex(platformHostnames) },
+      consentCookieRule,
+    ],
   }
   const existingEntry = Object.entries(config.tools).find(([, tool]) =>
     tool?.component === 'google-analytics_v4' && tool.settings?.tid === platformMeasurementId
@@ -140,7 +138,10 @@ for (const row of rows) {
   const hostnames = String(row.hostnames).split('|').map(value => value.toLowerCase()).sort()
   config.triggers[key] = {
     name: `Tenant hosts (${row.site_id})`,
-    loadRules: [{ match: '{{ client.pageLocation }}', op: 'MATCH_REGEX', value: pageLocationRegex(hostnames) }],
+    loadRules: [
+      { match: '{{ client.pageLocation }}', op: 'MATCH_REGEX', value: pageLocationRegex(hostnames) },
+      consentCookieRule,
+    ],
   }
   upsertGaTool(key, {
     name: `Tenant GA4 (${row.site_id})`,

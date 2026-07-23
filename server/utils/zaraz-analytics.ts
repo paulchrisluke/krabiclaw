@@ -1,7 +1,6 @@
 import { execute } from '~/server/db'
 import { platformAnalyticsHostnames, type DomainEnv } from '~/server/utils/domains'
 import { getSiteDomains } from '~/server/utils/domain-read-model'
-import { ZARAZ_ANALYTICS_PURPOSE, ZARAZ_ANALYTICS_PURPOSE_ID } from '~/utils/zaraz-consent'
 
 export interface ZarazEnv extends DomainEnv {
   CF_ZARAZ_API_TOKEN?: string
@@ -19,7 +18,6 @@ interface ZarazTool {
   enabled: boolean
   settings: Record<string, unknown>
   actions: Record<string, ZarazAction>
-  defaultPurpose?: string
   [key: string]: unknown
 }
 
@@ -123,26 +121,22 @@ export function platformPageLocationRegex(hostnames: string[]): string {
   return tenantPageLocationRegex(hostnames)
 }
 
-function consentPurposeId() {
-  return ZARAZ_ANALYTICS_PURPOSE_ID
-}
-
-function ensureAnalyticsConsentPurpose(config: ZarazConfig) {
+function disableZarazConsentManagement(config: ZarazConfig) {
   config.consent ||= {}
-  config.consent.enabled = true
-  config.consent.hideModal = true
-  config.consent.purposes ||= {}
-  config.consent.purposes[consentPurposeId()] ||= ZARAZ_ANALYTICS_PURPOSE
+  config.consent.enabled = false
 }
 
 function makePageLocationTrigger(name: string, hostnames: string[]): ZarazTrigger {
   return {
     name,
-    loadRules: [{
-      match: '{{ client.pageLocation }}',
-      op: 'MATCH_REGEX',
-      value: tenantPageLocationRegex(hostnames),
-    }],
+    loadRules: [
+      {
+        match: '{{ client.pageLocation }}',
+        op: 'MATCH_REGEX',
+        value: tenantPageLocationRegex(hostnames),
+      },
+      { match: '{{ system.cookies.kc_consent }}', op: 'EQUALS', value: 'accepted' },
+    ],
   }
 }
 
@@ -184,7 +178,7 @@ function upsertGa4Tool(
     name: existing?.name || input.name,
     enabled: true,
     settings: { ...(template?.settings ?? {}), ...(existing?.settings ?? {}), tid: input.measurementId },
-    defaultPurpose: consentPurposeId(),
+    defaultPurpose: undefined,
     actions: scopeActionsToTrigger(existing?.actions ?? template?.actions, input.triggerKey),
   }
 }
@@ -196,7 +190,7 @@ export function upsertPlatformZarazAnalytics(
   if (!input.measurementId || !input.hostnames.length) return
   config.triggers ||= {}
   config.tools ||= {}
-  ensureAnalyticsConsentPurpose(config)
+  disableZarazConsentManagement(config)
   config.historyChange = true
   config.triggers[PLATFORM_KEY] = makePageLocationTrigger('Platform hosts', input.hostnames)
 
@@ -219,7 +213,7 @@ export function upsertTenantZarazAnalytics(
   if (!input.measurementId || !input.hostnames.length) return
   config.triggers ||= {}
   config.tools ||= {}
-  ensureAnalyticsConsentPurpose(config)
+  disableZarazConsentManagement(config)
   config.historyChange = true
   const key = tenantKey(input.siteId)
   config.triggers[key] = makePageLocationTrigger(`Tenant hosts (${input.siteId})`, input.hostnames)
