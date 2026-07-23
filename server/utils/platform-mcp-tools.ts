@@ -1,4 +1,10 @@
 import { CHANGE_TYPES } from '~/server/utils/changelog'
+import {
+  AGENT_GUIDANCE_CANDIDATE_TYPE_SCHEMA,
+  AGENT_GUIDANCE_REVIEW_RESPONSE_SCHEMA,
+  AGENT_SKILL_TASK_SCHEMA,
+  RESOLVED_AGENT_GUIDANCE_SCHEMA,
+} from '~/server/utils/agent-skills/mcp-schema'
 
 export interface PlatformMcpToolDefinition {
   name: string
@@ -637,6 +643,42 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       },
       required: ['currentUser'],
     },
+  }),
+  readTool({
+    name: 'resolve_platform_agent_guidance',
+    description: 'Resolve reusable scoped Agent Skill guidance for platform MCP blog writing or image-generation briefs. Optionally pass site_id to preview tenant-scoped resolution; returns each applicable source document separately and cannot mutate skills.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task: AGENT_SKILL_TASK_SCHEMA,
+        organization_id: { type: 'string', description: 'Optional organization scope when resolving guidance outside a specific site.' },
+        site_id: { type: 'string', description: 'Optional site scope; the organization is derived from the site when present.' },
+      },
+      required: ['task'],
+      additionalProperties: false,
+    },
+    outputSchema: RESOLVED_AGENT_GUIDANCE_SCHEMA,
+  }),
+  readTool({
+    name: 'review_platform_agent_guidance_candidate',
+    description: 'Run a scoped advisory review of a platform or tenant-targeted blog draft or image-generation brief against the exact resolved Agent Skill guidance. This scaffold does not persist provenance; use the returned fingerprints as review evidence only.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task: AGENT_SKILL_TASK_SCHEMA,
+        candidate_type: AGENT_GUIDANCE_CANDIDATE_TYPE_SCHEMA,
+        candidate: {
+          type: 'object',
+          description: 'The exact draft or image brief being reviewed. For blog.write use { title, content_blocks, ...metadata }. For image.generate use { prompt, intended_use, alt_text, aspect_ratio }. Do not include raw image bytes.',
+          additionalProperties: true,
+        },
+        organization_id: { type: 'string', description: 'Optional organization scope when reviewing outside a specific site.' },
+        site_id: { type: 'string', description: 'Optional site scope; the organization is derived from the site when present.' },
+      },
+      required: ['task', 'candidate_type', 'candidate'],
+      additionalProperties: false,
+    },
+    outputSchema: AGENT_GUIDANCE_REVIEW_RESPONSE_SCHEMA,
   }),
   readTool({
     name: 'get_recent_changes',
