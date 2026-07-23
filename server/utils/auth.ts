@@ -167,6 +167,40 @@ interface CreateAuthOptions {
   waitUntil?: (_task: Promise<unknown>) => void
 }
 
+function normalizeOrigin(value: string | undefined): string | null {
+  const trimmed = value?.trim().replace(/\/$/, '')
+  if (!trimmed) return null
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+  try {
+    return new URL(withProtocol).origin
+  } catch {
+    return null
+  }
+}
+
+function wildcardOrigin(origin: string | null): string | null {
+  if (!origin) return null
+  const url = new URL(origin)
+  return `${url.protocol}//*.${url.host}`
+}
+
+function trustedOriginsForAuth(env: CloudflareEnv): string[] {
+  const origins = new Set<string>()
+  const authOrigin = normalizeOrigin(env.BETTER_AUTH_URL)
+  const platformOrigin = normalizeOrigin(env.NUXT_PUBLIC_PLATFORM_DOMAIN)
+  const freeSiteOrigin = normalizeOrigin(env.NUXT_PUBLIC_FREE_SITE_DOMAIN)
+  for (const origin of [authOrigin, platformOrigin, freeSiteOrigin, wildcardOrigin(freeSiteOrigin)]) {
+    if (origin) origins.add(origin)
+  }
+  if (import.meta.dev) {
+    const port = process.env.PORT || '3000'
+    origins.add(`http://localhost:${port}`)
+    origins.add(`http://127.0.0.1:${port}`)
+    origins.add(`http://*.localhost:${port}`)
+  }
+  return [...origins]
+}
+
 export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) {
   const d1 = env.DB
 
@@ -182,6 +216,7 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
     baseURL: authBaseUrl,
     basePath: '/api/auth',
     secret: env.BETTER_AUTH_SECRET,
+    trustedOrigins: trustedOriginsForAuth(env),
     database: drizzleAdapter(db, {
       provider: 'sqlite',
       schema,

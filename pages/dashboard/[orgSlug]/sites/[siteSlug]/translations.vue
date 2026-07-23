@@ -246,7 +246,7 @@ onMounted(async () => {
   if (!siteId.value) return
   try {
     const response = await $fetch<{ success: boolean; source_locale: string; locales: SiteLocaleRow[] }>(
-      '/api/dashboard/editor/locales'
+      `/api/editor/sites/${siteId.value}/locales`
     )
     activeLocales.value = (response.locales ?? []).filter(l => !l.is_source && l.status !== 'disabled')
   } catch {

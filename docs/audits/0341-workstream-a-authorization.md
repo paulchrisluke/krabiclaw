@@ -73,26 +73,19 @@ aggregate across locations), never from the URL shape alone.
 editors. It is not an authorization substitute: every permitted route below
 also applies the listed authoritative guard or filters its query by
 `member_access_scope`. Routes not listed are rejected before their handler can
-use context-only site resolution. The generic proxy only permits the audited
-`editor` and explicit `ai` namespaces; arbitrary `/api/sites/[siteId]/**`
-proxying is not available to scoped editors.
+use context-only site resolution. Historical `/api/dashboard/editor/**`,
+`/api/dashboard/ai/**`, and `/api/dashboard/site` aliases were deleted in #345;
+site-scoped editor and AI work now uses explicit `/api/editor/sites/[siteId]/**`
+and `/api/ai/[siteId]/**` routes.
 
 | Endpoint | Organization | Site-wide | Location | Conditional | Context-only | Guard used |
 |---|---|---|---|---|---|---|
 | `dashboard/context.get.ts` | | | | ✓ (site/location lists) | ✓ | `assertSiteContextAccess` in `getDashboardContext`; `listOrganizationSites` and `listDashboardLocations` filter by the member's scope rows |
 | `dashboard/home.get.ts` and SSR `getDashboardHomeData` caller | | | | ✓ | | locations and events use `EXISTS member_access_scope`; null-location aggregate events require a site-wide row; organization credit totals are omitted for scoped roles |
 | `dashboard/settings.get.ts`, `settings.patch.ts` | | ✓ | | | | `assertSiteWideAccess` after context resolution |
-| `dashboard/editor/notifications` proxy → `editor/sites/[siteId]/notifications.get.ts`, `.patch.ts` | | ✓ | | | | `requireSiteAccess` + `assertSiteWideAccess` |
 | `dashboard/locations/index.get.ts` | | | ✓ (filtered list) | | | `EXISTS member_access_scope`; site-wide rows include all locations, location rows include only exact locations |
 | `dashboard/locations/[id].get.ts`, `[id].patch.ts` | | | ✓ | | | target location supplies `site_id`; `assertLocationAccess`/`assertMemberScope` before return or mutation |
-| `dashboard/[...path].ts` → `locations/[id]/integrations/google-business`, `/auth` | | | ✓ | | | deny-by-default boundary permits only these exact descendants; destination `requireLocationAccess` checks the requested location before status read or OAuth start |
 | `dashboard/locations/add.post.ts` | | ✓ | | | | `assertSiteWideAccess` before preview, credit charge, or creation |
-| `dashboard/editor/menus.get.ts` | | | | ✓ (`locationId`; no location means site-wide) | | `assertResourceAccess` before `getMenus` |
-| `dashboard/[...path].ts` → `editor/**` | | | | ✓ (destination resource) | ✓ (destination context route only) | proxy context check plus the per-endpoint `/api/editor/sites/[siteId]/**` guards enumerated in this audit |
-| `dashboard/[...path].ts` → `ai/agent`, `ai/conversations/**` | | ✓ | | | | destination `getSiteForMember` requires a site-wide scope |
-| `dashboard/[...path].ts` → `ai/credits` | | ✓ | | | | destination `requireSiteAccess('site-wide')` |
-| `dashboard/[...path].ts` → `ai/enhance-prompt`, `ai/posts/generate` | | ✓ | | | | destination `assertSiteWideAccess` |
-| `dashboard/[...path].ts` → `ai/generate-image`, `ai/menu/extract` | | | | ✓ | | destination `assertResourceAccess`; new site-wide resources require `assertSiteWideAccess` |
 | `dashboard/notifications/index.get.ts`, `unread-count.get.ts`, `read-all.patch.ts`, `[notificationId]/read.patch.ts` | | | | ✓ | | `getNotificationAccess`: location notifications require exact/site-wide scope; null-location site notifications require site-wide scope; reads mutate only visible notifications |
 | `dashboard/sites/[siteId]/guest-threads/index.get.ts` | | | | ✓ (query location; no location means site-wide) | ✓ | `requireSiteAccess('context')` + `assertMemberScope`; list query is location-filtered |
 | `dashboard/sites/[siteId]/guest-threads/[threadId].get.ts`, `.patch.ts`, `/reply.post.ts` | | | | ✓ (thread row's own `location_id`) | ✓ | target thread lookup followed by `assertMemberScope` before read/mutation/reply |

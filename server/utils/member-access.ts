@@ -94,18 +94,17 @@ export function assertOrganizationAccess(role: string): void {
 // Deny-by-default boundary for dashboard handlers that resolve through
 // getDashboardContext. Each permitted route below is classified in the #341
 // authorization audit and applies its authoritative resource guard or filtered
-// query. The editor/AI proxy namespaces delegate to the already-audited
-// /api/editor/sites/[siteId]/** and selected /api/ai/[siteId]/** handlers.
+// query. Site-scoped editor and AI actions use their explicit canonical
+// /api/editor/sites/[siteId]/** and /api/ai/[siteId]/** routes instead of
+// hiding the site through /api/dashboard aliases.
 const SCOPED_ROLE_DASHBOARD_ROUTES = [
   /^\/api\/dashboard\/context$/,
   /^\/api\/dashboard\/home$/,
   /^\/api\/dashboard\/settings$/,
-  /^\/api\/dashboard\/locations(?:\/add|\/[^/]+(?:\/integrations\/google-business(?:\/auth)?)?)?$/,
+  /^\/api\/dashboard\/locations(?:\/add|\/[^/]+)?$/,
   /^\/api\/dashboard\/sites\/[^/]+\/guest-threads(?:\/[^/]+(?:\/reply)?)?$/,
   /^\/api\/dashboard\/onboarding\/checklist$/,
   /^\/api\/dashboard\/notifications(?:\/unread-count|\/read-all|\/[^/]+\/read)?$/,
-  /^\/api\/dashboard\/editor(?:\/.*)?$/,
-  /^\/api\/dashboard\/ai\/(?:agent|conversations(?:\/.*)?|credits|enhance-prompt|generate-image|menu\/extract|posts\/generate)$/,
 ]
 
 export function canScopedRoleUseDashboardPath(pathname: string): boolean {

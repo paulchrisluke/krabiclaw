@@ -178,8 +178,9 @@ test('phone invitation verifies identity, accepts access, and opens the scoped d
     headers: scopedHeaders,
     data: { name: 'Must not create' },
   })).status()).toBe(404)
-  expect((await page.request.get(`${baseURL}/api/dashboard/editor/menus?locationId=${LOCATION_ID}`, { headers: scopedHeaders })).status()).toBe(200)
-  expect((await page.request.get(`${baseURL}/api/dashboard/editor/menus?locationId=${SIBLING_LOCATION_ID}`, { headers: scopedHeaders })).status()).toBe(404)
+  expect((await page.request.get(`${baseURL}/api/editor/sites/${SITE_ID}/menus?locationId=${LOCATION_ID}`, { headers: scopedHeaders })).status()).toBe(200)
+  expect((await page.request.get(`${baseURL}/api/editor/sites/${SITE_ID}/menus?locationId=${SIBLING_LOCATION_ID}`, { headers: scopedHeaders })).status()).toBe(404)
+  expect((await page.request.get(`${baseURL}/api/dashboard/editor/menus?locationId=${LOCATION_ID}`, { headers: scopedHeaders })).status()).toBe(404)
   expect((await page.request.get(`${baseURL}/api/dashboard/onboarding/checklist?siteId=${SITE_ID}`, { headers: scopedHeaders })).status()).toBe(404)
 
   const locationOverview = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi`, { waitUntil: 'load' })
