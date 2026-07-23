@@ -40,19 +40,26 @@ Fresh worktrees usually do not have `node_modules`.
 
 ## Focused Testing
 
-The repository's `yarn test:unit` script intentionally runs the whole `tests/unit/**/*.test.ts` suite. For focused validation in a worktree, call Node's test runner directly with the specific files instead of expecting `yarn test:unit <file>` to narrow the suite.
+The repository's `yarn test:unit` script intentionally runs the whole `tests/unit/**/*.test.ts` suite. For focused validation in a worktree, use `yarn test:unit:file <path>` instead of expecting `yarn test:unit <file>` to narrow the suite.
 
 Example:
 
 ```bash
-node --experimental-strip-types --experimental-test-module-mocks --import ./tests/unit/support/register-aliases.mjs --test tests/unit/example.test.ts
+yarn test:unit:file tests/unit/example.test.ts
 ```
 
-Use full `yarn test:unit`, typecheck, lint, build, migration checks, and E2E suites when the PR scope or risk calls for them. In this repository, unit tests, lint, and typecheck are hygiene checks only. The large unit suite has repeatedly produced noise while missing the real product breakages; E2E and browser testing are the primary evidence that user-facing behavior works.
+Use full `yarn test:unit`, typecheck, lint, build, migration checks, and E2E suites when the PR scope or risk calls for them. In this repository, unit tests, lint, and typecheck are hygiene checks only. The large unit suite has repeatedly produced noise while missing the real product breakages; E2E and browser testing are the primary evidence that user-facing behavior works. See `docs/testing-strategy.md` for the repo taxonomy.
 
 Do not add unit tests by default just to make a PR look tested. Add or update unit tests only when they protect a narrow pure contract, parser, mapper, permission predicate, schema guard, or regression boundary that browser tests cannot target directly. For product workflows, spend the testing budget on Playwright, browser checks, API contract checks exercised through the real route, and CI E2E smoke.
 
 Any PR that changes a user-facing page, dashboard flow, CMS/editor behavior, auth navigation, MCP widget launch, or tenant public rendering needs real browser evidence before it is considered merge-ready. Prefer a relevant Playwright spec. If no spec exists, run the app and manually exercise the changed flow in a browser, then add the missing Playwright coverage when the workflow is important or likely to regress.
+
+For the common browser-first paths, prefer:
+
+```bash
+yarn test:browser:smoke
+yarn test:browser:dashboard
+```
 
 Report browser validation separately from unit/static validation:
 
@@ -65,12 +72,15 @@ Do not summarize a PR as validated, ready, or safe to merge when browser validat
 
 Fresh worktrees usually do not have a local `.env`. Nuxt validates required public runtime vars at startup, and editor preview endpoints require `PREVIEW_SECRET`. If Playwright times out waiting for `/api/dev/ready`, start the same dev command visibly before assuming the browser test is broken.
 
-For local Playwright runs that use dev login routes or editor previews, export the local-safe values in the same command so Playwright's `webServer` child receives them:
+For local Playwright runs that use dev login routes, editor previews, or dashboard pages, export the local-safe values and real Stripe test values in the same command so Playwright's `webServer` child receives them:
 
 ```bash
 NUXT_PUBLIC_PLATFORM_DOMAIN=http://localhost:3000 \
 NUXT_PUBLIC_FREE_SITE_DOMAIN=http://localhost:3000 \
 NUXT_PUBLIC_APP_NAME=KrabiClaw \
+STRIPE_SECRET_KEY="$STRIPE_SECRET_KEY" \
+STRIPE_WEBHOOK_SECRET="$STRIPE_WEBHOOK_SECRET" \
+NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="$NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" \
 PREVIEW_SECRET=ci-preview-secret \
 E2E_ALLOW_DEV_ROUTES=true \
 E2E_DEV_ROUTE_SECRET=ci-dev-route-secret \
