@@ -15,7 +15,6 @@ const orgContext = {
 // No synthetic scope segment exists in the canonical dashboard hierarchy.
 const EXPECTED_URLS: Record<DashboardDestination, string> = {
   'settings.general': 'https://krabiclaw.com/dashboard/pottery-house/settings/general',
-  'settings.domains': 'https://krabiclaw.com/dashboard/pottery-house/settings/domains',
   'settings.analytics': 'https://krabiclaw.com/dashboard/pottery-house/settings/analytics',
   'settings.billing': 'https://krabiclaw.com/dashboard/pottery-house/settings/billing',
   'settings.members': 'https://krabiclaw.com/dashboard/pottery-house/settings/members',
@@ -23,6 +22,7 @@ const EXPECTED_URLS: Record<DashboardDestination, string> = {
   'site.overview': 'https://krabiclaw.com/dashboard/pottery-house/sites/pottery-house-site',
   'site.locations': 'https://krabiclaw.com/dashboard/pottery-house/sites/pottery-house-site/locations',
   'site.locations.new': 'https://krabiclaw.com/dashboard/pottery-house/sites/pottery-house-site/locations/new',
+  'site.domains': 'https://krabiclaw.com/dashboard/pottery-house/sites/pottery-house-site/domains',
   'site.settings': 'https://krabiclaw.com/dashboard/pottery-house/sites/pottery-house-site/settings',
   'location.overview': 'https://krabiclaw.com/dashboard/pottery-house/sites/pottery-house-site/locations/ao-nang',
   'location.settings': 'https://krabiclaw.com/dashboard/pottery-house/sites/pottery-house-site/locations/ao-nang/settings',
@@ -56,15 +56,15 @@ test('DASHBOARD_DESTINATIONS has no untested entries (fails loudly if a destinat
 
 test('buildDashboardUrl falls back to organizationId when organizationSlug is missing', () => {
   const url = buildDashboardUrl(
-    { env: { NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.com' }, organizationId: 'org_123' },
-    'settings.domains',
+    { env: { NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.com' }, organizationId: 'org_123', siteSlug: 'site-a' },
+    'site.domains',
   )
-  assert.equal(url, 'https://krabiclaw.com/dashboard/org_123/settings/domains')
+  assert.equal(url, 'https://krabiclaw.com/dashboard/org_123/sites/site-a/domains')
 })
 
 test('buildDashboardUrl falls back to the default platform domain when env is unset', () => {
-  const url = buildDashboardUrl({ env: {}, organizationId: 'org_123' }, 'settings.domains')
-  assert.equal(url, 'https://krabiclaw.com/dashboard/org_123/settings/domains')
+  const url = buildDashboardUrl({ env: {}, organizationId: 'org_123', siteSlug: 'site-a' }, 'site.domains')
+  assert.equal(url, 'https://krabiclaw.com/dashboard/org_123/sites/site-a/domains')
 })
 
 test('location destinations reject missing location context', () => {

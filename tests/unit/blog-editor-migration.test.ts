@@ -18,3 +18,11 @@ test('scheduled publishing reports missing or dangling pinned revisions', async 
   assert.match(source, /scheduled_revision_id = \?`/)
   assert.match(source, /results\[1\]\?\.meta\?\.changes/)
 })
+
+test('scheduled_for alone transitions posts to scheduled and pins the current draft revision', async () => {
+  const source = await readFile(new URL('../../server/utils/platform-content.ts', import.meta.url), 'utf8')
+  assert.match(source, /else if \(input\.scheduled_for !== undefined && !input\.publish\) \{[\s\S]*updates\.push\('scheduled_for = \?', 'published_at = NULL', "status = 'scheduled'"\)/)
+  assert.match(source, /if \(!scheduledDocument\?\.document\.draft_revision_id\) badRequest\('Cannot schedule a post without a draft content revision'\)/)
+  assert.match(source, /updates\.push\('scheduled_revision_id = \?'\)[\s\S]*params\.push\(scheduledDocument\.document\.draft_revision_id\)/)
+  assert.match(source, /if \(scheduledFor && \(input\.publish \|\| input\.scheduled_for !== undefined\)\) \{[\s\S]*UPDATE blog_posts SET scheduled_revision_id = \(/)
+})

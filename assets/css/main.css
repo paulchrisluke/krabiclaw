@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
 @import "./saya.css";
+@import "./blawby.css";
 @plugin "@tailwindcss/typography";
 
 @theme static {

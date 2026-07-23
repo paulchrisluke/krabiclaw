@@ -16,6 +16,7 @@ test('canonical organization, site, location, and settings route files exist', (
     'pages/dashboard/[orgSlug]/sites/[siteSlug]/index.vue',
     'pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/index.vue',
     'pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/new.vue',
+    'pages/dashboard/[orgSlug]/sites/[siteSlug]/domains.vue',
     'pages/dashboard/[orgSlug]/sites/[siteSlug]/settings.vue',
     'pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/index.vue',
     'pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/settings.vue',
@@ -24,6 +25,7 @@ test('canonical organization, site, location, and settings route files exist', (
 
 test('removed add-location and location-preference routes stay deleted', () => {
   assert.equal(existsSync(resolve(root, 'pages/dashboard/[orgSlug]/sites/[siteSlug]/new.vue')), false)
+  assert.equal(existsSync(resolve(root, 'pages/dashboard/[orgSlug]/settings/domains.vue')), false)
   assert.equal(existsSync(resolve(root, 'server/api/dashboard/location-preference.patch.ts')), false)
 })
 

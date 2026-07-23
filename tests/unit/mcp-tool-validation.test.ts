@@ -126,10 +126,10 @@ test('validateNoUnknownTopLevelArguments sorts multiple unknown keys determinist
 })
 
 test('the tenant update_blog_post/create_blog_post schemas are strict (regression: siteTool() defaulted to additionalProperties: true, making tenant validation a no-op)', () => {
-  const updateBlogPost = tool(BLOG_TOOLS, 'update_blog_post')
-  assert.equal(updateBlogPost.inputSchema.additionalProperties, false)
-  const createBlogPost = tool(BLOG_TOOLS, 'create_blog_post')
-  assert.equal(createBlogPost.inputSchema.additionalProperties, false)
+  for (const name of ['create_blog_post', 'update_blog_post', 'update_blog_metadata', 'replace_blog_content']) {
+    const definition = tool(BLOG_TOOLS, name)
+    assert.equal(definition.inputSchema.additionalProperties, false, `${name} should reject unknown top-level arguments`)
+  }
 })
 
 test('validateNoUnknownTopLevelArguments rejects the tenant incident shape: update_blog_post called with body instead of content_blocks', () => {
@@ -153,6 +153,23 @@ test('validateNoUnknownTopLevelArguments accepts a valid tenant update_blog_post
     expected_document_updated_at: '2026-07-22T00:00:00.000Z',
     content_blocks: [{ type: 'markdown', data: { markdown: 'Hello' } }],
   }))
+})
+
+test('tenant blog schemas support seo_keywords wherever tenant prompts ask for it', () => {
+  for (const name of ['create_blog_post', 'update_blog_post', 'update_blog_metadata']) {
+    const definition = tool(BLOG_TOOLS, name)
+    const properties = definition.inputSchema.properties as Record<string, unknown>
+    assert.ok(Object.hasOwn(properties, 'seo_keywords'), `${name} should accept seo_keywords`)
+  }
+})
+
+test('tenant replace_blog_content requires content_blocks and expected_document_updated_at, with minItems: 1', () => {
+  const contentTool = tool(BLOG_TOOLS, 'replace_blog_content')
+  const required = contentTool.inputSchema.required as string[]
+  assert.ok(required.includes('content_blocks'))
+  assert.ok(required.includes('expected_document_updated_at'))
+  const properties = contentTool.inputSchema.properties as Record<string, { minItems?: number }>
+  assert.equal(properties.content_blocks?.minItems, 1)
 })
 
 test('create_platform_blog_post/replace_platform_blog_content descriptions describe content_blocks, not the retired body/components/embed-tag authoring model', () => {

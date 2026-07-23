@@ -2,16 +2,18 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import {
   createCustomDomainPair,
-  domainInstructions,
-  domainPair,
   hasCustomDomainsEntitlement,
+  inspectDomainResolution,
   validateCustomDomain
 } from '~/server/utils/domains'
+import { canonicalDomainForPair, domainPair } from '~/server/utils/domain-shared'
+import { domainInstructions, groupCustomDomains } from '~/server/utils/domain-read-model'
 import { notifyDomainLifecycle } from '~/server/utils/domain-notifications'
 
 interface CreateDomainBody {
   domain?: string
   include_www?: boolean
+  acknowledge_live_cutover?: boolean
 }
 
 export default defineEventHandler(async (event) => {
@@ -34,6 +36,18 @@ export default defineEventHandler(async (event) => {
   const validation = validateCustomDomain(env, requestedDomain)
   if (!validation.valid) return jsonResponse({ error: validation.reason }, { status: 400 })
 
+  const canonicalHostname = canonicalDomainForPair(requestedDomain, includeWww)
+  const liveResolution = await inspectDomainResolution(env, canonicalHostname).catch(() => null)
+  if (liveResolution?.resolves_elsewhere && body.acknowledge_live_cutover !== true) {
+    return jsonResponse({
+      error: 'This domain currently points somewhere else.',
+      live_cutover_warning: {
+        hostname: liveResolution.hostname,
+        records: liveResolution.records,
+        message: 'This domain currently points elsewhere and may be live. Changing DNS now can take it offline until KrabiClaw validation finishes.',
+      },
+    }, { status: 409 })
+  }
 
   try {
     const domains = await createCustomDomainPair(env, db, {
@@ -45,7 +59,7 @@ export default defineEventHandler(async (event) => {
       actorType
     })
 
-    const dashboardUrl = `${env.NUXT_PUBLIC_PLATFORM_DOMAIN}/dashboard/${encodeURIComponent(site.organization_slug ?? site.organization_id)}/settings/domains?site=${encodeURIComponent(site.subdomain ?? site.id)}`
+    const dashboardUrl = `${env.NUXT_PUBLIC_PLATFORM_DOMAIN}/dashboard/${encodeURIComponent(site.organization_slug ?? site.organization_id)}/sites/${encodeURIComponent(site.subdomain ?? site.id)}/domains`
     for (const domain of domains) {
       await notifyDomainLifecycle(env, db, {
         organizationId: site.organization_id,
@@ -61,6 +75,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({
       success: true,
       domains: domains.map((domain) => ({ ...domain, instructions: domainInstructions(domain) })),
+      domain_groups: groupCustomDomains(domains),
       requested_hostnames: domainPair(requestedDomain, includeWww)
     })
   } catch (error) {

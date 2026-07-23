@@ -12,6 +12,11 @@ declare global {
     zaraz?: {
       track: (_eventName: string, _params?: Record<string, unknown>) => void
       set: (_key: string, _value: Record<string, string>) => void
+      consent?: {
+        APIReady?: boolean
+        set: (_preferences: Record<string, boolean>) => void
+        sendQueuedEvents?: () => void
+      }
     }
   }
 }

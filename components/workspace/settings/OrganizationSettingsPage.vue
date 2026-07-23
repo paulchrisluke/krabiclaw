@@ -66,7 +66,6 @@ const orgBase = computed(() => `/dashboard/${String(route.params.orgSlug)}`)
 const managementLinks = computed(() => [
   { label: 'Members', description: 'Invite people and manage their organization membership.', icon: 'i-lucide-users', to: `${orgBase.value}/settings/members` },
   { label: 'Billing', description: 'Manage plans, payment methods, and organization credits.', icon: 'i-lucide-credit-card', to: `${orgBase.value}/settings/billing` },
-  { label: 'Domains', description: 'Manage domains owned by sites in this organization.', icon: 'i-lucide-globe', to: `${orgBase.value}/settings/domains` },
   { label: 'Analytics', description: 'Choose a site and configure its analytics connection.', icon: 'i-lucide-chart-bar', to: `${orgBase.value}/settings/analytics` },
   { label: 'ChatGPT', description: 'Configure the organization ChatGPT connection.', icon: 'i-lucide-message-square', to: `${orgBase.value}/settings/chatgpt` },
 ])

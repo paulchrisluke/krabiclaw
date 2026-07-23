@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "94256874-64a3-4623-8763-d5f70dd275af",
+  "id": "e2a6251e-feed-4fe6-9805-3096e91fc31e",
   "prevId": "966fa397-55bc-47bd-8637-26212818a4ea",
   "tables": {
     "account": {
@@ -1589,13 +1589,6 @@
         },
         "og_image_asset_id": {
           "name": "og_image_asset_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "feature_overrides": {
-          "name": "feature_overrides",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -14362,6 +14355,48 @@
           "notNull": false,
           "autoincrement": false
         },
+        "ssl_validation_name_2": {
+          "name": "ssl_validation_name_2",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ssl_validation_type_2": {
+          "name": "ssl_validation_type_2",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ssl_validation_value_2": {
+          "name": "ssl_validation_value_2",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dcv_delegation_name": {
+          "name": "dcv_delegation_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dcv_delegation_type": {
+          "name": "dcv_delegation_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dcv_delegation_value": {
+          "name": "dcv_delegation_value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "dns_target": {
           "name": "dns_target",
           "type": "text",
@@ -14376,6 +14411,20 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'pending'"
+        },
+        "dns_last_resolved_at": {
+          "name": "dns_last_resolved_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dns_resolved_target": {
+          "name": "dns_resolved_target",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "last_synced_at": {
           "name": "last_synced_at",
@@ -15647,13 +15696,6 @@
         },
         "robots": {
           "name": "robots",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "feature_overrides": {
-          "name": "feature_overrides",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

@@ -77,7 +77,7 @@ interface Props {
   data?: {
     items?: Array<{
       name: string
-      image?: string
+      image?: string | null
       imageKind?: string
       alt?: string
       price?: string
@@ -87,6 +87,7 @@ interface Props {
     }>
     hasMenu?: boolean
     vertical?: string
+    linkTarget?: string | null
   }
   bg?: string
   padding?: string
@@ -110,7 +111,7 @@ const allUnavailable = computed(() => {
   return list.length > 0 && list.every(item => item.unavailable)
 })
 const hasMenu = computed(() => props.data?.hasMenu || false)
-const linkTarget = computed(() => hasMenu.value ? '/menu' : '/experiences')
+const linkTarget = computed(() => props.data?.linkTarget || (hasMenu.value ? '/menu' : '/experiences'))
 
 const emptyState = computed(() => hasMenu.value ? sayaEmptyStates.menu : sayaEmptyStates.experiences)
 

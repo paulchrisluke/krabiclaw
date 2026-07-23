@@ -47,6 +47,33 @@ const AI_ASSISTANCE_PROMPT_DESCRIPTION_MAX = 500
 const AI_ASSISTANCE_PROMPT_COPY_LABEL_MAX = 80
 const COMPONENT_LABEL_MAX = 200
 const MAX_SLUG_ATTEMPTS = 8
+const BLOG_UPDATE_MUTATION_FIELDS: Array<keyof PlatformBlogUpdateInput> = [
+  'title',
+  'excerpt',
+  'category',
+  'tags',
+  'nav_section',
+  'nav_title',
+  'nav_order',
+  'nav_section_order',
+  'hide_from_nav',
+  'featured_order',
+  'seo_title',
+  'seo_description',
+  'seo_keywords',
+  'canonical_url',
+  'robots',
+  'featured_image_asset_id',
+  'social_image_asset_id',
+  'visibility',
+  'scheduled_for',
+  'slug',
+  'redirect_old_slug',
+  'reset_slug_override',
+  'content_blocks',
+  'publish',
+  'unpublish',
+]
 
 function parseStringArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string')
@@ -1586,6 +1613,9 @@ export async function updatePlatformBlogPost(
   siteId: string | null = null,
 ) {
   rejectLegacyBlogContentFields(input)
+  if (!BLOG_UPDATE_MUTATION_FIELDS.some(field => input[field] !== undefined)) {
+    badRequest('At least one blog mutation field is required')
+  }
   const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', siteId)
   const isTenant = Boolean(siteId)
   validateBlogCommon(input, isTenant)
@@ -1740,8 +1770,21 @@ export async function updatePlatformBlogPost(
   if (input.unpublish) {
     updates.push('published_at = NULL', 'scheduled_for = NULL', 'scheduled_revision_id = NULL', "status = 'draft'")
   } else if (input.scheduled_for !== undefined && !input.publish) {
-    updates.push('scheduled_for = ?')
-    params.push(scheduledFor ?? null)
+    if (scheduledFor) {
+      updates.push('scheduled_for = ?', 'published_at = NULL', "status = 'scheduled'")
+      params.push(scheduledFor)
+      if (!normalizedBlocks) {
+        const scheduledDocument = await getContentEditorSnapshot(db, blogContentOwnerType(siteId), postId)
+        if (!scheduledDocument?.document.draft_revision_id) badRequest('Cannot schedule a post without a draft content revision')
+        updates.push('scheduled_revision_id = ?')
+        params.push(scheduledDocument.document.draft_revision_id)
+      }
+    } else {
+      updates.push('scheduled_for = NULL', 'scheduled_revision_id = NULL')
+      if (current.status === 'scheduled') {
+        updates.push('published_at = NULL', "status = 'draft'")
+      }
+    }
   }
 
   if (!normalizedBlocks && (input.publish || input.unpublish)) {
@@ -1769,7 +1812,7 @@ export async function updatePlatformBlogPost(
         params: [postId, input.expected_updated_at],
       }, rowUpdate] : [rowUpdate]
       const after: BatchQuery[] = []
-      if (input.publish && scheduledFor) {
+      if (scheduledFor && (input.publish || input.scheduled_for !== undefined)) {
         after.push({
           query: `UPDATE blog_posts SET scheduled_revision_id = (
             SELECT draft_revision_id FROM content_documents WHERE owner_type = ? AND owner_id = ?

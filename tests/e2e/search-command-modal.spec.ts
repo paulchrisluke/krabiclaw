@@ -7,8 +7,7 @@ const BANNED_LABELS = ['Platform Pages', 'Routes', 'Route']
 
 // WCAG 2.1 relative luminance / contrast ratio, computed from resolved rgb() colors so
 // these assertions work regardless of which CSS custom property actually supplied the
-// color (Nuxt UI --ui-* tokens, Saya's --saya-*/--ui-* overrides, or Blawby's --blawby-*
-// tokens) — the point is to test the *rendered* result, not which token produced it.
+// color. The point is to test the rendered result, not which token produced it.
 function relativeLuminance([r, g, b]: [number, number, number]) {
   const channel = (value: number) => {
     const srgb = value / 255
@@ -55,16 +54,12 @@ async function assertDialogContrast(page: Page, minRatio = 4.5) {
 
 async function openSearchAfterHydration(page: Page, accessibleName: string) {
   const trigger = page.getByRole('button', { name: accessibleName })
-  await page.waitForFunction(name => {
-    const element = [...document.querySelectorAll('button')]
-      .find(button => button.getAttribute('aria-label') === name)
-    return Boolean(element && Object.getOwnPropertySymbols(element).some(symbol => String(symbol) === 'Symbol(_vei)'))
-  }, accessibleName)
-  await trigger.click()
-  await expect.poll(
-    () => page.getByRole('dialog').count(),
-    { message: `${accessibleName} should open after hydration` },
-  ).toBe(1)
+  await expect(trigger).toBeVisible()
+  await expect(trigger).toBeEnabled()
+  await expect(async () => {
+    await trigger.click()
+    await expect(page.getByRole('dialog')).toHaveCount(1, { timeout: 1_000 })
+  }, `${accessibleName} should open after hydration`).toPass({ timeout: 10_000 })
 }
 
 test.describe('platform command search modal', () => {
@@ -134,11 +129,12 @@ test.describe('Blawby command search modal', () => {
     const teleportedIntoBlawbyPortal = await dialog.evaluate(node => Boolean(node.closest('#blawby-portal-root')))
     expect(teleportedIntoBlawbyPortal).toBe(true)
 
-    // The dialog's input text color must resolve to --blawby-ink, not --blawby-primary —
-    // contrast must never depend on the tenant's configurable brand accent color.
-    const inkVsPrimary = await dialog.evaluate((node) => {
+    // The dialog uses Nuxt UI semantic text classes; inside .blawby-theme, --ui-text
+    // bridges to --blawby-ink so contrast never depends on the tenant accent color.
+    const lightTokens = await dialog.evaluate((node) => {
       const shell = node.closest('.blawby-shell') as HTMLElement
       const ink = getComputedStyle(shell).getPropertyValue('--blawby-ink').trim()
+      const uiText = getComputedStyle(shell).getPropertyValue('--ui-text').trim()
       const primary = getComputedStyle(shell).getPropertyValue('--blawby-primary').trim()
       const probe = document.createElement('span')
       probe.style.position = 'absolute'
@@ -152,15 +148,34 @@ test.describe('Blawby command search modal', () => {
 
       const input = node.querySelector('input[type="text"]') as HTMLElement
       const inputRgb = getComputedStyle(input).color
-      return { inputRgb, inkRgb, primaryRgb }
+      return { inputRgb, inkRgb, primaryRgb, uiText, ink }
     })
-    expect(inkVsPrimary.inputRgb).toBe(inkVsPrimary.inkRgb)
-    expect(inkVsPrimary.inputRgb).not.toBe(inkVsPrimary.primaryRgb)
+    expect(lightTokens.uiText).toBe(lightTokens.ink)
+    expect(lightTokens.inputRgb).toBe(lightTokens.inkRgb)
+    expect(lightTokens.inputRgb).not.toBe(lightTokens.primaryRgb)
 
     await assertDialogContrast(page)
 
     await page.locator('input[type="text"]').fill('divorce')
     await page.waitForTimeout(400)
     await assertNoBannedLabels(page)
+
+    await page.evaluate(() => document.documentElement.classList.add('dark'))
+    const darkTokens = await dialog.evaluate((node) => {
+      const shell = node.closest('.blawby-shell') as HTMLElement
+      return {
+        colorScheme: getComputedStyle(shell).colorScheme,
+        bg: getComputedStyle(shell).getPropertyValue('--blawby-bg').trim(),
+        uiBg: getComputedStyle(shell).getPropertyValue('--ui-bg').trim(),
+        ink: getComputedStyle(shell).getPropertyValue('--blawby-ink').trim(),
+        uiText: getComputedStyle(shell).getPropertyValue('--ui-text').trim(),
+      }
+    })
+    expect(darkTokens.colorScheme).toBe('dark')
+    expect(darkTokens.bg).toBe('#0f1222')
+    expect(darkTokens.uiBg).toBe(darkTokens.bg)
+    expect(darkTokens.ink).toBe('#f4f6fb')
+    expect(darkTokens.uiText).toBe(darkTokens.ink)
+    await assertDialogContrast(page)
   })
 })

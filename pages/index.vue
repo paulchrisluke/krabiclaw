@@ -167,7 +167,7 @@
           businessCity: businessCity,
           businessPrimaryPhoto: businessPrimaryPhoto,
           hasOrderLinks: hasOrderLinks,
-          ctaRoute: homeCopy.ctaRoute,
+          ctaRoute: homePrimaryCtaRoute,
           reserveCta: homeCopy.reserveCta,
           orderNowCta: homeCopy.orderNowCta,
           viewMenuCta: homeCopy.viewMenuCta,
@@ -182,7 +182,8 @@
         :data="{
           items: featuredContent,
           hasMenu: hasMenu,
-          vertical: site?.vertical
+          vertical: site?.vertical,
+          linkTarget: homeFeaturedContentLinkTarget
         }"
       />
 
@@ -380,7 +381,7 @@
       <LazySayaCTA
         :title="getField('cta.title')"
         :description="getField('cta.description')"
-        :cta-route="homeCopy.ctaRoute"
+        :cta-route="homePrimaryCtaRoute"
         :reserve-cta="homeCopy.reserveCta"
         :bg="'default'"
         :padding="'lg'"
@@ -405,6 +406,7 @@ import { useAuth } from '~/composables/useAuth'
 import { formatMoneyAmount, isSaleActive, resolveOverridePriceDisplay } from '~/shared/money'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 import { getActiveSpecialClosure } from '~/utils/formatters'
+import { resolveSiteExperienceHref } from '~/utils/experience-navigation'
 
 definePageMeta({ layout: false })
 
@@ -608,6 +610,16 @@ const featuredExperiences = computed(() => {
   return (featured.length > 0 ? featured : allExperiences.filter(exp => exp.status === 'active')).slice(0, 6)
 })
 const defaultCurrency = computed(() => bootstrapConfig.value.default_currency || 'THB')
+const isExperienceTenant = computed(() => site?.vertical === 'experience')
+const homeExperienceHref = computed(() => resolveSiteExperienceHref(experiencesList.value))
+const homePrimaryCtaRoute = computed(() => {
+  if (isExperienceTenant.value) return homeExperienceHref.value || homeCopy.value.ctaRoute
+  return homeCopy.value.ctaRoute
+})
+const homeFeaturedContentLinkTarget = computed(() => {
+  if (hasMenu.value) return '/menu'
+  return homeExperienceHref.value || '/experiences'
+})
 
 // Review location filter
 const reviewFilter = ref('all')

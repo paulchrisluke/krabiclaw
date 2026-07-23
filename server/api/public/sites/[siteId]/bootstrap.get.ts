@@ -577,7 +577,7 @@ export default defineEventHandler(async (event) => {
                   LEFT JOIN media_assets og ON og.id = e.og_image_asset_id AND og.status = 'active'
          AND og.organization_id = e.organization_id AND og.site_id = e.site_id
                   WHERE e.organization_id = ? AND e.site_id = ? AND e.status != 'inactive'`;
-    if (page === "location" && locationId) {
+    if (locationId) {
       expSql += ` AND e.location_id = ?`;
       expParams.push(locationId);
     }

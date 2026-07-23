@@ -49,6 +49,7 @@
         <div class="flex items-center justify-end gap-2 col-start-3">
           <!-- Primary CTA: Order Now if delivery links exist, otherwise dynamic Reserve/Book -->
           <NuxtLink
+            v-if="primaryCtaPath"
             :to="primaryCtaPath"
             class="inline-flex items-center justify-center rounded-full bg-(--brand-color) px-3 py-1.5 text-xs sm:text-sm font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90"
           >
@@ -153,6 +154,7 @@ const props = defineProps<{
   locations: ApiRecord[]
   menu: ApiRecord | null
   hasExperiences: boolean
+  experienceCtaPath?: string | null
 }>()
 
 const i18n = useI18n() as ApiValue as I18nComposable
@@ -190,6 +192,7 @@ const hasOrderLinks = computed(() =>
 
 const primaryCtaPath = computed(() => {
   if (hasOrderLinks.value && !isExperienceSite.value) return '/order'
+  if (isExperienceSite.value && props.experienceCtaPath !== undefined) return props.experienceCtaPath
   return verticalCopy.value.ctaRoute
 })
 

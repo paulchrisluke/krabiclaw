@@ -12,6 +12,7 @@
       <TransferOnboardingWizard
         :site-id="siteId"
         :org-slug="orgSlug"
+        :site-slug="subdomain"
         :site-name="siteName"
         :site-domain="siteDomain"
         :locations="locations"
