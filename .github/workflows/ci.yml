@@ -33,6 +33,7 @@ jobs:
           node-version: "22"
           cache: yarn
       - run: yarn install --frozen-lockfile
+      - run: yarn lint:better-auth-boundaries
       - run: yarn typecheck
       - run: yarn test:unit
 
@@ -199,6 +200,7 @@ jobs:
           cache: yarn
       - name: Run Node-only guardrails
         run: |
+          node scripts/check-better-auth-boundaries.mjs
           node scripts/lint-seeds.mjs
           node scripts/lint-migrations.mjs
           node scripts/lint-tool-parity.mjs
