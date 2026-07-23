@@ -101,7 +101,7 @@ export default defineEventHandler(async (event) => {
       page,
       changes,
       location_id: locationId,
-    });
+    }, session.user.id);
 
     return jsonResponse({
       success: true,
