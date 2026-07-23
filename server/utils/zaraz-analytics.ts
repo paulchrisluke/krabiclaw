@@ -164,18 +164,26 @@ function isGa4Tool(tool: ZarazTool | undefined): tool is ZarazTool {
   return tool?.component === 'google-analytics_v4'
 }
 
+function ga4ToolTemplate(config: ZarazConfig): ZarazTool | undefined {
+  return Object.values(config.tools ?? {}).find(tool =>
+    isGa4Tool(tool) && tool.defaultFields
+  )
+}
+
 function upsertGa4Tool(
   config: ZarazConfig,
   key: string,
   input: { name: string; measurementId: string; triggerKey: string; existing?: ZarazTool },
 ) {
   const existing = input.existing
+  const template = existing?.defaultFields ? existing : ga4ToolTemplate(config)
   config.tools[key] = {
     ...existing,
     component: 'google-analytics_v4',
     name: existing?.name || input.name,
     enabled: true,
     settings: { ...(existing?.settings ?? {}), tid: input.measurementId },
+    defaultFields: existing?.defaultFields ?? template?.defaultFields,
     defaultPurpose: consentPurposeId(),
     actions: scopeActionsToTrigger(existing?.actions, input.triggerKey),
   }

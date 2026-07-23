@@ -93,13 +93,18 @@ const scopeActions = (actions, triggerKey) => Object.fromEntries(Object.entries(
   key,
   { ...action, firingTriggers: [triggerKey], enabled: action.enabled !== false },
 ]))
+const ga4ToolTemplate = () => Object.values(config.tools).find(tool =>
+  tool?.component === 'google-analytics_v4' && tool?.defaultFields
+)
 const upsertGaTool = (key, { name, measurementId, triggerKey, existing }) => {
+  const template = existing?.defaultFields ? existing : ga4ToolTemplate()
   config.tools[key] = {
     ...existing,
     component: 'google-analytics_v4',
     name: existing?.name || name,
     enabled: true,
     settings: { ...(existing?.settings || {}), tid: measurementId },
+    defaultFields: existing?.defaultFields || template?.defaultFields,
     defaultPurpose: analyticsPurposeId,
     actions: scopeActions(existing?.actions, triggerKey),
   }
