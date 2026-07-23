@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
   removeStaleTenantZarazAnalytics,
@@ -8,7 +7,6 @@ import {
   upsertTenantZarazAnalytics,
   type ZarazConfig,
 } from '../../server/utils/zaraz-analytics.ts'
-import { ZARAZ_ANALYTICS_PURPOSE_ID } from '../../utils/zaraz-consent.ts'
 
 test('tenantPageLocationRegex scopes pageviews to exact active hostnames', () => {
   const pattern = new RegExp(tenantPageLocationRegex([
@@ -16,11 +14,11 @@ test('tenantPageLocationRegex scopes pageviews to exact active hostnames', () =>
     'www.northcarolinalegalservices.org',
   ]))
 
-  assert.equal(pattern.test('https://ncls.krabiclaw.com/'), true)
-  assert.equal(pattern.test('https://www.northcarolinalegalservices.org/services'), true)
-  assert.equal(pattern.test('https://other.krabiclaw.com/'), false)
-  assert.equal(pattern.test('https://nclsXkrabiclawXcom/'), false)
-  assert.equal(pattern.test('http://ncls.krabiclaw.com/'), false)
+  assert.equal(pattern.test('ncls.krabiclaw.com'), true)
+  assert.equal(pattern.test('www.northcarolinalegalservices.org'), true)
+  assert.equal(pattern.test('other.krabiclaw.com'), false)
+  assert.equal(pattern.test('nclsXkrabiclawXcom'), false)
+  assert.equal(pattern.test('https://ncls.krabiclaw.com/'), false)
 })
 
 test('platform Zaraz GA4 is scoped to platform hosts instead of every zone hostname', () => {
@@ -44,15 +42,23 @@ test('platform Zaraz GA4 is scoped to platform hosts instead of every zone hostn
     hostnames: ['krabiclaw.com', 'www.krabiclaw.com'],
   })
 
-  assert.equal(config.consent?.enabled, true)
-  assert.equal(config.consent?.hideModal, true)
-  assert.equal(config.tools.googleAnalytics.defaultPurpose, ZARAZ_ANALYTICS_PURPOSE_ID)
-  assert.deepEqual(config.tools.googleAnalytics.actions.Pageview.firingTriggers, ['ga-platform'])
+  assert.equal(config.consent?.enabled, false)
+  assert.equal(config.tools.googleAnalytics.defaultPurpose, undefined)
+  assert.deepEqual(config.tools.googleAnalytics.actions.Pageview.firingTriggers, ['Pageview'])
+  assert.deepEqual(config.tools.googleAnalytics.actions.Pageview.blockingTriggers, ['ga-platform', 'ga-consent-not-accepted'])
 
   const pattern = new RegExp(String((config.triggers['ga-platform'] as { loadRules: Array<{ value: string }> }).loadRules[0].value))
-  assert.equal(pattern.test('https://krabiclaw.com/blog'), true)
-  assert.equal(pattern.test('https://www.krabiclaw.com/blog'), true)
-  assert.equal(pattern.test('https://www.northcarolinalegalservices.org/article/foo'), false)
+  assert.equal(pattern.test('krabiclaw.com'), true)
+  assert.equal(pattern.test('www.krabiclaw.com'), true)
+  assert.equal(pattern.test('www.northcarolinalegalservices.org'), false)
+
+  const trigger = config.triggers['ga-platform'] as { system?: string, loadRules: Array<{ match: string, op: string, value: string }> }
+  assert.equal(trigger.system, undefined)
+  assert.equal(trigger.loadRules[0].op, 'NOT_MATCH_REGEX')
+  assert.deepEqual(config.triggers['ga-consent-not-accepted'], {
+    name: 'Analytics consent not accepted',
+    loadRules: [{ match: '{{ system.cookies.kc_consent }}', op: 'NOT_MATCH_REGEX', value: '^accepted$' }],
+  })
 })
 
 test('tenant Zaraz GA4 is scoped to active tenant hostnames and stale tenant tools are removed', () => {
@@ -81,21 +87,20 @@ test('tenant Zaraz GA4 is scoped to active tenant hostnames and stale tenant too
   assert.equal(config.tools['ga-tenant-old-site'], undefined)
   assert.equal(config.triggers['ga-tenant-old-site'], undefined)
   assert.equal(config.tools['ga-tenant-site-ncls-blawby'].settings.tid, 'G-08FKZD9LN2')
-  assert.equal(config.tools['ga-tenant-site-ncls-blawby'].defaultPurpose, ZARAZ_ANALYTICS_PURPOSE_ID)
-  assert.deepEqual(config.tools['ga-tenant-site-ncls-blawby'].actions.AllPageviews.firingTriggers, ['ga-tenant-site-ncls-blawby'])
+  assert.equal(config.tools['ga-tenant-site-ncls-blawby'].defaultPurpose, undefined)
+  assert.deepEqual(config.tools['ga-tenant-site-ncls-blawby'].actions.AllPageviews.firingTriggers, ['Pageview'])
+  assert.deepEqual(config.tools['ga-tenant-site-ncls-blawby'].actions.AllPageviews.blockingTriggers, ['ga-tenant-site-ncls-blawby', 'ga-consent-not-accepted'])
 
   const pattern = new RegExp(String((config.triggers['ga-tenant-site-ncls-blawby'] as { loadRules: Array<{ value: string }> }).loadRules[0].value))
-  assert.equal(pattern.test('https://www.northcarolinalegalservices.org/article/foo'), true)
-  assert.equal(pattern.test('https://ncls.krabiclaw.com/article/foo'), true)
-  assert.equal(pattern.test('https://krabiclaw.com/article/foo'), false)
-})
+  assert.equal(pattern.test('www.northcarolinalegalservices.org'), true)
+  assert.equal(pattern.test('ncls.krabiclaw.com'), true)
+  assert.equal(pattern.test('krabiclaw.com'), false)
 
-test('cookie consent updates the Zaraz analytics purpose as well as Google consent mode', () => {
-  const source = readFileSync('composables/useCookieConsent.ts', 'utf8')
-
-  assert.match(source, /ZARAZ_ANALYTICS_PURPOSE_ID/)
-  assert.match(source, /zaraz\?\.consent\?\.set/)
-  assert.match(source, /sendQueuedEvents/)
-  assert.match(source, /zarazConsentAPIReady/)
-  assert.match(source, /value === 'accepted'/)
+  const trigger = config.triggers['ga-tenant-site-ncls-blawby'] as { system?: string, loadRules: Array<{ match: string, op: string, value: string }> }
+  assert.equal(trigger.system, undefined)
+  assert.equal(trigger.loadRules[0].op, 'NOT_MATCH_REGEX')
+  assert.deepEqual(config.triggers['ga-consent-not-accepted'], {
+    name: 'Analytics consent not accepted',
+    loadRules: [{ match: '{{ system.cookies.kc_consent }}', op: 'NOT_MATCH_REGEX', value: '^accepted$' }],
+  })
 })
