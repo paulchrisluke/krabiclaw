@@ -55,6 +55,7 @@ const analyzeBundle = process.env.PERF_BUNDLE_ANALYZE === 'true'
 // one flag is meant to be set per build.
 const cssStrips: [envVar: string, line: string][] = [
   ['PERF_NO_SAYA_CSS', '@import "./saya.css";'],
+  ['PERF_NO_BLAWBY_CSS', '@import "./blawby.css";'],
   ['PERF_NO_TYPOGRAPHY_CSS', '@plugin "@tailwindcss/typography";'],
   ['PERF_NO_NUXT_UI_CSS', '@import "@nuxt/ui";'],
   ['PERF_NO_TAILWIND_CSS', '@import "tailwindcss";'],
