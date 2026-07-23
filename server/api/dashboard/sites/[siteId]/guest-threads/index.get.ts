@@ -10,7 +10,9 @@ export default defineEventHandler(async (event) => {
   const { db, site } = await requireSiteAccess(event, siteId, 'context')
   const query = getQuery(event)
   const locationId = typeof query.location_id === 'string' && query.location_id.trim() ? query.location_id.trim() : null
-  await assertMemberScope(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, locationId })
+  if (locationId) {
+    await assertMemberScope(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, locationId })
+  }
   const search = typeof query.search === 'string' ? query.search : null
   const type = query.type === 'contact' || query.type === 'reservation' || query.type === 'experience_booking'
     ? query.type as GuestThreadSubmissionType
@@ -22,6 +24,7 @@ export default defineEventHandler(async (event) => {
 
   const threads = await listGuestThreads(db, siteId, {
     locationId,
+    principal: { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId },
     search,
     type,
     inboxStatus,

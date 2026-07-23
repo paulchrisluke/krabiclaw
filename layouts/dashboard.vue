@@ -347,6 +347,7 @@ const siteOverviewGroup = computed(() => {
   if (scope.value !== 'site' || !siteBase.value) return []
   const items = [
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: siteBase.value },
+    { label: 'Inbox', icon: 'i-lucide-inbox', to: `${siteBase.value}/inbox` },
     { label: locationsNavLabel.value, icon: 'i-lucide-map-pin', to: locationsBase.value ?? `${siteBase.value}/locations` },
   ]
   if (!canManageSite.value) return items

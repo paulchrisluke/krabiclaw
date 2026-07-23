@@ -3,11 +3,12 @@
 // top-level utils/ auto-import convention — see utils/phone.ts for another
 // pure client+server helper living at this level.
 
-const INBOX_DEEP_LINK_PATH = /^\/dashboard\/[^/]+\/sites\/[^/]+\/locations\/[^/]+\/inbox(?:\/.*)?$/
+const INBOX_DEEP_LINK_PATH = /^\/dashboard\/[^/]+\/sites\/[^/]+(?:\/locations\/[^/]+)?\/inbox(?:\/.*)?$/
 
 /**
  * True when `path` is the WhatsApp-notification-driven guest-thread deep link
- * (`/dashboard/{org}/sites/{site}/locations/{location}/inbox`) — the one dashboard
+ * (`/dashboard/{org}/sites/{site}/inbox` or
+ * `/dashboard/{org}/sites/{site}/locations/{location}/inbox`) — the dashboard
  * route reached from an outbound WhatsApp notification link (issue #293,
  * Section B: "an expired/absent session triggers WhatsApp OTP and returns to
  * that same validated thread").

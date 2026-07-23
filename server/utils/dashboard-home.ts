@@ -1,5 +1,5 @@
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
-import { isOrganizationWideRole } from '~/server/utils/member-access'
+import { isOrganizationWideRole, listAccessibleLocationIds } from '~/server/utils/member-access'
 
 export interface DashboardHomeLocation {
   id: string
@@ -37,6 +37,12 @@ export interface DashboardHomeData {
   locations: DashboardHomeLocation[]
   credits: DashboardHomeCredits | null
   events: DashboardHomeEvent[]
+  operations: {
+    openThreads: number
+    unreadThreads: number
+    reservations: number
+    experienceBookings: number
+  }
 }
 
 function safeJsonParse(value: string): unknown {
@@ -73,7 +79,20 @@ export async function getDashboardHomeData(
           AND (mas.location_id IS NULL OR mas.location_id = e.location_id)
       )`
     : ''
-  const [locations, credits, events] = await Promise.all([
+  const accessibleLocationIds = principal ? await listAccessibleLocationIds(db, {
+    memberId: principal.memberId,
+    role: principal.role,
+    organizationId,
+    siteId,
+  }) : null
+  const operationScopeClause = scoped && accessibleLocationIds !== null
+    ? accessibleLocationIds.length === 0
+      ? null
+      : `AND gt.location_id IN (${accessibleLocationIds.map(() => '?').join(', ')})`
+    : ''
+  const operationScopeParams = scoped && accessibleLocationIds !== null ? accessibleLocationIds : []
+
+  const [locations, credits, events, operations] = await Promise.all([
     queryAll<{
       id: string; slug: string; title: string; city: string | null
       rating: number | null; review_count: number | null
@@ -116,7 +135,22 @@ export async function getDashboardHomeData(
       ORDER BY e.created_at DESC
       LIMIT 15
     `, scoped && principal ? [organizationId, siteId, principal.memberId] : [organizationId, siteId]),
+
+    operationScopeClause === null
+      ? Promise.resolve({ openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 })
+      : queryFirst<{ openThreads: number; unreadThreads: number; reservations: number; experienceBookings: number }>(db, `
+        SELECT
+          SUM(CASE WHEN gt.inbox_status != 'closed' THEN 1 ELSE 0 END) AS openThreads,
+          SUM(CASE WHEN gt.unread_count > 0 THEN 1 ELSE 0 END) AS unreadThreads,
+          SUM(CASE WHEN gt.submission_type = 'reservation' THEN 1 ELSE 0 END) AS reservations,
+          SUM(CASE WHEN gt.submission_type = 'experience_booking' THEN 1 ELSE 0 END) AS experienceBookings
+        FROM guest_threads gt
+        WHERE gt.organization_id = ? AND gt.site_id = ?
+        ${operationScopeClause}
+      `, [organizationId, siteId, ...operationScopeParams]),
   ])
+
+  const operationCounts = operations ?? { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
 
   return {
     locations: locations.map(l => ({
@@ -128,5 +162,11 @@ export async function getDashboardHomeData(
       ...e,
       metadata: e.metadata ? safeJsonParse(e.metadata) : null,
     })),
+    operations: {
+      openThreads: operationCounts.openThreads ?? 0,
+      unreadThreads: operationCounts.unreadThreads ?? 0,
+      reservations: operationCounts.reservations ?? 0,
+      experienceBookings: operationCounts.experienceBookings ?? 0,
+    },
   }
 }

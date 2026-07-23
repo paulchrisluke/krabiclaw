@@ -127,6 +127,35 @@
           </div>
         </div>
 
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <UCard>
+            <p class="text-sm text-muted">Publication</p>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <UBadge :color="dashboardState.site.value?.status === 'active' ? 'success' : 'neutral'" variant="soft" class="capitalize">
+                {{ dashboardState.site.value?.status || 'Unknown' }}
+              </UBadge>
+              <UBadge v-if="dashboardState.site.value?.onboarding_status" color="neutral" variant="soft" class="capitalize">
+                {{ dashboardState.site.value.onboarding_status.replace(/_/g, ' ') }}
+              </UBadge>
+            </div>
+          </UCard>
+          <UCard>
+            <p class="text-sm text-muted">{{ locationsNavLabel }}</p>
+            <p class="mt-2 text-2xl font-semibold text-highlighted">{{ locations.length }}</p>
+            <UButton class="mt-3" size="xs" color="neutral" variant="ghost" :to="locationsBase">Open index</UButton>
+          </UCard>
+          <UCard>
+            <p class="text-sm text-muted">Unread inbox</p>
+            <p class="mt-2 text-2xl font-semibold text-highlighted">{{ operations.unreadThreads }}</p>
+            <UButton class="mt-3" size="xs" color="neutral" variant="ghost" :to="`${siteDashboardPath}/inbox`">Open inbox</UButton>
+          </UCard>
+          <UCard>
+            <p class="text-sm text-muted">Open guest work</p>
+            <p class="mt-2 text-2xl font-semibold text-highlighted">{{ operations.openThreads }}</p>
+            <p class="mt-2 text-xs text-muted">{{ operationBreakdown }}</p>
+          </UCard>
+        </div>
+
         <!-- Locations preview -->
         <div v-if="locations.length > 0">
           <div class="flex items-center justify-between mb-3">
@@ -227,6 +256,12 @@ interface SiteEvent {
   metadata: Record<string, unknown> | null; created_at: string
   actor_name: string | null; actor_image: string | null; location_title: string | null
 }
+interface OperationsSummary {
+  openThreads: number
+  unreadThreads: number
+  reservations: number
+  experienceBookings: number
+}
 
 const requestEvent = useRequestEvent()
 
@@ -264,7 +299,14 @@ const { data, pending } = await useAsyncData(
       // legitimate state (mirrors home.get.ts's own `!site` branch, e.g. onboarding
       // in progress) and returns empty data rather than erroring.
       const context = await getDashboardContext(requestEvent, { requireSite: false })
-      if (!context.site) return { locations: [], credits: null, events: [] }
+      if (!context.site) {
+        return {
+          locations: [],
+          credits: null,
+          events: [],
+          operations: { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 },
+        }
+      }
 
       const db = cloudflareEnv(requestEvent).db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
@@ -275,7 +317,7 @@ const { data, pending } = await useAsyncData(
     }
 
     await dashboardState.refresh()
-    return $fetch<{ locations: Location[]; credits: Credits | null; events: SiteEvent[] }>('/api/dashboard/home')
+    return $fetch<{ locations: Location[]; credits: Credits | null; events: SiteEvent[]; operations: OperationsSummary }>('/api/dashboard/home')
   },
   // Reuse the SSR payload on first hydration (avoids a redundant duplicate fetch
   // on initial load), but force a fresh fetch on every subsequent client-side
@@ -308,6 +350,21 @@ const hasSiteServicesManager = computed(() => Boolean(siteCapabilities.value?.ma
 const siteDashboardPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}`)
 const locationsBase = computed(() => `${siteDashboardPath.value}/locations`)
 const events = computed(() => data.value?.events ?? [])
+const operations = computed<OperationsSummary>(() => data.value?.operations ?? {
+  openThreads: 0,
+  unreadThreads: 0,
+  reservations: 0,
+  experienceBookings: 0,
+})
+const hasReservations = computed(() => Boolean(siteCapabilities.value?.managers.some(manager => manager.id === 'reservations')))
+const hasExperiences = computed(() => Boolean(siteCapabilities.value?.managers.some(manager => manager.id === 'experiences')))
+const locationsNavLabel = computed(() => siteCapabilities.value?.locationVocabulary === 'office/service area' ? 'Offices / Service Areas' : 'Locations')
+const operationBreakdown = computed(() => {
+  const parts: string[] = []
+  if (hasReservations.value) parts.push(`${operations.value.reservations} reservations`)
+  if (hasExperiences.value) parts.push(`${operations.value.experienceBookings} bookings`)
+  return parts.length ? parts.join(' · ') : 'Contact messages'
+})
 
 // Getting-started task list — data source for both the checklist card and its
 // per-item ChowBotPromptTrigger auto-send prompts.

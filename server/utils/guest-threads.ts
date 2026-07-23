@@ -1,4 +1,5 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { listAccessibleLocationIds, type MemberAccessPrincipal } from '~/server/utils/member-access'
 import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
 
 export type GuestThreadSubmissionType = 'contact' | 'reservation' | 'experience_booking'
@@ -40,6 +41,7 @@ interface ContactThreadSource extends GuestThreadSourceBase {
   submission_type: 'contact'
   subject: string | null
   message: string
+  location_title: string | null
   experience_title: string | null
 }
 
@@ -118,7 +120,7 @@ export async function getGuestThreadSource(
       SELECT
         ct.organization_id,
         ct.site_id,
-        NULL AS location_id,
+        COALESCE(ct.location_id, e.location_id) AS location_id,
         ct.name AS guest_name,
         ct.email AS guest_email,
         NULL AS guest_phone,
@@ -126,10 +128,12 @@ export async function getGuestThreadSource(
         ct.status AS operational_status,
         ct.subject,
         ct.message,
+        bl.title AS location_title,
         e.title AS experience_title,
         'contact' AS submission_type
       FROM contact_submissions ct
       LEFT JOIN experiences e ON e.id = ct.experience_id
+      LEFT JOIN business_locations bl ON bl.id = COALESCE(ct.location_id, e.location_id)
       WHERE ct.id = ?
       LIMIT 1
     `, [submissionId])
@@ -159,7 +163,8 @@ export async function getGuestThreadSource(
     `, [submissionId])
   }
 
-  return await queryFirst<ExperienceThreadSource>(db, `
+  if (submissionType === 'experience_booking') {
+    return await queryFirst<ExperienceThreadSource>(db, `
     SELECT
       eb.organization_id,
       eb.site_id,
@@ -181,7 +186,10 @@ export async function getGuestThreadSource(
     LEFT JOIN experiences e ON e.id = eb.experience_id
     WHERE eb.id = ?
     LIMIT 1
-  `, [submissionId])
+    `, [submissionId])
+  }
+
+  return null
 }
 
 export async function getGuestThreadBySubmission(
@@ -215,10 +223,19 @@ export async function ensureGuestThread(
   submissionId: string,
 ): Promise<GuestThreadRow> {
   const existing = await getGuestThreadBySubmission(db, submissionType, submissionId)
-  if (existing) return existing
-
   const source = await getGuestThreadSource(db, submissionType, submissionId)
   if (!source) throw new Error('Submission not found')
+  if (existing) {
+    if ((existing.location_id ?? null) !== (source.location_id ?? null)) {
+      await execute(db, `
+        UPDATE guest_threads
+        SET location_id = ?, updated_at = ?
+        WHERE id = ?
+      `, [source.location_id, new Date().toISOString(), existing.id])
+      return { ...existing, location_id: source.location_id }
+    }
+    return existing
+  }
 
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
@@ -321,6 +338,7 @@ export async function listGuestThreads(
   siteId: string,
   opts: {
     locationId?: string | null
+    principal?: MemberAccessPrincipal | null
     search?: string | null
     type?: GuestThreadSubmissionType | null
     inboxStatus?: GuestThreadInboxStatus | null
@@ -331,8 +349,15 @@ export async function listGuestThreads(
   const params: Array<string | number> = [siteId]
   let where = 'gt.site_id = ?'
   if (opts.locationId) {
-    where += ' AND (gt.location_id = ? OR gt.location_id IS NULL)'
+    where += ' AND gt.location_id = ?'
     params.push(opts.locationId)
+  } else if (opts.principal) {
+    const accessibleLocationIds = await listAccessibleLocationIds(db, opts.principal)
+    if (accessibleLocationIds !== null) {
+      if (accessibleLocationIds.length === 0) return []
+      where += ` AND gt.location_id IN (${accessibleLocationIds.map(() => '?').join(', ')})`
+      params.push(...accessibleLocationIds)
+    }
   }
   if (opts.type) {
     where += ' AND gt.submission_type = ?'
