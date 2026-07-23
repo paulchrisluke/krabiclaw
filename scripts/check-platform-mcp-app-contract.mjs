@@ -12,7 +12,7 @@ if (baseUrlFlagIndex !== -1) {
 const BASE_URL = (_baseUrlArg ?? process.env.MCP_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 
 const MCP_URL = `${BASE_URL}/api/mcp/platform`
-const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2026-07-28'
+const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2025-06-18'
 
 let failed = false
 

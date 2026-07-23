@@ -1,4 +1,4 @@
-import { getHeader, setResponseStatus } from "h3";
+import { getHeader, getRequestURL, setResponseStatus } from "h3";
 import type { H3Event } from "h3";
 import {
   asMcpError,
@@ -7,8 +7,10 @@ import {
   mcpSuccess,
   MCP_ERROR,
   MCP_PROTOCOL_VERSION,
+  negotiatedMcpProtocolVersion,
   parseMcpToolCallArguments,
   readMcpRequest,
+  SUPPORTED_PROTOCOL_VERSIONS,
 } from "~/server/utils/mcp-protocol";
 import { catalogFingerprint, catalogMeta } from "~/server/utils/mcp-catalog";
 import { mcpHttpStatusForError, sendMcpErrorResponse, setMcpNotificationAccepted } from "~/server/utils/mcp-http-response";
@@ -40,6 +42,7 @@ import {
   getCloudflareWaitUntil,
   isMcpMutatingTool,
   mcpAuthRequiredResult,
+  mcpToolErrorResult,
   setMcpAuthChallenge,
 } from "~/server/utils/mcp-route-helpers";
 import { describeErrorForTelemetry, logMcpToolCallEvent } from "~/server/utils/mcp-telemetry";
@@ -208,17 +211,18 @@ export default defineEventHandler(async (event) => {
     // MCP protocol handshake — required before any tools/list or tools/call
     if (request.method === "initialize") {
       const user = await requireMcpUser(event, tenantAuthOptions);
+      const protocolVersion = negotiatedMcpProtocolVersion(request);
       logMcpEventDetached(event, cfEnv.DB, {
         userId: user.userId,
         requestId: request.id,
         method: request.method,
         status: "success",
         httpStatus: 200,
-        protocolVersion: typeof request.params?.protocolVersion === "string" ? request.params.protocolVersion : MCP_PROTOCOL_VERSION,
+        protocolVersion,
         oauthClientId: user.oauthClientId ?? null,
       });
       return mcpSuccess(request.id, {
-        protocolVersion: MCP_PROTOCOL_VERSION,
+        protocolVersion,
         capabilities: { tools: {}, resources: {}, prompts: {} },
         serverInfo: { name: "krabiclaw-mcp", version: "phase-5" },
         _meta: catalogMeta(MCP_PUBLIC_TOOLS),
@@ -361,7 +365,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
       const user = await requireMcpUser(event, tenantAuthOptions);
       const uri =
         typeof request.params?.uri === "string" ? request.params.uri : "";
-      const content = await readMcpAppResource(uri, baseUrl);
+      const content = await readMcpAppResource(uri, getRequestURL(event).origin);
       logMcpEventDetached(event, cfEnv.DB, {
         userId: user.userId,
         requestId: request.id,
@@ -435,12 +439,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
         oauthClientId: user.oauthClientId ?? null,
       });
       return mcpSuccess(request.id, {
-        supportedVersions: [
-          "2026-07-28",
-          "2025-11-25",
-          "2025-03-26",
-          "2024-11-05",
-        ],
+        supportedVersions: SUPPORTED_PROTOCOL_VERSIONS,
         capabilities: { tools: {} },
         serverInfo: {
           name: "krabiclaw-mcp",
@@ -755,7 +754,8 @@ Common workflows: update menus and items, create and publish site posts, triage 
     throw mcpProtocolError(MCP_ERROR.methodNotFound, `Unsupported MCP method: ${request.method}`, undefined, "protocol");
   } catch (error) {
     const mcpError = asMcpError(error);
-    const mappedStatus = mcpHttpStatusForError(mcpError);
+    const toolCallPermissionError = requestMethod === "tools/call" && mcpError.kind === "forbidden";
+    const mappedStatus = toolCallPermissionError ? 200 : mcpHttpStatusForError(mcpError);
     console.error("[MCP_ERROR]", JSON.stringify({
       status: mappedStatus,
       code: mcpError.code,
@@ -779,6 +779,9 @@ Common workflows: update menus and items, create and publish site posts, triage 
         return mcpSuccess(requestId, mcpAuthRequiredResult({ challenge: authChallenge, message: TENANT_AUTH_REQUIRED_TEXT }));
       }
       return sendMcpErrorResponse(event, { id: requestId, error: mcpError, authChallenge });
+    }
+    if (toolCallPermissionError) {
+      return mcpSuccess(requestId, mcpToolErrorResult(mcpError.message));
     }
     return sendMcpErrorResponse(event, { id: requestId, error: mcpError });
   }

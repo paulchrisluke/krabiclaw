@@ -3,7 +3,7 @@ import { devLoginHeaders, isDeployedWorkerTarget } from './test-env'
 import { loginAs } from './helpers/auth'
 import { MCP_FREE_USER_ID, MCP_GROWTH_USER_ID, MCP_MANAGED_USER_ID } from './helpers/plan-fixtures'
 
-const MCP_VERSION = '2026-07-28'
+const MCP_VERSION = '2025-06-18'
 // Fixed fixture sites seeded by generate-demo-seed.ts with the matching plan already
 // active. Entitlement checks are site-scoped (hasSiteEntitlement), so a plan-gated tool
 // call needs the org's actual paid site, not a brand-new site from ensureSite() (which
@@ -153,6 +153,92 @@ async function loginAsFreshMcpUser(request: APIRequestContext, baseURL: string) 
 }
 
 test.describe('stateless MCP server', () => {
+  test('ChatGPT session can launch the video upload widget without transport failures', async ({ request, baseURL }) => {
+    await loginAsFreshMcpUser(request, baseURL!)
+    const siteId = await ensureSite(request, baseURL!)
+
+    const initialize = await mcpRequest(request, baseURL!, {
+      method: 'initialize',
+      params: { protocolVersion: MCP_VERSION, capabilities: {}, clientInfo: { name: 'openai-mcp', version: '1.0.0' } },
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(initialize.status()).toBe(200)
+    const initializeBody = await initialize.json() as { result?: { protocolVersion?: string; capabilities?: { tools?: unknown; resources?: unknown } } }
+    expect(initializeBody.result?.protocolVersion).toBe(MCP_VERSION)
+    expect(initializeBody.result?.capabilities?.tools).toBeDefined()
+    expect(initializeBody.result?.capabilities?.resources).toBeDefined()
+
+    const initialized = await mcpRequest(request, baseURL!, {
+      method: 'notifications/initialized',
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(initialized.status()).toBe(202)
+
+    const tools = await mcpRequest(request, baseURL!, {
+      method: 'tools/list',
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(tools.status()).toBe(200)
+    const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, _meta?: Record<string, unknown> }> } }
+    const openVideoTool = toolsBody.result.tools.find(tool => tool.name === 'open_video_upload')
+    expect(openVideoTool).toBeTruthy()
+    expect(openVideoTool?._meta?.['openai/widgetAccessible']).toBe(true)
+    expect(openVideoTool?._meta?.['openai/outputTemplate']).toBe('ui://widget/video-upload@v1.html')
+
+    const launchVideo = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'open_video_upload',
+      args: { site_id: siteId, category: 'other' },
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(launchVideo.status()).toBe(200)
+    const launchVideoBody = await launchVideo.json() as {
+      result?: {
+        structuredContent?: Record<string, unknown>
+        _meta?: Record<string, unknown>
+      }
+    }
+    expect(launchVideoBody.result?.structuredContent).toEqual({
+      launched: true,
+      resourceUri: 'ui://widget/video-upload@v1.html',
+    })
+    expect(launchVideoBody.result?.structuredContent).not.toHaveProperty('context')
+    expect((launchVideoBody.result?._meta?.['krabiclaw/privateMeta'] as { context?: { site_id?: string; category?: string | null } } | undefined)?.context).toEqual({
+      site_id: siteId,
+      category: 'other',
+    })
+
+    const resource = await mcpRequest(request, baseURL!, {
+      method: 'resources/read',
+      params: { uri: 'ui://widget/video-upload@v1.html' },
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(resource.status()).toBe(200)
+    const resourceBody = await resource.json() as {
+      result: {
+        contents: Array<{
+          text: string
+          _meta?: {
+            ui?: {
+              csp?: { resourceDomains?: string[]; connectDomains?: string[] }
+              domain?: string
+            }
+            'openai/widgetDomain'?: string
+            'openai/widgetCSP'?: { resource_domains?: string[]; connect_domains?: string[] }
+          }
+        }>
+      }
+    }
+    const content = resourceBody.result.contents[0]!
+    const baseOrigin = new URL(baseURL!).origin
+    expect(content._meta?.ui?.csp?.resourceDomains).toContain(baseOrigin)
+    expect(content._meta?.ui?.csp?.connectDomains).toContain(baseOrigin)
+    expect(content._meta?.['openai/widgetDomain']).toBe(baseOrigin)
+    expect(content._meta?.['openai/widgetCSP']?.resource_domains).toContain(baseOrigin)
+    expect(content._meta?.['openai/widgetCSP']?.connect_domains).toContain(baseOrigin)
+    expect(content.text).toContain('/mcp-assets/video-upload-widget.v1.js')
+  })
+
   test('ChatGPT sequence and video widget produce an active, public, assignable asset', async ({ page, request, baseURL }) => {
     // The widget's downloadUrl points at this same app's own /api/mcp-test/tiny-video
     // fixture, so the server-side upload_user_media executor's fetch(downloadUrl) is a
@@ -175,7 +261,9 @@ test.describe('stateless MCP server', () => {
       extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
     })
     expect(initialize.status()).toBe(200)
-    expect((await initialize.json() as { result?: { capabilities?: { tools?: unknown } } }).result?.capabilities?.tools).toBeDefined()
+    const initializeBody = await initialize.json() as { result?: { protocolVersion?: string; capabilities?: { tools?: unknown } } }
+    expect(initializeBody.result?.protocolVersion).toBe(MCP_VERSION)
+    expect(initializeBody.result?.capabilities?.tools).toBeDefined()
 
     const initialized = await mcpRequest(request, baseURL!, {
       method: 'notifications/initialized',
@@ -192,6 +280,29 @@ test.describe('stateless MCP server', () => {
     expect(toolsBody.result.tools.filter(tool => tool.name.startsWith('open_') && tool.name.includes('upload')).map(tool => tool.name)).toEqual(['open_video_upload'])
     const openVideoTool = toolsBody.result.tools.find(tool => tool.name === 'open_video_upload')
     expect(openVideoTool?._meta?.['openai/widgetAccessible']).toBe(true)
+
+    const launchVideo = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'open_video_upload',
+      args: { site_id: siteId, category: 'other' },
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(launchVideo.status()).toBe(200)
+    const launchVideoBody = await launchVideo.json() as {
+      result?: {
+        structuredContent?: Record<string, unknown>
+        _meta?: Record<string, unknown>
+      }
+    }
+    expect(launchVideoBody.result?.structuredContent).toEqual({
+      launched: true,
+      resourceUri: 'ui://widget/video-upload@v1.html',
+    })
+    expect(launchVideoBody.result?.structuredContent).not.toHaveProperty('context')
+    expect((launchVideoBody.result?._meta?.['krabiclaw/privateMeta'] as { context?: { site_id?: string; category?: string | null } } | undefined)?.context).toEqual({
+      site_id: siteId,
+      category: 'other',
+    })
 
     const currentUser = await mcpRequest(request, baseURL!, {
       method: 'tools/call', toolName: 'get_current_user', args: {},
@@ -210,8 +321,27 @@ test.describe('stateless MCP server', () => {
       params: { uri: resourcesBody.result.resources[0]!.uri },
     })
     expect(resource.status()).toBe(200)
-    const resourceBody = await resource.json() as { result: { contents: Array<{ text: string }> } }
+    const resourceBody = await resource.json() as {
+      result: {
+        contents: Array<{
+          text: string
+          _meta?: {
+            ui?: {
+              csp?: { resourceDomains?: string[]; connectDomains?: string[] }
+              domain?: string
+            }
+            'openai/widgetCSP'?: { resource_domains?: string[]; connect_domains?: string[] }
+          }
+        }>
+      }
+    }
     const html = resourceBody.result.contents[0]!.text
+    const resourceMeta = resourceBody.result.contents[0]!._meta
+    const baseOrigin = new URL(baseURL!).origin
+    expect(resourceMeta?.ui?.csp?.resourceDomains).toContain(baseOrigin)
+    expect(resourceMeta?.ui?.csp?.connectDomains).toContain(baseOrigin)
+    expect(resourceMeta?.['openai/widgetCSP']?.resource_domains).toContain(baseOrigin)
+    expect(resourceMeta?.['openai/widgetCSP']?.connect_domains).toContain(baseOrigin)
     const scriptSrc = html.match(/<script[^>]+src="([^"]+)"/)?.[1]
     expect(scriptSrc).toBeTruthy()
     const script = await request.get(scriptSrc!)

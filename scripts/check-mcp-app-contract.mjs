@@ -10,7 +10,7 @@ if (_baseUrlArg !== undefined && !_baseUrlArg) {
 const BASE_URL = (_baseUrlArg ?? process.env.MCP_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 
 const MCP_URL = `${BASE_URL}/api/mcp`
-const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2026-07-28'
+const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2025-06-18'
 
 let failed = false
 
@@ -169,7 +169,9 @@ async function main() {
     const content = read.body?.result?.contents?.[0]
     if (content?.mimeType === 'text/html;profile=mcp-app') pass(`${resource.uri} read content uses MCP Apps MIME type`)
     else fail(`${resource.uri} read content has wrong MIME type`, content)
-    if (content?._meta?.ui?.csp?.resourceDomains?.length) pass(`${resource.uri} declares standard CSP metadata`)
+    if (content?._meta?.ui?.csp?.resourceDomains?.length && content?._meta?.ui?.csp?.connectDomains?.length) {
+      pass(`${resource.uri} declares standard CSP metadata`)
+    }
     else fail(`${resource.uri} missing standard CSP metadata`, content?._meta)
     if (content?._meta?.ui?.domain) pass(`${resource.uri} declares ui.domain`)
     else fail(`${resource.uri} missing ui.domain`, content?._meta)
@@ -177,6 +179,12 @@ async function main() {
       pass(`${resource.uri} keeps openai/widgetDomain aligned with ui.domain`)
     } else {
       fail(`${resource.uri} widget domain metadata mismatch`, content?._meta)
+    }
+    const widgetCsp = content?._meta?.['openai/widgetCSP']
+    if (widgetCsp?.resource_domains?.length && widgetCsp?.connect_domains?.length) {
+      pass(`${resource.uri} declares OpenAI widget CSP metadata`)
+    } else {
+      fail(`${resource.uri} missing OpenAI widget CSP metadata`, content?._meta)
     }
 
     const baseOrigin = new URL(BASE_URL).origin

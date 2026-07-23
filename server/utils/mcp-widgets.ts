@@ -30,10 +30,17 @@ export interface McpAppResourceContent {
   text: string;
   _meta: {
     ui: {
-      csp: { resourceDomains: string[] };
+      csp: {
+        resourceDomains: string[];
+        connectDomains: string[];
+      };
       domain: string;
     };
     "openai/widgetDomain": string;
+    "openai/widgetCSP": {
+      resource_domains: string[];
+      connect_domains: string[];
+    };
   };
 }
 
@@ -77,10 +84,17 @@ export async function readMcpAppResource(
     text,
     _meta: {
       ui: {
-        csp: { resourceDomains: [origin] },
+        csp: {
+          resourceDomains: [origin],
+          connectDomains: [origin],
+        },
         domain: origin,
       },
       "openai/widgetDomain": origin,
+      "openai/widgetCSP": {
+        resource_domains: [origin],
+        connect_domains: [origin],
+      },
     },
   };
 }

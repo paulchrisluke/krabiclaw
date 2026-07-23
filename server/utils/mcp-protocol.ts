@@ -1,7 +1,8 @@
 import { getHeader, type H3Event } from 'h3'
 
-export const MCP_PROTOCOL_VERSION = '2025-11-25'
-const SUPPORTED_PROTOCOL_VERSIONS = new Set(['2026-07-28', '2025-11-25', '2025-03-26', '2024-11-05'])
+export const MCP_PROTOCOL_VERSION = '2025-06-18'
+export const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'] as const
+const SUPPORTED_PROTOCOL_VERSION_SET = new Set<string>(SUPPORTED_PROTOCOL_VERSIONS)
 
 export type JsonRpcId = string | number | null
 
@@ -65,7 +66,7 @@ export function readMcpRequest(event: H3Event, body: unknown): McpRpcRequest {
   if (!version && !isNotification) {
     throw mcpProtocolError(MCP_ERROR.invalidRequest, 'Missing MCP protocol version.')
   }
-  if (version && !SUPPORTED_PROTOCOL_VERSIONS.has(version)) {
+  if (version && !SUPPORTED_PROTOCOL_VERSION_SET.has(version)) {
     throw mcpProtocolError(MCP_ERROR.invalidRequest, `Unsupported MCP protocol version: ${version}`)
   }
 
@@ -92,6 +93,11 @@ export function readMcpRequest(event: H3Event, body: unknown): McpRpcRequest {
     'io.modelcontextprotocol/version': version,
   }
   return request
+}
+
+export function negotiatedMcpProtocolVersion(request: McpRpcRequest) {
+  const version = metaString(request, 'io.modelcontextprotocol/version')
+  return version && SUPPORTED_PROTOCOL_VERSION_SET.has(version) ? version : MCP_PROTOCOL_VERSION
 }
 
 export function mcpSuccess(id: JsonRpcId | undefined, result: unknown) {

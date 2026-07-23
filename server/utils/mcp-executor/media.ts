@@ -107,11 +107,13 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         {
           launched: true,
           resourceUri: VIDEO_UPLOAD_WIDGET_RESOURCE_URI,
-          context: { site_id: site.siteId, category },
         },
         toolName === "open_media_upload"
           ? "Media upload compatibility widget launched. For images, upload_user_media remains the canonical path."
           : "Video upload widget launched.",
+        {
+          context: { site_id: site.siteId, category },
+        },
       );
     }
     case "update_media_asset": {
