@@ -40,7 +40,9 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
       reviews: `${locationBase}/reviews`,
       photos: `${locationBase}/photos`,
       qa: `${locationBase}/qa`,
-      inbox: `${locationBase}/inbox`,
+      inbox: `${siteBase}/inbox`,
+      siteInbox: `${siteBase}/inbox`,
+      locationInbox: `${locationBase}/inbox`,
       reservations: `${locationBase}/reservations`,
       // Orders is site-scoped (pages/dashboard/[orgSlug]/sites/[siteSlug]/orders.vue),
       // not per-location — do not point this at locationBase.

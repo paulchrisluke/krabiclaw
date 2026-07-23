@@ -1,5 +1,6 @@
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { isOrganizationWideRole } from '~/server/utils/member-access'
+import { getGuestThreadOperationSummary } from '~/server/utils/guest-threads'
 
 export interface DashboardHomeLocation {
   id: string
@@ -37,6 +38,12 @@ export interface DashboardHomeData {
   locations: DashboardHomeLocation[]
   credits: DashboardHomeCredits | null
   events: DashboardHomeEvent[]
+  operations: {
+    openThreads: number
+    unreadThreads: number
+    reservations: number
+    experienceBookings: number
+  }
 }
 
 function safeJsonParse(value: string): unknown {
@@ -73,7 +80,7 @@ export async function getDashboardHomeData(
           AND (mas.location_id IS NULL OR mas.location_id = e.location_id)
       )`
     : ''
-  const [locations, credits, events] = await Promise.all([
+  const [locations, credits, events, operations] = await Promise.all([
     queryAll<{
       id: string; slug: string; title: string; city: string | null
       rating: number | null; review_count: number | null
@@ -116,7 +123,15 @@ export async function getDashboardHomeData(
       ORDER BY e.created_at DESC
       LIMIT 15
     `, scoped && principal ? [organizationId, siteId, principal.memberId] : [organizationId, siteId]),
+
+    getGuestThreadOperationSummary(db, siteId, {
+      principal: scoped && principal
+        ? { memberId: principal.memberId, role: principal.role, organizationId, siteId }
+        : null,
+    }),
   ])
+
+  const operationCounts = operations ?? { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
 
   return {
     locations: locations.map(l => ({
@@ -128,5 +143,11 @@ export async function getDashboardHomeData(
       ...e,
       metadata: e.metadata ? safeJsonParse(e.metadata) : null,
     })),
+    operations: {
+      openThreads: operationCounts.openThreads ?? 0,
+      unreadThreads: operationCounts.unreadThreads ?? 0,
+      reservations: operationCounts.reservations ?? 0,
+      experienceBookings: operationCounts.experienceBookings ?? 0,
+    },
   }
 }

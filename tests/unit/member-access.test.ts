@@ -140,6 +140,8 @@ test('the audited /api/dashboard/** boundary is deny-by-default for scoped roles
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/locations/loc-1/integrations/google-business/auth'), true)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/locations/loc-1/integrations/google-business/unsafe'), false)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/editor/media'), true)
+  assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/sites/site-1/guest-threads'), true)
+  assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/sites/site-1/guest-threads/thread-1/reply'), true)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/ai/generate-image'), true)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/ai/credits'), true)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/onboarding/checklist?siteId=site-1'), true)

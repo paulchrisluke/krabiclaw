@@ -97,7 +97,7 @@ test.describe('reply threading', () => {
       data: {
         name: 'Reply Reservation Test',
         email: guestEmail,
-        phone: '+15555550301',
+        phone: '+14155552671',
         date: futureDate,
         time: '19:00',
         guests: '2',
@@ -186,7 +186,7 @@ test.describe('reply threading', () => {
   test('whatsapp guest reply is matched back to the reservation by phone', async ({ request }) => {
     const futureDate = new Date(Date.now() + 41 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!
     const since = new Date().toISOString()
-    const guestPhone = '+15555550302'
+    const guestPhone = '+14155552672'
 
     const createRes = await request.post(`${tenantBaseURL}/api/public/sites/${demoSiteId}/reservations`, {
       data: {
@@ -242,7 +242,7 @@ test.describe('reply threading', () => {
       data: {
         name: 'Owner Reply Flow Test',
         email: guestEmail,
-        phone: '+15555550303',
+        phone: '+14155552673',
         date: futureDate,
         time: '19:00',
         guests: '2',
@@ -259,7 +259,7 @@ test.describe('reply threading', () => {
     const login = await page.goto(devLoginUrl(baseURL!, 'user-demo'), { waitUntil: 'load' })
     expect(login?.status()).toBeLessThan(400)
 
-    const inboxUrl = `${baseURL}/dashboard/${demoOrgSlug}/sites/${demoSiteSlug}/${demoLocationSlug}/inbox?tab=reservations&reply=${createBody.id}`
+    const inboxUrl = `${baseURL}/dashboard/${demoOrgSlug}/sites/${demoSiteSlug}/locations/${demoLocationSlug}/inbox`
     const inboxResponse = await page.goto(inboxUrl, { waitUntil: 'load' })
     expect(inboxResponse?.status()).toBeLessThan(400)
 

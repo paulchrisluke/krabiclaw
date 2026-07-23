@@ -342,13 +342,25 @@ export async function updateNotificationsSettings(
   return await getNotificationsSettings(db, organizationId, siteId)
 }
 
-export async function listContactSubmissions(db: D1Database, siteId: string) {
+export async function listContactSubmissions(
+  db: D1Database,
+  siteId: string,
+  opts: { locationIds?: string[] | null } = {},
+) {
+  const params: string[] = [siteId]
+  let locationClause = ''
+  if (opts.locationIds) {
+    if (opts.locationIds.length === 0) return []
+    locationClause = `AND location_id IN (${opts.locationIds.map(() => '?').join(', ')})`
+    params.push(...opts.locationIds)
+  }
   return await queryAll<Record<string, unknown>>(db, `
     SELECT * FROM contact_submissions
     WHERE site_id = ?
+      ${locationClause}
     ORDER BY created_at DESC
     LIMIT 200
-  `, [siteId]);
+  `, params);
 }
 
 export async function updateContactSubmissionStatus(

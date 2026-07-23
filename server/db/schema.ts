@@ -259,10 +259,12 @@ export const contact_submissions = sqliteTable("contact_submissions", {
 	consent_at: text(),
 	status: text().default("new").notNull(),
 	ip_hash: text(),
+	location_id: text().references(() => business_locations.id, { onDelete: "set null" }),
 	experience_id: text().references(() => experiences.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	index("contact_submissions_org_site_idx").on(table.organization_id, table.site_id),
+	index("contact_submissions_location_idx").on(table.location_id, table.created_at),
 ]);
 
 export const guest_threads = sqliteTable("guest_threads", {

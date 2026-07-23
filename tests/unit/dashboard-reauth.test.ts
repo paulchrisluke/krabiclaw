@@ -4,6 +4,8 @@ import assert from 'node:assert/strict'
 import { isWhatsAppInboxDeepLinkPath } from '../../utils/dashboard-reauth.ts'
 
 test('isWhatsAppInboxDeepLinkPath matches the WhatsApp-notification guest-thread inbox route', () => {
+  assert.equal(isWhatsAppInboxDeepLinkPath('/dashboard/pottery-house/sites/main/inbox'), true)
+  assert.equal(isWhatsAppInboxDeepLinkPath('/dashboard/pottery-house/sites/main/inbox/'), true)
   assert.equal(isWhatsAppInboxDeepLinkPath('/dashboard/pottery-house/sites/main/locations/downtown/inbox'), true)
   assert.equal(isWhatsAppInboxDeepLinkPath('/dashboard/pottery-house/sites/main/locations/downtown/inbox/'), true)
 })

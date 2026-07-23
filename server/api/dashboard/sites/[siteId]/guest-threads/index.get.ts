@@ -1,6 +1,6 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
-import { listGuestThreads, type GuestThreadInboxStatus, type GuestThreadSubmissionType } from '~/server/utils/guest-threads'
+import { getGuestThreadOperationSummary, listGuestThreads, type GuestThreadInboxStatus, type GuestThreadSubmissionType } from '~/server/utils/guest-threads'
 import { assertMemberScope } from '~/server/utils/member-access'
 
 export default defineEventHandler(async (event) => {
@@ -10,7 +10,9 @@ export default defineEventHandler(async (event) => {
   const { db, site } = await requireSiteAccess(event, siteId, 'context')
   const query = getQuery(event)
   const locationId = typeof query.location_id === 'string' && query.location_id.trim() ? query.location_id.trim() : null
-  await assertMemberScope(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, locationId })
+  if (locationId) {
+    await assertMemberScope(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, locationId })
+  }
   const search = typeof query.search === 'string' ? query.search : null
   const type = query.type === 'contact' || query.type === 'reservation' || query.type === 'experience_booking'
     ? query.type as GuestThreadSubmissionType
@@ -20,13 +22,18 @@ export default defineEventHandler(async (event) => {
     : null
   const unreadOnly = query.unread === '1' || query.unread === 'true'
 
-  const threads = await listGuestThreads(db, siteId, {
-    locationId,
-    search,
-    type,
-    inboxStatus,
-    unreadOnly,
-  })
+  const principal = { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
+  const [threads, summary] = await Promise.all([
+    listGuestThreads(db, siteId, {
+      locationId,
+      principal,
+      search,
+      type,
+      inboxStatus,
+      unreadOnly,
+    }),
+    getGuestThreadOperationSummary(db, siteId, { locationId, principal }),
+  ])
 
-  return jsonResponse({ threads })
+  return jsonResponse({ threads, summary })
 })
