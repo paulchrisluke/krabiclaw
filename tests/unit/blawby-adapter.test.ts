@@ -5,6 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
+const approvedDonationUrl = "https://donate.stripe.com/bIY29UfAUec37GocMM";
+const legacyDonationHost = "app.blawby.com";
+
 function runAdapter(source: string) {
   const dir = mkdtempSync(join(tmpdir(), "blawby-adapter-"));
   const sourcePath = join(dir, "northcarolinalegalservices.ts");
@@ -39,7 +42,8 @@ export const northcarolinalegalservices: ISeedTenant = {
     disclaimer: 'Informational only.',
     fonts: ['https://fonts.googleapis.com/css2?family=Marcellus&family=Poppins:wght@400;600&display=swap'],
     calendlyUrl: 'https://calendly.com/old-link',
-    paymentBaseUrl: 'https://app.blawby.com/northcarolinalegalservices/pay',
+    paymentBaseUrl: 'https://payments.example.test/northcarolinalegalservices/pay',
+    donationUrl: 'https://donate.stripe.com/bIY29UfAUec37GocMM',
     googleTagManagerId: 'GTM-MDHRQP5',
     customHeadCode: '<script>custom()</script>',
     features: [{ title: 'Mission', desc: 'Access to justice.', icon: 'mission.svg' }],
@@ -173,8 +177,10 @@ test("NCLS Blawby adapter normalizes source data into cutover artifacts", () => 
     payload.tenantPages.find(
       (page: { path: string }) => page.path === "/donate",
     )?.cta_url,
-    "https://app.blawby.com/northcarolinalegalservices/pay/donate",
+    approvedDonationUrl,
   );
+  assert.equal(payload.donation.external_url, approvedDonationUrl);
+  assert.doesNotMatch(JSON.stringify(payload), new RegExp(legacyDonationHost));
   assert.deepEqual(
     payload.tenantPages
       .find((page: { path: string }) => page.path === "/")
@@ -314,6 +320,65 @@ test("Blawby artifact verifier passes a complete import manifest without a deplo
     report.checks.some(
       (check: { label: string }) =>
         check.label === "Import manifest contains media inventory",
+    ),
+  );
+  assert.ok(
+    report.checks.some(
+      (check: { label: string }) =>
+        check.label === "Donation CTA uses the approved Stripe destination",
+    ),
+  );
+});
+
+test("Blawby artifact verifier rejects the legacy Blawby donation host", () => {
+  const payload = runAdapter(sourceFixture);
+  payload.articles = payload.expected_article_slugs.map((slug: string) => ({
+    ...payload.articles[0],
+    slug,
+    canonical_url: `/article/${slug}`,
+  }));
+  payload.redirects = [
+    {
+      from_path:
+        "/article/divorce-and-children-in-north-carolina-what-to-expect-and-how-to-prepare",
+    },
+    {
+      from_path:
+        "/article/writing-your-own-will-how-it-works-in-north-carolina",
+    },
+  ];
+  for (const file of payload.mediaInventory.files)
+    file.upload_status = "verified";
+  payload.tenantPages.find(
+    (page: { path: string }) => page.path === "/donate",
+  ).cta_url = "https://app.blawby.com/northcarolinalegalservices/pay/donate";
+
+  const dir = mkdtempSync(join(tmpdir(), "blawby-verify-legacy-"));
+  const manifestPath = join(dir, "blawby-import.json");
+  const outPath = join(dir, "evidence.json");
+  writeFileSync(manifestPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "scripts/verify-blawby-site.mjs",
+      "--import-manifest",
+      manifestPath,
+      "--out",
+      outPath,
+    ],
+    { cwd: process.cwd(), encoding: "utf8" },
+  );
+  const report = JSON.parse(readFileSync(outPath, "utf8"));
+  rmSync(dir, { recursive: true, force: true });
+
+  assert.notEqual(result.status, 0);
+  assert.equal(report.ok, false);
+  assert.ok(
+    report.checks.some(
+      (check: { label: string; ok: boolean }) =>
+        check.label === "Canonical NCLS import data does not reference app.blawby.com" &&
+        check.ok === false,
     ),
   );
 });

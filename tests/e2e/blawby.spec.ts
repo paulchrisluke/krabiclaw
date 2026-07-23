@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test'
 import { blawbyBaseURL, blawbyExtraHeaders, collectPageErrors, expectHealthyPage, setupTenantHeaders } from './helpers'
 
+const approvedDonationUrl = 'https://donate.stripe.com/bIY29UfAUec37GocMM'
+const legacyDonationHost = 'app.blawby.com'
+
 async function waitForHydration(page: import('@playwright/test').Page) {
   await page.locator('.blawby-shell[data-hydrated="true"]').waitFor()
 }
@@ -57,6 +60,62 @@ test.describe('Blawby NCLS public site', () => {
       expect(response.headers().location).toBe(to)
     })
   }
+
+  test('donation page uses the approved Stripe destination for buttons and schema', async ({ page, context }) => {
+    await context.route(`${approvedDonationUrl}**`, route => route.fulfill({ status: 204, body: '' }))
+    await page.goto(`${blawbyBaseURL}/donate`, { waitUntil: 'load' })
+    await waitForHydration(page)
+
+    expect(page.url()).toBe(`${blawbyBaseURL}/donate`)
+    const donationLinks = page.getByRole('link', { name: /^Donate / })
+    await expect(donationLinks).toHaveCount(2)
+    await expect.poll(() => donationLinks.evaluateAll(links => links.map(link => (link as HTMLAnchorElement).href))).toEqual([
+      approvedDonationUrl,
+      approvedDonationUrl,
+    ])
+    await expect(page.locator('body')).not.toContainText(legacyDonationHost)
+
+    const jsonLd = await page.locator('script[type="application/ld+json"]').allTextContents()
+    const schemaText = JSON.stringify(jsonLd.map((entry) => JSON.parse(entry)))
+    expect(schemaText).toContain(`"target":"${approvedDonationUrl}"`)
+    expect(schemaText).not.toContain(legacyDonationHost)
+
+    const clickedButton = donationLinks.first()
+    await clickedButton.evaluate((link) => {
+      link.addEventListener('click', (event) => {
+        const browserWindow = window as Window & {
+          __nclsDonationClick?: {
+            defaultPrevented: boolean
+            href: string
+            rel: string
+            target: string
+          }
+        }
+        browserWindow.__nclsDonationClick = {
+          defaultPrevented: event.defaultPrevented,
+          href: (link as HTMLAnchorElement).href,
+          rel: (link as HTMLAnchorElement).rel,
+          target: (link as HTMLAnchorElement).target,
+        }
+      }, { once: true, capture: true })
+    })
+    await clickedButton.click()
+    await expect.poll(() => page.evaluate(() => {
+      return (window as Window & {
+        __nclsDonationClick?: {
+          defaultPrevented: boolean
+          href: string
+          rel: string
+          target: string
+        }
+      }).__nclsDonationClick ?? null
+    })).toEqual({
+      defaultPrevented: false,
+      href: approvedDonationUrl,
+      rel: 'noopener noreferrer',
+      target: '_blank',
+    })
+  })
 
   test('services payload excludes full bodies and unrelated pages', async ({ request }) => {
     const response = await request.get(`${blawbyBaseURL}/api/public/sites/site-ncls-blawby/blawby/route`, {
@@ -193,7 +252,7 @@ test.describe('Blawby NCLS public site', () => {
     expect(mediaUrls.length).toBeGreaterThan(0)
     for (const url of mediaUrls) {
       expect(approved.has(new URL(url).hostname)).toBe(true)
-      const mediaResponse = await request.get(url)
+      const mediaResponse = await request.get(url, { headers: { Range: 'bytes=0-0' } })
       expect(mediaResponse.status(), url).toBeLessThan(400)
     }
   })
