@@ -55,13 +55,13 @@ test('DASHBOARD_DESTINATIONS has no untested entries (fails loudly if a destinat
 })
 
 test('buildDashboardUrl rejects organizationId fallback for slug-routed dashboard destinations', () => {
-  assert.throws(
-    () => buildDashboardUrl(
-      { env: { NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.com' }, organizationId: 'org_123', siteSlug: 'site-a' },
-      'site.domains',
-    ),
-    /requires explicit organizationSlug context/,
-  )
+  for (const destination of Object.keys(DASHBOARD_DESTINATIONS) as DashboardDestination[]) {
+    assert.throws(
+      () => buildDashboardUrl({ ...orgContext, organizationSlug: undefined }, destination),
+      /requires explicit organizationSlug context/,
+      `"${destination}" allowed an organizationId fallback URL`,
+    )
+  }
 })
 
 test('buildDashboardUrl falls back to the default platform domain when env is unset', () => {
