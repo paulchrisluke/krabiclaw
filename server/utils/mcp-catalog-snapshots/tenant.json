@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:d6dbcdf94870c018664261bbdc5abd8f7dccca1cf9f0250fde7b645505610b09",
+  "fingerprint": "sha256:be0d9a31be4c0f29d42a093e68cbaa104d1a546ccda4c37a82cc55aaa8fa6b1a",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -8256,6 +8256,7 @@
         "type": "object"
       },
       "outputSchema": {
+        "additionalProperties": false,
         "properties": {
           "launched": {
             "type": "boolean"
