@@ -73,19 +73,29 @@ const config = envelope.result
 config.tools ||= {}
 config.triggers ||= {}
 
-const analyticsPurposeId = 'kc_analytics'
 config.consent ||= {}
 config.consent.enabled = false
 config.historyChange = true
 
-const pageLocationRegex = hostnames => `^https://(${hostnames.map(value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})/`
-const scopeActions = (actions, triggerKey) => Object.fromEntries(Object.entries(
+const CONSENT_BLOCK_TRIGGER = 'ga-consent-not-accepted'
+const hostnameRegex = hostnames => `^(${hostnames.map(value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})$`
+const firingTriggersForAction = action => {
+  if (action.actionType === 'pageview') return ['Pageview']
+  if (action.actionType === 'event') return ['AllTracks']
+  return action.firingTriggers?.length ? action.firingTriggers : ['Pageview']
+}
+const scopeActions = (actions, blockingTriggers) => Object.fromEntries(Object.entries(
   actions && Object.keys(actions).length
     ? actions
     : { AllPageviews: { actionType: 'pageview', firingTriggers: [], enabled: true } },
 ).map(([key, action]) => [
   key,
-  { ...action, firingTriggers: [triggerKey], enabled: action.enabled !== false },
+  {
+    ...action,
+    firingTriggers: firingTriggersForAction(action),
+    blockingTriggers,
+    enabled: action.enabled !== false,
+  },
 ]))
 const ga4ToolTemplate = () => Object.values(config.tools).find(tool =>
   tool?.component === 'google-analytics_v4' && tool?.defaultFields
@@ -100,15 +110,20 @@ const upsertGaTool = (key, { name, measurementId, triggerKey, existing }) => {
     enabled: true,
     settings: { ...(template?.settings || {}), ...(existing?.settings || {}), tid: measurementId },
     defaultPurpose: undefined,
-    actions: scopeActions(existing?.actions || template?.actions, triggerKey),
+    actions: scopeActions(existing?.actions || template?.actions, [triggerKey, CONSENT_BLOCK_TRIGGER]),
   }
+}
+
+config.triggers[CONSENT_BLOCK_TRIGGER] = {
+  name: 'Analytics consent not accepted',
+  loadRules: [{ match: '{{ system.cookies.kc_consent }}', op: 'NOT_MATCH_REGEX', value: '^accepted$' }],
 }
 
 if (platformMeasurementId && platformHostnames.length) {
   const triggerKey = 'ga-platform'
   config.triggers[triggerKey] = {
-    name: 'Platform hosts',
-    loadRules: [{ match: '{{ system.page.url }}', op: 'MATCH_REGEX', value: pageLocationRegex(platformHostnames) }],
+    name: 'Block non-platform hosts',
+    loadRules: [{ match: '{{ system.page.url.hostname }}', op: 'NOT_MATCH_REGEX', value: hostnameRegex(platformHostnames) }],
   }
   const existingEntry = Object.entries(config.tools).find(([, tool]) =>
     tool?.component === 'google-analytics_v4' && tool.settings?.tid === platformMeasurementId
@@ -133,8 +148,8 @@ for (const row of rows) {
   const key = `ga-tenant-${row.site_id}`
   const hostnames = String(row.hostnames).split('|').map(value => value.toLowerCase()).sort()
   config.triggers[key] = {
-    name: `Tenant hosts (${row.site_id})`,
-    loadRules: [{ match: '{{ system.page.url }}', op: 'MATCH_REGEX', value: pageLocationRegex(hostnames) }],
+    name: `Block non-tenant hosts (${row.site_id})`,
+    loadRules: [{ match: '{{ system.page.url.hostname }}', op: 'NOT_MATCH_REGEX', value: hostnameRegex(hostnames) }],
   }
   upsertGaTool(key, {
     name: `Tenant GA4 (${row.site_id})`,
