@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 
 const targets = ['--preview', '--staging', '--remote'].filter(flag => process.argv.includes(flag))
 if (targets.length !== 1) {
@@ -9,12 +10,22 @@ if (targets.length !== 1) {
 
 const dryRun = process.argv.includes('--dry-run')
 const target = targets[0]
-const zoneId = process.env.CF_ZONE_ID
+const wranglerToml = readFileSync('wrangler.toml', 'utf8')
+const readWranglerVar = (name) => wranglerToml.match(new RegExp(`^${name}\\s*=\\s*"([^"]+)"`, 'm'))?.[1] ?? ''
+const stripOrigin = value => String(value || '').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase()
+const zoneId = process.env.CF_ZONE_ID || readWranglerVar('CF_ZONE_ID')
 const token = process.env.CF_ZARAZ_API_TOKEN
 if (!zoneId || !token) {
   console.error('CF_ZONE_ID and CF_ZARAZ_API_TOKEN are required.')
   process.exit(1)
 }
+const platformMeasurementId = process.env.GA4_MEASUREMENT_ID || readWranglerVar('GA4_MEASUREMENT_ID')
+const platformHostnames = Array.from(new Set([
+  stripOrigin(process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN || readWranglerVar('NUXT_PUBLIC_FREE_SITE_DOMAIN') || 'https://krabiclaw.com'),
+  stripOrigin(process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || readWranglerVar('NUXT_PUBLIC_PLATFORM_DOMAIN') || 'https://krabiclaw.com'),
+  'krabiclaw.com',
+  'www.krabiclaw.com',
+].filter(Boolean))).sort()
 
 const wranglerArgs = ['d1', 'execute', 'DB']
 if (target === '--preview') wranglerArgs.push('--env', 'preview')
@@ -42,24 +53,81 @@ if (!response.ok || !envelope.success) {
 const config = envelope.result
 config.tools ||= {}
 config.triggers ||= {}
-for (const row of rows) {
-  const key = `ga-tenant-${row.site_id}`
-  const hostnames = String(row.hostnames).split('|').map(value => value.toLowerCase()).sort()
-  const escaped = hostnames.map(value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-  config.triggers[key] = {
-    loadRules: [{ match: '{{ client.pageLocation }}', op: 'MATCH_REGEX', value: `^https://(${escaped.join('|')})/` }],
-  }
+
+const analyticsPurposeId = 'kc_analytics'
+config.consent ||= {}
+config.consent.enabled = true
+config.consent.hideModal = true
+config.consent.purposes ||= {}
+config.consent.purposes[analyticsPurposeId] ||= {
+  name: 'Analytics',
+  description: 'Measure page views and site usage.',
+}
+config.historyChange = true
+
+const pageLocationRegex = hostnames => `^https://(${hostnames.map(value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})/`
+const scopeActions = (actions, triggerKey) => Object.fromEntries(Object.entries(
+  actions && Object.keys(actions).length
+    ? actions
+    : { AllPageviews: { actionType: 'pageview', firingTriggers: [], enabled: true } },
+).map(([key, action]) => [
+  key,
+  { ...action, firingTriggers: [triggerKey], enabled: action.enabled !== false },
+]))
+const upsertGaTool = (key, { name, measurementId, triggerKey, existing }) => {
   config.tools[key] = {
+    ...existing,
     component: 'google-analytics_v4',
-    name: `Tenant GA4 (${row.site_id})`,
+    name: existing?.name || name,
     enabled: true,
-    settings: { tid: row.ga4_measurement_id },
-    actions: { AllPageviews: { actionType: 'pageview', firingTriggers: [key], enabled: true } },
+    settings: { ...(existing?.settings || {}), tid: measurementId },
+    defaultPurpose: analyticsPurposeId,
+    actions: scopeActions(existing?.actions, triggerKey),
   }
 }
 
+if (platformMeasurementId && platformHostnames.length) {
+  const triggerKey = 'ga-platform'
+  config.triggers[triggerKey] = {
+    name: 'Platform hosts',
+    loadRules: [{ match: '{{ client.pageLocation }}', op: 'MATCH_REGEX', value: pageLocationRegex(platformHostnames) }],
+  }
+  const existingEntry = Object.entries(config.tools).find(([, tool]) =>
+    tool?.component === 'google-analytics_v4' && tool.settings?.tid === platformMeasurementId
+  )
+  upsertGaTool(existingEntry?.[0] || triggerKey, {
+    name: 'Platform GA4',
+    measurementId: platformMeasurementId,
+    triggerKey,
+    existing: existingEntry?.[1],
+  })
+}
+
+const activeTenantKeys = new Set(rows.map(row => `ga-tenant-${row.site_id}`))
+for (const key of Object.keys(config.tools)) {
+  if (key.startsWith('ga-tenant-') && !activeTenantKeys.has(key)) delete config.tools[key]
+}
+for (const key of Object.keys(config.triggers)) {
+  if (key.startsWith('ga-tenant-') && !activeTenantKeys.has(key)) delete config.triggers[key]
+}
+
+for (const row of rows) {
+  const key = `ga-tenant-${row.site_id}`
+  const hostnames = String(row.hostnames).split('|').map(value => value.toLowerCase()).sort()
+  config.triggers[key] = {
+    name: `Tenant hosts (${row.site_id})`,
+    loadRules: [{ match: '{{ client.pageLocation }}', op: 'MATCH_REGEX', value: pageLocationRegex(hostnames) }],
+  }
+  upsertGaTool(key, {
+    name: `Tenant GA4 (${row.site_id})`,
+    measurementId: row.ga4_measurement_id,
+    triggerKey: key,
+    existing: config.tools[key],
+  })
+}
+
 if (dryRun) {
-  console.log(JSON.stringify({ target, sites: rows.map(row => row.site_id), tools: rows.length }, null, 2))
+  console.log(JSON.stringify({ target, platformMeasurementId, platformHostnames, sites: rows.map(row => row.site_id), tools: rows.length }, null, 2))
   process.exit(0)
 }
 
