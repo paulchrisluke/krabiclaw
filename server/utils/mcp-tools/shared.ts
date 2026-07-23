@@ -302,21 +302,30 @@ export const blogComponentInputSchema = {
   ],
 }
 
-export const blogPostMutationResultObject = {
+const blogContentBlockObject = {
   type: 'object',
   properties: {
-    ok: { type: 'boolean' },
-    entity: { type: 'string', enum: ['blog_post'] },
     id: { type: 'string' },
-    slug: { type: ['string', 'null'] },
-    edit_url: { type: ['string', 'null'] },
-    public_url: { type: ['string', 'null'] },
-    changed_fields: { type: 'array', items: { type: 'string' } },
-    updated_at: { type: 'string' },
-    expected_document_updated_at: { type: ['string', 'null'], description: 'Current content-document concurrency token for the next complete block replacement.' },
-    context: { type: 'object' },
+    parent_block_id: { type: ['string', 'null'] },
+    type: { type: 'string', enum: ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout'] },
+    position: { type: 'number' },
+    level: { type: ['number', 'null'] },
+    data: { type: 'object' },
   },
-  required: ['ok', 'entity', 'id'],
+  required: ['id', 'parent_block_id', 'type', 'position', 'level', 'data'],
+  additionalProperties: false,
+}
+
+const featuredImageObject = {
+  type: ['object', 'null'],
+  properties: {
+    asset_id: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    kind: { type: ['string', 'null'] },
+    width: { type: ['number', 'null'] },
+    height: { type: ['number', 'null'] },
+  },
+  additionalProperties: false,
 }
 
 export const blogPostObject = {
@@ -325,31 +334,9 @@ export const blogPostObject = {
     id: { type: 'string' },
     title: { type: 'string' },
     slug: { type: 'string' },
-    body: { type: 'string' },
     excerpt: { type: ['string', 'null'] },
     category: { type: ['string', 'null'] },
     tags: { type: 'array', items: { type: 'string' } },
-    components: {
-      type: 'array',
-      items: blogComponentInputSchema,
-    },
-    content_document: {
-      type: ['object', 'null'],
-      properties: {
-        document: {
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-            updated_at: { type: 'string', description: 'Pass this value as expected_document_updated_at when replacing content_blocks.' },
-            draft_revision_id: { type: ['string', 'null'] },
-            published_revision_id: { type: ['string', 'null'] },
-          },
-          required: ['id', 'updated_at'],
-        },
-        blocks: { type: 'array', items: { type: 'object' } },
-      },
-      required: ['document', 'blocks'],
-    },
     ...BLOG_NAV_FIELDS_SCHEMA,
     seo_title: { type: ['string', 'null'] },
     seo_description: { type: ['string', 'null'] },
@@ -364,16 +351,51 @@ export const blogPostObject = {
     scheduled_for: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
-    featured_image: {
-      type: ['object', 'null'],
-      properties: {
-        asset_id: { type: ['string', 'null'] },
-        public_url: { type: ['string', 'null'] },
-        kind: { type: ['string', 'null'] },
-        width: { type: ['number', 'null'] },
-        height: { type: ['number', 'null'] },
-      },
-    },
+    featured_image: featuredImageObject,
+    admin_edit_url: { type: ['string', 'null'] },
+    edit_url: { type: ['string', 'null'] },
+    public_path: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    preview_url: { type: ['string', 'null'] },
+    view_url: { type: ['string', 'null'] },
+    content_blocks: { type: 'array', items: blogContentBlockObject },
+    document_updated_at: { type: ['string', 'null'], description: 'Concurrency token required when replacing content_blocks.' },
+  },
+  required: [
+    'id', 'title', 'slug', 'excerpt', 'category', 'tags',
+    'nav_section', 'nav_title', 'nav_order', 'nav_section_order', 'hide_from_nav', 'featured_order',
+    'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots',
+    'author_name', 'published', 'published_at', 'status', 'visibility', 'scheduled_for',
+    'created_at', 'updated_at', 'featured_image', 'admin_edit_url', 'edit_url',
+    'public_path', 'public_url', 'preview_url', 'view_url',
+    'content_blocks', 'document_updated_at',
+  ],
+  additionalProperties: false,
+}
+
+export const blogPostSummaryObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    title: { type: 'string' },
+    slug: { type: 'string' },
+    excerpt: { type: ['string', 'null'] },
+    category: { type: ['string', 'null'] },
+    tags: { type: 'array', items: { type: 'string' } },
+    ...BLOG_NAV_FIELDS_SCHEMA,
+    seo_title: { type: ['string', 'null'] },
+    seo_description: { type: ['string', 'null'] },
+    seo_keywords: { type: ['string', 'null'] },
+    canonical_url: { type: ['string', 'null'] },
+    robots: { type: ['string', 'null'] },
+    published: { type: 'boolean' },
+    published_at: { type: ['string', 'null'] },
+    status: { type: 'string', enum: ['draft', 'published', 'scheduled', 'archived'] },
+    visibility: { type: 'string', enum: ['public', 'unlisted'] },
+    scheduled_for: { type: ['string', 'null'] },
+    created_at: { type: 'string' },
+    updated_at: { type: 'string' },
+    featured_image: featuredImageObject,
     admin_edit_url: { type: ['string', 'null'] },
     edit_url: { type: ['string', 'null'] },
     public_path: { type: ['string', 'null'] },
@@ -381,6 +403,24 @@ export const blogPostObject = {
     preview_url: { type: ['string', 'null'] },
     view_url: { type: ['string', 'null'] },
   },
+  required: [
+    'id', 'title', 'slug', 'excerpt', 'category', 'tags',
+    'nav_section', 'nav_title', 'nav_order', 'nav_section_order', 'hide_from_nav', 'featured_order',
+    'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots',
+    'published', 'published_at', 'status', 'visibility', 'scheduled_for',
+    'created_at', 'updated_at', 'featured_image', 'admin_edit_url', 'edit_url',
+    'public_path', 'public_url', 'preview_url', 'view_url',
+  ],
+  additionalProperties: false,
+}
+
+export const blogPostMutationResultObject = {
+  type: 'object',
+  properties: {
+    post: blogPostObject,
+  },
+  required: ['post'],
+  additionalProperties: false,
 }
 
 export const postMutationResultObject = {
@@ -1123,6 +1163,8 @@ export const BOUNDED_WRITE_TOOL_NAMES = [
   'set_post_image',
   'create_blog_post',
   'update_blog_post',
+  'update_blog_metadata',
+  'replace_blog_content',
   'set_blog_post_image',
   'publish_blog_post',
   'unpublish_blog_post',
