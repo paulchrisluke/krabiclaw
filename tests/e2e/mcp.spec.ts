@@ -1446,13 +1446,18 @@ test.describe('stateless MCP server', () => {
     expect((await gbConnectionCall.json()).error?.code).toBe(-32601)
   })
 
-  test('cross-tenant isolation — owner of site B cannot read or mutate site A through MCP', async ({ request, baseURL }) => {
-    test.setTimeout(60_000)
+  async function setupCrossTenantIsolation(request: APIRequestContext, baseURL: string) {
     await loginAsFreshMcpUser(request, baseURL!)
     const siteA = await ensureSite(request, baseURL!)
 
     await loginAsFreshMcpUser(request, baseURL!)
     await ensureSite(request, baseURL!)
+
+    return siteA
+  }
+
+  test('cross-tenant isolation — owner of site B cannot read site A through MCP', async ({ request, baseURL }) => {
+    const siteA = await setupCrossTenantIsolation(request, baseURL!)
 
     const crossRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -1461,6 +1466,10 @@ test.describe('stateless MCP server', () => {
     })
     expect(crossRead.status()).toBe(200)
     expect((await crossRead.json()).result?.isError).toBe(true)
+  })
+
+  test('cross-tenant isolation — owner of site B cannot mutate site A through MCP', async ({ request, baseURL }) => {
+    const siteA = await setupCrossTenantIsolation(request, baseURL!)
 
     const crossMutate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
