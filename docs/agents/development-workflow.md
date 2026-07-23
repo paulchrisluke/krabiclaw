@@ -48,6 +48,26 @@ node --experimental-strip-types --experimental-test-module-mocks --import ./test
 
 Use full `yarn test:unit`, typecheck, lint, build, migration checks, and E2E suites when the PR scope or risk calls for them. If a local E2E fails because the dev server, loopback host, secure cookies, or provider secrets are unavailable, document the exact blocker and use the closest meaningful browser/API verification rather than claiming the E2E passed.
 
+## Local E2E Environment
+
+Fresh worktrees usually do not have a local `.env`. Nuxt validates required public runtime vars at startup, and editor preview endpoints require `PREVIEW_SECRET`. If Playwright times out waiting for `/api/dev/ready`, start the same dev command visibly before assuming the browser test is broken.
+
+For local Playwright runs that use dev login routes or editor previews, export the local-safe values in the same command so Playwright's `webServer` child receives them:
+
+```bash
+NUXT_PUBLIC_PLATFORM_DOMAIN=http://localhost:3000 \
+NUXT_PUBLIC_FREE_SITE_DOMAIN=http://localhost:3000 \
+NUXT_PUBLIC_APP_NAME=KrabiClaw \
+PREVIEW_SECRET=ci-preview-secret \
+E2E_ALLOW_DEV_ROUTES=true \
+E2E_DEV_ROUTE_SECRET=ci-dev-route-secret \
+EMAIL_DELIVERY_MODE=log_only \
+WHATSAPP_DELIVERY_MODE=log_only \
+npx playwright test tests/e2e/example.spec.ts --project=chromium --workers=1
+```
+
+If an authenticated dashboard E2E reaches the right page but API calls return 500, check the response body before changing UI selectors. Missing local env such as `PREVIEW_SECRET` is a setup issue, not an app contract failure.
+
 ## Review Hygiene
 
 - Do not call issues, bugs, or nearby failures "pre-existing" until you have opened the relevant files and know whether the fix is small.
