@@ -9,30 +9,39 @@
     </template>
 
     <template #body>
-      <div class="flex min-h-[calc(100vh-12rem)] flex-col overflow-hidden rounded-2xl border border-default bg-default lg:grid lg:grid-cols-[340px_minmax(0,1fr)_320px]">
+      <div class="flex min-h-[calc(100vh-12rem)] flex-col overflow-hidden rounded-xl border border-default bg-default shadow-sm lg:grid lg:grid-cols-[360px_minmax(0,1fr)_340px]">
         <aside
-          class="border-b border-default lg:block lg:border-b-0 lg:border-r"
+          class="min-h-0 border-b border-default bg-muted/30 lg:flex lg:flex-col lg:border-b-0 lg:border-r"
           :class="mobileView === 'thread' ? 'hidden' : 'block'"
         >
           <div class="border-b border-default px-4 py-4">
-            <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Guest Threads</p>
-            <p class="mt-1 text-sm text-muted">{{ inboxDescription }}</p>
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Guest Threads</p>
+                <p class="mt-1 text-sm text-muted">{{ inboxDescription }}</p>
+              </div>
+              <UBadge v-if="threads.length > 0" color="neutral" variant="soft" size="sm" class="shrink-0 rounded-full">
+                {{ threads.length }}
+              </UBadge>
+            </div>
           </div>
 
           <div class="space-y-3 border-b border-default px-4 py-4">
-            <input
+            <UInput
               v-model="search"
               type="search"
+              icon="i-lucide-search"
+              aria-label="Search guest threads"
               placeholder="Search guest, email, subject…"
-              class="w-full rounded-xl border border-default bg-elevated px-3 py-2.5 text-sm outline-none transition focus:border-primary"
-            >
+              class="w-full"
+            />
 
             <div class="grid grid-cols-2 gap-2">
-              <select v-model="typeFilter" class="rounded-xl border border-default bg-elevated px-3 py-2 text-sm">
+              <select v-model="typeFilter" aria-label="Filter by submission type" class="min-w-0 rounded-lg border border-default bg-default px-3 py-2 text-sm text-highlighted">
                 <option value="">All types</option>
                 <option v-for="option in typeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
               </select>
-              <select v-model="inboxStatusFilter" class="rounded-xl border border-default bg-elevated px-3 py-2 text-sm">
+              <select v-model="inboxStatusFilter" aria-label="Filter by inbox status" class="min-w-0 rounded-lg border border-default bg-default px-3 py-2 text-sm text-highlighted">
                 <option value="">All states</option>
                 <option value="open">Open</option>
                 <option value="waiting_on_owner">Waiting on owner</option>
@@ -41,8 +50,8 @@
               </select>
             </div>
 
-            <label class="flex items-center gap-2 text-sm text-muted">
-              <input v-model="unreadOnly" type="checkbox" class="rounded border-default">
+            <label class="inline-flex items-center gap-2 rounded-full border border-default bg-default px-3 py-1.5 text-sm text-muted">
+              <input v-model="unreadOnly" type="checkbox" class="rounded border-default text-primary">
               Unread only
             </label>
           </div>
@@ -52,31 +61,51 @@
               v-for="thread in threads"
               :key="thread.id"
               type="button"
-              class="flex w-full flex-col gap-2 border-b border-default px-4 py-4 text-left transition hover:bg-elevated"
-              :class="selectedThreadId === thread.id ? 'bg-elevated' : ''"
+              class="group flex w-full items-start gap-3 border-b border-default px-4 py-4 text-left transition hover:bg-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              :class="selectedThreadId === thread.id ? 'bg-default shadow-[inset_3px_0_0_var(--ui-primary)]' : ''"
               @click="selectThread(thread.id)"
             >
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                  <div class="flex items-center gap-2">
-                    <p class="truncate text-sm font-semibold text-highlighted">{{ thread.guest_name }}</p>
-                    <span v-if="thread.unread_count > 0" class="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-white">
-                      {{ thread.unread_count }}
-                    </span>
-                  </div>
-                  <p class="mt-1 truncate text-xs text-muted">{{ threadSecondaryLine(thread) }}</p>
+              <div class="relative shrink-0">
+                <div class="flex size-11 items-center justify-center rounded-full bg-elevated text-sm font-semibold text-highlighted ring-1 ring-default">
+                  {{ thread.guest_name.charAt(0).toUpperCase() }}
                 </div>
-                <span class="shrink-0 text-[11px] text-muted">{{ formatRelative(thread.last_message_at || thread.created_at) }}</span>
+                <span class="absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full bg-default ring-1 ring-default">
+                  <UIcon :name="threadTypeIcon(thread.submission_type)" class="size-3" :class="threadTypeIconClass(thread.submission_type)" />
+                </span>
               </div>
 
-              <div class="flex flex-wrap items-center gap-2 text-[11px]">
-                <span class="rounded-full border border-default px-2 py-0.5 text-muted">{{ threadTypeLabel(thread.submission_type) }}</span>
-                <span class="rounded-full border border-default px-2 py-0.5 text-muted">{{ thread.location_title || 'Site-wide' }}</span>
-                <span class="rounded-full border border-default px-2 py-0.5 text-muted">{{ threadStateLabel(thread.inbox_status) }}</span>
-                <span class="rounded-full border border-default px-2 py-0.5 text-muted">{{ thread.operational_status }}</span>
-              </div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="flex min-w-0 items-center gap-2">
+                      <p class="truncate text-sm font-semibold text-highlighted">{{ thread.guest_name }}</p>
+                      <span v-if="thread.unread_count > 0" class="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-white">
+                        {{ thread.unread_count }}
+                      </span>
+                    </div>
+                    <p class="mt-1 truncate text-xs text-muted">{{ threadSecondaryLine(thread) }}</p>
+                  </div>
+                  <span class="shrink-0 text-[11px] text-dimmed">{{ formatRelative(thread.last_message_at || thread.created_at) }}</span>
+                </div>
 
-              <p class="line-clamp-2 text-sm text-default">{{ thread.last_message_preview || 'Open thread' }}</p>
+                <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                  <UBadge :color="threadTypeColor(thread.submission_type)" variant="soft" size="xs" class="rounded-full">
+                    <UIcon :name="threadTypeIcon(thread.submission_type)" class="size-3" />
+                    {{ threadTypeLabel(thread.submission_type) }}
+                  </UBadge>
+                  <UBadge :color="threadStateColor(thread.inbox_status)" variant="soft" size="xs" class="rounded-full">
+                    {{ threadStateLabel(thread.inbox_status) }}
+                  </UBadge>
+                  <UBadge color="neutral" variant="outline" size="xs" class="max-w-full rounded-full">
+                    <span class="truncate">{{ thread.location_title || 'Site-wide' }}</span>
+                  </UBadge>
+                </div>
+
+                <p class="mt-2 line-clamp-2 text-sm text-default" :class="thread.unread_count > 0 ? 'font-medium text-highlighted' : ''">
+                  {{ thread.last_message_preview || 'Open thread' }}
+                </p>
+                <p class="mt-1 truncate text-xs text-dimmed">{{ operationalStatusLabel(thread.operational_status) }}</p>
+              </div>
             </button>
 
             <div v-if="!loadingThreads && threads.length === 0" class="px-6 py-12 text-center">
@@ -91,7 +120,7 @@
           class="min-h-0 flex-col border-b border-default lg:flex lg:border-b-0 lg:border-r"
           :class="mobileView === 'list' ? 'hidden' : 'flex'"
         >
-          <div class="border-b border-default px-4 py-4" v-if="selectedDetail">
+          <div v-if="selectedDetail" class="border-b border-default bg-default px-4 py-4">
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div class="flex min-w-0 items-start gap-2">
                 <UButton
@@ -106,18 +135,23 @@
                 />
                 <div class="min-w-0">
                   <h2 class="text-lg font-semibold text-highlighted">{{ selectedDetail.thread.guest_name }}</h2>
-                  <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
-                    <span>{{ threadTypeLabel(selectedDetail.thread.submission_type) }}</span>
-                    <span>•</span>
-                    <span>{{ selectedDetail.source.location_title || 'Site-wide' }}</span>
-                    <span>•</span>
-                    <span>{{ threadStateLabel(selectedDetail.thread.inbox_status) }}</span>
+                  <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                    <UBadge :color="threadTypeColor(selectedDetail.thread.submission_type)" variant="soft" size="xs" class="rounded-full">
+                      <UIcon :name="threadTypeIcon(selectedDetail.thread.submission_type)" class="size-3" />
+                      {{ threadTypeLabel(selectedDetail.thread.submission_type) }}
+                    </UBadge>
+                    <UBadge color="neutral" variant="outline" size="xs" class="max-w-full rounded-full">
+                      <span class="truncate">{{ selectedDetail.source.location_title || 'Site-wide' }}</span>
+                    </UBadge>
+                    <UBadge :color="threadStateColor(selectedDetail.thread.inbox_status)" variant="soft" size="xs" class="rounded-full">
+                      {{ threadStateLabel(selectedDetail.thread.inbox_status) }}
+                    </UBadge>
                   </div>
                 </div>
               </div>
-              <div class="flex gap-2">
-                <UButton size="sm" color="neutral" variant="ghost" @click="markSeen" :disabled="selectedDetail.thread.unread_count === 0">Mark seen</UButton>
-                <select v-model="selectedInboxStatus" class="rounded-xl border border-default bg-elevated px-3 py-2 text-sm" @change="updateInboxStatus">
+              <div class="flex min-w-0 flex-wrap items-center gap-2">
+                <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-check-check" @click="markSeen" :disabled="selectedDetail.thread.unread_count === 0">Mark seen</UButton>
+                <select v-model="selectedInboxStatus" aria-label="Change inbox status" class="min-w-0 rounded-lg border border-default bg-elevated px-3 py-2 text-sm text-highlighted" @change="updateInboxStatus">
                   <option value="open">Open</option>
                   <option value="waiting_on_owner">Waiting on owner</option>
                   <option value="waiting_on_guest">Waiting on guest</option>
@@ -178,59 +212,130 @@
           :class="mobileView === 'list' || mobileTab === 'conversation' ? 'hidden lg:block' : 'block'"
         >
           <div v-if="selectedDetail" class="space-y-4 p-4">
-            <UCard :ui="{ body: 'p-4' }">
-              <h3 class="text-sm font-semibold text-highlighted">Guest</h3>
-              <div class="mt-3 space-y-2 text-sm">
-                <p><span class="text-muted">Name:</span> {{ selectedDetail.source.guest_name }}</p>
-                <p v-if="selectedDetail.source.guest_email"><span class="text-muted">Email:</span> {{ selectedDetail.source.guest_email }}</p>
-                <p v-if="selectedDetail.source.guest_phone"><span class="text-muted">Phone:</span> {{ selectedDetail.source.guest_phone }}</p>
+            <UCard class="border border-default shadow-none" :ui="{ body: 'p-4' }">
+              <div class="flex items-center gap-3">
+                <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-elevated text-sm font-semibold text-highlighted ring-1 ring-default">
+                  {{ selectedDetail.source.guest_name.charAt(0).toUpperCase() }}
+                </div>
+                <div class="min-w-0">
+                  <h3 class="truncate text-sm font-semibold text-highlighted">{{ selectedDetail.source.guest_name }}</h3>
+                  <p class="mt-0.5 truncate text-xs text-muted">{{ selectedDetail.source.guest_email || selectedDetail.source.guest_phone || 'Guest contact' }}</p>
+                </div>
+              </div>
+              <div class="mt-4 divide-y divide-dashed divide-default text-sm">
+                <div v-if="selectedDetail.source.guest_email" class="grid gap-1 py-2 sm:grid-cols-[4.5rem_minmax(0,1fr)]">
+                  <span class="text-dimmed">Email</span>
+                  <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.guest_email }}</span>
+                </div>
+                <div v-if="selectedDetail.source.guest_phone" class="grid gap-1 py-2 sm:grid-cols-[4.5rem_minmax(0,1fr)]">
+                  <span class="text-dimmed">Phone</span>
+                  <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.guest_phone }}</span>
+                </div>
+                <div class="grid gap-1 py-2 sm:grid-cols-[4.5rem_minmax(0,1fr)]">
+                  <span class="text-dimmed">Thread</span>
+                  <span class="min-w-0 break-words text-default sm:text-right">{{ threadStateLabel(selectedDetail.thread.inbox_status) }}</span>
+                </div>
               </div>
             </UCard>
 
-            <UCard :ui="{ body: 'p-4' }">
-              <h3 class="text-sm font-semibold text-highlighted">Submission details</h3>
-              <div class="mt-3 space-y-2 text-sm">
+            <UCard class="border border-default shadow-none" :ui="{ body: 'p-4' }">
+              <div class="flex items-center justify-between gap-3">
+                <h3 class="text-sm font-semibold text-highlighted">Submission details</h3>
+                <UBadge :color="threadTypeColor(selectedDetail.source.submission_type)" variant="soft" size="xs" class="rounded-full">
+                  {{ threadTypeLabel(selectedDetail.source.submission_type) }}
+                </UBadge>
+              </div>
+              <div class="mt-3 divide-y divide-dashed divide-default text-sm">
                 <template v-if="selectedDetail.source.submission_type === 'contact'">
-                  <p v-if="selectedDetail.source.subject"><span class="text-muted">Subject:</span> {{ selectedDetail.source.subject }}</p>
-                  <p v-if="selectedDetail.source.location_title"><span class="text-muted">Location:</span> {{ selectedDetail.source.location_title }}</p>
-                  <p v-if="selectedDetail.source.experience_title"><span class="text-muted">Regarding:</span> {{ selectedDetail.source.experience_title }}</p>
-                  <p><span class="text-muted">Submitted:</span> {{ formatDate(selectedDetail.source.created_at) }}</p>
-                  <p class="whitespace-pre-wrap"><span class="text-muted">Message:</span> {{ selectedDetail.source.message }}</p>
+                  <div v-if="selectedDetail.source.subject" class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
+                    <span class="text-dimmed">Subject</span>
+                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.subject }}</span>
+                  </div>
+                  <div v-if="selectedDetail.source.location_title" class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
+                    <span class="text-dimmed">Location</span>
+                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.location_title }}</span>
+                  </div>
+                  <div v-if="selectedDetail.source.experience_title" class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
+                    <span class="text-dimmed">Regarding</span>
+                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.experience_title }}</span>
+                  </div>
+                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
+                    <span class="text-dimmed">Submitted</span>
+                    <span class="min-w-0 break-words text-default sm:text-right">{{ formatDate(selectedDetail.source.created_at) }}</span>
+                  </div>
+                  <div class="grid gap-1 py-2">
+                    <span class="text-dimmed">Message</span>
+                    <p class="min-w-0 whitespace-pre-wrap break-words text-default">{{ selectedDetail.source.message }}</p>
+                  </div>
                 </template>
                 <template v-else-if="selectedDetail.source.submission_type === 'reservation'">
-                  <p><span class="text-muted">Location:</span> {{ selectedDetail.source.location_title }}</p>
-                  <p><span class="text-muted">Date:</span> {{ selectedDetail.source.date }}</p>
-                  <p><span class="text-muted">Time:</span> {{ selectedDetail.source.time }}</p>
-                  <p><span class="text-muted">Guests:</span> {{ selectedDetail.source.guests }}</p>
-                  <p v-if="selectedDetail.source.requests"><span class="text-muted">Requests:</span> {{ selectedDetail.source.requests }}</p>
+                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
+                    <span class="text-dimmed">Location</span>
+                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.location_title }}</span>
+                  </div>
+                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
+                    <span class="text-dimmed">Date</span>
+                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.date }}</span>
+                  </div>
+                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
+                    <span class="text-dimmed">Time</span>
+                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.time }}</span>
+                  </div>
+                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
+                    <span class="text-dimmed">Guests</span>
+                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.guests }}</span>
+                  </div>
+                  <div class="grid gap-1 py-2">
+                    <span class="text-dimmed">Requests</span>
+                    <p class="min-w-0 whitespace-pre-wrap break-words text-default">{{ selectedDetail.source.requests || 'None' }}</p>
+                  </div>
                 </template>
                 <template v-else>
-                  <p><span class="text-muted">Location:</span> {{ selectedDetail.source.location_title }}</p>
-                  <p><span class="text-muted">Experience:</span> {{ selectedDetail.source.experience_title }}</p>
-                  <p><span class="text-muted">Date:</span> {{ selectedDetail.source.booking_date }}</p>
-                  <p><span class="text-muted">Time:</span> {{ selectedDetail.source.time_slot }}</p>
-                  <p><span class="text-muted">Party size:</span> {{ selectedDetail.source.party_size }}</p>
-                  <p v-if="selectedDetail.source.notes"><span class="text-muted">Notes:</span> {{ selectedDetail.source.notes }}</p>
+                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
+                    <span class="text-dimmed">Location</span>
+                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.location_title }}</span>
+                  </div>
+                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
+                    <span class="text-dimmed">Experience</span>
+                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.experience_title }}</span>
+                  </div>
+                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
+                    <span class="text-dimmed">Date</span>
+                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.booking_date }}</span>
+                  </div>
+                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
+                    <span class="text-dimmed">Time</span>
+                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.time_slot }}</span>
+                  </div>
+                  <div class="grid gap-1 py-2 sm:grid-cols-[6rem_minmax(0,1fr)]">
+                    <span class="text-dimmed">Party size</span>
+                    <span class="min-w-0 break-words text-default sm:text-right">{{ selectedDetail.source.party_size }}</span>
+                  </div>
+                  <div class="grid gap-1 py-2">
+                    <span class="text-dimmed">Notes</span>
+                    <p class="min-w-0 whitespace-pre-wrap break-words text-default">{{ selectedDetail.source.notes || 'None' }}</p>
+                  </div>
                 </template>
               </div>
             </UCard>
 
-            <UCard :ui="{ body: 'p-4' }">
+            <UCard class="border border-default shadow-none" :ui="{ body: 'p-4' }">
               <h3 class="text-sm font-semibold text-highlighted">Operational actions</h3>
-              <div class="mt-3 flex flex-wrap gap-2">
+              <p class="mt-1 text-xs text-muted">{{ operationalStatusLabel(selectedDetail.source.operational_status) }}</p>
+              <div class="mt-3 grid gap-2">
                 <template v-if="selectedDetail.source.submission_type === 'contact'">
-                  <UButton size="sm" color="neutral" variant="ghost" @click="updateContactStatus('read')">Mark read</UButton>
-                  <UButton size="sm" color="neutral" variant="soft" @click="updateContactStatus('replied')">Mark replied</UButton>
+                  <UButton size="sm" color="neutral" variant="outline" icon="i-lucide-check" block @click="updateContactStatus('read')">Mark read</UButton>
+                  <UButton size="sm" color="primary" variant="soft" icon="i-lucide-reply" block @click="updateContactStatus('replied')">Mark replied</UButton>
                 </template>
                 <template v-else-if="selectedDetail.source.submission_type === 'reservation'">
-                  <UButton size="sm" color="success" variant="ghost" @click="updateReservationStatus('confirmed')">Confirm</UButton>
-                  <UButton size="sm" color="neutral" variant="ghost" @click="updateReservationStatus('completed')">Complete</UButton>
-                  <UButton size="sm" color="error" variant="ghost" @click="updateReservationStatus('cancelled')">Cancel</UButton>
+                  <UButton size="sm" color="success" variant="soft" icon="i-lucide-calendar-check" block @click="updateReservationStatus('confirmed')">Confirm</UButton>
+                  <UButton size="sm" color="neutral" variant="outline" icon="i-lucide-check" block @click="updateReservationStatus('completed')">Complete</UButton>
+                  <UButton size="sm" color="error" variant="ghost" icon="i-lucide-x" block @click="updateReservationStatus('cancelled')">Cancel</UButton>
                 </template>
                 <template v-else>
-                  <UButton size="sm" color="success" variant="ghost" @click="updateBookingStatus('confirmed')">Confirm</UButton>
-                  <UButton size="sm" color="neutral" variant="ghost" @click="completeBooking">Complete</UButton>
-                  <UButton size="sm" color="error" variant="ghost" @click="updateBookingStatus('cancelled')">Cancel</UButton>
+                  <UButton size="sm" color="success" variant="soft" icon="i-lucide-calendar-check" block @click="updateBookingStatus('confirmed')">Confirm</UButton>
+                  <UButton size="sm" color="neutral" variant="outline" icon="i-lucide-check" block @click="completeBooking">Complete</UButton>
+                  <UButton size="sm" color="error" variant="ghost" icon="i-lucide-x" block @click="updateBookingStatus('cancelled')">Cancel</UButton>
                 </template>
               </div>
             </UCard>
@@ -253,6 +358,7 @@ const props = defineProps<{
 
 type SubmissionType = 'contact' | 'reservation' | 'experience_booking' | 'consultation' | 'appointment'
 type InboxStatus = 'open' | 'waiting_on_owner' | 'waiting_on_guest' | 'closed'
+type UiColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
 
 interface ThreadSummary {
   id: string
@@ -633,10 +739,47 @@ function threadTypeLabel(type: SubmissionType) {
   return 'Appointment'
 }
 
+function threadTypeIcon(type: SubmissionType) {
+  if (type === 'contact') return 'i-lucide-mail'
+  if (type === 'reservation') return 'i-lucide-calendar-days'
+  if (type === 'experience_booking') return 'i-lucide-ticket'
+  if (type === 'consultation') return 'i-lucide-message-circle-question'
+  return 'i-lucide-calendar-clock'
+}
+
+function threadTypeColor(type: SubmissionType): UiColor {
+  if (type === 'contact') return 'info'
+  if (type === 'reservation') return 'success'
+  if (type === 'experience_booking') return 'warning'
+  return 'neutral'
+}
+
+function threadTypeIconClass(type: SubmissionType) {
+  if (type === 'contact') return 'text-info'
+  if (type === 'reservation') return 'text-success'
+  if (type === 'experience_booking') return 'text-warning'
+  return 'text-muted'
+}
+
 function threadStateLabel(status: InboxStatus) {
   if (status === 'waiting_on_owner') return 'Waiting on owner'
   if (status === 'waiting_on_guest') return 'Waiting on guest'
   return status.charAt(0).toUpperCase() + status.slice(1)
+}
+
+function threadStateColor(status: InboxStatus): UiColor {
+  if (status === 'open') return 'info'
+  if (status === 'waiting_on_owner') return 'warning'
+  if (status === 'waiting_on_guest') return 'success'
+  return 'neutral'
+}
+
+function operationalStatusLabel(status: string) {
+  return status
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
 }
 
 function threadSecondaryLine(thread: ThreadSummary) {
