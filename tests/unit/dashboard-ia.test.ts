@@ -62,6 +62,7 @@ test('admin impersonation uses Better Auth APIs without custom proxy routes', ()
   assert.match(source('layouts/dashboard.vue'), /authClient\.admin\.stopImpersonating/)
 
   const files = [
+    ...collectSourceFiles(resolve(root, 'layouts')),
     ...collectSourceFiles(resolve(root, 'pages')),
     ...collectSourceFiles(resolve(root, 'components')),
     ...collectSourceFiles(resolve(root, 'composables')),
@@ -87,6 +88,7 @@ test('dashboard context and location navigation never infer residual selections'
 
 test('dashboard callers do not use removed editor, ai, or site aliases', () => {
   const files = [
+    ...collectSourceFiles(resolve(root, 'layouts')),
     ...collectSourceFiles(resolve(root, 'pages')),
     ...collectSourceFiles(resolve(root, 'components')),
     ...collectSourceFiles(resolve(root, 'composables')),

@@ -53,9 +53,8 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
 
     saving.value = true
     try {
-      // Get site context from tenant
-      const tenant = await useTenantSite()
-      if (!tenant.siteId) {
+      const resolvedSiteId = siteId || (await useTenantSite()).siteId
+      if (!resolvedSiteId) {
         throw new Error('No site context available')
       }
 
@@ -64,7 +63,7 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
         queryParams.set('locationId', effectiveLocationId.value)
       }
 
-      await $fetch(`/api/editor/sites/${tenant.siteId}/content/save?${queryParams.toString()}`, {
+      await $fetch(`/api/editor/sites/${resolvedSiteId}/content/save?${queryParams.toString()}`, {
         method: 'POST',
         body: { 
           page: currentPage.value,

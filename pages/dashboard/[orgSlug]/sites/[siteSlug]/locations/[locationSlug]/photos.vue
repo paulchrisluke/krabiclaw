@@ -253,6 +253,7 @@ async function loadAttachableMedia() {
   attachLoading.value = true
   try {
     const params = new URLSearchParams({ limit: '100' })
+    if (locationId.value) params.set('locationId', locationId.value)
     const res = await $fetch<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
     attachableAssets.value = (res.media ?? []).filter(asset => asset.location_id !== locationId.value)
   } catch (error) {
