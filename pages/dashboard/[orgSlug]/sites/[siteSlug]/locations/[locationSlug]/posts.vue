@@ -337,8 +337,7 @@ function normalizeGalleryForForm(items: unknown): GalleryFormItem[] {
   return gallery
 }
 
-function buildPostPayload(postId?: string) {
-  const locationId = currentLocationId.value
+function buildPostPayload(locationId: string, postId?: string) {
   return {
     title: editForm.title,
     body: editForm.body,
@@ -358,18 +357,21 @@ function buildPostPayload(postId?: string) {
 }
 
 const handleSave = async () => {
-  if (!editForm.body.trim() || !currentLocationId.value) return
+  const locationId = currentLocationId.value
+  if (!editForm.body.trim() || !locationId) return
   saving.value = true
   try {
     if (selectedPost.value) {
       const res = await $fetch<ApiRecord>(`/api/editor/sites/${siteId}/posts/${selectedPost.value.id}`, {
-        method: 'PATCH', body: buildPostPayload(String(selectedPost.value.id)),
+        method: 'PATCH', body: buildPostPayload(locationId, String(selectedPost.value.id)),
       })
+      if (currentLocationId.value !== locationId) return
       selectedPost.value = res.post
     } else {
       const res = await $fetch<ApiRecord>(`/api/editor/sites/${siteId}/posts`, {
-        method: 'POST', body: buildPostPayload(),
+        method: 'POST', body: buildPostPayload(locationId),
       })
+      if (currentLocationId.value !== locationId) return
       selectedPost.value = res.post
       composing.value = false
       if (res.post?.id) {
@@ -398,7 +400,8 @@ function hasUnsavedEdits(): boolean {
 }
 
 const handlePublish = async () => {
-  if (!editForm.body.trim() || !currentLocationId.value) return
+  const locationId = currentLocationId.value
+  if (!editForm.body.trim() || !locationId) return
   publishing.value = true
   try {
     // Save any edits first
@@ -406,13 +409,15 @@ const handlePublish = async () => {
     if (!postId || hasUnsavedEdits()) {
       const method = postId ? 'PATCH' : 'POST'
       const url = postId ? `/api/editor/sites/${siteId}/posts/${postId}` : `/api/editor/sites/${siteId}/posts`
-      const res = await $fetch<ApiRecord>(url, { method, body: buildPostPayload(postId ? String(postId) : undefined) })
+      const res = await $fetch<ApiRecord>(url, { method, body: buildPostPayload(locationId, postId ? String(postId) : undefined) })
+      if (currentLocationId.value !== locationId) return
       postId = res.post.id
       selectedPost.value = res.post
     }
     const res = await $fetch<ApiRecord>(`/api/editor/sites/${siteId}/posts/${postId}/publish`, {
       method: 'POST', body: { channels: selectedChannels.value },
     })
+    if (currentLocationId.value !== locationId) return
     selectedPost.value = res.post
     composing.value = false
     trackPostPublished(String(postId), siteId)

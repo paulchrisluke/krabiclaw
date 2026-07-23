@@ -1,7 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { listExperiences } from '~/server/utils/experiences'
-import { assertResourceAccess, listAccessibleLocationIds } from '~/server/utils/member-access'
+import { assertResourceAccess, findLocationInSite, listAccessibleLocationIds } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -28,11 +28,7 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const locationId = typeof query.location_id === 'string' && query.location_id ? query.location_id : null
   if (locationId) {
-    const location = await queryFirst<{ id: string }>(
-      db,
-      `SELECT id FROM business_locations WHERE id = ? AND site_id = ? AND organization_id = ? LIMIT 1`,
-      [locationId, siteId, site.organization_id],
-    )
+    const location = await findLocationInSite(db, { organizationId: site.organization_id, siteId, locationId })
     if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
     await assertResourceAccess(db, {
       memberId: site.member_id,

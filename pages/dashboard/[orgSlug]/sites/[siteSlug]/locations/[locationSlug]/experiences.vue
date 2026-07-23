@@ -346,9 +346,11 @@ const defaultCurrency = ref('THB')
 const loading = ref(true)
 const experiences = ref<ApiRecord[]>([])
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
+let experiencesLoadGeneration = 0
 
 async function loadExperiences() {
   const locationId = currentLocationId.value
+  const generation = ++experiencesLoadGeneration
   if (!locationId) {
     experiences.value = []
     loading.value = false
@@ -359,11 +361,15 @@ async function loadExperiences() {
     const res = await $fetch<{ experiences: ApiRecord[] }>(`/api/dashboard/editor/experiences`, {
       query: { location_id: locationId },
     })
+    if (generation !== experiencesLoadGeneration || currentLocationId.value !== locationId) return
     experiences.value = res.experiences ?? []
   } catch {
+    if (generation !== experiencesLoadGeneration || currentLocationId.value !== locationId) return
     experiences.value = []
   } finally {
-    loading.value = false
+    if (generation === experiencesLoadGeneration && currentLocationId.value === locationId) {
+      loading.value = false
+    }
   }
 }
 
@@ -566,9 +572,11 @@ async function loadExperiencePolicy(experienceId: string, locationId: string | n
         location_id: locationId ?? undefined,
       },
     })
+    if (currentLocationId.value !== locationId || editing.value?.id !== experienceId) return
     bookingPolicyDraft.value = res.policy ?? {}
     bookingPolicySummary.value = res.summary ?? null
   } catch {
+    if (currentLocationId.value !== locationId || editing.value?.id !== experienceId) return
     bookingPolicyDraft.value = {}
     bookingPolicySummary.value = null
   }
@@ -624,10 +632,12 @@ async function save() {
     let experienceResult: ApiRecord | null = null
     if (editing.value) {
       const response = await $fetch<{ experience: ApiRecord }>(`/api/dashboard/editor/experiences/${editing.value.id}`, { method: 'PATCH', body: payload })
+      if (currentLocationId.value !== locationId) return
       experienceResult = response.experience ?? null
       toast.add({ description: 'Experience updated.', color: 'success' })
     } else {
       const response = await $fetch<{ experience: ApiRecord }>(`/api/dashboard/editor/experiences`, { method: 'POST', body: payload })
+      if (currentLocationId.value !== locationId) return
       experienceResult = response.experience ?? null
       toast.add({ description: 'Experience created.', color: 'success' })
     }
@@ -646,11 +656,14 @@ async function save() {
             location_id: locationId,
           },
         })
+        if (currentLocationId.value !== locationId) return
         bookingPolicySummary.value = policyResponse.summary ?? null
       } catch {
+        if (currentLocationId.value !== locationId) return
         toast.add({ description: 'Experience saved, but the booking policy failed to save.', color: 'warning' })
       }
     }
+    if (currentLocationId.value !== locationId) return
     sliderOpen.value = false
     await loadExperiences()
   } catch {
