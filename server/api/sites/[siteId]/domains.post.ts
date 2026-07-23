@@ -9,6 +9,7 @@ import {
 import { canonicalDomainForPair, domainPair } from '~/server/utils/domain-shared'
 import { domainInstructions, groupCustomDomains } from '~/server/utils/domain-read-model'
 import { notifyDomainLifecycle } from '~/server/utils/domain-notifications'
+import { buildDashboardUrl } from '~/server/utils/dashboard-links'
 
 interface CreateDomainBody {
   domain?: string
@@ -59,7 +60,12 @@ export default defineEventHandler(async (event) => {
       actorType
     })
 
-    const dashboardUrl = `${env.NUXT_PUBLIC_PLATFORM_DOMAIN}/dashboard/${encodeURIComponent(site.organization_slug ?? site.organization_id)}/sites/${encodeURIComponent(site.subdomain ?? site.id)}/domains`
+    const dashboardUrl = buildDashboardUrl({
+      env,
+      organizationId: site.organization_id,
+      organizationSlug: site.organization_slug ?? undefined,
+      subdomain: site.subdomain,
+    }, 'site.domains')
     for (const domain of domains) {
       await notifyDomainLifecycle(env, db, {
         organizationId: site.organization_id,
