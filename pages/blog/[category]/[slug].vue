@@ -27,8 +27,7 @@
                    prose-strong:text-default
                    prose-li:text-muted
                    prose-hr:border-default
-                   prose-blockquote:border-l-(--kc-teal) prose-blockquote:text-muted
-                   dark:prose-invert"
+                   prose-blockquote:border-l-(--kc-teal) prose-blockquote:text-muted"
             v-html="block.html"
           />
           <!-- eslint-enable vue/no-v-html -->

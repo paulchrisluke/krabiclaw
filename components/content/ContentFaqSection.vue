@@ -9,7 +9,7 @@
       <div v-for="(item, index) in items" :key="`faq-${index}`" class="rounded-2xl border border-default p-5">
         <h3 class="text-lg font-medium text-default">{{ item.question }}</h3>
         <!-- eslint-disable-next-line vue/no-v-html -->
-        <div class="prose mt-3 max-w-none text-muted dark:prose-invert" v-html="item.answerHtml" />
+        <div class="prose mt-3 max-w-none text-muted" v-html="item.answerHtml" />
       </div>
     </div>
   </section>

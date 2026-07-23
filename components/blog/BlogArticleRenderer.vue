@@ -57,7 +57,7 @@
           @keydown.delete="handleDelete(index, $event)"
         />
         <!-- eslint-disable vue/no-v-html -->
-        <div v-else-if="block.type === 'markdown'" class="prose prose-lg max-w-none dark:prose-invert" v-html="renderMarkdown(String(block.data.markdown || ''))" />
+        <div v-else-if="block.type === 'markdown'" class="prose prose-lg max-w-none" v-html="renderMarkdown(String(block.data.markdown || ''))" />
         <!-- eslint-enable vue/no-v-html -->
         <component :is="`h${Math.max(2, Math.min(6, block.level || 2))}`" v-else-if="block.type === 'heading'" class="text-2xl font-semibold">
           {{ block.data.text }}
