@@ -32,7 +32,7 @@
     <div v-else-if="!hasMenu" class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
       <div class="saya-display saya-italic text-3xl text-default mb-4">{{ $t('saya.menu_page.coming_soon_title') }}</div>
       <p class="text-sm text-muted mb-6">{{ $t('saya.menu_page.coming_soon_desc', { location: location?.title }) }}</p>
-      <SayaButton v-if="hasExperiences" to="/experiences">
+      <SayaButton v-if="locationExperienceHref" :to="locationExperienceHref">
         {{ $t('saya.menu_page.view_experiences') }}
       </SayaButton>
     </div>
@@ -140,6 +140,7 @@
 
 <script setup lang="ts">
 import { formatMoneyAmount, isSaleActive } from '~/shared/money'
+import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
 
 definePageMeta({ layout: 'saya' })
 
@@ -152,9 +153,10 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
-const { location, menu: bootstrapMenu, menuItemsBySection, pending: menuLoading, config: bootstrapConfig, hasExperiences } = useBootstrap()
+const { location, menu: bootstrapMenu, menuItemsBySection, pending: menuLoading, config: bootstrapConfig, experiencesList } = useBootstrap()
 const { formatDate } = useLocaleDate()
 const hasMenu = computed(() => ((bootstrapMenu.value as { items?: unknown[] } | null)?.items?.length ?? 0) > 0)
+const locationExperienceHref = computed(() => resolveLocationExperienceHref(slug.value, experiencesList.value))
 
 const menuUpdated = computed(() => {
   const d = bootstrapMenu.value?.updated_at

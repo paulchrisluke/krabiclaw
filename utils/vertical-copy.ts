@@ -85,6 +85,8 @@ type VerticalCopy = {
   notScheduledLabel: string
   viewExperienceCta: string
   guestsMaxLabel: string
+  durationHourLabel: string
+  durationMinuteLabel: string
   nameLabel: string
   namePlaceholder: string
   emailLabel: string
@@ -205,6 +207,8 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       notScheduledLabel: "Not currently scheduled",
       viewExperienceCta: "View experience",
       guestsMaxLabel: "guests max",
+      durationHourLabel: "hr",
+      durationMinuteLabel: "min",
       nameLabel: "Name",
       namePlaceholder: "Your name",
       emailLabel: "Email",
@@ -323,6 +327,8 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       notScheduledLabel: "Not currently scheduled",
       viewExperienceCta: "View experience",
       guestsMaxLabel: "guests max",
+      durationHourLabel: "hr",
+      durationMinuteLabel: "min",
       nameLabel: "Name",
       namePlaceholder: "Your name",
       emailLabel: "Email",
@@ -443,6 +449,8 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       notScheduledLabel: "ยังไม่มีกำหนดการ",
       viewExperienceCta: "ดูประสบการณ์",
       guestsMaxLabel: "แขกสูงสุด",
+      durationHourLabel: "ชม.",
+      durationMinuteLabel: "นาที",
       nameLabel: "ชื่อ",
       namePlaceholder: "ชื่อของคุณ",
       emailLabel: "อีเมล",
@@ -561,6 +569,8 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       notScheduledLabel: "ยังไม่มีกำหนดการ",
       viewExperienceCta: "ดูประสบการณ์",
       guestsMaxLabel: "แขกสูงสุด",
+      durationHourLabel: "ชม.",
+      durationMinuteLabel: "นาที",
       nameLabel: "ชื่อ",
       namePlaceholder: "ชื่อของคุณ",
       emailLabel: "อีเมล",
@@ -683,6 +693,8 @@ registry.en.professional_service = {
   notScheduledLabel: "Not currently scheduled",
   viewExperienceCta: "View service",
   guestsMaxLabel: "people max",
+  durationHourLabel: "hr",
+  durationMinuteLabel: "min",
   specialRequestsLabel: "How can we help?",
   specialRequestsPlaceholder: "Tell us what kind of help you need.",
   guestLabel: "person",

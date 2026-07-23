@@ -13,7 +13,13 @@
          appear later in the same render caused a hydration child-count mismatch. -->
     <div id="saya-portal-root" />
 
-    <SayaHeader :site="site" :locations="locations" :menu="menu" :has-experiences="hasExperiences" />
+    <SayaHeader
+      :site="site"
+      :locations="locations"
+      :menu="menu"
+      :has-experiences="hasExperiences"
+      :experience-cta-path="locationExperienceCtaPath"
+    />
     <main class="grow">
       <slot />
     </main>
@@ -33,6 +39,7 @@
 
 <script setup>
 import ConsentBanner from '~/components/ConsentBanner.vue'
+import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
 
 if (import.meta.dev) useDebugLCP()
 
@@ -40,7 +47,7 @@ if (import.meta.dev) useDebugLCP()
 // header/footer receive the fields they need as props instead of each
 // independently calling useBootstrap()/useTenantSite() and relying on
 // cache-key coincidence to dedupe.
-const { config, locations, menu, hasExperiences, locales, error: bootstrapError } = useBootstrap()
+const { config, locations, menu, hasExperiences, experiencesList, locales, error: bootstrapError } = useBootstrap()
 const { siteId, isTenant, isPlatform, site } = useTenantSite()
 // Called for its side effect: keeps the consent ref in sync and lets the
 // head markup emit the default signal ahead of any analytics config.
@@ -90,6 +97,14 @@ const route = useRoute()
 const requestURL = useRequestURL()
 const requestHostname = requestURL.hostname
 const canonicalUrl = computed(() => new URL(route.path, requestURL.origin).toString())
+const routeLocationSlug = computed(() => {
+  const match = route.path.match(/^\/locations\/([^/]+)/)
+  return match?.[1] ?? null
+})
+const locationExperienceCtaPath = computed(() => {
+  if (!routeLocationSlug.value) return undefined
+  return resolveLocationExperienceHref(routeLocationSlug.value, experiencesList.value)
+})
 
 // Site-wide default only — individual pages set their own robots directive
 // when they have one; this is the fallback for pages that don't.

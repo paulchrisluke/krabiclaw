@@ -26,12 +26,14 @@
 </template>
 
 <script setup lang="ts">
+import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
+
 const props = defineProps<{
   locationSlug: string
-  active: 'overview' | 'menu' | 'posts' | 'reviews' | 'photos' | 'qa' | 'contact'
+  active: 'overview' | 'menu' | 'experiences' | 'posts' | 'reviews' | 'photos' | 'qa' | 'contact'
 }>()
 
-const { menu } = useBootstrap()
+const { menu, experiencesList } = useBootstrap()
 const { t } = useI18n()
 
 const hasMenu = computed(() => {
@@ -45,6 +47,10 @@ const items = computed(() => {
   ]
   if (hasMenu.value) {
     list.push({ key: 'menu', label: t('saya.subnav.menu'), href: `/locations/${props.locationSlug}/menu` })
+  }
+  const experiencesHref = resolveLocationExperienceHref(props.locationSlug, experiencesList.value)
+  if (experiencesHref) {
+    list.push({ key: 'experiences', label: t('saya.subnav.experiences'), href: experiencesHref })
   }
   list.push(
     { key: 'posts',    label: t('saya.subnav.posts'),   href: `/locations/${props.locationSlug}/posts` },
