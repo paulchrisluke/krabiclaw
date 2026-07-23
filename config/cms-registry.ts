@@ -87,13 +87,13 @@ const sayaCorePages: readonly CmsPageCapability[] = [
 
 const sayaCoreManagers: readonly CmsManagerCapability[] = [
   { key: 'site.blog', id: 'blog', label: 'Blog posts', section: 'collections', route: 'blog', scope: 'site' },
-  { key: 'site.reviews', id: 'reviews', label: 'Reviews', section: 'collections', route: 'reviews', scope: 'site' },
+  { key: 'site.testimonials', id: 'testimonials', label: 'Testimonials', section: 'collections', route: 'testimonials', scope: 'site' },
   { key: 'site.qa', id: 'qa', label: 'Q&A', section: 'collections', route: 'qa', scope: 'site' },
+  { key: 'site.media', id: 'media', label: 'Media library', section: 'media', route: 'media', scope: 'site' },
   { key: 'site.locations', id: 'locations', label: 'Locations', section: 'locations', route: '', scope: 'site' },
   { key: 'location.qa', id: 'qa', label: 'Q&A', section: 'collections', route: ':location/qa', scope: 'location' },
   { key: 'location.posts', id: 'posts', label: 'Posts', section: 'collections', route: ':location/posts', scope: 'location' },
   { key: 'location.photos', id: 'photos', label: 'Photos', section: 'media', route: ':location/photos', scope: 'location' },
-  { key: 'location.media', id: 'media', label: 'Media library', section: 'media', route: ':location/media', scope: 'location' },
   { key: 'site.settings', id: 'settings', label: 'Brand, navigation, footer & SEO', section: 'site', route: 'settings', scope: 'site' },
   { key: 'location.settings', id: 'settings', label: 'Location settings', section: 'site', route: ':location/settings', scope: 'location' },
 ]
@@ -136,14 +136,14 @@ const blawbyTemplateCatalog: CmsTemplateCatalog = {
   ],
   managers: [
     { key: 'site.blog', id: 'blog', label: 'Blog posts', section: 'collections', route: 'blog', scope: 'site' },
-    { key: 'site.reviews', id: 'reviews', label: 'Testimonials', section: 'collections', route: 'reviews', scope: 'site' },
+    { key: 'site.testimonials', id: 'testimonials', label: 'Testimonials', section: 'collections', route: 'testimonials', scope: 'site' },
     { key: 'site.qa', id: 'qa', label: 'Q&A', section: 'collections', route: 'qa', scope: 'site' },
+    { key: 'site.media', id: 'media', label: 'Media library', section: 'media', route: 'media', scope: 'site' },
     { key: 'site.locations', id: 'locations', label: 'Offices / service areas', section: 'locations', route: '', scope: 'site' },
-    { key: 'site.services', id: 'services', label: 'Services, policies & compliance', section: 'collections', route: 'professional-services', scope: 'site' },
+    { key: 'site.services', id: 'services', label: 'Professional services', section: 'collections', route: 'professional-services', scope: 'site' },
     { key: 'location.qa', id: 'qa', label: 'Q&A', section: 'collections', route: ':location/qa', scope: 'location' },
     { key: 'location.posts', id: 'posts', label: 'Posts', section: 'collections', route: ':location/posts', scope: 'location' },
     { key: 'location.photos', id: 'photos', label: 'Photos', section: 'media', route: ':location/photos', scope: 'location' },
-    { key: 'location.media', id: 'media', label: 'Media library', section: 'media', route: ':location/media', scope: 'location' },
     { key: 'site.settings', id: 'settings', label: 'Brand, navigation, footer & SEO', section: 'site', route: 'settings', scope: 'site' },
     { key: 'location.settings', id: 'settings', label: 'Location settings', section: 'site', route: ':location/settings', scope: 'location' },
   ],
@@ -196,8 +196,8 @@ const supportedCombinations: Record<SiteVertical, readonly PublicTemplateSlug[]>
   professional_service: ['blawby'],
 }
 
-// Always-on features: 'contact'/'locations'/'settings' are infra; 'blog'/'qa'/'reviews'/'posts'/
-// 'photos'/'media' are content managers — never business modules. An empty content manager still
+// Always-on features: 'contact'/'locations'/'settings' are infra; 'blog'/'qa'/
+// 'testimonials'/'reviews'/'posts'/'photos'/'media' are content managers — never business modules. An empty content manager still
 // needs to be reachable so an owner can create the first item (turning it off because it's empty
 // creates a circular UX problem), and public-side empty-state behavior for these is governed
 // separately by config/saya-empty-states.ts, not by this override model. None of these are
@@ -205,7 +205,7 @@ const supportedCombinations: Record<SiteVertical, readonly PublicTemplateSlug[]>
 // including surviving an explicit `disabled` entry — so an override can never drop them.
 export const ALWAYS_ON_FEATURES: readonly ProductFeature[] = [
   'contact', 'locations', 'settings',
-  'blog', 'qa', 'reviews', 'posts', 'photos', 'media',
+  'blog', 'qa', 'testimonials', 'reviews', 'posts', 'photos', 'media',
 ]
 
 // Real business-module defaults only — content managers are handled uniformly via

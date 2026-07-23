@@ -118,12 +118,12 @@
         <div v-if="canManageSite && isProfessionalService" class="flex flex-wrap items-center justify-between gap-3 border-y border-default py-4">
           <div>
             <h2 class="text-sm font-semibold text-highlighted">Firm-wide content</h2>
-            <p class="mt-1 text-xs text-muted">Manage Q&A and reviews that apply to the whole site.</p>
+            <p class="mt-1 text-xs text-muted">Manage Q&A and testimonials that apply to the whole site.</p>
           </div>
           <div class="flex flex-wrap gap-2">
-            <UButton icon="i-lucide-building-2" color="neutral" variant="soft" :to="`${siteDashboardPath}/professional-services`">Organization & SEO</UButton>
+            <UButton v-if="hasSiteServicesManager" icon="i-lucide-building-2" color="neutral" variant="soft" :to="`${siteDashboardPath}/professional-services`">Professional services</UButton>
             <UButton icon="i-lucide-circle-help" color="neutral" variant="soft" :to="`${siteDashboardPath}/qa`">Q&A</UButton>
-            <UButton icon="i-lucide-star" color="neutral" variant="soft" :to="`${siteDashboardPath}/reviews`">Reviews</UButton>
+            <UButton icon="i-lucide-star" color="neutral" variant="soft" :to="`${siteDashboardPath}/testimonials`">Testimonials</UButton>
           </div>
         </div>
 
@@ -205,6 +205,9 @@
 <script setup lang="ts">
 import { buildOnboardingChecklistItems, buildOnboardingStarterPrompt, type OnboardingChecklistResponse } from '~/composables/useOnboardingPrompts'
 import ChowBotPromptTrigger from '~/components/chowbot/ChowBotPromptTrigger.vue'
+import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
+import { resolvePublicTemplate } from '~/utils/template-registry'
+import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Dashboard | KrabiClaw', robots: 'noindex, nofollow' })
@@ -288,6 +291,20 @@ const previewLocations = computed(() => locations.value.slice(0, 3))
 const siteName = computed(() => dashboardState.site.value?.brand_name ?? 'Overview')
 const canManageSite = computed(() => dashboardState.siteAccess.value === 'organization' || dashboardState.siteAccess.value === 'site')
 const isProfessionalService = computed(() => ['service', 'professional_service'].includes(dashboardState.site.value?.vertical ?? ''))
+const siteCapabilities = computed(() => {
+  const vertical = dashboardState.site.value?.vertical
+  if (!vertical) return null
+  try {
+    const normalizedVertical = normalizeVertical(vertical) as SiteVertical
+    const template = resolvePublicTemplate({ vertical }).slug
+    return resolveCmsCapabilities(normalizedVertical, template, {
+      site: parseCmsFeatureOverrideDelta(dashboardState.site.value?.feature_overrides),
+    })
+  } catch {
+    return null
+  }
+})
+const hasSiteServicesManager = computed(() => Boolean(siteCapabilities.value?.managers.some(manager => manager.key === 'site.services')))
 const siteDashboardPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}`)
 const locationsBase = computed(() => `${siteDashboardPath.value}/locations`)
 const events = computed(() => data.value?.events ?? [])

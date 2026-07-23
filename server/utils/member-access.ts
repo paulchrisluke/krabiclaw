@@ -53,6 +53,17 @@ export interface MemberAccessPrincipal {
 
 export type DashboardSiteAccess = 'organization' | 'site' | 'location'
 
+export async function findLocationInSite(
+  db: DbClient,
+  input: { organizationId: string; siteId: string; locationId: string },
+): Promise<{ id: string } | null> {
+  return await queryFirst<{ id: string }>(db, `
+    SELECT id FROM business_locations
+    WHERE id = ? AND site_id = ? AND organization_id = ?
+    LIMIT 1
+  `, [input.locationId, input.siteId, input.organizationId])
+}
+
 export function isOrganizationWideRole(role: string): boolean {
   return role === 'owner' || role === 'admin'
 }

@@ -51,15 +51,15 @@ test('content managers are present for every vertical regardless of business mod
   for (const vertical of ['restaurant', 'experience', 'professional_service'] as const) {
     const template = vertical === 'professional_service' ? 'blawby' : 'saya'
     const resolved = resolveCmsCapabilities(vertical, template)
-    for (const feature of ['blog', 'qa', 'reviews', 'posts', 'photos', 'media']) {
+    for (const feature of ['blog', 'qa', 'testimonials', 'posts', 'photos', 'media']) {
       assert.ok(resolved.managers.some(manager => manager.id === feature), `${vertical} is missing content manager: ${feature}`)
     }
   }
 })
 
 test('content managers are never removable via an explicit disabled delta', () => {
-  const resolved = resolveCmsCapabilities('restaurant', 'saya', { site: { disabled: ['qa', 'blog', 'reviews', 'posts', 'photos', 'media'] } })
-  for (const feature of ['blog', 'qa', 'reviews', 'posts', 'photos', 'media']) {
+  const resolved = resolveCmsCapabilities('restaurant', 'saya', { site: { disabled: ['qa', 'blog', 'testimonials', 'posts', 'photos', 'media'] } })
+  for (const feature of ['blog', 'qa', 'testimonials', 'posts', 'photos', 'media']) {
     assert.ok(resolved.managers.some(manager => manager.id === feature), `${feature} should survive an explicit disable`)
   }
 })
@@ -70,7 +70,7 @@ test('toggleableModulesForScope only lists real business modules, never content 
   const blawbySite = toggleableModulesForScope('blawby', 'site')
   const blawbyLocation = toggleableModulesForScope('blawby', 'location')
 
-  for (const contentFeature of ['blog', 'qa', 'reviews', 'posts', 'photos', 'media', 'contact', 'locations', 'settings']) {
+  for (const contentFeature of ['blog', 'qa', 'testimonials', 'reviews', 'posts', 'photos', 'media', 'contact', 'locations', 'settings']) {
     assert.ok(!sayaSite.includes(contentFeature as never))
     assert.ok(!sayaLocation.includes(contentFeature as never))
   }
@@ -89,6 +89,23 @@ test('site.qa and location.qa are distinct, independently keyed managers', () =>
   assert.notEqual(siteQa.route, locationQa.route)
   assert.equal(siteQa.scope, 'site')
   assert.equal(locationQa.scope, 'location')
+})
+
+test('media library is site-scoped and photos are location-scoped', () => {
+  const restaurant = resolveCmsCapabilities('restaurant', 'saya')
+  assert.ok(restaurant.managers.some(manager => manager.key === 'site.media' && manager.route === 'media' && manager.scope === 'site'))
+  assert.ok(restaurant.managers.some(manager => manager.key === 'location.photos' && manager.route === ':location/photos' && manager.scope === 'location'))
+  assert.ok(!restaurant.managers.some(manager => manager.key === 'location.media'))
+})
+
+test('owner-entered testimonials are distinct from future location reviews', () => {
+  const restaurant = resolveCmsCapabilities('restaurant', 'saya')
+  const testimonials = restaurant.managers.find(manager => manager.key === 'site.testimonials')
+  assert.ok(testimonials)
+  assert.equal(testimonials.id, 'testimonials')
+  assert.equal(testimonials.label, 'Testimonials')
+  assert.equal(testimonials.route, 'testimonials')
+  assert.ok(!restaurant.managers.some(manager => manager.key === 'location.reviews'))
 })
 
 test('a hybrid site delta unlocks a manager the vertical does not default to', () => {
