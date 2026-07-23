@@ -84,7 +84,7 @@
   --blawby-primary-dark:  #0a0e1c;
   --blawby-primary-100:   #1b233d;
   --blawby-primary-200:   #2b3656;
-  --blawby-primary-800:   var(--blawby-token-primary-200, #b4c5e5);
+  --blawby-primary-800:   var(--blawby-token-primary-800, #1d294f);
   --blawby-accent:        var(--blawby-token-accent, #c19855);
   --blawby-accent-100:    #2a241b;
   --blawby-accent-200:    #332a1c;

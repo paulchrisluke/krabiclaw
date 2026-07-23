@@ -173,6 +173,13 @@ export interface TemplateMarketingMetadata {
    * `seo` field below for that pipeline's actual use on this template).
    */
   previewImageUrl: string | null
+  /**
+   * Root-relative or absolute URL to this template's brand logo, shown in the
+   * small avatar badges on the /templates index card and /templates/[slug]
+   * detail page (preview banner, sticky nav, sidebar). Null falls back to the
+   * same letter-avatar placeholder as `previewImageUrl` above.
+   */
+  logoUrl: string | null
   ctaLabel: string
   ctaTo: string
   features: TemplateMarketingFeature[]
@@ -212,6 +219,7 @@ export const publicTemplateMarketing: Record<PublicTemplateSlug, TemplateMarketi
     schemaOffer: { price: '0', priceCurrency: 'USD' },
     demoUrl: null,
     previewImageUrl: '/templates/saya-preview.jpg',
+    logoUrl: '/saya-logo.png',
     demoLabel: 'View live demo',
     ctaLabel: 'Get started free',
     ctaTo: '/signup',
@@ -278,6 +286,7 @@ export const publicTemplateMarketing: Record<PublicTemplateSlug, TemplateMarketi
     schemaOffer: null,
     demoUrl: 'https://ncls.krabiclaw.com',
     previewImageUrl: '/templates/blawby-preview.jpg',
+    logoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/27bc2bf2-8582-4ed1-e77c-45d7a3215b00/public',
     demoLabel: 'View live customer site',
     ctaLabel: 'Get started',
     ctaTo: '/signup',

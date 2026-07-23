@@ -33,7 +33,7 @@
       :menu="menu"
       :has-experiences="hasExperiences"
     />
-    <ConsentBanner />
+    <ConsentBanner v-if="!isDemoHost" />
   </div>
 </template>
 
@@ -106,10 +106,16 @@ const locationExperienceCtaPath = computed(() => {
   return resolveLocationExperienceHref(routeLocationSlug.value, experiencesList.value)
 })
 
+// Shared demo-host check: the synthetic "Ember & Slice" showcase site isn't a
+// real business collecting real visitor data, so it's excluded from search
+// (see siteRobots below) and skips the cookie-consent banner entirely rather
+// than asking demo visitors to accept/reject tracking that isn't happening.
+const isDemoHost = requestHostname.startsWith('demo.')
+
 // Site-wide default only — individual pages set their own robots directive
 // when they have one; this is the fallback for pages that don't.
 const siteRobots = computed(() => {
-  if (requestHostname.startsWith('demo.')) {
+  if (isDemoHost) {
     return 'noindex, nofollow'
   }
   return config.value?.robots || null

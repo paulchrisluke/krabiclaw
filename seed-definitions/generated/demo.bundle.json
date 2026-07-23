@@ -20,7 +20,8 @@
     "defaultCurrency": "USD",
     "vertical": "restaurant",
     "contentSource": "generated",
-    "mediaSource": "stock"
+    "mediaSource": "stock",
+    "logoAssetId": "media-demo-logo"
   },
   "siteConfig": [
     {
@@ -29,7 +30,7 @@
     },
     {
       "key": "brand_color",
-      "value": "#1E40AF"
+      "value": "#C2410C"
     }
   ],
   "siteLocales": [
@@ -216,6 +217,24 @@
     }
   ],
   "mediaAssets": [
+    {
+      "id": "media-demo-logo",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": null,
+      "kind": "image",
+      "provider": "external_url",
+      "source": "external",
+      "r2Key": null,
+      "cloudflareImageId": null,
+      "publicUrl": "/saya-logo.png",
+      "thumbnailUrl": "/saya-logo.png",
+      "mimeType": "image/png",
+      "fileName": "saya-logo.png",
+      "altText": "Saya theme logo",
+      "category": "other",
+      "status": "active"
+    },
     {
       "id": "media-demo-hero",
       "organizationId": "org-demo",
