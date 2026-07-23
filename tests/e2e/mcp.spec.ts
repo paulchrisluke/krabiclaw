@@ -445,16 +445,29 @@ test.describe('stateless MCP server', () => {
       if (create.status() !== 200) console.error(await create.text())
       expect(create.status()).toBe(200)
       const createBody = await create.json()
-      const created = mcpData<{ id: string; expected_document_updated_at: string }>(createBody)
+      const created = mcpData<{ post: { id: string; document_updated_at: string; content_blocks: Array<{ type: string }> } }>(createBody).post
       postId = created.id
-      expect(created.expected_document_updated_at).toEqual(expect.any(String))
+      expect(created.document_updated_at).toEqual(expect.any(String))
+      expect(created.content_blocks.map(block => block.type)).toEqual(['heading', 'markdown'])
+
+      const get = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'get_blog_post',
+        args: { site_id: siteId, post_id: postId },
+      })
+      expect(get.status()).toBe(200)
+      const readPost = mcpData<{ post: Record<string, unknown> & { document_updated_at: string; content_blocks: Array<{ type: string }> } }>(await get.json()).post
+      expect(readPost.document_updated_at).toEqual(created.document_updated_at)
+      expect(readPost.content_blocks.map(block => block.type)).toEqual(['heading', 'markdown'])
+      expect(readPost).not.toHaveProperty('body')
+      expect(readPost).not.toHaveProperty('components')
+      expect(readPost).not.toHaveProperty('content_document')
 
       const update = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'update_blog_post',
+        method: 'tools/call', toolName: 'replace_blog_content',
         args: {
           site_id: siteId,
           post_id: postId,
-          expected_document_updated_at: created.expected_document_updated_at,
+          expected_document_updated_at: readPost.document_updated_at,
           content_blocks: [
             { type: 'heading', level: 2, data: { text: 'Edited through MCP' } },
             { type: 'markdown', data: { markdown: 'Still one shared **document**.', editor_mode: 'rich' } },
@@ -463,12 +476,25 @@ test.describe('stateless MCP server', () => {
         },
       })
       expect(update.status()).toBe(200)
+      const updatedPost = mcpData<{ post: { document_updated_at: string; content_blocks: Array<{ type: string }> } }>(await update.json()).post
+      expect(updatedPost.document_updated_at).toEqual(expect.any(String))
+      expect(updatedPost.document_updated_at).not.toBe(readPost.document_updated_at)
 
       const dashboardRead = await request.get(`${baseURL}/api/editor/sites/${siteId}/blog/${postId}`)
       expect(dashboardRead.status()).toBe(200)
       const dashboardBody = await dashboardRead.json() as { post: { content_document: { blocks: Array<{ type: string; data: Record<string, unknown> }> } } }
       expect(dashboardBody.post.content_document.blocks.map(block => block.type)).toEqual(['heading', 'markdown', 'faq'])
       expect(dashboardBody.post.content_document.blocks[0]?.data.text).toBe('Edited through MCP')
+
+      const publish = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'publish_blog_post',
+        args: { site_id: siteId, post_id: postId },
+      })
+      expect(publish.status()).toBe(200)
+      const published = mcpData<{ post: { status: string; public_url: string | null; content_blocks: Array<{ type: string; data: Record<string, unknown> }> } }>(await publish.json()).post
+      expect(published.status).toBe('published')
+      expect(published.public_url).toEqual(expect.any(String))
+      expect(published.content_blocks[0]?.data.text).toBe('Edited through MCP')
 
       // Regression for the 2026-07-22 incident: update_blog_post sent `body`
       // instead of `content_blocks` and reported success without persisting
@@ -479,7 +505,7 @@ test.describe('stateless MCP server', () => {
         args: {
           site_id: siteId,
           post_id: postId,
-          expected_document_updated_at: created.expected_document_updated_at,
+          expected_document_updated_at: readPost.document_updated_at,
           body: 'This should never be persisted.',
         },
       })
@@ -1182,7 +1208,7 @@ test.describe('stateless MCP server', () => {
     expect(deleteLocationRes.status()).toBe(200)
   })
 
-  test('site-scoped tool visibility follows current roles and wrong-site calls fail', async ({ request, baseURL }) => {
+  test('site-scoped tool visibility follows current roles', async ({ request, baseURL }) => {
     await loginAsFreshMcpUser(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)
     const organizationId = await getSiteOrg(request, baseURL!, siteId)
@@ -1206,6 +1232,10 @@ test.describe('stateless MCP server', () => {
     expect(toolNames).toContain('update_page_content')
     expect(toolNames).not.toContain('update_notification_settings')
     expect(toolNames).not.toContain('get_google_business_auth_url')
+  })
+
+  test('site-scoped tools/list fails closed for inaccessible site ids', async ({ request, baseURL }) => {
+    await loginAsFreshMcpUser(request, baseURL!)
 
     const wrongSiteTools = await mcpRequest(request, baseURL!, {
       method: 'tools/list',
@@ -1222,6 +1252,10 @@ test.describe('stateless MCP server', () => {
     expect(blankSiteTools.status()).toBe(200)
     const blankSiteToolsBody = await blankSiteTools.json() as { result: { tools: Array<{ name: string }> } }
     expect(blankSiteToolsBody.result.tools).toEqual([])
+  })
+
+  test('wrong-site MCP tool calls fail', async ({ request, baseURL }) => {
+    await loginAsFreshMcpUser(request, baseURL!)
 
     const wrongSite = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
