@@ -80,6 +80,8 @@ const props = defineProps<{
   temporarilyUnavailableLabel: string
   fullyBookedLabel: string
   notScheduledLabel: string
+  durationHourLabel: string
+  durationMinuteLabel: string
 }>()
 
 function unavailabilityBadge(experience: Experience): string | null {
@@ -93,9 +95,11 @@ function unavailabilityBadge(experience: Experience): string | null {
 }
 
 function formatDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes} min`
+  if (minutes < 60) return `${minutes} ${props.durationMinuteLabel}`
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  return m ? `${h} hr ${m} min` : `${h} hr`
+  return m
+    ? `${h} ${props.durationHourLabel} ${m} ${props.durationMinuteLabel}`
+    : `${h} ${props.durationHourLabel}`
 }
 </script>

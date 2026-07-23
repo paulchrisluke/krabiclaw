@@ -21,6 +21,8 @@
         :temporarily-unavailable-label="expCopy.temporarilyUnavailableLabel"
         :fully-booked-label="expCopy.fullyBookedLabel"
         :not-scheduled-label="expCopy.notScheduledLabel"
+        :duration-hour-label="expCopy.durationHourLabel"
+        :duration-minute-label="expCopy.durationMinuteLabel"
       />
     </div>
   </NuxtLayout>

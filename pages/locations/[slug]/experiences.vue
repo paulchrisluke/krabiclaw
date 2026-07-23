@@ -17,6 +17,8 @@
           :temporarily-unavailable-label="expCopy.temporarilyUnavailableLabel"
           :fully-booked-label="expCopy.fullyBookedLabel"
           :not-scheduled-label="expCopy.notScheduledLabel"
+          :duration-hour-label="expCopy.durationHourLabel"
+          :duration-minute-label="expCopy.durationMinuteLabel"
         />
       </div>
     </template>
@@ -42,14 +44,16 @@
           :temporarily-unavailable-label="expCopy.temporarilyUnavailableLabel"
           :fully-booked-label="expCopy.fullyBookedLabel"
           :not-scheduled-label="expCopy.notScheduledLabel"
+          :duration-hour-label="expCopy.durationHourLabel"
+          :duration-minute-label="expCopy.durationMinuteLabel"
         />
       </div>
     </template>
 
     <div v-else class="mx-auto max-w-xl px-4 py-24 text-center">
       <SayaIcon name="map-pin" class="mx-auto mb-4 size-12 text-muted" />
-      <h1 class="saya-display-sm text-default">Location Not Found</h1>
-      <SayaButton to="/locations" class="mt-8">View all locations</SayaButton>
+      <h1 class="saya-display-sm text-default">{{ t('saya.location.not_found') }}</h1>
+      <SayaButton to="/locations" class="mt-8">{{ t('saya.location.view_all_locations') }}</SayaButton>
     </div>
   </div>
 </template>
@@ -63,7 +67,7 @@ const route = useRoute()
 const { isPlatform, site } = useTenantSite()
 if (isPlatform) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
 
-const { locale } = useI18n()
+const { locale, t } = useI18n()
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 const expCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
