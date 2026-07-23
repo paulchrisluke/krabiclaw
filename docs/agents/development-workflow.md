@@ -75,6 +75,10 @@ Fresh worktrees usually do not have a local `.env`. Nuxt validates required publ
 For local Playwright runs that use dev login routes, editor previews, or dashboard pages, export the local-safe values and real Stripe test values in the same command so Playwright's `webServer` child receives them:
 
 ```bash
+: "${STRIPE_SECRET_KEY:?Set STRIPE_SECRET_KEY to a Stripe test secret before dashboard E2E}"
+: "${STRIPE_WEBHOOK_SECRET:?Set STRIPE_WEBHOOK_SECRET to a Stripe test webhook secret before dashboard E2E}"
+: "${NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:?Set NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY to a Stripe test publishable key before dashboard E2E}"
+
 NUXT_PUBLIC_PLATFORM_DOMAIN=http://localhost:3000 \
 NUXT_PUBLIC_FREE_SITE_DOMAIN=http://localhost:3000 \
 NUXT_PUBLIC_APP_NAME=KrabiClaw \

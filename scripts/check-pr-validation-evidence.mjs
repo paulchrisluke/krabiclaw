@@ -21,7 +21,7 @@ function evidenceLine(body, label) {
 
 const body = readPullRequestBody()
 const required = ['Browser', 'Static']
-const placeholderPattern = /^(?:tbd|todo|n\/a|none|not run|manual\/playwright\/ci e2e evidence, or exact blocker\.|unit\/lint\/typecheck\/guardrail evidence, or exact blocker\.)$/i
+const placeholderPattern = /^(?:tbd|todo|n\/a|none|not run|blocked|exact blocker\.?|manual\/playwright\/ci e2e evidence, or exact blocker\.|unit\/lint\/typecheck\/guardrail evidence, or exact blocker\.)$/i
 const missing = required.filter((label) => {
   const value = evidenceLine(body, label)
   return !value || placeholderPattern.test(value)

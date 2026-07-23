@@ -57,5 +57,14 @@ test('platform admin enters and exits a client workspace through Better Auth imp
   expect(adminAccess.status()).toBe(200)
   expect(await adminAccess.json()).toMatchObject({ allowed: true })
 
+  await page.goto(`${baseURL}/admin/clients`, { waitUntil: 'load' })
+  const translationsButton = page.getByRole('button', { name: 'Open Pottery House Krabi translations' })
+  await expect(translationsButton).toBeEnabled()
+  await translationsButton.click()
+
+  await expect(page).toHaveURL(/\/dashboard\/pottery-house-krabi\/sites\/pottery-house\/translations$/)
+  await expect(page.getByText(/Impersonating/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Exit to Admin' })).toBeVisible()
+
   expect(errors).toEqual([])
 })

@@ -28,7 +28,21 @@ function skip(message) {
   console.log(`skip  ${message}`)
 }
 
-async function request(method, params = {}, authHeaders = {}) {
+async function request(method, params = {}, authHeaders = {}, options = {}) {
+  const payload = {
+    jsonrpc: '2.0',
+    method,
+    params,
+    _meta: {
+      'io.modelcontextprotocol/version': MCP_VERSION,
+      'io.modelcontextprotocol/method': method,
+      ...(method === 'tools/call' && params.name ? { 'io.modelcontextprotocol/name': String(params.name) } : {}),
+    },
+  }
+  if (!options.omitId) {
+    payload.id = `${method}-${Date.now()}`
+  }
+
   const res = await fetch(MCP_URL, {
     method: 'POST',
     headers: {
@@ -38,17 +52,7 @@ async function request(method, params = {}, authHeaders = {}) {
       ...(method === 'tools/call' && params.name ? { 'mcp-name': String(params.name) } : {}),
       ...authHeaders,
     },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: `${method}-${Date.now()}`,
-      method,
-      params,
-      _meta: {
-        'io.modelcontextprotocol/version': MCP_VERSION,
-        'io.modelcontextprotocol/method': method,
-        ...(method === 'tools/call' && params.name ? { 'io.modelcontextprotocol/name': String(params.name) } : {}),
-      },
-    }),
+    body: JSON.stringify(payload),
   })
   const text = await res.text()
   let body = null
@@ -132,7 +136,7 @@ async function main() {
   if (init.body?.result?.protocolVersion === MCP_VERSION) pass('initialize negotiates requested protocol version')
   else fail('initialize negotiated unexpected protocol version', init.body)
 
-  const initialized = await request('notifications/initialized', {}, headers)
+  const initialized = await request('notifications/initialized', {}, headers, { omitId: true })
   expectStatus('notifications/initialized is accepted', initialized.res.status, 202)
 
   const tools = await request('tools/list', {}, headers)

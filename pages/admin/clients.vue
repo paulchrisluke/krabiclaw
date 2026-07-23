@@ -59,7 +59,7 @@
                 variant="ghost"
                 icon="i-lucide-languages"
                 :aria-label="`Open ${client.brand_name || client.org_name} translations`"
-                :disabled="!client.impersonation_user_id"
+                :disabled="isImpersonatingClient || !client.impersonation_user_id"
                 :loading="impersonatingClientOrgId === client.org_id"
                 @click="openWorkspace(client, 'translations')"
               >
@@ -91,7 +91,7 @@
                 variant="soft"
                 icon="i-lucide-external-link"
                 :aria-label="`Open ${client.brand_name || client.org_name} workspace`"
-                :disabled="!client.impersonation_user_id"
+                :disabled="isImpersonatingClient || !client.impersonation_user_id"
                 :loading="impersonatingClientOrgId === client.org_id"
                 @click="openWorkspace(client)"
               >
@@ -397,6 +397,7 @@ interface BillingStatus {
 const clients = ref<Client[]>([])
 const clientsLoading = ref(true)
 const impersonatingClientOrgId = ref<string | null>(null)
+const isImpersonatingClient = computed(() => impersonatingClientOrgId.value !== null)
 const { refreshSession } = useAuth()
 
 const PLAN_LABELS: Record<string, string> = {
@@ -426,6 +427,8 @@ async function loadClients() {
 }
 
 async function openWorkspace(client: Client, destination: 'overview' | 'translations' = 'overview') {
+  if (isImpersonatingClient.value) return
+
   if (!client.org_slug || !client.impersonation_user_id) {
     toast.add({ title: 'No client workspace member available', color: 'warning' })
     return
