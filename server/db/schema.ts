@@ -1923,6 +1923,20 @@ export const mcp_tool_call_events = sqliteTable("mcp_tool_call_events", {
 	status: text().notNull(),
 	error_code: text(),
 	error_message: text(),
+	http_status: integer(),
+	jsonrpc_error_code: integer(),
+	jsonrpc_error_message: text(),
+	protocol_version: text(),
+	session_id_hash: text(),
+	oauth_client_id_hash: text(),
+	user_agent: text(),
+	cf_ray_id: text(),
+	deployment_version: text(),
+	catalog_fingerprint: text(),
+	compatibility_alias_used: integer(),
+	compatibility_tool_name: text(),
+	replacement_tool_names: text(),
+	unknown_tool_name: text(),
 	duration_ms: integer(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
@@ -1930,6 +1944,10 @@ export const mcp_tool_call_events = sqliteTable("mcp_tool_call_events", {
 	index("idx_mcp_tool_call_events_tool_status").on(table.tool_name, table.status),
 	index("idx_mcp_tool_call_events_site").on(table.site_id, table.created_at),
 	index("idx_mcp_tool_call_events_org").on(table.organization_id, table.created_at),
+	index("idx_mcp_tool_call_events_method_created").on(table.method, table.created_at),
+	index("idx_mcp_tool_call_events_session").on(table.session_id_hash, table.created_at),
+	index("idx_mcp_tool_call_events_unknown").on(table.unknown_tool_name, table.created_at),
+	index("idx_mcp_tool_call_events_compat").on(table.compatibility_tool_name, table.created_at),
 ]);
 
 export const site_transfer_requests = sqliteTable("site_transfer_requests", {

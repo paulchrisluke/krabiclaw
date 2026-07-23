@@ -23,7 +23,7 @@ import { SITES_TOOLS } from './sites'
 import { SUBMISSIONS_TOOLS } from './submissions'
 import { TRANSLATIONS_TOOLS } from './translations'
 
-export const MCP_TOOLS: McpToolDefinition[] = [
+export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
   ...ACCOUNT_TOOLS,
   ...ANALYTICS_TOOLS,
   ...BLOG_TOOLS,
@@ -46,6 +46,13 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   ...SITES_TOOLS,
   ...SUBMISSIONS_TOOLS,
   ...TRANSLATIONS_TOOLS,
+].sort((a, b) => a.name.localeCompare(b.name))
+
+export const MCP_INTERNAL_TOOLS: McpToolDefinition[] = []
+
+export const MCP_TOOLS: McpToolDefinition[] = [
+  ...MCP_PUBLIC_TOOLS,
+  ...MCP_INTERNAL_TOOLS,
 ].sort((a, b) => a.name.localeCompare(b.name))
 
 

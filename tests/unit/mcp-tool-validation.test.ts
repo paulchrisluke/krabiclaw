@@ -65,8 +65,8 @@ test('validateNoUnknownTopLevelArguments accepts a metadata-only update_platform
   }))
 })
 
-test('update_platform_blog_post is gone: absent from both PLATFORM_PUBLIC_MCP_TOOLS and the combined PLATFORM_MCP_TOOLS', () => {
-  assert.equal(PLATFORM_MCP_TOOLS.some(t => t.name === 'update_platform_blog_post'), false)
+test('update_platform_blog_post is hidden from discovery but retained in dispatch for stale catalogs', () => {
+  assert.equal(PLATFORM_MCP_TOOLS.some(t => t.name === 'update_platform_blog_post'), true)
   assert.equal(PLATFORM_PUBLIC_MCP_TOOLS.some(t => t.name === 'update_platform_blog_post'), false)
 })
 

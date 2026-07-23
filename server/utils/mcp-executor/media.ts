@@ -105,10 +105,12 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       return renderStructuredResponse(
         {
           launched: true,
+        },
+        "Video upload widget launched.",
+        {
           resourceUri: VIDEO_UPLOAD_WIDGET_RESOURCE_URI,
           context: { site_id: site.siteId, category },
         },
-        "Video upload widget launched.",
       );
     }
     case "update_media_asset": {

@@ -4,13 +4,13 @@ import test from 'node:test'
 import { renderPlatformMcpPrompt } from '../../server/utils/platform-mcp-prompts.ts'
 import { getPlatformMcpTool } from '../../server/utils/platform-mcp-tools.ts'
 
-test('update_and_publish_post prompt does not reference the retired update_platform_blog_post tool (regression: the prompt kept instructing the model to call a tool removed from both discovery and dispatch, guaranteeing methodNotFound)', () => {
+test('update_and_publish_post prompt does not steer fresh clients to the hidden update_platform_blog_post compatibility adapter', () => {
   const { text } = renderPlatformMcpPrompt('update_and_publish_post', {
     identifier: 'post-1',
     body: 'Approved final content.',
   })
   assert.ok(!text.includes('update_platform_blog_post'), 'prompt must not reference the retired update_platform_blog_post tool')
-  assert.ok(getPlatformMcpTool('update_platform_blog_post') === null, 'sanity check: update_platform_blog_post really is gone')
+  assert.ok(getPlatformMcpTool('update_platform_blog_post') !== null, 'hidden compatibility adapter must remain dispatchable')
 })
 
 test('update_and_publish_post prompt only references tool names that resolve through getPlatformMcpTool', () => {

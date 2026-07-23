@@ -39,6 +39,7 @@ import {
   updatePlatformBlogPost,
   updatePlatformDoc,
 } from '~/server/utils/platform-content'
+import { updatePlatformBlogPostCompatibility } from '~/server/utils/mcp-compat/platform-blog'
 
 function requiredString(args: Record<string, unknown>, key: string) {
   const value = args[key]
@@ -377,15 +378,22 @@ export function assertSafeDownloadUrl(rawUrl: string, label: string): URL {
     throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} download URL is invalid.`)
   }
 
-  if (parsed.protocol !== 'https:') {
-    throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} download URL must use https.`)
-  }
-
   const hostname = parsed.hostname.trim().toLowerCase()
   const normalizedHostname = normalizeHostnameForIpChecks(hostname)
   if (!hostname) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} download URL must include a hostname.`)
   }
+  const isDevLoopback = import.meta.dev && parsed.protocol === 'http:' && (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    normalizedHostname === '127.0.0.1' ||
+    normalizedHostname === '::1'
+  )
+  if (parsed.protocol !== 'https:' && !isDevLoopback) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} download URL must use https.`)
+  }
+  if (isDevLoopback) return parsed
+
   if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} download URL cannot target localhost.`)
   }
@@ -507,7 +515,7 @@ export async function executePlatformMcpToolCall(
 ) {
   const tool = getPlatformMcpTool(toolName)
   if (!tool) {
-    throw mcpProtocolError(MCP_ERROR.methodNotFound, `Unknown tool: ${toolName}`)
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown tool: ${toolName}`, { unknownToolName: toolName }, 'protocol')
   }
 
   const user = await requireMcpUser(event, {
@@ -742,6 +750,8 @@ export async function executePlatformMcpToolCall(
       }, blogScope)
       return { post: toPlatformBlogPostProjection(result.post) }
     }
+    case 'update_platform_blog_post':
+      return await updatePlatformBlogPostCompatibility(user.db, user.userId, rawArguments)
     case 'update_platform_blog_metadata': {
       const siteId = optionalString(rawArguments, 'site_id')
       const metadataFields = ['title', 'excerpt', 'category', 'nav_section', 'nav_title', 'nav_order', 'nav_section_order', 'hide_from_nav', 'featured_order', 'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots', 'featured_image_asset_id', 'visibility', 'slug', 'redirect_old_slug', 'reset_slug_override']
@@ -841,6 +851,6 @@ export async function executePlatformMcpToolCall(
     case 'delete_platform_doc':
       return await deletePlatformDoc(user.db, requiredString(rawArguments, 'doc_id'))
     default:
-      throw mcpProtocolError(MCP_ERROR.methodNotFound, `Unknown tool: ${toolName}`)
+      throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown tool: ${toolName}`, { unknownToolName: toolName }, 'protocol')
   }
 }

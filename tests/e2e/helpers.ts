@@ -64,18 +64,21 @@ export function collectPageErrors(page: Page) {
 
   page.on('console', (message) => {
     const text = message.text()
+    const location = message.location()
+    const source = location.url ? ` (${location.url}:${location.lineNumber}:${location.columnNumber})` : ''
+    const decoratedText = `${text}${source}`
     if (message.type() === 'error' || message.type() === 'warning') {
-      console.log(`[BROWSER ${message.type().toUpperCase()}] ${text}`)
+      console.log(`[BROWSER ${message.type().toUpperCase()}] ${decoratedText}`)
     }
-    if (message.type() === 'error') errors.push(text)
+    if (message.type() === 'error') errors.push(decoratedText)
     // Catch Vue Router "No match found" warnings (these indicate /undefined navigations)
     if (message.type() === 'warning' && text.includes('No match found for location with path')) {
-      errors.push(`Vue Router warn: ${text}`)
+      errors.push(`Vue Router warn: ${decoratedText}`)
     }
     if (message.type() === 'warning') {
       const isAllowlisted = warnAllowlistPatterns.some(pattern => text.includes(pattern))
       if (!isAllowlisted && warnFailurePatterns.some(pattern => text.includes(pattern))) {
-        errors.push(`Vue warn: ${text}`)
+        errors.push(`Vue warn: ${decoratedText}`)
       }
     }
   })

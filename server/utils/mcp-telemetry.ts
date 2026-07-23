@@ -1,4 +1,5 @@
 import { execute, type DbClient } from "~/server/db";
+import { anonymizeId } from "~/server/utils/platform-auth";
 
 // Field names that must never be logged verbatim, regardless of tool.
 const SENSITIVE_KEY_PATTERN =
@@ -116,6 +117,7 @@ export function describeErrorForTelemetry(error: unknown, maxLength = 1000): str
 export type McpToolCallStatus = "success" | "error" | "auth_required" | "blocked";
 
 export interface LogMcpToolCallEventInput {
+  env?: ApiRecord | null;
   organizationId?: string | null;
   siteId?: string | null;
   locationId?: string | null;
@@ -131,7 +133,30 @@ export interface LogMcpToolCallEventInput {
   status: McpToolCallStatus;
   errorCode?: string | number | null;
   errorMessage?: string | null;
+  httpStatus?: number | null;
+  jsonrpcErrorCode?: number | null;
+  jsonrpcErrorMessage?: string | null;
+  protocolVersion?: string | null;
+  sessionId?: string | null;
+  oauthClientId?: string | null;
+  userAgent?: string | null;
+  cfRayId?: string | null;
+  deploymentVersion?: string | null;
+  catalogFingerprint?: string | null;
+  compatibilityAliasUsed?: boolean | null;
+  compatibilityToolName?: string | null;
+  replacementToolNames?: string[] | null;
+  unknownToolName?: string | null;
   durationMs?: number | null;
+}
+
+function hashIdentifier(env: ApiRecord | null | undefined, value: string | null | undefined) {
+  if (!env || !value) return null;
+  try {
+    return anonymizeId(value, env);
+  } catch {
+    return null;
+  }
 }
 
 // Fire-and-forget by convention: callers should wrap this in waitUntil (or let
@@ -148,8 +173,12 @@ export async function logMcpToolCallEvent(
       INSERT INTO mcp_tool_call_events
         (id, organization_id, site_id, location_id, user_id, mcp_surface, request_id,
          method, tool_name, tool_domain, is_mutating, arguments_summary_json,
-         result_summary_json, status, error_code, error_message, duration_ms)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         result_summary_json, status, error_code, error_message,
+         http_status, jsonrpc_error_code, jsonrpc_error_message, protocol_version,
+         session_id_hash, oauth_client_id_hash, user_agent, cf_ray_id, deployment_version,
+         catalog_fingerprint, compatibility_alias_used, compatibility_tool_name,
+         replacement_tool_names, unknown_tool_name, duration_ms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       [
         crypto.randomUUID(),
@@ -168,6 +197,20 @@ export async function logMcpToolCallEvent(
         input.status,
         input.errorCode == null ? null : String(input.errorCode),
         truncateText(input.errorMessage, 1000),
+        input.httpStatus ?? null,
+        input.jsonrpcErrorCode ?? (typeof input.errorCode === "number" ? input.errorCode : null),
+        truncateText(input.jsonrpcErrorMessage ?? input.errorMessage, 1000),
+        input.protocolVersion ?? null,
+        hashIdentifier(input.env, input.sessionId),
+        hashIdentifier(input.env, input.oauthClientId),
+        truncateText(input.userAgent, 500),
+        input.cfRayId ?? null,
+        input.deploymentVersion ?? null,
+        input.catalogFingerprint ?? null,
+        input.compatibilityAliasUsed == null ? null : input.compatibilityAliasUsed ? 1 : 0,
+        input.compatibilityToolName ?? null,
+        input.replacementToolNames?.length ? JSON.stringify(input.replacementToolNames) : null,
+        input.unknownToolName ?? null,
         input.durationMs ?? null,
       ],
     );

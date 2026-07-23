@@ -1,5 +1,13 @@
 import type { H3Event } from 'h3'
 import { queryFirst } from '~/server/db'
+import { getMcpTool } from '~/server/utils/mcp-tools'
+import { requireMcpUser } from '~/server/utils/mcp-auth'
+import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
+import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
+import { renderStructuredResponse } from '~/server/utils/mcp-render'
+import { validateNoUnknownTopLevelArguments } from '~/server/utils/mcp-tool-validation'
+import { listSitesForUser } from '~/server/utils/mcp-workflows'
+import { hasSiteEntitlement } from '~/server/utils/billing'
 import { handleAnalyticsTools } from './analytics'
 import { handleBlogTools } from './blog'
 import { handleContentTools } from './content'
@@ -20,7 +28,16 @@ import { handleSettingsTools } from './settings'
 import { handleSitesTools } from './sites'
 import { handleSubmissionsTools } from './submissions'
 import { handleTranslationsTools } from './translations'
-import { NOT_HANDLED } from './shared'
+import {
+  NOT_HANDLED,
+  humanizeEntitlement,
+  normalizeWorkspaceArguments,
+  validateRequiredArguments,
+  workspaceContextPayload,
+  workspaceLocationsPayload,
+  workspaceOrganizationsPayload,
+  workspaceSitesPayload,
+} from './shared'
 import type { McpExecutorContext } from './shared'
 
 // Exported so non-MCP callers (chowbot-adapter.ts) dispatch through the same
@@ -59,6 +76,8 @@ export async function executeMcpToolCall(
     throw mcpProtocolError(
       MCP_ERROR.methodNotFound,
       `Unknown tool: ${toolName}`,
+      { unknownToolName: toolName },
+      'protocol',
     );
   }
 

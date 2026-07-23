@@ -19,6 +19,7 @@ export interface McpUserContext {
   userId: string
   isPlatformAdmin: boolean
   scopes: string[]
+  oauthClientId?: string | null
   // Only populated for session-based auth (ChowBot/dashboard) — bearer-token
   // auth (e.g. ChatGPT connector) has no browser session to read this from.
   activeOrganizationId?: string
@@ -37,11 +38,13 @@ export interface McpSiteContext extends McpUserContext {
 interface TokenLookupResult {
   userId: string | null
   reason: string
+  oauthClientId?: string | null
 }
 
 interface VerifiedTokenIdentity {
   userId: string
   tokenKind: 'jwt' | 'opaque'
+  oauthClientId?: string | null
 }
 
 interface TokenVerificationResult {
@@ -195,6 +198,7 @@ async function verifyBearerToken(
     env,
     db,
     userId: identity.userId,
+    oauthClientId: identity.oauthClientId ?? null,
     isPlatformAdmin: isPlatformAdmin(
       {
         role: user.role ?? null,
@@ -237,7 +241,7 @@ async function verifyJwtOrOpaqueToken(
   const jwtResult = await verifyJwtAccessToken(token, baseUrl, db, audiences, requiredScopes)
   if (jwtResult.userId) {
     return {
-      identity: { userId: jwtResult.userId, tokenKind: 'jwt' },
+      identity: { userId: jwtResult.userId, tokenKind: 'jwt', oauthClientId: jwtResult.oauthClientId ?? null },
       jwtReason: jwtResult.reason,
       opaqueReason: 'not_checked',
       scopes: jwtResult.scopes,
@@ -247,7 +251,7 @@ async function verifyJwtOrOpaqueToken(
   const opaqueResult = await verifyOpaqueAccessToken(token, db, requiredScopes)
   if (opaqueResult.userId) {
     return {
-      identity: { userId: opaqueResult.userId, tokenKind: 'opaque' },
+      identity: { userId: opaqueResult.userId, tokenKind: 'opaque', oauthClientId: opaqueResult.oauthClientId ?? null },
       jwtReason: jwtResult.reason,
       opaqueReason: opaqueResult.reason,
       scopes: opaqueResult.scopes,
@@ -294,8 +298,13 @@ async function verifyJwtAccessToken(
     if (missingScope) {
       return { userId: null, reason: `${missingScope}_scope_missing`, scopes }
     }
+    const oauthClientId = typeof payload.client_id === 'string'
+      ? payload.client_id
+      : typeof payload.azp === 'string'
+        ? payload.azp
+        : null
     return typeof payload.sub === 'string'
-      ? { userId: payload.sub, reason: 'accepted', scopes }
+      ? { userId: payload.sub, reason: 'accepted', scopes, oauthClientId }
       : { userId: null, reason: 'subject_missing', scopes }
   } catch (error) {
     return { userId: null, reason: joseErrorReason(error), scopes: [] }
@@ -313,8 +322,9 @@ async function verifyOpaqueAccessToken(
     expiresAt: number | null
     scopes: string | null
     client_disabled: number | null
+    oauth_client_id: string | null
   }>(db, `
-    SELECT oat.userId, oat.expiresAt, oat.scopes, oc.disabled AS client_disabled
+    SELECT oat.userId, oat.expiresAt, oat.scopes, oc.disabled AS client_disabled, oc.clientId AS oauth_client_id
     FROM oauthAccessToken oat
     LEFT JOIN oauthClient oc ON oc.clientId = oat.clientId
     WHERE oat.token = ?
@@ -334,7 +344,7 @@ async function verifyOpaqueAccessToken(
   const missingScope = requiredScopes.find(scope => !scopes.includes(scope))
   if (missingScope) return { userId: null, reason: `${missingScope}_scope_missing`, scopes }
 
-  return { userId: accessToken.userId, reason: 'accepted', scopes }
+  return { userId: accessToken.userId, reason: 'accepted', scopes, oauthClientId: accessToken.oauth_client_id }
 }
 
 // Decodes a JWT's payload segment without verifying the signature — used only

@@ -13,7 +13,7 @@ const fixtureUserId = process.env.MCP_CHATGPT_USER_ID || 'user-mcp-managed'
 const siteId = process.env.MCP_CHATGPT_SITE_ID || 'site-mcp-managed'
 const runId = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
 const artifactDir = path.join(rootDir, '.wrangler', 'chatgpt-connector', runId)
-const MCP_VERSION = '2025-11-25'
+const MCP_VERSION = '2025-06-18'
 const evidence = {
   runId,
   baseUrl,

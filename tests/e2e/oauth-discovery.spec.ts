@@ -269,7 +269,7 @@ test.describe('OAuth discovery endpoints', () => {
   })
 
   test('unauthenticated MCP request returns 401 with WWW-Authenticate header', async ({ request, baseURL }) => {
-    const MCP_VERSION = '2026-07-28'
+    const MCP_VERSION = '2025-06-18'
     const res = await request.post(`${baseURL}/api/mcp`, {
       headers: {
         'content-type': 'application/json',
@@ -296,7 +296,7 @@ test.describe('OAuth discovery endpoints', () => {
   })
 
   test('unauthenticated MCP tool call returns mcp/www_authenticate challenge', async ({ request, baseURL }) => {
-    const MCP_VERSION = '2026-07-28'
+    const MCP_VERSION = '2025-06-18'
     const res = await request.post(`${baseURL}/api/mcp`, {
       headers: {
         'content-type': 'application/json',
@@ -334,7 +334,7 @@ test.describe('OAuth discovery endpoints', () => {
   })
 
   test('unauthenticated platform MCP request returns platform WWW-Authenticate header', async ({ request, baseURL }) => {
-    const MCP_VERSION = '2026-07-28'
+    const MCP_VERSION = '2025-06-18'
     const res = await request.post(`${baseURL}/api/mcp/platform`, {
       headers: {
         'content-type': 'application/json',
@@ -359,7 +359,7 @@ test.describe('OAuth discovery endpoints', () => {
   })
 
   test('unauthenticated tenant and platform MCP tool calls are logged to mcp telemetry', async ({ request, baseURL }) => {
-    const MCP_VERSION = '2026-07-28'
+    const MCP_VERSION = '2025-06-18'
     const since = new Date().toISOString()
 
     const tenantRes = await request.post(`${baseURL}/api/mcp`, {

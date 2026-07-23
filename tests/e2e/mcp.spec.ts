@@ -3,7 +3,7 @@ import { devLoginHeaders, isDeployedWorkerTarget } from './test-env'
 import { loginAs } from './helpers/auth'
 import { MCP_FREE_USER_ID, MCP_GROWTH_USER_ID, MCP_MANAGED_USER_ID } from './helpers/plan-fixtures'
 
-const MCP_VERSION = '2026-07-28'
+const MCP_VERSION = '2025-06-18'
 // Fixed fixture sites seeded by generate-demo-seed.ts with the matching plan already
 // active. Entitlement checks are site-scoped (hasSiteEntitlement), so a plan-gated tool
 // call needs the org's actual paid site, not a brand-new site from ensureSite() (which
@@ -153,6 +153,103 @@ async function loginAsFreshMcpUser(request: APIRequestContext, baseURL: string) 
 }
 
 test.describe('stateless MCP server', () => {
+  test('ChatGPT session can launch the video upload widget without transport failures', async ({ request, baseURL }) => {
+    await loginAsFreshMcpUser(request, baseURL!)
+    const siteId = await ensureSite(request, baseURL!)
+
+    const initialize = await mcpRequest(request, baseURL!, {
+      method: 'initialize',
+      params: { protocolVersion: MCP_VERSION, capabilities: {}, clientInfo: { name: 'openai-mcp', version: '1.0.0' } },
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(initialize.status()).toBe(200)
+    const initializeBody = await initialize.json() as { result?: { protocolVersion?: string; capabilities?: { tools?: unknown; resources?: unknown } } }
+    expect(initializeBody.result?.protocolVersion).toBe(MCP_VERSION)
+    expect(initializeBody.result?.capabilities?.tools).toBeDefined()
+    expect(initializeBody.result?.capabilities?.resources).toBeDefined()
+
+    const initialized = await mcpRequest(request, baseURL!, {
+      method: 'notifications/initialized',
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(initialized.status()).toBe(202)
+
+    const tools = await mcpRequest(request, baseURL!, {
+      method: 'tools/list',
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(tools.status()).toBe(200)
+    const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, outputSchema?: Record<string, unknown>, _meta?: Record<string, unknown> }> } }
+    const openVideoTool = toolsBody.result.tools.find(tool => tool.name === 'open_video_upload')
+    expect(openVideoTool).toBeTruthy()
+    expect(openVideoTool?.outputSchema?.required).toEqual(['launched'])
+    expect((openVideoTool?._meta?.ui as { resourceUri?: string, visibility?: string[] } | undefined)?.resourceUri).toBe('ui://widget/video-upload@v1.html')
+    expect((openVideoTool?._meta?.ui as { resourceUri?: string, visibility?: string[] } | undefined)?.visibility).toEqual(['model', 'app'])
+    expect(openVideoTool?._meta?.['openai/outputTemplate']).toBe('ui://widget/video-upload@v1.html')
+
+    const launchVideo = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'open_video_upload',
+      args: { site_id: siteId, category: 'other' },
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(launchVideo.status()).toBe(200)
+    const launchVideoBody = await launchVideo.json() as {
+      result?: {
+        structuredContent?: Record<string, unknown>
+        _meta?: Record<string, unknown>
+      }
+    }
+    expect(launchVideoBody.result?.structuredContent).toEqual({
+      launched: true,
+    })
+    expect(launchVideoBody.result?.structuredContent).not.toHaveProperty('context')
+    expect(launchVideoBody.result?._meta?.resourceUri).toBe('ui://widget/video-upload@v1.html')
+    expect((launchVideoBody.result?._meta as { context?: { site_id?: string; category?: string | null } } | undefined)?.context).toEqual({
+      site_id: siteId,
+      category: 'other',
+    })
+
+    const staleLauncher = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'open_media_upload',
+      args: { site_id: siteId, category: 'other' },
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(staleLauncher.status()).toBe(200)
+    expect((await staleLauncher.json()).error?.code).toBe(-32601)
+
+    const resource = await mcpRequest(request, baseURL!, {
+      method: 'resources/read',
+      params: { uri: 'ui://widget/video-upload@v1.html' },
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(resource.status()).toBe(200)
+    const resourceBody = await resource.json() as {
+      result: {
+        contents: Array<{
+          text: string
+          _meta?: {
+            ui?: {
+              csp?: { resourceDomains?: string[]; connectDomains?: string[] }
+              domain?: string
+            }
+            'openai/widgetDomain'?: string
+            'openai/widgetCSP'?: { resource_domains?: string[]; connect_domains?: string[] }
+          }
+        }>
+      }
+    }
+    const content = resourceBody.result.contents[0]!
+    const baseOrigin = new URL(baseURL!).origin
+    expect(content._meta?.ui?.csp?.resourceDomains).toContain(baseOrigin)
+    expect(content._meta?.ui?.csp?.connectDomains).toContain(baseOrigin)
+    expect(content._meta?.['openai/widgetDomain']).toBe(baseOrigin)
+    expect(content._meta?.['openai/widgetCSP']?.resource_domains).toContain(baseOrigin)
+    expect(content._meta?.['openai/widgetCSP']?.connect_domains).toContain(baseOrigin)
+    expect(content.text).toContain('/mcp-assets/video-upload-widget.v1.js')
+  })
+
   test('ChatGPT sequence and video widget produce an active, public, assignable asset', async ({ page, request, baseURL }) => {
     // The widget's downloadUrl points at this same app's own /api/mcp-test/tiny-video
     // fixture, so the server-side upload_user_media executor's fetch(downloadUrl) is a
@@ -175,7 +272,9 @@ test.describe('stateless MCP server', () => {
       extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
     })
     expect(initialize.status()).toBe(200)
-    expect((await initialize.json() as { result?: { capabilities?: { tools?: unknown } } }).result?.capabilities?.tools).toBeDefined()
+    const initializeBody = await initialize.json() as { result?: { protocolVersion?: string; capabilities?: { tools?: unknown } } }
+    expect(initializeBody.result?.protocolVersion).toBe(MCP_VERSION)
+    expect(initializeBody.result?.capabilities?.tools).toBeDefined()
 
     const initialized = await mcpRequest(request, baseURL!, {
       method: 'notifications/initialized',
@@ -188,10 +287,34 @@ test.describe('stateless MCP server', () => {
       extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
     })
     expect(tools.status()).toBe(200)
-    const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, _meta?: Record<string, unknown> }> } }
+    const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, outputSchema?: Record<string, unknown>, _meta?: Record<string, unknown> }> } }
     expect(toolsBody.result.tools.filter(tool => tool.name.startsWith('open_') && tool.name.includes('upload')).map(tool => tool.name)).toEqual(['open_video_upload'])
     const openVideoTool = toolsBody.result.tools.find(tool => tool.name === 'open_video_upload')
-    expect(openVideoTool?._meta?.['openai/widgetAccessible']).toBe(true)
+    expect(openVideoTool?.outputSchema?.required).toEqual(['launched'])
+    expect((openVideoTool?._meta?.ui as { resourceUri?: string, visibility?: string[] } | undefined)?.resourceUri).toBe('ui://widget/video-upload@v1.html')
+
+    const launchVideo = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'open_video_upload',
+      args: { site_id: siteId, category: 'other' },
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(launchVideo.status()).toBe(200)
+    const launchVideoBody = await launchVideo.json() as {
+      result?: {
+        structuredContent?: Record<string, unknown>
+        _meta?: Record<string, unknown>
+      }
+    }
+    expect(launchVideoBody.result?.structuredContent).toEqual({
+      launched: true,
+    })
+    expect(launchVideoBody.result?.structuredContent).not.toHaveProperty('context')
+    expect(launchVideoBody.result?._meta?.resourceUri).toBe('ui://widget/video-upload@v1.html')
+    expect((launchVideoBody.result?._meta as { context?: { site_id?: string; category?: string | null } } | undefined)?.context).toEqual({
+      site_id: siteId,
+      category: 'other',
+    })
 
     const currentUser = await mcpRequest(request, baseURL!, {
       method: 'tools/call', toolName: 'get_current_user', args: {},
@@ -210,8 +333,27 @@ test.describe('stateless MCP server', () => {
       params: { uri: resourcesBody.result.resources[0]!.uri },
     })
     expect(resource.status()).toBe(200)
-    const resourceBody = await resource.json() as { result: { contents: Array<{ text: string }> } }
+    const resourceBody = await resource.json() as {
+      result: {
+        contents: Array<{
+          text: string
+          _meta?: {
+            ui?: {
+              csp?: { resourceDomains?: string[]; connectDomains?: string[] }
+              domain?: string
+            }
+            'openai/widgetCSP'?: { resource_domains?: string[]; connect_domains?: string[] }
+          }
+        }>
+      }
+    }
     const html = resourceBody.result.contents[0]!.text
+    const resourceMeta = resourceBody.result.contents[0]!._meta
+    const baseOrigin = new URL(baseURL!).origin
+    expect(resourceMeta?.ui?.csp?.resourceDomains).toContain(baseOrigin)
+    expect(resourceMeta?.ui?.csp?.connectDomains).toContain(baseOrigin)
+    expect(resourceMeta?.['openai/widgetCSP']?.resource_domains).toContain(baseOrigin)
+    expect(resourceMeta?.['openai/widgetCSP']?.connect_domains).toContain(baseOrigin)
     const scriptSrc = html.match(/<script[^>]+src="([^"]+)"/)?.[1]
     expect(scriptSrc).toBeTruthy()
     const script = await request.get(scriptSrc!)
@@ -559,9 +701,10 @@ test.describe('stateless MCP server', () => {
     expect(allToolNames.length).toBeGreaterThan(50)
 
     const invalid = await mcpRequest(request, baseURL!, { method: 'bad/method', id: 'bad-method' })
-    expect(invalid.status()).toBe(404)
-    const invalidBody = await invalid.json() as { id: string; error: { message: string } }
+    expect(invalid.status()).toBe(200)
+    const invalidBody = await invalid.json() as { id: string; error: { code: number; message: string } }
     expect(invalidBody.id).toBe('bad-method')
+    expect(invalidBody.error.code).toBe(-32601)
     expect(invalidBody.error.message).toContain('Unsupported MCP method')
   })
 
@@ -1262,7 +1405,8 @@ test.describe('stateless MCP server', () => {
       toolName: 'get_site',
       args: { site_id: `site-missing-${Date.now()}` },
     })
-    expect(wrongSite.status()).toBe(404)
+    expect(wrongSite.status()).toBe(200)
+    expect((await wrongSite.json()).result?.isError).toBe(true)
   })
 
   test('translation, google business, and work request tools are hidden from the conversational surface by default', async ({ request, baseURL }) => {
@@ -1293,14 +1437,16 @@ test.describe('stateless MCP server', () => {
       toolName: 'get_translation_inventory',
       args: { site_id: siteId, locale: 'th' },
     })
-    expect(inventoryCall.status()).toBe(404)
+    expect(inventoryCall.status()).toBe(200)
+    expect((await inventoryCall.json()).error?.code).toBe(-32601)
 
     const startJobCall = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'start_translation_job',
       args: { site_id: siteId, locale: 'th' },
     })
-    expect(startJobCall.status()).toBe(404)
+    expect(startJobCall.status()).toBe(200)
+    expect((await startJobCall.json()).error?.code).toBe(-32601)
 
     const locationId = await ensureLocation(request, baseURL!, siteId)
     const gbConnectionCall = await mcpRequest(request, baseURL!, {
@@ -1308,29 +1454,42 @@ test.describe('stateless MCP server', () => {
       toolName: 'get_google_business_connection',
       args: { site_id: siteId, location_id: locationId },
     })
-    expect(gbConnectionCall.status()).toBe(404)
+    expect(gbConnectionCall.status()).toBe(200)
+    expect((await gbConnectionCall.json()).error?.code).toBe(-32601)
   })
 
-  test('cross-tenant isolation — owner of site B cannot read or mutate site A through MCP', async ({ request, baseURL }) => {
+  async function setupCrossTenantIsolation(request: APIRequestContext, baseURL: string) {
     await loginAsFreshMcpUser(request, baseURL!)
     const siteA = await ensureSite(request, baseURL!)
 
     await loginAsFreshMcpUser(request, baseURL!)
     await ensureSite(request, baseURL!)
 
+    return siteA
+  }
+
+  test('cross-tenant isolation — owner of site B cannot read site A through MCP', async ({ request, baseURL }) => {
+    const siteA = await setupCrossTenantIsolation(request, baseURL!)
+
     const crossRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'get_site',
       args: { site_id: siteA },
     })
-    expect(crossRead.status()).toBe(404)
+    expect(crossRead.status()).toBe(200)
+    expect((await crossRead.json()).result?.isError).toBe(true)
+  })
+
+  test('cross-tenant isolation — owner of site B cannot mutate site A through MCP', async ({ request, baseURL }) => {
+    const siteA = await setupCrossTenantIsolation(request, baseURL!)
 
     const crossMutate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'update_site_settings',
       args: { site_id: siteA, brand_description: 'cross-tenant injection attempt' },
     })
-    expect(crossMutate.status()).toBe(404)
+    expect(crossMutate.status()).toBe(200)
+    expect((await crossMutate.json()).result?.isError).toBe(true)
   })
 
   // Positive control for the isolation test above — proves the 404s there come
@@ -1358,7 +1517,8 @@ test.describe('stateless MCP server', () => {
       toolName: 'reply_to_review',
       args: { site_id: siteId, review_id: 'missing-review-id', reply: `MCP owner reply ${Date.now()}` },
     })
-    expect(ownerReply.status()).toBe(404)
+    expect(ownerReply.status()).toBe(200)
+    expect((await ownerReply.json()).result?.isError).toBe(true)
 
     const editorCreate = await request.post(`${baseURL}/api/dev/test-member`, {
       headers: devLoginHeaders(),
@@ -1381,6 +1541,7 @@ test.describe('stateless MCP server', () => {
       toolName: 'reply_to_review',
       args: { site_id: siteId, review_id: 'missing-review-id', reply: 'editor should fail' },
     })
-    expect(editorReply.status()).toBe(403)
+    expect(editorReply.status()).toBe(200)
+    expect((await editorReply.json()).result?.isError).toBe(true)
   })
 })
