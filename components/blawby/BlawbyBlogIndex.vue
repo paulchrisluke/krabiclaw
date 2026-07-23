@@ -44,6 +44,7 @@ const { canonicalUrl } = useTenantSocialMetadata(() => ({
   brand: {
     siteName: identity.value.brand_name || 'Professional services',
     logoUrl: identity.value.logo_url || null,
+    faviconUrl: identity.value.favicon_url || null,
   },
 }))
 const homeUrl = useSeoUrl(() => '/')
