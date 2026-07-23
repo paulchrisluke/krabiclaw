@@ -1,7 +1,6 @@
 import { execute } from '~/server/db'
 import { platformAnalyticsHostnames, type DomainEnv } from '~/server/utils/domains'
 import { getSiteDomains } from '~/server/utils/domain-read-model'
-import { ZARAZ_ANALYTICS_PURPOSE, ZARAZ_ANALYTICS_PURPOSE_ID } from '~/utils/zaraz-consent'
 
 export interface ZarazEnv extends DomainEnv {
   CF_ZARAZ_API_TOKEN?: string
@@ -10,6 +9,7 @@ export interface ZarazEnv extends DomainEnv {
 interface ZarazAction {
   actionType: string
   firingTriggers: string[]
+  blockingTriggers?: string[]
   enabled: boolean
 }
 
@@ -19,7 +19,6 @@ interface ZarazTool {
   enabled: boolean
   settings: Record<string, unknown>
   actions: Record<string, ZarazAction>
-  defaultPurpose?: string
   [key: string]: unknown
 }
 
@@ -110,43 +109,50 @@ function tenantKey(siteId: string): string {
 }
 
 const PLATFORM_KEY = 'ga-platform'
+const CONSENT_BLOCK_TRIGGER = 'ga-consent-not-accepted'
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 export function tenantPageLocationRegex(hostnames: string[]): string {
-  return `^https://(${hostnames.map(escapeRegex).join('|')})/`
+  return `^(${hostnames.map(escapeRegex).join('|')})$`
 }
 
 export function platformPageLocationRegex(hostnames: string[]): string {
   return tenantPageLocationRegex(hostnames)
 }
 
-function consentPurposeId() {
-  return ZARAZ_ANALYTICS_PURPOSE_ID
-}
-
-function ensureAnalyticsConsentPurpose(config: ZarazConfig) {
+function disableZarazConsentManagement(config: ZarazConfig) {
   config.consent ||= {}
-  config.consent.enabled = true
-  config.consent.hideModal = true
-  config.consent.purposes ||= {}
-  config.consent.purposes[consentPurposeId()] ||= ZARAZ_ANALYTICS_PURPOSE
+  config.consent.enabled = false
 }
 
-function makePageLocationTrigger(name: string, hostnames: string[]): ZarazTrigger {
+function makeHostBlockTrigger(name: string, hostnames: string[]): ZarazTrigger {
   return {
     name,
     loadRules: [{
-      match: '{{ client.pageLocation }}',
-      op: 'MATCH_REGEX',
+      match: '{{ system.page.url.hostname }}',
+      op: 'NOT_MATCH_REGEX',
       value: tenantPageLocationRegex(hostnames),
     }],
   }
 }
 
-function scopeActionsToTrigger(actions: Record<string, ZarazAction> | undefined, triggerKey: string) {
+function makeConsentBlockTrigger(): ZarazTrigger {
+  return {
+    name: 'Analytics consent not accepted',
+    loadRules: [{ match: '{{ system.cookies.kc_consent }}', op: 'NOT_MATCH_REGEX', value: '^accepted$' }],
+  }
+}
+
+function firingTriggersForAction(action: ZarazAction): string[] {
+  if (action.actionType === 'pageview') return ['Pageview']
+  if (action.actionType === 'event') return ['AllTracks']
+  return action.firingTriggers?.length ? action.firingTriggers : ['Pageview']
+}
+
+function scopeActionsToTrigger(actions: Record<string, ZarazAction> | undefined, blockingTriggers: string[]) {
   const source = actions && Object.keys(actions).length
     ? actions
     : { AllPageviews: { actionType: 'pageview', firingTriggers: [], enabled: true } }
@@ -154,7 +160,8 @@ function scopeActionsToTrigger(actions: Record<string, ZarazAction> | undefined,
     key,
     {
       ...action,
-      firingTriggers: [triggerKey],
+      firingTriggers: firingTriggersForAction(action),
+      blockingTriggers,
       enabled: action.enabled !== false,
     },
   ]))
@@ -164,20 +171,28 @@ function isGa4Tool(tool: ZarazTool | undefined): tool is ZarazTool {
   return tool?.component === 'google-analytics_v4'
 }
 
+function ga4ToolTemplate(config: ZarazConfig): ZarazTool | undefined {
+  return Object.values(config.tools ?? {}).find(tool =>
+    isGa4Tool(tool) && tool.defaultFields
+  )
+}
+
 function upsertGa4Tool(
   config: ZarazConfig,
   key: string,
   input: { name: string; measurementId: string; triggerKey: string; existing?: ZarazTool },
 ) {
   const existing = input.existing
+  const template = existing?.defaultFields ? existing : ga4ToolTemplate(config)
   config.tools[key] = {
+    ...template,
     ...existing,
     component: 'google-analytics_v4',
     name: existing?.name || input.name,
     enabled: true,
-    settings: { ...(existing?.settings ?? {}), tid: input.measurementId },
-    defaultPurpose: consentPurposeId(),
-    actions: scopeActionsToTrigger(existing?.actions, input.triggerKey),
+    settings: { ...(template?.settings ?? {}), ...(existing?.settings ?? {}), tid: input.measurementId },
+    defaultPurpose: undefined,
+    actions: scopeActionsToTrigger(existing?.actions ?? template?.actions, [input.triggerKey, CONSENT_BLOCK_TRIGGER]),
   }
 }
 
@@ -188,9 +203,10 @@ export function upsertPlatformZarazAnalytics(
   if (!input.measurementId || !input.hostnames.length) return
   config.triggers ||= {}
   config.tools ||= {}
-  ensureAnalyticsConsentPurpose(config)
+  disableZarazConsentManagement(config)
   config.historyChange = true
-  config.triggers[PLATFORM_KEY] = makePageLocationTrigger('Platform hosts', input.hostnames)
+  config.triggers[CONSENT_BLOCK_TRIGGER] = makeConsentBlockTrigger()
+  config.triggers[PLATFORM_KEY] = makeHostBlockTrigger('Block non-platform hosts', input.hostnames)
 
   const existingEntry = Object.entries(config.tools).find(([, tool]) =>
     isGa4Tool(tool) && tool.settings?.tid === input.measurementId
@@ -211,10 +227,11 @@ export function upsertTenantZarazAnalytics(
   if (!input.measurementId || !input.hostnames.length) return
   config.triggers ||= {}
   config.tools ||= {}
-  ensureAnalyticsConsentPurpose(config)
+  disableZarazConsentManagement(config)
   config.historyChange = true
   const key = tenantKey(input.siteId)
-  config.triggers[key] = makePageLocationTrigger(`Tenant hosts (${input.siteId})`, input.hostnames)
+  config.triggers[CONSENT_BLOCK_TRIGGER] = makeConsentBlockTrigger()
+  config.triggers[key] = makeHostBlockTrigger(`Block non-tenant hosts (${input.siteId})`, input.hostnames)
   upsertGa4Tool(config, key, {
     name: `Tenant GA4 (${input.siteId})`,
     measurementId: input.measurementId,
