@@ -129,14 +129,11 @@ function disableZarazConsentManagement(config: ZarazConfig) {
 function makePageLocationTrigger(name: string, hostnames: string[]): ZarazTrigger {
   return {
     name,
-    loadRules: [
-      {
-        match: '{{ client.pageLocation }}',
-        op: 'MATCH_REGEX',
-        value: tenantPageLocationRegex(hostnames),
-      },
-      { match: '{{ client.__zarazTrack }}', op: 'EQUALS', value: 'Pageview' },
-    ],
+    loadRules: [{
+      match: '{{ client.pageLocation }}',
+      op: 'MATCH_REGEX',
+      value: tenantPageLocationRegex(hostnames),
+    }],
   }
 }
 

@@ -79,7 +79,6 @@ config.consent.enabled = false
 config.historyChange = true
 
 const pageLocationRegex = hostnames => `^https://(${hostnames.map(value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})/`
-const pageviewRule = { match: '{{ client.__zarazTrack }}', op: 'EQUALS', value: 'Pageview' }
 const scopeActions = (actions, triggerKey) => Object.fromEntries(Object.entries(
   actions && Object.keys(actions).length
     ? actions
@@ -109,10 +108,7 @@ if (platformMeasurementId && platformHostnames.length) {
   const triggerKey = 'ga-platform'
   config.triggers[triggerKey] = {
     name: 'Platform hosts',
-    loadRules: [
-      { match: '{{ client.pageLocation }}', op: 'MATCH_REGEX', value: pageLocationRegex(platformHostnames) },
-      pageviewRule,
-    ],
+    loadRules: [{ match: '{{ client.pageLocation }}', op: 'MATCH_REGEX', value: pageLocationRegex(platformHostnames) }],
   }
   const existingEntry = Object.entries(config.tools).find(([, tool]) =>
     tool?.component === 'google-analytics_v4' && tool.settings?.tid === platformMeasurementId
@@ -138,10 +134,7 @@ for (const row of rows) {
   const hostnames = String(row.hostnames).split('|').map(value => value.toLowerCase()).sort()
   config.triggers[key] = {
     name: `Tenant hosts (${row.site_id})`,
-    loadRules: [
-      { match: '{{ client.pageLocation }}', op: 'MATCH_REGEX', value: pageLocationRegex(hostnames) },
-      pageviewRule,
-    ],
+    loadRules: [{ match: '{{ client.pageLocation }}', op: 'MATCH_REGEX', value: pageLocationRegex(hostnames) }],
   }
   upsertGaTool(key, {
     name: `Tenant GA4 (${row.site_id})`,
