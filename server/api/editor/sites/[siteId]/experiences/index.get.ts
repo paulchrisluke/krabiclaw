@@ -1,7 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { listExperiences } from '~/server/utils/experiences'
-import { listAccessibleLocationIds } from '~/server/utils/member-access'
+import { assertResourceAccess, listAccessibleLocationIds } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -24,6 +24,25 @@ export default defineEventHandler(async (event) => {
   )
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+
+  const query = getQuery(event)
+  const locationId = typeof query.location_id === 'string' && query.location_id ? query.location_id : null
+  if (locationId) {
+    const location = await queryFirst<{ id: string }>(
+      db,
+      `SELECT id FROM business_locations WHERE id = ? AND site_id = ? AND organization_id = ? LIMIT 1`,
+      [locationId, siteId, site.organization_id],
+    )
+    if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
+    await assertResourceAccess(db, {
+      memberId: site.member_id,
+      role: site.member_role,
+      organizationId: site.organization_id,
+      siteId,
+      resourceLocationId: locationId,
+    })
+    return jsonResponse({ experiences: await listExperiences(db, siteId, { locationId }) })
+  }
 
   // A location-scoped editor sees only experiences at their own location(s),
   // rather than every experience across the whole site — null means

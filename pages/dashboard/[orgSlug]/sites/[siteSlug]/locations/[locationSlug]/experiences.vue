@@ -66,9 +66,6 @@
           <UFormField label="Title" required>
             <UInput v-model="form.title" placeholder="e.g. Chef's Table Omakase" class="w-full" />
           </UFormField>
-          <UFormField label="Location" required help="Every experience belongs to exactly one location.">
-            <USelect v-model="form.location_id" :items="locationItems" value-key="id" label-key="label" class="w-full" />
-          </UFormField>
           <UFormField label="Tagline" help="One-line hook shown on the listing card.">
             <UInput v-model="form.tagline" placeholder="e.g. Eight courses, one table, full attention." class="w-full" />
           </UFormField>
@@ -340,30 +337,28 @@ type ApiRecord = Experience
 
 const toast = useToast()
 const siteId = await useDashboardSiteId()
-const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
 
 const sitePublicUrl = ref<string | null>(null)
 const defaultCurrency = ref('THB')
 
-interface LocationRow {
-  id: string
-  slug: string
-  title: string
-  is_primary: boolean
-}
-
 // ── List ──────────────────────────────────────────────────
 const loading = ref(true)
 const experiences = ref<ApiRecord[]>([])
-const locations = computed(() => dashboard.locations.value as LocationRow[])
-const locationItems = computed(() => locations.value.map(location => ({ id: location.id, label: location.title })))
-const defaultLocationId = computed(() => dashboardLocation.currentLocationId.value ?? locations.value.find(l => l.is_primary)?.id ?? locations.value[0]?.id ?? '')
+const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
 
 async function loadExperiences() {
+  const locationId = currentLocationId.value
+  if (!locationId) {
+    experiences.value = []
+    loading.value = false
+    return
+  }
   loading.value = true
   try {
-    const res = await $fetch<{ experiences: ApiRecord[] }>(`/api/dashboard/editor/experiences`)
+    const res = await $fetch<{ experiences: ApiRecord[] }>(`/api/dashboard/editor/experiences`, {
+      query: { location_id: locationId },
+    })
     experiences.value = res.experiences ?? []
   } catch {
     experiences.value = []
@@ -407,7 +402,7 @@ const generating = ref(false)
 async function runGenerator(target: 'flat' | 'recurring', day?: WeekdayName) {
   generating.value = true
   try {
-    const res = await $fetch<{ slots: string[] }>(`/api/dashboard/editor/experiences/generate-slots`, {
+    const res = await $fetch<{ slots: string[] }>(`/api/utils/generate-slots`, {
       query: { start: generator.start, end: generator.end, interval_minutes: generator.interval },
     })
     if (target === 'flat') {
@@ -477,10 +472,16 @@ const form = reactive(emptyForm())
 const bookingPolicyDraft = ref<BookingPolicyPatch>({})
 const bookingPolicySummary = ref<RenderedBookingPolicySummary | null>(null)
 
+watch(currentLocationId, () => {
+  sliderOpen.value = false
+  editing.value = null
+  void loadExperiences()
+})
+
 function openCreate() {
   editing.value = null
   Object.assign(form, emptyForm())
-  form.location_id = defaultLocationId.value
+  form.location_id = currentLocationId.value ?? ''
   timeSlotsInput.value = ''
   slotsMode.value = 'flat'
   for (const day of weekdayNames) recurringInputs[day] = ''
@@ -524,7 +525,7 @@ function openEdit(exp: ApiRecord) {
   editing.value = exp
   Object.assign(form, {
     title: exp.title ?? '',
-    location_id: exp.location_id ?? defaultLocationId.value,
+    location_id: currentLocationId.value ?? exp.location_id ?? '',
     tagline: exp.tagline ?? '',
     body: exp.body ?? '',
     image_asset_id: exp.image_asset_id ?? null,
@@ -551,7 +552,7 @@ function openEdit(exp: ApiRecord) {
   timeSlotsInput.value = Array.isArray(exp.time_slots) ? exp.time_slots.join(', ') : (exp.time_slots ?? '')
   for (const day of weekdayNames) recurringInputs[day] = exp.recurring_slots?.[day]?.join(', ') ?? ''
   slotsMode.value = exp.recurring_slots ? 'recurring' : 'flat'
-  void loadExperiencePolicy(exp.id, exp.location_id)
+  void loadExperiencePolicy(exp.id, currentLocationId.value ?? exp.location_id)
   sliderOpen.value = true
 }
 
@@ -578,7 +579,8 @@ async function save() {
     toast.add({ description: 'Title is required.', color: 'error' })
     return
   }
-  if (!form.location_id) {
+  const locationId = currentLocationId.value
+  if (!locationId) {
     toast.add({ description: 'Location is required.', color: 'error' })
     return
   }
@@ -593,6 +595,7 @@ async function save() {
     }
     const payload = {
       ...form,
+      location_id: locationId,
       price_amount: parseNumber(form.price_amount),
       compare_at_price_amount: parseNumber(form.compare_at_price_amount),
       sale_starts_at: form.sale_starts_at.trim() || null,
@@ -640,7 +643,7 @@ async function save() {
             policy_type: 'experience',
             scope_type: 'experience',
             experience_id: experienceResult.id,
-            location_id: experienceResult.location_id ?? form.location_id,
+            location_id: locationId,
           },
         })
         bookingPolicySummary.value = policyResponse.summary ?? null

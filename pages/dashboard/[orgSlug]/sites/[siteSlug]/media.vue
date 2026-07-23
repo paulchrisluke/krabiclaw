@@ -1,7 +1,7 @@
 <template>
-  <UDashboardPanel id="location-media">
+  <UDashboardPanel id="site-media">
     <template #header>
-      <UDashboardNavbar title="Media">
+      <UDashboardNavbar title="Media library">
         <template #leading>
           <DashboardSidebarCollapseButton />
         </template>
@@ -53,7 +53,7 @@
         <UIcon name="i-lucide-upload" class="size-7 text-muted" />
         <p class="text-sm text-muted">Drag and drop images or videos here, or <span class="text-primary cursor-pointer">click to browse</span></p>
         <p class="text-xs text-muted">Images up to {{ formatSize(IMAGE_MAX_SIZE_BYTES) }} via Cloudflare Images · Videos up to {{ formatSize(VIDEO_MAX_SIZE_BYTES) }} via R2</p>
-        <p class="text-xs text-muted">Keep hero videos short (15s or less) and a few MB for fast page loads.</p>
+        <p class="text-xs text-muted">Use this site-wide library for page media, posts, galleries, and reusable assets.</p>
       </div>
 
       <input ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploadLoading" @change="onFileSelect" />
@@ -153,7 +153,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.media' })
+definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.media' })
 
 import VideoPosterPrompt from '~/components/workspace/media/VideoPosterPrompt.vue'
 import { IMAGE_MAX_SIZE_BYTES, VIDEO_MAX_SIZE_BYTES } from '~/composables/useMediaUpload'

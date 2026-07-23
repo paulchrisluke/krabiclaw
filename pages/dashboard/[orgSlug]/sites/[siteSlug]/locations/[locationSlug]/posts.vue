@@ -101,10 +101,7 @@
             </div>
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium text-highlighted">{{ post.title || post.body?.slice(0, 60) }}</p>
-                <div class="flex items-center gap-2">
-                  <p class="truncate text-xs text-muted">{{ formatDate(post.updated_at) }}</p>
-                  <UBadge v-if="locations.length > 1" color="neutral" variant="subtle" size="xs">{{ locationTitle(post.location_id) }}</UBadge>
-                </div>
+                <p class="truncate text-xs text-muted">{{ formatDate(post.updated_at) }}</p>
               </div>
               <UBadge :color="post.status === 'published' ? 'success' : 'warning'" variant="soft" size="xs" class="shrink-0">{{ post.status }}</UBadge>
             </div>
@@ -124,12 +121,10 @@
             v-model:image-kind="editForm.imageKind"
             v-model:gallery-media="editForm.gallery_media"
             v-model:selected-channels="selectedChannels"
-            v-model:location-id="editForm.location_id"
-            :eyebrow="composing ? 'New post' : 'Site post'"
+            :eyebrow="composing ? 'New location post' : 'Location post'"
             :status-text="String(selectedPost?.status ?? '')"
             :site-id="siteId"
             :channel-options="channelOptions"
-            :location-options="locationItemsWithoutAll"
             :show-image="true"
             :show-channels="true"
             :show-preview="true"
@@ -184,22 +179,14 @@ definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.posts' })
 const siteId = await useDashboardSiteId()
 const toast = useToast()
 const { trackPostCreated, trackPostPublished } = useAnalytics()
-const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
 
 // Posts list
 const posts = ref<ApiRecord[]>([])
-const locations = computed(() => dashboard.locations.value)
 const loading = ref(false)
 const activeTab = ref('all')
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
-const locationItemsWithoutAll = computed(() => locations.value.map(location => ({ value: location.id, label: location.title })))
 let postsLoadGeneration = 0
-
-function locationTitle(locationId: string | null) {
-  if (!locationId) return 'All locations'
-  return locations.value.find(l => l.id === locationId)?.title ?? 'Unknown location'
-}
 
 const loadPosts = async () => {
   const requestedLocationId = currentLocationId.value
@@ -268,7 +255,6 @@ const editForm = reactive({
   imagePreviewUrl: '' as string | null,
   imageKind: 'image' as string | null,
   gallery_media: [] as GalleryFormItem[],
-  location_id: ''
 })
 const selectedChannels = ref<string[]>(['site'])
 
@@ -281,7 +267,7 @@ const channelOptions = computed(() => [
   { value: 'instagram', label: 'Instagram', disabled: !facebookConnected.value, hint: facebookConnected.value ? 'Requires image' : 'Connect in Integrations' },
 ])
 
-function resetEditForm(locationId = '') {
+function resetEditForm() {
   editForm.title = ''
   editForm.body = ''
   editForm.slug = ''
@@ -291,13 +277,12 @@ function resetEditForm(locationId = '') {
   editForm.imagePreviewUrl = null
   editForm.imageKind = 'image'
   editForm.gallery_media = []
-  editForm.location_id = locationId
 }
 
 const openCompose = () => {
   selectedPost.value = null
   composing.value = true
-  resetEditForm(currentLocationId.value ?? '')
+  resetEditForm()
   selectedChannels.value = ['site']
 }
 
@@ -320,7 +305,6 @@ const selectPost = (post: ApiRecord) => {
   editForm.imagePreviewUrl = post.public_url ?? null
   editForm.imageKind = post.kind ?? 'image'
   editForm.gallery_media = normalizeGalleryForForm(post.gallery_media ?? post.gallery ?? [])
-  editForm.location_id = post.location_id ?? ''
   selectedChannels.value = ['site']
 }
 
@@ -354,6 +338,7 @@ function normalizeGalleryForForm(items: unknown): GalleryFormItem[] {
 }
 
 function buildPostPayload(postId?: string) {
+  const locationId = currentLocationId.value
   return {
     title: editForm.title,
     body: editForm.body,
@@ -361,7 +346,7 @@ function buildPostPayload(postId?: string) {
     seo_title: editForm.seo_title || null,
     seo_description: editForm.seo_description || null,
     image_asset_id: editForm.image_asset_id,
-    location_id: editForm.location_id || (postId ? null : undefined),
+    location_id: locationId ?? (postId ? null : undefined),
     gallery_media: editForm.gallery_media.map((item, index) => ({
       media_asset_id: item.media_asset_id,
       role: 'gallery',
@@ -373,7 +358,7 @@ function buildPostPayload(postId?: string) {
 }
 
 const handleSave = async () => {
-  if (!editForm.body.trim()) return
+  if (!editForm.body.trim() || !currentLocationId.value) return
   saving.value = true
   try {
     if (selectedPost.value) {
@@ -406,14 +391,14 @@ function hasUnsavedEdits(): boolean {
   if (editForm.seo_title !== (post.seo_title ?? '')) return true
   if (editForm.seo_description !== (post.seo_description ?? '')) return true
   if (editForm.image_asset_id !== (post.image_asset_id ?? null)) return true
-  if (editForm.location_id !== (post.location_id ?? '')) return true
+  if (currentLocationId.value !== (post.location_id ?? null)) return true
   const currentGallery = normalizeGalleryForForm(post.gallery_media ?? post.gallery ?? [])
   if (JSON.stringify(editForm.gallery_media) !== JSON.stringify(currentGallery)) return true
   return false
 }
 
 const handlePublish = async () => {
-  if (!editForm.body.trim()) return
+  if (!editForm.body.trim() || !currentLocationId.value) return
   publishing.value = true
   try {
     // Save any edits first
