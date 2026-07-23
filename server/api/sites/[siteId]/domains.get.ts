@@ -1,7 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryFirst } from '~/server/db'
-import { domainInstructions, getDomainEvents, getSiteDomains } from '~/server/utils/domains'
+import { domainInstructions, getDomainEvents, getSiteDomains, groupCustomDomains } from '~/server/utils/domains'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
 
 export default defineEventHandler(async (event) => {
@@ -37,5 +37,5 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  return jsonResponse({ success: true, domains: enriched, siteId })
+  return jsonResponse({ success: true, domains: enriched, domain_groups: groupCustomDomains(domains), siteId })
 })

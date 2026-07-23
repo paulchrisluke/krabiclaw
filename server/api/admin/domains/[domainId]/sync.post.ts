@@ -42,7 +42,7 @@ export default defineEventHandler(async (event) => {
     })
 
     const domain = await Promise.race([
-      syncDomainWithCloudflare(env, db, domainId, 'admin', session.user.id, controller.signal),
+      syncDomainWithCloudflare(env, db, domainId, 'admin', session.user.id, controller.signal, { forceRevalidation: true }),
       timeoutPromise
     ]).finally(() => {
       if (timeoutHandle) clearTimeout(timeoutHandle)

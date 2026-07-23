@@ -4,7 +4,6 @@
 // implementations that should still produce identical dashboard URLs.
 export const DASHBOARD_DESTINATIONS = {
   'settings.general': 'settings/general',
-  'settings.domains': 'settings/domains',
   'settings.analytics': 'settings/analytics',
   'settings.billing': 'settings/billing',
   'settings.members': 'settings/members',
@@ -12,6 +11,7 @@ export const DASHBOARD_DESTINATIONS = {
   'site.overview': 'sites/:siteSlug',
   'site.locations': 'sites/:siteSlug/locations',
   'site.locations.new': 'sites/:siteSlug/locations/new',
+  'site.domains': 'sites/:siteSlug/domains',
   'site.settings': 'sites/:siteSlug/settings',
   'location.overview': 'sites/:siteSlug/locations/:locationSlug',
   'location.settings': 'sites/:siteSlug/locations/:locationSlug/settings',

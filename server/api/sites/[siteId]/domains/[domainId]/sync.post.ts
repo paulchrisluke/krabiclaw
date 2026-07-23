@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const domain = await syncDomainWithCloudflare(env, db, domainId, site.member_role as 'owner' | 'admin' | 'editor', session.user.id)
+    const domain = await syncDomainWithCloudflare(env, db, domainId, site.member_role as 'owner' | 'admin' | 'editor', session.user.id, undefined, { forceRevalidation: true })
     if (domain.site_id !== site.id) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
       status: domain.status,
       title: `Domain synced: ${domain.domain}`,
       message: `${domain.domain} is now ${domain.status}.`,
-      dashboardUrl: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN}/dashboard/${encodeURIComponent(site.organization_slug ?? site.organization_id)}/settings/domains?site=${encodeURIComponent(site.subdomain ?? site.id)}`
+      dashboardUrl: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN}/dashboard/${encodeURIComponent(site.organization_slug ?? site.organization_id)}/sites/${encodeURIComponent(site.subdomain ?? site.id)}/domains`
     })
     return jsonResponse({ success: true, domain: { ...domain, instructions: domainInstructions(domain) } })
   } catch (error) {
