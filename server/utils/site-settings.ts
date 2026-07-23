@@ -1,5 +1,6 @@
 import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
 import { createSystemSubdomain } from '~/server/utils/domains'
+import { removeTenantZarazAnalytics, syncTenantZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { isCurrencyCode } from '~/shared/currencies'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 import { execute, queryAll, queryFirst } from '~/server/db'
@@ -215,6 +216,27 @@ async function updateNonSiteConfigFields(
   }
 
   return null
+}
+
+async function syncAnalyticsSettingToZaraz(
+  db: D1Database,
+  env: SetupEnv,
+  siteId: string,
+  organizationId: string,
+  measurementId: unknown
+) {
+  if (measurementId === undefined) return
+
+  try {
+    const normalizedMeasurementId = typeof measurementId === 'string' ? measurementId.trim() : ''
+    if (normalizedMeasurementId) {
+      await syncTenantZarazAnalytics(env, db, { siteId, organizationId, measurementId: normalizedMeasurementId })
+    } else {
+      await removeTenantZarazAnalytics(env, db, siteId)
+    }
+  } catch (error) {
+    console.error('zaraz_sync_failed', { siteId, error })
+  }
 }
 
 async function attemptSiteUpdate(
@@ -539,6 +561,13 @@ export async function updateSiteSettingsFields(
 
   const configError = await updateNonSiteConfigFields(db, organizationId, siteId, updates)
   if (configError) return configError
+  await syncAnalyticsSettingToZaraz(
+    db,
+    env,
+    siteId,
+    organizationId,
+    updates.google_analytics_measurement_id,
+  )
 
   if (updates.brand_name !== undefined) {
     const baseSlug = buildSlug(updates.brand_name)
