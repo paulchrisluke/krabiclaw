@@ -208,8 +208,17 @@ interface TenantPageForm extends Record<string, unknown> {
   components: ApiRecord[]
 }
 
+type ProfessionalServiceEditorResponse = {
+  success?: boolean
+  offerings: ApiRecord[]
+  tenantPages: ApiRecord[]
+  compliance: ComplianceRecord | null
+  consultation: ConsultationRecord | null
+}
+
 const siteId = await useDashboardSiteId()
 const headers = buildDashboardRequestHeaders()
+const requestEvent = useRequestEvent()
 const toast = useToast()
 const savingOfferings = ref(false)
 const savingPages = ref(false)
@@ -226,12 +235,41 @@ const addressVisibilityOptions = [
 
 const { data, pending, refresh } = await useAsyncData(
   `professional-service-content-${siteId}`,
-  () => $fetch<{
-    offerings: ApiRecord[]
-    tenantPages: ApiRecord[]
-    compliance: ComplianceRecord | null
-    consultation: ConsultationRecord | null
-  }>(`/api/editor/sites/${siteId}/professional-services`, { headers }),
+  async (): Promise<ProfessionalServiceEditorResponse> => {
+    if (import.meta.server) {
+      if (!requestEvent) {
+        throw createError({ statusCode: 500, statusMessage: 'Request event not available' })
+      }
+      const [
+        { cloudflareEnv },
+        { getAuthSession },
+        { loadMemberSiteRow },
+        { assertSiteWideAccess },
+        { getProfessionalServiceContent },
+      ] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/auth'),
+        import('~/server/utils/location-access'),
+        import('~/server/utils/member-access'),
+        import('~/server/utils/professional-services-editor'),
+      ])
+      const env = cloudflareEnv(requestEvent)
+      const db = env.DB || env.db
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+      const session = await getAuthSession(requestEvent, env)
+      if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
+      const site = await loadMemberSiteRow(db, siteId, session.user.id)
+      if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
+      await assertSiteWideAccess(db, {
+        memberId: site.member_id,
+        role: site.member_role,
+        organizationId: site.organization_id,
+        siteId,
+      })
+      return { success: true, ...(await getProfessionalServiceContent(db, siteId)) } as unknown as ProfessionalServiceEditorResponse
+    }
+    return await $fetch<ProfessionalServiceEditorResponse>(`/api/editor/sites/${siteId}/professional-services`, { headers })
+  },
 )
 
 const originalCompliance = computed(() => data.value?.compliance ?? {})
@@ -248,10 +286,14 @@ const form = reactive({
 const consultationForm = reactive({
   cta_label: '', external_url: '', schedule_path: '', confirmation_path: '',
 })
+const syncedOfferingsSnapshot = ref('')
+const syncedPagesSnapshot = ref('')
+const syncedComplianceSnapshot = ref('')
 
 const asString = (value: unknown) => typeof value === 'string' ? value : ''
 const asNumber = (value: unknown) => Number.isFinite(Number(value)) ? Number(value) : 0
 const nullable = (value: string) => value.trim() || null
+const formSnapshot = (value: unknown) => JSON.stringify(value)
 
 function normalizeOffering(item: ApiRecord): OfferingForm {
   return {
@@ -296,10 +338,26 @@ function normalizeTenantPage(item: ApiRecord): TenantPageForm {
   }
 }
 
-watchEffect(() => {
-  offeringsForm.value = (data.value?.offerings ?? []).map(normalizeOffering)
-  tenantPagesForm.value = (data.value?.tenantPages ?? []).map(normalizeTenantPage)
+function complianceFormSnapshot() {
+  return formSnapshot({
+    form: { ...form },
+    consultation: { ...consultationForm },
+  })
+}
 
+function syncOfferingsFromData() {
+  const normalized = (data.value?.offerings ?? []).map(normalizeOffering)
+  offeringsForm.value = normalized
+  syncedOfferingsSnapshot.value = formSnapshot(normalized)
+}
+
+function syncTenantPagesFromData() {
+  const normalized = (data.value?.tenantPages ?? []).map(normalizeTenantPage)
+  tenantPagesForm.value = normalized
+  syncedPagesSnapshot.value = formSnapshot(normalized)
+}
+
+function syncComplianceFromData() {
   const compliance = data.value?.compliance
   if (compliance) {
     const contact = compliance.contact_points?.[0] ?? {}
@@ -313,7 +371,6 @@ watchEffect(() => {
       footer_disclaimer: compliance.footer_disclaimer ?? '',
     })
   }
-
   const consultation = data.value?.consultation
   if (consultation) {
     Object.assign(consultationForm, {
@@ -323,6 +380,19 @@ watchEffect(() => {
       confirmation_path: consultation.confirmation_path ?? '/contact/confirmed',
     })
   }
+  syncedComplianceSnapshot.value = complianceFormSnapshot()
+}
+
+const offeringsDirty = computed(() => formSnapshot(offeringsForm.value) !== syncedOfferingsSnapshot.value)
+const pagesDirty = computed(() => formSnapshot(tenantPagesForm.value) !== syncedPagesSnapshot.value)
+const complianceDirty = computed(() => complianceFormSnapshot() !== syncedComplianceSnapshot.value)
+
+watch(() => data.value, () => {
+  if (!syncedOfferingsSnapshot.value || !offeringsDirty.value) syncOfferingsFromData()
+  if (!syncedPagesSnapshot.value || !pagesDirty.value) syncTenantPagesFromData()
+  if (!syncedComplianceSnapshot.value || !complianceDirty.value) syncComplianceFromData()
+}, {
+  immediate: true,
 })
 
 async function patchProfessionalServiceContent(body: ApiRecord, successMessage: string) {
@@ -331,7 +401,6 @@ async function patchProfessionalServiceContent(body: ApiRecord, successMessage: 
     headers,
     body,
   })
-  await refresh()
   toast.add({ description: successMessage, color: 'success' })
 }
 
@@ -339,6 +408,8 @@ async function saveOfferings() {
   savingOfferings.value = true
   try {
     await patchProfessionalServiceContent({ offerings: offeringsForm.value }, 'Offerings saved')
+    await refresh()
+    syncOfferingsFromData()
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Unable to save offerings', color: 'error' })
   } finally {
@@ -350,6 +421,8 @@ async function saveTenantPages() {
   savingPages.value = true
   try {
     await patchProfessionalServiceContent({ tenantPages: policyPageForms.value }, 'Policy pages saved')
+    await refresh()
+    syncTenantPagesFromData()
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Unable to save policy pages', color: 'error' })
   } finally {
@@ -387,6 +460,8 @@ async function saveCompliance() {
       confirmation_path: nullable(consultationForm.confirmation_path) || '/contact/confirmed',
     }
     await patchProfessionalServiceContent({ compliance, consultation }, 'Organization data saved')
+    await refresh()
+    syncComplianceFromData()
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Unable to save organization data', color: 'error' })
   } finally {
