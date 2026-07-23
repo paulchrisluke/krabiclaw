@@ -79,11 +79,6 @@ function resourceMetadataUrl(baseUrl: string) {
   return `${baseUrl}/.well-known/oauth-protected-resource`;
 }
 
-function shouldUseLeanToolCatalog(event: H3Event) {
-  const userAgent = (getHeader(event, "user-agent") || "").toLowerCase()
-  return userAgent.includes("openai-mcp/")
-}
-
 function safeMcpEnvelopeDetails(event: H3Event, body: unknown) {
   const record = body && typeof body === "object" && !Array.isArray(body)
     ? body as Record<string, unknown>
@@ -485,7 +480,6 @@ Common workflows: update menus and items, create and publish site posts, triage 
           )
         : new Set<string>();
 
-      const leanToolCatalog = shouldUseLeanToolCatalog(event)
       const tools = visibleSurfaceTools.filter((tool) => {
         // Without a site_id, return all tools so AI clients (e.g. ChatGPT) can discover
         // the full capability set on first connection. A supplied but inaccessible
@@ -517,15 +511,12 @@ Common workflows: update menus and items, create and publish site posts, triage 
               : {}),
             ...(tool.uiResourceUri
               ? {
-                  ui: { resourceUri: tool.uiResourceUri },
+                  ui: { resourceUri: tool.uiResourceUri, visibility: ["model", "app"] },
                   "openai/outputTemplate": tool.uiResourceUri,
-                  "openai/widgetAccessible": true,
                 }
               : {}),
           },
         }
-
-        if (leanToolCatalog) return baseTool
 
         return {
           ...baseTool,
@@ -649,9 +640,15 @@ Common workflows: update menus and items, create and publish site posts, triage 
         : JSON.stringify(structuredContent, null, 2);
 
       // Resolved once and reused for both telemetry and the cache-purge below.
-      const ctxSiteId = structuredContent && typeof structuredContent === 'object' && 'context' in structuredContent
+      const structuredContextSiteId = structuredContent && typeof structuredContent === 'object' && 'context' in structuredContent
         ? (structuredContent.context as Record<string, unknown>)?.site_id
         : null;
+      const metaContextSiteId = isRender && result.privateMeta?.context && typeof result.privateMeta.context === 'object'
+        ? (result.privateMeta.context as Record<string, unknown>)?.site_id
+        : null;
+      const ctxSiteId = typeof structuredContextSiteId === 'string'
+        ? structuredContextSiteId
+        : metaContextSiteId;
       const resolvedSiteId = typeof ctxSiteId === "string"
         ? ctxSiteId.trim()
         : typeof rawArgs.site_id === "string"
@@ -672,9 +669,6 @@ Common workflows: update menus and items, create and publish site posts, triage 
         status: "success",
         httpStatus: 200,
         oauthClientId: mcpUser.oauthClientId ?? null,
-        compatibilityAliasUsed: toolName === "open_media_upload",
-        compatibilityToolName: toolName === "open_media_upload" ? toolName : null,
-        replacementToolNames: toolName === "open_media_upload" ? ["upload_user_media", "open_video_upload"] : null,
         durationMs: Date.now() - toolStartedAt,
       });
 
@@ -743,9 +737,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
         ],
         ...(isRender && result.privateMeta
           ? {
-              _meta: {
-                "krabiclaw/privateMeta": result.privateMeta,
-              },
+              _meta: result.privateMeta,
             }
           : {}),
       });

@@ -1,29 +1,30 @@
 # MCP tool evolution runbook
 
-Published ChatGPT MCP apps can keep using a frozen, admin-approved action catalog after the live server changes. Treat every name that has appeared in production `tools/list` as a durable external API identifier for that endpoint version.
+Published ChatGPT MCP apps can keep using a frozen, admin-approved action catalog after the live server changes. Do not respond by adding more semantic aliases for every stale or hallucinated name. Prefer a small, standards-compliant tool surface: clear input/output schemas, widget details in `_meta`, and clean JSON-RPC recovery for unknown tools.
 
 ## Mandatory release sequence
 
-1. Add replacement tools.
-2. Add or retain hidden compatibility adapters for every released old name.
-3. Deploy replacements and adapters together.
+1. Add the replacement tool or tighten the existing canonical tool.
+2. Decide whether the old name is retained or retired:
+   - retain only when there is a real historical production contract that can be adapted safely without changing semantics;
+   - retire stale launchers, semantic variants, and hallucinated names, returning JSON-RPC `-32601` over HTTP 200.
+3. Deploy the canonical contract.
 4. Verify current production `tools/list` and `_meta["krabiclaw/catalogFingerprint"]`.
 5. Enterprise/Edu: Workspace Settings -> Apps -> Action control -> Refresh -> review diff -> enable replacement actions -> publish.
 6. Business: recreate and republish the custom app after incompatible changes.
 7. Test a new chat and an existing stale chat/registration.
 8. Monitor compatibility usage and unknown-tool telemetry.
-9. Never remove the adapter from the same endpoint version.
 
 ## Endpoint version policy
 
-`/api/mcp` and `/api/mcp/platform` retain every released dispatch identifier through their endpoint lifetime. A change that cannot be represented by a safe adapter requires a new endpoint version, such as `/api/mcp/v2` or `/api/mcp/platform/v2`, plus a separate ChatGPT app registration and explicit migration.
+`/api/mcp` and `/api/mcp/platform` keep tenant and platform surfaces separate. Hidden adapters are exceptions, not the default. A change that cannot be represented by a safe adapter and would break a high-value historical contract should use a new endpoint version, such as `/api/mcp/v2` or `/api/mcp/platform/v2`, plus a separate ChatGPT app registration and explicit migration.
 
 Do not use `serverInfo.version` as the sole compatibility boundary. The endpoint path and `server/utils/mcp-released-tools.ts` manifest are authoritative.
 
 ## Compatibility controls
 
 - Public catalogs are snapshotted in `server/utils/mcp-catalog-snapshots/`.
-- `yarn mcp:compat` fails when a public tool lacks a manifest entry, a deprecated tool is missing from dispatch, a deprecated tool leaks into discovery, or snapshots drift.
+- `yarn mcp:compat` fails when a public tool lacks a manifest entry, a retained deprecated adapter is missing from dispatch, a retired tool remains dispatchable, an old name leaks into discovery, or snapshots drift.
 - Run `yarn mcp:compat:write` only when intentionally updating public schemas, then review and commit the JSON diff.
 
 ## Incident queries

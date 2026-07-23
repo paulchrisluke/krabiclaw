@@ -1,5 +1,4 @@
 import { getHeader, setResponseStatus } from 'h3'
-import type { H3Event } from 'h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import {
   asMcpError,
@@ -57,11 +56,6 @@ const PLATFORM_KNOWLEDGE_MUTATION_TOOLS = new Set([
   'publish_content_revision',
 ])
 const PLATFORM_CATALOG_FINGERPRINT = catalogFingerprint(PLATFORM_PUBLIC_MCP_TOOLS)
-
-function shouldUseLeanToolCatalog(event: H3Event) {
-  const userAgent = (getHeader(event, 'user-agent') || '').toLowerCase()
-  return userAgent.includes('openai-mcp/')
-}
 
 function resourceMetadataUrl(baseUrl: string) {
   return `${baseUrl}/.well-known/oauth-protected-resource/platform-mcp`
@@ -325,18 +319,13 @@ export default defineEventHandler(async (event) => {
 
     if (request.method === 'tools/list') {
       const user = await requireMcpUser(event, platformAdminAuthOptions)
-      const leanToolCatalog = shouldUseLeanToolCatalog(event)
       const tools = PLATFORM_PUBLIC_MCP_TOOLS.map(tool => ({
           name: tool.name,
           description: tool.description,
           inputSchema: tool.inputSchema,
-          ...(leanToolCatalog
-            ? {}
-            : {
-                outputSchema: tool.outputSchema,
-                annotations: tool.annotations,
-                securitySchemes: tool.securitySchemes,
-              }),
+          outputSchema: tool.outputSchema,
+          annotations: tool.annotations,
+          securitySchemes: tool.securitySchemes,
           _meta: {
             securitySchemes: tool.securitySchemes,
             'krabiclaw/toolSurface': 'platform_admin',

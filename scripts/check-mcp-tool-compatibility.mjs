@@ -72,6 +72,12 @@ for (const config of surfaces) {
       if (!entry.replacementTools.length) failures.push(`${config.surface}: deprecated tool ${entry.name} must declare replacementTools`)
       if (!entry.compatibilityHandler) failures.push(`${config.surface}: deprecated tool ${entry.name} must declare compatibilityHandler`)
     }
+    if (entry.status === 'retired') {
+      if (dispatchNames.has(entry.name)) failures.push(`${config.surface}: retired released tool ${entry.name} must not remain in internal dispatch`)
+      if (publicNames.has(entry.name)) failures.push(`${config.surface}: retired released tool ${entry.name} must stay hidden from tools/list`)
+      if (!entry.replacementTools.length) failures.push(`${config.surface}: retired tool ${entry.name} must declare replacementTools`)
+      if (entry.compatibilityHandler) failures.push(`${config.surface}: retired tool ${entry.name} must not declare compatibilityHandler`)
+    }
   }
 
   const generated = {

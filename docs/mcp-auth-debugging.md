@@ -116,17 +116,17 @@ Signals:
 
 Likely cause:
 
-- not an auth problem — the `tools/list` response is large enough that
-  ChatGPT's client-side handling of it fails after a real 200. See
-  [local-mcp-harness.md](./local-mcp-harness.md#tool-catalog-size-and-toolslist)
-  for the lean-catalog behavior already in place for `openai-mcp/` user agents.
+- not an auth problem — inspect `tools/list` shape and size after the real 200.
+  See
+  [local-mcp-harness.md](./local-mcp-harness.md#tool-catalog-shape-and-toolslist)
+  for the current catalog-shape policy.
 
 Check:
 
-- compare `tools/list` payload size for the real ChatGPT user agent vs. a
-  manual request without it
-- confirm the lean-catalog path in `server/api/mcp.post.ts` /
-  `server/api/mcp/platform.post.ts` is actually matching that user agent
+- confirm ChatGPT receives tool descriptors with `inputSchema`, `outputSchema`,
+  annotations, and standard `_meta.ui.resourceUri` for widget tools
+- treat large catalog responses as a tool-sprawl/product problem, not a reason
+  to strip schema metadata from one client
 
 ### Host mismatch
 

@@ -65,9 +65,8 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: {
           launched: { type: 'boolean' },
-          resourceUri: { type: 'string' },
         },
-        required: ['launched', 'resourceUri'],
+        required: ['launched'],
       },
     }),
   siteTool({
@@ -155,27 +154,4 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
         required: ['answer', 'creditsRemaining', 'stats'],
       },
     }),
-]
-
-export const MEDIA_COMPAT_TOOLS: McpToolDefinition[] = [
-  siteTool({
-    name: 'open_media_upload',
-    description: 'Deprecated compatibility adapter for the former inline media upload widget. Prefer upload_user_media for images and open_video_upload for videos.',
-    domain: 'media',
-    minimumRole: 'editor',
-    confirmRequired: false,
-    uiResourceUri: VIDEO_UPLOAD_WIDGET_RESOURCE_URI,
-    inputSchema: {
-      category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this media will be used for.' },
-      accept: { type: 'string', enum: ['image', 'video', 'both'], description: 'Restrict the widget file picker. Defaults to both.' },
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        launched: { type: 'boolean' },
-        resourceUri: { type: 'string' },
-      },
-      required: ['launched', 'resourceUri'],
-    },
-  }),
 ]

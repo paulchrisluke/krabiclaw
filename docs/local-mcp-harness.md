@@ -336,20 +336,19 @@ command never prints the email, password, or password hash. Never commit the
 values; the provisioning script is deliberately local-only and always invokes
 Wrangler with `--local`.
 
-## Tool catalog size and `tools/list`
+## Tool catalog shape and `tools/list`
 
-`/api/mcp` and `/api/mcp/platform` detect the ChatGPT connector's user agent
-(`openai-mcp/...`) and send a leaner `tools/list` payload to it — dropping
-`outputSchema`, `annotations`, and the duplicate top-level `securitySchemes`
-per tool, since those aren't needed for tool selection and materially bloat
-the catalog. Everything else (`inspector`, curl, the local harness scripts)
-still gets the full catalog for debugging.
+`/api/mcp` and `/api/mcp/platform` return standards-compliant tool descriptors
+to ChatGPT and non-ChatGPT clients alike. Do not special-case the
+`openai-mcp/...` user agent by dropping `outputSchema` or annotations; clients
+use those fields to validate tool results and reason about follow-up calls.
 
 If a connector shows a stream/connection error right after auth succeeds
 (bearer token accepted, `tools/list` telemetry present) rather than during
-OAuth itself, suspect catalog size before suspecting auth — compare the
-`tools/list` response size for a real `openai-mcp/` user agent against a
-manual request without that header.
+OAuth itself, inspect catalog size as a product/tool-sprawl problem. Prefer
+removing duplicate semantic launchers, retiring stale names with JSON-RPC
+`-32601`, and keeping canonical tools well named over adding hidden adapters
+or stripping schema metadata from ChatGPT's view.
 
 ## Known gap: CIMD self-fetch on deployed Cloudflare Workers
 

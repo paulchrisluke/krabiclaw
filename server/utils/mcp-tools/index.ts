@@ -11,7 +11,7 @@ import { INTEGRATIONS_TOOLS } from './integrations'
 import { LOCALES_TOOLS } from './locales'
 import { LOCATIONS_TOOLS } from './locations'
 import { MANAGED_SERVICE_TOOLS } from './managed-service'
-import { MEDIA_COMPAT_TOOLS, MEDIA_TOOLS } from './media'
+import { MEDIA_TOOLS } from './media'
 import { MENUS_TOOLS } from './menus'
 import { NOTIFICATIONS_TOOLS } from './notifications'
 import { ONBOARDING_TOOLS } from './onboarding'
@@ -48,9 +48,7 @@ export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
   ...TRANSLATIONS_TOOLS,
 ].sort((a, b) => a.name.localeCompare(b.name))
 
-export const MCP_INTERNAL_TOOLS: McpToolDefinition[] = [
-  ...MEDIA_COMPAT_TOOLS,
-].sort((a, b) => a.name.localeCompare(b.name))
+export const MCP_INTERNAL_TOOLS: McpToolDefinition[] = []
 
 export const MCP_TOOLS: McpToolDefinition[] = [
   ...MCP_PUBLIC_TOOLS,

@@ -100,18 +100,15 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         context: await mutationContextPayload(site),
       };
     }
-    case "open_video_upload":
-    case "open_media_upload": {
+    case "open_video_upload": {
       const category = optionalString(args, "category") ?? null;
       return renderStructuredResponse(
         {
           launched: true,
-          resourceUri: VIDEO_UPLOAD_WIDGET_RESOURCE_URI,
         },
-        toolName === "open_media_upload"
-          ? "Media upload compatibility widget launched. For images, upload_user_media remains the canonical path."
-          : "Video upload widget launched.",
+        "Video upload widget launched.",
         {
+          resourceUri: VIDEO_UPLOAD_WIDGET_RESOURCE_URI,
           context: { site_id: site.siteId, category },
         },
       );

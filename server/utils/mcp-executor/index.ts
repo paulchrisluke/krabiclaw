@@ -74,7 +74,7 @@ export async function executeMcpToolCall(
   const tool = getMcpTool(toolName);
   if (!tool) {
     throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
+      MCP_ERROR.methodNotFound,
       `Unknown tool: ${toolName}`,
       { unknownToolName: toolName },
       'protocol',

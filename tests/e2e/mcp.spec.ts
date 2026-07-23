@@ -179,10 +179,12 @@ test.describe('stateless MCP server', () => {
       extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
     })
     expect(tools.status()).toBe(200)
-    const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, _meta?: Record<string, unknown> }> } }
+    const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, outputSchema?: Record<string, unknown>, _meta?: Record<string, unknown> }> } }
     const openVideoTool = toolsBody.result.tools.find(tool => tool.name === 'open_video_upload')
     expect(openVideoTool).toBeTruthy()
-    expect(openVideoTool?._meta?.['openai/widgetAccessible']).toBe(true)
+    expect(openVideoTool?.outputSchema?.required).toEqual(['launched'])
+    expect((openVideoTool?._meta?.ui as { resourceUri?: string, visibility?: string[] } | undefined)?.resourceUri).toBe('ui://widget/video-upload@v1.html')
+    expect((openVideoTool?._meta?.ui as { resourceUri?: string, visibility?: string[] } | undefined)?.visibility).toEqual(['model', 'app'])
     expect(openVideoTool?._meta?.['openai/outputTemplate']).toBe('ui://widget/video-upload@v1.html')
 
     const launchVideo = await mcpRequest(request, baseURL!, {
@@ -200,13 +202,22 @@ test.describe('stateless MCP server', () => {
     }
     expect(launchVideoBody.result?.structuredContent).toEqual({
       launched: true,
-      resourceUri: 'ui://widget/video-upload@v1.html',
     })
     expect(launchVideoBody.result?.structuredContent).not.toHaveProperty('context')
-    expect((launchVideoBody.result?._meta?.['krabiclaw/privateMeta'] as { context?: { site_id?: string; category?: string | null } } | undefined)?.context).toEqual({
+    expect(launchVideoBody.result?._meta?.resourceUri).toBe('ui://widget/video-upload@v1.html')
+    expect((launchVideoBody.result?._meta as { context?: { site_id?: string; category?: string | null } } | undefined)?.context).toEqual({
       site_id: siteId,
       category: 'other',
     })
+
+    const staleLauncher = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'open_media_upload',
+      args: { site_id: siteId, category: 'other' },
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(staleLauncher.status()).toBe(200)
+    expect((await staleLauncher.json()).error?.code).toBe(-32601)
 
     const resource = await mcpRequest(request, baseURL!, {
       method: 'resources/read',
@@ -276,10 +287,11 @@ test.describe('stateless MCP server', () => {
       extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
     })
     expect(tools.status()).toBe(200)
-    const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, _meta?: Record<string, unknown> }> } }
+    const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, outputSchema?: Record<string, unknown>, _meta?: Record<string, unknown> }> } }
     expect(toolsBody.result.tools.filter(tool => tool.name.startsWith('open_') && tool.name.includes('upload')).map(tool => tool.name)).toEqual(['open_video_upload'])
     const openVideoTool = toolsBody.result.tools.find(tool => tool.name === 'open_video_upload')
-    expect(openVideoTool?._meta?.['openai/widgetAccessible']).toBe(true)
+    expect(openVideoTool?.outputSchema?.required).toEqual(['launched'])
+    expect((openVideoTool?._meta?.ui as { resourceUri?: string, visibility?: string[] } | undefined)?.resourceUri).toBe('ui://widget/video-upload@v1.html')
 
     const launchVideo = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -296,10 +308,10 @@ test.describe('stateless MCP server', () => {
     }
     expect(launchVideoBody.result?.structuredContent).toEqual({
       launched: true,
-      resourceUri: 'ui://widget/video-upload@v1.html',
     })
     expect(launchVideoBody.result?.structuredContent).not.toHaveProperty('context')
-    expect((launchVideoBody.result?._meta?.['krabiclaw/privateMeta'] as { context?: { site_id?: string; category?: string | null } } | undefined)?.context).toEqual({
+    expect(launchVideoBody.result?._meta?.resourceUri).toBe('ui://widget/video-upload@v1.html')
+    expect((launchVideoBody.result?._meta as { context?: { site_id?: string; category?: string | null } } | undefined)?.context).toEqual({
       site_id: siteId,
       category: 'other',
     })

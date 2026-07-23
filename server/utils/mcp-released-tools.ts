@@ -2,7 +2,7 @@ import { MCP_PUBLIC_TOOLS, MCP_TOOLS } from '~/server/utils/mcp-tools'
 import { PLATFORM_MCP_TOOLS, PLATFORM_PUBLIC_MCP_TOOLS } from '~/server/utils/platform-mcp-tools'
 
 export type McpReleasedSurface = 'tenant' | 'platform'
-export type McpReleasedToolStatus = 'current' | 'deprecated'
+export type McpReleasedToolStatus = 'current' | 'deprecated' | 'retired'
 
 export interface McpReleasedToolManifestEntry {
   surface: McpReleasedSurface
@@ -28,9 +28,8 @@ const DEPRECATED_RELEASED_TOOLS: McpReleasedToolManifestEntry[] = [
     surface: 'tenant',
     name: 'open_media_upload',
     firstReleasedAt: '2026-07-06',
-    status: 'deprecated',
+    status: 'retired',
     replacementTools: ['upload_user_media', 'open_video_upload'],
-    compatibilityHandler: 'server/utils/mcp-executor/media.ts:handleMediaTools',
   },
 ]
 
