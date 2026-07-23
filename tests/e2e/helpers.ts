@@ -33,6 +33,7 @@ const THIRD_PARTY_REQUEST_DOMAINS = [
 const THIRD_PARTY_CONSOLE_PATTERNS = [
   'ERR_FAILED',
   'cloudflareinsights.com',
+  'Permissions policy violation: compute-pressure is not allowed in this document.',
 ]
 
 // Inject extra headers ONLY into requests targeting the tenant's base hostname.
