@@ -12,9 +12,12 @@ const longSidebarTitles = [
 const sidebarRegressionArticlePath = '/article/preparing-for-your-consultation-with-north-carolina-legal-services'
 
 async function expectContainedTwoLineSidebarTitle(link: import('@playwright/test').Locator, expectedTitle: string) {
-  await expect(link).toHaveAttribute('title', expectedTitle)
+  await expect(link).not.toHaveAttribute('title', /.*/)
   const title = link.locator('[data-blog-nav-title]')
   await expect(title).toBeVisible()
+  const tooltip = link.locator('[data-blog-nav-tooltip]')
+  await expect(tooltip).toHaveAttribute('aria-hidden', 'true')
+  await expect(tooltip).toHaveText(expectedTitle)
 
   const metrics = await title.evaluate((node) => {
     const titleElement = node as HTMLElement
@@ -167,6 +170,7 @@ test.describe('Blawby NCLS public site', () => {
       const keyboardLink = sidebar.getByRole('link', { name: longSidebarTitles[1], exact: true })
       await keyboardLink.focus()
       await expect(keyboardLink).toBeFocused()
+      await expect(keyboardLink.locator('[data-blog-nav-tooltip]')).toBeVisible()
     }
   })
 
