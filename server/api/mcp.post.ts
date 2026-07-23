@@ -227,11 +227,13 @@ export default defineEventHandler(async (event) => {
 Whenever an image is needed (hero, logo, post thumbnail, menu photo, experience cover, story image, or any content section):
 
 **AI-generated (user asks you to generate or create an image):**
-1. Call image_generation natively with model gpt-image-1 and a detailed prompt tailored to the business.
-2. Immediately call save_generated_image_file({ site_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
-3. Call show_generated_images with the assetId and publicUrl returned by save_generated_image_file.
-4. After the user approves, assign with the appropriate tool: set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, set_blog_post_image, or set_experience_image.
-5. If the user wants changes, call image_generation again with a revised prompt and repeat from step 2.
+1. Call resolve_agent_guidance({ site_id, task: "image.generate" }) and use every returned skill document separately.
+2. Prepare the exact image brief and call review_agent_guidance_candidate({ site_id, task: "image.generate", candidate_type: "image_brief", candidate: <brief> }). Revise the brief when the review recommends it.
+3. Call image_generation natively with model gpt-image-1 or gpt-image-2 and the reviewed prompt tailored to the business.
+4. Immediately call save_generated_image_file({ site_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
+5. Call show_generated_images with the assetId and publicUrl returned by save_generated_image_file.
+6. After the user approves, assign with the appropriate tool: set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, set_blog_post_image, or set_experience_image.
+7. If the user wants changes, call image_generation again with a revised prompt and repeat from step 4.
 
 This entire flow runs within the current conversation — do not tell the user to leave the app or use a different context.
 
@@ -257,6 +259,8 @@ KrabiClaw has three distinct content-creation tools — do not default to whiche
 - **create_blog_post** — long-form narrative/story content on the site's own blog. Use for "write about our history" or "announce our new location" as a story, not an action.
 - **create_experience** — a permanent, bookable offering with its own page: a class, package, tour, or group/custom-booking option that needs pricing/availability and a Reserve Now (or Contact Us, if left priceless) CTA. Use for "we want a dedicated page for X" when X is something people book or inquire about, even if there's no fixed price yet — leave price/price_amount unset for a "contact us for pricing" experience rather than writing a post or blog entry about it.
 If a request is ambiguous, ask a brief clarifying question rather than guessing.
+
+For create_blog_post, update_blog_post, or replace_blog_content, call resolve_agent_guidance({ site_id, task: "blog.write" }) before drafting and review_agent_guidance_candidate({ site_id, task: "blog.write", candidate_type: "blog_draft", candidate: <exact draft> }) before persisting a newly generated or materially rewritten draft. Skill guidance is advisory and scoped; tool schemas, authorization, publication approval, and content_blocks remain enforced by backend code.
 
 ## Session start
 Start every conversation by calling get_workspace_context. If no active site is set yet, call list_sites to discover the user's sites and present them clearly.

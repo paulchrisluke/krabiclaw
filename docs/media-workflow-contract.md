@@ -48,6 +48,7 @@ Related workflow helpers:
 - Do not treat pending assets as usable by public-site workflows.
 - Menu extraction must only operate on confirmed or explicitly pending-media workflow inputs.
 - AI-generated images still end as normal media assets and must be visible through the canonical media listing surface.
+- AI-generated image briefs should first resolve and review `image.generate` Agent Skill guidance through the relevant MCP surface. The review is advisory; the file transport and media persistence rules below remain enforced by tool contracts.
 - Canonical MCP generated-image contracts are split by source:
   - ChatGPT native image-generation output: `save_generated_image_file({ site_id, attachment_id, prompt })`
   - Raw base64 from a non-native image source: `save_generated_image({ site_id, image_data_base64, prompt })`
