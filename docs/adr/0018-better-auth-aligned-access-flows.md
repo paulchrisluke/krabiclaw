@@ -36,4 +36,4 @@ yarn seed:pottery-local
 PORT=3000 EMAIL_DELIVERY_MODE=log_only WHATSAPP_DELIVERY_MODE=log_only yarn test:e2e:access-local
 ```
 
-The suite covers phone invitation creation, OTP verification, session creation, automatic acceptance, scoped location-manager dashboard access, invitation retirement, OAuth authorization/discovery, and site-transfer return and completion behavior.
+The suite covers phone invitation creation, OTP verification, session creation, automatic acceptance, scoped editor dashboard access with location restrictions, invitation retirement, OAuth authorization/discovery, and site-transfer return and completion behavior.
