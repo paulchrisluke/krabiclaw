@@ -17,6 +17,8 @@ Use this workflow when running Codex or Claude agents in parallel worktrees.
 - After opening or pushing a PR, do one immediate status check and report the PR URL plus current check state.
 - Do not poll GitHub or CodeRabbit every few seconds. If checks or CodeRabbit are still pending, schedule or ask for a follow-up about 20 minutes later.
 - When CodeRabbit or CI reports actionable feedback, address it in the same worktree, push once the fix is coherent, then do one immediate status check again.
+- Treat CodeRabbit rate limiting as a blocked/pending review state, never as success. A status like "review rate limited" means the review did not happen yet, usually because too many PRs or commits are competing for CodeRabbit at once.
+- When CodeRabbit is rate limited, do not push empty commits or ask for manual re-reviews. Reduce the active review queue where possible, wait for the cooldown window, then check once after about 20 minutes.
 
 ## Local Dependencies
 
