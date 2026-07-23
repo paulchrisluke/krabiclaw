@@ -16,6 +16,7 @@ const defaultReferenceRepo = path.join(repoRoot, '.scratch', 'reference', 'react
 const defaultSource = path.join(defaultReferenceRepo, 'tenants', 'northcarolinalegalservices', 'northcarolinalegalservices.ts')
 const defaultClientImportDir = path.join(repoRoot, 'client-imports', 'north-carolina-legal-services')
 const siteId = 'site-ncls-blawby'
+const approvedDonationUrl = 'https://donate.stripe.com/bIY29UfAUec37GocMM'
 const isCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 
 function parseArgs(argv) {
@@ -188,7 +189,9 @@ function assetPointer(role, sourceName, extra = {}) {
 
 function parseSourceDate(value) {
   if (!value) return null
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString()
+  if (value instanceof Date || Object.prototype.toString.call(value) === '[object Date]') {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString()
+  }
   const source = String(value).trim()
   const iso = source.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
   const us = source.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
@@ -297,7 +300,7 @@ function consultationExternalUrl(config) {
 }
 
 function donationExternalUrl(config) {
-  return config.tenant.paymentBaseUrl ? `${config.tenant.paymentBaseUrl}/donate` : null
+  return config.tenant.donationUrl || config.donationUrl || approvedDonationUrl
 }
 
 function tenantPageFromVariant(page, config, linkMap) {
@@ -880,6 +883,10 @@ function buildPayload(config, sourcePath = null) {
     })),
   ]
   const externalConsultationUrl = consultationExternalUrl(config)
+  const externalDonationUrl = donationExternalUrl(config)
+  const serviceAreaName = config.serviceArea?.name === 'North Carlina'
+    ? 'North Carolina'
+    : config.serviceArea?.name || config.serviceArea?.locality || 'North Carolina'
   const personTitles = new Map((config.peopleAndAccounts || []).map(entry => [
     `${entry.person?.firstName || ''} ${entry.person?.surname || ''}`.trim(),
     entry.person?.title || null,
@@ -975,9 +982,7 @@ function buildPayload(config, sourcePath = null) {
       service_area: config.serviceArea
         ? {
             ...config.serviceArea,
-            name: config.serviceArea.name === 'North Carlina'
-              ? 'North Carolina'
-              : config.serviceArea.name || config.serviceArea.locality || null,
+            name: serviceAreaName,
           }
         : null,
       logo_asset_id: assetPointer('brand_logo', 'icons/logo.svg')?.asset_id || null,
@@ -1002,7 +1007,7 @@ function buildPayload(config, sourcePath = null) {
           contact_type: 'customer service',
           telephone: tenant.phone || null,
           email: tenant.email || null,
-          area_served: config.serviceArea?.name || config.serviceArea?.locality || 'North Carolina',
+          area_served: serviceAreaName,
         },
       ].filter(Boolean)
       return {
@@ -1019,7 +1024,7 @@ function buildPayload(config, sourcePath = null) {
         service_area_type: 'State',
         address_visibility: 'hidden',
         founder_name: tenant.founder || null,
-        founding_date: tenant.foundingDate || null,
+        founding_date: parseSourceDate(tenant.foundingDate),
         same_as: sameAs,
         contact_points: contactPoints,
         disclaimer: htmlishToMarkdown(tenant.disclaimer),
@@ -1057,6 +1062,10 @@ function buildPayload(config, sourcePath = null) {
         contact_form_enabled: false,
       },
       legacy_source_calendly_url_ignored: tenant.calendlyUrl || null,
+    },
+    donation: {
+      mode: 'external_url',
+      external_url: externalDonationUrl,
     },
     analyticsBridge: {
       provider: 'gtm',

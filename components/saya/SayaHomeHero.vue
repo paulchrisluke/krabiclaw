@@ -83,6 +83,7 @@
       <div v-else class="mt-12 flex flex-wrap gap-4">
         <NuxtLink v-if="hasOrderLinks" to="/order" class="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-base font-medium text-black no-underline transition hover:bg-zinc-100">{{ orderNowCta }}</NuxtLink>
         <NuxtLink
+          v-if="ctaRoute"
           :to="ctaRoute"
           class="inline-flex items-center justify-center rounded-full px-6 py-3 text-base font-medium no-underline transition"
           :class="hasOrderLinks ? 'border border-white/50 text-white hover:bg-white/10' : 'bg-white text-black hover:bg-zinc-100'"
@@ -90,7 +91,7 @@
           {{ reserveCta }}
         </NuxtLink>
         <NuxtLink
-          v-if="!hasOrderLinks"
+          v-if="showSecondaryCta"
           :to="viewMenuRoute"
           class="inline-flex items-center justify-center rounded-full border border-white/50 px-6 py-3 text-base font-medium text-white no-underline transition hover:bg-white/10"
         >
@@ -158,6 +159,9 @@ const reserveCta = computed(() => props.data?.reserveCta || '')
 const orderNowCta = computed(() => props.data?.orderNowCta || 'Action')
 const viewMenuCta = computed(() => props.data?.viewMenuCta || 'Explore')
 const viewMenuRoute = computed(() => props.data?.viewMenuRoute || '/')
+const showSecondaryCta = computed(() =>
+  !hasOrderLinks.value && !!viewMenuRoute.value && viewMenuRoute.value !== ctaRoute.value
+)
 // Neutral default until the owner picks a brand color in onboarding.
 const brandColor = computed(() => props.data?.brandColor || '#3F3F46')
 const isExperienceVertical = computed(() => props.data?.vertical === 'experience')

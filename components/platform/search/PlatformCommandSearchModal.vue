@@ -150,37 +150,12 @@ const PLATFORM_PALETTE: SearchPalette = {
   badge: 'border-default text-dimmed',
 }
 
-// Saya deliberately reuses the platform's semantic Nuxt UI utility classes rather than
-// bespoke Saya-only classes: assets/css/saya.css repoints the underlying --ui-* custom
-// properties to the tenant's brand tokens, scoped to `.saya-theme` (layouts/saya.vue).
-// Because this modal now teleports into #saya-portal-root — which renders inside
-// .saya-theme — those same utility classes automatically resolve to the Saya palette
-// instead of the platform default. This is an explicit branch, not a platform fallback;
-// the visual difference comes entirely from *where* the classes render, not from the
-// classes themselves.
+// Tenant variants deliberately reuse the platform's semantic Nuxt UI utility classes
+// rather than bespoke theme-only classes: assets/css/saya.css and assets/css/blawby.css
+// repoint the underlying --ui-* custom properties inside their layout theme scopes.
+// The visual difference comes entirely from where these classes render.
 const SAYA_PALETTE: SearchPalette = PLATFORM_PALETTE
-
-// Blawby does not repoint --ui-*; it exposes its own --blawby-* custom properties
-// (layouts/blawby.vue). Ordinary text uses --blawby-ink, the shell's dedicated
-// foreground token that every Blawby surface already uses for body copy — not
-// --blawby-primary, which is a brand accent color a tenant can set to anything
-// (including a light/bright color) and is unsafe as text on a fixed white/surface
-// background. Selected/hover states tint the *background* with the accent color
-// instead of swapping text color, so contrast never depends on the tenant's brand
-// color value. See the `.search-blawby-*` rules below.
-const BLAWBY_PALETTE: SearchPalette = {
-  panel: 'search-blawby-panel',
-  headerBorder: 'search-blawby-border',
-  text: 'search-blawby-text',
-  muted: 'search-blawby-muted',
-  dimmed: 'search-blawby-dimmed',
-  placeholder: 'search-blawby-placeholder',
-  esc: 'search-blawby-esc',
-  selected: 'search-blawby-selected',
-  hover: 'search-blawby-hover',
-  icon: 'search-blawby-icon',
-  badge: 'search-blawby-badge',
-}
+const BLAWBY_PALETTE: SearchPalette = PLATFORM_PALETTE
 
 const palette = computed<SearchPalette>(() => {
   if (props.variant === 'blawby') return BLAWBY_PALETTE
@@ -449,64 +424,3 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onGlobalKeydown)
 })
 </script>
-
-<style scoped>
-/* Blawby palette: every rule below reads --blawby-ink for text so contrast never
-   depends on the tenant-configurable --blawby-primary/--blawby-accent brand colors.
-   Vue's scoped attribute selectors still match after Teleport moves these elements
-   into #blawby-portal-root, since scoping is attribute-based, not DOM-position-based. */
-.search-blawby-panel {
-  border-color: var(--blawby-border);
-  background-color: var(--blawby-surface);
-}
-
-.search-blawby-border {
-  border-color: var(--blawby-border);
-}
-
-.search-blawby-text {
-  color: var(--blawby-ink);
-}
-
-.search-blawby-muted {
-  color: color-mix(in srgb, var(--blawby-ink) 72%, transparent);
-}
-
-.search-blawby-dimmed {
-  color: color-mix(in srgb, var(--blawby-ink) 48%, transparent);
-}
-
-.search-blawby-placeholder::placeholder {
-  color: color-mix(in srgb, var(--blawby-ink) 48%, transparent);
-}
-
-.search-blawby-esc {
-  border-color: var(--blawby-border);
-  color: color-mix(in srgb, var(--blawby-ink) 55%, transparent);
-}
-
-.search-blawby-esc:hover {
-  background-color: var(--blawby-accent-100);
-  color: var(--blawby-ink);
-}
-
-.search-blawby-selected {
-  background-color: var(--blawby-accent-100);
-  color: var(--blawby-ink);
-}
-
-.search-blawby-hover:hover {
-  background-color: color-mix(in srgb, var(--blawby-accent-100) 70%, transparent);
-}
-
-.search-blawby-icon {
-  border-color: var(--blawby-border);
-  background-color: var(--blawby-surface);
-  color: var(--blawby-ink);
-}
-
-.search-blawby-badge {
-  border-color: var(--blawby-border);
-  color: color-mix(in srgb, var(--blawby-ink) 60%, transparent);
-}
-</style>

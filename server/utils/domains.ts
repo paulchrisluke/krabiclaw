@@ -6,6 +6,7 @@ import { canonicalDomainForPair, domainPair, normalizeDomain, rootDomainForPair 
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 
 export interface DomainEnv {
+  GA4_MEASUREMENT_ID?: string
   CF_ZONE_ID?: string
   CF_CUSTOM_HOSTNAMES_API_TOKEN?: string
   CF_ZARAZ_API_TOKEN?: string
@@ -148,6 +149,14 @@ function platformDomainCandidates(env: DomainEnv): string[] {
   return values
     .filter((value): value is string => Boolean(value))
     .map((value) => value.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase())
+}
+
+export function platformAnalyticsHostnames(env: DomainEnv): string[] {
+  const hostnames = new Set(platformDomainCandidates(env))
+  for (const hostname of Array.from(hostnames)) {
+    if (hostname.split('.').length === 2) hostnames.add(`www.${hostname}`)
+  }
+  return Array.from(hostnames).sort()
 }
 
 // Non-throwing variant of platformHostname for callers building a best-effort fallback URL

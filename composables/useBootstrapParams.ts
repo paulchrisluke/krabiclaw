@@ -29,7 +29,7 @@ function getPreviewSubpath(path: string): string | null {
   return match[1] || '/'
 }
 
-function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "token"> {
+export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "token"> {
 
   // Location sub-pages: /locations/[slug]/*
   const locationMatch = path.match(/^\/locations\/([^/]+)/);

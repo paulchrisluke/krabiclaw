@@ -50,6 +50,9 @@ const APPROVED_MEDIA_HOSTS = [
   'customers.krabiclaw.com',
 ]
 
+const APPROVED_DONATION_URL = 'https://donate.stripe.com/bIY29UfAUec37GocMM'
+const LEGACY_DONATION_HOST = 'app.blawby.com'
+
 const SCREENSHOT_ROUTES = Object.keys(BLAWBY_PARITY_ROUTES)
 const SCREENSHOT_VIEWPORTS = Object.keys(BLAWBY_PARITY_VIEWPORTS)
 function parseArgs(argv) {
@@ -186,6 +189,10 @@ function collectKrabiClawMediaReferences(value, urls = new Set()) {
   return urls
 }
 
+function containsLegacyDonationHost(value) {
+  return JSON.stringify(value ?? null).includes(LEGACY_DONATION_HOST)
+}
+
 function checkMediaUrl(url) {
   if (url.startsWith('/') && !url.startsWith('//')) return { ok: true, reason: 'relative route' }
   let parsed
@@ -231,10 +238,44 @@ async function fetchResponseWithTimeout(url, options = {}) {
   }
 }
 
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function fetchRemoteMediaStatus(url) {
+  const attempts = 3
+  let lastStatus = 0
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const { response, timer } = await fetchResponseWithTimeout(url, { headers: { Range: 'bytes=0-0' } })
+    if (timer) clearTimeout(timer)
+    lastStatus = response.status
+    if (response.status >= 200 && response.status < 400) {
+      return { status: response.status, attempts: attempt }
+    }
+    if (attempt < attempts) await delay(250 * attempt)
+  }
+  return { status: lastStatus, attempts }
+}
+
+async function fetchRouteResponseWithRetries(url, options = {}) {
+  const attempts = 3
+  let lastResult = null
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const result = await fetchResponseWithTimeout(url, options)
+    lastResult = result
+    const status = result.response.status
+    const shouldRetry = status === 0 || status === 502 || status === 503 || status === 504
+    if (!shouldRetry || attempt === attempts) return { ...result, attempts: attempt }
+    if (result.timer) clearTimeout(result.timer)
+    await delay(250 * attempt)
+  }
+  return { ...lastResult, attempts }
+}
+
 async function checkRoute(base, route, options = {}) {
   const url = resolveUrl(base, route)
   const started = Date.now()
-  const { response, timer } = await fetchResponseWithTimeout(url, { redirect: options.redirect || 'follow' })
+  const { response, timer, attempts } = await fetchRouteResponseWithRetries(url, { redirect: options.redirect || 'follow' })
   let html = ''
   try {
     html = await response.text().catch(() => '')
@@ -248,12 +289,14 @@ async function checkRoute(base, route, options = {}) {
     status: response.status,
     location: response.headers?.get?.('location') ?? null,
     duration_ms: Date.now() - started,
+    attempts,
     ok: response.status >= 200 && response.status < 400,
     has_blawby_signal: /Blawby|Legal Services|consultation|--blawby-primary|ProfessionalService|LegalService/.test(html),
     has_saya_signal: /saya-restaurant-theme|Reserve a table|From the kitchen/.test(html),
     has_professional_schema: lower.includes('professionalservice') || lower.includes('legalservice'),
     has_restaurant_schema: lower.includes('restaurant') || lower.includes('foodestablishment'),
     has_noindex: /name=["']robots["'][^>]+noindex/i.test(html),
+    has_legacy_donation_host: lower.includes(LEGACY_DONATION_HOST),
     forbidden_copy: FORBIDDEN_COPY.filter((copy) => lower.includes(copy.toLowerCase())),
     bytes: html.length,
   }
@@ -299,6 +342,11 @@ function validateCalculator(component) {
 
 function validateArtifacts(checks, manifest) {
   if (!manifest) return
+  pushCheck(
+    checks,
+    !containsLegacyDonationHost(manifest),
+    `Canonical NCLS import data does not reference ${LEGACY_DONATION_HOST}`,
+  )
   pushCheck(checks, manifest.site?.vertical === 'service', 'Import manifest uses DB-supported service vertical')
   pushCheck(checks, manifest.site?.theme_id === 'blawby-theme-v1', 'Import manifest selects Blawby')
   pushCheck(checks, (manifest.offerings ?? []).length > 0, 'Import manifest contains offerings')
@@ -361,6 +409,18 @@ function validateArtifacts(checks, manifest) {
     'Donation CTA is external',
     { donationUrl: donationPage?.cta_url ?? null },
   )
+  pushCheck(
+    checks,
+    donationPage?.cta_url === APPROVED_DONATION_URL,
+    'Donation CTA uses the approved Stripe destination',
+    { donationUrl: donationPage?.cta_url ?? null },
+  )
+  pushCheck(
+    checks,
+    manifest.donation?.external_url === APPROVED_DONATION_URL,
+    'Donation configuration uses the approved Stripe destination',
+    { donationUrl: manifest.donation?.external_url ?? null },
+  )
 
   for (const page of manifest.tenantPages ?? []) {
     pushCheck(checks, !String(page.body || '').includes('](/files/'), `Tenant page ${page.path} does not reference legacy /files assets`)
@@ -384,6 +444,11 @@ function validatePublicData(checks, data, required) {
     return
   }
   pushCheck(checks, true, 'Public Blawby API data is fetchable and valid')
+  pushCheck(
+    checks,
+    !containsLegacyDonationHost(data),
+    `Public Blawby API data does not reference ${LEGACY_DONATION_HOST}`,
+  )
   pushCheck(checks, Array.isArray(data.offerings) && data.offerings.length > 0, 'Public Blawby API returns offerings')
   pushCheck(checks, Array.isArray(data.tenantPages) && data.tenantPages.some((page) => page.path === '/pricing'), 'Public Blawby API returns /pricing')
   pushCheck(checks, data.consultation?.tracking_enabled === true, 'Public consultation tracking is enabled')
@@ -397,6 +462,13 @@ function validatePublicData(checks, data, required) {
   for (const page of data.tenantPages ?? []) {
     pushCheck(checks, !String(page.body || '').includes('](/files/'), `Public tenant page ${page.path} does not reference legacy /files assets`)
   }
+  const donationPage = (data.tenantPages ?? []).find((page) => page.path === '/donate')
+  pushCheck(
+    checks,
+    donationPage?.cta_url === APPROVED_DONATION_URL,
+    'Public donation CTA uses the approved Stripe destination',
+    { donationUrl: donationPage?.cta_url ?? null },
+  )
 
   const bridge = data.consultation?.metadata?.analyticsBridge
   if (bridge) {
@@ -422,9 +494,8 @@ async function validateRemoteMedia(checks, ...sources) {
   const concurrency = 8
   for (let offset = 0; offset < urls.length; offset += concurrency) {
     await Promise.all(urls.slice(offset, offset + concurrency).map(async (url) => {
-      const { response, timer } = await fetchResponseWithTimeout(url, { headers: { Range: 'bytes=0-0' } })
-      if (timer) clearTimeout(timer)
-      pushCheck(checks, response.status >= 200 && response.status < 400, `Remote media is fetchable: ${url}`, { status: response.status })
+      const result = await fetchRemoteMediaStatus(url)
+      pushCheck(checks, result.status >= 200 && result.status < 400, `Remote media is fetchable: ${url}`, result)
     }))
   }
 }
@@ -599,6 +670,9 @@ for (const route of routes) {
   pushCheck(checks, result.forbidden_copy.length === 0, `GET ${route} has no forbidden restaurant copy`, {
     forbiddenCopy: result.forbidden_copy,
   })
+  if (route === '/donate') {
+    pushCheck(checks, !result.has_legacy_donation_host, `GET ${route} does not render ${LEGACY_DONATION_HOST}`)
+  }
   if (route === '/' || route.startsWith('/services')) {
     pushCheck(checks, result.has_professional_schema, `GET ${route} has professional-service schema signal`)
     pushCheck(checks, !result.has_restaurant_schema, `GET ${route} has no restaurant schema signal`)

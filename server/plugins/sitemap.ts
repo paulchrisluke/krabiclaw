@@ -178,7 +178,7 @@ export default defineNitroPlugin((nitroApp) => {
     const [locations, menuItems, posts, experiences] = await Promise.all([
       queryAll<ApiRecord>(
         db,
-        `SELECT slug, updated_at, grab_url, uber_eats_url, foodpanda_url
+        `SELECT id, slug, updated_at, grab_url, uber_eats_url, foodpanda_url
          FROM business_locations
          WHERE site_id = ?
            AND status = 'active'
@@ -207,7 +207,7 @@ export default defineNitroPlugin((nitroApp) => {
       ),
       queryAll<ApiRecord>(
         db,
-        `SELECT slug, updated_at
+        `SELECT slug, location_id, updated_at
          FROM experiences
          WHERE site_id = ?
            AND status != 'inactive'
@@ -229,10 +229,30 @@ export default defineNitroPlugin((nitroApp) => {
       entries.push({ loc: '/order' })
     }
 
+    const visibleExperienceCountsByLocation = new Map<string, number>()
+    for (const experience of experiences ?? []) {
+      const locationId = typeof experience.location_id === 'string' ? experience.location_id : ''
+      if (!locationId) continue
+      visibleExperienceCountsByLocation.set(
+        locationId,
+        (visibleExperienceCountsByLocation.get(locationId) ?? 0) + 1,
+      )
+    }
+
     entries.push(
       ...locations
         .filter(location => location.slug)
         .map(location => ({ loc: `/locations/${location.slug}`, lastmod: location.updated_at as string | undefined })),
+      ...locations
+        .filter(location =>
+          location.slug &&
+          typeof location.id === 'string' &&
+          (visibleExperienceCountsByLocation.get(location.id) ?? 0) >= 2
+        )
+        .map(location => ({
+          loc: `/locations/${location.slug}/experiences`,
+          lastmod: location.updated_at as string | undefined,
+        })),
       ...menuItems
         .filter(item => item.slug)
         .map(item => ({ loc: `/menu/${item.slug}`, lastmod: item.updated_at as string | undefined })),

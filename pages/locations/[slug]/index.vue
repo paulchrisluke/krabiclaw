@@ -80,6 +80,7 @@
             </div>
             <div class="mt-10 flex flex-wrap gap-3">
               <SayaButton
+                v-if="primaryCtaPath"
                 :to="primaryCtaPath"
                 size="lg"
                 class="bg-white! text-black! hover:bg-zinc-100!"
@@ -162,7 +163,8 @@
         :data="{
           items: featuredItems,
           hasMenu: hasMenu,
-          vertical: (site as ApiValue)?.vertical
+          vertical: (site as ApiValue)?.vertical,
+          linkTarget: featuredContentLinkTarget
         }"
       />
 
@@ -263,7 +265,7 @@
         <div class="flex flex-wrap items-center justify-between gap-8">
           <h2 class="saya-display-md saya-italic text-default">See you soon.</h2>
           <div class="flex flex-wrap gap-3">
-            <SayaButton :to="primaryCtaPath" size="lg">
+            <SayaButton v-if="primaryCtaPath" :to="primaryCtaPath" size="lg">
               {{ primaryCtaLabel }}
             </SayaButton>
             <NuxtLink
@@ -301,6 +303,7 @@
 import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage, nowInTimezone } from '~/utils/formatters'
 import { formatMoneyAmount, isSaleActive, resolveOverridePriceDisplay } from '~/shared/money'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
+import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
 
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
 
@@ -327,7 +330,6 @@ const {
   locationReviews,
   pending,
   config: bootstrapConfig,
-  hasExperiences,
   experiencesList,
   contentBlocks,
   postsList,
@@ -338,19 +340,35 @@ const hasMenu = computed(() => {
   return !!(m && m.items && m.items.length > 0)
 })
 
-const primaryCtaPath = computed(() => locationIndexCopy.value.ctaRoute)
+const isExperienceTenant = computed(() => (site as ApiValue)?.vertical === 'experience')
+const locationExperienceHref = computed(() =>
+  resolveLocationExperienceHref(slug.value, experiencesList.value)
+)
+
+const primaryCtaPath = computed(() => {
+  if (isExperienceTenant.value) return locationExperienceHref.value
+  return locationIndexCopy.value.ctaRoute
+})
 const primaryCtaLabel = computed(() => locationIndexCopy.value.reserveCta)
 
 const secondaryCtaPath = computed(() => {
+  if (isExperienceTenant.value) {
+    return hasMenu.value ? `/locations/${slug.value}/menu` : null
+  }
   if (hasMenu.value) return `/locations/${slug.value}/menu`
-  if (hasExperiences.value) return '/experiences'
+  if (locationExperienceHref.value) return locationExperienceHref.value
   return null
 })
 
 const secondaryCtaLabel = computed(() => {
   if (hasMenu.value) return 'View menu'
-  if (hasExperiences.value) return 'View experiences'
+  if (!isExperienceTenant.value && locationExperienceHref.value) return 'View experiences'
   return null
+})
+
+const featuredContentLinkTarget = computed(() => {
+  if (hasMenu.value) return `/locations/${slug.value}/menu`
+  return locationExperienceHref.value
 })
 
 // Contact fallbacks
@@ -446,7 +464,7 @@ const featuredItems = computed(() => {
       image: exp.image_url || null,
       imageKind: 'image',
       alt: exp.title ? `${exp.title} experience` : 'Featured experience image',
-      href: exp.slug ? `/experiences/${exp.slug}` : '/experiences',
+      href: exp.slug ? `/experiences/${exp.slug}` : locationExperienceHref.value || undefined,
       unavailable: !!closureMessage,
     }))
   }
