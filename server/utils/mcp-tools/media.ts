@@ -67,6 +67,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
           launched: { type: 'boolean' },
         },
         required: ['launched'],
+        additionalProperties: false,
       },
     }),
   siteTool({
