@@ -116,7 +116,7 @@
               v-for="feature in locationToggleableFeatures"
               :key="feature"
               v-model="locationEnabledFeatureSet[feature]"
-              :label="LOCATION_FEATURE_LABELS[feature] ?? feature"
+              :label="LOCATION_FEATURE_LABELS[feature] ?? humanizeFeatureId(feature)"
             />
           </div>
           <p v-else class="text-sm text-muted">No toggleable modules available — enable them on the site first.</p>
@@ -318,6 +318,13 @@ const LOCATION_FEATURE_LABELS: Partial<Record<ProductFeature, string>> = {
   experiences: 'Experiences',
 }
 
+// Every location-configurable module has an entry above today (config/cms-registry.ts's saya/blawby
+// ProductModuleDefinition lists), but this humanizes the fallback rather than only the map so a
+// future template/module doesn't silently render a raw snake_case id here.
+function humanizeFeatureId(feature: string): string {
+  return feature.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase())
+}
+
 interface BusinessLocation {
   id: string
   slug: string
@@ -416,7 +423,11 @@ async function saveLocationFeatures() {
   try {
     // Delta against the SITE's effective set, not this location's prior state (see
     // siteEffectiveFeatures' doc comment) — collapses to `null` when the checked set exactly
-    // matches what the site already supports.
+    // matches what the site already supports. `enabled` is structurally always [] today:
+    // locationToggleableFeatures is itself filtered from siteEffectiveFeatures (see its own
+    // computed above), so every feature checked here already satisfies `siteSet.has(feature)`.
+    // Kept as a real filter (not hardcoded to []) so this stays correct if that upstream
+    // computed ever changes — don't "simplify" this away without re-checking that invariant.
     const siteSet = new Set(siteEffectiveFeatures.value)
     const enabled = locationToggleableFeatures.value.filter(feature => locationEnabledFeatureSet[feature] && !siteSet.has(feature))
     const disabled = locationToggleableFeatures.value.filter(feature => siteSet.has(feature) && !locationEnabledFeatureSet[feature])
@@ -430,7 +441,7 @@ async function saveLocationFeatures() {
     fillLocationFeatures(response)
     toast.add({ description: 'Availability saved', color: 'success' })
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to save availability', color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to save availability'), color: 'error' })
   } finally {
     savingLocationFeatures.value = false
   }

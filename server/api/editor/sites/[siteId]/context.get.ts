@@ -27,6 +27,7 @@ interface LocationRow {
   title: string
   is_primary: number | boolean
   status: 'active' | 'inactive' | 'sync_error'
+  feature_overrides: string | null
 }
 
 interface ParsedLocation extends Omit<LocationRow, 'is_primary'> {
@@ -95,7 +96,7 @@ export default defineEventHandler(async (event) => {
 
     // Get active locations
     const locationRows = await queryAll<LocationRow>(db, `
-      SELECT id, slug, title, is_primary, status
+      SELECT id, slug, title, is_primary, status, feature_overrides
       FROM business_locations
       WHERE organization_id = ? AND site_id = ? AND status = 'active'
       ORDER BY is_primary DESC, title ASC

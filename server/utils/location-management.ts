@@ -504,8 +504,13 @@ export async function resolveLocationCapabilitySummary(
       location_effective_features: locationEffectiveFeatures,
       location_feature_overrides: parseCmsFeatureOverrideDelta(locationFeatureOverridesRaw),
     };
-  } catch {
-    return { site_effective_features: [], location_effective_features: [], location_feature_overrides: null };
+  } catch (error) {
+    // Fix the source of truth (mismatched vertical/theme, corrupt override JSON) rather than
+    // reporting a fake "everything disabled" summary — that would look like real product state
+    // instead of an unresolved config problem. Callers already handle a null summary safely
+    // (spreading null into a response object is a no-op).
+    console.error("resolveLocationCapabilitySummary: failed to resolve capabilities", { siteId, error });
+    return null;
   }
 }
 
