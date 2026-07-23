@@ -40,7 +40,7 @@ wranglerArgs.push('--remote', '--json', '--command', `
   GROUP BY gac.site_id, gac.organization_id, gac.ga4_measurement_id
 `)
 
-const raw = execFileSync('yarn', ['wrangler', ...wranglerArgs], { encoding: 'utf8' })
+const raw = execFileSync('npx', ['wrangler', ...wranglerArgs], { encoding: 'utf8' })
 const parsed = JSON.parse(raw)
 const rows = parsed.flatMap(result => result.results ?? result.result?.[0]?.results ?? [])
 const resolveZoneId = async () => {
