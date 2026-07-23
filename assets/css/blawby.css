@@ -1,0 +1,168 @@
+/* Blawby theme tokens — KrabiClaw Design System */
+
+.blawby-theme {
+  color-scheme: light;
+  background-color: var(--blawby-bg);
+  color: var(--blawby-ink);
+  font-family: Poppins, ui-sans-serif, system-ui, sans-serif;
+
+  --blawby-bg:            var(--blawby-token-bg, #fbfaf7);
+  --blawby-surface:       var(--blawby-token-surface, #ffffff);
+  --blawby-primary:       var(--blawby-token-primary, #25356c);
+  --blawby-primary-dark:  var(--blawby-token-primary-dark, #161f3b);
+  --blawby-primary-100:   var(--blawby-token-primary-100, #f2f5ff);
+  --blawby-primary-200:   var(--blawby-token-primary-200, #b4c5e5);
+  --blawby-primary-800:   var(--blawby-token-primary-800, #1d294f);
+  --blawby-accent:        var(--blawby-token-accent, #c19855);
+  --blawby-accent-100:    var(--blawby-token-accent-100, #faf5ea);
+  --blawby-accent-200:    var(--blawby-token-accent-200, #f8f0e1);
+  --blawby-accent-button: var(--blawby-token-accent-button, #b58c4f);
+  --blawby-accent-strong: var(--blawby-token-accent-strong, #a37732);
+  --blawby-border:        var(--blawby-token-border, #e5e7eb);
+  --blawby-ink:           var(--blawby-token-ink, #162033);
+
+  --color-primary:        var(--blawby-primary);
+  --primary-foreground:   var(--blawby-surface);
+  --ui-primary:           var(--blawby-primary);
+  --ui-secondary:         var(--blawby-accent);
+  --ui-success:           #10B981;
+  --ui-info:              #3B82F6;
+  --ui-warning:           #F59E0B;
+  --ui-error:             #EF4444;
+  --ui-bg:                var(--blawby-bg);
+  --ui-bg-elevated:       var(--blawby-surface);
+  --ui-bg-muted:          var(--blawby-primary-100);
+  --ui-bg-accented:       var(--blawby-accent-100);
+  --ui-bg-inverted:       var(--blawby-primary-dark);
+  --ui-text:              var(--blawby-ink);
+  --ui-text-muted:        color-mix(in srgb, var(--blawby-ink) 72%, transparent);
+  --ui-text-dimmed:       color-mix(in srgb, var(--blawby-ink) 48%, transparent);
+  --ui-text-toned:        color-mix(in srgb, var(--blawby-ink) 60%, transparent);
+  --ui-text-highlighted:  var(--blawby-primary);
+  --ui-text-inverted:     var(--blawby-surface);
+  --ui-border:            var(--blawby-border);
+  --ui-border-muted:      var(--blawby-primary-100);
+  --ui-border-accented:   var(--blawby-primary-200);
+  --ui-border-inverted:   var(--blawby-primary-dark);
+  --ui-radius:            0.5rem;
+
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.5rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.75rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 2rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 2rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl: 2rem;
+  --text-3xl--line-height: 2.5rem;
+  --text-4xl: 2.5rem;
+  --text-4xl--line-height: 3.5rem;
+  --text-5xl: 3rem;
+  --text-5xl--line-height: 3.5rem;
+  --text-6xl: 3.75rem;
+  --text-6xl--line-height: 1;
+  --text-7xl: 4.5rem;
+  --text-7xl--line-height: 1.1;
+  --text-8xl: 6rem;
+  --text-8xl--line-height: 1;
+  --text-9xl: 8rem;
+  --text-9xl--line-height: 1;
+  --container-2xl: 40rem;
+}
+
+.dark .blawby-theme {
+  color-scheme: dark;
+
+  --blawby-bg:            #0f1222;
+  --blawby-surface:       #161b31;
+  --blawby-primary:       var(--blawby-token-primary-200, #b4c5e5);
+  --blawby-primary-dark:  #0a0e1c;
+  --blawby-primary-100:   #1b233d;
+  --blawby-primary-200:   #2b3656;
+  --blawby-primary-800:   var(--blawby-token-primary-200, #b4c5e5);
+  --blawby-accent:        var(--blawby-token-accent, #c19855);
+  --blawby-accent-100:    #2a241b;
+  --blawby-accent-200:    #332a1c;
+  --blawby-accent-button: var(--blawby-token-accent-button, #b58c4f);
+  --blawby-accent-strong: #e0b86f;
+  --blawby-border:        rgba(255,255,255,12%);
+  --blawby-ink:           #f4f6fb;
+
+  --color-primary:        var(--blawby-accent);
+  --primary-foreground:   var(--blawby-primary-dark);
+  --ui-primary:           var(--blawby-accent);
+  --ui-secondary:         var(--blawby-primary);
+  --ui-success:           #34D399;
+  --ui-info:              #60A5FA;
+  --ui-warning:           #FBBF24;
+  --ui-error:             #F87171;
+  --ui-bg:                var(--blawby-bg);
+  --ui-bg-elevated:       var(--blawby-surface);
+  --ui-bg-muted:          var(--blawby-primary-100);
+  --ui-bg-accented:       var(--blawby-primary-200);
+  --ui-bg-inverted:       #f8fafc;
+  --ui-text:              var(--blawby-ink);
+  --ui-text-muted:        #c7cedd;
+  --ui-text-dimmed:       #9ea8bc;
+  --ui-text-toned:        #b5bed0;
+  --ui-text-highlighted:  #ffffff;
+  --ui-text-inverted:     var(--blawby-primary-dark);
+  --ui-border:            var(--blawby-border);
+  --ui-border-muted:      rgba(255,255,255,8%);
+  --ui-border-accented:   rgba(255,255,255,18%);
+  --ui-border-inverted:   #f8fafc;
+}
+
+html.blawby-document {
+  font-size: 100%;
+}
+
+.blawby-container {
+  margin-inline: auto;
+  max-width: 80rem;
+  padding-inline: 1rem;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .blawby-container {
+    padding-inline: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .blawby-container {
+    padding-inline: 2rem;
+  }
+}
+
+@media (min-width: 1920px) {
+  .blawby-container {
+    max-width: 88rem;
+    padding-inline: 3rem;
+  }
+}
+
+@media (min-width: 2560px) {
+  .blawby-container {
+    max-width: 96rem;
+    padding-inline: 4rem;
+  }
+}
+
+.blawby-display {
+  font-family: Marcellus, Georgia, serif;
+}
+
+.blawby-shell .prose :where(h1, h2, h3, h4) {
+  font-family: Marcellus, Georgia, serif;
+}
+
+.blawby-shell .prose.blawby-policy-prose :where(h1, h2, h3, h4) {
+  font-family: Poppins, Arial, sans-serif;
+}

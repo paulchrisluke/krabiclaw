@@ -2,7 +2,7 @@
 import { execSync } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { prepareD1SeedFile } from './utils/d1-seed-file.mjs'
 import { normalizeNonprofitStatus } from './utils/nonprofit-status.mjs'
 
@@ -36,6 +36,7 @@ const clientManifestPath = join(clientImportDir, 'client-manifest.json')
 const legacyManifestPath = join(clientImportDir, 'blawby-import.json')
 const manifestPath = explicitManifestPath || (existsSync(clientManifestPath) ? clientManifestPath : legacyManifestPath)
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+const manifestLabel = relative(process.cwd(), manifestPath) || manifestPath
 
 const ORG_ID = 'org-ncls-blawby'
 const USER_ID = 'user-ncls-blawby'
@@ -184,7 +185,7 @@ const mediaInsertSql = mediaRows ? `INSERT INTO media_assets (
 ${mediaRows};` : '-- No approved media/file rows in manifest.'
 
 const sql = `-- NCLS Blawby local seed
--- Generated from ${manifestPath}
+-- Generated from ${manifestLabel}
 -- Preview at: http://ncls.localhost:3000
 
 PRAGMA foreign_keys = ON;

@@ -132,10 +132,10 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
       return {
         description: `Update and publish tenant blog post: ${identifier}`,
         text: [
-          `Call get_blog_post with post_id "${identifier}", convert this writer-approved body into the complete canonical content_blocks array, and call update_blog_post with its expected_document_updated_at token: ${body}`,
+          `Call get_blog_post with post_id "${identifier}", convert this writer-approved body into the complete canonical content_blocks array, and call replace_blog_content with post.document_updated_at as expected_document_updated_at: ${body}`,
           "Preserve existing category, navigation, tags, and structural blocks unless the approved content requires changing them.",
           notes ? `Additional instructions: ${notes}` : "",
-          `Immediately after the update succeeds, call publish_blog_post with post_id "${identifier}". Report the changed fields, public_url, and admin_edit_url.`,
+          `Immediately after the replacement succeeds, call publish_blog_post with post_id "${identifier}". Report the public_url and admin_edit_url.`,
         ].filter(Boolean).join(" "),
       };
     }

@@ -179,7 +179,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.posts' })
 
 const siteId = await useDashboardSiteId()
 const toast = useToast()

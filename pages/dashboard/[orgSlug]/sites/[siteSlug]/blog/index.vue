@@ -72,7 +72,7 @@ interface BlogPost {
   published_at?: string | null
 }
 
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.blog' })
 
 const route = useRoute()
 const siteId = await useDashboardSiteId()

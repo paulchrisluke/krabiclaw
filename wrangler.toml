@@ -26,6 +26,7 @@ zone_name = "krabiclaw.com"
 
 [vars]
 CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
+CF_DCV_DELEGATION_TARGET = "krabiclaw.com.dcv.cloudflare.com"
 BETTER_AUTH_URL = "https://krabiclaw.com"
 NUXT_PUBLIC_PLATFORM_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
@@ -126,6 +127,7 @@ crons = []
 
 [env.preview.vars]
 CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
+CF_DCV_DELEGATION_TARGET = "krabiclaw.com.dcv.cloudflare.com"
 BETTER_AUTH_URL = "https://preview.krabiclaw.com"
 NUXT_PUBLIC_PLATFORM_DOMAIN = "https://preview.krabiclaw.com"
 MEDIA_BASE_URL = "https://preview.krabiclaw.com/__media"
@@ -184,6 +186,7 @@ crons = []
 
 [env.staging.vars]
 CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
+CF_DCV_DELEGATION_TARGET = "krabiclaw.com.dcv.cloudflare.com"
 BETTER_AUTH_URL = "https://staging.krabiclaw.com"
 NUXT_PUBLIC_PLATFORM_DOMAIN = "https://staging.krabiclaw.com"
 MEDIA_BASE_URL = "https://staging.krabiclaw.com/__media"

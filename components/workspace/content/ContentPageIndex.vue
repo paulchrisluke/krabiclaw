@@ -30,7 +30,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import { getScopedEditablePages } from '~/config/content-registry'
-import { resolveCmsCapabilities } from '~/config/cms-registry'
+import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
 import type { PublicTemplateSlug } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
@@ -45,12 +45,26 @@ const { paths } = useDashboardSiteLinks(props.siteId)
 const basePath = computed(() => props.scope === 'location' ? `${paths.value.project}/content` : paths.value.content)
 
 const siteData = ref<ApiRecord | null>(null)
-const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])
+const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean; feature_overrides?: string | null }>>([])
 const loadError = ref<string | null>(null)
+
+// Only meaningful when scope === 'location' (this component is only ever rendered inside a
+// locations/[locationSlug]/... route in that case) — route-derived, same pattern as
+// layouts/dashboard.vue and the location settings page, never inferred from siteLocations' first/
+// primary entry (that's cmsManagers' href-building fallback below, a different concern).
+const dashboardLocation = useDashboardLocation()
+const activeLocation = computed(() =>
+  props.scope === 'location' ? siteLocations.value.find(l => l.id === dashboardLocation.currentLocationId.value) ?? null : null
+)
 
 const cmsCapabilities = computed(() => {
   if (!siteData.value) return null
-  return resolveCmsCapabilities(siteData.value.vertical as SiteVertical, siteData.value.template as PublicTemplateSlug)
+  return resolveCmsCapabilities(siteData.value.vertical as SiteVertical, siteData.value.template as PublicTemplateSlug, {
+    site: parseCmsFeatureOverrideDelta(siteData.value.feature_overrides as string | null | undefined),
+    // Without this, a module the active location has explicitly disabled would still list as
+    // editable here even though its dashboard route already 404s.
+    location: activeLocation.value ? parseCmsFeatureOverrideDelta(activeLocation.value.feature_overrides) : undefined,
+  })
 })
 
 // blawby has no field-editable pages yet (professional_services editor gap,

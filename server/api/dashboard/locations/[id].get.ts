@@ -5,6 +5,7 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { parseLocationPayload } from './location-helpers'
 import { queryFirst } from '~/server/db'
 import { assertLocationAccess } from '~/server/utils/member-access'
+import { resolveLocationCapabilitySummary } from '~/server/utils/location-management'
 
 export default defineEventHandler(async (event) => {
   const locationId = getRouterParam(event, 'id')
@@ -44,5 +45,7 @@ export default defineEventHandler(async (event) => {
     locationId,
   })
 
-  return jsonResponse({ success: true, location: parseLocationPayload(location) })
+  const capabilitySummary = await resolveLocationCapabilitySummary(db, organizationId, location.site_id, location.feature_overrides as string | null ?? null)
+
+  return jsonResponse({ success: true, location: parseLocationPayload(location), ...capabilitySummary })
 })

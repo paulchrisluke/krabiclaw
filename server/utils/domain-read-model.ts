@@ -1,0 +1,210 @@
+import { queryAll } from '~/server/db'
+import { rootDomainForPair } from '~/server/utils/domain-shared'
+import type { DomainRecord, DomainRole, DomainStatus } from '~/server/utils/domains'
+
+export async function getSiteDomains(db: D1Database, siteId: string): Promise<DomainRecord[]> {
+  const domains = await queryAll<DomainRecord>(db, `
+    SELECT *
+    FROM site_domains
+    WHERE site_id = ? AND status != 'deleted'
+    ORDER BY type ASC, role ASC, created_at ASC
+  `, [siteId])
+
+  return domains || []
+}
+
+export interface DomainDnsRecord {
+  type: string
+  name: string
+  value: string
+  purpose: 'ownership' | 'dcv_delegation' | 'traffic' | 'ssl'
+}
+
+export interface DomainInstructions {
+  dns: DomainDnsRecord | null
+  ssl: DomainDnsRecord | null
+  ssl_records: DomainDnsRecord[]
+  dcv_delegation: DomainDnsRecord | null
+  ownership: DomainDnsRecord | null
+  records: DomainDnsRecord[]
+  apex_note: string | null
+  registrar_guides: Record<string, string>
+}
+
+export function domainInstructions(domain: DomainRecord) {
+  if (domain.type === 'subdomain') {
+    return {
+      dns: null,
+      ssl: null,
+      ssl_records: [],
+      dcv_delegation: null,
+      ownership: null,
+      records: [],
+      apex_note: null,
+      registrar_guides: {}
+    } satisfies DomainInstructions
+  }
+
+  const root = rootDomainForPair(domain.domain)
+  const isApex = domain.domain === root
+  const target = domain.dns_target || ''
+  const dns = isApex
+    ? null
+    : { type: 'CNAME', name: domain.domain.replace(`.${root}`, '') || 'www', value: target, purpose: 'traffic' as const }
+  const ownership = domain.ownership_validation_name && domain.ownership_validation_value
+    ? {
+        type: domain.ownership_validation_type || 'TXT',
+        name: domain.ownership_validation_name,
+        value: domain.ownership_validation_value,
+        purpose: 'ownership' as const,
+      }
+    : null
+  const dcvDelegation = domain.dcv_delegation_name && domain.dcv_delegation_value
+    ? {
+        type: domain.dcv_delegation_type || 'CNAME',
+        name: domain.dcv_delegation_name,
+        value: domain.dcv_delegation_value,
+        purpose: 'dcv_delegation' as const,
+      }
+    : null
+  const sslRecords: DomainDnsRecord[] = []
+  if (domain.ssl_validation_name && domain.ssl_validation_value) {
+    sslRecords.push({
+      type: domain.ssl_validation_type || 'TXT',
+      name: domain.ssl_validation_name,
+      value: domain.ssl_validation_value,
+      purpose: 'ssl',
+    })
+  }
+  if (domain.ssl_validation_name_2 && domain.ssl_validation_value_2) {
+    sslRecords.push({
+      type: domain.ssl_validation_type_2 || 'TXT',
+      name: domain.ssl_validation_name_2,
+      value: domain.ssl_validation_value_2,
+      purpose: 'ssl',
+    })
+  }
+  const records = [ownership, dcvDelegation, dns, ...(!dcvDelegation ? sslRecords : [])]
+    .filter((record): record is DomainDnsRecord => Boolean(record))
+
+  return {
+    dns,
+    ssl: sslRecords[0] ?? null,
+    ssl_records: sslRecords,
+    dcv_delegation: dcvDelegation,
+    ownership,
+    records,
+    apex_note: isApex ? `Forward ${root} to https://www.${root}` : null,
+    registrar_guides: {}
+  } satisfies DomainInstructions
+}
+
+function groupedStatus(records: DomainRecord[]): DomainStatus {
+  const statuses = records.map((record) => record.status)
+  for (const status of ['stuck', 'failed', 'blocked', 'verifying', 'pending'] as const) {
+    if (statuses.includes(status)) return status
+  }
+  return statuses.every((status) => status === 'active') ? 'active' : 'pending'
+}
+
+function newestDate(values: Array<string | null | undefined>): string | null {
+  const timestamps = values
+    .map((value) => value ? Date.parse(value) : NaN)
+    .filter((value) => Number.isFinite(value))
+  if (!timestamps.length) return null
+  return new Date(Math.max(...timestamps)).toISOString()
+}
+
+export interface DomainGroup {
+  id: string
+  domain: string
+  root_domain: string
+  role: DomainRole
+  status: DomainStatus
+  primary_domain_id: string | null
+  apex_domain_id: string | null
+  www_domain_id: string | null
+  domains: DomainRecord[]
+  records: DomainDnsRecord[]
+  warning: string | null
+  error: string | null
+  last_synced_at: string | null
+}
+
+export function groupCustomDomains(domains: DomainRecord[]): DomainGroup[] {
+  const byRoot = new Map<string, DomainRecord[]>()
+  for (const domain of domains) {
+    if (domain.type !== 'custom') continue
+    const root = rootDomainForPair(domain.domain)
+    byRoot.set(root, [...(byRoot.get(root) ?? []), domain])
+  }
+
+  return Array.from(byRoot.entries()).map(([root, records]) => {
+    const apex = records.find((record) => record.domain === root) ?? null
+    const www = records.find((record) => record.domain === `www.${root}`) ?? null
+    const primary = records.find((record) => record.role === 'canonical')
+      ?? records.find((record) => record.status === 'active')
+      ?? www
+      ?? apex
+      ?? records[0]
+      ?? null
+    const instructionRecord = apex ?? primary
+    const trafficRecord = www
+      ? domainInstructions(www).dns
+      : instructionRecord ? domainInstructions(instructionRecord).dns : null
+    const baseInstructions = instructionRecord ? domainInstructions(instructionRecord) : null
+    const dnsRecords = [
+      baseInstructions?.ownership ?? null,
+      baseInstructions?.dcv_delegation ?? null,
+      trafficRecord,
+      ...(!baseInstructions?.dcv_delegation ? baseInstructions?.ssl_records ?? [] : []),
+    ].filter((record): record is DomainDnsRecord => Boolean(record))
+    const status = groupedStatus(records)
+    return {
+      id: root,
+      domain: root,
+      root_domain: root,
+      role: records.some((record) => record.role === 'canonical') ? 'canonical' : 'secondary',
+      status,
+      primary_domain_id: primary?.id ?? null,
+      apex_domain_id: apex?.id ?? null,
+      www_domain_id: www?.id ?? null,
+      domains: records,
+      records: dnsRecords,
+      warning: status === 'stuck' ? 'This domain needs a manual resync.' : null,
+      error: status === 'failed' || status === 'blocked'
+        ? records.find((record) => record.error_message)?.error_message ?? null
+        : null,
+      last_synced_at: newestDate(records.map((record) => record.last_synced_at)),
+    } satisfies DomainGroup
+  }).sort((a, b) => a.domain.localeCompare(b.domain))
+}
+
+export async function getDomainEvents(db: D1Database, domainId: string) {
+  const events = await queryAll(db, `
+    SELECT *
+    FROM site_domain_events
+    WHERE domain_id = ?
+    ORDER BY created_at DESC
+    LIMIT 100
+  `, [domainId])
+
+  return events || []
+}
+
+export async function getSiteDomainsDashboardPayload(db: D1Database, siteId: string) {
+  const domains = await getSiteDomains(db, siteId)
+  const enriched = []
+  for (const domain of domains) {
+    enriched.push({
+      ...domain,
+      instructions: domainInstructions(domain),
+      events: domain.type === 'custom' ? await getDomainEvents(db, domain.id) : [],
+    })
+  }
+
+  return {
+    domains: enriched,
+    domain_groups: groupCustomDomains(domains),
+  }
+}

@@ -2,7 +2,11 @@ import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
 import { createSystemSubdomain } from '~/server/utils/domains'
 import { isCurrencyCode } from '~/shared/currencies'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
-import { execute, queryFirst } from '~/server/db'
+import { execute, queryAll, queryFirst } from '~/server/db'
+import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, toggleableModulesForScope, type CmsCapabilityOverrideDelta, type ProductFeature } from '~/config/cms-registry'
+import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
+import { checkModuleHasLiveData } from '~/server/utils/module-content-guard'
+import type { SiteVertical } from '~/utils/vertical-copy'
 
 type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
 
@@ -21,6 +25,8 @@ interface SiteSettingsRow {
   subdomain: string | null
   brand_name: string | null
   settings: string | null
+  vertical: string
+  theme_id: string
 }
 
 interface FullSiteRow extends SiteSettingsRow {
@@ -40,6 +46,7 @@ interface FullSiteRow extends SiteSettingsRow {
   canonical_url: string | null
   robots: string | null
   og_image_asset_id: string | null
+  feature_overrides: string | null
   created_at: string
   updated_at: string
 }
@@ -66,12 +73,13 @@ export async function loadSettingsPayload(
   organizationId: string,
   siteId: string
 ) {
-  const updatedSite = await queryFirst<FullSiteRow>(db, `
+  const updatedSite = await queryFirst<FullSiteRow & { vertical: string; theme_id: string }>(db, `
     SELECT id, organization_id, subdomain, theme, status,
            primary_location_id, public_url, custom_domain_status, default_currency,
            brand_name, brand_description, logo_url, logo_asset_id, contact_email,
            seo_title, seo_description, canonical_url, robots, og_image_asset_id,
-           settings, last_published_at, created_at, updated_at
+           feature_overrides, settings, last_published_at, created_at, updated_at,
+           vertical, theme_id
     FROM sites
     WHERE id = ? AND organization_id = ?
     LIMIT 1
@@ -91,6 +99,21 @@ export async function loadSettingsPayload(
   }
 
   const siteConfig = await getConfig(db, organizationId, siteId)
+
+  let toggleableFeatures: readonly ProductFeature[] = []
+  let effectiveFeatures: readonly ProductFeature[] = []
+  let defaultFeatures: readonly ProductFeature[] = []
+  try {
+    const { template, capabilities } = resolveSiteCmsCapabilities(updatedSite.vertical, updatedSite.theme_id, {
+      siteEnabledFeatures: updatedSite.feature_overrides,
+    })
+    toggleableFeatures = toggleableModulesForScope(template, 'site')
+    effectiveFeatures = [...new Set([...capabilities.pages.map(p => p.feature), ...capabilities.managers.map(m => m.id)])]
+    defaultFeatures = defaultModuleFeaturesForVertical(updatedSite.vertical as SiteVertical)
+  } catch {
+    // Unsupported vertical/template combination — leave the feature toggle list empty rather
+    // than 500ing the whole settings payload over an unrelated field.
+  }
 
   return {
     id: updatedSite.id,
@@ -112,6 +135,10 @@ export async function loadSettingsPayload(
     canonical_url: updatedSite.canonical_url,
     robots: updatedSite.robots,
     og_image_asset_id: updatedSite.og_image_asset_id,
+    feature_overrides: parseCmsFeatureOverrideDelta(updatedSite.feature_overrides),
+    toggleable_features: toggleableFeatures,
+    effective_features: effectiveFeatures,
+    default_features: defaultFeatures,
     brand_color: siteConfig.brand_color || '',
     default_currency: updatedSite.default_currency || 'THB',
     url_structure: siteSettings.url_structure || 'location_subdirectories',
@@ -324,6 +351,68 @@ async function attemptSiteUpdate(
     setParts.push('robots = ?')
     params.push(updates.robots ?? null)
   }
+  if (updates.feature_overrides !== undefined) {
+    let newDelta: CmsCapabilityOverrideDelta | null = null
+    if (updates.feature_overrides !== null) {
+      const { enabled = [], disabled = [] } = updates.feature_overrides
+      if (!Array.isArray(enabled) || !enabled.every(v => typeof v === 'string') || !Array.isArray(disabled) || !disabled.every(v => typeof v === 'string')) {
+        return { status: 400, data: { error: 'feature_overrides.enabled/disabled must be arrays of feature ids' } }
+      }
+      newDelta = { enabled: enabled as ProductFeature[], disabled: disabled as ProductFeature[] }
+    }
+
+    let allowedModules: readonly ProductFeature[] = []
+    let newEffectiveFeatures: readonly ProductFeature[] = []
+    try {
+      const { template, capabilities } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
+        siteEnabledFeatures: newDelta ? JSON.stringify(newDelta) : null,
+      })
+      allowedModules = toggleableModulesForScope(template, 'site')
+      newEffectiveFeatures = [...new Set([...capabilities.pages.map(p => p.feature), ...capabilities.managers.map(m => m.id)])]
+    } catch {
+      return { status: 422, data: { error: 'Unsupported site vertical/template — cannot resolve feature catalog' } }
+    }
+
+    if (newDelta) {
+      const submitted = [...(newDelta.enabled ?? []), ...(newDelta.disabled ?? [])]
+      const invalid = submitted.filter(feature => !allowedModules.includes(feature as ProductFeature))
+      if (invalid.length > 0) {
+        return { status: 400, data: { error: `Unsupported module(s) for this site's template: ${invalid.join(', ')}` } }
+      }
+
+      // Disabling a module that still has live content/bookings must not silently hide it.
+      for (const feature of newDelta.disabled ?? []) {
+        const guard = await checkModuleHasLiveData(db, { siteId }, feature as ProductFeature)
+        if (guard.blocked) {
+          return { status: 409, data: { error: guard.reason } }
+        }
+      }
+    }
+
+    // A location's feature_overrides.enabled entries must stay a subset of the site's EFFECTIVE
+    // set (config/cms-registry.ts) — check every location with an explicit override before
+    // writing, whether this update adds/removes a module or clears the override back to vertical
+    // defaults, so we never leave a location whose override resolveCmsCapabilities would reject.
+    // status = 'active' matches listDashboardLocations' filter — an inactive/soft-deleted
+    // location's stale override must not block a legitimate site feature update.
+    const overriddenLocations = await queryAll<{ title: string; feature_overrides: string }>(db, `
+      SELECT title, feature_overrides FROM business_locations
+      WHERE site_id = ? AND organization_id = ? AND status = 'active' AND feature_overrides IS NOT NULL
+    `, [siteId, organizationId])
+    const newEffectiveSet = new Set(newEffectiveFeatures)
+    const brokenLocations = overriddenLocations
+      .filter(loc => (parseCmsFeatureOverrideDelta(loc.feature_overrides)?.enabled ?? []).some(feature => !newEffectiveSet.has(feature)))
+      .map(loc => loc.title)
+    if (brokenLocations.length > 0) {
+      return {
+        status: 409,
+        data: { error: `Cannot update site features: location(s) ${brokenLocations.join(', ')} have overrides that require a feature this update would remove. Update those locations first.` },
+      }
+    }
+
+    setParts.push('feature_overrides = ?')
+    params.push(newDelta ? JSON.stringify(newDelta) : null)
+  }
   if (updates.og_image_asset_id !== undefined) {
     if (updates.og_image_asset_id !== null && updates.og_image_asset_id !== '') {
       const asset = await queryFirst(db, `
@@ -435,7 +524,7 @@ export async function updateSiteSettingsFields(
   }
 
   const site = await queryFirst<SiteSettingsRow>(db, `
-    SELECT id, organization_id, subdomain, brand_name, settings
+    SELECT id, organization_id, subdomain, brand_name, settings, vertical, theme_id
     FROM sites
     WHERE id = ? AND organization_id = ?
     LIMIT 1

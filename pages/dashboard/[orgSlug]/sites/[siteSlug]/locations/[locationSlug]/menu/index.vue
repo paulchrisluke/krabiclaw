@@ -47,7 +47,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.menu' })
 
 interface BusinessLocation {
   id: string

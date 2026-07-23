@@ -61,4 +61,54 @@ export default defineNuxtRouteMiddleware(async (to) => {
     if (isWhatsAppInboxDeepLinkPath(to.path)) query.mode = 'whatsapp'
     return navigateTo({ path: '/login', query })
   }
+
+  // Capability-gated manager pages (definePageMeta({ cmsCapabilityKey: 'site.qa' | ... }),
+  // matching a config/cms-registry.ts manager `key`) 404 instead of rendering when the
+  // resolved site/location doesn't have that feature enabled — see issue #342 requirement 5,
+  // "unsupported routes must throw a Nuxt 404, never redirect or render a fallback". This is
+  // the ONLY place that enforces it; every gated page file just declares its key.
+  const capabilityKey = typeof to.meta.cmsCapabilityKey === 'string' ? to.meta.cmsCapabilityKey : null
+  if (capabilityKey) {
+    const organizationSlug = typeof to.params.orgSlug === 'string' ? to.params.orgSlug : ''
+    const siteSlug = typeof to.params.siteSlug === 'string' ? to.params.siteSlug : ''
+    const locationSlug = typeof to.params.locationSlug === 'string' ? to.params.locationSlug : null
+
+    let capabilityAllowed = false
+    if (import.meta.server) {
+      const event = useRequestEvent()
+      if (event) {
+        try {
+          const [{ cloudflareEnv }, { getAuthSession }, { isDashboardRouteCapabilityAllowed }] = await Promise.all([
+            import('~/server/utils/api-response'),
+            import('~/server/utils/auth'),
+            import('~/server/utils/dashboard-route-capability'),
+          ])
+          const env = cloudflareEnv(event)
+          const session = await getAuthSession(event, env)
+          if (session?.user?.id && env.DB) {
+            capabilityAllowed = await isDashboardRouteCapabilityAllowed(env.DB, session.user.id, {
+              organizationSlug,
+              siteSlug,
+              locationSlug,
+              capabilityKey,
+            })
+          }
+        } catch {
+          // Fail closed on a DB/auth lookup failure (transient D1 error, etc.) — the same
+          // controlled 404 an unresolvable capability gets, not an unhandled 500 that crashes
+          // the navigation.
+          capabilityAllowed = false
+        }
+      }
+    } else {
+      const result = await $fetch<{ allowed?: boolean }>('/api/dashboard/route-capability', {
+        query: { orgSlug: organizationSlug, siteSlug, locationSlug: locationSlug ?? undefined, key: capabilityKey },
+      }).catch(() => null)
+      capabilityAllowed = Boolean(result?.allowed)
+    }
+
+    if (!capabilityAllowed) {
+      throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+    }
+  }
 })

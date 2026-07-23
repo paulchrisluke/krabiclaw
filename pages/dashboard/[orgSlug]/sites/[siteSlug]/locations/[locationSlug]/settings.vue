@@ -106,6 +106,29 @@
 
         <UCard>
           <template #header>
+            <div>
+              <h2 class="font-semibold text-highlighted">Available at this location</h2>
+              <p class="mt-1 text-sm text-muted">Which of the site's business modules are live at this specific location. Only modules the site itself supports can be turned on here.</p>
+            </div>
+          </template>
+          <div v-if="locationToggleableFeatures.length" class="grid gap-3 sm:grid-cols-2">
+            <UCheckbox
+              v-for="feature in locationToggleableFeatures"
+              :key="feature"
+              v-model="locationEnabledFeatureSet[feature]"
+              :label="LOCATION_FEATURE_LABELS[feature] ?? humanizeFeatureId(feature)"
+            />
+          </div>
+          <p v-else class="text-sm text-muted">No toggleable modules available — enable them on the site first.</p>
+          <template #footer>
+            <div class="flex justify-end">
+              <UButton color="neutral" variant="outline" :loading="savingLocationFeatures" @click="saveLocationFeatures">Save availability</UButton>
+            </div>
+          </template>
+        </UCard>
+
+        <UCard>
+          <template #header>
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 class="font-semibold text-highlighted">Location Details</h2>
@@ -283,7 +306,24 @@
 
 <script setup lang="ts">
 import { TIMEZONE_OPTIONS } from '~/utils/timezone'
+import { toggleableModulesForScope, type ProductFeature } from '~/config/cms-registry'
+import { resolvePublicTemplate } from '~/utils/template-registry'
+import type { SiteVertical } from '~/utils/vertical-copy'
 definePageMeta({ layout: 'dashboard' })
+
+const LOCATION_FEATURE_LABELS: Partial<Record<ProductFeature, string>> = {
+  menu: 'Menu',
+  reservations: 'Reservations',
+  ordering: 'Online ordering',
+  experiences: 'Experiences',
+}
+
+// Every location-configurable module has an entry above today (config/cms-registry.ts's saya/blawby
+// ProductModuleDefinition lists), but this humanizes the fallback rather than only the map so a
+// future template/module doesn't silently render a raw snake_case id here.
+function humanizeFeatureId(feature: string): string {
+  return feature.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase())
+}
 
 interface BusinessLocation {
   id: string
@@ -345,6 +385,67 @@ const gbConnection = ref<GbConnection | null>(null)
 let locationLoadToken = 0
 const connectingGoogle = ref(false)
 const syncingPlace = ref(false)
+const savingLocationFeatures = ref(false)
+const locationEnabledFeatureSet = reactive<Partial<Record<ProductFeature, boolean>>>({})
+// The baseline for diffing a checkbox change is always the parent SITE's effective feature set
+// (never this location's own current state) — re-enabling a module back to what the site already
+// supports must collapse the stored override to null, not an equivalent-but-redundant explicit
+// delta. Both come straight from the location GET/PATCH response (server/utils/location-management.ts's
+// resolveLocationCapabilitySummary) rather than being recomputed client-side.
+const siteEffectiveFeatures = ref<ProductFeature[]>([])
+const locationEffectiveFeatures = ref<ProductFeature[]>([])
+
+const locationToggleableFeatures = computed<ProductFeature[]>(() => {
+  const site = dashboard.site.value
+  if (!site?.vertical) return []
+  const template = resolvePublicTemplate({ vertical: site.vertical as SiteVertical }).slug
+  const configurableHere = new Set(toggleableModulesForScope(template, 'location'))
+  return siteEffectiveFeatures.value.filter(feature => configurableHere.has(feature))
+})
+
+interface LocationCapabilitySummary {
+  site_effective_features?: ProductFeature[]
+  location_effective_features?: ProductFeature[]
+}
+
+function fillLocationFeatures(summary: LocationCapabilitySummary) {
+  siteEffectiveFeatures.value = summary.site_effective_features ?? []
+  locationEffectiveFeatures.value = summary.location_effective_features ?? []
+  const enabled = new Set(locationEffectiveFeatures.value)
+  // Only ever read through locationToggleableFeatures (see the template's v-for and
+  // saveLocationFeatures' filter), so a stale key from a previous load is harmless.
+  for (const feature of locationToggleableFeatures.value) locationEnabledFeatureSet[feature] = enabled.has(feature)
+}
+
+async function saveLocationFeatures() {
+  const requestedLocationId = locationId.value
+  savingLocationFeatures.value = true
+  try {
+    // Delta against the SITE's effective set, not this location's prior state (see
+    // siteEffectiveFeatures' doc comment) — collapses to `null` when the checked set exactly
+    // matches what the site already supports. `enabled` is structurally always [] today:
+    // locationToggleableFeatures is itself filtered from siteEffectiveFeatures (see its own
+    // computed above), so every feature checked here already satisfies `siteSet.has(feature)`.
+    // Kept as a real filter (not hardcoded to []) so this stays correct if that upstream
+    // computed ever changes — don't "simplify" this away without re-checking that invariant.
+    const siteSet = new Set(siteEffectiveFeatures.value)
+    const enabled = locationToggleableFeatures.value.filter(feature => locationEnabledFeatureSet[feature] && !siteSet.has(feature))
+    const disabled = locationToggleableFeatures.value.filter(feature => siteSet.has(feature) && !locationEnabledFeatureSet[feature])
+    const featureOverrides = enabled.length === 0 && disabled.length === 0 ? null : { enabled, disabled }
+    const response = await $fetch<{ success: boolean; location: BusinessLocation } & LocationCapabilitySummary>(`/api/dashboard/locations/${requestedLocationId}`, {
+      method: 'PATCH',
+      body: { feature_overrides: featureOverrides },
+    })
+    if (locationId.value !== requestedLocationId) return
+    location.value = response.location
+    fillLocationFeatures(response)
+    toast.add({ description: 'Availability saved', color: 'success' })
+  } catch (error) {
+    toast.add({ description: getErrorMessage(error, 'Failed to save availability'), color: 'error' })
+  } finally {
+    savingLocationFeatures.value = false
+  }
+}
 const placeSyncResult = ref('')
 const detailsSaving = ref(false)
 const detailsSaved = ref(false)
@@ -661,13 +762,14 @@ const loadLocationWorkspace = async () => {
   error.value = null
   try {
     const [locationResponse, connectionResponse] = await Promise.all([
-      $fetch<{ success: boolean; location: BusinessLocation }>(`/api/dashboard/locations/${requestedLocationId}`),
+      $fetch<{ success: boolean; location: BusinessLocation } & LocationCapabilitySummary>(`/api/dashboard/locations/${requestedLocationId}`),
       $fetch<{ success: boolean; connection: GbConnection | null }>(`/api/dashboard/locations/${requestedLocationId}/integrations/google-business`),
     ])
     if (currentToken !== locationLoadToken || locationId.value !== requestedLocationId) return false
     if (!locationResponse.success) throw new Error('Failed to load location')
     location.value = locationResponse.location
     gbConnection.value = connectionResponse.connection
+    fillLocationFeatures(locationResponse)
     return true
   } catch (err) {
     if (currentToken !== locationLoadToken) return false

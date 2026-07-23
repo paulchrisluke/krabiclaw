@@ -144,10 +144,10 @@
                     <UIcon name="i-lucide-globe" class="size-4 text-primary shrink-0" />
                     <span class="text-[13px] font-semibold text-highlighted">Custom domain setup</span>
                   </div>
-                  <p class="text-[12px] text-muted leading-relaxed">Point <code class="font-mono">www.yourdomain.com</code> to us with a CNAME, then add the SSL verification TXT records. Full instructions are in Settings → Domains.</p>
+                  <p class="text-[12px] text-muted leading-relaxed">Add your domain, then copy the DNS records shown for this site.</p>
                   <div class="flex gap-2 pt-1">
-                    <UButton size="sm" color="primary" variant="outline" :to="`/dashboard/${orgSlug}/settings/domains`">
-                      Go to Domains settings
+                    <UButton size="sm" color="primary" variant="outline" :to="domainsPath">
+                      Go to Domains
                     </UButton>
                     <UButton size="sm" color="neutral" variant="ghost" @click="advance('done')">
                       Set up later
@@ -205,6 +205,7 @@ interface Location {
 interface Props {
   siteId: string
   orgSlug: string
+  siteSlug: string
   siteName: string
   siteDomain: string
   locations: Location[]
@@ -268,6 +269,8 @@ const notificationError = ref<string | null>(null)
 
 const showDomainStep = computed(() => ['growth', 'managed', 'seo_accelerator'].includes(props.plan))
 const showSocialStep = computed(() => ['growth', 'managed', 'seo_accelerator'].includes(props.plan))
+const domainsSiteSlug = computed(() => props.siteSlug || props.siteId)
+const domainsPath = computed(() => `/dashboard/${props.orgSlug}/sites/${domainsSiteSlug.value}/domains`)
 
 const connectingFacebook = ref(false)
 const facebookConnected = ref(false)
@@ -333,7 +336,7 @@ function advance(target: WizardStep) {
 
   if (target === 'domain') {
     pushMessage({
-      content: `Your ${props.plan} plan includes a custom domain. If you have a domain like www.yourdomain.com you can point it to your site. Head to Settings → Domains, or skip and do it later.`,
+      content: `Your ${props.plan} plan includes a custom domain. Add it from the site Domains page, or skip and do it later.`,
       domainCard: true,
     })
   }

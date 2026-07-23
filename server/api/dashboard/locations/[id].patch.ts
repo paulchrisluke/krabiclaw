@@ -3,12 +3,13 @@ import { getHeaders } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { syncLocationWhatsAppAccess, updateLocation } from '~/server/utils/location-management'
+import { resolveLocationCapabilitySummary, syncLocationWhatsAppAccess, updateLocation } from '~/server/utils/location-management'
 import { parseLocationPayload } from './location-helpers'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { queryFirst } from '~/server/db'
 import { assertMemberScope } from '~/server/utils/member-access'
 import { parsePhone } from '~/utils/phone'
+import type { ProductFeature } from '~/config/cms-registry'
 
 export default defineEventHandler(async (event) => {
   const locationId = getRouterParam(event, 'id')
@@ -81,6 +82,26 @@ export default defineEventHandler(async (event) => {
     ? undefined
     : (() => { const n = Number(body.review_count); return Number.isFinite(n) ? n : undefined })()
 
+  // Unlike the other optional fields above, a malformed feature_overrides (wrong type, not
+  // object/null) must not silently collapse to `undefined` — that would look like "field not
+  // touched" to updateLocation and quietly no-op a request the caller expected to apply.
+  let featureOverrides: { enabled?: string[]; disabled?: string[] } | null | undefined
+  if (body.feature_overrides === undefined) {
+    featureOverrides = undefined
+  } else if (body.feature_overrides === null) {
+    featureOverrides = null
+  } else if (typeof body.feature_overrides === 'object' && !Array.isArray(body.feature_overrides)) {
+    const raw = body.feature_overrides as { enabled?: unknown; disabled?: unknown }
+    const validEnabled = raw.enabled === undefined || (Array.isArray(raw.enabled) && raw.enabled.every((v) => typeof v === 'string'))
+    const validDisabled = raw.disabled === undefined || (Array.isArray(raw.disabled) && raw.disabled.every((v) => typeof v === 'string'))
+    if (!validEnabled || !validDisabled) {
+      return jsonResponse({ error: 'feature_overrides.enabled/disabled must be arrays of feature ids' }, { status: 400 })
+    }
+    featureOverrides = { enabled: raw.enabled as string[] | undefined, disabled: raw.disabled as string[] | undefined }
+  } else {
+    return jsonResponse({ error: 'feature_overrides must be an object with enabled/disabled arrays, or null' }, { status: 400 })
+  }
+
   const result = await updateLocation(
     db,
     organizationId,
@@ -130,6 +151,7 @@ export default defineEventHandler(async (event) => {
       status: body.status === 'active' || body.status === 'inactive' || body.status === 'sync_error'
         ? body.status
         : undefined,
+      feature_overrides: featureOverrides as { enabled?: ProductFeature[]; disabled?: ProductFeature[] } | null | undefined,
     },
     session.user.id,
   )
@@ -175,10 +197,12 @@ export default defineEventHandler(async (event) => {
 
   await purgeBootstrapCacheSafe(env, siteId)
 
-  const location = (result.data as { location?: unknown }).location
+  const location = (result.data as { location?: { feature_overrides?: string | null } }).location
+  const capabilitySummary = location ? await resolveLocationCapabilitySummary(db, organizationId, siteId, location.feature_overrides ?? null) : null
   return jsonResponse({
     success: true,
     location: location ? parseLocationPayload(location) : null,
+    ...capabilitySummary,
     ...(whatsappSyncWarning ? { warning: whatsappSyncWarning } : {}),
   }, { status: whatsappSyncWarning ? 207 : result.status })
 })

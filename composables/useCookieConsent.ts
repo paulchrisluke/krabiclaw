@@ -33,6 +33,8 @@
 // analytics (server/utils/pageview-tracking.ts) or Blawby's native
 // conversion-events beacon — those are first-party product/business
 // analytics, not third-party ads, and are out of scope by design.
+import { ZARAZ_ANALYTICS_PURPOSE_ID } from '~/utils/zaraz-consent'
+
 export type CookieConsentValue = 'accepted' | 'rejected' | null
 
 declare global {
@@ -61,6 +63,21 @@ function pushZarazConsentCommand(command: 'default' | 'update', value: CookieCon
     command === 'default' ? 'google_consent_default' : 'google_consent_update',
     Object.fromEntries(CONSENT_CATEGORIES.map(key => [key, state])),
   )
+  pushZarazConsentPurpose(value)
+}
+
+function pushZarazConsentPurpose(value: CookieConsentValue) {
+  if (!import.meta.client || value === null) return
+  const accepted = value === 'accepted'
+  const updatePurpose = () => {
+    window.zaraz?.consent?.set({ [ZARAZ_ANALYTICS_PURPOSE_ID]: accepted })
+    if (accepted) window.zaraz?.consent?.sendQueuedEvents?.()
+  }
+  if (window.zaraz?.consent?.APIReady) {
+    updatePurpose()
+    return
+  }
+  document.addEventListener('zarazConsentAPIReady', updatePurpose, { once: true })
 }
 
 // Module-level, client-only guard: fine here (unlike server-side state)

@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
       status: 'deleted',
       title: `Domain deleted: ${domain.domain}`,
       message: `${domain.domain} has been removed from KrabiClaw.`,
-      dashboardUrl: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN}/dashboard/${encodeURIComponent(site.organization_slug ?? site.organization_id)}/settings/domains?site=${encodeURIComponent(site.subdomain ?? site.id)}`
+      dashboardUrl: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN}/dashboard/${encodeURIComponent(site.organization_slug ?? site.organization_id)}/sites/${encodeURIComponent(site.subdomain ?? site.id)}/domains`
     })
     return jsonResponse({ success: true })
   } catch (error) {

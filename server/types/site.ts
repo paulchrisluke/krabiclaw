@@ -56,6 +56,9 @@ export interface UpdateSiteSettingsRequest {
   canonical_url?: string | null
   robots?: string | null
   og_image_asset_id?: string | null
+  // Additive/subtractive delta on top of the vertical's own module defaults (config/cms-registry.ts
+  // ProductFeature ids) — null clears the override back to defaults.
+  feature_overrides?: { enabled?: string[]; disabled?: string[] } | null
 }
 
 export interface LaunchReadiness {

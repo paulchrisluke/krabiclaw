@@ -59,6 +59,10 @@ export interface DashboardSiteRow {
   primary_location_id: string | null
   default_currency: string | null
   source_locale: string | null
+  // JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts),
+  // or null for pure vertical defaults — see resolveSiteCmsCapabilities
+  // (server/utils/cms-capabilities.ts), the one place this is parsed.
+  feature_overrides: string | null
   heroImageUrl?: string | null
   locationHeroImageUrl?: string | null
 }
@@ -72,6 +76,9 @@ export interface DashboardLocationRow {
   city: string | null
   address: string | null
   hero_url: string | null
+  // Same contract as DashboardSiteRow.feature_overrides, one scope down — the delta is applied
+  // on top of the parent site's effective feature set (never the vertical defaults directly).
+  feature_overrides: string | null
 }
 
 interface DashboardContextOptions {
@@ -166,7 +173,7 @@ export async function resolveRequestedOrganization(
 async function resolveRecentlyTransferredSite(db: DbClient, organizationId: string, userId: string): Promise<DashboardSiteRow | null> {
   return await queryFirst<DashboardSiteRow>(db, `
     SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, s.custom_domain, s.public_url,
-           s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency, s.source_locale
+           s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency, s.source_locale, s.feature_overrides
     FROM site_transfer_requests t
     JOIN sites s ON s.id = t.site_id
     WHERE t.claiming_organization_id = ? AND t.accepted_by_user_id = ? AND t.status = 'accepted'
@@ -269,7 +276,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   const site = siteSlug
     ? await queryFirst<DashboardSiteRow>(db, `
         SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
-               status, onboarding_status, plan, primary_location_id, default_currency, source_locale
+               status, onboarding_status, plan, primary_location_id, default_currency, source_locale, feature_overrides
         FROM sites
         WHERE organization_id = ? AND subdomain = ?
         LIMIT 1
@@ -348,7 +355,7 @@ export async function listDashboardLocations(db: DbClient, organizationId: strin
   const locations = await queryAll<DashboardLocationRow>(db, `
     SELECT business_locations.id, business_locations.slug, business_locations.title,
            business_locations.is_primary, business_locations.status,
-           business_locations.city, business_locations.address,
+           business_locations.city, business_locations.address, business_locations.feature_overrides,
            COALESCE(ma_hero.thumbnail_url, ma_hero.public_url) as hero_url
     FROM business_locations
     LEFT JOIN media_assets ma_hero ON ma_hero.id = business_locations.hero_image_asset_id
