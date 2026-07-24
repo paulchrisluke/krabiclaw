@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
 import { MCP_FREE_USER_ID, MCP_MANAGED_USER_ID } from './helpers/plan-fixtures'
-import { MCP_MANAGED_SITE_ID, mcpRequest, mcpData } from './helpers/mcp'
+import { MCP_VERSION, MCP_MANAGED_SITE_ID, mcpRequest, mcpData } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (content/publishing tool tests) — see
 // helpers/mcp.ts for why. This group covers post publishing, tenant blog
