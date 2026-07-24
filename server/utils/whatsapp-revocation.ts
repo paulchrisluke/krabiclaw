@@ -18,7 +18,7 @@
 // removal path here is gated on `isScopedRole(role)` (i.e. `editor`)
 // specifically, never an org-wide role.
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { isScopedRole, listResourceTeamAccesss, removeMemberResourceAccess } from '~/server/utils/member-access'
+import { isScopedRole, listResourceTeamAccess, removeMemberResourceAccess } from '~/server/utils/member-access'
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/site-events'
 import type { createAuth } from '~/server/utils/auth'
 
@@ -73,7 +73,7 @@ export async function removeOrgMembershipIfNoScopesRemain(
   // left has no remaining reason to be a member at all.
   if (!isScopedRole(member.role)) return { removed: false }
 
-  const scopes = await listResourceTeamAccesss(db, memberId)
+  const scopes = await listResourceTeamAccess(db, memberId)
   if (scopes.length > 0) return { removed: false }
 
   if (auth && options?.actorHeaders) {

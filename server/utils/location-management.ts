@@ -676,6 +676,18 @@ export async function createLocation(
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
+  // Captured up front so a team-provisioning failure after the location is
+  // already committed (see the ensureLocationTeam catch below) can restore
+  // the prior primary pointer instead of leaving sites.primary_location_id
+  // dangling at a location we're about to delete.
+  const previousPrimaryLocationId = isPrimary
+    ? (await queryFirst<{ primary_location_id: string | null }>(
+        db,
+        `SELECT primary_location_id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`,
+        [siteId, organizationId],
+      ))?.primary_location_id ?? null
+    : null;
+
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
     const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
 
@@ -760,7 +772,38 @@ export async function createLocation(
       }
 
       await executeBatch(db, statements);
-      await ensureLocationTeam(db, { organizationId, siteId, locationId: id, name: title });
+      try {
+        await ensureLocationTeam(db, { organizationId, siteId, locationId: id, name: title });
+      } catch (teamError) {
+        // D1 has no cross-statement transactions (see CLAUDE.md), so the
+        // location row above is already committed. Team provisioning is not
+        // optional — a location with no team can never be granted editor
+        // access — so compensate by removing the orphaned row (and
+        // restoring the primary pointer this attempt just moved) rather
+        // than leaving a stray row that would keep colliding with this
+        // slug on every retry.
+        const compensating: { query: string; params: unknown[] }[] = [];
+        if (isPrimary) {
+          compensating.push({
+            query: `UPDATE sites SET primary_location_id = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
+            params: [previousPrimaryLocationId, new Date().toISOString(), siteId, organizationId],
+          });
+          if (previousPrimaryLocationId) {
+            compensating.push({
+              query: `UPDATE business_locations SET is_primary = 1, updated_at = ? WHERE id = ? AND organization_id = ? AND site_id = ?`,
+              params: [new Date().toISOString(), previousPrimaryLocationId, organizationId, siteId],
+            });
+          }
+        }
+        compensating.push({
+          query: `DELETE FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?`,
+          params: [id, organizationId, siteId],
+        });
+        await executeBatch(db, compensating).catch((cleanupError) => {
+          console.error("Failed to roll back orphaned location after team provisioning failure:", cleanupError);
+        });
+        throw teamError;
+      }
       const location = await loadLocation(db, organizationId, siteId, id);
       await fireSiteEventSafe({
         db,

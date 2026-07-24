@@ -213,7 +213,6 @@ test('recalculateScopesForPhoneChange removes the exact resource team membership
     id: 'team-location',
     userId,
     teamId: 'location:loc-1',
-    organization_id: 'org-1',
     organizationId: 'org-1',
     siteId: 'site-1',
     locationId: 'loc-1',

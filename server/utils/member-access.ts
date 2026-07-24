@@ -176,7 +176,7 @@ export function assertDashboardPathPermission(role: string, pathname: string): v
   }
 }
 
-export async function listResourceTeamAccesss(db: DbClient, memberId: string): Promise<ResourceTeamAccess[]> {
+export async function listResourceTeamAccess(db: DbClient, memberId: string): Promise<ResourceTeamAccess[]> {
   return await queryAll<ResourceTeamAccess>(db, `
     SELECT s.organization_id AS organizationId, s.id AS siteId, NULL AS locationId
     FROM member m

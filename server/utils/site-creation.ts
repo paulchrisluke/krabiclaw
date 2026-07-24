@@ -73,8 +73,10 @@ export async function runSiteCreation(
       // A retry (pending/failed site from a previous attempt) may have been created
       // under a stale default (theme_id='saya-theme-v1', vertical='restaurant') —
       // correct both here so a professional-service retry can never be left on Saya.
+      siteId = existingRetrySiteId
       await execute(db, `UPDATE sites SET theme_id = ?, vertical = ?, updated_at = ? WHERE id = ?`,
         [themeId, storedVertical, new Date().toISOString(), existingRetrySiteId])
+      await ensureSiteTeam(db, { organizationId, siteId: existingRetrySiteId, name })
       return await performSeeding(env, db, existingRetrySiteId, organizationId, name, vertical, '')
     }
 
