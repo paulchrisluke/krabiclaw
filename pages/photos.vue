@@ -71,7 +71,7 @@ definePageMeta({ layout: 'saya' })
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
-const { locations, photosList, pending, config } = useBootstrap()
+const { locations, photosList, pending, config } = await useBootstrap()
 const photos = photosList
 const siteName = computed(() => site?.brand_name || 'Our Site')
 

@@ -147,7 +147,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 
 const restaurantName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Menu')
 
-const { menu: bootstrapMenu, menuItemsBySection, pending, locations, config: bootstrapConfig, hasExperiences } = useBootstrap()
+const { menu: bootstrapMenu, menuItemsBySection, pending, locations, config: bootstrapConfig, hasExperiences } = await useBootstrap()
 
 const hasMenu = computed(() => ((bootstrapMenu.value as { items?: unknown[] } | null)?.items?.length ?? 0) > 0)
 

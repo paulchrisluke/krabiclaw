@@ -1,15 +1,21 @@
-// Single SSR call — replaces every separate /locations, /google-business,
-// /config, /content/{page}, /menus fetch on tenant pages.
+// Per-page content fetch (photos/qa/reviews/blog/menu/experience datasets,
+// CMS content fields, booking policies). Site-wide chrome data that doesn't
+// vary by route (locations, config, menu, experiencesList) lives in
+// useSiteShell() instead — see that file for why the split exists.
 //
-// Key is derived from the current route via useBootstrapParams so that
-// the page component, SayaHeader, and SayaFooter all register the SAME
-// key → Nuxt deduplicates to ONE HTTP request per page load.
+// This is `await`-ed by every caller. That's load-bearing, not stylistic:
+// the key is derived from the current route, so on client-side navigation
+// the key changes on every page. A non-awaited useAsyncData here would let
+// Vue render the new page with the OLD key's leftover data for a beat (or,
+// if a component further down the tree never re-renders it, indefinitely)
+// before the new fetch resolves — see krabiclaw issue #436/#437. Awaiting it
+// at the top of each page's <script setup> makes Vue Router's Suspense
+// boundary hold the previous page on screen until the new page's real data
+// is in hand, exactly like pages/blog/[slug].vue's own post fetch already
+// does correctly.
 //
 // Usage (in a page):
-//   const { locations, googleBusiness, config, getField, getHero, menu,
-//           menuItemsBySection, location, locationReviews } = useBootstrap()
-//
-// No arguments needed — params are inferred from the route.
+//   const { getField, getHero, photosList, qaList, ... } = await useBootstrap()
 import { onMounted, onBeforeUnmount, unref } from "vue";
 import type { Ref } from "vue";
 import {
@@ -17,8 +23,9 @@ import {
   useBootstrapKey,
   useBootstrapUrl,
 } from "~/composables/useBootstrapParams";
-import type { Experience } from "~/server/utils/experiences";
+import { useSiteShell } from "~/composables/useSiteShell";
 import type { RenderedBookingPolicySummary } from "~/server/utils/booking-policies";
+import type { Experience } from "~/server/utils/experiences";
 
 interface ContentRow {
   field: string;
@@ -36,10 +43,7 @@ interface ContentRow {
 
 interface BootstrapPayload {
   locations: ApiRecord[];
-  config: Record<string, string>;
-  googleBusiness: ApiRecord;
   content: ContentRow[];
-  menu: ApiRecord | null;
   locationReviews: ApiRecord[];
   reviewsAggregate: ApiRecord | null;
   reviewsList: ApiRecord[];
@@ -48,28 +52,16 @@ interface BootstrapPayload {
   postsList: ApiRecord[];
   blogList: ApiRecord[];
   blogPost: ApiRecord | null;
-  locales: { code: string; label: string; is_source: boolean }[];
   reservationPolicySiteDefault: RenderedBookingPolicySummary | null;
   reservationPolicyByLocation: Record<string, RenderedBookingPolicySummary>;
   experiencePolicySiteDefault: RenderedBookingPolicySummary | null;
   experiencePolicyById: Record<string, RenderedBookingPolicySummary>;
-  hasExperiences: boolean;
-  experiencesList: Experience[];
   experienceDetail: Experience | null;
 }
 
 const emptyBootstrap = (): BootstrapPayload => ({
   locations: [],
-  config: {},
-  googleBusiness: {
-    business: null,
-    reviews: [],
-    media: [],
-    posts: [],
-    syncedAt: null,
-  },
   content: [],
-  menu: null,
   locationReviews: [],
   reviewsAggregate: null,
   reviewsList: [],
@@ -78,39 +70,35 @@ const emptyBootstrap = (): BootstrapPayload => ({
   postsList: [],
   blogList: [],
   blogPost: null,
-  locales: [],
   reservationPolicySiteDefault: null,
   reservationPolicyByLocation: {},
   experiencePolicySiteDefault: null,
   experiencePolicyById: {},
-  hasExperiences: false,
-  experiencesList: [],
   experienceDetail: null,
 });
 
-export const useBootstrap = (options: { enabled?: boolean | Ref<boolean> } = {}) => {
+export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> } = {}) => {
   const { isPlatform, siteId, draftId } = useTenantSite();
   const route = useRoute();
-  const requestFetch = useRequestFetch()
+  const requestFetch = useRequestFetch();
   const params = useBootstrapParams();
-  const entityId = computed(() => siteId || draftId || null)
+  const entityId = computed(() => siteId || draftId || null);
   const key = computed(() => useBootstrapKey(entityId.value, params.value));
-  const enabled = computed(() => options.enabled === undefined ? true : Boolean(unref(options.enabled)))
+  const enabled = computed(() => options.enabled === undefined ? true : Boolean(unref(options.enabled)));
 
-  const url = computed(() => {
-    return useBootstrapUrl(siteId, params.value);
-  });
+  const url = computed(() => useBootstrapUrl(siteId, params.value));
 
   const empty = emptyBootstrap();
 
-  const nuxtApp = useNuxtApp();
+  const shell = useSiteShell();
+
   const { data, error, pending } =
-    isPlatform || (!enabled.value) || (!siteId && !draftId)
+    isPlatform || !enabled.value || (!siteId && !draftId)
       ? { data: ref<BootstrapPayload>(empty), error: ref<Error | null>(null), pending: ref(false) }
-      : useAsyncData<BootstrapPayload>(
+      : await useAsyncData<BootstrapPayload>(
           key,
           async () => {
-            if (!import.meta.server) return $fetch<BootstrapPayload>(url.value)
+            if (!import.meta.server) return $fetch<BootstrapPayload>(url.value);
             // Nested SSR self-fetch (useRequestFetch) has been the source of a real bug
             // class elsewhere (pages/blog/[category]/[slug].vue, pages/docs/[...segments].vue):
             // Nitro's internal dispatch for those routes sometimes returned a wrong 404 that
@@ -119,49 +107,35 @@ export const useBootstrap = (options: { enabled?: boolean | Ref<boolean> } = {})
             // hasn't been reproduced failing the same way, but it's the highest-traffic
             // self-fetch in the app (every tenant page goes through it) — log on failure so
             // a future occurrence leaves evidence instead of a silent wrong render.
-            //
-            // A same-process direct-call fix (bypassing Nitro's router entirely) was tried
-            // and reverted: Nuxt's build-time import-protection plugin hard-blocks any import
-            // from server/** into composables/**, even dynamic ones, specifically to keep
-            // server-only code (D1/KV/H3 event) out of the client bundle. Eliminating this
-            // self-fetch for real would require moving bootstrap-building into server
-            // middleware (stashing the payload on event.context before SSR starts) — a
-            // bigger, more novel restructuring than this self-fetch-only fix, not attempted here.
             try {
-              return await requestFetch<BootstrapPayload>(url.value)
+              return await requestFetch<BootstrapPayload>(url.value);
             } catch (err) {
               // url/key can carry a signed preview token on /preview/* routes — strip it
               // before logging so it doesn't end up in server logs. Key fields are
               // "~"-joined with the token last (see useBootstrapKey).
-              const redactedUrl = url.value.replace(/([?&]token=)[^&]*/, '$1[redacted]')
+              const redactedUrl = url.value.replace(/([?&]token=)[^&]*/, "$1[redacted]");
               const redactedKey = params.value.token
-                ? key.value.split('~').slice(0, -1).concat('[redacted]').join('~')
-                : key.value
-              const errorSummary = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+                ? key.value.split("~").slice(0, -1).concat("[redacted]").join("~")
+                : key.value;
+              const errorSummary = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
               console.error(
-                `[useBootstrap] SSR self-fetch failed for siteId=${siteId ?? 'none'} draftId=${draftId ?? 'none'} ` +
-                `route=${route.path} url=${redactedUrl} key=${redactedKey} error=${errorSummary}`
-              )
-              throw err
+                `[useBootstrap] SSR self-fetch failed for siteId=${siteId ?? "none"} draftId=${draftId ?? "none"} ` +
+                  `route=${route.path} url=${redactedUrl} key=${redactedKey} error=${errorSummary}`,
+              );
+              throw err;
             }
           },
           {
             default: emptyBootstrap,
             server: true,
-            lazy: true,
             watch: [url],
-            // Return payload data if already fetched this key — prevents re-fetch across
-            // header/footer/page calling the same key in the same render cycle.
-            getCachedData(k) {
-              return nuxtApp.payload.data[k] as BootstrapPayload | undefined;
-            },
           },
         );
 
-  // ── Locations ─────────────────────────────────────────────
-  const locations = computed(
-    () => (data.value?.locations ?? []) as ApiRecord[],
-  );
+  // ── Locations / config / menu / experiences list ─────────────
+  // Site-wide, page-independent — sourced from useSiteShell(), which never
+  // goes stale across navigation because its key never changes.
+  const { locations, config, googleBusiness, locales, hasExperiences, experiencesList, menu: menuData, menuItemsBySection } = shell;
 
   // ── Single location (for /locations/[slug]/* pages) ───────
   const location = computed(() => {
@@ -169,63 +143,23 @@ export const useBootstrap = (options: { enabled?: boolean | Ref<boolean> } = {})
     return locations.value.find((l) => l.slug === params.value.location) ?? null;
   });
 
-  // ── Config ────────────────────────────────────────────────
-  const config = computed(
-    () => (data.value?.config ?? {}) as Record<string, string>,
-  );
-
-  // ── Google Business ───────────────────────────────────────
-  const googleBusiness = computed(
-    () => data.value?.googleBusiness ?? empty.googleBusiness,
-  );
-
   // ── Location reviews preview (3 items) ───────────────────
-  const locationReviews = computed(
-    () => (data.value?.locationReviews ?? []) as ApiRecord[],
-  );
+  const locationReviews = computed(() => (data.value?.locationReviews ?? []) as ApiRecord[]);
 
   // ── Full page datasets (types A / E / F) ─────────────────
-  const reviewsAggregate = computed(
-    () => (data.value?.reviewsAggregate ?? null) as ApiRecord | null,
-  );
-  const reviewsList = computed(
-    () => (data.value?.reviewsList ?? []) as ApiRecord[],
-  );
-  const photosList = computed(
-    () => (data.value?.photosList ?? []) as ApiRecord[],
-  );
+  const reviewsAggregate = computed(() => (data.value?.reviewsAggregate ?? null) as ApiRecord | null);
+  const reviewsList = computed(() => (data.value?.reviewsList ?? []) as ApiRecord[]);
+  const photosList = computed(() => (data.value?.photosList ?? []) as ApiRecord[]);
   const qaList = computed(() => (data.value?.qaList ?? []) as ApiRecord[]);
-  const postsList = computed(
-    () => (data.value?.postsList ?? []) as ApiRecord[],
-  );
-  const blogList = computed(
-    () => (data.value?.blogList ?? []) as ApiRecord[],
-  );
-  const blogPost = computed(
-    () => (data.value?.blogPost ?? null) as ApiRecord | null,
-  );
+  const postsList = computed(() => (data.value?.postsList ?? []) as ApiRecord[]);
+  const blogList = computed(() => (data.value?.blogList ?? []) as ApiRecord[]);
+  const blogPost = computed(() => (data.value?.blogPost ?? null) as ApiRecord | null);
 
-  // ── Site locales + experiences flag ──────────────────────
-  const locales = computed(() => data.value?.locales ?? []);
-  const hasExperiences = computed(() => data.value?.hasExperiences ?? false);
-  const reservationPolicySiteDefault = computed(
-    () => data.value?.reservationPolicySiteDefault ?? null,
-  );
-  const reservationPolicyByLocation = computed(
-    () => data.value?.reservationPolicyByLocation ?? {},
-  );
-  const experiencePolicySiteDefault = computed(
-    () => data.value?.experiencePolicySiteDefault ?? null,
-  );
-  const experiencePolicyById = computed(
-    () => data.value?.experiencePolicyById ?? {},
-  );
-  const experiencesList = computed(
-    () => (data.value?.experiencesList ?? []) as Experience[],
-  );
-  const experienceDetail = computed(
-    () => (data.value?.experienceDetail ?? null) as Experience | null,
-  );
+  const reservationPolicySiteDefault = computed(() => data.value?.reservationPolicySiteDefault ?? null);
+  const reservationPolicyByLocation = computed(() => data.value?.reservationPolicyByLocation ?? {});
+  const experiencePolicySiteDefault = computed(() => data.value?.experiencePolicySiteDefault ?? null);
+  const experiencePolicyById = computed(() => data.value?.experiencePolicyById ?? {});
+  const experienceDetail = computed(() => (data.value?.experienceDetail ?? null) as Experience | null);
 
   // ── Content ───────────────────────────────────────────────
   const contentMap = computed(() => {
@@ -328,19 +262,6 @@ export const useBootstrap = (options: { enabled?: boolean | Ref<boolean> } = {})
       videoKind: row?.hero_video_kind || "video",
     };
   };
-
-  // ── Menu ──────────────────────────────────────────────────
-  const menuData = computed(() => data.value?.menu ?? null);
-  const menuItemsBySection = computed(() => {
-    const m = menuData.value as { items?: ApiRecord[] } | null;
-    if (!m?.items) return {} as Record<string, ApiRecord[]>;
-    return m.items.reduce<Record<string, ApiRecord[]>>((acc, item) => {
-      const section = (item.section as string) || "Uncategorized";
-      if (!acc[section]) acc[section] = [];
-      acc[section].push(item);
-      return acc;
-    }, {});
-  });
 
   // ── Content Blocks for Dynamic Rendering ───────────────────
   const contentBlocks = computed(() => {

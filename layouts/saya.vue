@@ -43,18 +43,24 @@ import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
 
 if (import.meta.dev) useDebugLCP()
 
-// Single owner of the shared bootstrap/tenant-site fetch for this tree —
-// header/footer receive the fields they need as props instead of each
-// independently calling useBootstrap()/useTenantSite() and relying on
-// cache-key coincidence to dedupe.
-const { config, locations, menu, hasExperiences, experiencesList, locales, error: bootstrapError } = useBootstrap()
+// Single owner of the shared site-shell fetch for this tree — header/footer
+// receive the fields they need as props instead of each independently
+// calling useSiteShell()/useTenantSite(). This layout persists across
+// client-side navigation (it isn't remounted per route), so it uses
+// useSiteShell() rather than useBootstrap(): useBootstrap()'s key changes
+// per route and must be `await`-ed so Suspense can block the page swap on
+// it, but a persistent layout component never remounts, so there's no
+// Suspense boundary here for an await to plug into. useSiteShell()'s key is
+// siteId+locale only — it never changes across navigation, so it doesn't
+// need blocking and can't go stale (see useSiteShell.ts).
+const { config, locations, menu, hasExperiences, experiencesList, locales, error: bootstrapError } = useSiteShell()
 const { siteId, isTenant, isPlatform, site } = useTenantSite()
 // Called for its side effect: keeps the consent ref in sync and lets the
 // head markup emit the default signal ahead of any analytics config.
 useCookieConsent()
 
-// The full bootstrap payload above is intentionally `lazy: true` (see
-// useBootstrap.ts) so SSR doesn't block the whole page on it. But that means
+// The site-shell fetch above is intentionally `lazy: true` (see
+// useSiteShell.ts) so SSR doesn't block the whole page on it. But that means
 // brand_color isn't known yet on first paint, and the CTA button's Tailwind
 // class falls back to Nuxt UI's default color, then snaps to the real brand
 // color once bootstrap resolves client-side — a visible flash of the wrong

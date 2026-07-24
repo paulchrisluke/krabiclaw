@@ -181,7 +181,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
-const { location, reviewsAggregate, reviewsList, pending, config } = useBootstrap()
+const { location, reviewsAggregate, reviewsList, pending, config } = await useBootstrap()
 const { formatDate } = useLocaleDate()
 const aggregate = reviewsAggregate
 const reviews = reviewsList

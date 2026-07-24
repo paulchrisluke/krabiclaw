@@ -461,7 +461,7 @@ const {
   experiencesList,
   contentBlocks,
   blogList,
-} = useBootstrap({ enabled: shouldUseSayaBootstrap })
+} = await useBootstrap({ enabled: shouldUseSayaBootstrap })
 
 const locations = computed(() => bootstrapLocations.value)
 const hasOrderLinks = computed(() =>

@@ -445,7 +445,7 @@ const siteName = computed(() => (site as ApiValue)?.brand_name || (site as ApiVa
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 
-const { experienceDetail: experience, config: siteConfig, pending, locations, experiencePolicyById } = useBootstrap()
+const { experienceDetail: experience, config: siteConfig, pending, locations, experiencePolicyById } = await useBootstrap()
 
 const experienceIsOnSale = computed(() => isSaleActive((experience.value as ApiValue) ?? {}))
 const experienceCompareAtPrice = computed(() =>

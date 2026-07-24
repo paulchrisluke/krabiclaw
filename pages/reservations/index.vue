@@ -177,7 +177,7 @@ const { getField } = usePageContent('reservations')
 const { site, siteId } = useTenantSite()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
-const { locations, config, reservationPolicySiteDefault, reservationPolicyByLocation } = useBootstrap()
+const { locations, config, reservationPolicySiteDefault, reservationPolicyByLocation } = await useBootstrap()
 const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
 // Pure experience-vertical sites book per-experience on /experiences/[slug].

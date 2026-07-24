@@ -42,7 +42,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 
 const siteName = computed(() => site?.brand_name || 'Our Site')
 
-const { blogList, error, pending, config } = useBootstrap()
+const { blogList, error, pending, config } = await useBootstrap()
 const posts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 
 useTenantSocialMetadata(() => ({

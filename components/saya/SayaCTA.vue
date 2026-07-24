@@ -30,7 +30,6 @@
 <script setup lang="ts">
 
 import { computed } from 'vue'
-import { useBootstrap } from '~/composables/useBootstrap'
 
 defineProps({
   title: String,
@@ -41,7 +40,7 @@ defineProps({
   padding: { type: String, default: 'lg' }
 })
 
-const { locations } = useBootstrap()
+const { locations } = useSiteShell()
 const hasOrderLinks = computed(() =>
   locations.value.some((loc: { grab_url?: string; uber_eats_url?: string; foodpanda_url?: string }) => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )

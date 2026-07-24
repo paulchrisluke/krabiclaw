@@ -412,7 +412,7 @@ if (error.value) {
   throw error.value
 }
 
-const { config: siteConfig } = useBootstrap()
+const { config: siteConfig } = await useBootstrap()
 
 const item = computed<MenuItemType | null>(
   () => (data.value?.menu?.items as MenuItemType[] | undefined)?.find((i) => i.slug === route.params.slug) ?? null

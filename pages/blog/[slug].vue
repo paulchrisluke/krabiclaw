@@ -167,7 +167,7 @@ if (!data.value?.post) {
 }
 
 const post = computed(() => data.value?.post ?? null)
-const { blogList, config } = useBootstrap()
+const { blogList, config } = await useBootstrap()
 const allPosts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 const { categories } = useTenantBlogNav(allPosts)
 const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))

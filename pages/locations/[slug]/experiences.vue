@@ -77,7 +77,7 @@ const {
   experiencesList,
   pending: bootstrapPending,
   config,
-} = useBootstrap()
+} = await useBootstrap()
 
 const pending = computed(() => bootstrapPending.value)
 const experiences = computed<Experience[]>(() => experiencesList.value)
