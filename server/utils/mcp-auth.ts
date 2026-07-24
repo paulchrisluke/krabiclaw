@@ -153,8 +153,15 @@ async function verifyBearerToken(
       now_iso: new Date().toISOString(),
       ...(await decodeJwtClaimsUnsafe(token)),
     })
+    // Always 401, matching the pre-existing behavior for both invalid_token
+    // and insufficient_scope: asMcpError maps statusCode 403 to kind
+    // 'forbidden', a different code path used for tool-role permission
+    // denials (respondToMcpError returns a plain tool-error result there,
+    // dropping the WWW-Authenticate challenge). RFC 6750 §3.1 permits 401
+    // for insufficient_scope too ("MAY" 403, not "SHOULD"), so this stays
+    // spec-compliant while keeping the challenge intact on every path.
     throw createError({
-      statusCode: authChallenge.error === 'insufficient_scope' ? 403 : 401,
+      statusCode: 401,
       statusMessage: authChallenge.description,
       data: { mcpAuth: authChallenge },
     })
@@ -224,13 +231,17 @@ function isBetterAuthApiError(error: unknown): error is { status: string; messag
 
 function mcpAuthChallengeFromVerifyError(error: unknown, requiredScopes: string[]): McpAuthChallengeDetails {
   if (isBetterAuthApiError(error) && error.status === 'FORBIDDEN') {
-    const missingScope = requiredScopes.find(scope => error.message === `invalid scope ${scope}`)
-    if (missingScope) {
-      return {
-        error: 'insufficient_scope',
-        description: `${missingScope} scope required`,
-        scope: missingScope,
-      }
+    // @better-auth/core's verifyAccessTokenPayload only ever throws FORBIDDEN
+    // for a missing required scope — the status alone is the reliable
+    // classification signal. The `invalid scope ${sc}` message text is only
+    // used as a best-effort way to name which scope for the challenge/log;
+    // an upstream wording change degrades that naming, not the
+    // insufficient_scope classification itself.
+    const missingScope = requiredScopes.find(scope => error.message.includes(scope)) ?? requiredScopes[0]
+    return {
+      error: 'insufficient_scope',
+      description: missingScope ? `${missingScope} scope required` : 'Required scope missing',
+      scope: missingScope,
     }
   }
   return {

@@ -108,9 +108,16 @@ test('resolveMissingMcpCredential: a cookie present (browser/session caller) als
   assert.deepEqual(result, { handled: false })
 })
 
+const renderCalls: Array<{ name: string; args: Record<string, string> }> = []
 const catalog = {
   resources: { list: [{ uri: 'kc://a' }], read: async (uri: string) => ({ uri, text: 'content' }) },
-  prompts: { list: [{ name: 'p1' }], render: (name: string) => ({ description: name, text: 'rendered' }) },
+  prompts: {
+    list: [{ name: 'p1' }],
+    render: (name: string, args: Record<string, string>) => {
+      renderCalls.push({ name, args })
+      return { description: name, text: 'rendered' }
+    },
+  },
   discover: { serverName: 'test-mcp', serverVersion: 'v1', instructions: 'test instructions' },
 }
 
@@ -139,6 +146,7 @@ test('dispatchStandardMcpMethod: resources/list propagates a requireMcpUser reje
 })
 
 test('dispatchStandardMcpMethod: prompts/get renders with only string arguments accepted', async () => {
+  renderCalls.length = 0
   const event = fakeEvent()
   const request = readMcpRequest(event, {
     jsonrpc: '2.0', id: 4, method: 'prompts/get',
@@ -148,6 +156,7 @@ test('dispatchStandardMcpMethod: prompts/get renders with only string arguments 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const response = await dispatchStandardMcpMethod(event, request, runtimeDeps, catalog) as any
   assert.equal(response.result.description, 'p1')
+  assert.deepEqual(renderCalls, [{ name: 'p1', args: { a: 'x' } }])
 })
 
 test('dispatchStandardMcpMethod: an unrecognized method returns undefined so the caller falls through', async () => {
