@@ -4,6 +4,7 @@ import { normalizeLocale } from '~/server/utils/site-i18n'
 import { deleteSiteLocale } from '~/server/utils/site-locales'
 import { isDemoOrg } from '~/server/utils/demo'
 import { queryFirst } from '~/server/db'
+import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -27,7 +28,7 @@ export default defineEventHandler(async (event) => {
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const isPlatformAdmin = (session.user as { role?: string }).role === 'admin'
+  const isPlatformAdmin = await hasPlatformEventPermission(event, env, { platform: ['access'] })
   if (isDemoOrg(site.organization_id) && !isPlatformAdmin) {
     return jsonResponse({ error: 'Demo site is read-only' }, { status: 403 })
   }

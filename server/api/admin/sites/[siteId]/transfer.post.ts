@@ -5,7 +5,7 @@ import { executeBatch, queryFirst, type BatchQuery } from '~/server/db'
 import { hashEmail, isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { normalizeHost } from '~/server/utils/tenant-hosts'
 import { rootDomainForPair } from '~/server/utils/domain-shared'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 import {
   buildTransferDomainSnapshot,
   serializeTransferDomainSnapshot,
@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   const userId = session.user.id
-  const isPlatAdmin = isPlatformAdmin(session.user, env)
+  const isPlatAdmin = await hasPlatformEventPermission(event, env, { platform: ['organizations'] })
 
   // Verify caller is platform admin or an owner/admin of this site
   const site = await queryFirst<{ id: string; organization_id: string; brand_name: string | null }>(

@@ -1,8 +1,11 @@
 import { createError, getHeaders, type H3Event } from 'h3'
 import type { UserWithRole } from 'better-auth/plugins/admin'
+import { jsonResponse } from '~/server/utils/api-response'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { betterAuthTimestampToIso, type BetterAuthTimestamp } from '~/server/utils/better-auth-timestamps'
-import { hasBetterAuthAdminRole } from '~/server/utils/platform-auth'
+import { hasPlatformAdminPermission, type PlatformAdminPermission } from '~/utils/platform-admin-access'
+
+type PlatformUserPermission = NonNullable<PlatformAdminPermission['user']>[number]
 
 type BetterAuthUser = UserWithRole & {
   createdAt: BetterAuthTimestamp
@@ -51,6 +54,56 @@ export function authAdminApi(env: CloudflareEnv): AdminApi {
   return createAuth(env).api as unknown as AdminApi
 }
 
+export function platformPermissionError(error: unknown, fallback = 'Platform admin access required'): { statusCode: number; message: string } {
+  const statusCode = typeof (error as { statusCode?: unknown })?.statusCode === 'number'
+    ? (error as { statusCode: number }).statusCode
+    : 403
+  const message = statusCode === 401
+    ? 'Authentication required'
+    : (typeof (error as { statusMessage?: unknown })?.statusMessage === 'string'
+        ? (error as { statusMessage: string }).statusMessage
+        : fallback)
+  return { statusCode, message }
+}
+
+export async function requirePlatformEventPermission(
+  event: H3Event,
+  env: CloudflareEnv,
+  permissions: PlatformAdminPermission,
+): Promise<void> {
+  await requirePlatformPermission(authAdminApi(env), adminHeadersForEvent(event), permissions)
+}
+
+export async function hasPlatformEventPermission(
+  event: H3Event,
+  env: CloudflareEnv,
+  permissions: PlatformAdminPermission,
+): Promise<boolean> {
+  try {
+    await requirePlatformEventPermission(event, env, permissions)
+    return true
+  } catch (error) {
+    const { statusCode } = platformPermissionError(error)
+    if (statusCode === 401 || statusCode === 403) return false
+    throw error
+  }
+}
+
+export async function platformPermissionJsonResponse(
+  event: H3Event,
+  env: CloudflareEnv,
+  permissions: PlatformAdminPermission,
+  fallback = 'Platform admin access required',
+): Promise<Response | null> {
+  try {
+    await requirePlatformEventPermission(event, env, permissions)
+    return null
+  } catch (error) {
+    const { statusCode, message } = platformPermissionError(error, fallback)
+    return jsonResponse({ error: message }, { status: statusCode })
+  }
+}
+
 function normalizeAdminUser(user: BetterAuthUser): PlatformAdminUser {
   return {
     id: user.id,
@@ -92,11 +145,19 @@ function throwHttpError(error: unknown, fallbackMessage: string): never {
 export async function requirePlatformUserPermission(
   authApi: AdminApi,
   headers: HeadersInit,
-  permission: string,
+  permission: PlatformUserPermission,
+): Promise<void> {
+  await requirePlatformPermission(authApi, headers, { user: [permission] })
+}
+
+export async function requirePlatformPermission(
+  authApi: AdminApi,
+  headers: HeadersInit,
+  permissions: PlatformAdminPermission,
 ): Promise<void> {
   try {
     const result = await authApi.userHasPermission({
-      body: { permissions: { user: [permission] } },
+      body: { permissions },
       headers,
     })
     if (!result.success) {
@@ -160,7 +221,7 @@ export async function listPlatformAdminUsers(authApi: AdminApi, headers: Headers
     })
 
     return result.users
-      .filter(user => hasBetterAuthAdminRole((user as BetterAuthUser).role))
+      .filter(user => hasPlatformAdminPermission((user as BetterAuthUser).role))
       .map(user => normalizeAdminUser(user as BetterAuthUser))
   } catch (error) {
     throwHttpError(error, 'Failed to fetch platform admins')
@@ -187,7 +248,7 @@ export async function addPlatformAdminUser(
 
   const existing = await findUserByEmail(authApi, headers, email)
   if (existing) {
-    if (hasBetterAuthAdminRole(existing.role)) {
+    if (hasPlatformAdminPermission(existing.role)) {
       throw createError({ statusCode: 409, statusMessage: 'This user is already an admin' })
     }
     try {

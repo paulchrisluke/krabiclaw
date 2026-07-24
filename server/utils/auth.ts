@@ -20,6 +20,7 @@ import { validatePassword } from '~/utils/password-validation'
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/site-events'
 import type { InferSelectModel } from 'drizzle-orm'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
+import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform-admin-access'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
@@ -386,8 +387,10 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
       }),
       organization({ ac: organizationAccessControl, roles: organizationRoles }),
       admin({
+        ac: platformAdminAccessControl,
         adminRoles: ['admin'],
         defaultRole: 'user',
+        roles: platformAdminRoles,
         impersonationSessionDuration: 60 * 60,
       }),
       phoneNumber({

@@ -7,6 +7,7 @@ import { saveTranslationReviewItem } from '~/server/utils/translation-review'
 import { parseScope } from '~/server/utils/translation-helpers'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
+import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
 function parseEntityType(value: unknown): TranslationEntityType | null {
   return value === 'site_content' || value === 'menu' || value === 'menu_item' || value === 'business_location' || value === 'post'
@@ -54,7 +55,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Translation requires a Growth plan or above.' }, { status: 403 })
   }
 
-  const isPlatformAdmin = (session.user as { role?: string }).role === 'admin'
+  const isPlatformAdmin = await hasPlatformEventPermission(event, env, { platform: ['access'] })
   if (isDemoOrg(site.organization_id) && !isPlatformAdmin) {
     return jsonResponse({ error: 'Demo site is read-only' }, { status: 403 })
   }

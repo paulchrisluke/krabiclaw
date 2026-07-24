@@ -1,17 +1,15 @@
 // POST /api/admin/fulfillment/[id]/done — mark a service add-on purchase as fulfilled
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { execute } from '~/server/db'
+import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
+  const permissionDenied = await platformPermissionJsonResponse(event, env, { platform: ['fulfillment'] })
+  if (permissionDenied) return permissionDenied
 
   const id = getRouterParam(event, 'id')
   if (!id) return jsonResponse({ error: 'Purchase ID required' }, { status: 400 })

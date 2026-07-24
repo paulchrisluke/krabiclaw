@@ -1,7 +1,8 @@
 import { createError, getHeader, getHeaders, type H3Event } from 'h3'
 import { createLocalJWKSet, jwtVerify } from 'jose'
 import { getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
+import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
 import { queryAll, queryFirst } from '~/server/db'
 import { assertSiteWideAccess, isOrganizationWideRole } from '~/server/utils/member-access'
 
@@ -107,13 +108,7 @@ export async function requireMcpUser(
     env,
     db,
     userId: session.user.id,
-    isPlatformAdmin: isPlatformAdmin(
-      {
-        role: (session.user as { role?: string | null }).role ?? null,
-        email: session.user.email ?? null,
-      },
-      env,
-    ),
+    isPlatformAdmin: await hasPlatformEventPermission(event, env, { platform: ['access'] }),
     scopes: normalizedOptions.requiredScopes ?? ['tenant'],
     activeOrganizationId: typeof sessionRecord.activeOrganizationId === 'string' ? sessionRecord.activeOrganizationId : undefined,
   }
@@ -199,13 +194,7 @@ async function verifyBearerToken(
     db,
     userId: identity.userId,
     oauthClientId: identity.oauthClientId ?? null,
-    isPlatformAdmin: isPlatformAdmin(
-      {
-        role: user.role ?? null,
-        email: user.email ?? null,
-      },
-      env,
-    ),
+    isPlatformAdmin: hasPlatformAdminPermission(user.role),
     scopes: verification.scopes,
   }
 }

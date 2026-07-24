@@ -105,9 +105,9 @@ const EXISTING_DEBT_ALLOWLIST = {
     'server/api/site-transfer/[token]/accept.post.ts',
     'server/utils/mcp-auth.ts',
     'server/utils/notification-access.ts',
-    'server/utils/platform-auth.ts',
     'server/utils/route-access.ts',
     'tests/unit/platform-auth.test.ts',
+    'utils/platform-admin-access.ts',
   ]),
 
   direct_platform_role_sql: new Set([

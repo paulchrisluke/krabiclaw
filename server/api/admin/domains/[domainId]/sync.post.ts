@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { anonymizeId, isPlatformAdmin } from '~/server/utils/platform-auth'
+import { anonymizeId } from '~/server/utils/platform-telemetry'
+import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { syncDomainWithCloudflare } from '~/server/utils/domains'
 import { domainInstructions } from '~/server/utils/domain-read-model'
 
@@ -23,7 +24,8 @@ export default defineEventHandler(async (event) => {
 
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
+  const permissionDenied = await platformPermissionJsonResponse(event, env, { platform: ['domains'] })
+  if (permissionDenied) return permissionDenied
   if (domainSyncInFlight.has(domainId)) return jsonResponse({ error: 'Domain sync already in progress' }, { status: 409 })
 
   domainSyncInFlight.add(domainId)

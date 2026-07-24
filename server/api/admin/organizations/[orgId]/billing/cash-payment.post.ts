@@ -1,8 +1,7 @@
 // POST /api/admin/organizations/[orgId]/billing/cash-payment
 // Record a cash payment: creates Stripe customer + annual/monthly subscription + marks invoice paid out-of-band
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { getStripe, getPriceIdForPlan, setSiteEntitlementsFromPlan } from '~/server/utils/billing'
 import { execute, queryFirst } from '~/server/db'
 
@@ -16,9 +15,8 @@ export default defineEventHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
+  const permissionDenied = await platformPermissionJsonResponse(event, env, { platform: ['billing'] })
+  if (permissionDenied) return permissionDenied
 
   if (!env.STRIPE_SECRET_KEY) return jsonResponse({ error: 'Stripe not configured' }, { status: 503 })
 
