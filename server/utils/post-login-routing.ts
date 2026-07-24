@@ -41,6 +41,6 @@ export async function resolvePostLoginDestination(
   const slug = row?.slug
   if (slug) return `/dashboard/${encodeURIComponent(slug)}`
 
-  const isGuest = await userHasLinkedCustomers(db, user.id).catch(() => false)
+  const isGuest = await userHasLinkedCustomers(db, user.id)
   return isGuest ? '/account' : '/dashboard/onboarding'
 }
