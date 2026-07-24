@@ -72,6 +72,14 @@ function requiredCandidate(args: Record<string, unknown>) {
   return args.candidate as Record<string, unknown>
 }
 
+function requiredObjectArg(args: Record<string, unknown>, key: string) {
+  const value = args[key]
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be an object.`)
+  }
+  return value as Record<string, unknown>
+}
+
 function optionalNullableString(args: Record<string, unknown>, key: string) {
   const value = args[key]
   if (value === null) return null
@@ -207,27 +215,6 @@ async function resolveContentDocument(db: D1Database, args: Record<string, unkno
   const document = await getContentDocumentByOwner(db, ownerType, ownerId)
   if (!document) throw mcpProtocolError(MCP_ERROR.invalidParams, 'content document not found.')
   return document
-}
-
-async function platformGuidanceScope(db: D1Database, args: Record<string, unknown>) {
-  const siteId = optionalString(args, 'site_id') ?? null
-  if (!siteId) {
-    return {
-      siteId: null,
-      organizationId: optionalString(args, 'organization_id') ?? null,
-    }
-  }
-
-  const site = await queryFirst<{ organization_id: string }>(
-    db,
-    'SELECT organization_id FROM sites WHERE id = ? LIMIT 1',
-    [siteId],
-  )
-  if (!site) throw mcpProtocolError(MCP_ERROR.invalidParams, 'Site not found.')
-  return {
-    siteId,
-    organizationId: site.organization_id,
-  }
 }
 
 async function getFormattedContentBlock(db: D1Database, blockId: string) {
@@ -584,25 +571,64 @@ export async function executePlatformMcpToolCall(
         },
       }
     }
+    case 'get_platform_blog_writing_guidance': {
+      return await resolveAgentGuidance(user.db, {
+        task: 'blog.write',
+        audience: 'platform',
+      })
+    }
+    case 'get_platform_image_generation_guidance': {
+      return await resolveAgentGuidance(user.db, {
+        task: 'image.generate',
+        audience: 'platform',
+      })
+    }
+    case 'review_platform_blog_draft_against_guidance': {
+      try {
+        return await reviewAgentGuidanceCandidate(user.db, {
+          task: 'blog.write',
+          candidateType: 'blog_draft',
+          candidate: requiredObjectArg(rawArguments, 'draft'),
+          surface: 'platform_mcp',
+          audience: 'platform',
+          createdByUserId: user.userId,
+          resolutionFingerprint: optionalString(rawArguments, 'resolution_fingerprint') ?? null,
+        })
+      } catch (error) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, error instanceof Error ? error.message : String(error))
+      }
+    }
+    case 'review_platform_image_generation_brief': {
+      try {
+        return await reviewAgentGuidanceCandidate(user.db, {
+          task: 'image.generate',
+          candidateType: 'image_brief',
+          candidate: requiredObjectArg(rawArguments, 'brief'),
+          surface: 'platform_mcp',
+          audience: 'platform',
+          createdByUserId: user.userId,
+          resolutionFingerprint: optionalString(rawArguments, 'resolution_fingerprint') ?? null,
+        })
+      } catch (error) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, error instanceof Error ? error.message : String(error))
+      }
+    }
     case 'resolve_platform_agent_guidance': {
-      const scope = await platformGuidanceScope(user.db, rawArguments)
-      return await resolveAgentGuidance({
+      return await resolveAgentGuidance(user.db, {
         task: requiredAgentSkillTask(rawArguments),
-        surface: 'platform_mcp',
-        organizationId: scope.organizationId,
-        siteId: scope.siteId,
+        audience: 'platform',
       })
     }
     case 'review_platform_agent_guidance_candidate': {
-      const scope = await platformGuidanceScope(user.db, rawArguments)
       try {
-        return await reviewAgentGuidanceCandidate({
+        return await reviewAgentGuidanceCandidate(user.db, {
           task: requiredAgentSkillTask(rawArguments),
           candidateType: requiredAgentGuidanceCandidateType(rawArguments),
           candidate: requiredCandidate(rawArguments),
           surface: 'platform_mcp',
-          organizationId: scope.organizationId,
-          siteId: scope.siteId,
+          audience: 'platform',
+          createdByUserId: user.userId,
+          resolutionFingerprint: optionalString(rawArguments, 'resolution_fingerprint') ?? null,
         })
       } catch (error) {
         throw mcpProtocolError(

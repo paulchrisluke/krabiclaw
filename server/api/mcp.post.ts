@@ -25,6 +25,7 @@ import {
 import { MCP_PUBLIC_TOOLS, MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
 import { MCP_APP_RESOURCES, readMcpAppResource } from "~/server/utils/mcp-widgets";
+import { AGENT_SKILL_RESOURCE_TEMPLATES, readTenantAgentSkillResource } from "~/server/utils/agent-skills/mcp-resources";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { queryAll } from "~/server/db";
 import { purgeSiteKvCache } from "~/server/utils/edge-cache";
@@ -352,19 +353,21 @@ Common workflows: update menus and items, create and publish site posts, triage 
         userId: user.userId,
         requestId: request.id,
         method: request.method,
-        result: { count: 0 },
+        result: { count: AGENT_SKILL_RESOURCE_TEMPLATES.length },
         status: "success",
         httpStatus: 200,
         oauthClientId: user.oauthClientId ?? null,
       });
-      return mcpSuccess(request.id, { resourceTemplates: [] });
+      return mcpSuccess(request.id, { resourceTemplates: AGENT_SKILL_RESOURCE_TEMPLATES });
     }
 
     if (request.method === "resources/read") {
       const user = await requireMcpUser(event, tenantAuthOptions);
       const uri =
         typeof request.params?.uri === "string" ? request.params.uri : "";
-      const content = await readMcpAppResource(uri, getRequestURL(event).origin);
+      const content = uri.startsWith("krabiclaw://")
+        ? await readTenantAgentSkillResource(user.db, { uri, userId: user.userId, isPlatformAdmin: user.isPlatformAdmin })
+        : await readMcpAppResource(uri, getRequestURL(event).origin);
       logMcpEventDetached(event, cfEnv.DB, {
         userId: user.userId,
         requestId: request.id,

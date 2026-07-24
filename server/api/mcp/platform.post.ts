@@ -18,6 +18,7 @@ import { requireMcpUser } from '~/server/utils/mcp-auth'
 import { executePlatformMcpToolCall } from '~/server/utils/platform-mcp-executor'
 import { PLATFORM_MCP_TOOLS, PLATFORM_PUBLIC_MCP_TOOLS } from '~/server/utils/platform-mcp-tools'
 import { PLATFORM_MCP_RESOURCES, readPlatformMcpResource } from '~/server/utils/platform-mcp-resources'
+import { AGENT_SKILL_RESOURCE_TEMPLATES, readPlatformAgentSkillResource } from '~/server/utils/agent-skills/mcp-resources'
 import { PLATFORM_MCP_PROMPTS, renderPlatformMcpPrompt } from '~/server/utils/platform-mcp-prompts'
 import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-search-rebuild'
 import {
@@ -231,7 +232,9 @@ export default defineEventHandler(async (event) => {
     if (request.method === 'resources/read') {
       const user = await requireMcpUser(event, platformAdminAuthOptions)
       const uri = typeof request.params?.uri === 'string' ? request.params.uri : ''
-      const content = await readPlatformMcpResource(uri)
+      const content = uri.startsWith('krabiclaw://')
+        ? await readPlatformAgentSkillResource(user.db, uri)
+        : await readPlatformMcpResource(uri)
       logPlatformMcpEventDetached(event, env.DB, {
         userId: user.userId,
         requestId: request.id,
@@ -250,12 +253,12 @@ export default defineEventHandler(async (event) => {
         userId: user.userId,
         requestId: request.id,
         method: request.method,
-        result: { count: 0 },
+        result: { count: AGENT_SKILL_RESOURCE_TEMPLATES.length },
         status: 'success',
         httpStatus: 200,
         oauthClientId: user.oauthClientId ?? null,
       })
-      return mcpSuccess(request.id, { resourceTemplates: [] })
+      return mcpSuccess(request.id, { resourceTemplates: AGENT_SKILL_RESOURCE_TEMPLATES })
     }
 
     if (request.method === 'prompts/list') {

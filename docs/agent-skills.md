@@ -2,9 +2,9 @@
 
 Agent Skills are reusable instruction bundles for AI-assisted authoring workflows. They provide quality guidance; product correctness stays in backend contracts, permissions, schema validation, media storage, and publication workflows.
 
-## Current Scaffold
+## System Scope
 
-The first MCP-exposed scaffold supports two tasks:
+The first release supports two tasks:
 
 - `blog.write`
 - `image.generate`
@@ -19,7 +19,7 @@ Platform tools use platform naming:
 - `resolve_platform_agent_guidance`
 - `review_platform_agent_guidance_candidate`
 
-MCP tools are read/review-only. They cannot create, edit, activate, or archive skills. CMS/admin lifecycle tables and provenance-bound persistence are future work.
+MCP tools are read/review-only. They cannot create, edit, activate, or archive skills. Skill management belongs in authenticated CMS/admin routes with persisted lifecycle tables, guidance runs, artifact provenance, and Markdown import/export.
 
 ## Scope Hierarchy
 
@@ -31,7 +31,7 @@ Resolution is scoped as:
 
 Direct conflicts resolve by specificity: site overrides organization, organization overrides platform. Within one scope, lower `priority` sorts first, then `slug` ascending.
 
-The scaffold currently returns reusable platform baseline skills only. It still returns the requested scope and full scope order so tenant and platform callers use the same output shape before CMS-backed organization/site skills land.
+Resolution returns the requested scope and full scope order so tenant and platform callers use the same output shape for platform, organization, and site skill versions.
 
 ## Review Semantics
 
@@ -41,9 +41,9 @@ The scaffold currently returns reusable platform baseline skills only. It still 
 - `candidate_fingerprint`
 - advisory findings
 - `recommendation`
-- `persistence: "not_persisted"`
+  - persisted guidance run identity
 
-This is review evidence, not a publication blocker and not a persisted provenance record. Once the database lifecycle lands, persisted blog revisions and generated media assets must link to a completed review run for the exact candidate fingerprint.
+This is review evidence, not a semantic publication blocker. Persisted blog revisions and generated media assets must link to a completed review run for the exact candidate fingerprint.
 
 ## Security Boundary
 
@@ -59,7 +59,7 @@ Skills must not contain or enforce:
 
 Those invariants remain in code and MCP contracts. Skill text can describe voice, quality goals, creative direction, examples, and task workflow reminders.
 
-Tenant data isolation is mandatory: generic platform baselines must not mention customer-specific examples, motifs, locations, offers, or media. Tenant-specific guidance belongs in future organization/site skill versions, not hard-coded product modules.
+Tenant data isolation is mandatory: generic platform baselines must not mention customer-specific examples, motifs, locations, offers, or media. Tenant-specific guidance belongs in organization/site skill versions, not hard-coded product modules.
 
 ## Image Generation Contract
 

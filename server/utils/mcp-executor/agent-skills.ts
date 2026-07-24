@@ -30,22 +30,65 @@ function asInvalidParams(error: unknown): never {
 export async function handleAgentSkillTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
   switch (toolName) {
+    case "get_blog_writing_guidance":
+      return await resolveAgentGuidance(site.db, {
+        task: 'blog.write',
+        audience: 'tenant',
+        siteId: site.siteId,
+      })
+    case "get_image_generation_guidance":
+      return await resolveAgentGuidance(site.db, {
+        task: 'image.generate',
+        audience: 'tenant',
+        siteId: site.siteId,
+      })
+    case "review_blog_draft_against_guidance":
+      try {
+        return await reviewAgentGuidanceCandidate(site.db, {
+          task: 'blog.write',
+          candidateType: 'blog_draft',
+          candidate: requiredCandidate({ candidate: args.draft }),
+          surface: 'tenant_mcp',
+          audience: 'tenant',
+          siteId: site.siteId,
+          createdByUserId: site.userId,
+          resolutionFingerprint: typeof args.resolution_fingerprint === 'string' ? args.resolution_fingerprint : null,
+        })
+      } catch (error) {
+        return asInvalidParams(error)
+      }
+    case "review_image_generation_brief":
+      try {
+        return await reviewAgentGuidanceCandidate(site.db, {
+          task: 'image.generate',
+          candidateType: 'image_brief',
+          candidate: requiredCandidate({ candidate: args.brief }),
+          surface: 'tenant_mcp',
+          audience: 'tenant',
+          siteId: site.siteId,
+          createdByUserId: site.userId,
+          resolutionFingerprint: typeof args.resolution_fingerprint === 'string' ? args.resolution_fingerprint : null,
+        })
+      } catch (error) {
+        return asInvalidParams(error)
+      }
     case "resolve_agent_guidance":
-      return await resolveAgentGuidance({
+      return await resolveAgentGuidance(site.db, {
         task: requiredTask(args),
-        surface: 'tenant_mcp',
-        organizationId: site.organizationId,
+        audience: 'tenant',
         siteId: site.siteId,
       })
     case "review_agent_guidance_candidate":
       try {
-        return await reviewAgentGuidanceCandidate({
+        return await reviewAgentGuidanceCandidate(site.db, {
           task: requiredTask(args),
           candidateType: requiredCandidateType(args),
           candidate: requiredCandidate(args),
           surface: 'tenant_mcp',
-          organizationId: site.organizationId,
+          audience: 'tenant',
           siteId: site.siteId,
+          createdByUserId: site.userId,
+          resolutionFingerprint: typeof args.resolution_fingerprint === 'string' ? args.resolution_fingerprint : null,
         })
       } catch (error) {
         return asInvalidParams(error)
