@@ -85,7 +85,7 @@ async function impersonateUser(userId: string) {
     const result = await authClient.admin.impersonateUser({ userId })
     if (result.error) throw new Error(result.error.message)
     await refreshSession()
-    await navigateTo('/dashboard')
+    await navigateTo('/api/post-login', { external: true })
   } catch {
     toast.add({ title: 'Failed to impersonate user', color: 'error' })
   } finally {
