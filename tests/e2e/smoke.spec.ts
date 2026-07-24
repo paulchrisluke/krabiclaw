@@ -12,20 +12,28 @@ test('platform home renders', async ({ page, baseURL }) => {
 test.describe('representative tenant routes', () => {
   test.beforeEach(async ({ page }) => setupTenantHeaders(page, tenantBaseURL, tenantExtraHeaders))
 
-  test('home and a deep route render without hydration errors', async ({ page }) => {
-    // Preview is a shared hostname redeployed on every PR. A unique query keeps
-    // Cloudflare from serving HTML cached before the current deploy, which can
-    // reference Nuxt asset hashes that no longer exist in the Assets binding.
-    const deployProbe = `e2e-deploy-${Date.now()}`
-    for (const path of ['/', '/locations/brooklyn']) {
+  // Split into one test per path (was a single test looping over both) — a
+  // fresh preview deploy's first navigation to a not-yet-cached URL can cost
+  // several seconds of genuine cold-start latency (confirmed via curl: ~12s
+  // time-to-first-byte on a cold hit vs. ~2-3s once warm), and a full browser
+  // `waitUntil: 'load'` pays that cost again for every JS/CSS/image
+  // subresource on top of the document itself. Two such navigations sharing
+  // one 30s test timeout could exceed it even when neither navigation alone
+  // is anomalously slow; splitting gives each its own independent budget
+  // instead of masking the issue with a longer shared timeout.
+  for (const path of ['/', '/locations/brooklyn']) {
+    test(`${path === '/' ? 'home' : path} renders without hydration errors`, async ({ page }) => {
+      // Preview is a shared hostname redeployed on every PR. A unique query keeps
+      // Cloudflare from serving HTML cached before the current deploy, which can
+      // reference Nuxt asset hashes that no longer exist in the Assets binding.
       const errors = collectPageErrors(page)
       const url = new URL(path, `${tenantBaseURL}/`)
-      url.searchParams.set('e2e', deployProbe)
+      url.searchParams.set('e2e', `e2e-deploy-${Date.now()}`)
       const response = await page.goto(url.toString(), { waitUntil: 'load' })
       expect(response?.status()).toBeLessThan(400)
       await expectHealthyPage(page, errors)
-    }
-  })
+    })
+  }
 
   test('unknown tenant route returns not found', async ({ request }) => {
     const response = await request.get(`${tenantBaseURL}/e2e-this-route-does-not-exist`, { headers: tenantExtraHeaders })
