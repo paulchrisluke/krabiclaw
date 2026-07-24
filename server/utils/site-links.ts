@@ -5,12 +5,10 @@ import { resolvePublicTemplate, type PublicTemplateSlug } from '~/utils/template
 const ROBOTS_DIRECTIVES = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow'] as const
 const LINK_ITEM_STATUSES = ['active', 'hidden'] as const
 const LINK_PAGE_STATUSES = ['draft', 'published', 'archived'] as const
-const APPROVED_ICONS = ['calendar', 'menu', 'shopping-bag', 'ticket', 'mail', 'phone', 'map-pin', 'star', 'heart', 'globe', 'message-circle', 'external-link'] as const
 
 export type LinkPageStatus = typeof LINK_PAGE_STATUSES[number]
 export type LinkItemStatus = typeof LINK_ITEM_STATUSES[number]
 export type LinkPageRobots = typeof ROBOTS_DIRECTIVES[number]
-export type LinkItemIcon = typeof APPROVED_ICONS[number]
 
 export interface SiteLinksPage {
   id: string
@@ -18,9 +16,6 @@ export interface SiteLinksPage {
   site_id: string
   path: string
   title: string
-  bio: string | null
-  profile_image_asset_id: string | null
-  profile_image_url: string | null
   status: LinkPageStatus
   robots: LinkPageRobots
   seo_title: string | null
@@ -37,10 +32,6 @@ export interface SiteLinkItem {
   link_page_id: string
   label: string
   destination: string
-  description: string | null
-  icon: LinkItemIcon | null
-  image_asset_id: string | null
-  image_url: string | null
   sort_order: number
   status: LinkItemStatus
   created_at: string
@@ -66,8 +57,6 @@ export interface PublicSiteLinksPayload {
 
 export interface LinksPageUpdateInput {
   title?: unknown
-  bio?: unknown
-  profile_image_asset_id?: unknown
   status?: unknown
   robots?: unknown
   seo_title?: unknown
@@ -78,9 +67,6 @@ export interface LinkItemUpdateInput {
   id?: unknown
   label?: unknown
   destination?: unknown
-  description?: unknown
-  icon?: unknown
-  image_asset_id?: unknown
   sort_order?: unknown
   status?: unknown
 }
@@ -132,15 +118,6 @@ function normalizeRobots(value: unknown): LinkPageRobots {
   return robots as LinkPageRobots
 }
 
-function normalizeIcon(value: unknown): LinkItemIcon | null {
-  const icon = cleanString(value as ApiValue, 40)
-  if (!icon) return null
-  if (!APPROVED_ICONS.includes(icon as LinkItemIcon)) {
-    throw new SiteLinksValidationError(`Unsupported icon: ${icon}.`)
-  }
-  return icon as LinkItemIcon
-}
-
 export function validateLinkDestination(value: unknown): string {
   const destination = requiredString(value, 2048, 'Destination')
 
@@ -166,16 +143,6 @@ export function validateLinkDestination(value: unknown): string {
   return parsed.toString()
 }
 
-async function assertOwnedMediaAsset(db: DbClient, input: { organizationId: string; siteId: string; assetId: string | null; field: string }) {
-  if (!input.assetId) return
-  const asset = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM media_assets
-     WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active'
-     LIMIT 1
-  `, [input.assetId, input.organizationId, input.siteId])
-  if (!asset) throw new SiteLinksValidationError(`${input.field} must be an active media asset for this site.`)
-}
-
 function mapPage(row: ApiRecord): SiteLinksPage {
   return {
     id: String(row.id),
@@ -183,9 +150,6 @@ function mapPage(row: ApiRecord): SiteLinksPage {
     site_id: String(row.site_id),
     path: String(row.path || '/links'),
     title: String(row.title || 'Links'),
-    bio: typeof row.bio === 'string' ? row.bio : null,
-    profile_image_asset_id: typeof row.profile_image_asset_id === 'string' ? row.profile_image_asset_id : null,
-    profile_image_url: typeof row.profile_image_url === 'string' ? row.profile_image_url : null,
     status: (LINK_PAGE_STATUSES.includes(row.status as LinkPageStatus) ? row.status : 'draft') as LinkPageStatus,
     robots: (ROBOTS_DIRECTIVES.includes(row.robots as LinkPageRobots) ? row.robots : 'noindex,follow') as LinkPageRobots,
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
@@ -204,10 +168,6 @@ function mapItem(row: ApiRecord): SiteLinkItem {
     link_page_id: String(row.link_page_id),
     label: String(row.label || ''),
     destination: String(row.destination || ''),
-    description: typeof row.description === 'string' ? row.description : null,
-    icon: APPROVED_ICONS.includes(row.icon as LinkItemIcon) ? row.icon as LinkItemIcon : null,
-    image_asset_id: typeof row.image_asset_id === 'string' ? row.image_asset_id : null,
-    image_url: typeof row.image_url === 'string' ? row.image_url : null,
     sort_order: Number(row.sort_order ?? 0),
     status: (LINK_ITEM_STATUSES.includes(row.status as LinkItemStatus) ? row.status : 'active') as LinkItemStatus,
     created_at: String(row.created_at || ''),
@@ -224,9 +184,6 @@ export function defaultLinksPage(input: { organizationId: string; siteId: string
     site_id: input.siteId,
     path: '/links',
     title: input.brandName || 'Links',
-    bio: null,
-    profile_image_asset_id: null,
-    profile_image_url: null,
     status: 'draft',
     robots: 'noindex,follow',
     seo_title: null,
@@ -239,18 +196,16 @@ export function defaultLinksPage(input: { organizationId: string; siteId: string
 
 export async function getLinksPage(db: DbClient, siteId: string): Promise<{ page: SiteLinksPage | null; items: SiteLinkItem[] }> {
   const pageRow = await queryFirst<ApiRecord>(db, `
-    SELECT lp.*, ma.public_url AS profile_image_url
+    SELECT lp.*
       FROM site_link_pages lp
-      LEFT JOIN media_assets ma ON ma.id = lp.profile_image_asset_id AND ma.site_id = lp.site_id AND ma.status = 'active'
      WHERE lp.site_id = ?
      LIMIT 1
   `, [siteId])
   if (!pageRow) return { page: null, items: [] }
 
   const items = await queryAll<ApiRecord>(db, `
-    SELECT li.*, ma.public_url AS image_url
+    SELECT li.*
       FROM site_link_items li
-      LEFT JOIN media_assets ma ON ma.id = li.image_asset_id AND ma.site_id = li.site_id AND ma.status = 'active'
      WHERE li.link_page_id = ? AND li.site_id = ?
      ORDER BY li.sort_order ASC, li.created_at ASC
   `, [pageRow.id, siteId])
@@ -260,9 +215,12 @@ export async function getLinksPage(db: DbClient, siteId: string): Promise<{ page
 
 export async function getPublicLinksPage(db: DbClient, siteId: string): Promise<PublicSiteLinksPayload | null> {
   const site = await queryFirst<ApiRecord>(db, `
-    SELECT s.id, s.organization_id, s.brand_name, s.brand_description, s.logo_url, s.theme_id, s.vertical,
+    SELECT s.id, s.organization_id, s.brand_name, s.brand_description,
+           COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
+           s.theme_id, s.vertical,
            cfg.value AS brand_color
       FROM sites s
+      LEFT JOIN media_assets ma_logo ON s.logo_asset_id = ma_logo.id AND ma_logo.status = 'active'
       LEFT JOIN site_config cfg ON cfg.site_id = s.id AND cfg.key = 'brand_color'
      WHERE s.id = ? AND s.status = 'active' AND s.onboarding_status = 'active'
      LIMIT 1
@@ -307,23 +265,17 @@ export async function upsertLinksPage(db: DbClient, input: {
   const title = requiredString(input.page.title, 160, 'Title')
   const status = normalizeStatus(input.page.status, current.page?.status ?? 'draft')
   const robots = normalizeRobots(input.page.robots)
-  const profileImageAssetId = nullableString(input.page.profile_image_asset_id, 120)
-  await assertOwnedMediaAsset(db, { organizationId: input.organizationId, siteId: input.siteId, assetId: profileImageAssetId, field: 'Profile image' })
 
   const normalizedItems = input.items.map((item, index) => {
     const existingId = cleanString(item.id as ApiValue, 120)
     const id = existingId && !existingId.startsWith('tmp_') ? existingId : idWith('linkitem')
     const status = normalizeItemStatus(item.status)
-    const imageAssetId = nullableString(item.image_asset_id, 120)
     const sortOrder = Number(item.sort_order ?? index)
     if (!Number.isInteger(sortOrder)) throw new SiteLinksValidationError('Link sort order must be an integer.')
     return {
       id,
       label: requiredString(item.label, 120, 'Link label'),
       destination: validateLinkDestination(item.destination),
-      description: nullableString(item.description, 280),
-      icon: normalizeIcon(item.icon),
-      imageAssetId,
       sortOrder,
       status,
     }
@@ -335,10 +287,6 @@ export async function upsertLinksPage(db: DbClient, input: {
 
   const itemIds = normalizedItems.map(item => item.id)
   if (new Set(itemIds).size !== itemIds.length) throw new SiteLinksValidationError('Link item IDs must be unique.')
-
-  for (const item of normalizedItems) {
-    await assertOwnedMediaAsset(db, { organizationId: input.organizationId, siteId: input.siteId, assetId: item.imageAssetId, field: `Image for ${item.label}` })
-  }
 
   const existingIds = current.items.map(item => item.id)
   const retainedExistingIds = itemIds.filter(id => existingIds.includes(id))
@@ -355,13 +303,11 @@ export async function upsertLinksPage(db: DbClient, input: {
   const statements: BatchQuery[] = [{
     query: `
       INSERT INTO site_link_pages
-        (id, organization_id, site_id, path, title, bio, profile_image_asset_id,
-         status, robots, seo_title, seo_description, created_at, updated_at, updated_by)
-      VALUES (?, ?, ?, '/links', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, organization_id, site_id, path, title, status, robots, seo_title, seo_description,
+         created_at, updated_at, updated_by)
+      VALUES (?, ?, ?, '/links', ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(site_id) DO UPDATE SET
         title = excluded.title,
-        bio = excluded.bio,
-        profile_image_asset_id = excluded.profile_image_asset_id,
         status = excluded.status,
         robots = excluded.robots,
         seo_title = excluded.seo_title,
@@ -374,8 +320,6 @@ export async function upsertLinksPage(db: DbClient, input: {
       input.organizationId,
       input.siteId,
       title,
-      nullableString(input.page.bio, 500),
-      profileImageAssetId,
       status,
       robots,
       nullableString(input.page.seo_title, 200),
@@ -406,15 +350,12 @@ export async function upsertLinksPage(db: DbClient, input: {
     statements.push({
       query: `
         INSERT INTO site_link_items
-          (id, organization_id, site_id, link_page_id, label, destination, description, icon,
-           image_asset_id, sort_order, status, created_at, updated_at, updated_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, organization_id, site_id, link_page_id, label, destination, sort_order,
+           status, created_at, updated_at, updated_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           label = excluded.label,
           destination = excluded.destination,
-          description = excluded.description,
-          icon = excluded.icon,
-          image_asset_id = excluded.image_asset_id,
           sort_order = excluded.sort_order,
           status = excluded.status,
           updated_at = excluded.updated_at,
@@ -427,9 +368,6 @@ export async function upsertLinksPage(db: DbClient, input: {
         pageId,
         item.label,
         item.destination,
-        item.description,
-        item.icon,
-        item.imageAssetId,
         item.sortOrder,
         item.status,
         now,
@@ -530,5 +468,3 @@ export async function recordLinkClick(db: DbClient, input: {
   ])
   return { id }
 }
-
-export const LINK_ITEM_ICON_OPTIONS = APPROVED_ICONS.map(icon => ({ label: icon.replace(/-/g, ' '), value: icon }))

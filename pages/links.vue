@@ -9,17 +9,13 @@
             :alt="`${brandName} profile image`"
             :class="profileImageClass"
           >
-          <div v-else :class="profileFallbackClass" aria-hidden="true">
-            {{ brandInitial }}
-          </div>
           <p v-if="isBlawby" class="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--blawby-token-accent-strong)]">Links</p>
           <h1 :class="headingClass">{{ linksPage.page.title }}</h1>
-          <p v-if="linksPage.page.bio" :class="bioClass">{{ linksPage.page.bio }}</p>
         </div>
 
         <nav id="featured-links" aria-label="Featured links" class="mt-8">
           <ol class="space-y-3">
-            <li v-for="(item, index) in linksPage.items" :key="item.id">
+            <li v-for="item in linksPage.items" :key="item.id">
               <a
                 :href="item.destination"
                 :target="externalTarget(item.destination)"
@@ -28,21 +24,9 @@
                 :data-link-item-id="item.id"
                 @click="trackLinkClick(item)"
               >
-                <span :class="iconClass" aria-hidden="true">
-                  <img
-                    v-if="item.image_url"
-                    :src="item.image_url"
-                    alt=""
-                    class="size-full rounded-full object-cover"
-                    loading="lazy"
-                  >
-                  <span v-else>{{ iconGlyph(item.icon) }}</span>
-                </span>
                 <span class="min-w-0 flex-1">
                   <span :class="labelClass">{{ item.label }}</span>
-                  <span v-if="item.description" :class="descriptionClass">{{ item.description }}</span>
                 </span>
-                <span class="text-xs font-semibold text-current opacity-50">{{ String(index + 1).padStart(2, '0') }}</span>
               </a>
             </li>
           </ol>
@@ -53,14 +37,10 @@
 </template>
 
 <script setup lang="ts">
-type LinkItemIcon = 'calendar' | 'menu' | 'shopping-bag' | 'ticket' | 'mail' | 'phone' | 'map-pin' | 'star' | 'heart' | 'globe' | 'message-circle' | 'external-link'
 interface PublicLinksItem {
   id: string
   label: string
   destination: string
-  description: string | null
-  icon: LinkItemIcon | null
-  image_url: string | null
 }
 interface PublicSiteLinksPayload {
   site: {
@@ -73,8 +53,6 @@ interface PublicSiteLinksPayload {
   }
   page: {
     title: string
-    bio: string | null
-    profile_image_url: string | null
     robots: string
     seo_title: string | null
     seo_description: string | null
@@ -114,8 +92,7 @@ const linksPage = computed(() => data.value)
 const isBlawby = computed(() => linksPage.value?.site.template === 'blawby')
 const layoutName = computed(() => isBlawby.value ? 'blawby' : 'saya')
 const brandName = computed(() => linksPage.value?.site.brand_name || linksPage.value?.page.title || 'Links')
-const brandInitial = computed(() => brandName.value.trim().charAt(0).toUpperCase() || 'L')
-const profileImageUrl = computed(() => linksPage.value?.page.profile_image_url || linksPage.value?.site.logo_url || null)
+const profileImageUrl = computed(() => linksPage.value?.site.logo_url || null)
 
 const templateClass = computed(() => isBlawby.value
   ? 'min-h-[calc(100vh-8rem)] bg-[color:var(--blawby-token-bg)] px-4 py-10 sm:px-6 sm:py-14'
@@ -127,29 +104,17 @@ const identityClass = computed(() => isBlawby.value
   ? 'text-center'
   : 'text-center')
 const profileImageClass = computed(() => isBlawby.value
-  ? 'mx-auto size-24 rounded-full border-4 border-[color:var(--blawby-token-accent-200)] object-cover shadow-sm'
-  : 'mx-auto size-24 rounded-full border-4 border-(--brand-color)/20 object-cover shadow-sm')
-const profileFallbackClass = computed(() => isBlawby.value
-  ? 'mx-auto flex size-24 items-center justify-center rounded-full border-4 border-[color:var(--blawby-token-accent-200)] bg-[color:var(--blawby-token-surface)] text-4xl font-semibold text-[color:var(--blawby-token-primary)] shadow-sm'
-  : 'mx-auto flex size-24 items-center justify-center rounded-full border-4 border-(--brand-color)/20 bg-(--brand-color)/10 text-4xl font-semibold text-(--brand-color) shadow-sm')
+  ? 'mx-auto size-18 rounded-full object-cover shadow-sm'
+  : 'mx-auto size-18 rounded-full object-cover shadow-sm')
 const headingClass = computed(() => isBlawby.value
-  ? 'mt-4 text-3xl font-semibold tracking-normal text-[color:var(--blawby-token-primary-dark)]'
-  : 'saya-display-md mt-4 text-default')
-const bioClass = computed(() => isBlawby.value
-  ? 'mx-auto mt-3 max-w-sm text-base leading-7 text-gray-700'
-  : 'mx-auto mt-3 max-w-sm text-base leading-7 text-muted')
+  ? 'mt-5 text-3xl font-semibold tracking-normal text-[color:var(--blawby-token-primary-dark)]'
+  : 'saya-display-md mt-5 text-default')
 const linkClass = computed(() => isBlawby.value
-  ? 'group flex min-h-16 items-center gap-3 rounded-lg border border-[color:var(--blawby-token-border)] bg-white px-4 py-3 text-left text-[color:var(--blawby-token-primary-dark)] no-underline shadow-sm transition hover:-translate-y-0.5 hover:border-[color:var(--blawby-token-accent)] hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--blawby-token-accent)]'
-  : 'group flex min-h-16 items-center gap-3 rounded-full border border-(--brand-color)/25 bg-(--brand-color)/8 px-4 py-3 text-left text-default no-underline shadow-sm transition hover:-translate-y-0.5 hover:bg-(--brand-color)/12 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-(--brand-color)')
-const iconClass = computed(() => isBlawby.value
-  ? 'flex size-10 shrink-0 items-center justify-center rounded-full bg-[color:var(--blawby-token-accent-100)] text-base font-semibold text-[color:var(--blawby-token-accent-strong)]'
-  : 'flex size-10 shrink-0 items-center justify-center rounded-full bg-(--brand-color) text-base font-semibold text-(--brand-color-foreground)')
+  ? 'group flex min-h-14 items-center rounded-lg border border-[color:var(--blawby-token-border)] bg-white px-5 py-4 text-center text-[color:var(--blawby-token-primary-dark)] no-underline shadow-sm transition hover:-translate-y-0.5 hover:border-[color:var(--blawby-token-accent)] hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--blawby-token-accent)]'
+  : 'group flex min-h-14 items-center rounded-full border border-(--brand-color)/25 bg-(--brand-color)/8 px-5 py-4 text-center text-default no-underline shadow-sm transition hover:-translate-y-0.5 hover:bg-(--brand-color)/12 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-(--brand-color)')
 const labelClass = computed(() => isBlawby.value
   ? 'block truncate text-base font-semibold'
   : 'block truncate text-base font-semibold')
-const descriptionClass = computed(() => isBlawby.value
-  ? 'mt-0.5 block text-sm leading-5 text-gray-600'
-  : 'mt-0.5 block text-sm leading-5 text-muted')
 
 function isHttpDestination(destination: string) {
   return /^https?:\/\//i.test(destination)
@@ -161,24 +126,6 @@ function externalTarget(destination: string) {
 
 function externalRel(destination: string) {
   return isHttpDestination(destination) ? 'noopener noreferrer' : undefined
-}
-
-function iconGlyph(icon: PublicLinksItem['icon']) {
-  const glyphs: Record<string, string> = {
-    calendar: 'Cal',
-    menu: 'Menu',
-    'shopping-bag': 'Shop',
-    ticket: 'Tix',
-    mail: '@',
-    phone: 'Tel',
-    'map-pin': 'Map',
-    star: '*',
-    heart: '+',
-    globe: 'Web',
-    'message-circle': 'Msg',
-    'external-link': 'Go',
-  }
-  return icon ? glyphs[icon] : 'Go'
 }
 
 function trackLinkClick(item: PublicLinksItem) {
@@ -201,10 +148,10 @@ function trackLinkClick(item: PublicLinksItem) {
 const canonicalUrl = useSeoUrl('/links')
 useSeoMeta({
   title: computed(() => linksPage.value?.page.seo_title || `${brandName.value} Links`),
-  description: computed(() => linksPage.value?.page.seo_description || linksPage.value?.page.bio || linksPage.value?.site.brand_description || ''),
+  description: computed(() => linksPage.value?.page.seo_description || linksPage.value?.site.brand_description || ''),
   robots: computed(() => linksPage.value?.page.robots || 'noindex,follow'),
   ogTitle: computed(() => linksPage.value?.page.seo_title || `${brandName.value} Links`),
-  ogDescription: computed(() => linksPage.value?.page.seo_description || linksPage.value?.page.bio || linksPage.value?.site.brand_description || ''),
+  ogDescription: computed(() => linksPage.value?.page.seo_description || linksPage.value?.site.brand_description || ''),
   ogImage: computed(() => profileImageUrl.value || undefined),
   ogUrl: canonicalUrl,
 })

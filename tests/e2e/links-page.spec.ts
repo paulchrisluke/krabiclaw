@@ -15,9 +15,6 @@ type LinkItemInput = {
   id?: string
   label: string
   destination: string
-  description?: string | null
-  icon?: string | null
-  image_asset_id?: string | null
   sort_order?: number
   status?: 'active' | 'hidden'
 }
@@ -28,7 +25,6 @@ function alphabeticSuffix() {
 
 async function saveLinksPage(request: APIRequestContext, baseURL: string, siteId: string, input: {
   title: string
-  bio?: string | null
   status: 'draft' | 'published' | 'archived'
   robots?: string
   items: LinkItemInput[]
@@ -37,7 +33,6 @@ async function saveLinksPage(request: APIRequestContext, baseURL: string, siteId
     data: {
       page: {
         title: input.title,
-        bio: input.bio ?? null,
         status: input.status,
         robots: input.robots ?? 'noindex,follow',
       },
@@ -86,7 +81,6 @@ test.describe('tenant links page', () => {
       await expect(page.getByRole('heading', { name: 'Links page' })).toBeVisible()
 
       await page.getByRole('textbox', { name: 'Links page title' }).fill(dashboardTitle)
-      await page.getByRole('textbox', { name: 'Links page bio' }).fill('A compact link hub managed from the dashboard.')
       await page.getByRole('button', { name: 'Add link' }).click()
       await page.getByPlaceholder('Label').last().fill(menuLabel)
       await page.getByRole('textbox', { name: 'Link destination' }).last().fill('/menu')
@@ -106,11 +100,10 @@ test.describe('tenant links page', () => {
 
       const published = await saveLinksPage(request, baseURL!, DEMO_SITE_ID, {
         title: publicTitle,
-        bio: 'Fresh links from the kitchen.',
         status: 'published',
         items: [
-          { label: bookingLabel, destination: '/links#featured-links', description: 'Reserve directly from the link page.', icon: 'calendar' },
-          { label: menuLabel, destination: '/menu', description: 'See what is cooking.', icon: 'menu' },
+          { label: bookingLabel, destination: '/links#featured-links' },
+          { label: menuLabel, destination: '/menu' },
           { label: hiddenLabel, destination: '/blog', status: 'hidden' },
         ],
       })
@@ -166,9 +159,8 @@ test.describe('tenant links page', () => {
     try {
       await saveLinksPage(request, baseURL!, BLAWBY_SITE_ID, {
         title,
-        bio: 'Key public legal-service links.',
         status: 'published',
-        items: [{ label, destination: '/contact', description: 'Start with the contact page.', icon: 'message-circle' }],
+        items: [{ label, destination: '/contact' }],
       })
 
       await setupTenantHeaders(page, blawbyBaseURL, blawbyExtraHeaders)

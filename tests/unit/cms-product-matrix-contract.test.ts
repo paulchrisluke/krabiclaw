@@ -27,6 +27,7 @@ test('full product matrix resolves one coherent capability model', () => {
     'location.reservations',
     'location.settings',
     'site.blog',
+    'site.links',
     'site.locations',
     'site.media',
     'site.ordering',

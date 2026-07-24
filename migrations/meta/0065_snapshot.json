@@ -15007,27 +15007,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "icon": {
-          "name": "icon",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "image_asset_id": {
-          "name": "image_asset_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "sort_order": {
           "name": "sort_order",
           "type": "integer",
@@ -15125,19 +15104,6 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
-        },
-        "site_link_items_image_asset_id_media_assets_id_fk": {
-          "name": "site_link_items_image_asset_id_media_assets_id_fk",
-          "tableFrom": "site_link_items",
-          "tableTo": "media_assets",
-          "columnsFrom": [
-            "image_asset_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -15186,20 +15152,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "bio": {
-          "name": "bio",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "profile_image_asset_id": {
-          "name": "profile_image_asset_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         },
         "status": {
@@ -15307,19 +15259,6 @@
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "site_link_pages_profile_image_asset_id_media_assets_id_fk": {
-          "name": "site_link_pages_profile_image_asset_id_media_assets_id_fk",
-          "tableFrom": "site_link_pages",
-          "tableTo": "media_assets",
-          "columnsFrom": [
-            "profile_image_asset_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

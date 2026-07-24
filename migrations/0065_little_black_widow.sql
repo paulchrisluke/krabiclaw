@@ -5,9 +5,6 @@ CREATE TABLE `site_link_items` (
 	`link_page_id` text NOT NULL,
 	`label` text NOT NULL,
 	`destination` text NOT NULL,
-	`description` text,
-	`icon` text,
-	`image_asset_id` text,
 	`sort_order` integer DEFAULT 0 NOT NULL,
 	`status` text DEFAULT 'active' NOT NULL,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
@@ -16,7 +13,6 @@ CREATE TABLE `site_link_items` (
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`link_page_id`) REFERENCES `site_link_pages`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`image_asset_id`) REFERENCES `media_assets`(`id`) ON UPDATE no action ON DELETE set null,
 	CONSTRAINT "site_link_items_status_check" CHECK(status IN ('active', 'hidden'))
 );
 --> statement-breakpoint
@@ -28,8 +24,6 @@ CREATE TABLE `site_link_pages` (
 	`site_id` text NOT NULL,
 	`path` text DEFAULT '/links' NOT NULL,
 	`title` text NOT NULL,
-	`bio` text,
-	`profile_image_asset_id` text,
 	`status` text DEFAULT 'draft' NOT NULL,
 	`robots` text DEFAULT 'noindex,follow' NOT NULL,
 	`seo_title` text,
@@ -39,7 +33,6 @@ CREATE TABLE `site_link_pages` (
 	`updated_by` text,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`profile_image_asset_id`) REFERENCES `media_assets`(`id`) ON UPDATE no action ON DELETE set null,
 	CONSTRAINT "site_link_pages_path_check" CHECK(path LIKE '/%' AND path NOT LIKE '//%'),
 	CONSTRAINT "site_link_pages_status_check" CHECK(status IN ('draft', 'published', 'archived')),
 	CONSTRAINT "site_link_pages_robots_check" CHECK(robots IN ('index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow'))
