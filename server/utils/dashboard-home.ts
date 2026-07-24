@@ -66,18 +66,22 @@ export async function getDashboardHomeData(
   const scoped = principal && !isOrganizationWideRole(principal.role)
   const locationScopeClause = scoped
     ? `AND EXISTS (
-        SELECT 1 FROM member_access_scope mas
-        WHERE mas.member_id = ? AND mas.organization_id = bl.organization_id
-          AND mas.site_id = bl.site_id
-          AND (mas.location_id IS NULL OR mas.location_id = bl.id)
+        SELECT 1
+        FROM member m
+        JOIN sites s ON s.id = bl.site_id
+        JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId IN (s.team_id, bl.team_id)
+        WHERE m.id = ? AND m.organizationId = bl.organization_id
       )`
     : ''
   const eventScopeClause = scoped
     ? `AND EXISTS (
-        SELECT 1 FROM member_access_scope mas
-        WHERE mas.member_id = ? AND mas.organization_id = e.organization_id
-          AND mas.site_id = e.site_id
-          AND (mas.location_id IS NULL OR mas.location_id = e.location_id)
+        SELECT 1
+        FROM member m
+        JOIN sites s ON s.id = e.site_id
+        LEFT JOIN business_locations bl ON bl.id = e.location_id AND bl.site_id = e.site_id
+        JOIN teamMember tm ON tm.userId = m.userId
+          AND ((e.location_id IS NULL AND tm.teamId = s.team_id) OR (e.location_id IS NOT NULL AND tm.teamId IN (s.team_id, bl.team_id)))
+        WHERE m.id = ? AND m.organizationId = e.organization_id
       )`
     : ''
   const [locations, credits, events, operations] = await Promise.all([

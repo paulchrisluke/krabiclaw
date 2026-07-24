@@ -18,11 +18,26 @@ function setupDatabase() {
       channel TEXT NOT NULL,
       read_at TEXT
     );
-    CREATE TABLE member_access_scope (
-      member_id TEXT NOT NULL,
+    CREATE TABLE member (
+      id TEXT PRIMARY KEY,
+      organizationId TEXT NOT NULL,
+      userId TEXT NOT NULL
+    );
+    CREATE TABLE sites (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      team_id TEXT
+    );
+    CREATE TABLE business_locations (
+      id TEXT PRIMARY KEY,
       organization_id TEXT NOT NULL,
       site_id TEXT NOT NULL,
-      location_id TEXT
+      team_id TEXT
+    );
+    CREATE TABLE teamMember (
+      id TEXT PRIMARY KEY,
+      teamId TEXT NOT NULL,
+      userId TEXT NOT NULL
     );
     CREATE TABLE notification_reads (
       notification_id TEXT NOT NULL,
@@ -42,6 +57,12 @@ function setupDatabase() {
   insert.run('location-a', 'org-1', 'site-1', 'location-a', 'site')
   insert.run('location-b', 'org-1', 'site-1', 'location-b', 'site')
   insert.run('other-org', 'org-2', 'site-2', null, 'site')
+  db.prepare(`INSERT INTO member VALUES ('member-location-a', 'org-1', 'user-location-a')`).run()
+  db.prepare(`INSERT INTO member VALUES ('member-site', 'org-1', 'user-site')`).run()
+  db.prepare(`INSERT INTO sites VALUES ('site-1', 'org-1', 'site:site-1')`).run()
+  db.prepare(`INSERT INTO sites VALUES ('site-2', 'org-2', 'site:site-2')`).run()
+  db.prepare(`INSERT INTO business_locations VALUES ('location-a', 'org-1', 'site-1', 'location:location-a')`).run()
+  db.prepare(`INSERT INTO business_locations VALUES ('location-b', 'org-1', 'site-1', 'location:location-b')`).run()
   return db
 }
 
@@ -54,7 +75,7 @@ function idsFor(db: DatabaseSync, principal: NotificationVisibilityPrincipal) {
 
 test('location-scoped notification visibility applies to list, count, and mark-all', () => {
   const db = setupDatabase()
-  db.prepare(`INSERT INTO member_access_scope VALUES ('member-location-a', 'org-1', 'site-1', 'location-a')`).run()
+  db.prepare(`INSERT INTO teamMember VALUES ('tm-location-a', 'location:location-a', 'user-location-a')`).run()
   const principal: NotificationVisibilityPrincipal = {
     userId: 'user-location-a',
     platformAdmin: false,
@@ -80,7 +101,7 @@ test('location-scoped notification visibility applies to list, count, and mark-a
 
 test('whole-site access includes null and concrete locations while a location scope excludes site-wide rows', () => {
   const db = setupDatabase()
-  db.prepare(`INSERT INTO member_access_scope VALUES ('member-site', 'org-1', 'site-1', NULL)`).run()
+  db.prepare(`INSERT INTO teamMember VALUES ('tm-site', 'site:site-1', 'user-site')`).run()
 
   assert.deepEqual(idsFor(db, {
     userId: 'user-site',

@@ -88,9 +88,8 @@ function isExpectedSiteWideAccessDenial(error: unknown): boolean {
 
 // ChowBot operates conversationally across a whole site (no location-scoped
 // permission model at this layer), so — like MCP's requireMcpSite — an editor
-// needs a SITE-WIDE (location_id IS NULL) member_access_scope row to use
-// ChowBot for a site at all. A location-only-scoped editor is rejected rather
-// than silently getting whole-site chat access.
+// needs the site's resource team membership. A location-only editor is
+// rejected rather than silently getting whole-site chat access.
 export async function getSiteForMember(
   db: DbClient,
   siteId: string,
@@ -129,13 +128,11 @@ export async function listSitesForMember(
   const hasScopedMembership = (results ?? []).some(row => !isOrganizationWideRole(row.role))
   const siteWideScopes = hasScopedMembership
     ? await queryAll<{ member_id: string; site_id: string }>(db, `
-        SELECT mas.member_id, mas.site_id
-        FROM member_access_scope mas
-        JOIN member m
-          ON m.id = mas.member_id
-          AND m.organizationId = mas.organization_id
-        WHERE mas.location_id IS NULL
-          AND m.userId = ?
+        SELECT m.id AS member_id, s.id AS site_id
+        FROM member m
+        JOIN sites s ON s.organization_id = m.organizationId
+        JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId = s.team_id
+        WHERE m.userId = ?
       `, [userId])
     : []
   const siteWideScopeKeys = new Set(siteWideScopes.map(scope => `${scope.member_id}:${scope.site_id}`))

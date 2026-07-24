@@ -341,7 +341,7 @@ export async function listOrganizationSites(db: DbClient, organizationId: string
     SELECT id, brand_name, subdomain, plan
     FROM sites
     WHERE organization_id = ?
-      ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member_access_scope mas WHERE mas.member_id = ? AND mas.organization_id = sites.organization_id AND mas.site_id = sites.id)' : ''}
+      ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member m JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId = sites.team_id WHERE m.id = ? AND m.organizationId = sites.organization_id)' : ''}
     ORDER BY created_at ASC, id ASC
   `, principal && !isOrganizationWideRole(principal.role) ? [organizationId, principal.memberId] : [organizationId])
 }
@@ -428,7 +428,7 @@ export async function listDashboardLocations(db: DbClient, organizationId: strin
     FROM business_locations
     LEFT JOIN media_assets ma_hero ON ma_hero.id = business_locations.hero_image_asset_id
     WHERE business_locations.organization_id = ? AND business_locations.site_id = ? AND business_locations.status = 'active'
-      ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member_access_scope mas WHERE mas.member_id = ? AND mas.organization_id = business_locations.organization_id AND mas.site_id = business_locations.site_id AND (mas.location_id IS NULL OR mas.location_id = business_locations.id))' : ''}
+      ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member m JOIN sites s ON s.id = business_locations.site_id JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId IN (s.team_id, business_locations.team_id) WHERE m.id = ? AND m.organizationId = business_locations.organization_id)' : ''}
     ORDER BY is_primary DESC, title ASC
   `, principal && !isOrganizationWideRole(principal.role) ? [organizationId, siteId, principal.memberId] : [organizationId, siteId])
 

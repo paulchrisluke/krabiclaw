@@ -455,11 +455,9 @@ export async function requireMcpSite(
     throw createError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
   }
 
-  // #341 Workstream A: `editor` is always constrained through member_access_scope.
-  // MCP tools operate on a whole site (none currently take a location-scoped
-  // permission model at this auth layer), so an editor needs a SITE-WIDE
-  // (location_id IS NULL) scope row to use any MCP tool at all — a
-  // location-only-scoped editor is rejected here rather than silently getting
+  // MCP tools operate on a whole site at this auth layer, so an editor needs
+  // the site's resource team membership to use any MCP tool at all. A
+  // location-only editor is rejected here rather than silently getting
   // whole-site access. This is strictly a tightening versus the prior
   // role-name-only check: it was already impossible for a location-scoped
   // role to satisfy `minimumRole: 'editor'` before this change (that role

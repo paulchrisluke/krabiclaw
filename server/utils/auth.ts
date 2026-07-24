@@ -385,7 +385,14 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
         onClientCreated: normalizeCimdClientAuthentication,
         onClientRefreshed: normalizeCimdClientAuthentication,
       }),
-      organization({ ac: organizationAccessControl, roles: organizationRoles }),
+      organization({
+        ac: organizationAccessControl,
+        roles: organizationRoles,
+        teams: {
+          enabled: true,
+          defaultTeam: { enabled: false },
+        },
+      }),
       admin({
         ac: platformAdminAccessControl,
         adminRoles: ['admin'],

@@ -300,7 +300,7 @@ async function resolveQuotedNotification(
 
 // Tier 3 candidate list: recent (24h) guest-related operational notifications scoped to
 // sites/locations the manager is authorized for (org-wide roles see everything in their
-// org; editor always needs a matching member_access_scope row). Grouped by
+// org; editor always needs matching resource team membership). Grouped by
 // guest thread so a guest with multiple notification events in the window (e.g. created
 // + a reply) only appears once, most recent first.
 async function listRecentGuestNotificationCandidates(db: D1Database, userId: string): Promise<DisambiguationCandidate[]> {
@@ -318,12 +318,14 @@ async function listRecentGuestNotificationCandidates(db: D1Database, userId: str
     FROM notifications n
     JOIN member m ON m.organizationId = n.organization_id AND m.userId = ?
     JOIN guest_threads gt ON gt.submission_type = n.related_submission_type AND gt.submission_id = n.related_submission_id
-    LEFT JOIN member_access_scope mas ON mas.member_id = m.id AND mas.organization_id = n.organization_id
-      AND mas.site_id = n.site_id AND (mas.location_id IS NULL OR mas.location_id = n.location_id)
+    LEFT JOIN sites s ON s.id = n.site_id AND s.organization_id = n.organization_id
+    LEFT JOIN business_locations bl ON bl.id = n.location_id AND bl.site_id = n.site_id AND bl.organization_id = n.organization_id
+    LEFT JOIN teamMember tm ON tm.userId = m.userId
+      AND ((n.location_id IS NULL AND tm.teamId = s.team_id) OR (n.location_id IS NOT NULL AND tm.teamId IN (s.team_id, bl.team_id)))
     WHERE n.channel = 'whatsapp'
       AND n.related_submission_type IS NOT NULL AND n.related_submission_id IS NOT NULL
       AND n.created_at > ?
-      AND (m.role IN ('owner', 'admin') OR (m.role = 'editor' AND mas.id IS NOT NULL))
+      AND (m.role IN ('owner', 'admin') OR (m.role = 'editor' AND tm.id IS NOT NULL))
     GROUP BY gt.id
     ORDER BY createdAt DESC
     LIMIT 5
