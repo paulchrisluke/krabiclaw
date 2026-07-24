@@ -4,6 +4,7 @@ import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { validateNoUnknownTopLevelArguments } from '~/server/utils/mcp-tool-validation'
 import { requireMcpUser } from '~/server/utils/mcp-auth'
 import { queryFirst } from '~/server/db'
+import { resolveAgentGuidance, reviewAgentGuidanceCandidate, type AgentGuidanceCandidateType, type AgentSkillTask } from '~/server/utils/agent-skills/scoped'
 import { aggregatePlatformAnalyticsForDate, getPlatformAnalyticsSummary } from '~/server/utils/analytics'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getRecentChanges, validateChangelogLimit } from '~/server/utils/changelog'
@@ -52,6 +53,31 @@ function requiredString(args: Record<string, unknown>, key: string) {
 function optionalString(args: Record<string, unknown>, key: string) {
   const value = args[key]
   return typeof value === 'string' ? value : undefined
+}
+
+function requiredAgentSkillTask(args: Record<string, unknown>): AgentSkillTask {
+  if (args.task === 'blog.write' || args.task === 'image.generate') return args.task
+  throw mcpProtocolError(MCP_ERROR.invalidParams, 'task must be one of: blog.write, image.generate.')
+}
+
+function requiredAgentGuidanceCandidateType(args: Record<string, unknown>): AgentGuidanceCandidateType {
+  if (args.candidate_type === 'blog_draft' || args.candidate_type === 'image_brief') return args.candidate_type
+  throw mcpProtocolError(MCP_ERROR.invalidParams, 'candidate_type must be one of: blog_draft, image_brief.')
+}
+
+function requiredCandidate(args: Record<string, unknown>) {
+  if (!args.candidate || typeof args.candidate !== 'object' || Array.isArray(args.candidate)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, 'candidate must be an object.')
+  }
+  return args.candidate as Record<string, unknown>
+}
+
+function requiredObjectArg(args: Record<string, unknown>, key: string) {
+  const value = args[key]
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be an object.`)
+  }
+  return value as Record<string, unknown>
 }
 
 function optionalNullableString(args: Record<string, unknown>, key: string) {
@@ -543,6 +569,72 @@ export async function executePlatformMcpToolCall(
           role: currentUser.role ?? null,
           isPlatformAdmin: user.isPlatformAdmin,
         },
+      }
+    }
+    case 'get_platform_blog_writing_guidance': {
+      return await resolveAgentGuidance(user.db, {
+        task: 'blog.write',
+        audience: 'platform',
+      })
+    }
+    case 'get_platform_image_generation_guidance': {
+      return await resolveAgentGuidance(user.db, {
+        task: 'image.generate',
+        audience: 'platform',
+      })
+    }
+    case 'review_platform_blog_draft_against_guidance': {
+      try {
+        return await reviewAgentGuidanceCandidate(user.db, {
+          task: 'blog.write',
+          candidateType: 'blog_draft',
+          candidate: requiredObjectArg(rawArguments, 'draft'),
+          surface: 'platform_mcp',
+          audience: 'platform',
+          createdByUserId: user.userId,
+          resolutionFingerprint: optionalString(rawArguments, 'resolution_fingerprint') ?? null,
+        })
+      } catch (error) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, error instanceof Error ? error.message : String(error))
+      }
+    }
+    case 'review_platform_image_generation_brief': {
+      try {
+        return await reviewAgentGuidanceCandidate(user.db, {
+          task: 'image.generate',
+          candidateType: 'image_brief',
+          candidate: requiredObjectArg(rawArguments, 'brief'),
+          surface: 'platform_mcp',
+          audience: 'platform',
+          createdByUserId: user.userId,
+          resolutionFingerprint: optionalString(rawArguments, 'resolution_fingerprint') ?? null,
+        })
+      } catch (error) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, error instanceof Error ? error.message : String(error))
+      }
+    }
+    case 'resolve_platform_agent_guidance': {
+      return await resolveAgentGuidance(user.db, {
+        task: requiredAgentSkillTask(rawArguments),
+        audience: 'platform',
+      })
+    }
+    case 'review_platform_agent_guidance_candidate': {
+      try {
+        return await reviewAgentGuidanceCandidate(user.db, {
+          task: requiredAgentSkillTask(rawArguments),
+          candidateType: requiredAgentGuidanceCandidateType(rawArguments),
+          candidate: requiredCandidate(rawArguments),
+          surface: 'platform_mcp',
+          audience: 'platform',
+          createdByUserId: user.userId,
+          resolutionFingerprint: optionalString(rawArguments, 'resolution_fingerprint') ?? null,
+        })
+      } catch (error) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          error instanceof Error ? error.message : String(error),
+        )
       }
     }
     case 'get_recent_changes': {

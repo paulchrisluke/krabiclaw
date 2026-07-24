@@ -18,6 +18,7 @@ import { requireMcpUser } from '~/server/utils/mcp-auth'
 import { executePlatformMcpToolCall } from '~/server/utils/platform-mcp-executor'
 import { PLATFORM_MCP_TOOLS, PLATFORM_PUBLIC_MCP_TOOLS } from '~/server/utils/platform-mcp-tools'
 import { PLATFORM_MCP_RESOURCES, readPlatformMcpResource } from '~/server/utils/platform-mcp-resources'
+import { AGENT_SKILL_RESOURCE_TEMPLATES, readPlatformAgentSkillResource } from '~/server/utils/agent-skills/mcp-resources'
 import { PLATFORM_MCP_PROMPTS, renderPlatformMcpPrompt } from '~/server/utils/platform-mcp-prompts'
 import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-search-rebuild'
 import {
@@ -181,7 +182,9 @@ export default defineEventHandler(async (event) => {
           'Derive voice and tone from existing published posts/docs (via list_platform_blog_posts, get_platform_blog_post, list_platform_docs, get_platform_doc) rather than inventing a style — KrabiClaw has no separate style guide; the published content is the style guide.',
           'Ground prioritization in get_platform_analytics (traffic and new_signups), not guesses about what readers want.',
           'Use get_recent_changes when the writer needs categorized merged-pull-request source data for release notes, social posts, or product updates. Treat it as source material for human-reviewed drafts; it does not publish or send anything.',
-          'If the writer wants a featured image or step image, use list_platform_media_assets to choose an existing asset or upload_platform_image with a real ChatGPT attachment. Do not suggest or rely on generated images for this surface.',
+          'Before drafting or materially rewriting a platform blog post, call resolve_platform_agent_guidance({ task: "blog.write" }) and review_platform_agent_guidance_candidate({ task: "blog.write", candidate_type: "blog_draft", candidate: <exact draft> }). For tenant-targeted platform support, pass site_id so the scope is explicit.',
+          'For image-generation requests, call resolve_platform_agent_guidance({ task: "image.generate" }) and review_platform_agent_guidance_candidate({ task: "image.generate", candidate_type: "image_brief", candidate: <exact brief> }) before using native image_generation. Do not treat a generated image as stored platform media unless a platform media save tool exists for that flow.',
+          'If the writer wants to use an existing or attached featured/step image, use list_platform_media_assets to choose an existing asset or upload_platform_image with a real ChatGPT attachment.',
           'Prefer the prompts audit_content_for_growth, draft_blog_post, and update_and_publish_post as starting points for those respective workflows.',
           'New content should be drafted for the writer\'s approval before publishing. Once the writer has supplied or approved final content, execute the corresponding tool calls directly and in sequence — do not stop to describe a call instead of making it.',
         ].join(' '),
@@ -229,7 +232,9 @@ export default defineEventHandler(async (event) => {
     if (request.method === 'resources/read') {
       const user = await requireMcpUser(event, platformAdminAuthOptions)
       const uri = typeof request.params?.uri === 'string' ? request.params.uri : ''
-      const content = await readPlatformMcpResource(uri)
+      const content = uri.startsWith('krabiclaw://')
+        ? await readPlatformAgentSkillResource(user.db, uri)
+        : await readPlatformMcpResource(uri)
       logPlatformMcpEventDetached(event, env.DB, {
         userId: user.userId,
         requestId: request.id,
@@ -248,12 +253,12 @@ export default defineEventHandler(async (event) => {
         userId: user.userId,
         requestId: request.id,
         method: request.method,
-        result: { count: 0 },
+        result: { count: AGENT_SKILL_RESOURCE_TEMPLATES.length },
         status: 'success',
         httpStatus: 200,
         oauthClientId: user.oauthClientId ?? null,
       })
-      return mcpSuccess(request.id, { resourceTemplates: [] })
+      return mcpSuccess(request.id, { resourceTemplates: AGENT_SKILL_RESOURCE_TEMPLATES })
     }
 
     if (request.method === 'prompts/list') {

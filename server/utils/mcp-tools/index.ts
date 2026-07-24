@@ -1,6 +1,7 @@
 import type { McpToolDefinition } from './shared'
 import { TOOL_ANNOTATIONS_BY_NAME } from './shared'
 import { ACCOUNT_TOOLS } from './account'
+import { AGENT_SKILL_TOOLS } from './agent-skills'
 import { ANALYTICS_TOOLS } from './analytics'
 import { BLOG_TOOLS } from './blog'
 import { CONTENT_TOOLS } from './content'
@@ -25,6 +26,7 @@ import { TRANSLATIONS_TOOLS } from './translations'
 
 export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
   ...ACCOUNT_TOOLS,
+  ...AGENT_SKILL_TOOLS,
   ...ANALYTICS_TOOLS,
   ...BLOG_TOOLS,
   ...CONTENT_TOOLS,

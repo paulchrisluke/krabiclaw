@@ -1,4 +1,10 @@
 import { CHANGE_TYPES } from '~/server/utils/changelog'
+import {
+  AGENT_GUIDANCE_CANDIDATE_TYPE_SCHEMA,
+  AGENT_GUIDANCE_REVIEW_RESPONSE_SCHEMA,
+  AGENT_SKILL_TASK_SCHEMA,
+  RESOLVED_AGENT_GUIDANCE_SCHEMA,
+} from '~/server/utils/agent-skills/mcp-schema'
 
 export interface PlatformMcpToolDefinition {
   name: string
@@ -639,6 +645,91 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     },
   }),
   readTool({
+    name: 'get_platform_blog_writing_guidance',
+    description: 'Resolve persisted platform Agent Skill guidance for platform blog writing. Returns each active source document separately; MCP cannot create, edit, activate, or archive skills.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    outputSchema: RESOLVED_AGENT_GUIDANCE_SCHEMA,
+  }),
+  readTool({
+    name: 'review_platform_blog_draft_against_guidance',
+    description: 'Persist a server-side advisory review run for an exact platform blog draft against resolved platform Agent Skill guidance.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        resolution_fingerprint: { type: 'string' },
+        draft: {
+          type: 'object',
+          description: 'The exact complete platform blog candidate being reviewed, including canonical top-level content_blocks.',
+          additionalProperties: true,
+        },
+      },
+      required: ['resolution_fingerprint', 'draft'],
+      additionalProperties: false,
+    },
+    outputSchema: AGENT_GUIDANCE_REVIEW_RESPONSE_SCHEMA,
+  }),
+  readTool({
+    name: 'get_platform_image_generation_guidance',
+    description: 'Resolve persisted platform Agent Skill guidance for platform image generation. Returns each active source document separately; MCP cannot create, edit, activate, or archive skills.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    outputSchema: RESOLVED_AGENT_GUIDANCE_SCHEMA,
+  }),
+  readTool({
+    name: 'review_platform_image_generation_brief',
+    description: 'Persist a server-side advisory review run for an exact platform image-generation brief against resolved platform Agent Skill guidance.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        resolution_fingerprint: { type: 'string' },
+        brief: {
+          type: 'object',
+          properties: {
+            prompt: { type: 'string' },
+            intended_use: { type: 'string' },
+            alt_text: { type: 'string' },
+            aspect_ratio: { type: 'string' },
+          },
+          required: ['prompt', 'intended_use', 'alt_text', 'aspect_ratio'],
+          additionalProperties: false,
+        },
+      },
+      required: ['resolution_fingerprint', 'brief'],
+      additionalProperties: false,
+    },
+    outputSchema: AGENT_GUIDANCE_REVIEW_RESPONSE_SCHEMA,
+  }),
+  readTool({
+    name: 'resolve_platform_agent_guidance',
+    description: 'Compatibility alias for platform Agent Skill guidance. Prefer get_platform_blog_writing_guidance or get_platform_image_generation_guidance.',
+    inputSchema: {
+      type: 'object',
+      properties: { task: AGENT_SKILL_TASK_SCHEMA },
+      required: ['task'],
+      additionalProperties: false,
+    },
+    outputSchema: RESOLVED_AGENT_GUIDANCE_SCHEMA,
+  }),
+  readTool({
+    name: 'review_platform_agent_guidance_candidate',
+    description: 'Compatibility alias for persisted platform Agent Skill review. Prefer review_platform_blog_draft_against_guidance or review_platform_image_generation_brief.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task: AGENT_SKILL_TASK_SCHEMA,
+        candidate_type: AGENT_GUIDANCE_CANDIDATE_TYPE_SCHEMA,
+        resolution_fingerprint: { type: 'string' },
+        candidate: {
+          type: 'object',
+          description: 'The exact draft or image brief being reviewed. Do not include raw image bytes.',
+          additionalProperties: true,
+        },
+      },
+      required: ['task', 'candidate_type', 'resolution_fingerprint', 'candidate'],
+      additionalProperties: false,
+    },
+    outputSchema: AGENT_GUIDANCE_REVIEW_RESPONSE_SCHEMA,
+  }),
+  readTool({
     name: 'get_recent_changes',
     description: 'Fetch recently merged KrabiClaw GitHub pull requests, newest first, categorized by conventional-commit title type. Use this source data to draft release notes, social posts, and product updates for human review; this tool does not draft or publish anything.',
     openWorld: true,
@@ -877,10 +968,11 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         ...NAV_FIELDS_SCHEMA,
         seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         ...SEO_FIELDS_SCHEMA,
+        guidance_run_id: { type: 'string', description: 'Completed blog.write review run returned by review_platform_blog_draft_against_guidance for this exact draft.' },
         publish: { type: 'boolean' },
         site_id: { type: 'string', description: 'Optional site id to create tenant blog posts instead of platform posts.' },
       },
-      required: ['title', 'content_blocks'],
+      required: ['title', 'content_blocks', 'guidance_run_id'],
       additionalProperties: false,
     },
     outputSchema: PLATFORM_BLOG_POST_RESPONSE_SCHEMA,
@@ -921,9 +1013,10 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         post_id: { type: 'string', description: 'Post id or slug.' },
         content_blocks: { type: 'array', description: 'Canonical ordered article blocks, replacing the complete draft block set.', items: { type: 'object', properties: CONTENT_BLOCK_INPUT_PROPERTIES, required: ['type', 'data'], additionalProperties: false }, minItems: 1 },
         expected_document_updated_at: { type: 'string', description: 'Concurrency token from the post\'s document_updated_at (get_platform_blog_post). A stale token is rejected with a conflict.' },
+        guidance_run_id: { type: 'string', description: 'Completed blog.write review run returned by review_platform_blog_draft_against_guidance for this exact replacement draft.' },
         site_id: { type: 'string', description: 'Optional site id to update tenant blog posts instead of platform posts.' },
       },
-      required: ['post_id', 'content_blocks', 'expected_document_updated_at'],
+      required: ['post_id', 'content_blocks', 'expected_document_updated_at', 'guidance_run_id'],
       additionalProperties: false,
     },
     outputSchema: PLATFORM_BLOG_POST_RESPONSE_SCHEMA,

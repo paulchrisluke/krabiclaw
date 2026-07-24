@@ -20,6 +20,7 @@ import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { normalizeBlogSlug, parseScheduledFor, resolveBlogPublicPath, resolveSlugMutation, structuredComponentsFromBlocks } from '~/utils/blog-editor'
 import { createBlogRedirect, resolveBlogSocialImage } from '~/server/utils/blog-publishing'
 import { resolvePublicTemplate } from '~/utils/template-registry'
+import { assertGuidanceRunMatchesCandidate } from '~/server/utils/agent-skills/scoped'
 
 const BLOG_TITLE_MAX = 200
 const BLOG_EXCERPT_MAX = 500
@@ -241,6 +242,7 @@ export interface PlatformDocNavGroupInput {
 export interface PlatformBlogCreateInput extends PlatformContentNavInput {
   title: string
   content_blocks: Array<ContentBlockInput & { id?: string }>
+  guidance_run_id?: string | null
   excerpt?: string | null
   category?: string | null
   tags?: string[] | null
@@ -274,6 +276,7 @@ export interface PlatformBlogUpdateInput extends PlatformContentNavInput {
   redirect_old_slug?: boolean
   reset_slug_override?: boolean
   content_blocks?: Array<ContentBlockInput & { id?: string }>
+  guidance_run_id?: string | null
   expected_document_updated_at?: string
   expected_updated_at?: string
   publish?: boolean
@@ -1521,6 +1524,23 @@ export async function createPlatformBlogPost(
   const publishedAt = input.publish && !scheduledFor ? now : null
   const canonicalBlocks = await normalizeCanonicalBlogBlocks(db, input, siteId)
   const canonicalBody = renderCanonicalBlogBody(canonicalBlocks)
+  const guidanceRun = input.guidance_run_id
+    ? await assertGuidanceRunMatchesCandidate(db, {
+        guidanceRunId: input.guidance_run_id,
+        task: 'blog.write',
+        organizationId,
+        siteId,
+        candidate: {
+          title: input.title,
+          excerpt: input.excerpt ?? null,
+          category: input.category ?? null,
+          tags: input.tags ?? [],
+          seo_title: input.seo_title ?? null,
+          seo_description: input.seo_description ?? null,
+          content_blocks: canonicalBlocks,
+        },
+      })
+    : null
 
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
     const slug = attempt === 0 ? slugBase : `${slugBase}-${randomSlugSuffix()}`
@@ -1575,14 +1595,23 @@ export async function createPlatformBlogPost(
         label: input.publish && !scheduledFor ? 'Published canonical blocks' : 'Draft canonical blocks',
         publish: Boolean(input.publish && !scheduledFor),
         additionalQueriesBefore: [blogPostInsert],
-        additionalQueriesAfter: scheduledFor
-          ? [{
-              query: `UPDATE blog_posts SET scheduled_revision_id = (
-                SELECT draft_revision_id FROM content_documents WHERE owner_type = ? AND owner_id = ?
-              ) WHERE id = ?`,
-              params: [ownerType, id, id],
-            }]
-          : undefined,
+        additionalQueriesAfter: revisionId => [
+          ...(scheduledFor
+            ? [{
+                query: `UPDATE blog_posts SET scheduled_revision_id = (
+                  SELECT draft_revision_id FROM content_documents WHERE owner_type = ? AND owner_id = ?
+                ) WHERE id = ?`,
+                params: [ownerType, id, id],
+              }]
+            : []),
+          ...(guidanceRun
+            ? [{
+                query: `INSERT INTO agent_guidance_artifacts (id, guidance_run_id, artifact_type, artifact_id, created_at)
+                  VALUES (?, ?, 'content_revision', ?, ?)`,
+                params: [crypto.randomUUID(), guidanceRun.id, revisionId, now],
+              }]
+            : []),
+        ],
       })
       const post = await getPlatformBlogPost(db, id, siteId)
       return {
@@ -1619,7 +1648,7 @@ export async function updatePlatformBlogPost(
   const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', siteId)
   const isTenant = Boolean(siteId)
   validateBlogCommon(input, isTenant)
-  const current = await queryFirst<{ category: string | null; title: string; slug: string; status: string; published_at: string | null; first_published_at: string | null; slug_manually_overridden: number; updated_at: string }>(db, 'SELECT category, title, slug, status, published_at, first_published_at, slug_manually_overridden, updated_at FROM blog_posts WHERE id = ? LIMIT 1', [postId])
+  const current = await queryFirst<{ organization_id: string | null; category: string | null; title: string; slug: string; status: string; published_at: string | null; first_published_at: string | null; slug_manually_overridden: number; updated_at: string; excerpt: string | null; tags_json: string | null; seo_title: string | null; seo_description: string | null }>(db, 'SELECT organization_id, category, title, slug, status, published_at, first_published_at, slug_manually_overridden, updated_at, excerpt, tags_json, seo_title, seo_description FROM blog_posts WHERE id = ? LIMIT 1', [postId])
   if (!current) notFound('Post not found')
   if (input.expected_updated_at && current.updated_at !== input.expected_updated_at) {
     throw createError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
@@ -1634,6 +1663,26 @@ export async function updatePlatformBlogPost(
     }
     normalizedBlocks = await normalizeEditorContentBlocks(db, input.content_blocks, siteId)
   }
+  if (input.guidance_run_id && !normalizedBlocks) {
+    badRequest('guidance_run_id is only valid when replacing blog content_blocks')
+  }
+  const guidanceRun = input.guidance_run_id && normalizedBlocks
+    ? await assertGuidanceRunMatchesCandidate(db, {
+        guidanceRunId: input.guidance_run_id,
+        task: 'blog.write',
+        organizationId: current.organization_id,
+        siteId,
+        candidate: {
+          title: input.title ?? current.title,
+          excerpt: input.excerpt !== undefined ? input.excerpt : current.excerpt,
+          category: input.category !== undefined ? input.category : current.category,
+          tags: input.tags !== undefined ? input.tags ?? [] : parseStringArray(current.tags_json),
+          seo_title: input.seo_title !== undefined ? input.seo_title : current.seo_title,
+          seo_description: input.seo_description !== undefined ? input.seo_description : current.seo_description,
+          content_blocks: normalizedBlocks,
+        },
+      })
+    : null
   const effectiveCategory = input.category !== undefined ? input.category : current?.category ?? null
   if (!isTenant) {
     if (!effectiveCategory?.trim()) badRequest('category is required')
@@ -1833,7 +1882,16 @@ export async function updatePlatformBlogPost(
         label: 'Editor autosave',
         publish: Boolean(input.publish && !scheduledFor),
         additionalQueriesBefore: before,
-        additionalQueriesAfter: after,
+        additionalQueriesAfter: revisionId => [
+          ...after,
+          ...(guidanceRun
+            ? [{
+                query: `INSERT INTO agent_guidance_artifacts (id, guidance_run_id, artifact_type, artifact_id, created_at)
+                  VALUES (?, ?, 'content_revision', ?, ?)`,
+                params: [crypto.randomUUID(), guidanceRun.id, revisionId, now],
+              }]
+            : []),
+        ],
       })
     } else {
       const post = await queryFirst<ApiRecord | null>(db, `${rowUpdate.query} RETURNING id`, rowUpdate.params)

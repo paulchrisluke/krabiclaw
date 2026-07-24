@@ -250,6 +250,67 @@ test.describe('stateless MCP server', () => {
     expect(content.text).toContain('/mcp-assets/video-upload-widget.v1.js')
   })
 
+  test('ChatGPT session can resolve and review scoped agent guidance', async ({ request, baseURL }) => {
+    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+    const siteId = MCP_GROWTH_SITE_ID
+
+    const tools = await mcpRequest(request, baseURL!, {
+      method: 'tools/list',
+      siteId,
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(tools.status()).toBe(200)
+    const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, annotations?: { readOnlyHint?: boolean } }> } }
+    const guidanceTools = toolsBody.result.tools.filter(tool => tool.name === 'resolve_agent_guidance' || tool.name === 'review_agent_guidance_candidate')
+    expect(guidanceTools.map(tool => tool.name).sort()).toEqual(['resolve_agent_guidance', 'review_agent_guidance_candidate'])
+    expect(guidanceTools.every(tool => tool.annotations?.readOnlyHint === true)).toBe(true)
+
+    const resolve = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'resolve_agent_guidance',
+      args: { site_id: siteId, task: 'image.generate' },
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(resolve.status()).toBe(200)
+    const guidance = mcpData<{
+      requested_scope: { scope_type: string; site_id: string | null }
+      scope_order: string[]
+      skills: Array<{ scope_type: string; instructions_markdown: string }>
+    }>(await resolve.json())
+    expect(guidance.requested_scope).toMatchObject({ scope_type: 'site', site_id: siteId })
+    expect(guidance.scope_order).toEqual(['platform', 'organization', 'site'])
+    expect(guidance.skills[0]?.scope_type).toBe('platform')
+    expect(guidance.skills[0]?.instructions_markdown).toContain('save_generated_image_file')
+
+    const review = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'review_agent_guidance_candidate',
+      args: {
+        site_id: siteId,
+        task: 'image.generate',
+        candidate_type: 'image_brief',
+        candidate: {
+          prompt: 'Homepage hero for a hands-on local class.',
+          intended_use: 'homepage hero',
+          alt_text: 'Hands shaping clay on a wheel',
+          transport: 'image_data_base64 from image_generation_call.result',
+        },
+      },
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    })
+    expect(review.status()).toBe(200)
+    const reviewBody = mcpData<{
+      review: {
+        recommendation: string
+        persistence: string
+        findings: Array<{ message: string }>
+      }
+    }>(await review.json())
+    expect(reviewBody.review.recommendation).toBe('revise')
+    expect(reviewBody.review.persistence).toBe('not_persisted')
+    expect(reviewBody.review.findings.some(finding => finding.message.includes('file reference'))).toBe(true)
+  })
+
   test('ChatGPT sequence and video widget produce an active, public, assignable asset', async ({ page, request, baseURL }) => {
     // The widget's downloadUrl points at this same app's own /api/mcp-test/tiny-video
     // fixture, so the server-side upload_user_media executor's fetch(downloadUrl) is a

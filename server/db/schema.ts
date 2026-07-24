@@ -106,6 +106,97 @@ export const ai_usage_log = sqliteTable("ai_usage_log", {
 	index("ai_usage_log_organization_id_idx").on(table.organization_id),
 ]);
 
+export const agent_skills = sqliteTable("agent_skills", {
+	id: text().primaryKey(),
+	scope_type: text().notNull(),
+	organization_id: text().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().references(() => sites.id, { onDelete: "cascade" } ),
+	task: text().notNull(),
+	slug: text().notNull(),
+	created_by_user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	uniqueIndex("agent_skills_platform_identity_unique").on(table.task, table.slug).where(sql`scope_type = 'platform'`),
+	uniqueIndex("agent_skills_organization_identity_unique").on(table.organization_id, table.task, table.slug).where(sql`scope_type = 'organization'`),
+	uniqueIndex("agent_skills_site_identity_unique").on(table.organization_id, table.site_id, table.task, table.slug).where(sql`scope_type = 'site'`),
+	index("agent_skills_resolution_idx").on(table.task, table.scope_type, table.organization_id, table.site_id),
+	check("agent_skills_scope_type_check", sql`scope_type IN ('platform', 'organization', 'site')`),
+	check("agent_skills_task_check", sql`task IN ('blog.write', 'image.generate')`),
+	check("agent_skills_scope_target_check", sql`
+		(scope_type = 'platform' AND organization_id IS NULL AND site_id IS NULL) OR
+		(scope_type = 'organization' AND organization_id IS NOT NULL AND site_id IS NULL) OR
+		(scope_type = 'site' AND organization_id IS NOT NULL AND site_id IS NOT NULL)
+	`),
+	check("agent_skills_slug_check", sql`slug GLOB '[a-z0-9]*' AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '%--%' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-'`),
+]);
+
+export const agent_skill_versions = sqliteTable("agent_skill_versions", {
+	id: text().primaryKey(),
+	skill_id: text().notNull().references(() => agent_skills.id, { onDelete: "cascade" } ),
+	version: integer().notNull(),
+	name: text().notNull(),
+	description: text().notNull(),
+	instructions_markdown: text().notNull(),
+	priority: integer().default(100).notNull(),
+	status: text().notNull(),
+	content_hash: text().notNull(),
+	created_by_user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	approved_by_user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	activated_at: text(),
+}, (table) => [
+	uniqueIndex("agent_skill_versions_skill_version_unique").on(table.skill_id, table.version),
+	uniqueIndex("agent_skill_versions_one_active_unique").on(table.skill_id).where(sql`status = 'active'`),
+	index("agent_skill_versions_skill_status_idx").on(table.skill_id, table.status),
+	check("agent_skill_versions_status_check", sql`status IN ('draft', 'active', 'archived')`),
+	check("agent_skill_versions_version_check", sql`version >= 1`),
+	check("agent_skill_versions_name_check", sql`length(name) BETWEEN 1 AND 160`),
+	check("agent_skill_versions_description_check", sql`length(description) BETWEEN 1 AND 1000`),
+	check("agent_skill_versions_instructions_check", sql`length(cast(instructions_markdown AS blob)) BETWEEN 1 AND 100000`),
+	check("agent_skill_versions_priority_check", sql`priority BETWEEN 0 AND 1000`),
+	check("agent_skill_versions_hash_check", sql`length(content_hash) = 64 AND lower(content_hash) = content_hash`),
+]);
+
+export const agent_guidance_runs = sqliteTable("agent_guidance_runs", {
+	id: text().primaryKey(),
+	task: text().notNull(),
+	candidate_type: text().notNull(),
+	surface: text().notNull(),
+	organization_id: text().references(() => organization.id, { onDelete: "set null" } ),
+	site_id: text().references(() => sites.id, { onDelete: "set null" } ),
+	resolution_fingerprint: text().notNull(),
+	resolved_skills_json: text().notNull(),
+	candidate_fingerprint: text().notNull(),
+	recommendation: text().notNull(),
+	findings_json: text().notNull(),
+	review_model: text().notNull(),
+	created_by_user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	reviewed_at: text().notNull(),
+}, (table) => [
+	index("agent_guidance_runs_site_idx").on(table.site_id, table.task, table.created_at),
+	index("agent_guidance_runs_organization_idx").on(table.organization_id, table.task, table.created_at),
+	index("agent_guidance_runs_fingerprint_idx").on(table.resolution_fingerprint, table.candidate_fingerprint),
+	check("agent_guidance_runs_task_check", sql`task IN ('blog.write', 'image.generate')`),
+	check("agent_guidance_runs_candidate_type_check", sql`candidate_type IN ('blog_draft', 'image_brief')`),
+	check("agent_guidance_runs_surface_check", sql`surface IN ('tenant_mcp', 'platform_mcp', 'dashboard_ai', 'internal_api')`),
+	check("agent_guidance_runs_recommendation_check", sql`recommendation IN ('ready', 'revise')`),
+]);
+
+export const agent_guidance_artifacts = sqliteTable("agent_guidance_artifacts", {
+	id: text().primaryKey(),
+	guidance_run_id: text().notNull().references(() => agent_guidance_runs.id, { onDelete: "cascade" } ),
+	artifact_type: text().notNull(),
+	artifact_id: text().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	uniqueIndex("agent_guidance_artifacts_unique").on(table.guidance_run_id, table.artifact_type, table.artifact_id),
+	index("agent_guidance_artifacts_artifact_idx").on(table.artifact_type, table.artifact_id),
+	check("agent_guidance_artifacts_type_check", sql`artifact_type IN ('content_revision', 'media_asset')`),
+]);
+
 export const business_location_translations = sqliteTable("business_location_translations", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),

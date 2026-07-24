@@ -72,6 +72,8 @@ The generated test environment contains:
 
 - `BETTER_AUTH_URL`
 - `NUXT_PUBLIC_PLATFORM_DOMAIN`
+- `NUXT_PUBLIC_FREE_SITE_DOMAIN`
+- `NUXT_PUBLIC_APP_NAME`
 - `MCP_BASE_URL`
 - `MEDIA_BASE_URL=<origin>/__media`
 - `E2E_ALLOW_DEV_ROUTES=true`

@@ -1,0 +1,106 @@
+import type { McpToolDefinition } from './shared'
+import { siteTool } from './shared'
+import {
+  AGENT_GUIDANCE_CANDIDATE_TYPE_SCHEMA,
+  AGENT_GUIDANCE_REVIEW_RESPONSE_SCHEMA,
+  AGENT_SKILL_TASK_SCHEMA,
+  RESOLVED_AGENT_GUIDANCE_SCHEMA,
+} from '~/server/utils/agent-skills/mcp-schema'
+
+export const AGENT_SKILL_TOOLS: McpToolDefinition[] = [
+  siteTool({
+    name: 'get_blog_writing_guidance',
+    description: 'Resolve persisted scoped Agent Skill guidance for tenant blog writing. Use before drafting or materially rewriting blog content. Returns each active source document separately; MCP cannot create, edit, activate, or archive skills.',
+    domain: 'agent_skills',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {},
+    required: [],
+    strict: true,
+    outputSchema: RESOLVED_AGENT_GUIDANCE_SCHEMA,
+  }),
+  siteTool({
+    name: 'review_blog_draft_against_guidance',
+    description: 'Persist a server-side advisory review run for an exact tenant blog draft against resolved Agent Skill guidance. The returned guidance_run_id must be bound to later generated content persistence.',
+    domain: 'agent_skills',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      resolution_fingerprint: { type: 'string' },
+      draft: {
+        type: 'object',
+        description: 'The exact complete blog candidate being reviewed, including canonical top-level content_blocks.',
+        additionalProperties: true,
+      },
+    },
+    required: ['resolution_fingerprint', 'draft'],
+    strict: true,
+    outputSchema: AGENT_GUIDANCE_REVIEW_RESPONSE_SCHEMA,
+  }),
+  siteTool({
+    name: 'get_image_generation_guidance',
+    description: 'Resolve persisted scoped Agent Skill guidance for tenant image generation. Use before preparing an AI-generated image brief. Returns each active source document separately; MCP cannot create, edit, activate, or archive skills.',
+    domain: 'agent_skills',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {},
+    required: [],
+    strict: true,
+    outputSchema: RESOLVED_AGENT_GUIDANCE_SCHEMA,
+  }),
+  siteTool({
+    name: 'review_image_generation_brief',
+    description: 'Persist a server-side advisory review run for an exact tenant image-generation brief against resolved Agent Skill guidance. The returned guidance_run_id must be bound to later generated media persistence.',
+    domain: 'agent_skills',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      resolution_fingerprint: { type: 'string' },
+      brief: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string' },
+          intended_use: { type: 'string' },
+          alt_text: { type: 'string' },
+          aspect_ratio: { type: 'string' },
+        },
+        required: ['prompt', 'intended_use', 'alt_text', 'aspect_ratio'],
+        additionalProperties: false,
+      },
+    },
+    required: ['resolution_fingerprint', 'brief'],
+    strict: true,
+    outputSchema: AGENT_GUIDANCE_REVIEW_RESPONSE_SCHEMA,
+  }),
+  siteTool({
+    name: 'resolve_agent_guidance',
+    description: 'Compatibility alias for scoped Agent Skill guidance. Prefer get_blog_writing_guidance or get_image_generation_guidance.',
+    domain: 'agent_skills',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: { task: AGENT_SKILL_TASK_SCHEMA },
+    required: ['task'],
+    strict: true,
+    outputSchema: RESOLVED_AGENT_GUIDANCE_SCHEMA,
+  }),
+  siteTool({
+    name: 'review_agent_guidance_candidate',
+    description: 'Compatibility alias for persisted Agent Skill review. Prefer review_blog_draft_against_guidance or review_image_generation_brief.',
+    domain: 'agent_skills',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      task: AGENT_SKILL_TASK_SCHEMA,
+      candidate_type: AGENT_GUIDANCE_CANDIDATE_TYPE_SCHEMA,
+      resolution_fingerprint: { type: 'string' },
+      candidate: {
+        type: 'object',
+        description: 'The exact draft or image brief being reviewed. Do not include raw image bytes.',
+        additionalProperties: true,
+      },
+    },
+    required: ['task', 'candidate_type', 'resolution_fingerprint', 'candidate'],
+    strict: true,
+    outputSchema: AGENT_GUIDANCE_REVIEW_RESPONSE_SCHEMA,
+  }),
+]
