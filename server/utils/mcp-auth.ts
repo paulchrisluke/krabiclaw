@@ -425,58 +425,6 @@ export async function requireMcpSite(
 ): Promise<McpSiteContext> {
   const user = await requireMcpUser(event)
 
-  if (user.isPlatformAdmin) {
-    // Check id first, then subdomain, then custom_domain — an OR across all
-    // three columns is ambiguous if a value collides across columns (e.g. a
-    // custom_domain on one site equal to another site's id).
-    const site = await queryFirst<{ id: string; organization_id: string; organization_slug: string | null; subdomain: string | null; custom_domain: string | null; public_url: string | null }>(
-      user.db,
-      `
-      SELECT s.id, s.organization_id, o.slug as organization_slug, s.subdomain, s.custom_domain, s.public_url
-      FROM sites s
-      LEFT JOIN organization o ON s.organization_id = o.id
-      WHERE s.id = ?
-      LIMIT 1
-    `,
-      [siteId],
-    ) ?? await queryFirst<{ id: string; organization_id: string; organization_slug: string | null; subdomain: string | null; custom_domain: string | null; public_url: string | null }>(
-      user.db,
-      `
-      SELECT s.id, s.organization_id, o.slug as organization_slug, s.subdomain, s.custom_domain, s.public_url
-      FROM sites s
-      LEFT JOIN organization o ON s.organization_id = o.id
-      WHERE s.subdomain = ?
-      LIMIT 1
-    `,
-      [siteId],
-    ) ?? await queryFirst<{ id: string; organization_id: string; organization_slug: string | null; subdomain: string | null; custom_domain: string | null; public_url: string | null }>(
-      user.db,
-      `
-      SELECT s.id, s.organization_id, o.slug as organization_slug, s.subdomain, s.custom_domain, s.public_url
-      FROM sites s
-      LEFT JOIN organization o ON s.organization_id = o.id
-      WHERE s.custom_domain = ?
-      LIMIT 1
-    `,
-      [siteId],
-    )
-
-    if (!site?.organization_id) {
-      throw createError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
-    }
-
-    return {
-      ...user,
-      siteId: site.id,
-      organizationId: site.organization_id,
-      organizationSlug: site.organization_slug || undefined,
-      subdomain: site.subdomain ?? null,
-      customDomain: site.custom_domain ?? null,
-      publicUrl: site.public_url ?? null,
-      role: 'owner',
-    }
-  }
-
   type MemberSiteRow = { id: string; organization_id: string; role: string; member_id: string; organization_slug: string | null; subdomain: string | null; custom_domain: string | null; public_url: string | null }
   const memberSiteByColumn = async (column: 'id' | 'subdomain' | 'custom_domain') =>
     queryFirst<MemberSiteRow>(
