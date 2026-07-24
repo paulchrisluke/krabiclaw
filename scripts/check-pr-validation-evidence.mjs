@@ -1,17 +1,47 @@
 import { readFileSync } from 'node:fs'
 
-function readPullRequestBody() {
-  if (process.env.PR_BODY) return process.env.PR_BODY
+function readEventPayload() {
   const eventPath = process.env.GITHUB_EVENT_PATH
-  if (!eventPath) return ''
+  if (!eventPath) return null
 
   try {
-    const event = JSON.parse(readFileSync(eventPath, 'utf8'))
-    return event.pull_request?.body ?? ''
+    return JSON.parse(readFileSync(eventPath, 'utf8'))
   } catch (error) {
     console.error(`Unable to read pull request event payload: ${error.message}`)
     process.exit(1)
   }
+}
+
+async function readCurrentPullRequestBody(event) {
+  const token = process.env.GITHUB_TOKEN
+  const repository = process.env.GITHUB_REPOSITORY
+  const number = event?.pull_request?.number
+  if (!token || !repository || !number) return ''
+
+  const response = await fetch(`https://api.github.com/repos/${repository}/pulls/${number}`, {
+    headers: {
+      accept: 'application/vnd.github+json',
+      authorization: `Bearer ${token}`,
+      'x-github-api-version': '2022-11-28',
+    },
+  })
+
+  if (!response.ok) {
+    console.warn(`Unable to fetch current pull request body: ${response.status} ${response.statusText}`)
+    return ''
+  }
+
+  const pullRequest = await response.json()
+  return pullRequest.body ?? ''
+}
+
+async function readPullRequestBody() {
+  if (process.env.PR_BODY) return process.env.PR_BODY
+  const event = readEventPayload()
+  const currentBody = await readCurrentPullRequestBody(event)
+  if (currentBody) return currentBody
+
+  return event?.pull_request?.body ?? ''
 }
 
 function evidenceLine(body, label) {
@@ -19,7 +49,7 @@ function evidenceLine(body, label) {
   return body.match(pattern)?.[1]?.trim() ?? ''
 }
 
-const body = readPullRequestBody()
+const body = await readPullRequestBody()
 const required = ['Browser', 'Static']
 const placeholderPattern = /^(?:tbd|todo|n\/a|none|not run|blocked|exact blocker\.?|manual\/playwright\/ci e2e evidence, or exact blocker\.|unit\/lint\/typecheck\/guardrail evidence, or exact blocker\.)$/i
 const missing = required.filter((label) => {
