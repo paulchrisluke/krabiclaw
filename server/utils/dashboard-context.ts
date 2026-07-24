@@ -81,6 +81,12 @@ export interface DashboardLocationRow {
   feature_overrides: string | null
 }
 
+export type DashboardLocationContextRow = Record<string, unknown> & {
+  id: string
+  organization_id: string
+  site_id: string
+}
+
 interface DashboardContextOptions {
   requireSite?: boolean
   // Opt-in only — see resolveRecentlyTransferredSite. Defaults to off so generic
@@ -348,6 +354,68 @@ export async function getDashboardSite(event: H3Event) {
   return {
     ...context,
     site: context.site
+  }
+}
+
+export async function getDashboardLocationContext(event: H3Event, locationId: string): Promise<{
+  env: ReturnType<typeof cloudflareEnv>
+  db: D1Database
+  session: NonNullable<Awaited<ReturnType<typeof getAuthSession>>>
+  userId: string
+  organization: DashboardOrganizationRow
+  location: DashboardLocationContextRow
+}> {
+  const env = cloudflareEnv(event)
+  const db = env.DB
+
+  if (!db) {
+    throw createError({ statusCode: 503, message: 'Database not available' })
+  }
+
+  const session = await getAuthSession(event, env)
+  if (!session?.user?.id) {
+    throw createError({ statusCode: 401, message: 'Authentication required' })
+  }
+
+  const row = await queryFirst<DashboardLocationContextRow & {
+    organization_name: string
+    organization_slug: string | null
+    organization_logo: string | null
+    member_role: string
+    member_id: string
+  }>(db, `
+    SELECT bl.*,
+           o.name AS organization_name, o.slug AS organization_slug, o.logo AS organization_logo,
+           m.role AS member_role, m.id AS member_id
+    FROM business_locations bl
+    JOIN organization o ON o.id = bl.organization_id
+    JOIN member m ON m.organizationId = bl.organization_id
+    WHERE bl.id = ? AND m.userId = ?
+    LIMIT 1
+  `, [locationId, session.user.id])
+
+  if (!row) {
+    throw createError({ statusCode: 404, message: 'Location not found' })
+  }
+
+  const organization = {
+    id: row.organization_id,
+    name: row.organization_name,
+    slug: row.organization_slug,
+    logo: row.organization_logo,
+    role: row.member_role,
+    memberId: row.member_id,
+  }
+
+  assertDashboardPathPermission(organization.role, event.path)
+
+  return {
+    env,
+    db,
+    session,
+    userId: session.user.id,
+    organization,
+    location: row,
   }
 }
 
