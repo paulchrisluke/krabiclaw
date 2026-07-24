@@ -4,6 +4,7 @@ import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { validateNoUnknownTopLevelArguments } from '~/server/utils/mcp-tool-validation'
 import { requireMcpUser } from '~/server/utils/mcp-auth'
 import { queryFirst } from '~/server/db'
+import { resolveAgentGuidance, reviewAgentGuidanceCandidate, type AgentGuidanceCandidateType, type AgentSkillTask } from '~/server/utils/agent-skills/scoped'
 import { aggregatePlatformAnalyticsForDate, getPlatformAnalyticsSummary } from '~/server/utils/analytics'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getRecentChanges, validateChangelogLimit } from '~/server/utils/changelog'
@@ -52,6 +53,23 @@ function requiredString(args: Record<string, unknown>, key: string) {
 function optionalString(args: Record<string, unknown>, key: string) {
   const value = args[key]
   return typeof value === 'string' ? value : undefined
+}
+
+function requiredAgentSkillTask(args: Record<string, unknown>): AgentSkillTask {
+  if (args.task === 'blog.write' || args.task === 'image.generate') return args.task
+  throw mcpProtocolError(MCP_ERROR.invalidParams, 'task must be one of: blog.write, image.generate.')
+}
+
+function requiredAgentGuidanceCandidateType(args: Record<string, unknown>): AgentGuidanceCandidateType {
+  if (args.candidate_type === 'blog_draft' || args.candidate_type === 'image_brief') return args.candidate_type
+  throw mcpProtocolError(MCP_ERROR.invalidParams, 'candidate_type must be one of: blog_draft, image_brief.')
+}
+
+function requiredCandidate(args: Record<string, unknown>) {
+  if (!args.candidate || typeof args.candidate !== 'object' || Array.isArray(args.candidate)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, 'candidate must be an object.')
+  }
+  return args.candidate as Record<string, unknown>
 }
 
 function optionalNullableString(args: Record<string, unknown>, key: string) {
@@ -189,6 +207,27 @@ async function resolveContentDocument(db: D1Database, args: Record<string, unkno
   const document = await getContentDocumentByOwner(db, ownerType, ownerId)
   if (!document) throw mcpProtocolError(MCP_ERROR.invalidParams, 'content document not found.')
   return document
+}
+
+async function platformGuidanceScope(db: D1Database, args: Record<string, unknown>) {
+  const siteId = optionalString(args, 'site_id') ?? null
+  if (!siteId) {
+    return {
+      siteId: null,
+      organizationId: optionalString(args, 'organization_id') ?? null,
+    }
+  }
+
+  const site = await queryFirst<{ organization_id: string }>(
+    db,
+    'SELECT organization_id FROM sites WHERE id = ? LIMIT 1',
+    [siteId],
+  )
+  if (!site) throw mcpProtocolError(MCP_ERROR.invalidParams, 'Site not found.')
+  return {
+    siteId,
+    organizationId: site.organization_id,
+  }
 }
 
 async function getFormattedContentBlock(db: D1Database, blockId: string) {
@@ -543,6 +582,33 @@ export async function executePlatformMcpToolCall(
           role: currentUser.role ?? null,
           isPlatformAdmin: user.isPlatformAdmin,
         },
+      }
+    }
+    case 'resolve_platform_agent_guidance': {
+      const scope = await platformGuidanceScope(user.db, rawArguments)
+      return await resolveAgentGuidance({
+        task: requiredAgentSkillTask(rawArguments),
+        surface: 'platform_mcp',
+        organizationId: scope.organizationId,
+        siteId: scope.siteId,
+      })
+    }
+    case 'review_platform_agent_guidance_candidate': {
+      const scope = await platformGuidanceScope(user.db, rawArguments)
+      try {
+        return await reviewAgentGuidanceCandidate({
+          task: requiredAgentSkillTask(rawArguments),
+          candidateType: requiredAgentGuidanceCandidateType(rawArguments),
+          candidate: requiredCandidate(rawArguments),
+          surface: 'platform_mcp',
+          organizationId: scope.organizationId,
+          siteId: scope.siteId,
+        })
+      } catch (error) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          error instanceof Error ? error.message : String(error),
+        )
       }
     }
     case 'get_recent_changes': {

@@ -56,10 +56,17 @@ test('removed add-location and location-preference routes stay deleted', () => {
 })
 
 test('admin impersonation uses Better Auth APIs without custom proxy routes', () => {
+  const clientsPage = source('pages/admin/clients.vue')
+  const usersPage = source('pages/admin/users.vue')
+  const clientsRoute = source('server/api/admin/clients.get.ts')
+
   assert.equal(existsSync(resolve(root, 'server/api/admin/impersonation/start.post.ts')), false)
   assert.equal(existsSync(resolve(root, 'server/api/admin/impersonation/stop.post.ts')), false)
-  assert.match(source('pages/admin/users.vue'), /authClient\.admin\.impersonateUser/)
+  assert.match(usersPage, /authClient\.admin\.impersonateUser/)
+  assert.match(clientsPage, /authClient\.admin\.impersonateUser/)
   assert.match(source('layouts/dashboard.vue'), /authClient\.admin\.stopImpersonating/)
+  assert.match(clientsRoute, /impersonation_user_id/)
+  assert.doesNotMatch(clientsPage, /:to="`\/dashboard\/\$\{client\.org_slug\}/)
 
   const files = [
     ...collectSourceFiles(resolve(root, 'layouts')),

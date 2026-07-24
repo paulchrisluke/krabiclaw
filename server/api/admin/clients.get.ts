@@ -19,6 +19,7 @@ interface ClientRow {
   stripe_customer_id: string | null
   stripe_subscription_id: string | null
   pending_transfer_email: string | null
+  impersonation_user_id: string | null
   created_at: string
 }
 
@@ -42,6 +43,17 @@ export default defineEventHandler(async (event) => {
              ROW_NUMBER() OVER (PARTITION BY from_organization_id ORDER BY created_at DESC) as rn
       FROM site_transfer_requests
       WHERE status = 'pending'
+    ),
+    workspace_member AS (
+      SELECT organizationId, userId,
+             ROW_NUMBER() OVER (
+               PARTITION BY organizationId
+               ORDER BY
+                 CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END,
+                 createdAt ASC
+             ) as rn
+      FROM member
+      WHERE role IN ('owner', 'admin')
     )
     SELECT
       o.id AS org_id,
@@ -58,12 +70,14 @@ export default defineEventHandler(async (event) => {
       ob.stripe_customer_id,
       sb.stripe_subscription_id,
       pt.to_email AS pending_transfer_email,
+      wm.userId AS impersonation_user_id,
       o.createdAt AS created_at
     FROM organization o
     LEFT JOIN organization_billing ob ON ob.organization_id = o.id
     LEFT JOIN single_site s ON s.organization_id = o.id AND s.rn = 1
     LEFT JOIN site_billing sb ON sb.site_id = s.id
     LEFT JOIN pending_transfer pt ON pt.from_organization_id = o.id AND pt.rn = 1
+    LEFT JOIN workspace_member wm ON wm.organizationId = o.id AND wm.rn = 1
     WHERE sb.plan IN ('growth', 'managed', 'seo_accelerator')
     ORDER BY
       CASE sb.plan

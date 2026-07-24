@@ -116,9 +116,10 @@ async function resolveAssetPointer(db: DbClient, siteId: string, value: string) 
      WHERE site_id = ? AND id = ? AND status = 'active'
      LIMIT 1
   `, [siteId, value])
+  if (!asset[0]) return null
   return {
     asset_id: value,
-    url: asset[0]?.public_url ?? null,
+    url: asset[0].public_url ?? null,
   }
 }
 

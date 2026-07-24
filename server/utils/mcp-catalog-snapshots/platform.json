@@ -1,6 +1,6 @@
 {
   "surface": "platform",
-  "fingerprint": "sha256:e6729e4959f014d09610e6febecff4a3a56e0d192f98d93de239c9f98e84938f",
+  "fingerprint": "sha256:5d1d73f94ffb6ee1bc22cffe0e0a91d4a1ed6530ea2387a21071ae6d4ee3c02f",
   "tools": [
     {
       "name": "create_platform_blog_post",
@@ -6354,6 +6354,542 @@
         },
         "required": [
           "post"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "resolve_platform_agent_guidance",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "description": "Optional organization scope when resolving guidance outside a specific site.",
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Optional site scope; the organization is derived from the site when present.",
+            "type": "string"
+          },
+          "task": {
+            "description": "Reusable guidance task to resolve.",
+            "enum": [
+              "blog.write",
+              "image.generate"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "precedence": {
+            "type": "string"
+          },
+          "requested_scope": {
+            "additionalProperties": false,
+            "properties": {
+              "organization_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "scope_type": {
+                "enum": [
+                  "platform",
+                  "organization",
+                  "site"
+                ],
+                "type": "string"
+              },
+              "site_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "scope_type",
+              "organization_id",
+              "site_id"
+            ],
+            "type": "object"
+          },
+          "resolution_fingerprint": {
+            "type": "string"
+          },
+          "scope_order": {
+            "items": {
+              "enum": [
+                "platform",
+                "organization",
+                "site"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "skills": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "content_hash": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "instructions_markdown": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "organization_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "priority": {
+                  "type": "number"
+                },
+                "scope_type": {
+                  "enum": [
+                    "platform",
+                    "organization",
+                    "site"
+                  ],
+                  "type": "string"
+                },
+                "site_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "skill_id": {
+                  "type": "string"
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "source": {
+                  "enum": [
+                    "code_baseline"
+                  ],
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "active"
+                  ],
+                  "type": "string"
+                },
+                "task": {
+                  "description": "Reusable guidance task to resolve.",
+                  "enum": [
+                    "blog.write",
+                    "image.generate"
+                  ],
+                  "type": "string"
+                },
+                "version": {
+                  "type": "number"
+                },
+                "version_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "skill_id",
+                "version_id",
+                "scope_type",
+                "organization_id",
+                "site_id",
+                "task",
+                "slug",
+                "name",
+                "description",
+                "version",
+                "priority",
+                "status",
+                "content_hash",
+                "source",
+                "instructions_markdown"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "surface": {
+            "enum": [
+              "tenant_mcp",
+              "platform_mcp"
+            ],
+            "type": "string"
+          },
+          "task": {
+            "description": "Reusable guidance task to resolve.",
+            "enum": [
+              "blog.write",
+              "image.generate"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "task",
+          "surface",
+          "requested_scope",
+          "scope_order",
+          "precedence",
+          "skills",
+          "resolution_fingerprint",
+          "notes"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "review_platform_agent_guidance_candidate",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate": {
+            "additionalProperties": true,
+            "description": "The exact draft or image brief being reviewed. For blog.write use { title, content_blocks, ...metadata }. For image.generate use { prompt, intended_use, alt_text, aspect_ratio }. Do not include raw image bytes.",
+            "type": "object"
+          },
+          "candidate_type": {
+            "enum": [
+              "blog_draft",
+              "image_brief"
+            ],
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Optional organization scope when reviewing outside a specific site.",
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Optional site scope; the organization is derived from the site when present.",
+            "type": "string"
+          },
+          "task": {
+            "description": "Reusable guidance task to resolve.",
+            "enum": [
+              "blog.write",
+              "image.generate"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "task",
+          "candidate_type",
+          "candidate"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "guidance": {
+            "additionalProperties": false,
+            "properties": {
+              "notes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "precedence": {
+                "type": "string"
+              },
+              "requested_scope": {
+                "additionalProperties": false,
+                "properties": {
+                  "organization_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "scope_type": {
+                    "enum": [
+                      "platform",
+                      "organization",
+                      "site"
+                    ],
+                    "type": "string"
+                  },
+                  "site_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "scope_type",
+                  "organization_id",
+                  "site_id"
+                ],
+                "type": "object"
+              },
+              "resolution_fingerprint": {
+                "type": "string"
+              },
+              "scope_order": {
+                "items": {
+                  "enum": [
+                    "platform",
+                    "organization",
+                    "site"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "skills": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "content_hash": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "instructions_markdown": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "organization_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "priority": {
+                      "type": "number"
+                    },
+                    "scope_type": {
+                      "enum": [
+                        "platform",
+                        "organization",
+                        "site"
+                      ],
+                      "type": "string"
+                    },
+                    "site_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "skill_id": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "enum": [
+                        "code_baseline"
+                      ],
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "active"
+                      ],
+                      "type": "string"
+                    },
+                    "task": {
+                      "description": "Reusable guidance task to resolve.",
+                      "enum": [
+                        "blog.write",
+                        "image.generate"
+                      ],
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "number"
+                    },
+                    "version_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "skill_id",
+                    "version_id",
+                    "scope_type",
+                    "organization_id",
+                    "site_id",
+                    "task",
+                    "slug",
+                    "name",
+                    "description",
+                    "version",
+                    "priority",
+                    "status",
+                    "content_hash",
+                    "source",
+                    "instructions_markdown"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "surface": {
+                "enum": [
+                  "tenant_mcp",
+                  "platform_mcp"
+                ],
+                "type": "string"
+              },
+              "task": {
+                "description": "Reusable guidance task to resolve.",
+                "enum": [
+                  "blog.write",
+                  "image.generate"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "task",
+              "surface",
+              "requested_scope",
+              "scope_order",
+              "precedence",
+              "skills",
+              "resolution_fingerprint",
+              "notes"
+            ],
+            "type": "object"
+          },
+          "review": {
+            "additionalProperties": false,
+            "properties": {
+              "candidate_fingerprint": {
+                "type": "string"
+              },
+              "candidate_type": {
+                "enum": [
+                  "blog_draft",
+                  "image_brief"
+                ],
+                "type": "string"
+              },
+              "finding_count": {
+                "type": "number"
+              },
+              "findings": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "severity": {
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high"
+                      ],
+                      "type": "string"
+                    },
+                    "skill_version_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "severity",
+                    "skill_version_id",
+                    "message"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "persistence": {
+                "enum": [
+                  "not_persisted"
+                ],
+                "type": "string"
+              },
+              "recommendation": {
+                "enum": [
+                  "pass",
+                  "revise"
+                ],
+                "type": "string"
+              },
+              "resolution_fingerprint": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "completed"
+                ],
+                "type": "string"
+              },
+              "surface": {
+                "enum": [
+                  "tenant_mcp",
+                  "platform_mcp"
+                ],
+                "type": "string"
+              },
+              "task": {
+                "description": "Reusable guidance task to resolve.",
+                "enum": [
+                  "blog.write",
+                  "image.generate"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "candidate_type",
+              "surface",
+              "status",
+              "recommendation",
+              "resolution_fingerprint",
+              "candidate_fingerprint",
+              "finding_count",
+              "findings",
+              "persistence"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "review",
+          "guidance"
         ],
         "type": "object"
       }

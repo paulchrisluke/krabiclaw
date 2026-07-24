@@ -65,6 +65,7 @@ For local Miniflare-backed tests, keep bindings with `remote = false` in `wrangl
 ## PR execution and guardrails
 
 - Draft pull requests do not deploy or run remote E2E. Marking a PR ready, or pushing a new commit after it is ready, starts the preview deployment and smoke suite.
+- PR descriptions must include filled `Browser:` and `Static:` validation lines. `Browser` is for Playwright, CI E2E, or manual browser evidence; `Static` is for unit, lint, typecheck, build, and guardrail evidence.
 - Preview seeds are generated into one SQL bundle and applied with one remote D1 operation. The bundle remains idempotent and uses the same real preview D1, migration flow, fixed secrets, and deployed Worker as before.
 - `e2e-smoke` and every staging deployment run `yarn test:e2e:smoke`. Staging adds path-gated `auth`, `dashboard`, `billing`, `notifications`, `mcp`, `seo`, Pottery House, and Blawby suites.
 - The full `yarn test:e2e:full` suite and exhaustive client verifiers run in `.github/workflows/e2e-full.yml`. Failures retain Playwright reports/screenshots and are reported in the workflow summary, but are not a required development gate.
