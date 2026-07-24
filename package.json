@@ -38,7 +38,7 @@
     "test:e2e:billing": "playwright test tests/e2e/billing-webhook-signed.spec.ts",
     "test:e2e:notifications": "playwright test tests/e2e/notifications.spec.ts",
     "test:e2e:seo": "playwright test tests/e2e/seo.spec.ts",
-    "test:e2e:mcp": "playwright test tests/e2e/mcp.spec.ts tests/e2e/oauth-discovery.spec.ts",
+    "test:e2e:mcp": "playwright test tests/e2e/mcp-media.spec.ts tests/e2e/mcp-content.spec.ts tests/e2e/mcp-owner-tools.spec.ts tests/e2e/mcp-authorization.spec.ts tests/e2e/oauth-discovery.spec.ts",
     "test:e2e:clients": "playwright test tests/e2e/pottery-house.spec.ts tests/e2e/pottery-house-dashboard.spec.ts tests/e2e/blawby.spec.ts tests/e2e/site-content-scopes.spec.ts tests/e2e/search-command-modal.spec.ts",
     "test:e2e:blawby": "playwright test tests/e2e/blawby.spec.ts tests/e2e/site-content-scopes.spec.ts",
     "test:e2e:pottery-house": "playwright test tests/e2e/pottery-house.spec.ts tests/e2e/pottery-house-dashboard.spec.ts",
