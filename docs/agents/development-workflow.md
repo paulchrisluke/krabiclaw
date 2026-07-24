@@ -72,7 +72,7 @@ E2E_DEV_ROUTE_SECRET=ci-dev-route-secret \
 EMAIL_DELIVERY_MODE=log_only \
 WHATSAPP_DELIVERY_MODE=log_only \
 PLAYWRIGHT_WORKERS=1 \
-npx playwright test tests/e2e/mcp.spec.ts --project=chromium --workers=1 --grep "exact test name"
+npx playwright test tests/e2e/mcp-owner-tools.spec.ts --project=chromium --workers=1 --grep "exact test name"
 ```
 
 For dashboard, billing, or auth flows that touch Stripe-backed routes, also require the Stripe test values before running:

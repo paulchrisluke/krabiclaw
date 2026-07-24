@@ -20,7 +20,7 @@ import { execute, queryAll, queryFirst } from '~/server/db'
 import { ensureGuestThread, getGuestThreadBySubmission, getGuestThreadDetail, getGuestThreadSource, postGuestThreadReply } from '~/server/utils/guest-threads'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 import { findSubmissionByPhone, insertInboundSubmissionReply } from '~/server/utils/submission-messages'
-import { isAuthorizedWhatsAppRecipient } from '~/server/utils/member-access'
+import { isAuthorizedWhatsAppRecipient, teamAccessPredicate } from '~/server/utils/member-access'
 import {
   ASK_CHOWBOT_OR_QUOTE_MESSAGE,
   REPLY_SENT_CONFIRMATION,
@@ -320,12 +320,10 @@ async function listRecentGuestNotificationCandidates(db: D1Database, userId: str
     JOIN guest_threads gt ON gt.submission_type = n.related_submission_type AND gt.submission_id = n.related_submission_id
     LEFT JOIN sites s ON s.id = n.site_id AND s.organization_id = n.organization_id
     LEFT JOIN business_locations bl ON bl.id = n.location_id AND bl.site_id = n.site_id AND bl.organization_id = n.organization_id
-    LEFT JOIN teamMember tm ON tm.userId = m.userId
-      AND ((n.location_id IS NULL AND tm.teamId = s.team_id) OR (n.location_id IS NOT NULL AND tm.teamId IN (s.team_id, bl.team_id)))
     WHERE n.channel = 'whatsapp'
       AND n.related_submission_type IS NOT NULL AND n.related_submission_id IS NOT NULL
       AND n.created_at > ?
-      AND (m.role IN ('owner', 'admin') OR (m.role = 'editor' AND tm.id IS NOT NULL))
+      AND (m.role IN ('owner', 'admin') OR (m.role = 'editor' AND ${teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: 'bl.team_id' })}))
     GROUP BY gt.id
     ORDER BY createdAt DESC
     LIMIT 5

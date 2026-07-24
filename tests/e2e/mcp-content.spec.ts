@@ -1,18 +1,50 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
 import { MCP_FREE_USER_ID, MCP_MANAGED_USER_ID } from './helpers/plan-fixtures'
-import { MCP_MANAGED_SITE_ID, mcpRequest, mcpData } from './helpers/mcp'
+import { MCP_VERSION, MCP_MANAGED_SITE_ID, mcpRequest, mcpData } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (content/publishing tool tests) — see
 // helpers/mcp.ts for why. This group covers post publishing, tenant blog
 // tools, and the stateless discovery/list/error protocol flow.
 
 test.describe('stateless MCP server', () => {
-  test('posts publish immediately with validated types, real media, skipped social outcomes, and idempotency', async ({ request, baseURL }) => {
-    test.setTimeout(90_000)
+  // Split out of one test doing ~15-18 sequential MCP round trips sharing a
+  // single 90s budget (invalid-post validation, the create/publish/
+  // idempotency/public-API chain, and event/offer type validation are three
+  // largely independent scenarios) — was intermittently exceeding even that
+  // 90s budget under preview-deploy load, most recently confirmed on an
+  // unrelated staging push (run 30061194138) that predates this split.
+  // Splitting gives each scenario its own budget instead of raising the
+  // shared one further.
+
+  test('invalid event and offer posts are rejected with validation errors', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
     const siteId = MCP_MANAGED_SITE_ID
-    const createdPostIds: string[] = []
+
+    const invalidEvent = await mcpRequest(request, baseURL!, {
+      method: 'tools/call', toolName: 'create_post',
+      args: { site_id: siteId, title: 'Invalid event', body: 'Missing its start.', post_type: 'event' },
+    })
+    expect(invalidEvent.status()).toBe(200)
+    const invalidEventBody = await invalidEvent.json()
+    expect(invalidEventBody.result?.isError).toBe(true)
+    expect(invalidEventBody.result?.content?.[0]?.text).toContain('event_start')
+
+    const invalidOffer = await mcpRequest(request, baseURL!, {
+      method: 'tools/call', toolName: 'create_post',
+      args: { site_id: siteId, title: 'Invalid offer', body: 'Missing terms.', post_type: 'offer' },
+    })
+    expect(invalidOffer.status()).toBe(200)
+    const invalidOfferBody = await invalidOffer.json()
+    expect(invalidOfferBody.result?.isError).toBe(true)
+    expect(invalidOfferBody.result?.content?.[0]?.text).toMatch(/offer_coupon|offer_terms/)
+  })
+
+  test('a post publishes immediately, stays idempotent on repeat, and matches the public API', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
+    await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
+    const siteId = MCP_MANAGED_SITE_ID
+    let createdPostId: string | undefined
 
     try {
       const mediaResponse = await mcpRequest(request, baseURL!, {
@@ -23,24 +55,6 @@ test.describe('stateless MCP server', () => {
       const imageAsset = mediaAssets.find(asset => asset.status === 'active' && (asset.id ?? asset.asset_id))
       expect(imageAsset).toBeTruthy()
       const imageAssetId = imageAsset!.id ?? imageAsset!.asset_id!
-
-      const invalidEvent = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'create_post',
-        args: { site_id: siteId, title: 'Invalid event', body: 'Missing its start.', post_type: 'event' },
-      })
-      expect(invalidEvent.status()).toBe(200)
-      const invalidEventBody = await invalidEvent.json()
-      expect(invalidEventBody.result?.isError).toBe(true)
-      expect(invalidEventBody.result?.content?.[0]?.text).toContain('event_start')
-
-      const invalidOffer = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'create_post',
-        args: { site_id: siteId, title: 'Invalid offer', body: 'Missing terms.', post_type: 'offer' },
-      })
-      expect(invalidOffer.status()).toBe(200)
-      const invalidOfferBody = await invalidOffer.json()
-      expect(invalidOfferBody.result?.isError).toBe(true)
-      expect(invalidOfferBody.result?.content?.[0]?.text).toMatch(/offer_coupon|offer_terms/)
 
       const now = Date.now()
       const create = await mcpRequest(request, baseURL!, {
@@ -56,7 +70,7 @@ test.describe('stateless MCP server', () => {
       if (create.status() !== 200) console.error(await create.text())
       expect(create.status()).toBe(200)
       const created = mcpData<{ id: string, slug: string }>(await create.json())
-      createdPostIds.push(created.id)
+      createdPostId = created.id
 
       const read = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'get_post', args: { site_id: siteId, post_id: created.id },
@@ -97,7 +111,28 @@ test.describe('stateless MCP server', () => {
       expect(repeatedPost.published_at).toBe(firstPost.published_at)
       expect(repeatedPost.channels.filter(job => job.channel === 'site')).toHaveLength(1)
       expect(repeatedPost.channels.filter(job => job.channel === 'facebook')).toHaveLength(1)
+    } finally {
+      if (createdPostId) {
+        const cleanup = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_post', args: { site_id: siteId, post_id: createdPostId } })
+        if (cleanup.status() !== 200 || (await cleanup.json()).result?.isError) {
+          console.error(`Failed to clean up post ${createdPostId} on ${siteId}: status ${cleanup.status()}`)
+        }
+      }
+    }
+  })
 
+  // Comparable round-trip count to the publish/idempotency test above (4
+  // creates/reads plus 2 deletes), which needed an explicit 60s budget under
+  // preview-deploy load — this test was missed with the default 30s when the
+  // file was split and timed out the same way (run 30084182210).
+  test('event and offer post types store their type-specific fields', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
+    await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
+    const siteId = MCP_MANAGED_SITE_ID
+    const now = Date.now()
+    const createdPostIds: string[] = []
+
+    try {
       const eventStart = new Date(Date.now() + 86_400_000).toISOString()
       const eventEnd = new Date(Date.now() + 90_000_000).toISOString()
       const event = await mcpRequest(request, baseURL!, {
@@ -123,7 +158,10 @@ test.describe('stateless MCP server', () => {
       expect(offerPost).toMatchObject({ post_type: 'offer', offer_coupon: 'MCP20', offer_terms: 'Valid during the E2E window.' })
     } finally {
       for (const postId of createdPostIds) {
-        await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_post', args: { site_id: siteId, post_id: postId } })
+        const cleanup = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_post', args: { site_id: siteId, post_id: postId } })
+        if (cleanup.status() !== 200 || (await cleanup.json()).result?.isError) {
+          console.error(`Failed to clean up post ${postId} on ${siteId}: status ${cleanup.status()}`)
+        }
       }
     }
   })
