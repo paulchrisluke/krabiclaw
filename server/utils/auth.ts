@@ -23,61 +23,8 @@ import { organizationAccessControl, organizationRoles } from '~/utils/organizati
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
-type OAuthClientHookData = Record<string, unknown> & {
-  clientId?: unknown
-  scopes?: unknown
-}
 
 const CIMD_TENANT_SCOPES = ['openid', 'offline_access', 'tenant'] as const
-
-function isUrlClientId(value: unknown): value is string {
-  if (typeof value !== 'string') return false
-  try {
-    const url = new URL(value)
-    return url.protocol === 'https:' || (import.meta.dev && url.protocol === 'http:')
-  } catch {
-    return false
-  }
-}
-
-// The adapter serializes string[] fields as JSON. Letting SQLite apply
-// oauthClient.scopes' historical empty-string default makes the adapter
-// JSON.parse('') on the first CIMD registration response. URL clients
-// without metadata scopes are tenant connectors, not platform clients.
-//
-// create and update need different defaulting rules here: a fresh row with
-// no scopes value at all must still get a real array so the invalid empty-
-// string column default never applies. An update that doesn't touch scopes
-// must leave the persisted value alone — defaulting there would silently
-// wipe whatever scopes an unrelated update (renaming a client, rotating
-// jwksUri) happens to pass through this same hook.
-function normalizeOAuthClientScopesOnCreate(data: OAuthClientHookData) {
-  if (Array.isArray(data.scopes)) return
-
-  return {
-    data: {
-      ...data,
-      scopes: isUrlClientId(data.clientId) ? [...CIMD_TENANT_SCOPES] : [],
-    },
-  }
-}
-
-function normalizeOAuthClientScopesOnUpdate(data: OAuthClientHookData) {
-  if (Array.isArray(data.scopes) || !('scopes' in data)) return
-  // clientId isn't necessarily part of every update payload (the row is
-  // targeted by a WHERE clause, not by data.clientId). Without it there's no
-  // way to tell a CIMD tenant connector from a non-URL client, and guessing
-  // "non-URL" would misclassify a URL client and overwrite its real scopes.
-  // Leave scopes untouched rather than guess.
-  if (typeof data.clientId !== 'string') return
-
-  return {
-    data: {
-      ...data,
-      scopes: isUrlClientId(data.clientId) ? [...CIMD_TENANT_SCOPES] : [],
-    },
-  }
-}
 
 async function normalizeCimdClientAuthentication(data: {
   client: SchemaClient<Scope[]>
@@ -97,11 +44,10 @@ async function normalizeCimdClientAuthentication(data: {
     update.scopes = [...CIMD_TENANT_SCOPES]
   }
   if (supportsPrivateKeyJwt) {
-    // ChatGPT currently advertises both `none` and `private_key_jwt` in the
-    // plural capability field. CIMD only reads the singular preference and
-    // otherwise registers `none`, even though ChatGPT exchanges the code with
-    // a signed client assertion. Prefer the authenticated method when a JWKS
-    // URI is actually supplied.
+    // @better-auth/cimd@1.7.0-beta.10 reads only the singular
+    // token_endpoint_auth_method when converting metadata; ChatGPT-shaped
+    // metadata can advertise private_key_jwt only in the plural capability
+    // field. Remove this after CIMD maps that supported method itself.
     update.tokenEndpointAuthMethod = 'private_key_jwt'
     update.public = false
     update.jwksUri = jwksUri
@@ -222,10 +168,6 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
       schema,
     }),
     databaseHooks: {
-      oauthClient: {
-        create: { before: normalizeOAuthClientScopesOnCreate },
-        update: { before: normalizeOAuthClientScopesOnUpdate },
-      },
       user: {
         create: {
           after: async (user) => {

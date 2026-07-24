@@ -26,7 +26,7 @@ As of 2026-07-10:
 
 | Surface | Raw tools | Default visible tools | Notes |
 | --- | ---: | ---: | --- |
-| Client MCP | 128 | 103 | Feature-flagged groups hidden (translations/locales 11, social/OAuth publishing 7, domains 5, managed service 2 = 25). Raw count grew from 119 as of 2026-07-05; only +1 (`sync_menu_items`, see below) is from the ChowBot consolidation work in this doc's history — the remaining growth predates it and wasn't re-audited here |
+| Client MCP | 130 | 105 | Feature-flagged groups hidden (translations/locales 11, social/OAuth publishing 7, domains 5, managed service 2 = 25). Raw/default counts now include two Agent Skill guidance tools for blog and image workflows. Raw count grew from 119 as of 2026-07-05; only +1 (`sync_menu_items`, see below) is from the ChowBot consolidation work in this doc's history — the remaining growth predates it and wasn't re-audited here |
 | ChowBot | 95 | 82 | Same feature-flag policy (translations/locales 11 + managed service 2 = 13 hidden); WhatsApp-specific tools remain ChowBot-only. Previously only 2 of the 11 translations tools and 0 of the 2 managed-service tools were actually reachable despite the flag existing — `chowbot-tools/translations.ts` and `chowbot-tools/managed-service.ts` never defined schemas for the rest. Fixed; counts above reflect the tools now actually being registered, matching what this table already described |
 
 Counts are checked by `yarn lint:tool-parity` (`scripts/lint-tool-parity.mjs`), which also verifies tool names stay in sync across definitions, executor dispatch, the confirm-required set, and feature-gate groups — update this table whenever those counts drift.
@@ -58,6 +58,7 @@ These groups are hidden by default on both conversational surfaces where present
 | `get_current_user`, `get_workspace_context`, `set_workspace_context` | ChatGPT connector workspace/session context |
 | `list_sites`, `create_site`, `show_site_preview` | ChatGPT connector onboarding and site selection |
 | `show_generated_images`, `save_generated_image`, `save_generated_image_file`, `upload_user_photo` | ChatGPT native image/file flow |
+| `resolve_agent_guidance`, `review_agent_guidance_candidate` | Client MCP exposes scoped Agent Skill guidance and advisory review for ChatGPT blog/image workflows; ChowBot should call the same shared resolver/review service when its matching UX is added |
 | `get_booking_policy`, `preview_booking_policy`, `update_booking_policy` | Structured booking-policy editing is currently exposed in Client MCP first; ChowBot should use the same backend resolver/formatter when a chat-safe editing flow is added |
 | `get_site`, `update_site_settings`, `set_brand_color`, `clear_home_hero_image`, `clear_home_hero_video`, `clear_location_hero_image`, `clear_location_hero_video`, `copy_location_batch`, `reorder_experience_gallery`, `get_site_analytics` | Client MCP-specific granularity or dashboard-backed utility not currently present in ChowBot |
 

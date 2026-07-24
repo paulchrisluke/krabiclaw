@@ -20,6 +20,24 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  validation-evidence:
+    name: PR validation evidence
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: yarn check:pr-validation
+
   typecheck:
     name: Type check
     if: github.event_name == 'pull_request' || github.event_name == 'push'
@@ -362,8 +380,7 @@ jobs:
                 -H "cache-control: no-store" \
                 "https://preview.krabiclaw.com${route}?e2e=asset-probe-$i" || true)
               route_assets=$(printf '%s' "$tenant_html" | grep -oE '/_nuxt/[^"'"'"') >]+[.](css|js)' || true)
-              asset_paths="${asset_paths}
-${route_assets}"
+              asset_paths="${asset_paths}"$'\n'"${route_assets}"
             done
 
             asset_failures=""
@@ -375,8 +392,7 @@ ${route_assets}"
                 "https://preview.krabiclaw.com${asset_path}" || true)
               case "$asset_path:$asset_result" in
                 *.css:200\ text/css*|*.js:200\ *javascript*) ;;
-                *) asset_failures="${asset_failures}
-${asset_path} -> ${asset_result:-no response}" ;;
+                *) asset_failures="${asset_failures}"$'\n'"${asset_path} -> ${asset_result:-no response}" ;;
               esac
             done < <(printf '%s\n' "$asset_paths" | sort -u)
 

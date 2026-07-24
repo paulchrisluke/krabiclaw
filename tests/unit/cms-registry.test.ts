@@ -8,6 +8,7 @@ import {
   validateCmsCapabilityDefinition,
   validateCmsCapabilityRegistry,
 } from '../../config/cms-registry.ts'
+import { getEditableFieldKeys, getScopedEditablePages } from '../../config/content-registry.ts'
 
 test('CMS capability registry is internally valid', () => {
   assert.doesNotThrow(() => validateCmsCapabilityRegistry())
@@ -55,6 +56,25 @@ test('content managers are present for every vertical regardless of business mod
       assert.ok(resolved.managers.some(manager => manager.id === feature), `${vertical} is missing content manager: ${feature}`)
     }
   }
+})
+
+test('Blawby exposes only tenant_page-backed home/about/contact in the field editor', () => {
+  const professional = resolveCmsCapabilities('professional_service', 'blawby')
+  const sitePages = getScopedEditablePages('professional_service', professional, 'site')
+  const locationPages = getScopedEditablePages('professional_service', professional, 'location')
+
+  assert.deepEqual(sitePages.map(page => page.id), ['home', 'about', 'contact'])
+  assert.ok(sitePages.every(page => page.editor === 'professional_services'))
+  assert.deepEqual(locationPages, [])
+  assert.deepEqual(getEditableFieldKeys('contact', 'professional_services'), [
+    'hero.title',
+    'hero.subtitle',
+    'contact.title',
+    'contact.description',
+    'contact.cards',
+    'cta.title',
+    'cta.description',
+  ])
 })
 
 test('content managers are never removable via an explicit disabled delta', () => {

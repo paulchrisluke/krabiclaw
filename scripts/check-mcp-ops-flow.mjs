@@ -276,7 +276,9 @@ async function main() {
     title: 'Invalid MCP Experience Status',
     status: 'draft',
   })
-  expectStatus('create_experience rejects invalid status', invalidExperience, 400)
+  expectStatus('create_experience rejects invalid status over JSON-RPC transport', invalidExperience)
+  expectValue('create_experience invalid status returns tool error', invalidExperience.body?.result?.isError === true, invalidExperience.body)
+  expectValue('create_experience invalid status explains allowed statuses', String(invalidExperience.body?.result?.content?.[0]?.text ?? '').includes('active, inactive, sold_out'), invalidExperience.body)
 
   const experienceUpdate = await mcp(headers, 'update_experience', {
     site_id: siteId,
