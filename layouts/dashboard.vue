@@ -248,6 +248,7 @@ type NavGroupId = 'Content' | 'Operate' | 'Reputation' | 'Publishing'
 // below, not through the toggleable manager nav.
 const MANAGER_GROUP: Partial<Record<ProductFeature, NavGroupId>> = {
   media: 'Content',
+  links: 'Content',
   posts: 'Content',
   photos: 'Content',
   menu: 'Operate',
@@ -263,6 +264,7 @@ const MANAGER_GROUP: Partial<Record<ProductFeature, NavGroupId>> = {
 
 const MANAGER_ICON: Partial<Record<ProductFeature, string>> = {
   media: 'i-lucide-image',
+  links: 'i-lucide-link',
   posts: 'i-lucide-megaphone',
   photos: 'i-lucide-image',
   menu: 'i-lucide-utensils',

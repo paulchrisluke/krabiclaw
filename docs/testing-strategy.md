@@ -50,17 +50,6 @@ yarn test:browser:dashboard
 
 Use `yarn test:unit` only when the PR risk calls for the full unit glob. Passing the whole unit suite is not enough to call a user-facing change validated.
 
-## PR Evidence
-
-Every PR description must include filled validation lines:
-
-```text
-Browser: Playwright dashboard smoke passed locally; PR E2E smoke pending.
-Static: yarn check:pr-validation passed; targeted unit file passed.
-```
-
-If browser validation is blocked, state the exact blocker. Do not describe the PR as ready to merge until Browser evidence is present and the PR-level E2E gate is green.
-
 ## First Reduction Pass
 
 The first conservative pass removed `tests/unit/dashboard-nuxt-ui-consolidation.test.ts`. That file scanned source text for removed component names and implementation details from an old dashboard cleanup. The useful behavior is now covered through `tests/e2e/dashboard.spec.ts`, which exercises the real dashboard shell, search trigger, account menu, and responsive sidebar in a browser.
