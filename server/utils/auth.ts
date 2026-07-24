@@ -45,10 +45,16 @@ async function normalizeCimdClientAuthentication(data: {
     update.scopes = [...CIMD_TENANT_SCOPES]
   }
   if (supportsPrivateKeyJwt) {
-    // @better-auth/cimd@1.7.0-beta.10 reads only the singular
-    // token_endpoint_auth_method when converting metadata; ChatGPT-shaped
-    // metadata can advertise private_key_jwt only in the plural capability
-    // field. Remove this after CIMD maps that supported method itself.
+    // @better-auth/cimd@1.7.0-beta.10's convertDocToClient only reads the
+    // singular doc.token_endpoint_auth_method (node_modules/@better-auth/cimd/
+    // dist/index.mjs lines ~106-115, ~298) — it never checks the plural
+    // capability field, token_endpoint_auth_methods_supported, that
+    // ChatGPT-shaped CIMD documents advertise private_key_jwt through.
+    // Confirmed against the installed package source; remove this once a
+    // newer @better-auth/cimd release maps that field itself. Covered by
+    // tests/e2e/oauth-discovery.spec.ts's "ChatGPT-shaped CIMD uses
+    // private_key_jwt" test — removing this hook without an upstream fix
+    // breaks that flow.
     update.tokenEndpointAuthMethod = 'private_key_jwt'
     update.public = false
     update.jwksUri = jwksUri
