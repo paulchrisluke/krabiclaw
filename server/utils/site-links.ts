@@ -288,14 +288,12 @@ export async function upsertLinksPage(db: DbClient, input: {
   const itemIds = normalizedItems.map(item => item.id)
   if (new Set(itemIds).size !== itemIds.length) throw new SiteLinksValidationError('Link item IDs must be unique.')
 
-  const existingIds = current.items.map(item => item.id)
-  const retainedExistingIds = itemIds.filter(id => existingIds.includes(id))
-  const foreignIds = retainedExistingIds.length
+  const foreignIds = itemIds.length
     ? await queryAll<{ id: string }>(db, `
       SELECT id FROM site_link_items
-       WHERE id IN (${retainedExistingIds.map(() => '?').join(',')})
+       WHERE id IN (${itemIds.map(() => '?').join(',')})
          AND (organization_id <> ? OR site_id <> ? OR link_page_id <> ?)
-    `, [...retainedExistingIds, input.organizationId, input.siteId, pageId])
+    `, [...itemIds, input.organizationId, input.siteId, pageId])
     : []
   if (foreignIds.length) throw new SiteLinksValidationError('Link item IDs must belong to the current site.')
 

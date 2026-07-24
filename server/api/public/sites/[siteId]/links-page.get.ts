@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
   if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
 
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
   if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
 
   const linksPage = await getPublicLinksPage(db, siteId)

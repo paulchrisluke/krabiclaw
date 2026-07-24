@@ -13,11 +13,14 @@ export default defineEventHandler(async (event) => {
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return jsonResponse({ error: 'Invalid links page payload' }, { status: 400 })
     }
+    if (!Array.isArray(body.items)) {
+      return jsonResponse({ error: 'Invalid links page payload' }, { status: 400 })
+    }
     const result = await upsertLinksPage(db, {
       organizationId: site.organization_id,
       siteId,
       page: body.page ?? {},
-      items: Array.isArray(body.items) ? body.items : [],
+      items: body.items,
       updatedBy: session.user.id,
     })
     return jsonResponse(result)
