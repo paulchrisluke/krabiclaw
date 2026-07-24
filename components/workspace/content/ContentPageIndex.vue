@@ -7,14 +7,6 @@
     <USkeleton v-for="i in 3" :key="i" class="h-32 rounded-xl" />
   </div>
 
-  <div v-else-if="cmsCapabilities?.template === 'blawby'" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-    <UCard v-for="manager in cmsManagers" :key="manager.id">
-      <UIcon :name="manager.icon" class="size-5 text-primary" />
-      <h2 class="mt-3 font-semibold text-highlighted">{{ manager.label }}</h2>
-      <UButton :to="manager.to" :disabled="!manager.to" label="Open editor" class="mt-4" size="sm" />
-    </UCard>
-  </div>
-
   <div v-else-if="pages.length" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
     <UCard v-for="page in pages" :key="page.id">
       <UIcon name="i-lucide-file-text" class="size-5 text-primary" />
@@ -50,8 +42,7 @@ const loadError = ref<string | null>(null)
 
 // Only meaningful when scope === 'location' (this component is only ever rendered inside a
 // locations/[locationSlug]/... route in that case) — route-derived, same pattern as
-// layouts/dashboard.vue and the location settings page, never inferred from siteLocations' first/
-// primary entry (that's cmsManagers' href-building fallback below, a different concern).
+// layouts/dashboard.vue and the location settings page.
 const dashboardLocation = useDashboardLocation()
 const activeLocation = computed(() =>
   props.scope === 'location' ? siteLocations.value.find(l => l.id === dashboardLocation.currentLocationId.value) ?? null : null
@@ -64,38 +55,6 @@ const cmsCapabilities = computed(() => {
     // Without this, a module the active location has explicitly disabled would still list as
     // editable here even though its dashboard route already 404s.
     location: activeLocation.value ? parseCmsFeatureOverrideDelta(activeLocation.value.feature_overrides) : undefined,
-  })
-})
-
-// blawby has no field-editable pages yet (professional_services editor gap,
-// issue #323) — fall back to its manager grid instead of an empty page list.
-const cmsManagers = computed(() => {
-  const capabilities = cmsCapabilities.value
-  if (!capabilities) return []
-  const location = siteLocations.value.find(l => l.is_primary)?.slug ?? siteLocations.value[0]?.slug
-  const iconBySection = {
-    collections: 'i-lucide-database',
-    locations: 'i-lucide-map-pin',
-    media: 'i-lucide-image',
-    site: 'i-lucide-settings',
-  } as const
-  return capabilities.managers.map((manager) => {
-    if (manager.id === 'settings') {
-      return { ...manager, icon: iconBySection[manager.section], to: paths.value.settingsGeneral }
-    }
-    if (manager.scope === 'location' && !location) {
-      return { ...manager, icon: iconBySection[manager.section], to: undefined }
-    }
-    if (manager.scope === 'location') {
-      const rel = manager.route ? manager.route.replace(/^:location\/?/, '') : ''
-      const to = rel ? `${paths.value.site}/locations/${location}/${rel}` : `${paths.value.site}/locations/${location}`
-      return { ...manager, icon: iconBySection[manager.section], to }
-    }
-    return {
-      ...manager,
-      icon: iconBySection[manager.section],
-      to: manager.route ? `${paths.value.site}/${manager.route}` : paths.value.site,
-    }
   })
 })
 
