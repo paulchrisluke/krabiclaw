@@ -11,7 +11,7 @@ The Platform Admin MCP create/update tools were not callable in this Codex sessi
 
 ## Draft 1 Metadata
 
-Title: 70 AI Prompt Examples to Manage Your Restaurant Website With ChatGPT
+Title: AI Prompt Examples to Manage Your Restaurant Website With ChatGPT
 
 Slug suggestion: `ai-prompt-examples-restaurant-website-chatgpt`
 
@@ -21,7 +21,7 @@ Publish: false
 
 Excerpt: Copy-paste AI prompt examples for restaurant owners using KrabiClaw through ChatGPT to manage menus, photos, reviews, analytics, posts, translations, locations, and launch tasks.
 
-SEO description: 70 practical AI prompt examples for restaurant owners using ChatGPT and KrabiClaw to manage menus, photos, reviews, website copy, analytics, Google Business, translations, posts, and launch settings.
+SEO description: Practical AI prompt examples for restaurant owners using ChatGPT and KrabiClaw to manage menus, photos, reviews, website copy, analytics, Google Business, translations, posts, and launch settings.
 
 SEO keywords: AI prompts for restaurant owners, ChatGPT restaurant website, AI restaurant website builder, AI menu builder, AI menu import, restaurant website analytics AI, AI restaurant review management, sync Google Business restaurant, translate restaurant menu AI, AI restaurant social media posts
 
@@ -285,7 +285,7 @@ That is the right shape for a useful AI prompt: plain language, grounded in your
 
 ## Draft 2 Metadata
 
-Title: 60 AI Prompt Examples to Manage Your Tour or Experience Business With ChatGPT
+Title: AI Prompt Examples to Manage Your Tour or Experience Business With ChatGPT
 
 Slug suggestion: `ai-prompt-examples-tour-experience-business-chatgpt`
 

@@ -1,16 +1,29 @@
-import { resolveAgentGuidance, reviewAgentGuidanceCandidate, type AgentGuidanceCandidateType, type AgentSkillTask } from '~/server/utils/agent-skills/scoped'
+import {
+  parseAgentGuidanceCandidateType,
+  parseAgentSkillTask,
+  resolveAgentGuidance,
+  reviewAgentGuidanceCandidate,
+  type AgentGuidanceCandidateType,
+  type AgentSkillTask,
+} from '~/server/utils/agent-skills/scoped'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import type { McpExecutorContext } from './shared'
 import { NOT_HANDLED } from './shared'
 
 function requiredTask(args: Record<string, unknown>): AgentSkillTask {
-  if (args.task === 'blog.write' || args.task === 'image.generate') return args.task
-  throw mcpProtocolError(MCP_ERROR.invalidParams, 'task must be one of: blog.write, image.generate.')
+  try {
+    return parseAgentSkillTask(args.task)
+  } catch (error) {
+    return asInvalidParams(error)
+  }
 }
 
 function requiredCandidateType(args: Record<string, unknown>): AgentGuidanceCandidateType {
-  if (args.candidate_type === 'blog_draft' || args.candidate_type === 'image_brief') return args.candidate_type
-  throw mcpProtocolError(MCP_ERROR.invalidParams, 'candidate_type must be one of: blog_draft, image_brief.')
+  try {
+    return parseAgentGuidanceCandidateType(args.candidate_type)
+  } catch (error) {
+    return asInvalidParams(error)
+  }
 }
 
 function requiredCandidate(args: Record<string, unknown>) {
@@ -31,12 +44,16 @@ export async function handleAgentSkillTools(ctx: McpExecutorContext): Promise<un
   const { toolName, args, site } = ctx
   switch (toolName) {
     case "resolve_agent_guidance":
-      return await resolveAgentGuidance({
-        task: requiredTask(args),
-        surface: 'tenant_mcp',
-        organizationId: site.organizationId,
-        siteId: site.siteId,
-      })
+      try {
+        return await resolveAgentGuidance({
+          task: requiredTask(args),
+          surface: 'tenant_mcp',
+          organizationId: site.organizationId,
+          siteId: site.siteId,
+        })
+      } catch (error) {
+        return asInvalidParams(error)
+      }
     case "review_agent_guidance_candidate":
       try {
         return await reviewAgentGuidanceCandidate({

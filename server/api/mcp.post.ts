@@ -233,7 +233,7 @@ Whenever an image is needed (hero, logo, post thumbnail, menu photo, experience 
 4. Immediately call save_generated_image_file({ site_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
 5. Call show_generated_images with the assetId and publicUrl returned by save_generated_image_file.
 6. After the user approves, assign with the appropriate tool: set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, set_blog_post_image, or set_experience_image.
-7. If the user wants changes, call image_generation again with a revised prompt and repeat from step 4.
+7. If the user wants changes, revise the brief and repeat from step 2 so review_agent_guidance_candidate approves every changed image brief before image_generation or saving.
 
 This entire flow runs within the current conversation — do not tell the user to leave the app or use a different context.
 

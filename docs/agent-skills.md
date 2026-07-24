@@ -47,7 +47,7 @@ This is review evidence, not a publication blocker and not a persisted provenanc
 
 ## Security Boundary
 
-Skills must not contain or enforce:
+Skills must not be the authoritative enforcement point for:
 
 - authorization or tenant membership rules
 - tool input/output schemas
