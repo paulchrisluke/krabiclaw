@@ -88,9 +88,7 @@ const EXISTING_DEBT_ALLOWLIST = {
     'scripts/break-glass-promote-platform-admin.mjs',
   ]),
 
-  direct_oauth_token_sql: new Set([
-    'server/utils/mcp-auth.ts',
-  ]),
+  direct_oauth_token_sql: new Set([]),
 
   dashboard_context_headers: new Set([
     'PRODUCT.md',
@@ -113,7 +111,6 @@ const EXISTING_DEBT_ALLOWLIST = {
     'docs/local-mcp-harness.md',
     'server/api/auth/oauth2/test-private-client-metadata.get.ts',
     'server/utils/auth.ts',
-    'server/utils/mcp-auth.ts',
     'tests/e2e/oauth-discovery.spec.ts',
   ]),
 }
@@ -244,9 +241,9 @@ async function checkMcpResourceBoundary() {
     ['server/api/mcp/platform.post.ts', "requiredScopes: ['platform_admin']", 'platform MCP scope'],
     ['server/api/mcp/platform.post.ts', 'requirePlatformAdmin: true', 'platform MCP admin gate'],
     ['server/routes/.well-known/oauth-protected-resource.get.ts', 'resource: `${baseUrl}/api/mcp`', 'tenant protected resource metadata'],
-    ['server/routes/.well-known/oauth-protected-resource.get.ts', "scopes_supported: ['openid', 'offline_access', 'tenant']", 'tenant protected resource scopes'],
+    ['server/routes/.well-known/oauth-protected-resource.get.ts', "scopes_supported: ['offline_access', 'tenant']", 'tenant protected resource scopes'],
     ['server/routes/.well-known/oauth-protected-resource/platform-mcp.get.ts', 'resource: `${baseUrl}/api/mcp/platform`', 'platform protected resource metadata'],
-    ['server/routes/.well-known/oauth-protected-resource/platform-mcp.get.ts', "scopes_supported: ['openid', 'offline_access', 'platform_admin']", 'platform protected resource scopes'],
+    ['server/routes/.well-known/oauth-protected-resource/platform-mcp.get.ts', "scopes_supported: ['offline_access', 'platform_admin']", 'platform protected resource scopes'],
     ['server/utils/auth.ts', "identifier: `${authBaseUrl}/api/mcp`", 'tenant OAuth resource registration'],
     ['server/utils/auth.ts', "allowedScopes: ['openid', 'offline_access', 'tenant']", 'tenant OAuth resource scopes'],
     ['server/utils/auth.ts', "identifier: `${authBaseUrl}/api/mcp/platform`", 'platform OAuth resource registration'],
