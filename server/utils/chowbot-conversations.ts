@@ -1,6 +1,6 @@
 import type { ChowBotToolCall, JsonSerializable } from '~/server/utils/chowbot-agent'
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { assertSiteWideAccess, isOrganizationWideRole } from '~/server/utils/member-access'
+import { assertSiteWideAccess, isOrganizationWideRole, teamAccessPredicate } from '~/server/utils/member-access'
 
 export type ChowBotChannel = 'dashboard' | 'whatsapp'
 export type ChowBotRole = 'user' | 'assistant' | 'system' | 'tool'
@@ -118,36 +118,14 @@ export async function listSitesForMember(
   db: DbClient,
   userId: string,
 ): Promise<ChowBotSiteAccess[]> {
-  const results = await queryAll<ChowBotSiteAccess & { member_id: string }>(db, `
-    SELECT s.id, s.organization_id, s.brand_name, s.default_currency, m.role, m.id AS member_id
+  return await queryAll<ChowBotSiteAccess>(db, `
+    SELECT s.id, s.organization_id, s.brand_name, s.default_currency, m.role
     FROM sites s
     JOIN member m ON s.organization_id = m.organizationId
     WHERE m.userId = ? AND s.status = 'active'
+      AND (m.role IN ('owner', 'admin') OR (m.role = 'editor' AND ${teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id' })}))
     ORDER BY s.updated_at DESC
   `, [userId])
-  const hasScopedMembership = (results ?? []).some(row => !isOrganizationWideRole(row.role))
-  const siteWideScopes = hasScopedMembership
-    ? await queryAll<{ member_id: string; site_id: string }>(db, `
-        SELECT m.id AS member_id, s.id AS site_id
-        FROM member m
-        JOIN sites s ON s.organization_id = m.organizationId
-        JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId = s.team_id
-        WHERE m.userId = ?
-      `, [userId])
-    : []
-  const siteWideScopeKeys = new Set(siteWideScopes.map(scope => `${scope.member_id}:${scope.site_id}`))
-
-  const accessible: ChowBotSiteAccess[] = []
-  for (const row of results ?? []) {
-    if (isOrganizationWideRole(row.role)) {
-      accessible.push(row)
-      continue
-    }
-    if (row.role === 'editor' && siteWideScopeKeys.has(`${row.member_id}:${row.id}`)) {
-      accessible.push(row)
-    }
-  }
-  return accessible
 }
 
 export async function listConversations(

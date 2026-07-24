@@ -5,6 +5,39 @@ import { parsePhoneOrThrow } from '~/utils/phone'
 // Auth Teams membership. Owner/admin are organization-wide. Editors are scoped
 // by membership in a site's team and/or one or more location teams.
 
+/**
+ * Composes the team-membership EXISTS predicate shared by every bulk query
+ * that filters a set of rows (locations, events, notifications, member-owned
+ * sites) down to what a scoped editor's Teams membership actually covers —
+ * dashboard-home.ts, chowbot-conversations.ts, and whatsapp/webhook.post.ts
+ * each independently wrote this same `EXISTS (SELECT 1 FROM teamMember tm
+ * WHERE tm.userId = ... AND tm.teamId ...)` shape before this was extracted.
+ *
+ * A pure string builder rather than a per-row async function: every caller
+ * here filters many rows in one query for performance (avoiding an N+1
+ * `hasTeamAccess()` call per row), so the predicate has to compose into the
+ * caller's own SQL, not replace it. Point-lookup checks (assertSiteWideAccess,
+ * assertLocationAccess, etc. below) stay as their own queries — they're
+ * already correct, already tested, and a single-row lookup gets no benefit
+ * from string-templating its own predicate.
+ *
+ * `userIdExpr` is the caller's already-joined `member.userId` column
+ * reference (e.g. `m.userId`). `siteTeamExpr`/`locationTeamExpr` are the
+ * caller's `sites.team_id`/`business_locations.team_id` column references —
+ * pass `locationTeamExpr` only when the row being filtered can itself be
+ * location-scoped; omitting it produces a site-wide-only check.
+ */
+export function teamAccessPredicate(opts: {
+  userIdExpr: string
+  siteTeamExpr: string
+  locationTeamExpr?: string | null
+}): string {
+  const teamIdMatch = opts.locationTeamExpr
+    ? `tm.teamId IN (${opts.siteTeamExpr}, ${opts.locationTeamExpr})`
+    : `tm.teamId = ${opts.siteTeamExpr}`
+  return `EXISTS (SELECT 1 FROM teamMember tm WHERE tm.userId = ${opts.userIdExpr} AND ${teamIdMatch})`
+}
+
 export interface ResourceTeamAccess {
   organizationId: string
   siteId: string
