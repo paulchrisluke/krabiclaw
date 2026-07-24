@@ -2,7 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { queryAll } from '~/server/db'
 import { betterAuthTimestampToIso, type BetterAuthTimestamp } from '~/server/utils/better-auth-timestamps'
-import { adminHeadersForEvent, authAdminApi, listPlatformAdminUsers } from '~/server/utils/platform-admin-users'
+import { adminHeadersForEvent, authAdminApi, listPlatformAdminUsers, platformPermissionError, requirePlatformEventPermission } from '~/server/utils/platform-admin-users'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -10,6 +10,7 @@ export default defineEventHandler(async (event) => {
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   try {
+    await requirePlatformEventPermission(event, env, { user: ['list'] })
     const [team, pendingInvitationRows] = await Promise.all([
       listPlatformAdminUsers(authAdminApi(env), adminHeadersForEvent(event)),
       queryAll<{
@@ -38,8 +39,7 @@ export default defineEventHandler(async (event) => {
       pendingInvitations,
     })
   } catch (error) {
-    const statusCode = typeof (error as { statusCode?: unknown })?.statusCode === 'number' ? (error as { statusCode: number }).statusCode : 500
-    const message = typeof (error as { statusMessage?: unknown })?.statusMessage === 'string' ? (error as { statusMessage: string }).statusMessage : 'Failed to fetch members'
+    const { statusCode, message } = platformPermissionError(error, 'Failed to fetch members')
     return jsonResponse({ error: message }, { status: statusCode })
   }
 })

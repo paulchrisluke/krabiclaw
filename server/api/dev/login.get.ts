@@ -3,7 +3,7 @@
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { createAuth } from '~/server/utils/auth'
 import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
-import { hasBetterAuthAdminRole } from '~/server/utils/platform-auth'
+import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
 import { execute, queryAll, queryFirst } from '~/server/db'
 
 // Mirrors better-call's signCookieValue (HMAC-SHA256, base64(raw signature),
@@ -124,14 +124,14 @@ export default defineEventHandler(async (event) => {
       row.has_site === 1 &&
       row.is_owner === 1 &&
       row.has_org === 1 &&
-      !hasBetterAuthAdminRole(row.role)
+      !hasPlatformAdminPermission(row.role)
     ) || rows.find((row) =>
       row.is_owner === 1 &&
       row.has_org === 1 &&
-      !hasBetterAuthAdminRole(row.role)
+      !hasPlatformAdminPermission(row.role)
     ) || rows.find((row) =>
       row.has_org === 1 &&
-      !hasBetterAuthAdminRole(row.role)
+      !hasPlatformAdminPermission(row.role)
     ) || null
     if (!user) {
       throw createError({ statusCode: 500, statusMessage: 'No suitable dev user (prefer owner with site, fallback owner with org, fallback member with org)' })

@@ -1,7 +1,7 @@
 // GET /api/admin/blog/posts/[postId] - Fetch single platform blog post (including draft)
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { getPlatformBlogPost } from '~/server/utils/platform-content'
 
 function auditLog(action: string, payload: ApiRecord) {
@@ -19,12 +19,13 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  if (!isPlatformAdmin(session.user, env)) {
+  const permissionDenied = await platformPermissionJsonResponse(event, env, { platform: ['content'] })
+  if (permissionDenied) {
     auditLog('admin_read_denied', {
       email: session.user.email,
       postId
     })
-    return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
+    return permissionDenied
   }
 
   try {

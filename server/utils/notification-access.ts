@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { isOrganizationWideRole } from '~/server/utils/member-access'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
 export interface NotificationVisibilityPrincipal {
   userId: string
@@ -57,7 +57,7 @@ export function buildNotificationVisibilityFilter(principal: NotificationVisibil
 
 export async function getNotificationAccess(event: H3Event) {
   const context = await getDashboardContext(event, { requireSite: false, requireOrganization: false })
-  const platformAdmin = isPlatformAdmin(context.session.user as { role?: string | null; email?: string | null }, context.env)
+  const platformAdmin = await hasPlatformEventPermission(event, context.env, { platform: ['access'] })
   const filter = buildNotificationVisibilityFilter({
     userId: context.userId,
     platformAdmin,

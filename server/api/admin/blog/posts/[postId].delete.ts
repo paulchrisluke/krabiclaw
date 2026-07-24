@@ -1,7 +1,7 @@
 // DELETE /api/admin/blog/posts/[postId] - Delete platform blog post
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { deletePlatformBlogPost } from '~/server/utils/platform-content'
 import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-search-rebuild'
 
@@ -16,9 +16,8 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  if (!isPlatformAdmin(session.user, env)) {
-    return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
-  }
+  const permissionDenied = await platformPermissionJsonResponse(event, env, { platform: ['content'] })
+  if (permissionDenied) return permissionDenied
 
   try {
     const result = await deletePlatformBlogPost(db, postId)

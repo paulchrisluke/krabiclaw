@@ -1,7 +1,6 @@
 // GET /api/admin/clients — orgs on managed service plans
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { platformPermissionError, requirePlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { queryAll } from '~/server/db'
 
 interface ClientRow {
@@ -28,9 +27,12 @@ export default defineEventHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
+  try {
+    await requirePlatformEventPermission(event, env, { platform: ['billing'] })
+  } catch (error) {
+    const { statusCode, message } = platformPermissionError(error)
+    return jsonResponse({ error: message }, { status: statusCode })
+  }
 
   const clients = await queryAll<ClientRow>(db, `
     WITH single_site AS (
@@ -59,7 +61,7 @@ export default defineEventHandler(async (event) => {
       o.id AS org_id,
       o.name AS org_name,
       o.slug AS org_slug,
-      COALESCE(sb.plan, 'free') AS plan,
+      COALESCE(sb.plan, s.plan, 'free') AS plan,
       s.id AS site_id,
       s.brand_name,
       s.subdomain,
@@ -78,7 +80,7 @@ export default defineEventHandler(async (event) => {
     LEFT JOIN site_billing sb ON sb.site_id = s.id
     LEFT JOIN pending_transfer pt ON pt.from_organization_id = o.id AND pt.rn = 1
     LEFT JOIN workspace_member wm ON wm.organizationId = o.id AND wm.rn = 1
-    WHERE sb.plan IN ('growth', 'managed', 'seo_accelerator')
+    WHERE COALESCE(sb.plan, s.plan) IN ('growth', 'managed', 'seo_accelerator')
     ORDER BY
       CASE sb.plan
         WHEN 'seo_accelerator' THEN 0

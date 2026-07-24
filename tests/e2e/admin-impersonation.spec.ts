@@ -24,6 +24,13 @@ test('platform admin enters and exits a client workspace through Better Auth imp
   const initialLogin = await page.goto(devLoginUrl(baseURL!, adminUserId), { waitUntil: 'load' })
   expect(initialLogin?.status()).toBeLessThan(400)
 
+  const deniedAccess = await page.request.get(`${baseURL}/api/admin/access`)
+  expect(deniedAccess.status()).toBe(200)
+  expect(await deniedAccess.json()).toMatchObject({ allowed: false })
+
+  const deniedClients = await page.request.get(`${baseURL}/api/admin/clients`)
+  expect(deniedClients.status()).toBe(403)
+
   promoteLocalPlatformAdmin(adminEmail)
 
   const adminLogin = await page.goto(devLoginUrl(baseURL!, adminUserId), { waitUntil: 'load' })

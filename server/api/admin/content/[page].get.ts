@@ -1,7 +1,6 @@
 // GET /api/admin/content/[page] - Get platform page content
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { queryFirst } from '~/server/db'
 
 import { ALLOWED_PLATFORM_CONTENT_PAGES } from '~/utils/platform-content-pages'
@@ -15,12 +14,8 @@ export default defineEventHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.email || !session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
-  if (!isPlatformAdmin(session.user, env)) {
-    return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
-  }
+  const permissionDenied = await platformPermissionJsonResponse(event, env, { platform: ['content'] })
+  if (permissionDenied) return permissionDenied
 
   let row
   try {

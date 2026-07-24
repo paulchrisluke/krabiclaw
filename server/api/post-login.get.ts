@@ -3,7 +3,7 @@
 import { getQuery } from 'h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { queryFirst } from '~/server/db'
 import { userHasLinkedCustomers } from '~/server/utils/guest-claims'
 import { validatedInternalPath } from '~/shared/auth/return-target'
@@ -18,10 +18,8 @@ export default defineEventHandler(async (event) => {
   const redirect = validatedInternalPath(getQuery(event).redirect)
   if (redirect) return sendRedirect(event, redirect)
 
-  const user = session.user as typeof session.user & { role?: string }
-
   // Platform owners and admins always go to admin
-  if (isPlatformAdmin(user, env)) {
+  if (await hasPlatformEventPermission(event, env, { platform: ['access'] })) {
     return sendRedirect(event, '/admin')
   }
 

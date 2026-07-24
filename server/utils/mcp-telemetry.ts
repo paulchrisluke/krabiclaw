@@ -1,5 +1,5 @@
 import { execute, type DbClient } from "~/server/db";
-import { anonymizeId } from "~/server/utils/platform-auth";
+import { anonymizeId } from "~/server/utils/platform-telemetry";
 
 // Field names that must never be logged verbatim, regardless of tool.
 const SENSITIVE_KEY_PATTERN =
