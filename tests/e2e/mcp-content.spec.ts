@@ -113,12 +113,20 @@ test.describe('stateless MCP server', () => {
       expect(repeatedPost.channels.filter(job => job.channel === 'facebook')).toHaveLength(1)
     } finally {
       if (createdPostId) {
-        await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_post', args: { site_id: siteId, post_id: createdPostId } })
+        const cleanup = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_post', args: { site_id: siteId, post_id: createdPostId } })
+        if (cleanup.status() !== 200 || (await cleanup.json()).result?.isError) {
+          console.error(`Failed to clean up post ${createdPostId} on ${siteId}: status ${cleanup.status()}`)
+        }
       }
     }
   })
 
+  // Comparable round-trip count to the publish/idempotency test above (4
+  // creates/reads plus 2 deletes), which needed an explicit 60s budget under
+  // preview-deploy load — this test was missed with the default 30s when the
+  // file was split and timed out the same way (run 30084182210).
   test('event and offer post types store their type-specific fields', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
     await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
     const siteId = MCP_MANAGED_SITE_ID
     const now = Date.now()
@@ -150,7 +158,10 @@ test.describe('stateless MCP server', () => {
       expect(offerPost).toMatchObject({ post_type: 'offer', offer_coupon: 'MCP20', offer_terms: 'Valid during the E2E window.' })
     } finally {
       for (const postId of createdPostIds) {
-        await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_post', args: { site_id: siteId, post_id: postId } })
+        const cleanup = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_post', args: { site_id: siteId, post_id: postId } })
+        if (cleanup.status() !== 200 || (await cleanup.json()).result?.isError) {
+          console.error(`Failed to clean up post ${postId} on ${siteId}: status ${cleanup.status()}`)
+        }
       }
     }
   })
