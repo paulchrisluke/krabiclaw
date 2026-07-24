@@ -17,7 +17,6 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
         site.db,
         site.siteId,
         site.userId,
-        site.isPlatformAdmin,
       );
       const subdomain = (siteRow as Record<string, unknown>).subdomain as string | null | undefined;
       const customDomain = (siteRow as Record<string, unknown>).custom_domain as string | null | undefined;

@@ -34,17 +34,7 @@ import { reorderQa, updateQa } from "~/server/utils/location-qa";
 export async function listSitesForUser(
   db: D1Database,
   userId: string,
-  isPlatformAdmin: boolean,
 ) {
-  if (isPlatformAdmin) {
-    return await queryAll<Record<string, unknown>>(db, `
-      SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
-             s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
-      FROM sites s
-      ORDER BY s.created_at DESC
-    `);
-  }
-
   const orgRows = await queryAll<{ id: string }>(db, `
     SELECT o.id
     FROM organization o
@@ -69,17 +59,8 @@ export async function getSiteForMcp(
   db: D1Database,
   siteId: string,
   userId: string,
-  isPlatformAdmin = false,
 ) {
-  const site = isPlatformAdmin
-    ? await queryFirst<Record<string, unknown>>(db, `
-      SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
-             s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
-      FROM sites s
-      WHERE s.id = ?
-      LIMIT 1
-    `, [siteId])
-    : await queryFirst<Record<string, unknown>>(db, `
+  const site = await queryFirst<Record<string, unknown>>(db, `
       SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
              s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
       FROM sites s
