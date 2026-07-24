@@ -6,6 +6,7 @@ import { parsePhone } from "~/utils/phone";
 import type { CmsCapabilityOverrideDelta, ProductFeature } from "~/config/cms-registry";
 import { resolveSiteCmsCapabilities } from "~/server/utils/cms-capabilities";
 import { checkModuleHasLiveData } from "~/server/utils/module-content-guard";
+import { ensureLocationTeam } from "~/server/utils/member-access";
 
 // Require format-valid E.164 at the shared location write boundary (issue
 // #293 Section D/I) — this is the one place createLocation/updateLocation
@@ -759,6 +760,7 @@ export async function createLocation(
       }
 
       await executeBatch(db, statements);
+      await ensureLocationTeam(db, { organizationId, siteId, locationId: id, name: title });
       const location = await loadLocation(db, organizationId, siteId, id);
       await fireSiteEventSafe({
         db,

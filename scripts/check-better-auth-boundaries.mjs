@@ -28,32 +28,6 @@ const ALWAYS_ALLOWED_FILES = new Set([
 ])
 
 const EXISTING_DEBT_ALLOWLIST = {
-  member_access_scope: new Set([
-    'docs/audits/0341-workstream-a-authorization.md',
-    'pages/dashboard/[orgSlug]/settings/members.vue',
-    'scripts/backfill-whatsapp-members.mjs',
-    'server/api/dashboard/invitations/[invitationId]/retry.post.ts',
-    'server/api/dashboard/locations/index.get.ts',
-    'server/api/dashboard/organizations/members/[memberId]/remove.post.ts',
-    'server/api/invitations/[invitationId]/accept.post.ts',
-    'server/api/whatsapp/webhook.post.ts',
-    'server/utils/chowbot-conversations.ts',
-    'server/utils/dashboard-context.ts',
-    'server/utils/dashboard-home.ts',
-    'server/utils/dev-test-members.ts',
-    'server/utils/mcp-auth.ts',
-    'server/utils/member-access.ts',
-    'server/utils/notification-access.ts',
-    'server/utils/whatsapp-access.ts',
-    'server/utils/whatsapp-revocation.ts',
-    'tests/unit/editor-scope-migration.test.ts',
-    'tests/unit/guest-threads.test.ts',
-    'tests/unit/member-access.test.ts',
-    'tests/unit/notification-access.test.ts',
-    'tests/unit/whatsapp-backfill-script.test.ts',
-    'tests/unit/whatsapp-revocation.test.ts',
-  ]),
-
   admin_impersonation_proxy: new Set([
     'tests/unit/dashboard-ia.test.ts',
   ]),

@@ -3,11 +3,9 @@
 //
 // G — clearing/replacing a location's `notification_phone` or a site's
 // `site_config['whatsapp_phone']` must remove only the recipient's
-// WhatsApp-derived scope for that exact site/location. Manual and migration-
-// backfilled grants are preserved. An editor left with zero scopes anywhere
-// in the org has their organization membership removed (their only reason to
-// be a member was that scope — see #341 Workstream A: editor is always
-// constrained through member_access_scope).
+// WhatsApp-derived team membership for that exact site/location. An editor
+// left with zero resource teams anywhere in the org has their organization
+// membership removed.
 //
 // H — removing a scoped editor directly must first surface (and let the
 // caller clear) any notification assignments still pointing at their verified
@@ -20,7 +18,7 @@
 // removal path here is gated on `isScopedRole(role)` (i.e. `editor`)
 // specifically, never an org-wide role.
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { isScopedRole, listMemberAccessScopes } from '~/server/utils/member-access'
+import { isScopedRole, listResourceTeamAccesss, removeMemberResourceAccess } from '~/server/utils/member-access'
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/site-events'
 import type { createAuth } from '~/server/utils/auth'
 
@@ -39,8 +37,8 @@ export interface RemoveMembershipResult {
 }
 
 /**
- * If `memberId` is a scoped editor with zero remaining `member_access_scope`
- * rows anywhere in the org, removes their organization membership. No-op
+ * If `memberId` is a scoped editor with zero remaining resource teams anywhere
+ * in the org, removes their organization membership. No-op
  * (and returns `{ removed: false }`) for any other role, for a member with
  * remaining scopes, or for an unknown member id.
  *
@@ -75,7 +73,7 @@ export async function removeOrgMembershipIfNoScopesRemain(
   // left has no remaining reason to be a member at all.
   if (!isScopedRole(member.role)) return { removed: false }
 
-  const scopes = await listMemberAccessScopes(db, memberId)
+  const scopes = await listResourceTeamAccesss(db, memberId)
   if (scopes.length > 0) return { removed: false }
 
   if (auth && options?.actorHeaders) {
@@ -135,14 +133,9 @@ export interface PhoneChangeResult {
 /**
  * Call on every write to `business_locations.notification_phone` or
  * `site_config['whatsapp_phone']` where the phone value actually changed.
- * Removes only a WhatsApp-derived `member_access_scope` row for this exact
- * site/location — manual/backfilled grants and other scope rows (other sites/
- * locations, even ones that still list the same phone number) are untouched
- * by construction, since the DELETE below is always scoped to the single
- * `(site_id, location_id)` pair this config write is for. That's the whole
- * "recalculation": a shared number configured at N places has N independent
- * scope rows, and clearing one config slot only ever removes the one scope
- * row tied to that slot.
+ * Removes the resource team membership for this exact site/location. A shared
+ * number configured at N places has N independent team memberships, and
+ * clearing one config slot only removes the one tied to that slot.
  *
  * A no-op (idempotent) when `previousPhone` is empty or unchanged — re-saving
  * the same number must not re-trigger removal/audit events.
@@ -159,8 +152,8 @@ export async function recalculateScopesForPhoneChange(
     return { scopeRemoved: false, memberRemoved: false }
   }
 
-  const holder = await queryFirst<{ memberId: string; role: string }>(db, `
-    SELECT m.id AS memberId, m.role
+  const holder = await queryFirst<{ memberId: string; role: string; userId: string }>(db, `
+    SELECT m.id AS memberId, m.role, m.userId
     FROM user u
     JOIN member m ON m.userId = u.id AND m.organizationId = ?
     WHERE u.phoneNumber = ? AND u.phoneNumberVerified = 1
@@ -172,19 +165,12 @@ export async function recalculateScopesForPhoneChange(
   // the DELETE below is further restricted to WhatsApp-derived grants.
   if (!isScopedRole(holder.role)) return { scopeRemoved: false, memberRemoved: false }
 
-  const deleteResult = scopeType === 'location'
-    ? await execute(db, `
-        DELETE FROM member_access_scope
-        WHERE member_id = ? AND organization_id = ? AND site_id = ? AND location_id = ?
-          AND grant_source = 'whatsapp_config'
-      `, [holder.memberId, organizationId, siteId, locationId])
-    : await execute(db, `
-        DELETE FROM member_access_scope
-        WHERE member_id = ? AND organization_id = ? AND site_id = ? AND location_id IS NULL
-          AND grant_source = 'whatsapp_config'
-      `, [holder.memberId, organizationId, siteId])
-
-  const scopeRemoved = (deleteResult.meta?.changes ?? 0) > 0
+  const scopeRemoved = await removeMemberResourceAccess(db, {
+    userId: holder.userId,
+    organizationId,
+    siteId,
+    locationId,
+  })
   if (!scopeRemoved) return { scopeRemoved: false, memberRemoved: false }
 
   await fireSiteEventSafe({

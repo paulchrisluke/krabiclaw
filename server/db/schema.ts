@@ -179,6 +179,7 @@ export const business_locations = sqliteTable("business_locations", {
 	canonical_url: text(),
 	robots: text(),
 	og_image_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
+	team_id: text().references((): AnySQLiteColumn => team.id, { onDelete: "set null" } ),
 	// JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts).
 	// NULL means "inherit the parent site's effective feature set" — never the vertical defaults
 	// directly. `enabled` entries must always be a subset of what the site itself resolves to;
@@ -485,6 +486,7 @@ export const invitation = sqliteTable("invitation", {
 	status: text().default("pending").notNull(),
 	expiresAt: integer({ mode: "timestamp" }).notNull(),
 	inviterId: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
+	teamId: text().references((): AnySQLiteColumn => team.id, { onDelete: "set null" } ),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 }, (table) => [
 	index("invitation_organizationId_idx").on(table.organizationId),
@@ -628,19 +630,25 @@ export const member = sqliteTable("member", {
 	index("member_organizationId_idx").on(table.organizationId),
 ]);
 
-export const member_access_scope = sqliteTable("member_access_scope", {
+export const team = sqliteTable("team", {
 	id: text().primaryKey(),
-	member_id: text().notNull().references(() => member.id, { onDelete: "cascade" }),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
-	location_id: text().references(() => business_locations.id, { onDelete: "cascade" }),
-	grant_source: text().default("manual").notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	name: text().notNull(),
+	organizationId: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
+	updatedAt: integer({ mode: "timestamp" }),
 }, (table) => [
-	uniqueIndex("idx_member_access_scope_unique").on(table.member_id, table.site_id, table.location_id),
-	uniqueIndex("idx_member_access_scope_site_unique").on(table.member_id, table.site_id).where(sql`location_id IS NULL`),
-	index("idx_member_access_scope_member_id").on(table.member_id),
-	index("idx_member_access_scope_resource").on(table.organization_id, table.site_id, table.location_id),
+	index("team_organizationId_idx").on(table.organizationId),
+]);
+
+export const teamMember = sqliteTable("teamMember", {
+	id: text().primaryKey(),
+	teamId: text().notNull().references(() => team.id, { onDelete: "cascade" } ),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
+	membershipKey: text().unique(),
+	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
+}, (table) => [
+	index("teamMember_teamId_idx").on(table.teamId),
+	index("teamMember_userId_idx").on(table.userId),
 ]);
 
 export const menu_item_translations = sqliteTable("menu_item_translations", {
@@ -2054,6 +2062,7 @@ export const sites = sqliteTable("sites", {
 	seo_description: text(),
 	canonical_url: text(),
 	robots: text(),
+	team_id: text().references((): AnySQLiteColumn => team.id, { onDelete: "set null" } ),
 	// JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts)
 	// layered additively/subtractively on top of the vertical's own module defaults — NULL means
 	// "use vertical defaults as-is." Only real business modules (menu/ordering/reservations/

@@ -36,13 +36,29 @@ export async function createDevTestMember(
   if (input.role === 'editor') {
     queries.push({
       query: `
-        INSERT OR IGNORE INTO member_access_scope
-          (id, member_id, organization_id, site_id, location_id, grant_source)
-        SELECT lower(hex(randomblob(16))), ?, ?, id, NULL, 'manual'
+        INSERT OR IGNORE INTO team (id, name, organizationId, createdAt)
+        SELECT 'site:' || id, COALESCE(brand_name, id), organization_id, ?
         FROM sites
         WHERE organization_id = ?
       `,
-      params: [input.memberId, input.organizationId, input.organizationId],
+      params: [input.now, input.organizationId],
+    })
+    queries.push({
+      query: `
+        UPDATE sites
+        SET team_id = 'site:' || id
+        WHERE organization_id = ? AND team_id IS NULL
+      `,
+      params: [input.organizationId],
+    })
+    queries.push({
+      query: `
+        INSERT OR IGNORE INTO teamMember (id, teamId, userId, membershipKey, createdAt)
+        SELECT lower(hex(randomblob(16))), team_id, ?, team_id || ':' || ?, ?
+        FROM sites
+        WHERE organization_id = ? AND team_id IS NOT NULL
+      `,
+      params: [input.userId, input.userId, input.now, input.organizationId],
     })
   }
 

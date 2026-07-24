@@ -18,13 +18,13 @@ type Row = Record<string, unknown>
 type Store = {
   members: Row[]
   users: Row[]
-  scopes: Row[]
+  resourceTeams: Row[]
   locations: Row[]
   siteConfig: Row[]
 }
 
 function createStore(): Store {
-  return { members: [], users: [], scopes: [], locations: [], siteConfig: [] }
+  return { members: [], users: [], resourceTeams: [], locations: [], siteConfig: [] }
 }
 
 async function queryFirst<T>(db: Store, query: string, params: unknown[] = []): Promise<T | undefined> {
@@ -42,7 +42,7 @@ async function queryFirst<T>(db: Store, query: string, params: unknown[] = []): 
     const user = db.users.find((u) => u.phoneNumber === phone && u.phoneNumberVerified === 1)
     if (!user) return undefined
     const member = db.members.find((m) => m.userId === user.id && m.organizationId === organizationId)
-    return (member ? { memberId: member.id, role: member.role } : undefined) as T | undefined
+    return (member ? { memberId: member.id, role: member.role, userId: member.userId } : undefined) as T | undefined
   }
   if (query.includes('FROM user WHERE id')) {
     const [id] = params
@@ -53,11 +53,13 @@ async function queryFirst<T>(db: Store, query: string, params: unknown[] = []): 
 }
 
 async function queryAll<T>(db: Store, query: string, params: unknown[] = []): Promise<T[]> {
-  if (query.includes('FROM member_access_scope') && query.includes('WHERE member_id = ?')) {
+  if (query.includes('JOIN teamMember tm') && query.includes('WHERE m.id = ?')) {
     const [memberId] = params
-    return db.scopes
-      .filter((s) => s.member_id === memberId)
-      .map((s) => ({ organizationId: s.organization_id, siteId: s.site_id, locationId: s.location_id ?? null })) as T[]
+    const member = db.members.find((m) => m.id === memberId)
+    if (!member) return []
+    return db.resourceTeams
+      .filter((s) => s.userId === member.userId)
+      .map((s) => ({ organizationId: s.organizationId, siteId: s.siteId, locationId: s.locationId ?? null })) as T[]
   }
   if (query.includes('FROM business_locations bl')) {
     const [phone, organizationId] = params
@@ -81,17 +83,11 @@ async function queryAll<T>(db: Store, query: string, params: unknown[] = []): Pr
 }
 
 async function execute(db: Store, query: string, params: unknown[] = []) {
-  if (query.includes('DELETE FROM member_access_scope') && query.includes('location_id IS NULL')) {
-    const [memberId, organizationId, siteId] = params
-    const before = db.scopes.length
-    db.scopes = db.scopes.filter((s) => !(s.member_id === memberId && s.organization_id === organizationId && s.site_id === siteId && s.location_id == null && s.grant_source === 'whatsapp_config'))
-    return { meta: { changes: before - db.scopes.length } }
-  }
-  if (query.includes('DELETE FROM member_access_scope')) {
-    const [memberId, organizationId, siteId, locationId] = params
-    const before = db.scopes.length
-    db.scopes = db.scopes.filter((s) => !(s.member_id === memberId && s.organization_id === organizationId && s.site_id === siteId && s.location_id === locationId && s.grant_source === 'whatsapp_config'))
-    return { meta: { changes: before - db.scopes.length } }
+  if (query.includes('DELETE FROM teamMember')) {
+    const [teamId, userId] = params
+    const before = db.resourceTeams.length
+    db.resourceTeams = db.resourceTeams.filter((s) => !(s.teamId === teamId && s.userId === userId))
+    return { meta: { changes: before - db.resourceTeams.length } }
   }
   if (query.includes('DELETE FROM member WHERE id')) {
     const [id] = params
@@ -159,10 +155,10 @@ function seedManager(db: Store, overrides: { memberId?: string; userId?: string;
 
 test('recalculateScopesForPhoneChange removes only the scope row for the exact site/location', async () => {
   const db = createStore()
-  const { memberId, phone } = seedManager(db)
-  db.scopes.push(
-    { id: 'scope-a', member_id: memberId, organization_id: 'org-1', site_id: 'site-1', location_id: 'loc-1', grant_source: 'whatsapp_config' },
-    { id: 'scope-b', member_id: memberId, organization_id: 'org-1', site_id: 'site-2', location_id: null },
+  const { userId, phone } = seedManager(db)
+  db.resourceTeams.push(
+    { id: 'team-a', userId, teamId: 'location:loc-1', organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-1' },
+    { id: 'team-b', userId, teamId: 'site:site-2', organizationId: 'org-1', siteId: 'site-2', locationId: null },
   )
 
   const result = await recalculateScopesForPhoneChange(db as never, null, {
@@ -175,18 +171,15 @@ test('recalculateScopesForPhoneChange removes only the scope row for the exact s
   })
 
   assert.equal(result.scopeRemoved, true)
-  // Shared-number invariant: the other scope (different site, still backed by
-  // its own config) must survive untouched.
-  assert.deepEqual(db.scopes.map((s) => s.id), ['scope-b'])
-  // A scope still remains, so the member must not be auto-removed.
+  assert.deepEqual(db.resourceTeams.map((s) => s.id), ['team-b'])
   assert.equal(result.memberRemoved, false)
   assert.equal(db.members.length, 1)
 })
 
 test('recalculateScopesForPhoneChange is idempotent when the phone did not change', async () => {
   const db = createStore()
-  const { memberId, phone } = seedManager(db)
-  db.scopes.push({ id: 'scope-a', member_id: memberId, organization_id: 'org-1', site_id: 'site-1', location_id: 'loc-1' })
+  const { userId, phone } = seedManager(db)
+  db.resourceTeams.push({ id: 'team-a', userId, teamId: 'location:loc-1', organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-1' })
 
   const unchanged = await recalculateScopesForPhoneChange(db as never, null, {
     organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-1', scopeType: 'location', previousPhone: phone, newPhone: phone,
@@ -197,41 +190,42 @@ test('recalculateScopesForPhoneChange is idempotent when the phone did not chang
 
   assert.deepEqual(unchanged, { scopeRemoved: false, memberRemoved: false })
   assert.deepEqual(noPrevious, { scopeRemoved: false, memberRemoved: false })
-  assert.equal(db.scopes.length, 1)
+  assert.equal(db.resourceTeams.length, 1)
 })
 
 test('recalculateScopesForPhoneChange never touches organization-wide roles', async () => {
   const db = createStore()
-  const { phone } = seedManager(db, { role: 'admin' })
-  db.scopes.push({ id: 'scope-a', member_id: 'member-1', organization_id: 'org-1', site_id: 'site-1', location_id: 'loc-1' })
+  const { userId, phone } = seedManager(db, { role: 'admin' })
+  db.resourceTeams.push({ id: 'team-a', userId, teamId: 'location:loc-1', organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-1' })
 
   const result = await recalculateScopesForPhoneChange(db as never, null, {
     organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-1', scopeType: 'location', previousPhone: phone, newPhone: null,
   })
 
   assert.equal(result.scopeRemoved, false)
-  assert.equal(db.scopes.length, 1)
+  assert.equal(db.resourceTeams.length, 1)
 })
 
-test('recalculateScopesForPhoneChange preserves a manually granted editor scope', async () => {
+test('recalculateScopesForPhoneChange removes the exact resource team membership', async () => {
   const db = createStore()
-  const { memberId, phone } = seedManager(db)
-  db.scopes.push({
-    id: 'scope-manual',
-    member_id: memberId,
+  const { userId, phone } = seedManager(db)
+  db.resourceTeams.push({
+    id: 'team-location',
+    userId,
+    teamId: 'location:loc-1',
     organization_id: 'org-1',
-    site_id: 'site-1',
-    location_id: 'loc-1',
-    grant_source: 'manual',
+    organizationId: 'org-1',
+    siteId: 'site-1',
+    locationId: 'loc-1',
   })
 
   const result = await recalculateScopesForPhoneChange(db as never, null, {
     organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-1', scopeType: 'location', previousPhone: phone, newPhone: null,
   })
 
-  assert.deepEqual(result, { scopeRemoved: false, memberRemoved: false })
-  assert.deepEqual(db.scopes.map(scope => scope.id), ['scope-manual'])
-  assert.equal(db.members.length, 1)
+  assert.equal(result.scopeRemoved, true)
+  assert.deepEqual(db.resourceTeams, [])
+  assert.equal(db.members.length, 0)
 })
 
 test('removeOrgMembershipIfNoScopesRemain removes a scope-less editor directly when no actor headers are available', async () => {
@@ -246,8 +240,8 @@ test('removeOrgMembershipIfNoScopesRemain removes a scope-less editor directly w
 
 test('removeOrgMembershipIfNoScopesRemain leaves a member with remaining scopes untouched', async () => {
   const db = createStore()
-  const { memberId } = seedManager(db)
-  db.scopes.push({ id: 'scope-a', member_id: memberId, organization_id: 'org-1', site_id: 'site-1', location_id: null })
+  const { memberId, userId } = seedManager(db)
+  db.resourceTeams.push({ id: 'team-a', userId, teamId: 'site:site-1', organizationId: 'org-1', siteId: 'site-1', locationId: null })
 
   const result = await removeOrgMembershipIfNoScopesRemain(db as never, null, memberId)
 
@@ -262,9 +256,8 @@ test('removeOrgMembershipIfNoScopesRemain never removes owner/admin, but does re
     const result = await removeOrgMembershipIfNoScopesRemain(db as never, null, memberId)
     assert.equal(result.removed, false, `${role} must not be auto-removed`)
   }
-  // An editor is always constrained through member_access_scope — one with
-  // zero remaining scope rows anywhere has no access to anything and is the
-  // correct case to remove, same as the retired location_manager role was.
+  // An editor with zero remaining resource teams has no tenant surface access
+  // and is the correct case to remove.
   const { memberId: editorMemberId } = seedManager(db, { memberId: 'member-editor', userId: 'user-editor', phone: '+66810000006', role: 'editor' })
   const editorResult = await removeOrgMembershipIfNoScopesRemain(db as never, null, editorMemberId)
   assert.equal(editorResult.removed, true, 'a scope-less editor should be removed')

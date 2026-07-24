@@ -1,8 +1,9 @@
 import { appendResponseHeader, getHeaders } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createAuth, getAuthSession } from '~/server/utils/auth'
-import { executeBatch, queryAll, queryFirst } from '~/server/db'
+import { execute, queryAll, queryFirst } from '~/server/db'
 import { buildInvitationRedirectUrl, sanitizeInvitationReturnTo } from '~/server/utils/invitations'
+import { addMemberResourceAccess } from '~/server/utils/member-access'
 
 interface AcceptInvitationApi {
   acceptInvitation(_input: {
@@ -144,24 +145,15 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Invitation was accepted but membership activation failed' }, { status: 500 })
   }
   if (pendingScopes.length > 0) {
-    await executeBatch(db, [
-      ...pendingScopes.map(scope => ({
-        query: `INSERT OR IGNORE INTO member_access_scope (id, member_id, organization_id, site_id, location_id, grant_source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        params: [crypto.randomUUID(), acceptedMember.id, scope.organization_id, scope.site_id, scope.location_id, scope.grant_source, new Date().toISOString()],
-      })),
-      ...pendingScopes
-        .filter(scope => scope.grant_source === 'manual')
-        .map(scope => scope.location_id
-          ? {
-              query: `UPDATE member_access_scope SET grant_source = 'manual' WHERE member_id = ? AND organization_id = ? AND site_id = ? AND location_id = ?`,
-              params: [acceptedMember.id, scope.organization_id, scope.site_id, scope.location_id],
-            }
-          : {
-              query: `UPDATE member_access_scope SET grant_source = 'manual' WHERE member_id = ? AND organization_id = ? AND site_id = ? AND location_id IS NULL`,
-              params: [acceptedMember.id, scope.organization_id, scope.site_id],
-            }),
-      { query: `DELETE FROM invitation_access_scope WHERE invitation_id = ?`, params: [invitationId] },
-    ])
+    for (const scope of pendingScopes) {
+      await addMemberResourceAccess(db, {
+        userId: session.user.id,
+        organizationId: scope.organization_id,
+        siteId: scope.site_id,
+        locationId: scope.location_id,
+      })
+    }
+    await execute(db, `DELETE FROM invitation_access_scope WHERE invitation_id = ?`, [invitationId])
   }
 
   const headerBag = response.headers as Headers & {

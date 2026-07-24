@@ -6,6 +6,7 @@ import { setSiteEntitlementsFromPlan } from '~/server/utils/billing'
 import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
 import { ALL_VERTICALS, type SiteVertical } from '~/utils/vertical-copy'
 import { resolvePublicTemplate } from '~/utils/template-registry'
+import { ensureSiteTeam } from '~/server/utils/member-access'
 
 type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
 
@@ -91,6 +92,7 @@ export async function runSiteCreation(
       }
       throw siteError
     }
+    await ensureSiteTeam(db, { organizationId, siteId, name })
 
     return await performSeeding(env, db, siteId, organizationId, name, vertical, normalizedSubdomain)
 
