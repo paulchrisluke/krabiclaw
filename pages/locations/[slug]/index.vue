@@ -333,7 +333,7 @@ const {
   experiencesList,
   contentBlocks,
   postsList,
-} = useBootstrap()
+} = await useBootstrap()
 
 const hasMenu = computed(() => {
   const m = bootstrapMenu.value as { items?: unknown[] } | null
