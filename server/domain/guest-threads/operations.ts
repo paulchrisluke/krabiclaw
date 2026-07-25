@@ -351,7 +351,7 @@ async function executeReply(
     toAddress: summary.guestEmail,
   })
 
-  await attemptEmailDelivery(db, {
+  const { success, error } = await attemptEmailDelivery(db, {
     delivery,
     env: input.env,
     to: summary.guestEmail,
@@ -360,6 +360,17 @@ async function executeReply(
     body: replyBody,
     submissionType: adapter.type,
     submissionId: thread.submission_id,
+  })
+
+  await appendEntry(db, {
+    threadId: thread.id,
+    organizationId: thread.organization_id,
+    siteId: thread.site_id,
+    kind: 'delivery',
+    actorKind: 'system',
+    channel: 'email',
+    eventName: success ? 'delivery.sent' : 'delivery.failed',
+    payloadJson: { action: 'reply', deliveryId: delivery.id, error: error ?? null },
   })
 
   await advanceMemberCursor(db, thread.id, input.actorMemberId, messageEntry.id)
