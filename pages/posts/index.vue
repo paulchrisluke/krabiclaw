@@ -44,7 +44,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const { locale } = useI18n()
 const postsCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 
-const { googleBusiness, locations, config } = useBootstrap()
+const { googleBusiness, locations, config } = await useBootstrap()
 const googlePosts = computed(() => googleBusiness.value?.posts || [])
 const siteName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Site')
 

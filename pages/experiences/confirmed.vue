@@ -51,7 +51,7 @@ definePageMeta({ layout: 'saya' })
 const { formatDate } = useLocaleDate()
 const justCopied = ref(false)
 const { siteId } = useTenantSite()
-const { experiencePolicyById, experiencePolicySiteDefault } = useBootstrap()
+const { experiencePolicyById, experiencePolicySiteDefault } = await useBootstrap()
 
 const confirmation = ref<BookingConfirmationData | null>(null)
 

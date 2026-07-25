@@ -51,7 +51,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
-const { location, postsList, config: bootstrapConfig } = useBootstrap()
+const { location, postsList, config: bootstrapConfig } = await useBootstrap()
 const posts = postsList
 
 const runtimeConfig = useRuntimeConfig()

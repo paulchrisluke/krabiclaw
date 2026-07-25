@@ -58,7 +58,7 @@ definePageMeta({ layout: 'saya' })
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
-const { googleBusiness, locations, config } = useBootstrap()
+const { googleBusiness, locations, config } = await useBootstrap()
 const starRatingMap = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }
 const allReviews = computed(() => googleBusiness.value?.reviews ?? [])
 const googleReviewRating = r => starRatingMap[r.starRating] ?? Number(r.starRating ?? r.rating ?? 0)
