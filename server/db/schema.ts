@@ -285,6 +285,15 @@ export const guest_threads = sqliteTable("guest_threads", {
 	last_outbound_at: text(),
 	last_message_preview: text(),
 	owner_last_seen_at: text(),
+	// Conversation-state machine (issue #442). Independent of the source's operational status;
+	// updated only by server/domain/guest-threads/state-machine.ts via the canonical operation
+	// service, never inferred client-side from raw source status.
+	conversation_state: text().default("needs_attention").notNull(),
+	// Read-optimized projection of the underlying source record's operational status
+	// (e.g. reservation 'confirmed'). Not independently editable; refreshed only by
+	// server/domain/guest-threads/operations.ts after a successful source mutation.
+	operational_status: text(),
+	resolved_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
@@ -292,9 +301,78 @@ export const guest_threads = sqliteTable("guest_threads", {
 	index("guest_threads_site_updated_idx").on(table.site_id, table.updated_at),
 	index("guest_threads_location_updated_idx").on(table.location_id, table.updated_at),
 	index("guest_threads_inbox_status_idx").on(table.site_id, table.inbox_status, table.updated_at),
+	index("guest_threads_conversation_state_idx").on(table.site_id, table.conversation_state, table.updated_at),
 	check("guest_threads_submission_type_check", sql`submission_type IN ('contact', 'reservation', 'experience_booking')`),
 	check("guest_threads_inbox_status_check", sql`inbox_status IN ('open', 'waiting_on_owner', 'waiting_on_guest', 'closed')`),
+	check("guest_threads_conversation_state_check", sql`conversation_state IN ('needs_attention', 'waiting_on_guest', 'resolved')`),
 	index("guest_threads_organization_id_idx").on(table.organization_id),
+]);
+
+// Canonical append-only conversation/history ledger for a guest thread (issue #442).
+// Replaces submission_messages as the sole timeline store. Entries are facts and are
+// never rewritten; corrections are new entries.
+export const guest_thread_entries = sqliteTable("guest_thread_entries", {
+	id: text().primaryKey(),
+	thread_id: text().notNull().references(() => guest_threads.id, { onDelete: "cascade" } ),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	kind: text().notNull(),
+	actor_kind: text().notNull(),
+	actor_user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	channel: text(),
+	body: text(),
+	event_name: text(),
+	payload_json: text(),
+	external_id: text(),
+	occurred_at: text().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("guest_thread_entries_thread_occurred_idx").on(table.thread_id, table.occurred_at),
+	uniqueIndex("guest_thread_entries_external_id_unique").on(table.external_id).where(sql`external_id IS NOT NULL`),
+	index("guest_thread_entries_site_kind_occurred_idx").on(table.site_id, table.kind, table.occurred_at),
+	index("guest_thread_entries_organization_id_idx").on(table.organization_id),
+	check("guest_thread_entries_kind_check", sql`kind IN ('submission', 'message', 'operation', 'delivery', 'assignment', 'resolution')`),
+	check("guest_thread_entries_actor_kind_check", sql`actor_kind IN ('guest', 'member', 'system')`),
+	check("guest_thread_entries_channel_check", sql`channel IS NULL OR channel IN ('web', 'email', 'whatsapp', 'system')`),
+]);
+
+// Per-member read cursor for a thread (issue #442). Keyed on member.id (not raw user.id) to
+// match how server/utils/location-access.ts resolves identity everywhere else.
+export const guest_thread_member_state = sqliteTable("guest_thread_member_state", {
+	thread_id: text().notNull().references(() => guest_threads.id, { onDelete: "cascade" } ),
+	member_id: text().notNull().references(() => member.id, { onDelete: "cascade" } ),
+	last_read_entry_id: text().references(() => guest_thread_entries.id, { onDelete: "set null" } ),
+	last_read_at: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.thread_id, table.member_id] }),
+	index("guest_thread_member_state_member_updated_idx").on(table.member_id, table.updated_at),
+]);
+
+// Durable delivery outbox for guest-facing transactional sends tied to a thread entry
+// (issue #442). Intent is persisted before any external send attempt so a durable
+// message/intent record always exists even if the provider call fails.
+export const guest_thread_deliveries = sqliteTable("guest_thread_deliveries", {
+	id: text().primaryKey(),
+	thread_id: text().notNull().references(() => guest_threads.id, { onDelete: "cascade" } ),
+	entry_id: text().references(() => guest_thread_entries.id, { onDelete: "set null" } ),
+	channel: text().notNull(),
+	provider: text(),
+	idempotency_key: text().notNull(),
+	status: text().default("queued").notNull(),
+	attempt_count: integer().default(0).notNull(),
+	last_error: text(),
+	provider_message_id: text(),
+	to_address: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	uniqueIndex("guest_thread_deliveries_idempotency_key_unique").on(table.idempotency_key),
+	index("guest_thread_deliveries_thread_status_idx").on(table.thread_id, table.status),
+	index("guest_thread_deliveries_status_updated_idx").on(table.status, table.updated_at),
+	check("guest_thread_deliveries_channel_check", sql`channel IN ('email', 'whatsapp')`),
+	check("guest_thread_deliveries_status_check", sql`status IN ('queued', 'sent', 'failed')`),
 ]);
 
 export const submission_messages = sqliteTable("submission_messages", {
