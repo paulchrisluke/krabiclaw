@@ -346,14 +346,22 @@ jobs:
           curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://preview.krabiclaw.com/blog" || true
           curl -sf "${CURL_TIMEOUT[@]}" -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" -o /dev/null "https://preview.krabiclaw.com/api/dev/login" || true
 
-          tenant_html=$(curl -sf "${CURL_TIMEOUT[@]}" \
+          http_code=$(curl -s -w "%{http_code}" -o /tmp/preview-html.txt "${CURL_TIMEOUT[@]}" \
             -H "x-preview-tenant: demo" \
             -H "cache-control: no-store" \
-            "https://preview.krabiclaw.com/?e2e=asset-probe" || true)
+            "https://preview.krabiclaw.com/?e2e=asset-probe" || echo "000")
+          tenant_html=$(cat /tmp/preview-html.txt 2>/dev/null || echo "")
+
+          echo "HTTP $http_code from preview.krabiclaw.com"
+          if [ "$http_code" != "200" ]; then
+            echo "::error::Preview returned HTTP $http_code"
+            echo "Response body (first 500 chars):"
+            printf '%s' "$tenant_html" | head -c 500
+            exit 1
+          fi
 
           if [ -z "$tenant_html" ]; then
-            echo "::error::Preview returned empty HTML"
-            echo "HTML response was empty"
+            echo "::error::Preview returned 200 but empty body"
             exit 1
           fi
 
@@ -502,14 +510,22 @@ jobs:
           curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://staging.krabiclaw.com/api/billing/plans" || true
           curl -sf "${CURL_TIMEOUT[@]}" -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" -o /dev/null "https://staging.krabiclaw.com/api/dev/login" || true
 
-          tenant_html=$(curl -sf "${CURL_TIMEOUT[@]}" \
+          http_code=$(curl -s -w "%{http_code}" -o /tmp/staging-html.txt "${CURL_TIMEOUT[@]}" \
             -H "x-preview-tenant: demo" \
             -H "cache-control: no-store" \
-            "https://staging.krabiclaw.com/?e2e=asset-probe" || true)
+            "https://staging.krabiclaw.com/?e2e=asset-probe" || echo "000")
+          tenant_html=$(cat /tmp/staging-html.txt 2>/dev/null || echo "")
+
+          echo "HTTP $http_code from staging.krabiclaw.com"
+          if [ "$http_code" != "200" ]; then
+            echo "::error::Staging returned HTTP $http_code"
+            echo "Response body (first 500 chars):"
+            printf '%s' "$tenant_html" | head -c 500
+            exit 1
+          fi
 
           if [ -z "$tenant_html" ]; then
-            echo "::error::Staging returned empty HTML"
-            echo "HTML response was empty"
+            echo "::error::Staging returned 200 but empty body"
             exit 1
           fi
 
