@@ -461,13 +461,18 @@ Common workflows: update menus and items, create and publish site posts, triage 
           oauthClientId: mcpUser.oauthClientId ?? null,
           durationMs: Date.now() - toolStartedAt,
         });
-        if (mcpErr.code === MCP_ERROR.invalidParams) {
-          return mcpSuccess(request.id, {
-            isError: true,
-            content: [{ type: "text", text: mcpErr.message }],
-          });
-        }
-        throw toolError;
+        // Any other tool-execution failure (including a plain `throw new
+        // Error(...)` from a business-rule guard, which asMcpError falls
+        // back to classifying as kind:'transport') must still resolve as a
+        // graceful isError:true 200, not a raw HTTP 500 — MCP clients can't
+        // act on a transport-level error mid-tool-call any more than they
+        // can act on a raw 401 (see resolveMissingMcpCredential). Confirmed
+        // via issue #386/#408 staging verification: get_google_business_connection's
+        // plain "requires a paid plan" throw was leaking as a 500.
+        return mcpSuccess(request.id, {
+          isError: true,
+          content: [{ type: "text", text: mcpErr.message }],
+        });
       }
 
       const isRender = isMcpRenderResponse(result);
