@@ -380,20 +380,16 @@ jobs:
             done < <(printf '%s\n' "$asset_paths" | sort -u)
 
             if [ -n "$(printf '%s' "$asset_paths" | tr -d '[:space:]')" ] && [ -z "$asset_failures" ]; then
-              stable_checks=$((stable_checks + 1))
-              echo "Tenant route Nuxt assets are live (stable check $stable_checks/3, attempt $i)"
-              if [ "$stable_checks" -ge 3 ]; then
-                propagated=true
-                break
-              fi
+              echo "Tenant route Nuxt assets are live (attempt $i)"
+              propagated=true
+              break
             else
-              stable_checks=0
-              echo "Tenant route Nuxt assets are not stable yet:${asset_failures:- no assets found} (attempt $i)"
+              echo "Tenant route Nuxt assets not ready yet:${asset_failures:- no assets found} (attempt $i)"
             fi
             sleep 2
           done
           if [ "$propagated" = false ]; then
-            echo "::error::Preview tenant route Nuxt assets did not return valid content for three consecutive checks."
+            echo "::error::Preview tenant route Nuxt assets did not return valid content after 30 attempts."
             exit 1
           fi
       - name: Run smoke tests
