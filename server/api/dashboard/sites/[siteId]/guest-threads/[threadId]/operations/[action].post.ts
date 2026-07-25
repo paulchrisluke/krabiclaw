@@ -11,7 +11,7 @@ import { getGuestThreadById } from '~/server/domain/guest-threads/repository'
 import { getGuestThreadDetail } from '~/server/domain/guest-threads/detail'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
 
-const KNOWN_ACTIONS = new Set(['confirm', 'cancel', 'complete', 'resolve', 'reopen', 'reply'])
+const KNOWN_ACTIONS = new Set(['confirm', 'cancel', 'complete', 'resolve', 'reopen', 'reply', 'retry_delivery'])
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -26,8 +26,9 @@ export default defineEventHandler(async (event) => {
   if (!thread) return jsonResponse({ error: 'Thread not found' }, { status: 404 })
   await assertMemberScope(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, locationId: thread.location_id })
 
-  const body = (await readBody(event).catch(() => null)) as { body?: unknown } | null
+  const body = (await readBody(event).catch(() => null)) as { body?: unknown; deliveryId?: unknown } | null
   const replyBody = typeof body?.body === 'string' ? body.body : undefined
+  const deliveryId = typeof body?.deliveryId === 'string' ? body.deliveryId : undefined
 
   const outcome = await executeGuestThreadOperation(db, {
     threadId,
@@ -36,11 +37,12 @@ export default defineEventHandler(async (event) => {
     actorUserId: session.user.id,
     actorMemberId: site.member_id,
     body: replyBody,
+    deliveryId,
     env,
   })
 
   if (!outcome.ok) {
-    if (outcome.reason === 'thread_not_found' || outcome.reason === 'source_not_found') {
+    if (outcome.reason === 'thread_not_found' || outcome.reason === 'source_not_found' || outcome.reason === 'delivery_not_found') {
       return jsonResponse({ error: 'Thread not found' }, { status: 404 })
     }
     if (outcome.reason === 'invalid_transition') {

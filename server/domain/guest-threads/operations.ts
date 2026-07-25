@@ -1,8 +1,8 @@
 import { queryFirst, type DbClient } from '~/server/db'
 import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
 import { getAdapter } from './adapters/registry'
-import { appendEntry, getLatestEntryByKind } from './entries'
-import { attemptEmailDelivery, createDeliveryIntent } from './deliveries'
+import { appendEntry, getEntryById, getLatestEntryByKind } from './entries'
+import { attemptEmailDelivery, createDeliveryIntent, getDeliveryById } from './deliveries'
 import { getGuestThreadById, updateThreadProjection } from './repository'
 import { advanceMemberCursor } from './read-state'
 import { nextConversationState } from './state-machine'
@@ -10,7 +10,7 @@ import type { AnyGuestThreadSourceAdapter, GuestThreadRow } from './types'
 
 export type OperationOutcome =
   | { ok: true; thread: GuestThreadRow; availableActions: string[] }
-  | { ok: false; status: 404; reason: 'thread_not_found' | 'source_not_found' }
+  | { ok: false; status: 404; reason: 'thread_not_found' | 'source_not_found' | 'delivery_not_found' }
   | { ok: false; status: 409; reason: 'invalid_transition'; message: string }
   | { ok: false; status: 400; reason: 'no_guest_email' | 'empty_body' }
 
@@ -21,6 +21,7 @@ export interface ExecuteOperationInput {
   actorUserId: string
   actorMemberId: string
   body?: string
+  deliveryId?: string
   env: ReplyEmailEnv
 }
 
@@ -80,6 +81,9 @@ export async function executeGuestThreadOperation(db: DbClient, input: ExecuteOp
   }
   if (input.action === 'reopen') {
     return await executeManualTransition(db, thread, 'manual_reopen', 'reopened', input.actorUserId)
+  }
+  if (input.action === 'retry_delivery') {
+    return await executeRetryDelivery(db, input, thread, adapter, source)
   }
 
   const availableActions = adapter.listAvailableActions(source)
@@ -200,6 +204,92 @@ async function executeManualTransition(
   const source = await adapter.loadSource({ db }, thread.submission_id)
   const availableActions = source ? adapter.listAvailableActions(source) : []
   const refreshedThread = await getGuestThreadById(db, thread.id, thread.site_id)
+  return { ok: true, thread: refreshedThread ?? thread, availableActions }
+}
+
+/**
+ * Retries a previously failed delivery using the same durable intent row (no new
+ * idempotency key/entry is created — this is a re-attempt of the existing intent, not a
+ * new send). Reconstructs the message content from the delivery's associated ledger
+ * entry: a `message` entry's body is resent verbatim; an `operation` entry's
+ * confirm/cancel/complete notification is recomposed from the adapter's *current*
+ * source detail (the transactional content, e.g. reservation date/time, is still
+ * accurate even if other fields changed since).
+ */
+async function executeRetryDelivery(
+  db: DbClient,
+  input: ExecuteOperationInput,
+  thread: GuestThreadRow,
+  adapter: AnyGuestThreadSourceAdapter,
+  source: unknown,
+): Promise<OperationOutcome> {
+  if (!input.deliveryId) {
+    return { ok: false, status: 400, reason: 'empty_body' }
+  }
+  const delivery = await getDeliveryById(db, input.deliveryId)
+  if (!delivery || delivery.thread_id !== thread.id) {
+    return { ok: false, status: 404, reason: 'delivery_not_found' }
+  }
+  if (!delivery.to_address) {
+    return { ok: false, status: 400, reason: 'no_guest_email' }
+  }
+
+  const entry = delivery.entry_id ? await getEntryById(db, delivery.entry_id) : null
+  const fromName = await getSiteBrandName(db, thread.site_id)
+
+  let subject: string
+  let body: string
+  if (entry?.kind === 'message' && entry.body) {
+    subject = thread.submission_type === 'contact'
+      ? `Re: your message to ${fromName}`
+      : thread.submission_type === 'reservation'
+        ? `Re: your reservation at ${fromName}`
+        : `Re: your booking at ${fromName}`
+    body = entry.body
+  } else {
+    const action = entry?.payload_json ? (JSON.parse(entry.payload_json) as { action?: string }).action ?? 'confirm' : 'confirm'
+    subject = operationSubject(action, fromName)
+    body = operationBody(action, adapter, source)
+  }
+
+  const { success, error } = await attemptEmailDelivery(db, {
+    delivery,
+    env: input.env,
+    to: delivery.to_address,
+    fromName,
+    subject,
+    body,
+    submissionType: adapter.type,
+    submissionId: thread.submission_id,
+  })
+
+  await appendEntry(db, {
+    threadId: thread.id,
+    organizationId: thread.organization_id,
+    siteId: thread.site_id,
+    kind: 'delivery',
+    actorKind: 'member',
+    actorUserId: input.actorUserId,
+    channel: 'email',
+    eventName: success ? 'delivery.retry_sent' : 'delivery.retry_failed',
+    payloadJson: { deliveryId: delivery.id, error: error ?? null },
+  })
+
+  // A successful reply-message retry doesn't itself change conversation state further —
+  // the original reply already moved the thread to waiting_on_guest when it was first
+  // sent (or attempted). Only an operation-notification retry (confirm/cancel/complete)
+  // completes the state-machine's "operation succeeded + notification sent" transition,
+  // since that transition was deliberately withheld while the notification was failing.
+  if (success && entry?.kind !== 'message') {
+    const conversationState = nextConversationState(thread.conversation_state, {
+      type: 'operation_succeeded',
+      notificationOutcome: 'sent',
+    })
+    await updateThreadProjection(db, thread.id, { conversationState })
+  }
+
+  const refreshedThread = await getGuestThreadById(db, thread.id, thread.site_id)
+  const availableActions = adapter.listAvailableActions(source)
   return { ok: true, thread: refreshedThread ?? thread, availableActions }
 }
 

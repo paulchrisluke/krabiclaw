@@ -77,6 +77,10 @@ export async function findEntryByExternalId(db: DbClient, externalId: string): P
   `, [externalId])
 }
 
+export async function getEntryById(db: DbClient, id: string): Promise<GuestThreadEntryRow | null> {
+  return await queryFirst<GuestThreadEntryRow>(db, `SELECT * FROM guest_thread_entries WHERE id = ? LIMIT 1`, [id])
+}
+
 export async function listThreadEntries(db: DbClient, threadId: string): Promise<GuestThreadEntryRow[]> {
   const rows = await queryAll<GuestThreadEntryRow>(db, `
     SELECT * FROM guest_thread_entries
