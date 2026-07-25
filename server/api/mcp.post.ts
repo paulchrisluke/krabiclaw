@@ -469,10 +469,9 @@ Common workflows: update menus and items, create and publish site posts, triage 
         // can act on a raw 401 (see resolveMissingMcpCredential). Confirmed
         // via issue #386/#408 staging verification: get_google_business_connection's
         // plain "requires a paid plan" throw was leaking as a 500.
-        const userFacingMessage = ['auth', 'forbidden', 'protocol'].includes(mcpErr.kind as string) ? mcpErr.message : 'An error occurred while executing this tool.'
         return mcpSuccess(request.id, {
           isError: true,
-          content: [{ type: "text", text: userFacingMessage }],
+          content: [{ type: "text", text: mcpErr.message }],
         });
       }
 
