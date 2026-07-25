@@ -364,16 +364,34 @@ test.describe('stateless MCP server', () => {
     }
   })
 
-  test('owner can use menus, posts, media, and experiences workflow tools', async ({ request, baseURL }) => {
-    // 31 sequential real API round-trips (menus, items, posts, media, experiences,
-    // cleanup) — has repeatedly landed right at a 180s budget on its final
-    // delete_location cleanup call under normal (non-degraded) preview latency,
-    // with every prior assertion passing. Not a hang: each individual step is fast,
-    // there are just a lot of them.
-    test.setTimeout(300_000)
+  // The single 31-round-trip "menus, posts, media, and experiences" test below
+  // was split into 4 independent tests, one per domain (location, menu, post,
+  // media/experience) — each domain's calls are self-contained (no shared
+  // state crosses the split points) and each gets its own timeout budget
+  // sized to its own call count, instead of every domain sharing one budget
+  // and one failure. A real bug surfaced through this test on staging (see
+  // issue #386/#408 verification): a genuine 500 from get_post, unrelated to
+  // any of tonight's PR diffs, is exactly the kind of single-step failure
+  // that's easy to misdiagnose as "the environment is flaky" when it's
+  // buried inside a 31-step test — splitting makes the actual failing step
+  // and its response immediately visible instead of one failure among 31.
+  test('owner can manage a scratch location', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
     const siteId = MCP_MANAGED_SITE_ID
     const locationId = await createScratchLocation(request, baseURL!, siteId)
+
+    const deleteLocationRes = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'delete_location',
+      args: { site_id: siteId, location_id: locationId },
+    })
+    expect(deleteLocationRes.status()).toBe(200)
+  })
+
+  test('owner can manage menu and menu-item tools', async ({ request, baseURL }) => {
+    test.setTimeout(120_000)
+    await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
+    const siteId = MCP_MANAGED_SITE_ID
 
     const menu = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -477,6 +495,19 @@ test.describe('stateless MCP server', () => {
     })
     expect(deleteMenuItemRes.status()).toBe(200)
 
+    const deleteMenuRes = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'delete_menu',
+      args: { site_id: siteId, menu_id: menuId },
+    })
+    expect(deleteMenuRes.status()).toBe(200)
+  })
+
+  test('owner can manage post tools', async ({ request, baseURL }) => {
+    test.setTimeout(90_000)
+    await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
+    const siteId = MCP_MANAGED_SITE_ID
+
     const post = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'create_post',
@@ -531,6 +562,12 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, post_id: postDeleteId },
     })
     expect(postDelete.status()).toBe(200)
+  })
+
+  test('owner can manage media and experience tools including public booking', async ({ request, baseURL }) => {
+    test.setTimeout(120_000)
+    await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
+    const siteId = MCP_MANAGED_SITE_ID
 
     const mediaList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -636,20 +673,6 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, experience_id: deleteExperienceId },
     })
     expect(deleteExperienceRes.status()).toBe(200)
-
-    const deleteMenuRes = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'delete_menu',
-      args: { site_id: siteId, menu_id: menuId },
-    })
-    expect(deleteMenuRes.status()).toBe(200)
-
-    const deleteLocationRes = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'delete_location',
-      args: { site_id: siteId, location_id: locationId },
-    })
-    expect(deleteLocationRes.status()).toBe(200)
   })
 
 })

@@ -3,7 +3,6 @@ import { cloudflareEnv } from '~/server/utils/api-response'
 import {
   asMcpError,
   mcpSuccess,
-  MCP_ERROR,
   negotiatedMcpProtocolVersion,
   parseMcpToolCallArguments,
   readMcpRequest,
@@ -249,28 +248,33 @@ export default defineEventHandler(async (event) => {
           })
           return sendMcpErrorResponse(event, { id: request.id, error: mcpErr })
         }
-        if (mcpErr.code === MCP_ERROR.invalidParams) {
-          logPlatformMcpEventDetached(event, env.DB, {
-            userId: callUser.userId,
-            requestId: request.id,
-            method: request.method,
-            toolName,
-            toolDomain: PLATFORM_MCP_TOOL_DOMAIN,
-            isMutating: isMcpMutatingTool(PLATFORM_MCP_TOOLS.find(t => t.name === toolName)),
-            arguments: summarizePayloadShape(rawArgs),
-            status: 'error',
-            errorCode: mcpErr.code,
-            errorMessage: mcpErr.message,
-            httpStatus: 200,
-            oauthClientId: callUser.oauthClientId ?? null,
-            durationMs: Date.now() - toolStart,
-          })
-          return mcpSuccess(request.id, {
-            isError: true,
-            content: [{ type: 'text', text: mcpErr.message }],
-          })
-        }
-        throw toolError
+        // Any other tool-execution failure (including a plain `throw new
+        // Error(...)` from a business-rule guard, which asMcpError falls
+        // back to classifying as kind:'transport') must still resolve as a
+        // graceful isError:true 200, not a raw HTTP 500 — MCP clients can't
+        // act on a transport-level error mid-tool-call any more than they
+        // can act on a raw 401 (see resolveMissingMcpCredential). Confirmed
+        // via issue #386/#408 staging verification: get_google_business_connection's
+        // plain "requires a paid plan" throw was leaking as a 500.
+        logPlatformMcpEventDetached(event, env.DB, {
+          userId: callUser.userId,
+          requestId: request.id,
+          method: request.method,
+          toolName,
+          toolDomain: PLATFORM_MCP_TOOL_DOMAIN,
+          isMutating: isMcpMutatingTool(PLATFORM_MCP_TOOLS.find(t => t.name === toolName)),
+          arguments: summarizePayloadShape(rawArgs),
+          status: 'error',
+          errorCode: mcpErr.code,
+          errorMessage: mcpErr.message,
+          httpStatus: 200,
+          oauthClientId: callUser.oauthClientId ?? null,
+          durationMs: Date.now() - toolStart,
+        })
+        return mcpSuccess(request.id, {
+          isError: true,
+          content: [{ type: 'text', text: mcpErr.message }],
+        })
       }
 
       // After any mutating tool call, purge KV HTML cache for every platform
