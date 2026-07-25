@@ -75,48 +75,11 @@
   --container-2xl: 40rem;
 }
 
-.dark .blawby-theme {
-  color-scheme: dark;
-
-  --blawby-bg:            #0f1222;
-  --blawby-surface:       #161b31;
-  --blawby-primary:       var(--blawby-token-primary-200, #b4c5e5);
-  --blawby-primary-dark:  #0a0e1c;
-  --blawby-primary-100:   #1b233d;
-  --blawby-primary-200:   #2b3656;
-  --blawby-primary-800:   var(--blawby-token-primary-800, #1d294f);
-  --blawby-accent:        var(--blawby-token-accent, #c19855);
-  --blawby-accent-100:    #2a241b;
-  --blawby-accent-200:    #332a1c;
-  --blawby-accent-button: var(--blawby-token-accent-button, #b58c4f);
-  --blawby-accent-strong: #e0b86f;
-  --blawby-border:        rgba(255,255,255,12%);
-  --blawby-ink:           #f4f6fb;
-
-  --color-primary:        var(--blawby-accent);
-  --primary-foreground:   var(--blawby-primary-dark);
-  --ui-primary:           var(--blawby-accent);
-  --ui-secondary:         var(--blawby-primary);
-  --ui-success:           #34D399;
-  --ui-info:              #60A5FA;
-  --ui-warning:           #FBBF24;
-  --ui-error:             #F87171;
-  --ui-bg:                var(--blawby-bg);
-  --ui-bg-elevated:       var(--blawby-surface);
-  --ui-bg-muted:          var(--blawby-primary-100);
-  --ui-bg-accented:       var(--blawby-primary-200);
-  --ui-bg-inverted:       #f8fafc;
-  --ui-text:              var(--blawby-ink);
-  --ui-text-muted:        #c7cedd;
-  --ui-text-dimmed:       #9ea8bc;
-  --ui-text-toned:        #b5bed0;
-  --ui-text-highlighted:  #ffffff;
-  --ui-text-inverted:     var(--blawby-primary-dark);
-  --ui-border:            var(--blawby-border);
-  --ui-border-muted:      rgba(255,255,255,8%);
-  --ui-border-accented:   rgba(255,255,255,18%);
-  --ui-border-inverted:   #f8fafc;
-}
+/* Blawby intentionally has no dark-mode variant — a professional-service tenant
+ * site (law firms, clinics) should look the same regardless of the visitor's
+ * system color-scheme preference, not flip to a different palette underneath
+ * them. .blawby-theme above sets color-scheme: light unconditionally so the
+ * browser's own chrome (scrollbars, form controls) also stays light. */
 
 html.blawby-document {
   font-size: 100%;

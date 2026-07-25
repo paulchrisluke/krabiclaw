@@ -276,7 +276,7 @@ async function load() {
       $fetch<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings'),
       $fetch<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>(`/api/editor/sites/${siteId}/notifications`),
       hasFacebookAccess.value
-        ? $fetch<FacebookConnectionStatus>('/api/integrations/facebook-pages/connection')
+        ? $fetch<FacebookConnectionStatus>('/api/integrations/facebook-pages/connection', { query: { siteId } })
         : Promise.resolve<FacebookConnectionStatus>({ connected: false }),
     ])
     if (token !== loadToken) return
