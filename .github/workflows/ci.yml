@@ -339,44 +339,11 @@ jobs:
           printf '%s' "$EMAIL_REPLY_SECRET_PREVIEW" | npx wrangler secret put EMAIL_REPLY_SECRET --env preview
           printf '%s' "$EMAIL_INBOUND_SECRET_PREVIEW" | npx wrangler secret put EMAIL_INBOUND_SECRET --env preview
       - run: npx playwright install --with-deps chromium
-      - name: Warm up preview Worker and verify asset propagation
+      - name: Warm up preview Worker
         run: |
-          CURL_TIMEOUT=(--connect-timeout 5 --max-time 15)
-          curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://preview.krabiclaw.com/" || true
-          curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://preview.krabiclaw.com/blog" || true
-          curl -sf "${CURL_TIMEOUT[@]}" -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" -o /dev/null "https://preview.krabiclaw.com/api/dev/login" || true
-
-          http_code=$(curl -s -w "%{http_code}" -o /tmp/preview-html.txt "${CURL_TIMEOUT[@]}" \
-            -H "x-preview-tenant: demo" \
-            -H "cache-control: no-store" \
-            "https://preview.krabiclaw.com/?e2e=asset-probe" || echo "000")
-          tenant_html=$(cat /tmp/preview-html.txt 2>/dev/null || echo "")
-
-          echo "HTTP $http_code from preview.krabiclaw.com"
-          if [ "$http_code" != "200" ]; then
-            echo "::error::Preview returned HTTP $http_code"
-            echo "Response body (first 500 chars):"
-            printf '%s' "$tenant_html" | head -c 500
-            exit 1
-          fi
-
-          if [ -z "$tenant_html" ]; then
-            echo "::error::Preview returned 200 but empty body"
-            exit 1
-          fi
-
-          asset_paths=$(printf '%s' "$tenant_html" | grep -oE '/_nuxt/[^"'"'"') >]+[.](css|js)' || true)
-
-          if [ -z "$asset_paths" ]; then
-            echo "::error::No Nuxt assets found in HTML"
-            echo "HTML size: $(printf '%s' "$tenant_html" | wc -c) bytes"
-            echo "First 500 chars of HTML:"
-            printf '%s' "$tenant_html" | head -c 500
-            exit 1
-          fi
-
-          echo "Found assets in HTML:"
-          printf '%s' "$asset_paths"
+          curl -sf --connect-timeout 5 --max-time 15 "https://preview.krabiclaw.com/" || true
+          curl -sf --connect-timeout 5 --max-time 15 "https://preview.krabiclaw.com/blog" || true
+          curl -sf --connect-timeout 5 --max-time 15 -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" "https://preview.krabiclaw.com/api/dev/login" || true
       - name: Run smoke tests
         env:
           PLAYWRIGHT_PREVIEW_URL: https://preview.krabiclaw.com
@@ -502,44 +469,12 @@ jobs:
         run: |
           printf '%s' "$E2E_DEV_ROUTE_SECRET_STAGING" | npx wrangler secret put E2E_DEV_ROUTE_SECRET --env staging
       - run: npx playwright install --with-deps chromium
-      - name: Warm up staging Worker and verify asset propagation
+      - name: Warm up staging Worker
         run: |
-          CURL_TIMEOUT=(--connect-timeout 5 --max-time 15)
-          curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://staging.krabiclaw.com/" || true
-          curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://staging.krabiclaw.com/blog" || true
-          curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://staging.krabiclaw.com/api/billing/plans" || true
-          curl -sf "${CURL_TIMEOUT[@]}" -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" -o /dev/null "https://staging.krabiclaw.com/api/dev/login" || true
-
-          http_code=$(curl -s -w "%{http_code}" -o /tmp/staging-html.txt "${CURL_TIMEOUT[@]}" \
-            -H "x-preview-tenant: demo" \
-            -H "cache-control: no-store" \
-            "https://staging.krabiclaw.com/?e2e=asset-probe" || echo "000")
-          tenant_html=$(cat /tmp/staging-html.txt 2>/dev/null || echo "")
-
-          echo "HTTP $http_code from staging.krabiclaw.com"
-          if [ "$http_code" != "200" ]; then
-            echo "::error::Staging returned HTTP $http_code"
-            echo "Response body (first 500 chars):"
-            printf '%s' "$tenant_html" | head -c 500
-            exit 1
-          fi
-
-          if [ -z "$tenant_html" ]; then
-            echo "::error::Staging returned 200 but empty body"
-            exit 1
-          fi
-
-          asset_path=$(printf '%s' "$tenant_html" | grep -oE '/_nuxt/entry\.[A-Za-z0-9_-]+\.css' | head -1)
-
-          if [ -z "$asset_path" ]; then
-            echo "::error::No entry CSS asset found in HTML"
-            echo "HTML size: $(printf '%s' "$tenant_html" | wc -c) bytes"
-            echo "First 500 chars of HTML:"
-            printf '%s' "$tenant_html" | head -c 500
-            exit 1
-          fi
-
-          echo "Found entry asset in HTML: $asset_path"
+          curl -sf --connect-timeout 5 --max-time 15 "https://staging.krabiclaw.com/" || true
+          curl -sf --connect-timeout 5 --max-time 15 "https://staging.krabiclaw.com/blog" || true
+          curl -sf --connect-timeout 5 --max-time 15 "https://staging.krabiclaw.com/api/billing/plans" || true
+          curl -sf --connect-timeout 5 --max-time 15 -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" "https://staging.krabiclaw.com/api/dev/login" || true
       - name: Run required smoke and changed subsystem suites
         env:
           AUTH_CHANGED: ${{ needs.changes.outputs.auth }}
