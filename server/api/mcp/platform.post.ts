@@ -256,7 +256,7 @@ export default defineEventHandler(async (event) => {
         // can act on a raw 401 (see resolveMissingMcpCredential). Confirmed
         // via issue #386/#408 staging verification: get_google_business_connection's
         // plain "requires a paid plan" throw was leaking as a 500.
-        const userFacingMessage = ['auth', 'forbidden', 'protocol'].includes(mcpErr.kind) ? mcpErr.message : 'An error occurred while executing this tool.'
+        const userFacingMessage = ['auth', 'forbidden', 'protocol'].includes(mcpErr.kind as string) ? mcpErr.message : 'An error occurred while executing this tool.'
         logPlatformMcpEventDetached(event, env.DB, {
           userId: callUser.userId,
           requestId: request.id,
