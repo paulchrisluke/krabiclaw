@@ -95,6 +95,7 @@ const {
   listAccessibleLocationIds,
   resolveDashboardSiteAccess,
   canScopedRoleUseDashboardPath,
+  teamAccessPredicate,
 } = await import('../../server/utils/member-access.ts')
 
 test('owner and admin bypass every team check', async () => {
@@ -161,4 +162,29 @@ test('the audited /api/dashboard/** boundary is deny-by-default for scoped roles
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/sites/site-1/guest-threads/thread-1/reply'), true)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/onboarding/checklist?siteId=site-1'), true)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/members'), false)
+})
+
+// #406: teamAccessPredicate is the shared EXISTS-clause builder extracted out
+// of dashboard-home.ts, chowbot-conversations.ts, and whatsapp/webhook.post.ts,
+// which each independently wrote this same team-membership check for their
+// own bulk row-filtering queries before this consolidation.
+test('teamAccessPredicate builds a site-only EXISTS clause when no location expression is given', () => {
+  assert.equal(
+    teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id' }),
+    'EXISTS (SELECT 1 FROM teamMember tm WHERE tm.userId = m.userId AND tm.teamId = s.team_id)',
+  )
+})
+
+test('teamAccessPredicate builds a site-or-location EXISTS clause when a location expression is given', () => {
+  assert.equal(
+    teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: 'bl.team_id' }),
+    'EXISTS (SELECT 1 FROM teamMember tm WHERE tm.userId = m.userId AND tm.teamId IN (s.team_id, bl.team_id))',
+  )
+})
+
+test('teamAccessPredicate treats an explicit null locationTeamExpr the same as omitting it', () => {
+  assert.equal(
+    teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: null }),
+    teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id' }),
+  )
 })
