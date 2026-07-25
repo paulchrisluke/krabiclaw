@@ -346,52 +346,29 @@ jobs:
           curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://preview.krabiclaw.com/blog" || true
           curl -sf "${CURL_TIMEOUT[@]}" -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" -o /dev/null "https://preview.krabiclaw.com/api/dev/login" || true
 
-          # Cloudflare propagates a new Worker+Assets deploy to edge PoPs over a few
-          # seconds, not instantly. A request landing on a not-yet-updated PoP right
-          # after deploy can serve this build's HTML (correct new asset hashes) while
-          # the actual asset request lands on a different, still-stale PoP (or vice
-          # versa) — producing a 404 with the wrong MIME type mid-test. A blind sleep
-          # doesn't confirm propagation actually finished, so poll the Nuxt assets
-          # referenced by the same tenant routes smoke opens.
-          propagated=false
-          stable_checks=0
-          for i in $(seq 1 30); do
-            asset_paths=""
-            for route in "/" "/locations/brooklyn"; do
-              tenant_html=$(curl -sf "${CURL_TIMEOUT[@]}" \
-                -H "x-preview-tenant: demo" \
-                -H "cache-control: no-store" \
-                "https://preview.krabiclaw.com${route}?e2e=asset-probe-$i" || true)
-              route_assets=$(printf '%s' "$tenant_html" | grep -oE '/_nuxt/[^"'"'"') >]+[.](css|js)' || true)
-              asset_paths="${asset_paths}"$'\n'"${route_assets}"
-            done
+          tenant_html=$(curl -sf "${CURL_TIMEOUT[@]}" \
+            -H "x-preview-tenant: demo" \
+            -H "cache-control: no-store" \
+            "https://preview.krabiclaw.com/?e2e=asset-probe" || true)
 
-            asset_failures=""
-            while IFS= read -r asset_path; do
-              [ -n "$asset_path" ] || continue
-              asset_result=$(curl -sI "${CURL_TIMEOUT[@]}" -o /dev/null -w "%{http_code} %{content_type}" \
-                -H "x-preview-tenant: demo" \
-                -H "cache-control: no-store" \
-                "https://preview.krabiclaw.com${asset_path}" || true)
-              case "$asset_path:$asset_result" in
-                *.css:200\ text/css*|*.js:200\ *javascript*) ;;
-                *) asset_failures="${asset_failures}"$'\n'"${asset_path} -> ${asset_result:-no response}" ;;
-              esac
-            done < <(printf '%s\n' "$asset_paths" | sort -u)
-
-            if [ -n "$(printf '%s' "$asset_paths" | tr -d '[:space:]')" ] && [ -z "$asset_failures" ]; then
-              echo "Tenant route Nuxt assets are live (attempt $i)"
-              propagated=true
-              break
-            else
-              echo "Tenant route Nuxt assets not ready yet:${asset_failures:- no assets found} (attempt $i)"
-            fi
-            sleep 2
-          done
-          if [ "$propagated" = false ]; then
-            echo "::error::Preview tenant route Nuxt assets did not return valid content after 30 attempts."
+          if [ -z "$tenant_html" ]; then
+            echo "::error::Preview returned empty HTML"
+            echo "HTML response was empty"
             exit 1
           fi
+
+          asset_paths=$(printf '%s' "$tenant_html" | grep -oE '/_nuxt/[^"'"'"') >]+[.](css|js)' || true)
+
+          if [ -z "$asset_paths" ]; then
+            echo "::error::No Nuxt assets found in HTML"
+            echo "HTML size: $(printf '%s' "$tenant_html" | wc -c) bytes"
+            echo "First 500 chars of HTML:"
+            printf '%s' "$tenant_html" | head -c 500
+            exit 1
+          fi
+
+          echo "Found assets in HTML:"
+          printf '%s' "$asset_paths"
       - name: Run smoke tests
         env:
           PLAYWRIGHT_PREVIEW_URL: https://preview.krabiclaw.com
@@ -525,37 +502,28 @@ jobs:
           curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://staging.krabiclaw.com/api/billing/plans" || true
           curl -sf "${CURL_TIMEOUT[@]}" -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" -o /dev/null "https://staging.krabiclaw.com/api/dev/login" || true
 
-          # See the matching comment in the "Warm up preview Worker" step (e2e-smoke
-          # job) — same Cloudflare edge-propagation race, poll for the real asset
-          # instead of guessing a fixed sleep duration.
-          propagated=false
-          stable_checks=0
-          for i in $(seq 1 30); do
-            tenant_html=$(curl -sf "${CURL_TIMEOUT[@]}" \
-              -H "x-preview-tenant: demo" \
-              -H "cache-control: no-store" \
-              "https://staging.krabiclaw.com/?e2e=asset-probe-$i" || true)
-            asset_path=$(printf '%s' "$tenant_html" | grep -oE '/_nuxt/entry\.[A-Za-z0-9_-]+\.css' | head -1)
-            asset_result=""
-            if [ -n "$asset_path" ]; then
-              asset_result=$(curl -sI "${CURL_TIMEOUT[@]}" -o /dev/null -w "%{http_code} %{content_type}" \
-                -H "x-preview-tenant: demo" \
-                -H "cache-control: no-store" \
-                "https://staging.krabiclaw.com${asset_path}" || true)
-            fi
-            if [[ "$asset_result" == "200 text/css"* ]]; then
-              echo "Asset $asset_path is live with CSS content (attempt $i)"
-              propagated=true
-              break
-            else
-              echo "Tenant entry asset not ready yet (${asset_result:-no asset found}), retrying... (attempt $i)"
-            fi
-            sleep 2
-          done
-          if [ "$propagated" = false ]; then
-            echo "::error::Staging tenant entry asset did not return 200 text/css after 30 attempts."
+          tenant_html=$(curl -sf "${CURL_TIMEOUT[@]}" \
+            -H "x-preview-tenant: demo" \
+            -H "cache-control: no-store" \
+            "https://staging.krabiclaw.com/?e2e=asset-probe" || true)
+
+          if [ -z "$tenant_html" ]; then
+            echo "::error::Staging returned empty HTML"
+            echo "HTML response was empty"
             exit 1
           fi
+
+          asset_path=$(printf '%s' "$tenant_html" | grep -oE '/_nuxt/entry\.[A-Za-z0-9_-]+\.css' | head -1)
+
+          if [ -z "$asset_path" ]; then
+            echo "::error::No entry CSS asset found in HTML"
+            echo "HTML size: $(printf '%s' "$tenant_html" | wc -c) bytes"
+            echo "First 500 chars of HTML:"
+            printf '%s' "$tenant_html" | head -c 500
+            exit 1
+          fi
+
+          echo "Found entry asset in HTML: $asset_path"
       - name: Run required smoke and changed subsystem suites
         env:
           AUTH_CHANGED: ${{ needs.changes.outputs.auth }}
