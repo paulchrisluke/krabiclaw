@@ -1,10 +1,21 @@
 // PATCH /api/editor/sites/[siteId]/experience-bookings/[bookingId]
+//
+// Delegates to the same canonical guest-thread operation service the dashboard inbox
+// uses (issue #442 Locked Decision #4), so both surfaces share one state-mutation +
+// ledger-append path rather than forking editor-specific logic.
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { updateBookingStatusForSite } from '~/server/utils/experiences'
 import { assertResourceAccess } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { queryFirst } from '~/server/db'
+import { experienceBookingAdapter } from '~/server/domain/guest-threads/adapters/experience-booking'
+import { ensureGuestThread } from '~/server/domain/guest-threads/repository'
+import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
+
+const STATUS_TO_ACTION = {
+  confirmed: 'confirm',
+  cancelled: 'cancel',
+} as const
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -34,12 +45,31 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody(event) as { status?: unknown }
   const status = cleanString(body.status, 20)
-  if (!['pending', 'confirmed', 'cancelled'].includes(status)) {
-    return jsonResponse({ error: 'Invalid status' }, { status: 400 })
+  const action = (STATUS_TO_ACTION as Record<string, string>)[status]
+  if (!action) {
+    return jsonResponse({ error: 'Invalid status. Must be one of: confirmed, cancelled' }, { status: 400 })
   }
 
-  const updated = await updateBookingStatusForSite(db, siteId, bookingId, status as 'pending' | 'confirmed' | 'cancelled')
-  if (!updated) return jsonResponse({ error: 'Booking not found' }, { status: 404 })
+  const thread = await ensureGuestThread(db, experienceBookingAdapter, bookingId)
+
+  const outcome = await executeGuestThreadOperation(db, {
+    threadId: thread.id,
+    siteId,
+    action,
+    actorUserId: session.user.id,
+    actorMemberId: site.member_id,
+    env,
+  })
+
+  if (!outcome.ok) {
+    if (outcome.reason === 'thread_not_found' || outcome.reason === 'source_not_found') {
+      return jsonResponse({ error: 'Booking not found' }, { status: 404 })
+    }
+    if (outcome.reason === 'invalid_transition') {
+      return jsonResponse({ error: outcome.message }, { status: 409 })
+    }
+    return jsonResponse({ error: 'Booking update failed' }, { status: 400 })
+  }
 
   return jsonResponse({ updated: true })
 })

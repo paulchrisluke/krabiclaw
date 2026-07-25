@@ -1,7 +1,6 @@
 import { useRender } from 'vue-email'
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { hashEmail, isReservedTestDomain, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
-import { ensureGuestThread } from '~/server/utils/guest-threads'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification, toDashboardButtonPath, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 import { buildReplyToAddress } from '~/server/utils/submission-messages'
 import { isAuthorizedWhatsAppRecipient } from '~/server/utils/member-access'
@@ -235,7 +234,15 @@ async function buildOwnerInboxUrl(
     submissionId: string
   }
 ): Promise<string | null> {
-  const thread = await ensureGuestThread(db, opts.tab === 'contact' ? 'contact' : opts.tab === 'reservations' ? 'reservation' : 'experience_booking', opts.submissionId)
+  const submissionType = opts.tab === 'contact' ? 'contact' : opts.tab === 'reservations' ? 'reservation' : 'experience_booking'
+  // Deferred import: the reservation/experience-booking adapters pull in mcp-workflows.ts
+  // and experiences.ts, whose own dependency graphs (google-business.ts) import this file —
+  // a static top-level import here would be a circular import.
+  const [{ ensureGuestThread }, { getAdapter }] = await Promise.all([
+    import('~/server/domain/guest-threads/repository'),
+    import('~/server/domain/guest-threads/adapters/registry'),
+  ])
+  const thread = await ensureGuestThread(db, getAdapter(submissionType), opts.submissionId)
   return await buildOwnerThreadInboxUrl(env, db, {
     organizationId: opts.organizationId,
     siteId: opts.siteId,
@@ -1410,6 +1417,18 @@ async function notifyGuestThreadReplyInner(
     inboundChannel: opts.inboundChannel,
     messagePreview: opts.messagePreview,
     replyUrl,
+  })
+
+  // Guarantees a dashboard bell entry for the guest reply itself, independent of whether
+  // the owner's configured delivery channels below are enabled/succeed — each channel send
+  // further down logs its own separate delivery-attempt notification record.
+  await insertDashboardNotification(db, {
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    locationId: opts.locationId ?? null,
+    template: opts.inboundChannel === 'email' ? 'submission_reply_email' : 'submission_reply_whatsapp',
+    title,
+    payload,
   })
 
   const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)

@@ -3,16 +3,17 @@
 // after it parses a reply sent to reply+<type>-<id>-<token>@reply.<platform-domain>. Authenticated by
 // a shared secret header, not a dashboard session — the caller is a Worker, not a browser.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { queryFirst } from '~/server/db'
-import { ensureGuestThread, getGuestThreadSource } from '~/server/utils/guest-threads'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 import {
   getSubmissionOrgSite,
-  insertInboundSubmissionReply,
   isSubmissionType,
   parseReplyToAddress,
   verifyReplyToken,
 } from '~/server/utils/submission-messages'
+import { getAdapter } from '~/server/domain/guest-threads/adapters/registry'
+import { ensureGuestThread, updateThreadProjection } from '~/server/domain/guest-threads/repository'
+import { appendEntry } from '~/server/domain/guest-threads/entries'
+import { nextConversationState } from '~/server/domain/guest-threads/state-machine'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -42,47 +43,60 @@ export default defineEventHandler(async (event) => {
   const orgSite = await getSubmissionOrgSite(db, parsed.submissionType, parsed.submissionId)
   if (!orgSite) return jsonResponse({ error: 'Submission not found' }, { status: 404 })
 
-  // Idempotency check: use the message-id from headers as a unique key
-  // to prevent duplicate processing on retries
-  const existing = await queryFirst<{ id: string }>(db, `SELECT id FROM submission_messages WHERE meta_message_id = ? LIMIT 1`, [messageIdHeader])
-  if (existing) return jsonResponse({ received: true })
+  const adapter = getAdapter(parsed.submissionType)
+  const thread = await ensureGuestThread(db, adapter, parsed.submissionId)
 
-  await insertInboundSubmissionReply(env, db, {
-    submissionType: parsed.submissionType,
-    submissionId: parsed.submissionId,
+  // Idempotent on the inbound provider message id via the ledger's external_id unique
+  // index — a retried delivery from the email worker appends nothing new and returns
+  // the existing entry.
+  const entry = await appendEntry(db, {
+    threadId: thread.id,
     organizationId: orgSite.organizationId,
     siteId: orgSite.siteId,
+    kind: 'message',
+    actorKind: 'guest',
     channel: 'email',
     body: text,
-    metaMessageId: messageIdHeader,
-    from,
+    externalId: messageIdHeader,
   })
 
-  try {
-    const thread = await ensureGuestThread(db, parsed.submissionType, parsed.submissionId)
-    const source = await getGuestThreadSource(db, parsed.submissionType, parsed.submissionId)
-    if (source) {
-      await notifyGuestThreadReply(env, db, {
-        organizationId: orgSite.organizationId,
-        siteId: orgSite.siteId,
-        locationId: source.location_id,
-        threadId: thread.id,
+  const alreadyProcessed = entry.body !== text
+  if (!alreadyProcessed) {
+    const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
+    await updateThreadProjection(db, thread.id, { conversationState })
+  }
+
+  if (!alreadyProcessed) {
+    try {
+      const source = await adapter.loadSource({ db }, parsed.submissionId)
+      if (source) {
+        const summary = adapter.summarize(source)
+        await notifyGuestThreadReply(env, db, {
+          organizationId: orgSite.organizationId,
+          siteId: orgSite.siteId,
+          locationId: summary.locationId,
+          threadId: thread.id,
+          submissionType: parsed.submissionType,
+          submissionId: parsed.submissionId,
+          guestName: summary.guestName,
+          guestEmail: summary.guestEmail,
+          guestPhone: summary.guestPhone,
+          inboundChannel: 'email',
+          messagePreview: text,
+        })
+      }
+    } catch (err) {
+      console.error('[email-inbound] Failed to notify owner of guest reply:', {
         submissionType: parsed.submissionType,
         submissionId: parsed.submissionId,
-        guestName: source.guest_name,
-        guestEmail: source.guest_email,
-        guestPhone: source.guest_phone,
-        inboundChannel: 'email',
-        messagePreview: text,
+        error: err instanceof Error ? err.message : String(err),
       })
     }
-  } catch (err) {
-    console.error('[email-inbound] Failed to notify owner of guest reply:', {
-      submissionType: parsed.submissionType,
-      submissionId: parsed.submissionId,
-      error: err instanceof Error ? err.message : String(err),
-    })
   }
+
+  // `from` is currently unused beyond routing (the reply address encodes submission
+  // identity), kept in the payload contract for the email worker's own logging.
+  void from
 
   return jsonResponse({ received: true })
 })

@@ -148,21 +148,26 @@ test('dashboard notification writers use canonical fields and guest replies emit
   for (const file of [
     'server/utils/domain-notifications.ts',
     'server/utils/site-transfer-notifications.ts',
-    'server/utils/submission-messages.ts',
   ]) {
     const source = readFileSync(file, 'utf8')
     assert.match(source, /(?:create|build)CanonicalNotification/)
     assert.doesNotMatch(source, /INSERT INTO notifications[\s\S]{0,300}'dashboard'/)
   }
 
+  // Guest-reply ingestion (issue #442) writes the append-only ledger entry via
+  // server/domain/guest-threads/entries.ts and, separately, guarantees exactly one
+  // dashboard bell entry via notifyGuestThreadReplyInner below — it must not call
+  // createCanonicalNotification directly (that would risk a second, differently-shaped
+  // insert) and must go through the same insertDashboardNotification wrapper every other
+  // canonical writer uses.
   const notifications = readFileSync('server/utils/notifications.ts', 'utf8')
-  const guestReplyWriter = notifications.slice(notifications.indexOf('async function notifyGuestThreadReplyInner'))
+  const guestReplyWriter = notifications.slice(
+    notifications.indexOf('async function notifyGuestThreadReplyInner'),
+    notifications.indexOf('async function notifyGuestThreadReplyInner') + 2500,
+  )
   assert.doesNotMatch(guestReplyWriter, /createCanonicalNotification/)
-
-  const inboundWriter = readFileSync('server/utils/submission-messages.ts', 'utf8')
-  assert.match(inboundWriter, /buildOwnerThreadInboxUrl\(env, db/)
-  assert.match(inboundWriter, /deepLink: replyUrl/)
-  assert.equal(inboundWriter.match(/buildCanonicalNotificationInsert\(\{/g)?.length, 1)
+  assert.match(guestReplyWriter, /buildOwnerThreadInboxUrl\(env, db/)
+  assert.equal(guestReplyWriter.match(/insertDashboardNotification\(db, \{/g)?.length, 1)
 })
 
 test('canonical guest-reply deep link targets the exact dashboard inbox thread', () => {

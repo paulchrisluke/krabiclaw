@@ -1,32 +1,9 @@
 import { jsonResponse } from '~/server/utils/api-response'
-import { getGuestThreadDetail, markGuestThreadSeen } from '~/server/utils/guest-threads'
+import { getGuestThreadDetail } from '~/server/domain/guest-threads/detail'
+import { getGuestThreadById } from '~/server/domain/guest-threads/repository'
+import { advanceMemberCursor } from '~/server/domain/guest-threads/read-state'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertMemberScope } from '~/server/utils/member-access'
-
-function openingTimelineItem(detail: NonNullable<Awaited<ReturnType<typeof getGuestThreadDetail>>>) {
-  const { thread, source } = detail
-  if (source.submission_type === 'contact') {
-    return {
-      id: `opening-${thread.id}`,
-      type: 'message',
-      role: 'guest',
-      channel: 'web',
-      body: source.message,
-      createdAt: source.created_at,
-      synthetic: true,
-      label: 'Website message',
-    }
-  }
-
-  return {
-    id: `opening-${thread.id}`,
-    type: 'event',
-    role: 'system',
-    body: source.submission_type === 'reservation' ? 'Reservation request received' : 'Experience booking request received',
-    createdAt: source.created_at,
-    synthetic: true,
-  }
-}
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -34,40 +11,25 @@ export default defineEventHandler(async (event) => {
   if (!siteId || !threadId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
   const { db, site } = await requireSiteAccess(event, siteId, 'context')
-  const detail = await getGuestThreadDetail(db, threadId, siteId)
+  const thread = await getGuestThreadById(db, threadId, siteId)
+  if (!thread) return jsonResponse({ error: 'Thread not found' }, { status: 404 })
+  await assertMemberScope(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, locationId: thread.location_id })
+
+  const detail = await getGuestThreadDetail(db, threadId, siteId, site.member_id)
   if (!detail) return jsonResponse({ error: 'Thread not found' }, { status: 404 })
-  await assertMemberScope(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, locationId: detail.thread.location_id })
 
-  const timeline = [
-    openingTimelineItem(detail),
-    ...detail.messages.map(message => ({
-      id: message.id,
-      type: 'message',
-      role: message.direction === 'in' ? 'guest' : 'owner',
-      channel: message.channel,
-      body: message.body,
-      createdAt: message.created_at,
-      status: message.status,
-      error: message.error,
-      synthetic: false,
-    })),
-  ]
-
+  // Advances only the requesting member's own read cursor — opening a thread must never
+  // mark it read for any other authorized member (issue #442 Locked Decision #10).
   try {
-    await markGuestThreadSeen(db, threadId)
+    const latest = detail.entries[detail.entries.length - 1]
+    if (latest) await advanceMemberCursor(db, threadId, site.member_id, latest.id)
   } catch (error) {
-    console.error('mark_guest_thread_seen_failed', {
+    console.error('advance_member_cursor_failed', {
       threadId,
+      memberId: site.member_id,
       error: error instanceof Error ? error.message : String(error),
     })
   }
 
-  return jsonResponse({
-    thread: {
-      ...detail.thread,
-      unread_count: 0,
-    },
-    source: detail.source,
-    timeline,
-  })
+  return jsonResponse({ thread: detail })
 })

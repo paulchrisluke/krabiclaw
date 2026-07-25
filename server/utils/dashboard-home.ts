@@ -1,6 +1,6 @@
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { isOrganizationWideRole, teamAccessPredicate } from '~/server/utils/member-access'
-import { getGuestThreadOperationSummary } from '~/server/utils/guest-threads'
+import { getGuestThreadOperationSummary } from '~/server/domain/guest-threads/repository'
 
 export interface DashboardHomeLocation {
   id: string
@@ -135,6 +135,7 @@ export async function getDashboardHomeData(
       principal: scoped && principal
         ? { memberId: principal.memberId, role: principal.role, organizationId, siteId }
         : null,
+      memberId: principal?.memberId ?? '',
     }),
   ])
 

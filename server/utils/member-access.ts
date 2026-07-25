@@ -59,6 +59,16 @@ export interface MemberAccessPrincipal {
 
 export type DashboardSiteAccess = 'organization' | 'site' | 'location'
 
+export async function resolveMemberId(
+  db: DbClient,
+  input: { organizationId: string; userId: string },
+): Promise<string | null> {
+  const row = await queryFirst<{ id: string }>(db, `
+    SELECT id FROM member WHERE userId = ? AND organizationId = ? LIMIT 1
+  `, [input.userId, input.organizationId])
+  return row?.id ?? null
+}
+
 export async function findLocationInSite(
   db: DbClient,
   input: { organizationId: string; siteId: string; locationId: string },

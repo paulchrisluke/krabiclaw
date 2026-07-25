@@ -127,13 +127,13 @@ export type OperationExecutionResult =
 
 export interface GuestThreadSourceAdapter<TSource, TSnapshot, TAction extends string> {
   type: GuestThreadSubmissionType
-  loadSource(ctx: AdapterLoadContext, submissionId: string): Promise<TSource | null>
-  createOpeningSnapshot(source: TSource): TSnapshot
-  summarize(source: TSource): ThreadSummaryProjection
-  getOperationalStatus(source: TSource): string
-  listAvailableActions(source: TSource): TAction[]
-  executeAction(ctx: OperationExecutionContext, source: TSource, action: TAction): Promise<OperationExecutionResult>
-  buildCurrentDetail(source: TSource): ThreadDetailSourceModel
+  loadSource(_ctx: AdapterLoadContext, _submissionId: string): Promise<TSource | null>
+  createOpeningSnapshot(_source: TSource): TSnapshot
+  summarize(_source: TSource): ThreadSummaryProjection
+  getOperationalStatus(_source: TSource): string
+  listAvailableActions(_source: TSource): TAction[]
+  executeAction(_ctx: OperationExecutionContext, _source: TSource, _action: TAction): Promise<OperationExecutionResult>
+  buildCurrentDetail(_source: TSource): ThreadDetailSourceModel
 }
 
 // Type-erased form used by the registry/operations layer so callers don't need to know
