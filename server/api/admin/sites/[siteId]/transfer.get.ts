@@ -2,7 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryFirst } from '~/server/db'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   const userId = session.user.id
-  const isPlatAdmin = isPlatformAdmin(session.user, env)
+  const isPlatAdmin = await hasPlatformEventPermission(event, env, { platform: ['organizations'] })
 
   const site = await queryFirst<{ id: string }>(
     db,

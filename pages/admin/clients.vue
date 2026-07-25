@@ -53,13 +53,15 @@
             </div>
             <div class="flex items-center gap-2 shrink-0">
               <UButton
-                v-if="client.org_slug"
+                v-if="client.org_slug && client.subdomain"
                 size="xs"
                 color="neutral"
                 variant="ghost"
                 icon="i-lucide-languages"
-                :to="`/dashboard/${client.org_slug}/translations`"
-                target="_blank"
+                :aria-label="`Open ${client.brand_name || client.org_name} translations`"
+                :disabled="isImpersonatingClient || !client.impersonation_user_id"
+                :loading="impersonatingClientOrgId === client.org_id"
+                @click="openWorkspace(client, 'translations')"
               >
                 Translations
               </UButton>
@@ -88,8 +90,10 @@
                 color="primary"
                 variant="soft"
                 icon="i-lucide-external-link"
-                :to="`/dashboard/${client.org_slug}`"
-                target="_blank"
+                :aria-label="`Open ${client.brand_name || client.org_name} workspace`"
+                :disabled="isImpersonatingClient || !client.impersonation_user_id"
+                :loading="impersonatingClientOrgId === client.org_id"
+                @click="openWorkspace(client)"
               >
                 Workspace
               </UButton>
@@ -352,6 +356,7 @@ interface Client {
   stripe_customer_id: string | null
   stripe_subscription_id: string | null
   pending_transfer_email: string | null
+  impersonation_user_id: string | null
 }
 
 interface BillingStatus {
@@ -391,6 +396,9 @@ interface BillingStatus {
 
 const clients = ref<Client[]>([])
 const clientsLoading = ref(true)
+const impersonatingClientOrgId = ref<string | null>(null)
+const isImpersonatingClient = computed(() => impersonatingClientOrgId.value !== null)
+const { refreshSession } = useAuth()
 
 const PLAN_LABELS: Record<string, string> = {
   growth: 'Growth',
@@ -415,6 +423,31 @@ async function loadClients() {
     toast.add({ title: 'Failed to load clients', color: 'error' })
   } finally {
     clientsLoading.value = false
+  }
+}
+
+async function openWorkspace(client: Client, destination: 'overview' | 'translations' = 'overview') {
+  if (isImpersonatingClient.value) return
+
+  if (!client.org_slug || !client.impersonation_user_id) {
+    toast.add({ title: 'No client workspace member available', color: 'warning' })
+    return
+  }
+
+  impersonatingClientOrgId.value = client.org_id
+  try {
+    const { authClient } = await import('~/lib/auth-client')
+    const result = await authClient.admin.impersonateUser({ userId: client.impersonation_user_id })
+    if (result.error) throw new Error(result.error.message)
+    await refreshSession()
+    const path = destination === 'translations' && client.subdomain
+      ? `/dashboard/${client.org_slug}/sites/${client.subdomain}/translations`
+      : `/dashboard/${client.org_slug}`
+    await navigateTo(path)
+  } catch {
+    toast.add({ title: 'Failed to enter client workspace', color: 'error' })
+  } finally {
+    impersonatingClientOrgId.value = null
   }
 }
 

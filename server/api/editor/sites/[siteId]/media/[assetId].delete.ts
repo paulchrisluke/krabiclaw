@@ -3,7 +3,7 @@
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { deleteMediaAsset } from '~/server/utils/media-asset-manager'
-import { anonymizeId } from '~/server/utils/platform-auth'
+import { anonymizeId } from '~/server/utils/platform-telemetry'
 import { assertResourceAccess } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { queryFirst } from '~/server/db'

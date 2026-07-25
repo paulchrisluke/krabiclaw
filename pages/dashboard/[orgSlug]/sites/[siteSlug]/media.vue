@@ -158,8 +158,8 @@ definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.media' })
 import VideoPosterPrompt from '~/components/workspace/media/VideoPosterPrompt.vue'
 import { IMAGE_MAX_SIZE_BYTES, VIDEO_MAX_SIZE_BYTES } from '~/composables/useMediaUpload'
 
-const _siteId = await useDashboardSiteId()
-const siteApiBase = `/api/dashboard/editor`
+const siteId = await useDashboardSiteId()
+const siteApiBase = `/api/editor/sites/${siteId}`
 const toast = useToast()
 
 interface MediaAsset {

@@ -28,7 +28,7 @@ const AUTHORIZE_URL = `${BASE_URL}/api/auth/oauth2/authorize`;
 const CONSENT_URL = `${BASE_URL}/api/auth/oauth2/consent`;
 const TEST_CLIENT_METADATA_URL = `${BASE_URL}/api/auth/oauth2/test-client-metadata`;
 
-const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? "2026-07-28";
+const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? "2025-06-18";
 
 const IS_STAGING = (() => {
   try {

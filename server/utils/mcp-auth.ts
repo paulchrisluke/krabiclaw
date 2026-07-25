@@ -1,7 +1,8 @@
 import { createError, getHeader, getHeaders, type H3Event } from 'h3'
-import { createLocalJWKSet, jwtVerify } from 'jose'
-import { getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { oauthProviderResourceClient } from '@better-auth/oauth-provider/resource-client'
+import { createAuth, getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
+import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
+import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
 import { queryAll, queryFirst } from '~/server/db'
 import { assertSiteWideAccess, isOrganizationWideRole } from '~/server/utils/member-access'
 
@@ -19,6 +20,7 @@ export interface McpUserContext {
   userId: string
   isPlatformAdmin: boolean
   scopes: string[]
+  oauthClientId?: string | null
   // Only populated for session-based auth (ChowBot/dashboard) — bearer-token
   // auth (e.g. ChatGPT connector) has no browser session to read this from.
   activeOrganizationId?: string
@@ -34,30 +36,13 @@ export interface McpSiteContext extends McpUserContext {
   role: McpToolRole
 }
 
-interface TokenLookupResult {
-  userId: string | null
-  reason: string
-}
-
-interface VerifiedTokenIdentity {
-  userId: string
-  tokenKind: 'jwt' | 'opaque'
-}
-
-interface TokenVerificationResult {
-  identity: VerifiedTokenIdentity | null
-  jwtReason: string
-  opaqueReason: string
-  scopes: string[]
-}
-
 interface McpAuthChallengeDetails {
   error: 'invalid_token' | 'insufficient_scope'
   description: string
   scope?: string
 }
 
-interface RequireMcpUserOptions {
+export interface RequireMcpUserOptions {
   audiences?: string[]
   requiredScopes?: string[]
   requirePlatformAdmin?: boolean
@@ -104,13 +89,7 @@ export async function requireMcpUser(
     env,
     db,
     userId: session.user.id,
-    isPlatformAdmin: isPlatformAdmin(
-      {
-        role: (session.user as { role?: string | null }).role ?? null,
-        email: session.user.email ?? null,
-      },
-      env,
-    ),
+    isPlatformAdmin: await hasPlatformEventPermission(event, env, { platform: ['access'] }),
     scopes: normalizedOptions.requiredScopes ?? ['tenant'],
     activeOrganizationId: typeof sessionRecord.activeOrganizationId === 'string' ? sessionRecord.activeOrganizationId : undefined,
   }
@@ -121,6 +100,14 @@ export async function requireMcpUser(
   return user
 }
 
+// Delegates local JWT verification (JWKS fetch/cache, issuer/audience/expiry,
+// scope check) to Better Auth's own resource-server helper instead of a
+// hand-rolled jose-based implementation reading raw key rows directly.
+// Opaque (non-JWT) access tokens are not supported here: every resource
+// currently issues RS256 JWTs (see the `resources` config in createAuth),
+// and any pre-JWT opaque token still on file is rejected cleanly as
+// `no token payload` rather than carrying forward a second, direct-SQL
+// verification path alongside it.
 async function verifyBearerToken(
   event: H3Event,
   token: string,
@@ -140,9 +127,17 @@ async function verifyBearerToken(
   // scope claim alone.
   const requiredScopes = options.requiredScopes ?? ['tenant']
 
-  const verification = await verifyJwtOrOpaqueToken(token, baseUrl, db, audiences, requiredScopes)
-  if (!verification.identity) {
-    const authChallenge = mcpAuthChallengeDetails(verification, requiredScopes)
+  const auth = createAuth(env)
+  const { verifyBearerToken: verify } = oauthProviderResourceClient(auth).getActions()
+
+  let payload: { sub?: unknown; scope?: unknown; client_id?: unknown }
+  try {
+    payload = await verify(token, {
+      verifyOptions: { audience: audiences },
+      scopes: requiredScopes,
+    })
+  } catch (error) {
+    const authChallenge = mcpAuthChallengeFromVerifyError(error, requiredScopes)
     // claimed_* fields are decoded WITHOUT signature verification — never use
     // them for auth decisions, only to see what a rejected token *claims*
     // (aud/exp/iss mismatches are otherwise invisible: the verifier only
@@ -151,34 +146,55 @@ async function verifyBearerToken(
       path: event.path,
       token_fingerprint: tokenFingerprint,
       token_shape: token.split('.').length === 3 ? 'jwt' : 'opaque',
-      jwt_reason: verification.jwtReason,
-      opaque_reason: verification.opaqueReason,
+      reason: error instanceof Error ? error.message : String(error),
       oauth_error: authChallenge.error,
       audiences_checked: audiences,
       required_scopes: requiredScopes,
       now_iso: new Date().toISOString(),
       ...(await decodeJwtClaimsUnsafe(token)),
     })
+    // Always 401, matching the pre-existing behavior for both invalid_token
+    // and insufficient_scope: asMcpError maps statusCode 403 to kind
+    // 'forbidden', a different code path used for tool-role permission
+    // denials (respondToMcpError returns a plain tool-error result there,
+    // dropping the WWW-Authenticate challenge). RFC 6750 §3.1 permits 401
+    // for insufficient_scope too ("MAY" 403, not "SHOULD"), so this stays
+    // spec-compliant while keeping the challenge intact on every path.
     throw createError({
       statusCode: 401,
       statusMessage: authChallenge.description,
       data: { mcpAuth: authChallenge },
     })
   }
-  const identity = verification.identity
-  ensureForbiddenScopesAbsent(verification.scopes, options.forbiddenScopes)
+
+  const scopes = parseScopesFromJwtPayload(payload.scope)
+  ensureForbiddenScopesAbsent(scopes, options.forbiddenScopes)
+
+  const userId = typeof payload.sub === 'string' ? payload.sub : null
+  if (!userId) {
+    logMcpAuth(event, 'warn', 'credential_rejected', {
+      path: event.path,
+      token_fingerprint: tokenFingerprint,
+      reason: 'subject_missing',
+    })
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Token missing, expired, invalid, or not issued for this MCP resource',
+      data: { mcpAuth: { error: 'invalid_token', description: 'Token missing, expired, invalid, or not issued for this MCP resource' } },
+    })
+  }
+  const oauthClientId = typeof payload.client_id === 'string' ? payload.client_id : null
 
   const user = await queryFirst<{ role?: string; email?: string | null }>(
     db,
     'SELECT role, email FROM user WHERE id = ? LIMIT 1',
-    [identity.userId],
+    [userId],
   )
 
   if (!user) {
     logMcpAuth(event, 'warn', 'credential_rejected', {
       path: event.path,
       token_fingerprint: tokenFingerprint,
-      token_kind: identity.tokenKind,
       reason: 'user_not_found',
     })
     throw createError({ statusCode: 401, statusMessage: 'User not found' })
@@ -187,37 +203,44 @@ async function verifyBearerToken(
   logMcpAuth(event, 'info', 'credential_accepted', {
     path: event.path,
     token_fingerprint: tokenFingerprint,
-    token_kind: identity.tokenKind,
     audiences_checked: audiences,
   })
 
   return {
     env,
     db,
-    userId: identity.userId,
-    isPlatformAdmin: isPlatformAdmin(
-      {
-        role: user.role ?? null,
-        email: user.email ?? null,
-      },
-      env,
-    ),
-    scopes: verification.scopes,
+    userId,
+    oauthClientId,
+    isPlatformAdmin: hasPlatformAdminPermission(user.role),
+    scopes,
   }
 }
 
-function mcpAuthChallengeDetails(
-  verification: TokenVerificationResult,
-  requiredScopes: string[],
-): McpAuthChallengeDetails {
-  const missingScope = requiredScopes.find(scope =>
-    verification.jwtReason === `${scope}_scope_missing` ||
-    verification.opaqueReason === `${scope}_scope_missing`
-  )
-  if (missingScope) {
+// Better Auth's verifyBearerToken throws a better-call APIError: status
+// FORBIDDEN with message `invalid scope ${scope}` for a missing required
+// scope, status UNAUTHORIZED for anything else (expired/invalid signature/
+// wrong audience/wrong issuer/not a JWT at all). Duck-typed rather than
+// checked with `instanceof`/`isAPIError` — a differently-bundled copy of
+// better-call across packages can fail an instanceof check even though the
+// thrown value carries the real .status/.statusCode/.message shape (verified
+// empirically against the installed better-auth/@better-auth/oauth-provider
+// version pair).
+function isBetterAuthApiError(error: unknown): error is { status: string; message: string } {
+  return !!error && typeof error === 'object' && 'status' in error && 'statusCode' in error && typeof (error as { message?: unknown }).message === 'string'
+}
+
+function mcpAuthChallengeFromVerifyError(error: unknown, requiredScopes: string[]): McpAuthChallengeDetails {
+  if (isBetterAuthApiError(error) && error.status === 'FORBIDDEN') {
+    // @better-auth/core's verifyAccessTokenPayload only ever throws FORBIDDEN
+    // for a missing required scope — the status alone is the reliable
+    // classification signal. The `invalid scope ${sc}` message text is only
+    // used as a best-effort way to name which scope for the challenge/log;
+    // an upstream wording change degrades that naming, not the
+    // insufficient_scope classification itself.
+    const missingScope = requiredScopes.find(scope => error.message.includes(scope)) ?? requiredScopes[0]
     return {
       error: 'insufficient_scope',
-      description: `${missingScope} scope required`,
+      description: missingScope ? `${missingScope} scope required` : 'Required scope missing',
       scope: missingScope,
     }
   }
@@ -225,116 +248,6 @@ function mcpAuthChallengeDetails(
     error: 'invalid_token',
     description: 'Token missing, expired, invalid, or not issued for this MCP resource',
   }
-}
-
-async function verifyJwtOrOpaqueToken(
-  token: string,
-  baseUrl: string,
-  db: D1Database,
-  audiences: string[],
-  requiredScopes: string[],
-): Promise<TokenVerificationResult> {
-  const jwtResult = await verifyJwtAccessToken(token, baseUrl, db, audiences, requiredScopes)
-  if (jwtResult.userId) {
-    return {
-      identity: { userId: jwtResult.userId, tokenKind: 'jwt' },
-      jwtReason: jwtResult.reason,
-      opaqueReason: 'not_checked',
-      scopes: jwtResult.scopes,
-    }
-  }
-
-  const opaqueResult = await verifyOpaqueAccessToken(token, db, requiredScopes)
-  if (opaqueResult.userId) {
-    return {
-      identity: { userId: opaqueResult.userId, tokenKind: 'opaque' },
-      jwtReason: jwtResult.reason,
-      opaqueReason: opaqueResult.reason,
-      scopes: opaqueResult.scopes,
-    }
-  }
-
-  return {
-    identity: null,
-    jwtReason: jwtResult.reason,
-    opaqueReason: opaqueResult.reason,
-    scopes: [],
-  }
-}
-
-async function verifyJwtAccessToken(
-  token: string,
-  baseUrl: string,
-  db: D1Database,
-  audiences: string[],
-  requiredScopes: string[],
-): Promise<TokenLookupResult & { scopes: string[] }> {
-  const keys = await queryAll<{ id: string; publicKey: string; alg: string | null }>(
-    db,
-    'SELECT id, publicKey, alg FROM jwks ORDER BY createdAt DESC',
-  )
-
-  if (!keys?.length) return { userId: null, reason: 'jwks_empty', scopes: [] }
-
-  const jwks = createLocalJWKSet({
-    keys: keys.map(k => ({
-      ...JSON.parse(k.publicKey),
-      kid: k.id,
-      alg: k.alg ?? 'EdDSA',
-    })),
-  })
-
-  try {
-    const { payload } = await jwtVerify(token, jwks, {
-      issuer: baseUrl,
-      audience: audiences,
-    })
-    const scopes = parseScopesFromJwtPayload(payload.scope)
-    const missingScope = requiredScopes.find(scope => !scopes.includes(scope))
-    if (missingScope) {
-      return { userId: null, reason: `${missingScope}_scope_missing`, scopes }
-    }
-    return typeof payload.sub === 'string'
-      ? { userId: payload.sub, reason: 'accepted', scopes }
-      : { userId: null, reason: 'subject_missing', scopes }
-  } catch (error) {
-    return { userId: null, reason: joseErrorReason(error), scopes: [] }
-  }
-}
-
-async function verifyOpaqueAccessToken(
-  token: string,
-  db: D1Database,
-  requiredScopes: string[],
-): Promise<TokenLookupResult & { scopes: string[] }> {
-  const hashedToken = await sha256Base64Url(token)
-  const accessToken = await queryFirst<{
-    userId: string | null
-    expiresAt: number | null
-    scopes: string | null
-    client_disabled: number | null
-  }>(db, `
-    SELECT oat.userId, oat.expiresAt, oat.scopes, oc.disabled AS client_disabled
-    FROM oauthAccessToken oat
-    LEFT JOIN oauthClient oc ON oc.clientId = oat.clientId
-    WHERE oat.token = ?
-    LIMIT 1
-  `, [hashedToken])
-
-  if (!accessToken?.userId || !accessToken.expiresAt) return { userId: null, reason: 'token_not_found', scopes: [] }
-  if (accessToken.client_disabled) return { userId: null, reason: 'client_disabled', scopes: [] }
-
-  // oauthAccessToken.expiresAt is stored as unix seconds (drizzle integer
-  // timestamp mode) — multiply back to milliseconds before comparing.
-  const expiresAtMs = accessToken.expiresAt * 1000
-  if (Number.isNaN(expiresAtMs)) return { userId: null, reason: 'expiry_invalid', scopes: [] }
-  if (expiresAtMs <= Date.now()) return { userId: null, reason: 'token_expired', scopes: [] }
-
-  const scopes = parseTokenScopes(accessToken.scopes)
-  const missingScope = requiredScopes.find(scope => !scopes.includes(scope))
-  if (missingScope) return { userId: null, reason: `${missingScope}_scope_missing`, scopes }
-
-  return { userId: accessToken.userId, reason: 'accepted', scopes }
 }
 
 // Decodes a JWT's payload segment without verifying the signature — used only
@@ -364,17 +277,6 @@ async function decodeJwtClaimsUnsafe(token: string): Promise<Record<string, unkn
   }
 }
 
-function joseErrorReason(error: unknown) {
-  if (!error || typeof error !== 'object') return 'jwt_invalid'
-  const code = 'code' in error && typeof error.code === 'string' ? error.code : ''
-  const claim = 'claim' in error && typeof error.claim === 'string' ? error.claim : ''
-  if (code === 'ERR_JWT_EXPIRED') return 'jwt_expired'
-  if (code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED') return 'jwt_signature_invalid'
-  if (code === 'ERR_JWKS_NO_MATCHING_KEY') return 'jwt_key_not_found'
-  if (code === 'ERR_JWT_CLAIM_VALIDATION_FAILED' && claim) return `jwt_claim_${claim}_invalid`
-  return code ? `jwt_${code.toLowerCase()}` : 'jwt_invalid'
-}
-
 function logMcpAuth(
   event: H3Event,
   level: 'info' | 'warn',
@@ -392,16 +294,6 @@ function logMcpAuth(
 async function sha256Base64Url(value: string) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
   return Buffer.from(digest).toString('base64url')
-}
-
-function parseTokenScopes(scopes: string | null) {
-  if (!scopes) return []
-  try {
-    const parsed = JSON.parse(scopes)
-    return Array.isArray(parsed) ? parsed.filter((scope): scope is string => typeof scope === 'string') : []
-  } catch {
-    return scopes.split(' ').filter(Boolean)
-  }
 }
 
 function parseScopesFromJwtPayload(scopeClaim: unknown) {
@@ -425,58 +317,6 @@ export async function requireMcpSite(
   minimumRole: McpToolRole = 'editor',
 ): Promise<McpSiteContext> {
   const user = await requireMcpUser(event)
-
-  if (user.isPlatformAdmin) {
-    // Check id first, then subdomain, then custom_domain — an OR across all
-    // three columns is ambiguous if a value collides across columns (e.g. a
-    // custom_domain on one site equal to another site's id).
-    const site = await queryFirst<{ id: string; organization_id: string; organization_slug: string | null; subdomain: string | null; custom_domain: string | null; public_url: string | null }>(
-      user.db,
-      `
-      SELECT s.id, s.organization_id, o.slug as organization_slug, s.subdomain, s.custom_domain, s.public_url
-      FROM sites s
-      LEFT JOIN organization o ON s.organization_id = o.id
-      WHERE s.id = ?
-      LIMIT 1
-    `,
-      [siteId],
-    ) ?? await queryFirst<{ id: string; organization_id: string; organization_slug: string | null; subdomain: string | null; custom_domain: string | null; public_url: string | null }>(
-      user.db,
-      `
-      SELECT s.id, s.organization_id, o.slug as organization_slug, s.subdomain, s.custom_domain, s.public_url
-      FROM sites s
-      LEFT JOIN organization o ON s.organization_id = o.id
-      WHERE s.subdomain = ?
-      LIMIT 1
-    `,
-      [siteId],
-    ) ?? await queryFirst<{ id: string; organization_id: string; organization_slug: string | null; subdomain: string | null; custom_domain: string | null; public_url: string | null }>(
-      user.db,
-      `
-      SELECT s.id, s.organization_id, o.slug as organization_slug, s.subdomain, s.custom_domain, s.public_url
-      FROM sites s
-      LEFT JOIN organization o ON s.organization_id = o.id
-      WHERE s.custom_domain = ?
-      LIMIT 1
-    `,
-      [siteId],
-    )
-
-    if (!site?.organization_id) {
-      throw createError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
-    }
-
-    return {
-      ...user,
-      siteId: site.id,
-      organizationId: site.organization_id,
-      organizationSlug: site.organization_slug || undefined,
-      subdomain: site.subdomain ?? null,
-      customDomain: site.custom_domain ?? null,
-      publicUrl: site.public_url ?? null,
-      role: 'owner',
-    }
-  }
 
   type MemberSiteRow = { id: string; organization_id: string; role: string; member_id: string; organization_slug: string | null; subdomain: string | null; custom_domain: string | null; public_url: string | null }
   const memberSiteByColumn = async (column: 'id' | 'subdomain' | 'custom_domain') =>
@@ -508,11 +348,9 @@ export async function requireMcpSite(
     throw createError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
   }
 
-  // #341 Workstream A: `editor` is always constrained through member_access_scope.
-  // MCP tools operate on a whole site (none currently take a location-scoped
-  // permission model at this auth layer), so an editor needs a SITE-WIDE
-  // (location_id IS NULL) scope row to use any MCP tool at all — a
-  // location-only-scoped editor is rejected here rather than silently getting
+  // MCP tools operate on a whole site at this auth layer, so an editor needs
+  // the site's resource team membership to use any MCP tool at all. A
+  // location-only editor is rejected here rather than silently getting
   // whole-site access. This is strictly a tightening versus the prior
   // role-name-only check: it was already impossible for a location-scoped
   // role to satisfy `minimumRole: 'editor'` before this change (that role

@@ -17,7 +17,7 @@ const CANONICAL_LOCAL_ORIGIN = 'https://local.krabiclaw.com'
 const TUNNEL_CONFIG_PATH = 'tunnel.yml'
 const CANONICAL_TUNNEL_ID = 'ba36c78c-9e7d-4312-be92-63a58d96baba'
 const CANONICAL_TUNNEL_NAME = 'krabiclaw-local'
-const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2025-11-25'
+const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2025-06-18'
 
 let failed = false
 

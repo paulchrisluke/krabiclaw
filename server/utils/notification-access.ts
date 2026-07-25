@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { isOrganizationWideRole } from '~/server/utils/member-access'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
 export interface NotificationVisibilityPrincipal {
   userId: string
@@ -30,18 +30,18 @@ export function buildNotificationVisibilityFilter(principal: NotificationVisibil
       visibilityClauses.push(`(n.scope IN ('organization', 'site') AND n.organization_id = ?)`)
       params.push(principal.organization.id)
     } else {
-      // A location-scoped member may only see site notifications covered by an
-      // explicit access scope. A null notification location is site-wide and
-      // therefore requires a null (whole-site) member scope.
       visibilityClauses.push(`(n.scope = 'site' AND n.organization_id = ? AND EXISTS (
-        SELECT 1 FROM member_access_scope mas
-        WHERE mas.member_id = ?
-          AND mas.organization_id = n.organization_id
-          AND mas.site_id = n.site_id
+        SELECT 1
+        FROM member m
+        JOIN sites s ON s.organization_id = m.organizationId AND s.id = n.site_id
+        LEFT JOIN business_locations bl ON bl.organization_id = m.organizationId AND bl.site_id = s.id AND bl.id = n.location_id
+        JOIN teamMember tm
+          ON tm.userId = m.userId
           AND (
-            (n.location_id IS NULL AND mas.location_id IS NULL)
-            OR (n.location_id IS NOT NULL AND (mas.location_id IS NULL OR mas.location_id = n.location_id))
+            (n.location_id IS NULL AND tm.teamId = s.team_id)
+            OR (n.location_id IS NOT NULL AND tm.teamId IN (s.team_id, bl.team_id))
           )
+        WHERE m.id = ? AND m.organizationId = n.organization_id
       ))`)
       params.push(principal.organization.id, principal.organization.memberId)
     }
@@ -57,7 +57,7 @@ export function buildNotificationVisibilityFilter(principal: NotificationVisibil
 
 export async function getNotificationAccess(event: H3Event) {
   const context = await getDashboardContext(event, { requireSite: false, requireOrganization: false })
-  const platformAdmin = isPlatformAdmin(context.session.user as { role?: string | null; email?: string | null }, context.env)
+  const platformAdmin = await hasPlatformEventPermission(event, context.env, { platform: ['access'] })
   const filter = buildNotificationVisibilityFilter({
     userId: context.userId,
     platformAdmin,

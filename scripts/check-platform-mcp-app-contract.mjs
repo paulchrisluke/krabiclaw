@@ -12,7 +12,7 @@ if (baseUrlFlagIndex !== -1) {
 const BASE_URL = (_baseUrlArg ?? process.env.MCP_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 
 const MCP_URL = `${BASE_URL}/api/mcp/platform`
-const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2026-07-28'
+const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2025-06-18'
 
 let failed = false
 
@@ -80,7 +80,12 @@ async function authHeaders() {
     headers['x-dev-route-secret'] = process.env.E2E_DEV_ROUTE_SECRET
   }
 
-  const login = await fetch(`${BASE_URL}/api/dev/login`, {
+  const loginUrl = new URL('/api/dev/login', BASE_URL)
+  if (process.env.MCP_DEV_LOGIN_USER_ID) {
+    loginUrl.searchParams.set('userId', process.env.MCP_DEV_LOGIN_USER_ID)
+  }
+
+  const login = await fetch(loginUrl, {
     headers,
     redirect: 'manual',
   })

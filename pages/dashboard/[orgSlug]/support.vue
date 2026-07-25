@@ -228,7 +228,8 @@ interface WorkRequest {
   notes: string | null; created_at: string
 }
 
-const { data, refresh } = await useFetch<{ requests: WorkRequest[] }>('/api/dashboard/work-requests')
+const requestHeaders = buildDashboardRequestHeaders()
+const { data, refresh } = await useFetch<{ requests: WorkRequest[] }>('/api/dashboard/work-requests', { headers: requestHeaders })
 const requests = computed(() => data.value?.requests)
 
 async function submitRequest() {
@@ -239,6 +240,7 @@ async function submitRequest() {
   try {
     await $fetch('/api/dashboard/work-requests', {
       method: 'POST',
+      headers: requestHeaders,
       body: { type: form.type, title: form.title.trim(), description: form.description.trim() || undefined, priority: form.priority },
     })
     form.title = ''

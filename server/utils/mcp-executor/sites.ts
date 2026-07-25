@@ -15,12 +15,10 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
           site.db,
           site.siteId,
           site.userId,
-          site.isPlatformAdmin,
         );
         const workspace = await resolveMcpWorkspace(
           site.db,
           site.userId,
-          site.isPlatformAdmin,
           { siteId: site.siteId },
         );
         return {

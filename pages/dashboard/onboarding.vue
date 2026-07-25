@@ -185,7 +185,8 @@ const loadContext = async () => {
 // Step 2 — editor context includes the signed preview token needed to render draft sites
 const loadPreviewToken = async () => {
   try {
-    const res = await $fetch<{ context: { previewToken: string } }>('/api/dashboard/editor/context')
+    if (!siteId.value) return
+    const res = await $fetch<{ context: { previewToken: string } }>(`/api/editor/sites/${siteId.value}/context`)
     if (res.context?.previewToken) previewToken.value = res.context.previewToken
   } catch {
     // Non-fatal — preview still works if onboarding_status is 'active' (it will be after setup)

@@ -192,7 +192,7 @@ const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).de
 
 const { isPlatform, site } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
-const { getField, locations, contentBlocks, config } = useBootstrap()
+const { getField, locations, contentBlocks, config } = await useBootstrap()
 const { resolveComponent } = useDynamicComponent()
 const { locale } = useI18n()
 const copy = computed(() => getVerticalCopy(site?.vertical, locale.value))

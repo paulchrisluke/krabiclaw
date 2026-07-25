@@ -1,4 +1,10 @@
 import { CHANGE_TYPES } from '~/server/utils/changelog'
+import {
+  AGENT_GUIDANCE_CANDIDATE_TYPE_SCHEMA,
+  AGENT_GUIDANCE_REVIEW_RESPONSE_SCHEMA,
+  AGENT_SKILL_TASK_SCHEMA,
+  RESOLVED_AGENT_GUIDANCE_SCHEMA,
+} from '~/server/utils/agent-skills/mcp-schema'
 
 export interface PlatformMcpToolDefinition {
   name: string
@@ -584,6 +590,8 @@ const PLATFORM_DOC_TOOL_DESCRIPTION = [
   SHARED_TOOL_DESCRIPTION_LINES[2],
 ].join(' ')
 
+export const PLATFORM_LEGACY_UPDATE_BLOG_POST_TOOL_NAME = 'update_platform_blog_post'
+
 const PLATFORM_SECURITY_SCHEMES: Array<{ type: 'oauth2'; scopes: string[] }> = [
   { type: 'oauth2', scopes: ['platform_admin'] },
 ]
@@ -635,6 +643,42 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       },
       required: ['currentUser'],
     },
+  }),
+  readTool({
+    name: 'resolve_platform_agent_guidance',
+    description: 'Resolve reusable scoped Agent Skill guidance for platform MCP blog writing or image-generation briefs. Optionally pass site_id to preview tenant-scoped resolution; returns each applicable source document separately and cannot mutate skills.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task: AGENT_SKILL_TASK_SCHEMA,
+        organization_id: { type: 'string', description: 'Optional organization scope when resolving guidance outside a specific site.' },
+        site_id: { type: 'string', description: 'Optional site scope; the organization is derived from the site when present.' },
+      },
+      required: ['task'],
+      additionalProperties: false,
+    },
+    outputSchema: RESOLVED_AGENT_GUIDANCE_SCHEMA,
+  }),
+  readTool({
+    name: 'review_platform_agent_guidance_candidate',
+    description: 'Run a scoped advisory review of a platform or tenant-targeted blog draft or image-generation brief against the exact resolved Agent Skill guidance. This scaffold does not persist provenance; use the returned fingerprints as review evidence only.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task: AGENT_SKILL_TASK_SCHEMA,
+        candidate_type: AGENT_GUIDANCE_CANDIDATE_TYPE_SCHEMA,
+        candidate: {
+          type: 'object',
+          description: 'The exact draft or image brief being reviewed. For blog.write use { title, content_blocks, ...metadata }. For image.generate use { prompt, intended_use, alt_text, aspect_ratio }. Do not include raw image bytes.',
+          additionalProperties: true,
+        },
+        organization_id: { type: 'string', description: 'Optional organization scope when reviewing outside a specific site.' },
+        site_id: { type: 'string', description: 'Optional site scope; the organization is derived from the site when present.' },
+      },
+      required: ['task', 'candidate_type', 'candidate'],
+      additionalProperties: false,
+    },
+    outputSchema: AGENT_GUIDANCE_REVIEW_RESPONSE_SCHEMA,
   }),
   readTool({
     name: 'get_recent_changes',
@@ -1209,6 +1253,47 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
 ]
 
+export const PLATFORM_LEGACY_UPDATE_BLOG_POST_COMPAT_TOOL = writeTool({
+  name: PLATFORM_LEGACY_UPDATE_BLOG_POST_TOOL_NAME,
+  description: PLATFORM_BLOG_TOOL_DESCRIPTION,
+  openWorld: true,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      post_id: { type: 'string', description: 'Post id or slug.' },
+      title: { type: 'string' },
+      body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
+      content_blocks: { type: 'array', items: { type: 'object', properties: CONTENT_BLOCK_INPUT_PROPERTIES, required: ['type', 'data'], additionalProperties: false }, minItems: 1 },
+      expected_document_updated_at: { type: 'string' },
+      expected_updated_at: { type: 'string' },
+      excerpt: { type: 'string' },
+      category: { type: 'string', description: 'Platform posts use the documented platform categories; tenant categories are free text when site_id is provided.' },
+      ...NAV_FIELDS_SCHEMA,
+      seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
+      ...SEO_FIELDS_SCHEMA,
+      components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
+      publish: { type: 'boolean' },
+      unpublish: { type: 'boolean' },
+      site_id: { type: 'string', description: 'Optional site id to update tenant blog posts instead of platform posts.' },
+    },
+    required: ['post_id'],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      success: { type: 'boolean' },
+      admin_edit_url: { type: 'string' },
+      public_path: NULLABLE_STRING,
+      public_url: NULLABLE_STRING,
+      preview_url: NULLABLE_STRING,
+      post: { type: 'object' },
+    },
+    required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'post'],
+    additionalProperties: false,
+  },
+})
+
 // Not returned by tools/list — these are a debug/support escape hatch for
 // editing a content document block-by-block, not the normal blog-authoring
 // path. Still fully dispatchable by name (see getPlatformMcpTool below,
@@ -1216,6 +1301,7 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
 // session or direct support access still works — only *discovery* of new
 // sessions is affected.
 export const PLATFORM_INTERNAL_MCP_TOOLS: PlatformMcpToolDefinition[] = [
+  PLATFORM_LEGACY_UPDATE_BLOG_POST_COMPAT_TOOL,
   readTool({
     name: 'get_content_document_outline',
     description: 'Get the block outline for a platform blog, platform doc, or tenant blog content document. Provide either document_id, or owner_type plus owner_id.',

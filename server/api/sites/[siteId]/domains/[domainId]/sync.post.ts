@@ -4,6 +4,7 @@ import { syncDomainWithCloudflare } from '~/server/utils/domains'
 import { domainInstructions } from '~/server/utils/domain-read-model'
 import { notifyDomainLifecycle } from '~/server/utils/domain-notifications'
 import { requireSiteAccess } from '~/server/utils/location-access'
+import { buildDashboardUrl } from '~/server/utils/dashboard-links'
 
 interface DomainRecordRow {
   id: string
@@ -42,7 +43,12 @@ export default defineEventHandler(async (event) => {
       status: domain.status,
       title: `Domain synced: ${domain.domain}`,
       message: `${domain.domain} is now ${domain.status}.`,
-      dashboardUrl: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN}/dashboard/${encodeURIComponent(site.organization_slug ?? site.organization_id)}/sites/${encodeURIComponent(site.subdomain ?? site.id)}/domains`
+      dashboardUrl: buildDashboardUrl({
+        env,
+        organizationId: site.organization_id,
+        organizationSlug: site.organization_slug ?? undefined,
+        subdomain: site.subdomain,
+      }, 'site.domains')
     })
     return jsonResponse({ success: true, domain: { ...domain, instructions: domainInstructions(domain) } })
   } catch (error) {

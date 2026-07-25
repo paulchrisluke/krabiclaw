@@ -222,7 +222,7 @@ async function loadAssets() {
     const params = new URLSearchParams()
     if (kindFilter.value && kindFilter.value !== ALL_MEDIA_KIND) params.set('kind', kindFilter.value)
     if (props.locationId) params.set('locationId', props.locationId)
-    const res = await $fetch<{ media: MediaAsset[] }>(`/api/dashboard/editor/media?${params}`, {
+    const res = await $fetch<{ media: MediaAsset[] }>(`/api/editor/sites/${props.siteId}/media?${params}`, {
       signal: controller.signal,
     })
 
@@ -279,7 +279,7 @@ async function uploadImage(file: File) {
   uploadProgress.value = 0
   try {
     const { assetId, uploadUrl } = await $fetch<{ assetId: string; uploadUrl: string; imageId: string }>(
-      `/api/dashboard/editor/media/request-upload`,
+      `/api/editor/sites/${props.siteId}/media/request-upload`,
       { method: 'POST', body: { filename: file.name, locationId: props.locationId } }
     )
 
@@ -312,7 +312,7 @@ async function uploadImage(file: File) {
 
     uploadProgress.value = 80
 
-    const confirmEndpoint = `/api/dashboard/editor/media/${assetId}/confirm`
+    const confirmEndpoint = `/api/editor/sites/${props.siteId}/media/${assetId}/confirm`
     let asset: MediaAsset | null = null
     let lastError: unknown = null
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -361,7 +361,7 @@ async function uploadVideo(file: File) {
 
     const asset = await new Promise<MediaAsset>((resolve, reject) => {
       const xhr = new XMLHttpRequest()
-      xhr.open('POST', '/api/dashboard/editor/media/upload')
+      xhr.open('POST', `/api/editor/sites/${props.siteId}/media/upload`)
 
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) {

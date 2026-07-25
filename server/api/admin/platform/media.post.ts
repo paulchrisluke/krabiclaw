@@ -3,7 +3,7 @@
 // for admin contexts that need this outside a ChatGPT/MCP session, e.g. docs screenshots.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { hasCloudflareImagesConfig, uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { createMediaAsset } from '~/server/utils/media-asset-manager'
 import { ensurePlatformMediaScope, listPlatformMediaAssets, PLATFORM_MEDIA_ORG_ID, PLATFORM_MEDIA_SITE_ID } from '~/server/utils/platform-media'
@@ -31,9 +31,8 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  if (!isPlatformAdmin(session.user, env)) {
-    return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
-  }
+  const permissionDenied = await platformPermissionJsonResponse(event, env, { platform: ['media'] })
+  if (permissionDenied) return permissionDenied
 
   if (!hasCloudflareImagesConfig(env)) {
     return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })

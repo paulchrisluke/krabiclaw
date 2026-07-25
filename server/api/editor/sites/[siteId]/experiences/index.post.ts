@@ -11,6 +11,23 @@ const optionalInteger = (value: unknown) => {
   return Number.isFinite(parsed) && Number.isInteger(parsed) ? parsed : null
 }
 
+type ExperienceMediaItem = { url: string; kind: 'image' | 'video' }
+class InvalidImagesError extends Error {}
+
+function normalizeExperienceImages(value: unknown): ExperienceMediaItem[] | undefined {
+  if (value === null || value === undefined) return undefined
+  if (!Array.isArray(value)) {
+    throw new InvalidImagesError()
+  }
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
+    .map((item): ExperienceMediaItem => ({
+      url: String(item.url ?? '').trim(),
+      kind: item.kind === 'video' ? 'video' : 'image',
+    }))
+    .filter(item => item.url)
+}
+
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
@@ -57,11 +74,14 @@ export default defineEventHandler(async (event) => {
   let highlights: string[] | null
   let includedItems: string[] | null
   let whatToBring: string[] | null
+  let images: ExperienceMediaItem[] | undefined
   try {
     highlights = stringArrayOrNull(body.highlights)
     includedItems = stringArrayOrNull(body.included_items)
     whatToBring = stringArrayOrNull(body.what_to_bring)
+    images = normalizeExperienceImages(body.images)
   } catch (err) {
+    if (err instanceof InvalidImagesError) return jsonResponse({ error: 'images must be an array' }, { status: 400 })
     if (err instanceof InvalidFieldError) return jsonResponse({ error: 'highlights, included_items, and what_to_bring must be arrays' }, { status: 400 })
     throw err
   }
@@ -78,6 +98,7 @@ export default defineEventHandler(async (event) => {
     body: body.body ? String(body.body).trim() : null,
     image_asset_id: body.image_asset_id ? String(body.image_asset_id) : null,
     video_asset_id: body.video_asset_id ? String(body.video_asset_id) : null,
+    images,
     highlights,
     included_items: includedItems,
     what_to_bring: whatToBring,

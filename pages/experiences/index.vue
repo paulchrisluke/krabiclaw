@@ -38,7 +38,7 @@ const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 const { locale } = useI18n()
 const expCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 
-const { experiencesList, pending: bootstrapPending, getField, config } = useBootstrap()
+const { experiencesList, pending: bootstrapPending, getField, config } = await useBootstrap()
 
 const pending = computed(() => bootstrapPending.value)
 const experiences = computed<Experience[]>(() => experiencesList.value)

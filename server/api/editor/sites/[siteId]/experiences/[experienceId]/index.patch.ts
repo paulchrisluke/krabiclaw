@@ -16,6 +16,22 @@ const optionalInteger = (value: unknown) => {
   return parsed !== null && Number.isInteger(parsed) ? parsed : null
 }
 
+type ExperienceMediaItem = { url: string; kind: 'image' | 'video' }
+
+function normalizeExperienceImages(value: unknown): ExperienceMediaItem[] | null {
+  if (value === null || value === undefined) return null
+  if (!Array.isArray(value)) {
+    throw new InvalidFieldError('images')
+  }
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
+    .map((item): ExperienceMediaItem => ({
+      url: String(item.url ?? '').trim(),
+      kind: item.kind === 'video' ? 'video' : 'image',
+    }))
+    .filter(item => item.url)
+}
+
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const experienceId = getRouterParam(event, 'experienceId')
@@ -41,6 +57,14 @@ export default defineEventHandler(async (event) => {
   if ('body' in body) updates.body = body.body ? String(body.body).trim() : null
   if ('image_asset_id' in body) updates.image_asset_id = body.image_asset_id ? String(body.image_asset_id) : null
   if ('video_asset_id' in body) updates.video_asset_id = body.video_asset_id ? String(body.video_asset_id) : null
+  if ('images' in body) {
+    try {
+      updates.images = normalizeExperienceImages(body.images)
+    } catch (err) {
+      if (err instanceof InvalidFieldError) return jsonResponse({ error: 'images must be an array' }, { status: 400 })
+      throw err
+    }
+  }
   try {
     if ('highlights' in body) updates.highlights = stringArrayOrNull(body.highlights)
     if ('included_items' in body) updates.included_items = stringArrayOrNull(body.included_items)

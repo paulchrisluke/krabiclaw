@@ -1,6 +1,7 @@
 import type { McpToolDefinition } from './shared'
 import { TOOL_ANNOTATIONS_BY_NAME } from './shared'
 import { ACCOUNT_TOOLS } from './account'
+import { AGENT_SKILL_TOOLS } from './agent-skills'
 import { ANALYTICS_TOOLS } from './analytics'
 import { BLOG_TOOLS } from './blog'
 import { CONTENT_TOOLS } from './content'
@@ -23,8 +24,9 @@ import { SITES_TOOLS } from './sites'
 import { SUBMISSIONS_TOOLS } from './submissions'
 import { TRANSLATIONS_TOOLS } from './translations'
 
-export const MCP_TOOLS: McpToolDefinition[] = [
+export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
   ...ACCOUNT_TOOLS,
+  ...AGENT_SKILL_TOOLS,
   ...ANALYTICS_TOOLS,
   ...BLOG_TOOLS,
   ...CONTENT_TOOLS,
@@ -46,6 +48,13 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   ...SITES_TOOLS,
   ...SUBMISSIONS_TOOLS,
   ...TRANSLATIONS_TOOLS,
+].sort((a, b) => a.name.localeCompare(b.name))
+
+export const MCP_INTERNAL_TOOLS: McpToolDefinition[] = []
+
+export const MCP_TOOLS: McpToolDefinition[] = [
+  ...MCP_PUBLIC_TOOLS,
+  ...MCP_INTERNAL_TOOLS,
 ].sort((a, b) => a.name.localeCompare(b.name))
 
 

@@ -270,9 +270,11 @@ async function load() {
   loadError.value = null
   try {
     await dashboard.refresh()
+    const siteId = dashboard.siteId.value
+    if (!siteId) throw new Error('Site not found')
     const [settings, notifications, facebook] = await Promise.all([
       $fetch<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings'),
-      $fetch<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>('/api/dashboard/editor/notifications'),
+      $fetch<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>(`/api/editor/sites/${siteId}/notifications`),
       hasFacebookAccess.value
         ? $fetch<FacebookConnectionStatus>('/api/integrations/facebook-pages/connection')
         : Promise.resolve<FacebookConnectionStatus>({ connected: false }),
@@ -344,7 +346,9 @@ async function saveNotifications() {
   const requestedSiteSlug = route.params.siteSlug
   savingNotifications.value = true
   try {
-    const response = await $fetch<{ notifications: { whatsapp_phone: string | null; channels: string[] } }>('/api/dashboard/editor/notifications', {
+    const siteId = dashboard.siteId.value
+    if (!siteId) throw new Error('Site not found')
+    const response = await $fetch<{ notifications: { whatsapp_phone: string | null; channels: string[] } }>(`/api/editor/sites/${siteId}/notifications`, {
       method: 'PATCH',
       body: { whatsapp_phone: whatsappPhone.value.trim() || null, channels: notificationChannels.value },
     })

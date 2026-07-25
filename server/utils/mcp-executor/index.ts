@@ -1,5 +1,14 @@
 import type { H3Event } from 'h3'
 import { queryFirst } from '~/server/db'
+import { getMcpTool } from '~/server/utils/mcp-tools'
+import { requireMcpUser } from '~/server/utils/mcp-auth'
+import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
+import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
+import { renderStructuredResponse } from '~/server/utils/mcp-render'
+import { validateNoUnknownTopLevelArguments } from '~/server/utils/mcp-tool-validation'
+import { listSitesForUser } from '~/server/utils/mcp-workflows'
+import { hasSiteEntitlement } from '~/server/utils/billing'
+import { handleAgentSkillTools } from './agent-skills'
 import { handleAnalyticsTools } from './analytics'
 import { handleBlogTools } from './blog'
 import { handleContentTools } from './content'
@@ -20,13 +29,23 @@ import { handleSettingsTools } from './settings'
 import { handleSitesTools } from './sites'
 import { handleSubmissionsTools } from './submissions'
 import { handleTranslationsTools } from './translations'
-import { NOT_HANDLED } from './shared'
+import {
+  NOT_HANDLED,
+  humanizeEntitlement,
+  normalizeWorkspaceArguments,
+  validateRequiredArguments,
+  workspaceContextPayload,
+  workspaceLocationsPayload,
+  workspaceOrganizationsPayload,
+  workspaceSitesPayload,
+} from './shared'
 import type { McpExecutorContext } from './shared'
 
 // Exported so non-MCP callers (chowbot-adapter.ts) dispatch through the same
 // domain-handler registry instead of hand-copying it — one list of which
 // domain owns which tool, not two.
 export const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promise<unknown>> = {
+  agent_skills: handleAgentSkillTools,
   analytics: handleAnalyticsTools,
   blog: handleBlogTools,
   content: handleContentTools,
@@ -59,6 +78,8 @@ export async function executeMcpToolCall(
     throw mcpProtocolError(
       MCP_ERROR.methodNotFound,
       `Unknown tool: ${toolName}`,
+      { unknownToolName: toolName },
+      'protocol',
     );
   }
 
@@ -84,12 +105,10 @@ export async function executeMcpToolCall(
     const allSites = await listSitesForUser(
       user.db,
       user.userId,
-      user.isPlatformAdmin,
     );
     const workspace = await resolveMcpWorkspace(
       user.db,
       user.userId,
-      user.isPlatformAdmin,
     );
     const workspaceSitesById = new Map(workspace.sites.map((site) => [site.id, site] as const));
     const sites = allSites.map((s: Record<string, unknown>) => ({
@@ -156,7 +175,6 @@ export async function executeMcpToolCall(
     const workspace = await resolveMcpWorkspace(
       user.db,
       user.userId,
-      user.isPlatformAdmin,
     );
     const env = cloudflareEnv(event) as { NUXT_PUBLIC_FREE_SITE_DOMAIN?: string };
     return {
@@ -177,7 +195,6 @@ export async function executeMcpToolCall(
       workspace = await resolveMcpWorkspace(
         user.db,
         user.userId,
-        user.isPlatformAdmin,
         {
           organizationId,
           siteId,
@@ -203,7 +220,6 @@ export async function executeMcpToolCall(
     const refreshed = await resolveMcpWorkspace(
       user.db,
       user.userId,
-      user.isPlatformAdmin,
       {
         organizationId: workspace.organization?.id ?? null,
         siteId: workspace.site?.id ?? null,
@@ -531,7 +547,6 @@ export async function executeMcpToolCall(
     const createdSite = await resolveMcpWorkspace(
       user.db,
       user.userId,
-      user.isPlatformAdmin,
       { siteId: normalized.siteId, requireSite: true },
     );
     await upsertMcpWorkspacePreference(user.db, {
@@ -555,7 +570,6 @@ export async function executeMcpToolCall(
       workspace = await resolveMcpWorkspace(
         site.db,
         site.userId,
-        site.isPlatformAdmin,
         {
           siteId: site.siteId,
           locationId: explicitLocationId,

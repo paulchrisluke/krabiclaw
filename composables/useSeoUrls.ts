@@ -44,7 +44,7 @@ export function useSharedOgImage(value?: MaybeRefOrGetter<string | null | undefi
  * location's hero photo → logo → the generic platform placeholder.
  */
 export function useTenantOgImage(value?: MaybeRefOrGetter<string | null | undefined>) {
-  const { config, locations } = useBootstrap()
+  const { config, locations } = useSiteShell()
   return useSeoUrl(() =>
     toValue(value) ||
     config.value?.og_image_url ||

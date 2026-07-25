@@ -54,22 +54,36 @@ test('DASHBOARD_DESTINATIONS has no untested entries (fails loudly if a destinat
   assert.deepEqual(registryKeys, expectedKeys)
 })
 
-test('buildDashboardUrl falls back to organizationId when organizationSlug is missing', () => {
-  const url = buildDashboardUrl(
-    { env: { NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.com' }, organizationId: 'org_123', siteSlug: 'site-a' },
-    'site.domains',
-  )
-  assert.equal(url, 'https://krabiclaw.com/dashboard/org_123/sites/site-a/domains')
+test('buildDashboardUrl rejects organizationId fallback for slug-routed dashboard destinations', () => {
+  for (const destination of Object.keys(DASHBOARD_DESTINATIONS) as DashboardDestination[]) {
+    assert.throws(
+      () => buildDashboardUrl({ ...orgContext, organizationSlug: undefined }, destination),
+      /requires explicit organizationSlug context/,
+      `"${destination}" allowed an organizationId fallback URL`,
+    )
+  }
 })
 
 test('buildDashboardUrl falls back to the default platform domain when env is unset', () => {
-  const url = buildDashboardUrl({ env: {}, organizationId: 'org_123', siteSlug: 'site-a' }, 'site.domains')
-  assert.equal(url, 'https://krabiclaw.com/dashboard/org_123/sites/site-a/domains')
+  const url = buildDashboardUrl({
+    env: {},
+    organizationId: 'org_123',
+    organizationSlug: 'pottery-house',
+    siteSlug: 'site-a',
+  }, 'site.domains')
+  assert.equal(url, 'https://krabiclaw.com/dashboard/pottery-house/sites/site-a/domains')
+})
+
+test('site destinations reject missing site context', () => {
+  assert.throws(
+    () => buildDashboardUrl({ ...orgContext, siteSlug: null, subdomain: null }, 'site.domains'),
+    /requires explicit siteSlug context/,
+  )
 })
 
 test('location destinations reject missing location context', () => {
   assert.throws(
     () => buildDashboardUrl({ ...orgContext, locationSlug: null }, 'location.settings'),
-    /requires explicit site\/location context/,
+    /requires explicit locationSlug context/,
   )
 })

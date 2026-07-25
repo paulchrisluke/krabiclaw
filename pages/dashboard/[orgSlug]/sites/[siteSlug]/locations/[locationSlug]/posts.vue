@@ -510,7 +510,7 @@ const generatePost = async () => {
       image_base64 = dataUrl.slice(commaIndex + 1)
     }
 
-    const res = await $fetch<ApiRecord>(`/api/dashboard/ai/posts/generate`, {
+    const res = await $fetch<ApiRecord>(`/api/ai/${siteId}/posts/generate`, {
       method: 'POST',
       body: { prompt: aiPrompt.value.trim(), image_base64, image_mime },
     })

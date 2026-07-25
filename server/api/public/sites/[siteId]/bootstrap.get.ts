@@ -555,10 +555,15 @@ export default defineEventHandler(async (event) => {
   }
 
   // Experiences list + detail (mutually exclusive with the query conditions above)
+  // `page === null` covers the site-shell request (useSiteShell.ts) — it
+  // deliberately omits `page` to keep its cache key stable across
+  // navigation, but still needs the real experiences list for header/subnav
+  // CTAs, so it must qualify here the same as home/location/experiences do.
   const needsExperiencesList =
     (page === "experiences" && !experienceSlug) ||
     page === "home" ||
-    page === "location";
+    page === "location" ||
+    page === null;
 
   if (needsExperiencesList) {
     const expParams: unknown[] = [orgId, siteId];

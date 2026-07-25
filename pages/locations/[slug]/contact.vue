@@ -185,7 +185,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 
 // Bootstrap: location data + page content (parking/notes) — 1 SSR call
-const { location, getField: getContentField, pending, config } = useBootstrap()
+const { location, getField: getContentField, pending, config } = await useBootstrap()
 
 const formattedAddress = computed(() => {
   const loc = location.value

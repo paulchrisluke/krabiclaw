@@ -4,13 +4,13 @@
 // so they land in Cloudflare Images with a public_url ready to paste into the
 // docs' markdown body / how_to step image_asset_id.
 //
-// Requires: `yarn dev` running locally, and a local dev user with role
-// "admin" in D1 (the upload route is gated by isPlatformAdmin()). Defaults
-// to a user id of "docs-admin" — if that user does not exist or is not an
-// admin yet in your local D1, run once before using this script:
+// Requires: `yarn dev` running locally and a local dev user with Better Auth
+// Admin access. Defaults to a user id of "docs-admin" — if no working admin
+// session exists in local D1, run the break-glass recovery command once before
+// using this script:
 //
 //   curl "http://localhost:3000/api/dev/login?userId=docs-admin" -o /dev/null
-//   yarn wrangler d1 execute DB --local --command "UPDATE user SET role='admin' WHERE id='docs-admin';"
+//   yarn platform-admin:break-glass-promote --email docs-admin@example.test --local
 //
 // Usage:
 //   node scripts/capture-docs-screenshots.mjs [outDir]

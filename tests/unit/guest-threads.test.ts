@@ -5,7 +5,7 @@ const capturedQueries: Array<{ query: string; params: unknown[] }> = []
 const capturedFirstQueries: Array<{ query: string; params: unknown[] }> = []
 
 async function queryAll<T>(_db: unknown, query: string, params: unknown[] = []): Promise<T[]> {
-  if (query.includes('FROM member_access_scope')) {
+  if (query.includes('SELECT bl.id AS location_id')) {
     return [{ location_id: 'loc-1' }] as T[]
   }
   if (query.includes('FROM guest_threads')) {

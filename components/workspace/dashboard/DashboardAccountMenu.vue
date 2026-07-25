@@ -13,6 +13,7 @@
       :avatar="{ src: sessionData?.user?.image ?? undefined, alt: sessionData?.user?.name || 'User avatar', size: 'sm' }"
       :label="collapsed ? undefined : sessionData?.user?.name"
       :trailing-icon="collapsed ? undefined : 'i-lucide-ellipsis'"
+      data-testid="dashboard-account-menu-button"
     />
 
     <template #content-top>

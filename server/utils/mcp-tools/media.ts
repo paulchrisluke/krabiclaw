@@ -65,9 +65,9 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: {
           launched: { type: 'boolean' },
-          resourceUri: { type: 'string' },
         },
-        required: ['launched', 'resourceUri'],
+        required: ['launched'],
+        additionalProperties: false,
       },
     }),
   siteTool({

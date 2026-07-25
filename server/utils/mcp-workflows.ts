@@ -1,4 +1,4 @@
-import { contentRegistry, getFieldDef } from "~/config/content-registry";
+import { contentRegistry, getEditableFieldKeys, getFieldDef } from "~/config/content-registry";
 import { resolveSiteCmsCapabilities } from "~/server/utils/cms-capabilities";
 import { hasSiteEntitlement } from "~/server/utils/billing";
 import {
@@ -19,6 +19,10 @@ import {
   upsertSiteContent,
 } from "~/server/utils/content-management";
 import type { SiteContent } from "~/server/utils/content-management";
+import {
+  getProfessionalServiceEditorPageContent,
+  updateProfessionalServiceEditorPageContent,
+} from "~/server/utils/professional-services-editor";
 import type { CloudflareEnv } from "~/server/utils/auth";
 import { signOAuthState } from "~/server/utils/encryption";
 import { updateLocation } from "~/server/utils/location-management";
@@ -30,17 +34,7 @@ import { reorderQa, updateQa } from "~/server/utils/location-qa";
 export async function listSitesForUser(
   db: D1Database,
   userId: string,
-  isPlatformAdmin: boolean,
 ) {
-  if (isPlatformAdmin) {
-    return await queryAll<Record<string, unknown>>(db, `
-      SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
-             s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
-      FROM sites s
-      ORDER BY s.created_at DESC
-    `);
-  }
-
   const orgRows = await queryAll<{ id: string }>(db, `
     SELECT o.id
     FROM organization o
@@ -65,17 +59,8 @@ export async function getSiteForMcp(
   db: D1Database,
   siteId: string,
   userId: string,
-  isPlatformAdmin = false,
 ) {
-  const site = isPlatformAdmin
-    ? await queryFirst<Record<string, unknown>>(db, `
-      SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
-             s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
-      FROM sites s
-      WHERE s.id = ?
-      LIMIT 1
-    `, [siteId])
-    : await queryFirst<Record<string, unknown>>(db, `
+  const site = await queryFirst<Record<string, unknown>>(db, `
       SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
              s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
       FROM sites s
@@ -108,8 +93,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function editableFieldKeys(page: string) {
-  return Object.keys(contentRegistry[page]?.fields ?? {});
+function editableFieldKeys(page: string, editor: "site_content" | "professional_services" = "site_content") {
+  return getEditableFieldKeys(page, editor);
 }
 
 async function assertSiteContentPage(
@@ -131,7 +116,7 @@ async function assertSiteContentPage(
   if (!pageCapability) {
     throw createError({ statusCode: 400, statusMessage: `Page "${page}" is not available for ${vertical}/${template}.` });
   }
-  if (pageCapability.editor !== "site_content") {
+  if (pageCapability.editor !== "site_content" && pageCapability.editor !== "professional_services") {
     throw createError({ statusCode: 400, statusMessage: `Page "${page}" is owned by the ${pageCapability.editor} editor.` });
   }
   return pageCapability;
@@ -628,6 +613,33 @@ export async function updatePageContent(
     `, [locationId, organizationId, siteId]);
     if (!location) throw createError({ statusCode: 404, statusMessage: `Location "${locationId}" is not owned by site "${siteId}".` });
   }
+
+  if (pageDefinition.editor === "professional_services") {
+    const result = await updateProfessionalServiceEditorPageContent(db, {
+      organizationId,
+      siteId,
+      page: input.page,
+      changes: input.changes,
+      updatedBy: actorId ?? null,
+    });
+    await fireSiteEventSafe({
+      db,
+      organizationId,
+      siteId,
+      locationId: null,
+      actorId,
+      eventType: "content.updated",
+      entityType: "tenant_page",
+      entityId: `site:${input.page}`,
+      metadata: {
+        page: input.page,
+        fields: Object.keys(input.changes),
+        editor: "professional_services",
+      },
+    });
+    return result;
+  }
+
   const { normalizedFields, heroChange, hasHeroChange } =
     normalizeContentChanges(input.page, input.changes);
 
@@ -723,6 +735,11 @@ export async function getEditorContent(
     `, [locationId, organizationId, siteId]);
     if (!location) throw createError({ statusCode: 404, statusMessage: `Location "${locationId}" is not owned by site "${siteId}".` });
   }
+
+  if (pageDefinition.editor === "professional_services") {
+    return await getProfessionalServiceEditorPageContent(db, organizationId, siteId, page);
+  }
+
   const mergedContent = await getPageContent(
     db,
     organizationId,
@@ -781,7 +798,7 @@ export async function getEditorContent(
     }
   }
 
-  const editableKeys = editableFieldKeys(page);
+  const editableKeys = editableFieldKeys(page, pageDefinition.editor);
   const content = mergedContent.map((item) => {
     const isStructuredHero = item.field === "hero";
     const isEditableField =

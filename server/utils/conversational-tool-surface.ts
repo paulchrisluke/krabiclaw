@@ -111,6 +111,8 @@ export function assertConversationalToolEnabled(name: string, env?: ApiRecord) {
   throw mcpProtocolError(
     MCP_ERROR.methodNotFound,
     `Tool ${name} is not exposed on the conversational surface. Enable ${flag}=true to opt into ${group.replaceAll('_', ' ')} tools.`,
+    undefined,
+    'protocol',
   )
 }
 

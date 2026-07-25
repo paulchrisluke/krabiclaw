@@ -416,7 +416,7 @@ async function handleSetupMessage(text: string) {
   creatingRestaurant.value = true
 
   try {
-    const validation = await $fetch<{ available: boolean; message?: string }>('/api/dashboard/site/validate-subdomain', {
+    const validation = await $fetch<{ available: boolean; message?: string }>('/api/sites/validate-subdomain', {
       method: 'POST',
       body: { subdomain: requestedSubdomain }
     })
@@ -427,7 +427,7 @@ async function handleSetupMessage(text: string) {
       return
     }
 
-    await $fetch('/api/dashboard/site', {
+    await $fetch('/api/sites', {
       method: 'POST',
       body: {
         name: setupRestaurantName.value,

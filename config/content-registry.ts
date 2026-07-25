@@ -1,5 +1,6 @@
 import type { SiteVertical } from '~/utils/vertical-copy'
-import { cmsCapabilityRegistry, resolveCmsCapabilities, type CmsCapabilityDefinition, type CmsCapabilityOverrides } from '~/config/cms-registry'
+import { cmsCapabilityRegistry, resolveCmsCapabilities, type CmsCapabilityDefinition, type CmsCapabilityOverrides, type CmsPageCapability } from '~/config/cms-registry'
+import type { PublicTemplateSlug } from '~/utils/template-registry'
 
 export type FieldSource = 'manual' | 'google' | 'static' | 'computed'
 
@@ -84,6 +85,25 @@ export interface EditablePage {
   path: string
   scope: 'site' | 'location'
   scopeLabelKey: 'site' | 'location' | 'office'
+  editor: CmsPageCapability['editor']
+}
+
+export const professionalServiceFieldEditorPages = ['home', 'about', 'contact'] as const
+
+export type ProfessionalServiceFieldEditorPage = typeof professionalServiceFieldEditorPages[number]
+
+export const professionalServiceEditableFields: Record<ProfessionalServiceFieldEditorPage, readonly string[]> = {
+  home: ['hero.title', 'hero.subtitle', 'hero.image', 'cta.title', 'cta.description'],
+  about: ['hero.title', 'hero.subtitle', 'cta.title'],
+  contact: ['hero.title', 'hero.subtitle', 'contact.title', 'contact.description', 'contact.cards', 'cta.title', 'cta.description'],
+}
+
+function isProfessionalServiceFieldEditorPage(pageId: string): pageId is ProfessionalServiceFieldEditorPage {
+  return (professionalServiceFieldEditorPages as readonly string[]).includes(pageId)
+}
+
+export function isFieldEditablePageCapability(page: CmsPageCapability): boolean {
+  return page.editor === 'site_content' || (page.editor === 'professional_services' && isProfessionalServiceFieldEditorPage(page.id))
 }
 
 /** Resolves the visible page inventory for a tenant's vertical — the one source of truth for
@@ -98,6 +118,7 @@ export function getEditablePages(vertical: SiteVertical, template: PublicTemplat
       scopeLabelKey: page.scope === 'site'
         ? 'site'
         : capability.locationVocabulary === 'office/service area' ? 'office' : 'location',
+      editor: page.editor,
     }))
 }
 
@@ -105,17 +126,15 @@ export function getEditablePages(vertical: SiteVertical, template: PublicTemplat
  *  scope. Maps directly off the already-resolved `capabilities.pages` (not a fresh
  *  getEditablePages(vertical, template) call) so a hybrid site/location override — a page the
  *  vertical doesn't default to but the site explicitly enabled — is still enumerated; deriving
- *  from the unresolved default template list would silently drop it. blawby has no
- *  field-editable pages yet (professional_services editor gap, issue #323), so it always
- *  returns an empty list rather than pages that would 400 against assertSiteContentPage. */
+ *  from the unresolved default template list would silently drop it. */
 export function getScopedEditablePages(
   vertical: SiteVertical | null,
   capabilities: CmsCapabilityDefinition | null,
   scope: 'site' | 'location',
 ): EditablePage[] {
-  if (!vertical || !capabilities || capabilities.template === 'blawby') return []
+  if (!vertical || !capabilities) return []
   return capabilities.pages
-    .filter(page => page.scope === scope)
+    .filter(page => page.scope === scope && isFieldEditablePageCapability(page) && Boolean(contentRegistry[page.id]))
     .map(page => ({
       id: page.id,
       label: page.label,
@@ -124,7 +143,28 @@ export function getScopedEditablePages(
       scopeLabelKey: page.scope === 'site'
         ? 'site'
         : capabilities.locationVocabulary === 'office/service area' ? 'office' : 'location',
+      editor: page.editor,
     }))
+}
+
+export function getEditableFieldKeys(page: string, editor: CmsPageCapability['editor'] = 'site_content'): string[] {
+  const pageDefinition = contentRegistry[page]
+  if (!pageDefinition) return []
+  if (editor === 'professional_services') {
+    return isProfessionalServiceFieldEditorPage(page)
+      ? professionalServiceEditableFields[page].filter(field => Boolean(pageDefinition.fields[field]))
+      : []
+  }
+  return Object.keys(pageDefinition.fields)
+}
+
+export function getEditablePageGroups(page: string, editor: CmsPageCapability['editor'] = 'site_content'): PageGroupDefinition[] {
+  const pageDefinition = contentRegistry[page]
+  if (!pageDefinition) return []
+  const editableFields = new Set(getEditableFieldKeys(page, editor))
+  return pageDefinition.groups
+    .map(group => ({ ...group, fields: group.fields.filter(field => editableFields.has(field)) }))
+    .filter(group => group.fields.length > 0)
 }
 
 /** Builds the URL a real visitor would see for a resolved page path — the one place that
@@ -403,6 +443,8 @@ export const contentRegistry: Record<string, PageDefinition> = {
     scope: 'site',
     groups: [
       { id: 'hero', label: 'Hero Section', icon: 'i-lucide-image', fields: ['hero.title', 'hero.subtitle'] },
+      { id: 'contact', label: 'Contact Content', icon: 'i-lucide-message-square-text', fields: ['contact.title', 'contact.description', 'contact.cards'] },
+      { id: 'cta', label: 'Call to Action', icon: 'i-lucide-megaphone', fields: ['cta.title', 'cta.description'] },
     ],
     fields: {
       'hero.title': {
@@ -418,6 +460,39 @@ export const contentRegistry: Record<string, PageDefinition> = {
         sources: ['manual'],
         defaultValue: "We'd love to hear from you",
         placeholder: 'A short line shown under the page title'
+      },
+      'contact.title': {
+        label: 'Contact Section Title',
+        type: 'text',
+        sources: ['manual'],
+        defaultValue: 'Get in touch',
+        placeholder: 'e.g. Get in touch'
+      },
+      'contact.description': {
+        label: 'Contact Section Description',
+        type: 'textarea',
+        sources: ['manual'],
+        defaultValue: '',
+        placeholder: 'A short introduction above the contact cards'
+      },
+      'contact.cards': {
+        label: 'Contact Cards',
+        type: 'richtext',
+        sources: ['manual'],
+        defaultValue: '',
+        placeholder: 'One card per block, separated by a blank line'
+      },
+      'cta.title': {
+        label: 'CTA Heading',
+        type: 'text',
+        sources: ['manual'],
+        defaultValue: 'Get started today'
+      },
+      'cta.description': {
+        label: 'CTA Description',
+        type: 'richtext',
+        sources: ['manual'],
+        defaultValue: ''
       }
     }
   },
@@ -619,6 +694,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
 }
 
 /** Get a field definition for a page+field key */
-export const getFieldDef = (page: string, field: string): FieldDefinition | undefined => {
+export const getFieldDef = (page: string, field: string, editor?: CmsPageCapability['editor']): FieldDefinition | undefined => {
+  if (editor && !getEditableFieldKeys(page, editor).includes(field)) return undefined
   return contentRegistry[page]?.fields[field]
 }

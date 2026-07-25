@@ -1,5 +1,4 @@
-// Core site creation logic shared by POST /api/sites and the legacy
-// dashboard/site proxy. Handles org creation/lookup, idempotency,
+// Core site creation logic shared by site creation entry points. Handles org creation/lookup, idempotency,
 // subdomain uniqueness, seeding, and Cloudflare subdomain registration.
 import { seedNewSite } from '~/server/utils/site-template'
 import { createSystemSubdomain } from '~/server/utils/domains'
@@ -7,6 +6,7 @@ import { setSiteEntitlementsFromPlan } from '~/server/utils/billing'
 import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
 import { ALL_VERTICALS, type SiteVertical } from '~/utils/vertical-copy'
 import { resolvePublicTemplate } from '~/utils/template-registry'
+import { ensureSiteTeam } from '~/server/utils/member-access'
 
 type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
 
@@ -73,8 +73,10 @@ export async function runSiteCreation(
       // A retry (pending/failed site from a previous attempt) may have been created
       // under a stale default (theme_id='saya-theme-v1', vertical='restaurant') —
       // correct both here so a professional-service retry can never be left on Saya.
+      siteId = existingRetrySiteId
       await execute(db, `UPDATE sites SET theme_id = ?, vertical = ?, updated_at = ? WHERE id = ?`,
         [themeId, storedVertical, new Date().toISOString(), existingRetrySiteId])
+      await ensureSiteTeam(db, { organizationId, siteId: existingRetrySiteId, name })
       return await performSeeding(env, db, existingRetrySiteId, organizationId, name, vertical, '')
     }
 
@@ -92,6 +94,7 @@ export async function runSiteCreation(
       }
       throw siteError
     }
+    await ensureSiteTeam(db, { organizationId, siteId, name })
 
     return await performSeeding(env, db, siteId, organizationId, name, vertical, normalizedSubdomain)
 

@@ -39,6 +39,18 @@ export function mcpAuthRequiredResult(options: { challenge: string; message: str
   }
 }
 
+export function mcpToolErrorResult(message: string) {
+  return {
+    isError: true,
+    content: [
+      {
+        type: 'text',
+        text: message,
+      },
+    ],
+  }
+}
+
 const TOKEN_MISSING_DESCRIPTION = 'Token missing, expired, invalid, or not issued for this MCP resource'
 
 export function mcpAuthChallengeDetailsFromError(error: unknown): {

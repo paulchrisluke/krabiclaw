@@ -216,8 +216,8 @@ async function loadStatus() {
   error.value = ''
   try {
     const [localesResponse, jobsResponse] = await Promise.all([
-      $fetch<{ success: boolean; source_locale: string; locales: SiteLocaleRow[] }>(`/api/dashboard/editor/locales`),
-      $fetch<{ success: boolean; jobs: TranslationJobRow[] }>(`/api/dashboard/editor/translations/jobs`),
+      $fetch<{ success: boolean; source_locale: string; locales: SiteLocaleRow[] }>(`/api/editor/sites/${props.siteId}/locales`),
+      $fetch<{ success: boolean; jobs: TranslationJobRow[] }>(`/api/editor/sites/${props.siteId}/translations/jobs`),
     ])
     sourceLocale.value = localesResponse.source_locale || 'en'
     locales.value = localesResponse.locales || []
@@ -244,7 +244,7 @@ async function estimateTranslation() {
   error.value = ''
   try {
     const response = await $fetch<{ success: boolean; estimate: TranslationEstimate }>(
-      `/api/dashboard/editor/translations/inventory`,
+      `/api/editor/sites/${props.siteId}/translations/inventory`,
       {
         query: {
           locale: form.locale,
@@ -266,7 +266,7 @@ async function ensureLocale() {
   const existing = locales.value.find(locale => locale.locale === form.locale)
   if (existing) return
 
-  await $fetch(`/api/dashboard/editor/locales`, {
+  await $fetch(`/api/editor/sites/${props.siteId}/locales`, {
     method: 'POST',
     body: {
       locale: form.locale,
@@ -284,7 +284,7 @@ async function startTranslation() {
   error.value = ''
   try {
     await ensureLocale()
-    await $fetch(`/api/dashboard/editor/translations/jobs`, {
+    await $fetch(`/api/editor/sites/${props.siteId}/translations/jobs`, {
       method: 'POST',
       body: {
         locale: form.locale,

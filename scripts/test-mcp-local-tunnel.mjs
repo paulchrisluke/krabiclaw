@@ -216,6 +216,8 @@ async function main() {
   const devRouteSecret = values.get('E2E_DEV_ROUTE_SECRET') || randomBytes(24).toString('hex')
   values.set('BETTER_AUTH_URL', origin)
   values.set('NUXT_PUBLIC_PLATFORM_DOMAIN', origin)
+  values.set('NUXT_PUBLIC_FREE_SITE_DOMAIN', origin)
+  values.set('NUXT_PUBLIC_APP_NAME', values.get('NUXT_PUBLIC_APP_NAME') || 'KrabiClaw')
   values.set('MCP_BASE_URL', origin)
   values.set('MEDIA_BASE_URL', `${origin}/__media`)
   values.set('E2E_ALLOW_DEV_ROUTES', 'true')
@@ -226,6 +228,8 @@ async function main() {
     ...process.env,
     BETTER_AUTH_URL: origin,
     NUXT_PUBLIC_PLATFORM_DOMAIN: origin,
+    NUXT_PUBLIC_FREE_SITE_DOMAIN: origin,
+    NUXT_PUBLIC_APP_NAME: values.get('NUXT_PUBLIC_APP_NAME') || 'KrabiClaw',
     MCP_BASE_URL: origin,
     MEDIA_BASE_URL: `${origin}/__media`,
     E2E_ALLOW_DEV_ROUTES: 'true',

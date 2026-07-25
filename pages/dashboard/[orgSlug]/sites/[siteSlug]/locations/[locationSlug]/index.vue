@@ -164,9 +164,9 @@ async function load() {
     const [locationResponse, menuResponse, connectionResponse, threadsResponse] = await Promise.all([
       $fetch<{ success: boolean; location: LocationOverview }>(`/api/dashboard/locations/${locationId.value}`),
       hasMenu.value
-        ? $fetch<{ success: boolean; menus: ApiRecord[] }>(`/api/dashboard/editor/menus?locationId=${locationId.value}`)
+        ? $fetch<{ success: boolean; menus: ApiRecord[] }>(`/api/editor/sites/${siteId}/menus?locationId=${locationId.value}`)
         : Promise.resolve({ success: true, menus: [] }),
-      $fetch<{ connection: GoogleConnection | null }>(`/api/dashboard/locations/${locationId.value}/integrations/google-business`),
+      $fetch<{ connection: GoogleConnection | null }>(`/api/sites/${siteId}/locations/${locationId.value}/integrations/google-business`),
       $fetch<{ summary: InboxSummary }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
         query: { location_id: locationId.value },
       }),

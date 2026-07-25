@@ -432,6 +432,7 @@ export default defineNuxtConfig({
     '/auth/**':      { headers: { 'cache-control': 'no-store' } },
     '/signup':       { headers: { 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" } },
     '/login':        { headers: { 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" } },
+    '/links':        { headers: { 'cache-control': 'private, no-store' } },
 
     // Public pages — detectBrowserLanguage is disabled so / is safe to cache.
     // Explicit '/' rule overrides any cache-control the i18n module injects internally.

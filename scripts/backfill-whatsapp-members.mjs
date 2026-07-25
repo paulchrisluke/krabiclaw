@@ -95,7 +95,18 @@ for (const group of groups.values()) {
   `)[0] ?? null
   const email = identity?.email || `phone-${digits}@phone.krabiclaw.local`
   const pending = run(`SELECT id, role FROM invitation WHERE organizationId = '${q(group.organizationId)}' AND lower(email) = lower('${q(email)}') AND status = 'pending' ORDER BY createdAt DESC LIMIT 1`)[0] ?? null
-  const existingScopes = identity?.member_id ? run(`SELECT site_id, location_id FROM member_access_scope WHERE member_id = '${q(identity.member_id)}' ORDER BY site_id, location_id`) : []
+  const existingScopes = identity?.member_id ? run(`
+    SELECT s.id AS site_id, NULL AS location_id
+    FROM sites s
+    JOIN teamMember tm ON tm.teamId = s.team_id
+    WHERE s.organization_id = '${q(group.organizationId)}' AND tm.userId = '${q(identity.user_id)}'
+    UNION
+    SELECT bl.site_id, bl.id AS location_id
+    FROM business_locations bl
+    JOIN teamMember tm ON tm.teamId = bl.team_id
+    WHERE bl.organization_id = '${q(group.organizationId)}' AND tm.userId = '${q(identity.user_id)}'
+    ORDER BY site_id, location_id
+  `) : []
   const pendingScopes = pending ? run(`SELECT site_id, location_id FROM invitation_access_scope WHERE invitation_id = '${q(pending.id)}' ORDER BY site_id, location_id`) : []
   const active = identity?.member_id && ['owner', 'admin', 'editor'].includes(identity.role)
   const unsupportedMember = identity?.member_id && !active
@@ -120,7 +131,13 @@ for (const item of report) {
 
   if (active) {
     if (!['owner', 'admin'].includes(identity.role)) {
-      for (const scope of item.scopes) run(`INSERT OR IGNORE INTO member_access_scope (id, member_id, organization_id, site_id, location_id, grant_source, created_at) VALUES ('${randomUUID()}', '${q(identity.member_id)}', '${q(item.organizationId)}', '${q(scope.siteId)}', ${scope.locationId ? `'${q(scope.locationId)}'` : 'NULL'}, 'whatsapp_config', datetime('now'))`)
+      for (const scope of item.scopes) {
+        const teamId = scope.locationId ? `location:${scope.locationId}` : `site:${scope.siteId}`
+        run(`INSERT OR IGNORE INTO team (id, name, organizationId, createdAt) VALUES ('${q(teamId)}', '${q(scope.locationName || scope.siteId)}', '${q(item.organizationId)}', unixepoch())`)
+        if (scope.locationId) run(`UPDATE business_locations SET team_id = '${q(teamId)}' WHERE id = '${q(scope.locationId)}' AND site_id = '${q(scope.siteId)}' AND organization_id = '${q(item.organizationId)}' AND team_id IS NULL`)
+        else run(`UPDATE sites SET team_id = '${q(teamId)}' WHERE id = '${q(scope.siteId)}' AND organization_id = '${q(item.organizationId)}' AND team_id IS NULL`)
+        run(`INSERT OR IGNORE INTO teamMember (id, teamId, userId, membershipKey, createdAt) VALUES ('${randomUUID()}', '${q(teamId)}', '${q(identity.user_id)}', '${q(`${teamId}:${identity.user_id}`)}', unixepoch())`)
+      }
     }
     continue
   }

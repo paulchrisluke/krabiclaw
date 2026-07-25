@@ -11,17 +11,27 @@ export const useAiCredits = (siteId: Ref<string | null> | ComputedRef<string | n
     }
   }
 
-  const balance = useState<number | null>('ai:credits:balance', () => null)
-  const total = useState<number | null>('ai:credits:total', () => null)
+  const balance = ref<number | null>(null)
+  const total = ref<number | null>(null)
+
+  watch(siteId, () => {
+    balance.value = null
+    total.value = null
+  })
 
   const fetch = async () => {
-    if (!siteId.value) return
+    if (!siteId.value) {
+      balance.value = null
+      total.value = null
+      return
+    }
     try {
-      const res = await $fetch<{ balance: number; total: number }>(`/api/dashboard/ai/credits`)
+      const res = await $fetch<{ balance: number; total: number }>(`/api/ai/${siteId.value}/credits`)
       balance.value = res.balance
       total.value = res.total
     } catch {
-      // non-critical
+      balance.value = null
+      total.value = null
     }
   }
 

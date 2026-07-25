@@ -9,7 +9,7 @@ const SITE_ID = process.argv.includes('--site-id')
 const USER_ID = process.argv.includes('--user-id')
   ? process.argv[process.argv.indexOf('--user-id') + 1]
   : process.env.MCP_USER_ID
-const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2026-07-28'
+const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2025-06-18'
 
 const isLocal = BASE_URL.includes('localhost') || BASE_URL.includes('127.0.0.1')
 const allowCreate = isLocal || process.env.MCP_ALLOW_CREATE === '1'
@@ -276,7 +276,9 @@ async function main() {
     title: 'Invalid MCP Experience Status',
     status: 'draft',
   })
-  expectStatus('create_experience rejects invalid status', invalidExperience, 400)
+  expectStatus('create_experience rejects invalid status over JSON-RPC transport', invalidExperience)
+  expectValue('create_experience invalid status returns tool error', invalidExperience.body?.result?.isError === true, invalidExperience.body)
+  expectValue('create_experience invalid status explains allowed statuses', String(invalidExperience.body?.result?.content?.[0]?.text ?? '').includes('active, inactive, sold_out'), invalidExperience.body)
 
   const experienceUpdate = await mcp(headers, 'update_experience', {
     site_id: siteId,

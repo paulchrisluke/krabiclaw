@@ -4,6 +4,7 @@ import { getAuthSession } from '../utils/auth'
 import { DEMO_ORG_ID } from '../utils/demo'
 import { defineEventHandler } from 'h3'
 import { queryAll } from '~/server/db'
+import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -24,7 +25,7 @@ export default defineEventHandler(async (event) => {
   }
   
   const userId = session.user.id
-  const isPlatformAdmin = (session.user as { role?: string }).role === 'admin'
+  const isPlatformAdmin = await hasPlatformEventPermission(event, env, { platform: ['access'] })
 
   try {
     // Get user's organization

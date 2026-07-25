@@ -56,7 +56,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
       const workspace = await resolveMcpWorkspace(
         site.db,
         site.userId,
-        site.isPlatformAdmin,
         { siteId: site.siteId },
       );
       return {
@@ -70,7 +69,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         const workspace = await resolveMcpWorkspace(
           site.db,
           site.userId,
-          site.isPlatformAdmin,
           { siteId: site.siteId, locationId },
         );
         return {

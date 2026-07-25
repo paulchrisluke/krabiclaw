@@ -20,7 +20,7 @@ import { execute, queryAll, queryFirst } from '~/server/db'
 import { ensureGuestThread, getGuestThreadBySubmission, getGuestThreadDetail, getGuestThreadSource, postGuestThreadReply } from '~/server/utils/guest-threads'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 import { findSubmissionByPhone, insertInboundSubmissionReply } from '~/server/utils/submission-messages'
-import { isAuthorizedWhatsAppRecipient } from '~/server/utils/member-access'
+import { isAuthorizedWhatsAppRecipient, teamAccessPredicate } from '~/server/utils/member-access'
 import {
   ASK_CHOWBOT_OR_QUOTE_MESSAGE,
   REPLY_SENT_CONFIRMATION,
@@ -300,7 +300,7 @@ async function resolveQuotedNotification(
 
 // Tier 3 candidate list: recent (24h) guest-related operational notifications scoped to
 // sites/locations the manager is authorized for (org-wide roles see everything in their
-// org; editor always needs a matching member_access_scope row). Grouped by
+// org; editor always needs matching resource team membership). Grouped by
 // guest thread so a guest with multiple notification events in the window (e.g. created
 // + a reply) only appears once, most recent first.
 async function listRecentGuestNotificationCandidates(db: D1Database, userId: string): Promise<DisambiguationCandidate[]> {
@@ -318,12 +318,12 @@ async function listRecentGuestNotificationCandidates(db: D1Database, userId: str
     FROM notifications n
     JOIN member m ON m.organizationId = n.organization_id AND m.userId = ?
     JOIN guest_threads gt ON gt.submission_type = n.related_submission_type AND gt.submission_id = n.related_submission_id
-    LEFT JOIN member_access_scope mas ON mas.member_id = m.id AND mas.organization_id = n.organization_id
-      AND mas.site_id = n.site_id AND (mas.location_id IS NULL OR mas.location_id = n.location_id)
+    LEFT JOIN sites s ON s.id = n.site_id AND s.organization_id = n.organization_id
+    LEFT JOIN business_locations bl ON bl.id = n.location_id AND bl.site_id = n.site_id AND bl.organization_id = n.organization_id
     WHERE n.channel = 'whatsapp'
       AND n.related_submission_type IS NOT NULL AND n.related_submission_id IS NOT NULL
       AND n.created_at > ?
-      AND (m.role IN ('owner', 'admin') OR (m.role = 'editor' AND mas.id IS NOT NULL))
+      AND (m.role IN ('owner', 'admin') OR (m.role = 'editor' AND ${teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: 'bl.team_id' })}))
     GROUP BY gt.id
     ORDER BY createdAt DESC
     LIMIT 5

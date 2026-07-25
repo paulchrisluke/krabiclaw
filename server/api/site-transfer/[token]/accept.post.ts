@@ -2,7 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { execute, queryFirst } from '~/server/db'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { executeSiteTransfer } from '~/server/utils/site-transfer'
 import { createOrganizationForSite } from '~/server/utils/site-creation'
 import { getStripe, getPriceIdForPlan } from '~/server/utils/billing'
@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
 
   const userId = session.user.id
   const userEmail = session.user.email?.toLowerCase() ?? ''
-  const isPlatAdmin = isPlatformAdmin(session.user, env)
+  const isPlatAdmin = await hasPlatformEventPermission(event, env, { platform: ['organizations'] })
 
   let acceptBody: { interval?: string } = {}
   try {

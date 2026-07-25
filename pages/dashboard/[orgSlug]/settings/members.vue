@@ -394,10 +394,9 @@ const inviteError = ref<string | null>(null)
 const inviteSuccess = ref(false)
 const inviteSuccessTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
 
-// Editor invites are always scoped to a site (and optionally a single
-// location) — #341 Workstream A: editor is always constrained through
-// member_access_scope, so the invite form must collect that scope up front
-// rather than leaving a new editor with no access to anything.
+// Editor invites are always scoped to a site team (and optionally a single
+// location team), so the invite form must collect that scope up front rather
+// than leaving a new editor with no access to anything.
 interface OrgSiteSummary { id: string; brand_name: string | null; subdomain: string | null }
 interface OrgLocationSummary { id: string; title: string }
 
@@ -629,7 +628,7 @@ async function cancelInvitation(invitationId: string) {
 // authClient.organization.removeMember directly — Better Auth's org-plugin
 // after-hook can't block/veto, so this server route is the only place that
 // can check for active WhatsApp notification assignments before removing a
-// location_manager and require a deliberate confirm-and-clear step (issue
+// scoped editor and require a deliberate confirm-and-clear step (issue
 // #293 Section H).
 async function submitRemoveMember(memberId: string, options?: { confirmed?: boolean }) {
   removingMemberId.value = memberId

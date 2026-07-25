@@ -1138,6 +1138,8 @@ export const READ_ONLY_TOOL_NAMES = [
   'list_work_requests',
   'get_site_domains',
   'get_site_analytics',
+  'resolve_agent_guidance',
+  'review_agent_guidance_candidate',
 ] as const
 
 export const BOUNDED_WRITE_TOOL_NAMES = [

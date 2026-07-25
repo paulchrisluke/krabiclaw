@@ -6,7 +6,8 @@
 import type { H3Event } from 'h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { requirePlatformEventPermission } from '~/server/utils/platform-admin-users'
+import { PLATFORM_ADMIN_ACCESS_PERMISSION } from '~/utils/platform-admin-access'
 
 export type RouteAccessResult =
   | { status: 'unauthenticated' }
@@ -26,9 +27,11 @@ export async function resolveAdminAccessForEvent(event: H3Event): Promise<RouteA
   const env = cloudflareEnv(event)
   const session = await getAuthSession(event, env)
   if (!session?.user) return { status: 'unauthenticated' }
-  const allowed = isPlatformAdmin(
-    { role: (session.user as { role?: string | null }).role ?? null, email: session.user.email ?? null },
-    env,
-  )
+  let allowed = true
+  try {
+    await requirePlatformEventPermission(event, env, PLATFORM_ADMIN_ACCESS_PERMISSION)
+  } catch {
+    allowed = false
+  }
   return { status: 'ok', allowed }
 }

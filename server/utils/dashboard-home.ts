@@ -1,5 +1,5 @@
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
-import { isOrganizationWideRole } from '~/server/utils/member-access'
+import { isOrganizationWideRole, teamAccessPredicate } from '~/server/utils/member-access'
 import { getGuestThreadOperationSummary } from '~/server/utils/guest-threads'
 
 export interface DashboardHomeLocation {
@@ -66,18 +66,25 @@ export async function getDashboardHomeData(
   const scoped = principal && !isOrganizationWideRole(principal.role)
   const locationScopeClause = scoped
     ? `AND EXISTS (
-        SELECT 1 FROM member_access_scope mas
-        WHERE mas.member_id = ? AND mas.organization_id = bl.organization_id
-          AND mas.site_id = bl.site_id
-          AND (mas.location_id IS NULL OR mas.location_id = bl.id)
+        SELECT 1
+        FROM member m
+        JOIN sites s ON s.id = bl.site_id
+        WHERE m.id = ? AND m.organizationId = bl.organization_id
+          AND ${teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: 'bl.team_id' })}
       )`
     : ''
+  // bl.team_id is NULL when the event has no location_id (the LEFT JOIN
+  // below doesn't match) — teamAccessPredicate's `tm.teamId IN (s.team_id,
+  // NULL)` then degrades to matching only s.team_id, so this needs no
+  // separate branch for the location-vs-site-wide event case.
   const eventScopeClause = scoped
     ? `AND EXISTS (
-        SELECT 1 FROM member_access_scope mas
-        WHERE mas.member_id = ? AND mas.organization_id = e.organization_id
-          AND mas.site_id = e.site_id
-          AND (mas.location_id IS NULL OR mas.location_id = e.location_id)
+        SELECT 1
+        FROM member m
+        JOIN sites s ON s.id = e.site_id
+        LEFT JOIN business_locations bl ON bl.id = e.location_id AND bl.site_id = e.site_id
+        WHERE m.id = ? AND m.organizationId = e.organization_id
+          AND ${teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: 'bl.team_id' })}
       )`
     : ''
   const [locations, credits, events, operations] = await Promise.all([

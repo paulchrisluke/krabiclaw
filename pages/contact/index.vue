@@ -262,7 +262,7 @@ const inputClass = FORM_INPUT_CLASS
 const businessName = computed(() => site?.brand_name || 'Our Business')
 
 // ── Bootstrap: locations + config in one call ─────────────
-const { locations, config: siteConfig } = useBootstrap()
+const { locations, config: siteConfig } = await useBootstrap()
 
 function formatLocAddress(loc) {
   if (!loc.address) return loc.city || ''

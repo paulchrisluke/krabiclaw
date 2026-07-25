@@ -961,7 +961,6 @@ export async function mutationContextPayload(
   site: {
     db: D1Database;
     userId: string;
-    isPlatformAdmin: boolean;
     siteId: string;
   },
   options: {
@@ -972,7 +971,6 @@ export async function mutationContextPayload(
   const workspace = await resolveMcpWorkspace(
     site.db,
     site.userId,
-    site.isPlatformAdmin,
     {
       organizationId: options.organizationId ?? null,
       siteId: site.siteId,
@@ -1055,7 +1053,6 @@ export async function normalizeWorkspaceArguments(
     workspace = await resolveMcpWorkspace(
       user.db,
       user.userId,
-      user.isPlatformAdmin,
       {
         siteId: hasSite ? String(args.site_id) : null,
         locationId: hasLocation ? String(args.location_id) : null,

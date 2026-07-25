@@ -31,21 +31,7 @@ test.describe('dashboard API smoke', () => {
 
     const uniqueTitle = `Dashboard E2E ${Date.now()}`
 
-    if (!hasSite) {
-      const saveRes = await request.post(`${baseURL}/api/dashboard/editor/content/save`, {
-        headers: orgHeaders,
-        data: {
-          page: 'home',
-          changes: {
-            'hero.title': uniqueTitle,
-          },
-        },
-      })
-      expect(saveRes.status()).toBe(400)
-      const saveBody = await saveRes.json()
-      expect(String(saveBody.error || '')).toContain('Site workspace has not been created yet')
-      return
-    }
+    if (!hasSite) return
 
     const saveRes = await request.post(`${baseURL}/api/editor/sites/${siteId}/content/save`, {
       data: {
@@ -77,5 +63,45 @@ test.describe('dashboard API smoke', () => {
         && entry.metadata?.page === 'home'
       ),
     ).toBe(true)
+
+    const removedAlias = await request.post(`${baseURL}/api/dashboard/editor/content/save`, {
+      headers: orgHeaders,
+      data: {
+        page: 'home',
+        changes: { 'hero.title': uniqueTitle },
+      },
+    })
+    expect(removedAlias.status()).toBe(404)
+  })
+
+  test('location id dashboard API ignores stale dashboard headers and checks the location owner org', async ({ request, baseURL }) => {
+    const login = await request.get(devLoginUrl(baseURL!, 'user-pottery-house'), { headers: devLoginHeaders() })
+    expect(login.status()).toBeLessThan(400)
+
+    const noHeader = await request.get(`${baseURL}/api/dashboard/locations/loc-pottery-house`)
+    expect(noHeader.status()).toBe(200)
+    await expect(noHeader.json()).resolves.toMatchObject({
+      success: true,
+      location: {
+        id: 'loc-pottery-house',
+        site_id: 'site-pottery-house',
+        organization_id: 'org-pottery-house',
+      },
+    })
+
+    const staleHeader = await request.get(`${baseURL}/api/dashboard/locations/loc-pottery-house`, {
+      headers: dashboardOrgHeaders('ember-slice-demo'),
+    })
+    expect(staleHeader.status()).toBe(200)
+    await expect(staleHeader.json()).resolves.toMatchObject({
+      success: true,
+      location: {
+        id: 'loc-pottery-house',
+        organization_id: 'org-pottery-house',
+      },
+    })
+
+    const otherOrg = await request.get(`${baseURL}/api/dashboard/locations/loc-demo`)
+    expect(otherOrg.status()).toBe(404)
   })
 })

@@ -9,7 +9,7 @@ const SITE_ID = process.argv.includes('--site-id')
 const USER_ID = process.argv.includes('--user-id')
   ? process.argv[process.argv.indexOf('--user-id') + 1]
   : process.env.MCP_USER_ID
-const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2026-07-28'
+const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2025-06-18'
 
 const isLocal = (() => { try { const h = new URL(BASE_URL).hostname; return h === 'localhost' || h === '127.0.0.1'; } catch { return false; } })()
 const allowCreate = isLocal || process.env.MCP_ALLOW_CREATE === '1'

@@ -1,6 +1,8 @@
 import { executeBatch, queryAll, type BatchQuery, type DbClient } from '~/server/db'
 import { cleanString } from '~/server/utils/api-response'
 import { getPublicBlawbyData } from '~/server/utils/professional-services'
+import type { SiteContent } from '~/server/utils/content-management'
+import { professionalServiceEditableFields, type ProfessionalServiceFieldEditorPage } from '~/config/content-registry'
 import { sanitizeUrl } from '~/utils/sanitize'
 import { normalizeNonprofitStatus } from '~/utils/professional-service-schema'
 
@@ -13,6 +15,15 @@ export class ProfessionalServiceValidationError extends Error {
 
 function json(value: unknown) {
   return JSON.stringify(value ?? null)
+}
+
+function parseJson<T>(value: unknown, fallback: T): T {
+  if (typeof value !== 'string' || !value.trim()) return fallback
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return fallback
+  }
 }
 
 function idWith(prefix: string) {
@@ -35,6 +46,292 @@ function safeStoredUrl(value: unknown, maxLength: number) {
 function safeStoredPath(value: unknown, maxLength: number) {
   const cleaned = cleanString(value, maxLength)
   return cleaned && cleaned.startsWith('/') && !cleaned.startsWith('//') ? cleaned : null
+}
+
+const PROFESSIONAL_SERVICE_PAGE_PATHS: Record<ProfessionalServiceFieldEditorPage, string> = {
+  home: '/',
+  about: '/about',
+  contact: '/contact',
+}
+
+type TenantPageEditorRow = {
+  id: string
+  organization_id: string
+  site_id: string
+  path: string
+  title: string
+  summary: string | null
+  components_json: string | null
+  updated_at: string
+}
+
+function assertProfessionalServiceEditorPage(page: string): asserts page is ProfessionalServiceFieldEditorPage {
+  if (!Object.hasOwn(PROFESSIONAL_SERVICE_PAGE_PATHS, page)) {
+    validationError(`Page "${page}" is not supported by the professional services editor.`)
+  }
+}
+
+function componentByType(components: ApiRecord[], type: string) {
+  return components.find(component => component.type === type) ?? null
+}
+
+function ensureComponent(components: ApiRecord[], type: string) {
+  const existing = componentByType(components, type)
+  if (existing) return existing
+  const created: ApiRecord = { type }
+  components.push(created)
+  return created
+}
+
+function optionalString(value: unknown) {
+  return typeof value === 'string' ? value : ''
+}
+
+function assetPointerId(value: unknown) {
+  return value && typeof value === 'object' && typeof (value as ApiRecord).asset_id === 'string'
+    ? String((value as ApiRecord).asset_id)
+    : null
+}
+
+function assetPointerUrl(value: unknown) {
+  return value && typeof value === 'object' && typeof (value as ApiRecord).url === 'string'
+    ? String((value as ApiRecord).url)
+    : null
+}
+
+function contactCardsToEditorValue(value: unknown) {
+  return Array.isArray(value) ? value.map(String).filter(Boolean).join('\n\n') : ''
+}
+
+function editorValueToContactCards(value: string) {
+  return value.split(/\n\s*\n/).map(card => card.trim()).filter(Boolean)
+}
+
+async function resolveAssetPointer(db: DbClient, siteId: string, value: string) {
+  if (!value) return null
+  if (/^https?:\/\//i.test(value)) return { url: value }
+  const asset = await queryAll<{ id: string; public_url: string | null }>(db, `
+    SELECT id, public_url
+      FROM media_assets
+     WHERE site_id = ? AND id = ? AND status = 'active'
+     LIMIT 1
+  `, [siteId, value])
+  if (!asset[0]) return null
+  return {
+    asset_id: value,
+    url: asset[0].public_url ?? null,
+  }
+}
+
+function editorRow(input: {
+  row: TenantPageEditorRow
+  page: string
+  field: string
+  value?: string | null
+  type?: string
+  heroTitle?: string | null
+  heroSubtitle?: string | null
+  heroImageAssetId?: string | null
+  heroPublicUrl?: string | null
+}): SiteContent {
+  return {
+    id: `professional-service::${input.row.id}::${input.field}`,
+    organization_id: input.row.organization_id,
+    site_id: input.row.site_id,
+    page: input.page,
+    field: input.field,
+    value: input.value ?? undefined,
+    content: input.value ?? undefined,
+    type: input.type ?? 'text',
+    source: 'manual',
+    hero_title: input.heroTitle ?? undefined,
+    hero_subtitle: input.heroSubtitle ?? undefined,
+    hero_image_asset_id: input.heroImageAssetId ?? undefined,
+    hero_public_url: input.heroPublicUrl ?? null,
+    updated_at: input.row.updated_at,
+  }
+}
+
+async function loadTenantPageEditorRow(db: DbClient, organizationId: string, siteId: string, page: ProfessionalServiceFieldEditorPage) {
+  const path = PROFESSIONAL_SERVICE_PAGE_PATHS[page]
+  const row = await queryAll<TenantPageEditorRow>(db, `
+    SELECT id, organization_id, site_id, path, title, summary, components_json, updated_at
+      FROM tenant_pages
+     WHERE organization_id = ? AND site_id = ? AND path = ?
+     LIMIT 1
+  `, [organizationId, siteId, path])
+  if (!row[0]) validationError(`Tenant page "${path}" was not found for this site.`)
+  return row[0]
+}
+
+export async function getProfessionalServiceEditorPageContent(
+  db: DbClient,
+  organizationId: string,
+  siteId: string,
+  page: string,
+) {
+  assertProfessionalServiceEditorPage(page)
+  const row = await loadTenantPageEditorRow(db, organizationId, siteId, page)
+  const components = parseJson<ApiRecord[]>(row.components_json, [])
+  const heroType = page === 'home' ? 'home_hero' : 'page_hero'
+  const hero = componentByType(components, heroType)
+  const cta = componentByType(components, 'consultation_cta')
+  const contact = page === 'contact' ? componentByType(components, 'contact_cards') : null
+  const background = hero?.background
+
+  const fields: SiteContent[] = [
+    editorRow({
+      row,
+      page,
+      field: 'hero',
+      heroTitle: optionalString(hero?.title) || row.title,
+      heroSubtitle: optionalString(hero?.description) || row.summary || '',
+      heroImageAssetId: page === 'home' ? assetPointerId(background) : null,
+      heroPublicUrl: page === 'home' ? assetPointerUrl(background) : null,
+    }),
+  ]
+
+  if (cta) {
+    fields.push(
+      editorRow({ row, page, field: 'cta.title', value: optionalString(cta.title), type: 'text' }),
+      editorRow({ row, page, field: 'cta.description', value: optionalString(cta.description), type: 'richtext' }),
+    )
+  }
+
+  if (contact) {
+    fields.push(
+      editorRow({ row, page, field: 'contact.title', value: optionalString(contact.title), type: 'text' }),
+      editorRow({ row, page, field: 'contact.description', value: optionalString(contact.description), type: 'textarea' }),
+      editorRow({ row, page, field: 'contact.cards', value: contactCardsToEditorValue(contact.cardsContent), type: 'richtext' }),
+    )
+  }
+
+  return {
+    fields,
+    siteId,
+    locationId: null,
+    page,
+    public_path: row.path,
+    schema: {
+      page,
+      fields: professionalServiceEditableFields[page],
+      structured: professionalServiceEditableFields[page].filter(field => field.startsWith('hero.')),
+    },
+  }
+}
+
+async function listEditableOfferings(db: DbClient, siteId: string) {
+  const rows = await queryAll<ApiRecord>(db, `
+    SELECT *
+      FROM offerings
+     WHERE site_id = ?
+     ORDER BY sort_order ASC, name ASC
+  `, [siteId])
+
+  return rows.map(row => ({
+    ...row,
+    features: parseJson<unknown[]>(row.features, []),
+    faqs: parseJson<unknown[]>(row.faqs, []),
+    media_asset_ids: parseJson<string[]>(row.media_asset_ids, []),
+    featured: row.featured === true || row.featured === 1,
+  }))
+}
+
+async function listEditableTenantPages(db: DbClient, siteId: string) {
+  const rows = await queryAll<ApiRecord>(db, `
+    SELECT *
+      FROM tenant_pages
+     WHERE site_id = ?
+     ORDER BY sort_order ASC, title ASC
+  `, [siteId])
+
+  return rows.map(row => ({
+    ...row,
+    components: parseJson<ApiRecord[]>(row.components_json, []),
+  }))
+}
+
+export async function updateProfessionalServiceEditorPageContent(
+  db: DbClient,
+  input: {
+    organizationId: string
+    siteId: string
+    page: string
+    changes: Record<string, unknown>
+    updatedBy?: string | null
+  },
+) {
+  assertProfessionalServiceEditorPage(input.page)
+  const row = await loadTenantPageEditorRow(db, input.organizationId, input.siteId, input.page)
+  const components = parseJson<ApiRecord[]>(row.components_json, [])
+  const allowedFields = new Set(professionalServiceEditableFields[input.page])
+  const unknownFields = Object.keys(input.changes).filter(field => !allowedFields.has(field))
+  if (unknownFields.length) {
+    validationError(`Field "${unknownFields[0]}" is not editable on page "${input.page}".`)
+  }
+
+  const heroType = input.page === 'home' ? 'home_hero' : 'page_hero'
+  const hero = ensureComponent(components, heroType)
+  let title = row.title
+  let summary = row.summary
+
+  for (const [field, rawValue] of Object.entries(input.changes)) {
+    if (typeof rawValue !== 'string') {
+      validationError(`Field "${field}" must be a string.`)
+    }
+    const value = rawValue
+    if (field === 'hero.title') {
+      hero.title = value
+      title = cleanString(value, 200) || row.title
+      continue
+    }
+    if (field === 'hero.subtitle') {
+      hero.description = value
+      summary = cleanString(value, 700) || null
+      continue
+    }
+    if (field === 'hero.image') {
+      if (input.page !== 'home') validationError(`Field "${field}" is not editable on page "${input.page}".`)
+      hero.background = await resolveAssetPointer(db, input.siteId, value)
+      continue
+    }
+    if (field === 'cta.title' || field === 'cta.description') {
+      const cta = ensureComponent(components, 'consultation_cta')
+      cta[field === 'cta.title' ? 'title' : 'description'] = value
+      continue
+    }
+    if (field === 'contact.title' || field === 'contact.description' || field === 'contact.cards') {
+      if (input.page !== 'contact') validationError(`Field "${field}" is not editable on page "${input.page}".`)
+      const contact = ensureComponent(components, 'contact_cards')
+      if (field === 'contact.cards') contact.cardsContent = editorValueToContactCards(value)
+      else contact[field === 'contact.title' ? 'title' : 'description'] = value
+    }
+  }
+
+  await executeBatch(db, [{
+    query: `
+      UPDATE tenant_pages
+         SET title = ?, summary = ?, components_json = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ?
+       WHERE organization_id = ? AND site_id = ? AND path = ?
+    `,
+    params: [
+      title,
+      summary,
+      json(components),
+      input.updatedBy ?? null,
+      input.organizationId,
+      input.siteId,
+      PROFESSIONAL_SERVICE_PAGE_PATHS[input.page],
+    ],
+  }])
+
+  return {
+    success: true,
+    page: input.page,
+    location_id: null,
+    changes_count: Object.keys(input.changes).length,
+    public_path: PROFESSIONAL_SERVICE_PAGE_PATHS[input.page],
+  }
 }
 
 function recordArray(value: unknown): ApiRecord[] {
@@ -168,7 +465,12 @@ export function validateProfessionalServicePayload(body: ApiRecord) {
 }
 
 export async function getProfessionalServiceContent(db: DbClient, siteId: string) {
-  return getPublicBlawbyData(db, siteId)
+  const [content, offerings, tenantPages] = await Promise.all([
+    getPublicBlawbyData(db, siteId),
+    listEditableOfferings(db, siteId),
+    listEditableTenantPages(db, siteId),
+  ])
+  return { ...content, offerings, tenantPages }
 }
 
 export async function upsertProfessionalServiceContent(

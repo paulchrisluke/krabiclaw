@@ -358,7 +358,7 @@ async function loadExperiences() {
   }
   loading.value = true
   try {
-    const res = await $fetch<{ experiences: ApiRecord[] }>(`/api/dashboard/editor/experiences`, {
+    const res = await $fetch<{ experiences: ApiRecord[] }>(`/api/editor/sites/${siteId}/experiences`, {
       query: { location_id: locationId },
     })
     if (generation !== experiencesLoadGeneration || currentLocationId.value !== locationId) return
@@ -375,7 +375,7 @@ async function loadExperiences() {
 
 async function loadSitePublicUrl() {
   try {
-    const response = await $fetch<{ success: boolean; settings: { public_url?: string | null; default_currency?: string } }>(`/api/dashboard/settings`)
+      const response = await $fetch<{ success: boolean; settings: { public_url?: string | null; default_currency?: string } }>(`/api/dashboard/settings`)
     sitePublicUrl.value = response.settings?.public_url || null
     defaultCurrency.value = response.settings?.default_currency || 'THB'
   } catch {
@@ -631,12 +631,12 @@ async function save() {
     }
     let experienceResult: ApiRecord | null = null
     if (editing.value) {
-      const response = await $fetch<{ experience: ApiRecord }>(`/api/dashboard/editor/experiences/${editing.value.id}`, { method: 'PATCH', body: payload })
+      const response = await $fetch<{ experience: ApiRecord }>(`/api/editor/sites/${siteId}/experiences/${editing.value.id}`, { method: 'PATCH', body: payload })
       if (currentLocationId.value !== locationId) return
       experienceResult = response.experience ?? null
       toast.add({ description: 'Experience updated.', color: 'success' })
     } else {
-      const response = await $fetch<{ experience: ApiRecord }>(`/api/dashboard/editor/experiences`, { method: 'POST', body: payload })
+      const response = await $fetch<{ experience: ApiRecord }>(`/api/editor/sites/${siteId}/experiences`, { method: 'POST', body: payload })
       if (currentLocationId.value !== locationId) return
       experienceResult = response.experience ?? null
       toast.add({ description: 'Experience created.', color: 'success' })
@@ -687,7 +687,7 @@ async function doDelete() {
   if (!deletingExp.value) return
   deleting.value = true
   try {
-    await $fetch(`/api/dashboard/editor/experiences/${deletingExp.value.id}`, { method: 'DELETE' })
+    await $fetch(`/api/editor/sites/${siteId}/experiences/${deletingExp.value.id}`, { method: 'DELETE' })
     toast.add({ description: 'Experience deleted.', color: 'success' })
     deleteOpen.value = false
     await loadExperiences()
@@ -725,11 +725,11 @@ async function loadAvailability() {
   try {
     const [avail, overrides] = await Promise.all([
       $fetch<{ timezone: string; dates: Array<{ date: string; slots: SlotAvailability[] }> }>(
-        `/api/dashboard/editor/experiences/${availabilityExp.value.id}/availability`,
+        `/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/availability`,
         { query: { date: availabilityDate.value } },
       ),
       $fetch<{ overrides: SlotOverride[] }>(
-        `/api/dashboard/editor/experiences/${availabilityExp.value.id}/slot-overrides`,
+        `/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/slot-overrides`,
       ),
     ])
     availabilityTimezone.value = avail.timezone
@@ -750,7 +750,7 @@ async function toggleSlotOverride(slot: SlotAvailability) {
   savingOverride.value = slot.time_slot
   try {
     const capacityInput = slotCapacityOverrides[slot.time_slot]
-    await $fetch(`/api/dashboard/editor/experiences/${availabilityExp.value.id}/slot-overrides`, {
+    await $fetch(`/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/slot-overrides`, {
       method: 'POST',
       body: {
         override_date: availabilityDate.value,
@@ -770,7 +770,7 @@ async function toggleSlotOverride(slot: SlotAvailability) {
 async function deleteOverride(override: SlotOverride) {
   if (!availabilityExp.value) return
   try {
-    await $fetch(`/api/dashboard/editor/experiences/${availabilityExp.value.id}/slot-overrides/${override.id}`, { method: 'DELETE' })
+    await $fetch(`/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/slot-overrides/${override.id}`, { method: 'DELETE' })
     await loadAvailability()
   } catch {
     toast.add({ description: 'Failed to delete override.', color: 'error' })

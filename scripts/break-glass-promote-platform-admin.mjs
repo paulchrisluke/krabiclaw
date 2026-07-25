@@ -3,7 +3,7 @@
 import { spawnSync } from 'node:child_process'
 
 function usage() {
-  console.error('Usage: node scripts/promote-platform-admin.mjs --email user@example.com [--remote|--local|--staging]')
+  console.error('Usage: node scripts/break-glass-promote-platform-admin.mjs --email user@example.com [--remote|--local|--staging]')
   process.exit(1)
 }
 
@@ -23,7 +23,8 @@ const targetFlag = args.includes('--staging')
 const sql = `UPDATE user SET role = 'admin' WHERE lower(email) = '${email.replace(/'/g, "''")}';`
 const cmdArgs = ['wrangler', 'd1', 'execute', 'DB', ...targetFlag.split(' '), '--command', sql]
 
-console.log(`Promoting ${email} to platform admin using: yarn ${cmdArgs.join(' ')}`)
+console.warn('BREAK GLASS ONLY: normal platform admin management must use Better Auth Admin APIs.')
+console.warn(`Promoting ${email} to platform admin using: yarn ${cmdArgs.join(' ')}`)
 
 const result = spawnSync('yarn', cmdArgs, { stdio: 'inherit' })
 process.exit(result.status ?? 1)
