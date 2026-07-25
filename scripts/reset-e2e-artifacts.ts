@@ -181,8 +181,8 @@ PRAGMA foreign_keys = ON;
 DELETE FROM notification_events WHERE organization_id IN (${eligibleOrgIds});
 
 -- Cascades through sites, content, translation_jobs, experiences, locations, guest_threads
--- (and, via guest_threads' own cascading FK, submission_messages), etc. via
--- organization_id -> organization(id) ON DELETE CASCADE.
+-- (and, via guest_threads' own cascading FKs, guest_thread_entries/guest_thread_member_state/
+-- guest_thread_deliveries), etc. via organization_id -> organization(id) ON DELETE CASCADE.
 DELETE FROM organization WHERE id IN (${eligibleOrgIds});
 
 -- Category 2: guest-submitted rows on the persistent Pottery House/demo fixtures, marked by
@@ -191,10 +191,11 @@ DELETE FROM organization WHERE id IN (${eligibleOrgIds});
 -- and notifications_organization_created_at_idx (see comment above) - so the
 -- unindexable 'LIKE %@playwright.example' only has to scan a handful of fixture-scoped rows,
 -- not a full table scan. notification_events is polymorphic (submission_type/submission_id, no
--- FK) so it must be swept explicitly before its parent rows disappear. submission_messages has a
--- real FK to guest_threads (ON DELETE CASCADE), but it's deleted explicitly here too rather than
--- relied on implicitly, so this block's correctness doesn't depend on the guest_threads delete
--- below succeeding first.
+-- FK) so it must be swept explicitly before its parent rows disappear. guest_thread_entries/
+-- guest_thread_member_state/guest_thread_deliveries all have real FKs to guest_threads
+-- (ON DELETE CASCADE), but they're deleted explicitly here too rather than relied on
+-- implicitly, so this block's correctness doesn't depend on the guest_threads delete below
+-- succeeding first.
 -- Each branch is LIMIT-bounded too, as its own derived table - SQLite rejects a bare
 -- parenthesized SELECT as a compound-query operand inside IN(...) ("near UNION: syntax error"),
 -- so each branch is wrapped as SELECT id FROM (SELECT ... LIMIT n) instead. Defensive: category 2
@@ -208,7 +209,15 @@ DELETE FROM notification_events WHERE submission_id IN (
   SELECT id FROM (SELECT id FROM experience_bookings WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize})
 );
 
-DELETE FROM submission_messages WHERE thread_id IN (
+DELETE FROM guest_thread_deliveries WHERE thread_id IN (
+  SELECT id FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
+);
+
+DELETE FROM guest_thread_member_state WHERE thread_id IN (
+  SELECT id FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
+);
+
+DELETE FROM guest_thread_entries WHERE thread_id IN (
   SELECT id FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
 );
 

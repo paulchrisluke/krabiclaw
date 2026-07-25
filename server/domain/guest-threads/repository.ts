@@ -76,9 +76,9 @@ export async function ensureGuestThread(
         query: `
           INSERT INTO guest_threads
             (id, organization_id, site_id, location_id, submission_type, submission_id, guest_name, guest_email, guest_phone,
-             inbox_status, unread_count, last_message_at, last_message_preview, conversation_state, operational_status,
+             last_message_at, last_message_preview, conversation_state, operational_status,
              created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', 0, ?, ?, 'needs_attention', ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'needs_attention', ?, ?, ?)
         `,
         params: [
           threadId,

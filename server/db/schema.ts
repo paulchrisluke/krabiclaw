@@ -278,13 +278,10 @@ export const guest_threads = sqliteTable("guest_threads", {
 	guest_name: text().notNull(),
 	guest_email: text(),
 	guest_phone: text(),
-	inbox_status: text().default("open").notNull(),
-	unread_count: integer().default(0).notNull(),
 	last_message_at: text(),
 	last_inbound_at: text(),
 	last_outbound_at: text(),
 	last_message_preview: text(),
-	owner_last_seen_at: text(),
 	// Conversation-state machine (issue #442). Independent of the source's operational status;
 	// updated only by server/domain/guest-threads/state-machine.ts via the canonical operation
 	// service, never inferred client-side from raw source status.
@@ -300,10 +297,8 @@ export const guest_threads = sqliteTable("guest_threads", {
 	unique("guest_threads_submission_unique").on(table.submission_type, table.submission_id),
 	index("guest_threads_site_updated_idx").on(table.site_id, table.updated_at),
 	index("guest_threads_location_updated_idx").on(table.location_id, table.updated_at),
-	index("guest_threads_inbox_status_idx").on(table.site_id, table.inbox_status, table.updated_at),
 	index("guest_threads_conversation_state_idx").on(table.site_id, table.conversation_state, table.updated_at),
 	check("guest_threads_submission_type_check", sql`submission_type IN ('contact', 'reservation', 'experience_booking')`),
-	check("guest_threads_inbox_status_check", sql`inbox_status IN ('open', 'waiting_on_owner', 'waiting_on_guest', 'closed')`),
 	check("guest_threads_conversation_state_check", sql`conversation_state IN ('needs_attention', 'waiting_on_guest', 'resolved')`),
 	index("guest_threads_organization_id_idx").on(table.organization_id),
 ]);
@@ -375,29 +370,6 @@ export const guest_thread_deliveries = sqliteTable("guest_thread_deliveries", {
 	check("guest_thread_deliveries_status_check", sql`status IN ('queued', 'sent', 'failed')`),
 ]);
 
-export const submission_messages = sqliteTable("submission_messages", {
-	id: text().primaryKey(),
-	thread_id: text().references(() => guest_threads.id, { onDelete: "cascade" } ),
-	submission_type: text().notNull(), // 'contact' | 'reservation' | 'experience_booking'
-	submission_id: text().notNull(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	direction: text().notNull(), // 'out' | 'in'
-	channel: text().notNull(), // 'email' | 'whatsapp'
-	body: text().notNull(),
-	sender_user_id: text().references(() => user.id, { onDelete: "set null" } ),
-	meta_message_id: text().unique(),
-	status: text().default("sent").notNull(),
-	error: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	check("submission_type_check", sql`submission_type IN ('contact', 'reservation', 'experience_booking')`),
-	check("direction_check", sql`direction IN ('in', 'out')`),
-	check("channel_check", sql`channel IN ('email', 'whatsapp')`),
-	index("submission_type_id_idx").on(table.submission_type, table.submission_id),
-	index("submission_messages_thread_created_idx").on(table.thread_id, table.created_at),
-	index("submission_messages_org_site_idx").on(table.organization_id, table.site_id),
-]);
 
 export const notification_events = sqliteTable("notification_events", {
 	id: text().primaryKey(),

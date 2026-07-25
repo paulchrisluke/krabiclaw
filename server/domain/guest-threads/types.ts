@@ -25,13 +25,10 @@ export interface GuestThreadRow {
   guest_name: string
   guest_email: string | null
   guest_phone: string | null
-  inbox_status: string
-  unread_count: number
   last_message_at: string | null
   last_inbound_at: string | null
   last_outbound_at: string | null
   last_message_preview: string | null
-  owner_last_seen_at: string | null
   conversation_state: ConversationState
   operational_status: string | null
   resolved_at: string | null

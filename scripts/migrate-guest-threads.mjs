@@ -160,6 +160,19 @@ function authorizedMembersSql(organizationId, siteTeamId, locationTeamId) {
 
 console.log(`[migrate-guest-threads] target=${targetArgs.join(' ')} mode=${apply ? 'apply' : 'dry-run'}`)
 
+// This script only makes sense between migration 0067 (additive ledger tables) and 0068
+// (drops the legacy inbox_status/unread_count/owner_last_seen_at columns + submission_messages
+// table it reads from). Running it after 0068 has already been applied would fail with a
+// confusing "no such column" SQLite error deep in the first query below — fail fast with a
+// clear message instead.
+const guestThreadsColumns = run(`PRAGMA table_info(guest_threads)`)
+const hasLegacyColumns = guestThreadsColumns.some(col => col.name === 'inbox_status')
+if (!hasLegacyColumns) {
+  console.error('[migrate-guest-threads] guest_threads no longer has legacy columns (inbox_status) — migration 0068 has already run against this target.')
+  console.error('[migrate-guest-threads] This script must run after 0067 and before 0068. There is nothing left to migrate here.')
+  process.exit(1)
+}
+
 const threads = run(`
   SELECT gt.id, gt.organization_id, gt.site_id, gt.location_id, gt.submission_type, gt.submission_id,
          gt.guest_name, gt.inbox_status, gt.unread_count, gt.owner_last_seen_at,
