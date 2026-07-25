@@ -42,7 +42,6 @@ interface ContentRow {
 }
 
 interface BootstrapPayload {
-  locations: ApiRecord[];
   content: ContentRow[];
   locationReviews: ApiRecord[];
   reviewsAggregate: ApiRecord | null;
@@ -60,7 +59,6 @@ interface BootstrapPayload {
 }
 
 const emptyBootstrap = (): BootstrapPayload => ({
-  locations: [],
   content: [],
   locationReviews: [],
   reviewsAggregate: null,

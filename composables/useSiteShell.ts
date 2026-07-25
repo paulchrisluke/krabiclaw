@@ -92,10 +92,14 @@ export const useSiteShell = () => {
             try {
               return await requestFetch<SiteShellPayload>(url.value);
             } catch (err) {
+              const redactedUrl = url.value.replace(/([?&]token=)[^&]*/, "$1[redacted]");
+              const redactedKey = params.value.token
+                ? key.value.split("~").slice(0, -1).concat("[redacted]").join("~")
+                : key.value;
               const errorSummary = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
               console.error(
                 `[useSiteShell] SSR self-fetch failed for siteId=${siteId ?? "none"} draftId=${draftId ?? "none"} ` +
-                  `url=${url.value} key=${key.value} error=${errorSummary}`,
+                  `url=${redactedUrl} key=${redactedKey} error=${errorSummary}`,
               );
               throw err;
             }

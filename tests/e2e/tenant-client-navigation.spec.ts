@@ -85,7 +85,7 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
       linkHref: '/experiences',
       beforeText: 'Ember & Slice',
       afterText: 'Pizza Making Class',
-      forbiddenTexts: [],
+      forbiddenTexts: ['No experiences yet.'],
     })
   })
 
@@ -95,7 +95,7 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
       linkHref: '/experiences/pizza-making-class',
       beforeText: 'Pizza Making Class',
       afterText: 'Stretch dough',
-      forbiddenTexts: [],
+      forbiddenTexts: ['No experience details yet.'],
     })
   })
 
@@ -105,7 +105,7 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
       linkHref: '/menu',
       beforeText: 'Ember & Slice',
       afterText: 'Menu',
-      forbiddenTexts: [],
+      forbiddenTexts: ['No menu items.'],
     })
   })
 
@@ -115,7 +115,7 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
       linkHref: '/locations',
       beforeText: 'Ember & Slice',
       afterText: 'Locations',
-      forbiddenTexts: [],
+      forbiddenTexts: ['No locations.'],
     })
   })
 
@@ -125,7 +125,7 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
       linkHref: '/locations/brooklyn',
       beforeText: 'Locations',
       afterText: 'Ember & Slice Brooklyn',
-      forbiddenTexts: [],
+      forbiddenTexts: ['No location details.'],
     })
   })
 
