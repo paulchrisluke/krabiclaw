@@ -5614,6 +5614,22 @@
           "notNull": false,
           "autoincrement": false
         },
+        "inbox_status": {
+          "name": "inbox_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'open'"
+        },
+        "unread_count": {
+          "name": "unread_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
         "last_message_at": {
           "name": "last_message_at",
           "type": "text",
@@ -5637,6 +5653,13 @@
         },
         "last_message_preview": {
           "name": "last_message_preview",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "owner_last_seen_at": {
+          "name": "owner_last_seen_at",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -5694,6 +5717,15 @@
           "name": "guest_threads_location_updated_idx",
           "columns": [
             "location_id",
+            "updated_at"
+          ],
+          "isUnique": false
+        },
+        "guest_threads_inbox_status_idx": {
+          "name": "guest_threads_inbox_status_idx",
+          "columns": [
+            "site_id",
+            "inbox_status",
             "updated_at"
           ],
           "isUnique": false
@@ -5770,6 +5802,10 @@
         "guest_threads_submission_type_check": {
           "name": "guest_threads_submission_type_check",
           "value": "submission_type IN ('contact', 'reservation', 'experience_booking')"
+        },
+        "guest_threads_inbox_status_check": {
+          "name": "guest_threads_inbox_status_check",
+          "value": "inbox_status IN ('open', 'waiting_on_owner', 'waiting_on_guest', 'closed')"
         },
         "guest_threads_conversation_state_check": {
           "name": "guest_threads_conversation_state_check",

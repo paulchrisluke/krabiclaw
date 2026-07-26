@@ -278,10 +278,13 @@ export const guest_threads = sqliteTable("guest_threads", {
 	guest_name: text().notNull(),
 	guest_email: text(),
 	guest_phone: text(),
+	inbox_status: text().default("open").notNull(),
+	unread_count: integer().default(0).notNull(),
 	last_message_at: text(),
 	last_inbound_at: text(),
 	last_outbound_at: text(),
 	last_message_preview: text(),
+	owner_last_seen_at: text(),
 	// Conversation-state machine (issue #442). Independent of the source's operational status;
 	// updated only by server/domain/guest-threads/state-machine.ts via the canonical operation
 	// service, never inferred client-side from raw source status.
@@ -297,8 +300,10 @@ export const guest_threads = sqliteTable("guest_threads", {
 	unique("guest_threads_submission_unique").on(table.submission_type, table.submission_id),
 	index("guest_threads_site_updated_idx").on(table.site_id, table.updated_at),
 	index("guest_threads_location_updated_idx").on(table.location_id, table.updated_at),
+	index("guest_threads_inbox_status_idx").on(table.site_id, table.inbox_status, table.updated_at),
 	index("guest_threads_conversation_state_idx").on(table.site_id, table.conversation_state, table.updated_at),
 	check("guest_threads_submission_type_check", sql`submission_type IN ('contact', 'reservation', 'experience_booking')`),
+	check("guest_threads_inbox_status_check", sql`inbox_status IN ('open', 'waiting_on_owner', 'waiting_on_guest', 'closed')`),
 	check("guest_threads_conversation_state_check", sql`conversation_state IN ('needs_attention', 'waiting_on_guest', 'resolved')`),
 	index("guest_threads_organization_id_idx").on(table.organization_id),
 ]);
