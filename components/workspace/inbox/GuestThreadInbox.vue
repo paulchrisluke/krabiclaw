@@ -74,14 +74,14 @@
         </div>
       </div>
 
-      <div v-else class="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4">
-        <div v-if="loadingDetail" class="space-y-3">
+      <div v-else class="flex min-h-[calc(100vh-8rem)] w-full flex-1 flex-col">
+        <div v-if="loadingDetail" class="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-3">
           <USkeleton class="h-32 rounded-lg" />
-          <USkeleton class="h-96 rounded-lg" />
+          <USkeleton class="min-h-0 flex-1 rounded-lg" />
         </div>
 
-        <div v-else-if="selectedDetail" class="min-h-0">
-          <section class="min-h-[34rem] overflow-hidden rounded-lg border border-default bg-default shadow-sm">
+        <div v-else-if="selectedDetail" class="min-h-0 flex-1">
+          <section class="flex h-full min-h-[calc(100vh-8rem)] overflow-hidden border border-default bg-default shadow-sm sm:rounded-lg">
             <GuestThreadConversation
               v-model:input="replyDraft"
               :entries="conversationEntries"
@@ -106,7 +106,7 @@
           </section>
         </div>
 
-        <div v-else class="rounded-lg border border-default bg-default px-6 py-14 text-center shadow-sm">
+        <div v-else class="mx-auto w-full max-w-5xl rounded-lg border border-default bg-default px-6 py-14 text-center shadow-sm">
           <UIcon name="i-lucide-message-circle-off" class="mx-auto size-8 text-muted" />
           <p class="mt-3 text-sm font-medium text-highlighted">Thread not found</p>
           <UButton class="mt-4" color="neutral" variant="soft" icon="i-lucide-chevron-left" @click="goBackToList">
