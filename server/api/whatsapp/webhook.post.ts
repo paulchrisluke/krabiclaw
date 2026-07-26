@@ -841,8 +841,7 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
             body: text,
             externalId: message.id,
           })
-          const alreadyProcessed = entry.body !== text
-          if (!alreadyProcessed) {
+          if (entry.created) {
             const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
             await updateThreadProjection(db, thread.id, { conversationState })
 

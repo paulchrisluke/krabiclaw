@@ -1,7 +1,7 @@
 import { queryFirst, type DbClient } from '~/server/db'
 import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
 import { getAdapter } from './adapters/registry'
-import { appendEntry, getEntryById, getLatestEntryByKind } from './entries'
+import { appendEntry, getEntryById, getLatestEntryByKind, parseEntryPayload } from './entries'
 import { attemptEmailDelivery, createDeliveryIntent, getDeliveryById } from './deliveries'
 import { getGuestThreadById, updateThreadProjection } from './repository'
 import { advanceMemberCursor } from './read-state'
@@ -12,7 +12,7 @@ export type OperationOutcome =
   | { ok: true; thread: GuestThreadRow; availableActions: string[] }
   | { ok: false; status: 404; reason: 'thread_not_found' | 'source_not_found' | 'delivery_not_found' }
   | { ok: false; status: 409; reason: 'invalid_transition'; message: string }
-  | { ok: false; status: 400; reason: 'no_guest_email' | 'empty_body' }
+  | { ok: false; status: 400; reason: 'no_guest_email' | 'empty_body' | 'missing_delivery_id' }
 
 export interface ExecuteOperationInput {
   threadId: string
@@ -224,7 +224,7 @@ async function executeRetryDelivery(
   source: unknown,
 ): Promise<OperationOutcome> {
   if (!input.deliveryId) {
-    return { ok: false, status: 400, reason: 'empty_body' }
+    return { ok: false, status: 400, reason: 'missing_delivery_id' }
   }
   const delivery = await getDeliveryById(db, input.deliveryId)
   if (!delivery || delivery.thread_id !== thread.id) {
@@ -232,6 +232,9 @@ async function executeRetryDelivery(
   }
   if (!delivery.to_address) {
     return { ok: false, status: 400, reason: 'no_guest_email' }
+  }
+  if (delivery.status !== 'failed' || delivery.attempt_count >= 5) {
+    return { ok: false, status: 409, reason: 'invalid_transition', message: 'Only failed deliveries with remaining retry attempts can be retried' }
   }
 
   const entry = delivery.entry_id ? await getEntryById(db, delivery.entry_id) : null
@@ -247,7 +250,7 @@ async function executeRetryDelivery(
         : `Re: your booking at ${fromName}`
     body = entry.body
   } else {
-    const action = entry?.payload_json ? (JSON.parse(entry.payload_json) as { action?: string }).action ?? 'confirm' : 'confirm'
+    const action = entry ? (parseEntryPayload(entry)?.action as string | undefined) ?? 'confirm' : 'confirm'
     subject = operationSubject(action, fromName)
     body = operationBody(action, adapter, source)
   }

@@ -23,12 +23,13 @@ export interface AppendEntryInput {
  *
  * When `externalId` is provided and already exists, returns the existing entry instead
  * of inserting a duplicate (idempotent inbound ingestion — e.g. inbound email Message-Id,
- * WhatsApp message id).
+ * WhatsApp message id). The returned row includes `created` so callers can distinguish
+ * a new append from a retry.
  */
-export async function appendEntry(db: DbClient, input: AppendEntryInput): Promise<GuestThreadEntryRow> {
+export async function appendEntry(db: DbClient, input: AppendEntryInput): Promise<GuestThreadEntryRow & { created?: boolean }> {
   if (input.externalId) {
     const existing = await findEntryByExternalId(db, input.externalId)
-    if (existing) return existing
+    if (existing) return { ...existing, created: false }
   }
 
   const id = input.id ?? crypto.randomUUID()
@@ -68,7 +69,7 @@ export async function appendEntry(db: DbClient, input: AppendEntryInput): Promis
 
   const created = await queryFirst<GuestThreadEntryRow>(db, `SELECT * FROM guest_thread_entries WHERE id = ? LIMIT 1`, [id])
   if (!created) throw new Error('Failed to load appended guest thread entry')
-  return created
+  return { ...created, created: true }
 }
 
 export async function findEntryByExternalId(db: DbClient, externalId: string): Promise<GuestThreadEntryRow | null> {

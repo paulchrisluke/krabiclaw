@@ -64,8 +64,12 @@ export async function resolveMemberId(
   input: { organizationId: string; userId: string },
 ): Promise<string | null> {
   const row = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM member WHERE userId = ? AND organizationId = ? LIMIT 1
-  `, [input.userId, input.organizationId])
+    SELECT m.id
+    FROM member m
+    JOIN user u ON u.id = m.userId
+    WHERE m.organizationId = ? AND u.id = ?
+    LIMIT 1
+  `, [input.organizationId, input.userId])
   return row?.id ?? null
 }
 

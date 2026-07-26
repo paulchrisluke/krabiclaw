@@ -84,7 +84,7 @@ export default defineEventHandler(async (event) => {
     body: body.body.trim(),
     externalId: messageId,
   })
-  if (entry.body === body.body.trim()) {
+  if (entry.created) {
     const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
     await updateThreadProjection(db, thread.id, { conversationState })
 

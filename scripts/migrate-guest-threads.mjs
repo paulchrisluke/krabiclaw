@@ -144,7 +144,7 @@ function backfillConversationState(thread, messages, operationalStatus) {
 
 function authorizedMembersSql(organizationId, siteTeamId, locationTeamId) {
   return `
-    SELECT DISTINCT m.id AS member_id
+    SELECT DISTINCT m.id AS member_id, m.role AS member_role
     FROM member m
     WHERE m.organizationId = ${q(organizationId)}
       AND (
@@ -271,17 +271,20 @@ for (const thread of threads) {
   }
 
   const authorizedMembers = run(authorizedMembersSql(thread.organization_id, thread.site_team_id, thread.location_team_id))
-  for (const { member_id: memberId } of authorizedMembers) {
+  for (const { member_id: memberId, member_role: memberRole } of authorizedMembers) {
     const [{ count: existingCursorCount } = { count: 0 }] = run(`
       SELECT COUNT(*) AS count FROM guest_thread_member_state WHERE thread_id = ${q(thread.id)} AND member_id = ${q(memberId)}
     `)
     if (Number(existingCursorCount) > 0) continue
 
+    const isOwnerMember = memberRole === 'owner'
+    const lastReadAt = isOwnerMember ? thread.owner_last_seen_at : null
+
     // A null owner_last_seen_at means "never read" — preserved as a null cursor, not
     // invented as read.
     exec(`
       INSERT INTO guest_thread_member_state (thread_id, member_id, last_read_entry_id, last_read_at, created_at, updated_at)
-      VALUES (${q(thread.id)}, ${q(memberId)}, NULL, ${q(thread.owner_last_seen_at)}, ${q(now)}, ${q(now)})
+      VALUES (${q(thread.id)}, ${q(memberId)}, NULL, ${q(lastReadAt)}, ${q(now)}, ${q(now)})
     `)
     membersSeeded += 1
   }

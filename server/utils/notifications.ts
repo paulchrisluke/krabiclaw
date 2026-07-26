@@ -235,20 +235,26 @@ async function buildOwnerInboxUrl(
   }
 ): Promise<string | null> {
   const submissionType = opts.tab === 'contact' ? 'contact' : opts.tab === 'reservations' ? 'reservation' : 'experience_booking'
-  // Deferred import: the reservation/experience-booking adapters pull in mcp-workflows.ts
-  // and experiences.ts, whose own dependency graphs (google-business.ts) import this file —
-  // a static top-level import here would be a circular import.
-  const [{ ensureGuestThread }, { getAdapter }] = await Promise.all([
-    import('~/server/domain/guest-threads/repository'),
-    import('~/server/domain/guest-threads/adapters/registry'),
-  ])
-  const thread = await ensureGuestThread(db, getAdapter(submissionType), opts.submissionId)
-  return await buildOwnerThreadInboxUrl(env, db, {
-    organizationId: opts.organizationId,
-    siteId: opts.siteId,
-    locationId: opts.locationId,
-    threadId: thread.id,
-  })
+  try {
+    // Deferred import: the reservation/experience-booking adapters pull in mcp-workflows.ts
+    // and experiences.ts, whose own dependency graphs (google-business.ts) import this file —
+    // a static top-level import here would be a circular import.
+    const [{ ensureGuestThread }, { getAdapter }] = await Promise.all([
+      import('~/server/domain/guest-threads/repository'),
+      import('~/server/domain/guest-threads/adapters/registry'),
+    ])
+    const thread = await ensureGuestThread(db, getAdapter(submissionType), opts.submissionId)
+    return await buildOwnerThreadInboxUrl(env, db, {
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      locationId: opts.locationId,
+      threadId: thread.id,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.includes('Submission not found')) return null
+    return null
+  }
 }
 
 // Deep-links an owner notification straight to the dashboard reviews page for that location,

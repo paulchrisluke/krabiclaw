@@ -39,6 +39,14 @@ export async function resolveContactSubmissionAssignment(
       'SELECT id, title, location_id FROM experiences WHERE id = ? AND site_id = ? LIMIT 1',
       [opts.experienceId, opts.siteId],
     )
+    if (!experience) {
+      return {
+        selectedLocation,
+        experience: null,
+        assignedLocationId: null,
+        error: 'experience_id must reference an experience on this site',
+      }
+    }
   }
 
   return {

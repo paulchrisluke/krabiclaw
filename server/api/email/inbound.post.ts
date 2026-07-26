@@ -60,13 +60,10 @@ export default defineEventHandler(async (event) => {
     externalId: messageIdHeader,
   })
 
-  const alreadyProcessed = entry.body !== text
-  if (!alreadyProcessed) {
+  if (entry.created) {
     const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
     await updateThreadProjection(db, thread.id, { conversationState })
-  }
 
-  if (!alreadyProcessed) {
     try {
       const source = await adapter.loadSource({ db }, parsed.submissionId)
       if (source) {

@@ -9,7 +9,6 @@ import type {
   GuestThreadSubmissionType,
   ListGuestThreadsOptions,
 } from './types'
-import { computeUnreadForMember } from './read-state'
 import { formatOperationalStatusLabel } from './status-labels'
 
 export async function getGuestThreadBySubmission(
@@ -242,6 +241,18 @@ export async function listGuestThreads(
 
   const limit = Math.max(1, Math.min(opts.limit ?? 100, 200))
 
+  const unreadFilter = opts.unreadOnly && opts.memberId
+    ? `
+      AND EXISTS (
+        SELECT 1
+        FROM guest_thread_entries e
+        LEFT JOIN guest_thread_member_state gms ON gms.thread_id = gt.id AND gms.member_id = ?
+        WHERE e.thread_id = gt.id
+          AND (gms.last_read_at IS NULL OR e.occurred_at > gms.last_read_at)
+      )
+    `
+    : ''
+
   const rows = await queryAll<GuestThreadListRow>(db, `
     SELECT
       gt.*,
@@ -259,14 +270,17 @@ export async function listGuestThreads(
     FROM guest_threads gt
     LEFT JOIN business_locations bl ON bl.id = gt.location_id
     WHERE ${where}
+    ${unreadFilter}
     ORDER BY gt.updated_at DESC
     LIMIT ?
-  `, [...params, limit])
+  `, opts.unreadOnly && opts.memberId ? [opts.memberId, ...params, limit] : [...params, limit])
 
+  const unreadIds = opts.memberId
+    ? new Set(await listUnreadThreadIds(db, rows.map(row => row.id), opts.memberId))
+    : new Set<string>()
   const items: GuestThreadListItemViewModel[] = []
   for (const row of rows ?? []) {
-    const unread = opts.memberId ? await computeUnreadForMember(db, row.id, opts.memberId) : false
-    if (opts.unreadOnly && !unread) continue
+    const unread = unreadIds.has(row.id)
     items.push({
       id: row.id,
       guestName: row.guest_name,
@@ -287,6 +301,23 @@ export async function listGuestThreads(
     })
   }
   return items
+}
+
+async function listUnreadThreadIds(db: DbClient, threadIds: string[], memberId: string): Promise<string[]> {
+  if (threadIds.length === 0) return []
+  const placeholders = threadIds.map(() => '?').join(', ')
+  const rows = await queryAll<{ thread_id: string }>(db, `
+    SELECT gt.id AS thread_id
+    FROM guest_threads gt
+    LEFT JOIN guest_thread_member_state gms ON gms.thread_id = gt.id AND gms.member_id = ?
+    WHERE gt.id IN (${placeholders})
+      AND EXISTS (
+        SELECT 1 FROM guest_thread_entries e
+        WHERE e.thread_id = gt.id
+          AND (gms.last_read_at IS NULL OR e.occurred_at > gms.last_read_at)
+      )
+  `, [memberId, ...threadIds])
+  return (rows ?? []).map(row => row.thread_id)
 }
 
 /** Refreshes the read-optimized operational_status/conversation_state/resolved_at projection. */

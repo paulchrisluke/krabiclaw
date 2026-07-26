@@ -83,22 +83,32 @@ export interface DeliverGuestEmailInput {
  * via the canonical reply-channel sender — never a bespoke fetch to the email provider.
  */
 export async function attemptEmailDelivery(db: DbClient, input: DeliverGuestEmailInput): Promise<{ success: boolean; error?: string }> {
-  const result = await sendReplyEmail(input.env, {
-    to: input.to,
-    fromName: input.fromName,
-    subject: input.subject,
-    body: input.body,
-    submissionType: input.submissionType as SubmissionType,
-    submissionId: input.submissionId,
-  })
+  try {
+    const result = await sendReplyEmail(input.env, {
+      to: input.to,
+      fromName: input.fromName,
+      subject: input.subject,
+      body: input.body,
+      submissionType: input.submissionType as SubmissionType,
+      submissionId: input.submissionId,
+    })
 
-  await markDeliveryAttempt(db, input.delivery.id, {
-    status: result.success ? 'sent' : 'failed',
-    providerMessageId: result.messageId ?? null,
-    lastError: result.error ?? null,
-  })
+    await markDeliveryAttempt(db, input.delivery.id, {
+      status: result.success ? 'sent' : 'failed',
+      providerMessageId: result.messageId ?? null,
+      lastError: result.error ?? null,
+    })
 
-  return { success: result.success, error: result.error }
+    return { success: result.success, error: result.error }
+  } catch (error) {
+    const lastError = error instanceof Error ? error.message : String(error)
+    await markDeliveryAttempt(db, input.delivery.id, {
+      status: 'failed',
+      providerMessageId: null,
+      lastError,
+    })
+    return { success: false, error: lastError }
+  }
 }
 
 export async function listDeliveryFailures(db: DbClient, threadId: string): Promise<GuestThreadDeliveryRow[]> {
