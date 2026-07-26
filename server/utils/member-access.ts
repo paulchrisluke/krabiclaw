@@ -62,7 +62,7 @@ export interface MemberAccessPrincipal {
 export type DashboardSiteAccess = 'organization' | 'site' | 'location'
 
 export async function resolveMemberId(
-  input: { organizationId: string; userId: string; env?: CloudflareEnv },
+  input: { organizationId: string; userId: string; env: CloudflareEnv },
 ): Promise<string | null> {
   if (!input.env) {
     throw new Error('resolveMemberId requires CloudflareEnv so Better Auth can resolve organization membership')
