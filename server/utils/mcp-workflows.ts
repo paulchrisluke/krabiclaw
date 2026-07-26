@@ -26,7 +26,7 @@ import {
 import type { CloudflareEnv } from "~/server/utils/auth";
 import { signOAuthState } from "~/server/utils/encryption";
 import { updateLocation } from "~/server/utils/location-management";
-import { execute, queryAll, queryFirst } from "~/server/db";
+import { execute, queryAll, queryFirst, type DbClient } from "~/server/db";
 import { revokeReviewRequestForBooking } from "~/server/utils/review-requests";
 import { fireSiteEventSafe } from "~/server/utils/site-events";
 import { reorderQa, updateQa } from "~/server/utils/location-qa";
@@ -449,7 +449,7 @@ export async function getReservationSubmissionsByStatus(
 }
 
 export async function updateReservationSubmissionStatus(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   submissionId: string,
   status: string,

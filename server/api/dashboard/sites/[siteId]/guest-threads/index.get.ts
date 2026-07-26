@@ -1,6 +1,7 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
-import { getGuestThreadOperationSummary, listGuestThreads, type GuestThreadInboxStatus, type GuestThreadSubmissionType } from '~/server/utils/guest-threads'
+import { listGuestThreads, getGuestThreadOperationSummary } from '~/server/domain/guest-threads/repository'
+import type { ConversationState, GuestThreadSubmissionType } from '~/server/domain/guest-threads/types'
 import { assertMemberScope } from '~/server/utils/member-access'
 
 export default defineEventHandler(async (event) => {
@@ -17,22 +18,25 @@ export default defineEventHandler(async (event) => {
   const type = query.type === 'contact' || query.type === 'reservation' || query.type === 'experience_booking'
     ? query.type as GuestThreadSubmissionType
     : null
-  const inboxStatus = query.inbox_status === 'open' || query.inbox_status === 'waiting_on_owner' || query.inbox_status === 'waiting_on_guest' || query.inbox_status === 'closed'
-    ? query.inbox_status as GuestThreadInboxStatus
+  const conversationState = query.conversation_state === 'needs_attention' || query.conversation_state === 'waiting_on_guest' || query.conversation_state === 'resolved'
+    ? query.conversation_state as ConversationState
     : null
   const unreadOnly = query.unread === '1' || query.unread === 'true'
 
   const principal = { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
+  const opts = {
+    locationId,
+    principal,
+    memberId: site.member_id,
+    search,
+    type,
+    conversationState,
+    unreadOnly,
+  }
+
   const [threads, summary] = await Promise.all([
-    listGuestThreads(db, siteId, {
-      locationId,
-      principal,
-      search,
-      type,
-      inboxStatus,
-      unreadOnly,
-    }),
-    getGuestThreadOperationSummary(db, siteId, { locationId, principal }),
+    listGuestThreads(db, siteId, opts),
+    getGuestThreadOperationSummary(db, siteId, opts),
   ])
 
   return jsonResponse({ threads, summary })

@@ -55,7 +55,7 @@
             <span class="min-w-0 flex-1">
               <span class="block text-sm font-medium text-highlighted truncate">{{ notification.title || 'Notification' }}</span>
               <span v-if="notification.message" class="block text-xs text-muted line-clamp-2 mt-0.5">{{ notification.message }}</span>
-              <span class="block text-[11px] text-dimmed mt-1">{{ formatTimestamp(notification.created_at) }}</span>
+              <span class="block text-[11px] text-dimmed mt-1">{{ formatExactDateTime(notification.created_at, { includeTime: true }) }}</span>
             </span>
           </button>
         </div>
@@ -86,6 +86,7 @@ const notifications = ref<DashboardNotification[]>([])
 const unreadCount = ref(0)
 const loading = ref(false)
 const markingAll = ref(false)
+const { formatExactDateTime } = useHumanTime()
 let refreshTimer: ReturnType<typeof setInterval> | undefined
 
 function severityDot(severity: DashboardNotification['severity']) {
@@ -93,12 +94,6 @@ function severityDot(severity: DashboardNotification['severity']) {
   if (severity === 'warning') return 'bg-warning'
   if (severity === 'success') return 'bg-success'
   return 'bg-primary'
-}
-
-function formatTimestamp(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date)
 }
 
 function safeDeepLink(value: string | null): string | null {

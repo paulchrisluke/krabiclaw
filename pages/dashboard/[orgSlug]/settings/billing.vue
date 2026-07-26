@@ -211,7 +211,7 @@
                       <td class="px-3 py-2 text-right tabular-nums text-muted">{{ Number(row.input_tokens).toLocaleString() }}</td>
                       <td class="px-3 py-2 text-right tabular-nums text-muted">{{ Number(row.output_tokens).toLocaleString() }}</td>
                       <td class="px-3 py-2 text-right font-medium tabular-nums">{{ row.credits_charged }}</td>
-                      <td class="px-3 py-2 text-right text-muted">{{ formatRelative(String(row.created_at)) }}</td>
+                      <td class="px-3 py-2 text-right text-muted">{{ formatRelativeTime(String(row.created_at)) }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -421,17 +421,7 @@ const loadCredits = async () => {
   }
 }
 
-const formatRelative = (iso: string) => {
-  try {
-    const diff = Date.now() - new Date(iso).getTime()
-    const mins = Math.floor(diff / 60000)
-    if (mins < 1) return 'just now'
-    if (mins < 60) return `${mins}m ago`
-    const hrs = Math.floor(mins / 60)
-    if (hrs < 24) return `${hrs}h ago`
-    return `${Math.floor(hrs / 24)}d ago`
-  } catch { return '—' }
-}
+const { formatRelativeTime, formatExactDateTime: formatDate } = useHumanTime()
 
 const loadBillingData = async () => {
   loading.value = true
@@ -501,15 +491,6 @@ const openBillingPortal = async () => {
   }
 }
 
-const formatDate = (dateString: string) => {
-  try {
-    const date = new Date(dateString)
-    if (isNaN(date.getTime()) || date.toString() === 'Invalid Date') return '-'
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-  } catch {
-    return '-'
-  }
-}
 
 onMounted(async () => {
   const { success, plan, canceled, siteId, ...restQuery } = route.query

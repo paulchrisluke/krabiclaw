@@ -82,7 +82,8 @@
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Activity | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
-const { eventLabel, timeAgo } = useSiteEventLabels()
+const { eventLabel } = useSiteEventLabels()
+const { formatRelativeTime: timeAgo } = useHumanTime()
 const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 const toast = useToast()

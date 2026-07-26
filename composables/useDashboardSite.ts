@@ -120,7 +120,11 @@ export function useDashboardSite() {
 
 export async function useDashboardSiteId() {
   const dashboard = useDashboardSite()
-  if (!dashboard.state.value) await dashboard.refresh()
+  const route = useRoute()
+  const routeSiteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
+  if (!dashboard.state.value || (routeSiteSlug && dashboard.site.value?.subdomain !== routeSiteSlug)) {
+    await dashboard.refresh()
+  }
   const siteId = dashboard.siteId.value
   if (!siteId) {
     throw createError({ statusCode: 404, message: 'Site not found' })

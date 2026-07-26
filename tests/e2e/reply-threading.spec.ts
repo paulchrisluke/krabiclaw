@@ -34,6 +34,7 @@ type NotificationRow = {
   template: string
   title: string
   status: string
+  payload: string | null
 }
 
 async function waitForSubmissionMessages(
@@ -253,6 +254,17 @@ test.describe('reply threading', () => {
     expect(createRes.status()).toBe(201)
     const createBody = await createRes.json() as { id: string }
 
+    const ownerNotifications = await waitForReplyNotification(
+      request,
+      tenantBaseURL,
+      demoSiteId,
+      since,
+      'new_reservation',
+    )
+    const ownerNotificationPayload = JSON.parse(ownerNotifications[0]?.payload ?? '{}') as { deep_link?: string }
+    expect(ownerNotificationPayload.deep_link).toContain(`/dashboard/${demoOrgSlug}/sites/${demoSiteSlug}/locations/${demoLocationSlug}/inbox/`)
+    expect(ownerNotificationPayload.deep_link).not.toContain('?thread=')
+
     const errors = collectPageErrors(page)
     await setupTenantHeaders(page, baseURL!, devHeaders())
 
@@ -264,11 +276,28 @@ test.describe('reply threading', () => {
     expect(inboxResponse?.status()).toBeLessThan(400)
 
     await expect(page.locator('body')).toContainText('Inbox')
+    const threadLink = page.getByRole('link', { name: /Owner Reply Flow Test/ }).first()
+    await expect(threadLink).toBeVisible()
+    const threadHref = await threadLink.getAttribute('href')
+    expect(threadHref).toBeTruthy()
+    const threadResponse = await page.goto(new URL(threadHref!, baseURL).toString(), { waitUntil: 'load' })
+    expect(threadResponse?.status()).toBeLessThan(400)
+    await expect(page).toHaveURL(/\/inbox\/[^/?#]+$/)
     await expect(page.getByRole('heading', { name: 'Owner Reply Flow Test' })).toBeVisible()
-    await expect(page.locator('body')).toContainText('Replies from this inbox are sent by email.')
+    await expect(page.locator('body')).toContainText(guestEmail)
+    await expect(page.locator('body')).toContainText('+14155552673')
+    await expect(page.locator('body')).toContainText('Window seat if possible')
 
     await page.getByPlaceholder('Write your reply…').fill(replyBody)
-    await page.getByRole('button', { name: 'Send reply' }).click()
+    const sendReplyButton = page.getByRole('button', { name: 'Send reply' })
+    await expect(sendReplyButton).toBeVisible()
+    await expect(sendReplyButton).toBeEnabled()
+    const sendReplyBox = await sendReplyButton.boundingBox()
+    expect(sendReplyBox).not.toBeNull()
+    await page.mouse.click(
+      sendReplyBox!.x + sendReplyBox!.width / 2,
+      sendReplyBox!.y + sendReplyBox!.height / 2,
+    )
 
     await expect(page.locator('body')).toContainText('Reply sent')
     await expect(page.locator('body')).toContainText(replyBody)

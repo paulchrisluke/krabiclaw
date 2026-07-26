@@ -17,7 +17,7 @@ test('phoneDigitsFromInvitationEmail recovers the encoded digits, or null for no
 })
 
 test('sanitizeInvitationReturnTo only accepts a same-org, root-relative dashboard path', () => {
-  assert.equal(sanitizeInvitationReturnTo('/dashboard/pottery-house/sites/main/inbox?thread=abc', 'pottery-house'), '/dashboard/pottery-house/sites/main/inbox?thread=abc')
+  assert.equal(sanitizeInvitationReturnTo('/dashboard/pottery-house/sites/main/inbox/abc', 'pottery-house'), '/dashboard/pottery-house/sites/main/inbox/abc')
   assert.equal(sanitizeInvitationReturnTo('/dashboard/pottery-house', 'pottery-house'), '/dashboard/pottery-house')
   // Wrong org scope.
   assert.equal(sanitizeInvitationReturnTo('/dashboard/other-org/sites/main', 'pottery-house'), null)

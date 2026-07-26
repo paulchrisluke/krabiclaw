@@ -1,7 +1,12 @@
 import type { H3Event } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { findSubmissionByPhone, insertInboundSubmissionReply } from '~/server/utils/submission-messages'
+import { findSubmissionByPhone } from '~/server/utils/submission-messages'
 import { parsePhoneOrThrow } from '~/utils/phone'
+import { getAdapter } from '~/server/domain/guest-threads/adapters/registry'
+import { ensureGuestThread, updateThreadProjection } from '~/server/domain/guest-threads/repository'
+import { appendEntry } from '~/server/domain/guest-threads/entries'
+import { nextConversationState } from '~/server/domain/guest-threads/state-machine'
+import { notifyGuestThreadReply } from '~/server/utils/notifications'
 
 const enc = new TextEncoder()
 
@@ -66,16 +71,40 @@ export default defineEventHandler(async (event) => {
   }
 
   const messageId = body.messageId?.trim() || crypto.randomUUID()
-  await insertInboundSubmissionReply(env, db, {
-    submissionType: match.submissionType,
-    submissionId: match.submissionId,
+  const adapter = getAdapter(match.submissionType)
+  const thread = await ensureGuestThread(db, adapter, match.submissionId)
+  const entry = await appendEntry(db, {
+    threadId: thread.id,
     organizationId: match.organizationId,
     siteId: match.siteId,
+    kind: 'message',
+    actorKind: 'guest',
     channel: 'whatsapp',
     body: text,
-    metaMessageId: messageId,
-    from: parsePhoneOrThrow(from, { defaultCountry: 'TH' }),
+    externalId: messageId,
   })
+  if (entry.created) {
+    const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
+    await updateThreadProjection(db, thread.id, { conversationState })
+
+    const source = await adapter.loadSource({ db }, match.submissionId)
+    if (source) {
+      const summary = adapter.summarize(source)
+      await notifyGuestThreadReply(env, db, {
+        organizationId: match.organizationId,
+        siteId: match.siteId,
+        locationId: summary.locationId,
+        threadId: thread.id,
+        submissionType: match.submissionType,
+        submissionId: match.submissionId,
+        guestName: summary.guestName,
+        guestEmail: summary.guestEmail,
+        guestPhone: summary.guestPhone,
+        inboundChannel: 'whatsapp',
+        messagePreview: text,
+      })
+    }
+  }
 
   return jsonResponse({ received: true, match, messageId })
 })
